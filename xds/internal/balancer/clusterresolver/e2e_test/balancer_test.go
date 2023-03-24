@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -31,22 +32,100 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // Register the "cds_experimental" LB policy.
 )
+
+// makeAggregateClusterResource returns an aggregate cluster resource with the
+// given name and list of child names.
+func makeAggregateClusterResource(name string, childNames []string) *v3clusterpb.Cluster {
+	return &v3clusterpb.Cluster{
+		Name: name,
+		ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
+			ClusterType: &v3clusterpb.Cluster_CustomClusterType{
+				Name: "envoy.clusters.aggregate",
+				TypedConfig: testutils.MarshalAny(&v3aggregateclusterpb.ClusterConfig{
+					Clusters: childNames,
+				}),
+			},
+		},
+		LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+	}
+}
+
+// makeLogicalDNSClusterResource returns a LOGICAL_DNS cluster resource with the
+// given name and given dns host and port.
+func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clusterpb.Cluster {
+	return &v3clusterpb.Cluster{
+		Name:                 name,
+		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_LOGICAL_DNS},
+		LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
+		LoadAssignment: &v3endpointpb.ClusterLoadAssignment{
+			Endpoints: []*v3endpointpb.LocalityLbEndpoints{{
+				LbEndpoints: []*v3endpointpb.LbEndpoint{{
+					HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{
+						Endpoint: &v3endpointpb.Endpoint{
+							Address: &v3corepb.Address{
+								Address: &v3corepb.Address_SocketAddress{
+									SocketAddress: &v3corepb.SocketAddress{
+										Address: dnsHost,
+										PortSpecifier: &v3corepb.SocketAddress_PortValue{
+											PortValue: dnsPort,
+										},
+									},
+								},
+							},
+						},
+					},
+				}},
+			}},
+		},
+	}
+}
+
+// setupDNS unregisters the DNS resolver and registers a manual resolver for the
+// same scheme. This allows the test to mock the DNS resolution by supplying the
+// addresses of the test backends.
+//
+// Returns the following:
+//   - a channel on to which the dns target being resolved is written to by the
+//     mock DNS resolver
+//   - a channel to notify close of the DNS resolver
+//   - a channel to notify re-resolution requests for the DNS resolver
+//   - a manual resolver which is used to mock the actual DNS resolution
+//   - a cleanup function which re-registers the original DNS resolver
+func setupDNS() (chan resolver.Target, chan struct{}, chan resolver.ResolveNowOptions, *manual.Resolver, func()) {
+	dnsTargetCh := make(chan resolver.Target, 1)
+	dnsCloseCh := make(chan struct{}, 1)
+	resolveNowCh := make(chan resolver.ResolveNowOptions, 1)
+
+	mr := manual.NewBuilderWithScheme("dns")
+	mr.BuildCallback = func(target resolver.Target, _ resolver.ClientConn, _ resolver.BuildOptions) { dnsTargetCh <- target }
+	mr.CloseCallback = func() { dnsCloseCh <- struct{}{} }
+	mr.ResolveNowCallback = func(opts resolver.ResolveNowOptions) { resolveNowCh <- opts }
+
+	dnsResolverBuilder := resolver.Get("dns")
+	resolver.UnregisterForTesting("dns")
+	resolver.Register(mr)
+
+	return dnsTargetCh, dnsCloseCh, resolveNowCh, mr, func() { resolver.Register(dnsResolverBuilder) }
+}
 
 // TestErrorFromParentLB_ConnectionError tests the case where the parent of the
 // clusterresolver LB policy sends its a connection error. The parent policy,
@@ -308,11 +387,11 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	}
 }
 
-// TestEDSResourceRemoved tests the case where the EDS resource requested by the
-// clusterresolver LB policy is removed from the management server.  The test
+// TestEDS_ResourceRemoved tests the case where the EDS resource requested by
+// the clusterresolver LB policy is removed from the management server. The test
 // verifies that the EDS watch is not canceled and that RPCs continue to succeed
 // with the previously received configuration.
-func (s) TestEDSResourceRemoved(t *testing.T) {
+func (s) TestEDS_ResourceRemoved(t *testing.T) {
 	// Start an xDS management server that uses a couple of channels to
 	// notify the test about the following events:
 	// - an EDS requested with the expected resource name is requested
@@ -412,5 +491,943 @@ func (s) TestEDSResourceRemoved(t *testing.T) {
 			t.Fatal("EDS watch canceled when not expected to be canceled")
 		default:
 		}
+	}
+}
+
+// TestEDS_ClusterResourceDoesNotContainEDSServiceName tests the case where the
+// Cluster resource sent by the management server does not contain an EDS
+// service name. The test verifies that the cluster_resolver LB policy uses the
+// cluster name for the EDS resource.
+func (s) TestEDS_ClusterResourceDoesNotContainEDSServiceName(t *testing.T) {
+	edsResourceCh := make(chan string, 1)
+	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() != version.V3EndpointsURL {
+				return nil
+			}
+			if len(req.GetResourceNames()) > 0 {
+				select {
+				case edsResourceCh <- req.GetResourceNames()[0]:
+				default:
+				}
+			}
+			return nil
+		},
+	})
+	defer cleanup()
+
+	// Start a test backend and extract its host and port.
+	backend := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+	}
+	backend.StartServer()
+	defer backend.Stop()
+	_, p, err := net.SplitHostPort(backend.Address)
+	if err != nil {
+		t.Fatalf("Failed to split test backend address %q: %v", backend.Address, err)
+	}
+	port, err := strconv.ParseUint(p, 10, 32)
+	if err != nil {
+		t.Fatalf("Failed to parse test backend port %q: %v", backend.Address, err)
+	}
+
+	// Configure cluster and endpoints resources with the same name in the management server. The cluster resource does not specify an EDS service name.
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, "", e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(clusterName, "localhost", []uint32{uint32(port)})},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	// Create a manual resolver and push a service config specifying the use of
+	// the cds LB policy as the top-level LB policy, and a corresponding config
+	// with a single cluster.
+	r := manual.NewBuilderWithScheme("whatever")
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": "%s"
+				}
+			}]
+		}`, clusterName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for EDS request to be received on the management server")
+	case name := <-edsResourceCh:
+		if name != clusterName {
+			t.Fatalf("Received EDS request with resource name %q, want %q", name, clusterName)
+		}
+	}
+}
+
+// TestEDS_ClusterResourceUpdates verifies different scenarios with regards to
+// cluster resource updates.
+//
+//   - The first cluster resource contains an eds_service_name. The test verifies
+//     that an EDS request with sent for the recieved eds_service_name. It also
+//     verifies that a subsequent RPC gets routed to a backend belonging to that
+//     service name.
+//   - The next cluster resource update contains no eds_service_name. The test
+//     verifies that a subsequent EDS request is sent for the cluster_name and
+//     that the previously recieved eds_service_name is no longer requested. It
+//     also verifies that a subsequent RPC gets routed to a backend belonging to
+//     service represented by the cluster_name.
+//   - The next cluster resource update changes the circuit breaking
+//     configuration, but does not change the service name. The test verifies
+//     that a subsequent RPC gets routed to the same backend as before.
+func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Start an xDS management server that pushes the EDS resource names on to a
+	// channel.
+	edsResourceNameCh := make(chan []string, 1)
+	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() != version.V3EndpointsURL {
+				return nil
+			}
+			if len(req.GetResourceNames()) == 0 {
+				// This is the case for ACKs. Do nothing here.
+				return nil
+			}
+			select {
+			case <-ctx.Done():
+			case edsResourceNameCh <- req.GetResourceNames():
+			}
+			return nil
+		},
+		AllowResourceSubset: true,
+	})
+	defer cleanup()
+
+	// Start two test backends and extract their host and port. The first
+	// backend is used for the EDS resource identified by the eds_service_name,
+	// and the second backend is used for the EDS resource identified by the
+	// cluster_name.
+	servers, cleanup2 := startTestServiceBackends(t, 2)
+	defer cleanup2()
+	addrs, ports := backendAddressesAndPorts(t, servers)
+
+	// Configure cluster and endpoints resources in the management server.
+	resources := e2e.UpdateOptions{
+		NodeID:   nodeID,
+		Clusters: []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
+			e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{uint32(ports[0])}),
+			e2e.DefaultEndpoint(clusterName, "localhost", []uint32{uint32(ports[1])}),
+		},
+		SkipValidation: true,
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	// Create a manual resolver and push a service config specifying the use of
+	// the cds LB policy as the top-level LB policy, and a corresponding config
+	// with a single cluster.
+	r := manual.NewBuilderWithScheme("whatever")
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": "%s"
+				}
+			}]
+		}`, clusterName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	peer := &peer.Peer{}
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
+		t.Fatalf("EmptyCall() RPC failed: %v", err)
+	}
+	if peer.Addr.String() != addrs[0].Addr {
+		t.Fatalf("EmptyCall() RPC routed to backend %q, want %q", peer.Addr, addrs[0].Addr)
+	}
+
+	// Ensure EDS watch is registered for eds_service_name.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for EDS request to be received on the management server")
+	case names := <-edsResourceNameCh:
+		if !cmp.Equal(names, []string{edsServiceName}) {
+			t.Fatalf("Received EDS request with resource names %v, want %v", names, []string{edsServiceName})
+		}
+	}
+
+	// Change the cluster resource to not contain an eds_service_name.
+	resources.Clusters = []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, "", e2e.SecurityLevelNone)}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure that an EDS watch for eds_service_name is canceled and new watch
+	// for cluster_name is registered. The actual order in which this happens is
+	// not deterministic, i.e the watch for old resource could be canceled
+	// before the new one is registered or vice-versa. In either case,
+	// eventually, we want to see a request to the management server for just
+	// the cluster_name.
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		names := <-edsResourceNameCh
+		if cmp.Equal(names, []string{clusterName}) {
+			break
+		}
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("Timeout when waiting for old EDS watch to be canceled and new one to be registered")
+	}
+
+	// Make RPC, and ensure that it gets routed to the second backend.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
+		t.Fatalf("EmptyCall() RPC failed: %v", err)
+	}
+	if peer.Addr.String() != addrs[1].Addr {
+		t.Fatalf("EmptyCall() RPC routed to backend %q, want %q", peer.Addr, addrs[1].Addr)
+	}
+
+	// Change cluster resource circuit breaking count.
+	resources.Clusters[0].CircuitBreakers = &v3clusterpb.CircuitBreakers{
+		Thresholds: []*v3clusterpb.CircuitBreakers_Thresholds{
+			{
+				Priority:    v3corepb.RoutingPriority_DEFAULT,
+				MaxRequests: wrapperspb.UInt32(512),
+			},
+		},
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make RPC, and ensure that it still gets routed to the second backend.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
+		t.Fatalf("EmptyCall() RPC failed: %v", err)
+	}
+	if peer.Addr.String() != addrs[1].Addr {
+		t.Fatalf("EmptyCall() RPC routed to backend %q, want %q", peer.Addr, addrs[1].Addr)
+	}
+}
+
+// TestAggregateCluster_WithTwoEDSClusters tests the case where the top-level
+// cluster resource is an aggregate cluster. It verifies that RPCs fail when the
+// management server has not responded to all requested EDS resources, and also
+// that RPCs are routed to the highest priority cluster once all resources have
+// been sent by the management server.
+func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Start an xDS management server that pushes the EDS resource names on to a
+	// channel.
+	edsResourceNameCh := make(chan []string, 1)
+	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() != version.V3EndpointsURL {
+				return nil
+			}
+			if len(req.GetResourceNames()) == 0 {
+				// This is the case for ACKs. Do nothing here.
+				return nil
+			}
+			select {
+			case <-ctx.Done():
+			case edsResourceNameCh <- req.GetResourceNames():
+			}
+			return nil
+		},
+		AllowResourceSubset: true,
+	})
+	defer cleanup()
+
+	// Start two test backends and extract their host and port. The first
+	// backend belongs to EDS cluster "cluster-1", while the second backend
+	// belongs to EDS cluster "cluster-2".
+	servers, cleanup2 := startTestServiceBackends(t, 2)
+	defer cleanup2()
+	addrs, ports := backendAddressesAndPorts(t, servers)
+
+	// Configure an aggregate cluster, two EDS clusters and only one endpoints
+	// resource (corresponding to the first EDS cluster) in the management
+	// server.
+	const clusterName1 = clusterName + "cluster-1"
+	const clusterName2 = clusterName + "cluster-2"
+	resources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterName, []string{clusterName1, clusterName2}),
+			e2e.DefaultCluster(clusterName1, "", e2e.SecurityLevelNone),
+			e2e.DefaultCluster(clusterName2, "", e2e.SecurityLevelNone),
+		},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(clusterName1, "localhost", []uint32{uint32(ports[0])})},
+		SkipValidation: true,
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	// Create a manual resolver and push a service config specifying the use of
+	// the cds LB policy as the top-level LB policy, and a corresponding config
+	// with a single cluster.
+	r := manual.NewBuilderWithScheme("whatever")
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": "%s"
+				}
+			}]
+		}`, clusterName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+	// Create a ClientConn.
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	// Wait for both EDS resources to be requested.
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		names := <-edsResourceNameCh
+		if cmp.Equal(names, []string{clusterName1, clusterName2}) {
+			break
+		}
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("Timeout when waiting for all EDS resources to be requested")
+	}
+
+	// Make an RPC with a short deadline. We expect this RPC to not succeed
+	// because the management server has not yet responded with all EDS
+	// resources requested.
+	client := testgrpc.NewTestServiceClient(cc)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	_, err = client.EmptyCall(sCtx, &testpb.Empty{})
+	if err == nil {
+		t.Fatal("EmptyCall() RPC succeeded when expected to fail")
+	}
+	if code := status.Code(err); code != codes.DeadlineExceeded {
+		t.Fatalf("EmptyCall() RPC failed with code %s, want %s", code, codes.DeadlineExceeded)
+	}
+
+	// Update the management server with the second EDS resource.
+	resources.Endpoints = append(resources.Endpoints, e2e.DefaultEndpoint(clusterName2, "localhost", []uint32{uint32(ports[1])}))
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make an RPC and ensure that it gets routed to cluster-1 since it is
+	// implicitly higher priority than cluster-2.
+	peer := &peer.Peer{}
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() RPC failed: %v", err)
+	}
+	if peer.Addr.String() != addrs[0].Addr {
+		t.Fatalf("EmptyCall() RPC routed to backend %q, want %q", peer.Addr, addrs[0].Addr)
+	}
+}
+
+// TestAggregateCluster_WithTwoEDSClusters_PrioritiesChange tests the case where
+// the top-level cluster resource is an aggregate cluster. It verifies that RPCs
+// are routed to the highest priority EDS cluster.
+func (s) TestAggregateCluster_WithTwoEDSClusters_PrioritiesChange(t *testing.T) {
+	// Start an xDS management server.
+	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer cleanup()
+
+	// Start two test backends and extract their host and port. The first
+	// backend belongs to EDS cluster "cluster-1", while the second backend
+	// belongs to EDS cluster "cluster-2".
+	servers, cleanup2 := startTestServiceBackends(t, 2)
+	defer cleanup2()
+	addrs, ports := backendAddressesAndPorts(t, servers)
+
+	// Configure an aggregate cluster, two EDS clusters and the corresponding
+	// endpoints resources in the management server.
+	const clusterName1 = clusterName + "cluster-1"
+	const clusterName2 = clusterName + "cluster-2"
+	resources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterName, []string{clusterName1, clusterName2}),
+			e2e.DefaultCluster(clusterName1, "", e2e.SecurityLevelNone),
+			e2e.DefaultCluster(clusterName2, "", e2e.SecurityLevelNone),
+		},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
+			e2e.DefaultEndpoint(clusterName1, "localhost", []uint32{uint32(ports[0])}),
+			e2e.DefaultEndpoint(clusterName2, "localhost", []uint32{uint32(ports[1])}),
+		},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	// Create a manual resolver and push a service config specifying the use of
+	// the cds LB policy as the top-level LB policy, and a corresponding config
+	// with a single cluster.
+	r := manual.NewBuilderWithScheme("whatever")
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": "%s"
+				}
+			}]
+		}`, clusterName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	// Make an RPC and ensure that it gets routed to cluster-1 since it is
+	// implicitly higher priority than cluster-2.
+	client := testgrpc.NewTestServiceClient(cc)
+	peer := &peer.Peer{}
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() RPC failed: %v", err)
+	}
+	if peer.Addr.String() != addrs[0].Addr {
+		t.Fatalf("EmptyCall() RPC routed to backend %q, want %q", peer.Addr, addrs[0].Addr)
+	}
+
+	// Swap the priorities of the EDS clusters in the aggregate cluster.
+	resources.Clusters = []*v3clusterpb.Cluster{
+		makeAggregateClusterResource(clusterName, []string{clusterName2, clusterName1}),
+		e2e.DefaultCluster(clusterName1, "", e2e.SecurityLevelNone),
+		e2e.DefaultCluster(clusterName2, "", e2e.SecurityLevelNone),
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make an RPC and ensure that it gets routed to cluster-1 since it is
+	// implicitly higher priority than cluster-2.
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
+			t.Fatalf("EmptyCall() RPC failed: %v", err)
+		}
+		if peer.Addr.String() != addrs[1].Addr {
+			break
+		}
+	}
+	if ctx.Err() != nil {
+		t.Fatal("Timeout waiting for RPCs to be routed to cluster-2 after priority switch")
+	}
+}
+
+// TestAggregateCluster_WithOneDNSCluster tests the case where the top-level
+// cluster resource is an aggregate cluster that resolves to a single
+// LOGICAL_DNS cluster. The test verifies that RPCs can be made to backends that
+// make up the LOGICAL_DNS cluster.
+func (s) TestAggregateCluster_WithOneDNSCluster(t *testing.T) {
+	dnsTargetCh, _, _, dnsR, cleanup1 := setupDNS()
+	defer cleanup1()
+
+	// Start an xDS management server.
+	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer cleanup2()
+
+	// Start two test backends and extract their host and port.
+	servers, cleanup3 := startTestServiceBackends(t, 2)
+	defer cleanup3()
+	addrs, _ := backendAddressesAndPorts(t, servers)
+
+	// Configure an aggregate cluster pointing to a single DNS cluster.
+	const (
+		dnsClusterName = clusterName + "-dns"
+		dnsHostName    = "dns_host"
+		dnsPort        = uint32(8080)
+	)
+	resources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterName, []string{dnsClusterName}),
+			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
+		},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	// Create a manual resolver and push a service config specifying the use of
+	// the cds LB policy as the top-level LB policy, and a corresponding config
+	// with a single cluster.
+	r := manual.NewBuilderWithScheme("whatever")
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": "%s"
+				}
+			}]
+		}`, clusterName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+	// Create a ClientConn.
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	// Ensure that the DNS resolver is started for the expected target.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for DNS resolver to be started")
+	case target := <-dnsTargetCh:
+		got, want := target.Endpoint(), fmt.Sprintf("%s:%d", dnsHostName, dnsPort)
+		if got != want {
+			t.Fatalf("DNS resolution started for target %q, want %q", got, want)
+		}
+	}
+
+	// Update DNS resolver with test backend addresses.
+	dnsR.UpdateState(resolver.State{Addresses: addrs})
+
+	// Make an RPC and ensure that it gets routed to the first backend since the
+	// child policy for a LOGICAL_DNS cluster is pick_first by default.
+	client := testgrpc.NewTestServiceClient(cc)
+	peer := &peer.Peer{}
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() RPC failed: %v", err)
+	}
+	if peer.Addr.String() != addrs[0].Addr {
+		t.Fatalf("EmptyCall() RPC routed to backend %q, want %q", peer.Addr, addrs[0].Addr)
+	}
+}
+
+// TestAggregateCluster_WithEDSAndDNS tests the case where the top-level cluster
+// resource is an aggregate cluster that resolves to an EDS and a DNS cluster.
+// The test verifies that RPCs fail until both clusters are resolved, and RPCs
+// are routed to the higher priority EDS cluster.
+func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
+	dnsTargetCh, _, _, dnsR, cleanup1 := setupDNS()
+	defer cleanup1()
+
+	// Start an xDS management server that pushes the name of the requested EDS
+	// resource on to a channel.
+	edsResourceCh := make(chan string, 1)
+	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() != version.V3EndpointsURL {
+				return nil
+			}
+			if len(req.GetResourceNames()) > 0 {
+				select {
+				case edsResourceCh <- req.GetResourceNames()[0]:
+				default:
+				}
+			}
+			return nil
+		},
+		AllowResourceSubset: true,
+	})
+	defer cleanup2()
+
+	// Start two test backends and extract their host and port. The first
+	// backend is used for the EDS cluster and the second backend is used for
+	// the LOGICAL_DNS cluster.
+	servers, cleanup3 := startTestServiceBackends(t, 2)
+	defer cleanup3()
+	addrs, ports := backendAddressesAndPorts(t, servers)
+
+	// Configure an aggregate cluster pointing to an EDS and DNS cluster. Also
+	// configure an endpoints resource for the EDS cluster.
+	const (
+		edsClusterName = clusterName + "-eds"
+		dnsClusterName = clusterName + "-dns"
+		dnsHostName    = "dns_host"
+		dnsPort        = uint32(8080)
+	)
+	resources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
+			e2e.DefaultCluster(edsClusterName, "", e2e.SecurityLevelNone),
+			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
+		},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsClusterName, "localhost", []uint32{uint32(ports[0])})},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	// Create a manual resolver and push a service config specifying the use of
+	// the cds LB policy as the top-level LB policy, and a corresponding config
+	// with a single cluster.
+	r := manual.NewBuilderWithScheme("whatever")
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": "%s"
+				}
+			}]
+		}`, clusterName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+	// Create a ClientConn.
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	// Ensure that an EDS request is sent for the expected resource name.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for EDS request to be received on the management server")
+	case name := <-edsResourceCh:
+		if name != edsClusterName {
+			t.Fatalf("Received EDS request with resource name %q, want %q", name, edsClusterName)
+		}
+	}
+
+	// Ensure that the DNS resolver is started for the expected target.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for DNS resolver to be started")
+	case target := <-dnsTargetCh:
+		got, want := target.Endpoint(), fmt.Sprintf("%s:%d", dnsHostName, dnsPort)
+		if got != want {
+			t.Fatalf("DNS resolution started for target %q, want %q", got, want)
+		}
+	}
+
+	// Make an RPC with a short deadline. We expect this RPC to not succeed
+	// because the DNS resolver has not responded with endpoint addresses.
+	client := testgrpc.NewTestServiceClient(cc)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	_, err = client.EmptyCall(sCtx, &testpb.Empty{})
+	if err == nil {
+		t.Fatal("EmptyCall() RPC succeeded when expected to fail")
+	}
+	if code := status.Code(err); code != codes.DeadlineExceeded {
+		t.Fatalf("EmptyCall() RPC failed with code %s, want %s", code, codes.DeadlineExceeded)
+	}
+
+	// Update DNS resolver with test backend addresses.
+	dnsR.UpdateState(resolver.State{Addresses: addrs[1:]})
+
+	// Make an RPC and ensure that it gets routed to the first backend since the
+	// EDS cluster is of higher priority than the LOGICAL_DNS cluster.
+	peer := &peer.Peer{}
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() RPC failed: %v", err)
+	}
+	if peer.Addr.String() != addrs[0].Addr {
+		t.Fatalf("EmptyCall() RPC routed to backend %q, want %q", peer.Addr, addrs[0].Addr)
+	}
+}
+
+// TestAggregateCluster_SwitchEDSAndDNS tests the case where the top-level
+// cluster resource is an aggregate cluster. It initially resolves to a single
+// EDS cluster. The test verifies that RPCs are routed to backends in the EDS
+// cluster. Subsequently, the aggregate cluster resolves to a single DNS
+// cluster. The test verifies that RPCs are successful, this time to backends in
+// the DNS cluster.
+func (s) TestAggregateCluster_SwitchEDSAndDNS(t *testing.T) {
+	dnsTargetCh, _, _, dnsR, cleanup1 := setupDNS()
+	defer cleanup1()
+
+	// Start an xDS management server.
+	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer cleanup2()
+
+	// Start two test backends and extract their host and port. The first
+	// backend is used for the EDS cluster and the second backend is used for
+	// the LOGICAL_DNS cluster.
+	servers, cleanup3 := startTestServiceBackends(t, 2)
+	defer cleanup3()
+	addrs, ports := backendAddressesAndPorts(t, servers)
+
+	// Configure an aggregate cluster pointing to a single EDS cluster. Also,
+	// configure the underlying EDS cluster (and the corresponding endpoints
+	// resource) and DNS cluster (will be used later in the test).
+	const (
+		dnsClusterName = clusterName + "-dns"
+		dnsHostName    = "dns_host"
+		dnsPort        = uint32(8080)
+	)
+	resources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterName, []string{edsServiceName}),
+			e2e.DefaultCluster(edsServiceName, "", e2e.SecurityLevelNone),
+			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
+		},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{uint32(ports[0])})},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	// Create a manual resolver and push a service config specifying the use of
+	// the cds LB policy as the top-level LB policy, and a corresponding config
+	// with a single cluster.
+	r := manual.NewBuilderWithScheme("whatever")
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": "%s"
+				}
+			}]
+		}`, clusterName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+	// Create a ClientConn.
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	// Ensure that the RPC is routed to the appropriate backend.
+	client := testgrpc.NewTestServiceClient(cc)
+	peer := &peer.Peer{}
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() RPC failed: %v", err)
+	}
+	if peer.Addr.String() != addrs[0].Addr {
+		t.Fatalf("EmptyCall() RPC routed to backend %q, want %q", peer.Addr, addrs[0].Addr)
+	}
+
+	// Update the aggregate cluster to point to a single DNS cluster.
+	resources.Clusters = []*v3clusterpb.Cluster{
+		makeAggregateClusterResource(clusterName, []string{dnsClusterName}),
+		e2e.DefaultCluster(edsServiceName, "", e2e.SecurityLevelNone),
+		makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure that the DNS resolver is started for the expected target.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for DNS resolver to be started")
+	case target := <-dnsTargetCh:
+		got, want := target.Endpoint(), fmt.Sprintf("%s:%d", dnsHostName, dnsPort)
+		if got != want {
+			t.Fatalf("DNS resolution started for target %q, want %q", got, want)
+		}
+	}
+
+	// Update DNS resolver with test backend addresses.
+	dnsR.UpdateState(resolver.State{Addresses: addrs[1:]})
+
+	// Make an RPC and ensure that it gets routed to the backend corresponding
+	// to the LOGICAL_DNS cluster.
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer))
+		if peer.Addr.String() == addrs[1].Addr {
+			break
+		}
+	}
+	if ctx.Err() != nil {
+		t.Fatal("Timeout when waiting for RPCs to be routed to backends in the DNS cluster")
+	}
+}
+
+// TestAggregateCluster_ErrorsFromEDSAndDNS tests the case where the top-level
+// cluster is an aggregate cluster which resolves to an EDS and DNS cluster.
+// When the EDS cluster resports errors, the test verifies that we switch to the
+// DNS cluster. And once the DNS cluster also returns an error, the test
+// verifies that the error is reported to the caller of the RPC.
+func (s) TestAggregateCluster_ErrorsFromEDSAndDNS(t *testing.T) {
+	dnsTargetCh, _, _, dnsR, cleanup1 := setupDNS()
+	defer cleanup1()
+
+	// Start an xDS management server.
+	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer cleanup2()
+
+	// Configure an aggregate cluster pointing to an EDS and DNS cluster. Also
+	// configure a bad endpoints resource for the EDS cluster that results in
+	// the update being NACKed.
+	const (
+		edsClusterName = clusterName + "-eds"
+		dnsClusterName = clusterName + "-dns"
+		dnsHostName    = "dns_host"
+		dnsPort        = uint32(8080)
+	)
+	badEndpointResource := e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{8080})
+	badEndpointResource.Endpoints[0].LbEndpoints[0].LoadBalancingWeight = &wrapperspb.UInt32Value{Value: 0}
+	resources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
+			e2e.DefaultCluster(edsClusterName, "", e2e.SecurityLevelNone),
+			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
+		},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{badEndpointResource},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	// Create a manual resolver and push a service config specifying the use of
+	// the cds LB policy as the top-level LB policy, and a corresponding config
+	// with a single cluster.
+	r := manual.NewBuilderWithScheme("whatever")
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": "%s"
+				}
+			}]
+		}`, clusterName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+	// Create a ClientConn.
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	// Make an RPC with a short deadline. We expect this RPC to not succeed
+	// because the EDS resource came back with an error, and we are yet to push
+	// an update through the DNS resolver.
+	client := testgrpc.NewTestServiceClient(cc)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	_, err = client.EmptyCall(sCtx, &testpb.Empty{}, grpc.WaitForReady(true))
+	if err == nil {
+		t.Fatal("EmptyCall() RPC succeeded when expected to fail")
+	}
+	if code := status.Code(err); code != codes.DeadlineExceeded {
+		t.Fatalf("EmptyCall() RPC failed with code %s, want %s", code, codes.DeadlineExceeded)
+	}
+
+	// Ensure that the DNS resolver is started for the expected target.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for DNS resolver to be started")
+	case target := <-dnsTargetCh:
+		got, want := target.Endpoint(), fmt.Sprintf("%s:%d", dnsHostName, dnsPort)
+		if got != want {
+			t.Fatalf("DNS resolution started for target %q, want %q", got, want)
+		}
+	}
+
+	// Push an error from the DNS resolver as well.
+	dnsErr := fmt.Errorf("DNS error")
+	dnsR.ReportError(dnsErr)
+
+	// Ensure that the error returned from the DNS resolver is reported to the
+	// caller of the RPC.
+	_, err = client.EmptyCall(ctx, &testpb.Empty{})
+	if code := status.Code(err); code != codes.Unavailable {
+		t.Fatalf("EmptyCall() RPC failed with code %s, want %s", code, codes.Unavailable)
+	}
+	if err == nil || !strings.Contains(err.Error(), dnsErr.Error()) {
+		t.Fatalf("EmptyCall() RPC failed with error %v, want %v", err, dnsErr)
 	}
 }
