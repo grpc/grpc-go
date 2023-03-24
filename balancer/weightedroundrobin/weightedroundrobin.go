@@ -20,6 +20,8 @@
 package weightedroundrobin
 
 import (
+	"fmt"
+
 	"google.golang.org/grpc/resolver"
 )
 
@@ -65,4 +67,8 @@ func GetAddrInfo(addr resolver.Address) AddrInfo {
 	v := addr.BalancerAttributes.Value(attributeKey{})
 	ai, _ := v.(AddrInfo)
 	return ai
+}
+
+func (a AddrInfo) String() string {
+	return fmt.Sprintf("Weight: %d", a.Weight)
 }

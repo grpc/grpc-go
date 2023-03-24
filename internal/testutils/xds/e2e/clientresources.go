@@ -536,6 +536,17 @@ type EndpointOptions struct {
 	// Ports is a set of ports on "localhost" where the endpoints corresponding
 	// to this resource reside.
 	Ports []uint32
+
+	// PortsInLocalities represent ports in different localities. The first
+	// dimension represents a locality, and the second represents the ports
+	// within that locality.
+	PortsInLocalities [][]uint32
+
+	// LocalityWeights are the weights of localities specified in the first
+	// dimension of PortsInLocalities. Must be the same length as the first
+	// dimension of PortsInLocalities.
+	LocalityWeights []uint32
+
 	// DropPercents is a map from drop category to a drop percentage. If unset,
 	// no drops are configured.
 	DropPercents map[string]int
@@ -548,6 +559,62 @@ func DefaultEndpoint(clusterName string, host string, ports []uint32) *v3endpoin
 		Host:        host,
 		Ports:       ports,
 	})
+}
+
+// EndpointResourceWithOptionsMultipleLocalities returns an xDS Endpoint
+// resource which specifies multiple localities, with the ports specified per
+// locality placed into each localities endpoints specification.
+func EndpointResourceWithOptionsMultipleLocalities(opts EndpointOptions) *v3endpointpb.ClusterLoadAssignment {
+	var endpoints []*v3endpointpb.LocalityLbEndpoints
+	for i, portsInLocality := range opts.PortsInLocalities {
+		var lbEndpoints []*v3endpointpb.LbEndpoint
+		for _, port := range portsInLocality {
+			lbEndpoints = append(lbEndpoints, &v3endpointpb.LbEndpoint{
+				HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{Endpoint: &v3endpointpb.Endpoint{
+					Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
+						SocketAddress: &v3corepb.SocketAddress{
+							Protocol:      v3corepb.SocketAddress_TCP,
+							Address:       opts.Host,
+							PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: port}},
+					}},
+				}},
+				LoadBalancingWeight: &wrapperspb.UInt32Value{Value: 1},
+			})
+		}
+
+		endpoints = append(endpoints, &v3endpointpb.LocalityLbEndpoints{
+			Locality: &v3corepb.Locality{
+				Region:  fmt.Sprintf("region%d", i),
+				Zone:    fmt.Sprintf("zone%d", i),
+				SubZone: fmt.Sprintf("subzone%d", i),
+			},
+			LbEndpoints:         lbEndpoints,
+			LoadBalancingWeight: &wrapperspb.UInt32Value{Value: opts.LocalityWeights[i]},
+			Priority:            0,
+		})
+	}
+
+	cla := &v3endpointpb.ClusterLoadAssignment{
+		ClusterName: opts.ClusterName,
+		Endpoints:   endpoints,
+	}
+
+	var drops []*v3endpointpb.ClusterLoadAssignment_Policy_DropOverload
+	for category, val := range opts.DropPercents {
+		drops = append(drops, &v3endpointpb.ClusterLoadAssignment_Policy_DropOverload{
+			Category: category,
+			DropPercentage: &v3typepb.FractionalPercent{
+				Numerator:   uint32(val),
+				Denominator: v3typepb.FractionalPercent_HUNDRED,
+			},
+		})
+	}
+	if len(drops) != 0 {
+		cla.Policy = &v3endpointpb.ClusterLoadAssignment_Policy{
+			DropOverloads: drops,
+		}
+	}
+	return cla
 }
 
 // EndpointResourceWithOptions returns an xds Endpoint resource configured with
@@ -564,18 +631,20 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 						PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: port}},
 				}},
 			}},
+			LoadBalancingWeight: &wrapperspb.UInt32Value{Value: 1},
 		})
 	}
 	cla := &v3endpointpb.ClusterLoadAssignment{
 		ClusterName: opts.ClusterName,
-		Endpoints: []*v3endpointpb.LocalityLbEndpoints{{
-			Locality:            &v3corepb.Locality{SubZone: "subzone"},
-			LbEndpoints:         lbEndpoints,
-			LoadBalancingWeight: &wrapperspb.UInt32Value{Value: 1},
-			Priority:            0,
-		}},
+		Endpoints: []*v3endpointpb.LocalityLbEndpoints{
+			{
+				Locality:            &v3corepb.Locality{SubZone: "subzone"},
+				LbEndpoints:         lbEndpoints,
+				LoadBalancingWeight: &wrapperspb.UInt32Value{Value: 1},
+				Priority:            0,
+			},
+		},
 	}
-
 	var drops []*v3endpointpb.ClusterLoadAssignment_Policy_DropOverload
 	for category, val := range opts.DropPercents {
 		drops = append(drops, &v3endpointpb.ClusterLoadAssignment_Policy_DropOverload{

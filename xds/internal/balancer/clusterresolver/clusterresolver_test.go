@@ -27,8 +27,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/roundrobin"
-	"google.golang.org/grpc/balancer/weightedtarget"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -378,7 +376,6 @@ func (s) TestOutlierDetection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	localityID := xdsinternal.LocalityID{Zone: "zone"}
 	// The priority configuration generated should have Outlier Detection as a
 	// direct child due to Outlier Detection being turned on.
 	pCfgWant := &priority.LBConfig{
@@ -393,17 +390,6 @@ func (s) TestOutlierDetection(t *testing.T) {
 							Config: &clusterimpl.LBConfig{
 								Cluster:        testClusterName,
 								EDSServiceName: "test-eds-service-name",
-								ChildPolicy: &internalserviceconfig.BalancerConfig{
-									Name: weightedtarget.Name,
-									Config: &weightedtarget.LBConfig{
-										Targets: map[string]weightedtarget.Target{
-											assertString(localityID.ToString): {
-												Weight:      100,
-												ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-											},
-										},
-									},
-								},
 							},
 						},
 					},

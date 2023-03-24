@@ -77,13 +77,11 @@ const (
 )
 
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
-	var lbPolicy *ClusterLBPolicyRingHash
-	var lbCfgJSON json.RawMessage
+	var lbPolicy json.RawMessage
 	var err error
 	switch cluster.GetLbPolicy() {
 	case v3clusterpb.Cluster_ROUND_ROBIN:
-		lbPolicy = nil // The default is round_robin, and there's no config to set.
-		lbCfgJSON = []byte(fmt.Sprintf(`[{%q: {"childPolicy": [{"round_robin": {}}]}}]`, "xds_wrr_locality_experimental"))
+		lbPolicy = []byte(fmt.Sprintf(`[{%q: {"childPolicy": [{"round_robin": {}}]}}]`, "xds_wrr_locality_experimental"))
 	case v3clusterpb.Cluster_RING_HASH:
 		if !envconfig.XDSRingHash {
 			return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
@@ -101,10 +99,9 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		if max := rhc.GetMaximumRingSize(); max != nil {
 			maxSize = max.GetValue()
 		}
-		lbPolicy = &ClusterLBPolicyRingHash{MinimumRingSize: minSize, MaximumRingSize: maxSize}
 
-		rhLBCfgJSON := []byte(fmt.Sprintf("{\"minRingSize\": %d, \"maxRingSize\": %d}", minSize, maxSize))
-		lbCfgJSON = []byte(fmt.Sprintf(`[{%q: %s}]`, "ring_hash_experimental", rhLBCfgJSON))
+		rhLBCfg := []byte(fmt.Sprintf("{\"minRingSize\": %d, \"maxRingSize\": %d}", minSize, maxSize))
+		lbPolicy = []byte(fmt.Sprintf(`[{%q: %s}]`, "ring_hash_experimental", rhLBCfg))
 	default:
 		return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
@@ -129,7 +126,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	}
 
 	if cluster.GetLoadBalancingPolicy() != nil && envconfig.XDSCustomLBPolicy {
-		lbCfgJSON, err = xdslbregistry.ConvertToServiceConfig(cluster.GetLoadBalancingPolicy())
+		lbPolicy, err = xdslbregistry.ConvertToServiceConfig(cluster.GetLoadBalancingPolicy())
 		if err != nil {
 			return ClusterUpdate{}, fmt.Errorf("error converting LoadBalancingPolicy %v in response: %+v: %v", cluster.GetLoadBalancingPolicy(), cluster, err)
 		}
@@ -137,8 +134,8 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		// converted configuration. It will do this by having the gRPC LB policy
 		// registry parse the configuration." - A52
 		bc := &internalserviceconfig.BalancerConfig{}
-		if err := json.Unmarshal(lbCfgJSON, bc); err != nil {
-			return ClusterUpdate{}, fmt.Errorf("JSON generated from xDS LB policy registry: %s is invalid: %v", pretty.FormatJSON(lbCfgJSON), err)
+		if err := json.Unmarshal(lbPolicy, bc); err != nil {
+			return ClusterUpdate{}, fmt.Errorf("JSON generated from xDS LB policy registry: %s is invalid: %v", pretty.FormatJSON(lbPolicy), err)
 		}
 	}
 
@@ -147,7 +144,6 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		SecurityCfg:      sc,
 		MaxRequests:      circuitBreakersFromCluster(cluster),
 		LBPolicy:         lbPolicy,
-		LBPolicyJSON:     lbCfgJSON,
 		OutlierDetection: od,
 	}
 

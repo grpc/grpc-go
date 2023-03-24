@@ -364,23 +364,8 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, testClient, wantAddrs); err != nil {
 		t.Fatal(err)
 	}
-
-	// Change the weight of locality2 and ensure weighted roundrobin.  Since
-	// locality2 has twice the weight of locality3, it will be picked twice as
-	// frequently as locality3 for RPCs. And since locality2 has a single
-	// backend and locality3 has two backends, the backend in locality2 will
-	// receive four times the traffic of each of locality3's backends.
-	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
-		{name: localityName2, weight: 2, ports: ports[1:2]},
-		{name: localityName3, weight: 1, ports: ports[2:4]},
-	})
-	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-	wantAddrs = []resolver.Address{addrs[1], addrs[1], addrs[1], addrs[1], addrs[2], addrs[3]}
-	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, testClient, wantAddrs); err != nil {
-		t.Fatal(err)
-	}
+	// Locality weights are now taken into account for in
+	// wrr_locality_experimental.
 }
 
 // TestEDS_EndpointsHealth tests the cluster_resolver LB policy using an EDS

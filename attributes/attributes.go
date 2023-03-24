@@ -25,6 +25,8 @@
 // later release.
 package attributes
 
+import "strings"
+
 // Attributes is an immutable struct for storing and retrieving generic
 // key/value pairs.  Keys must be hashable, and users should define their own
 // types for keys.  Values should not be modified after they are added to an
@@ -98,4 +100,23 @@ func (a *Attributes) Equal(o *Attributes) bool {
 		}
 	}
 	return true
+}
+
+// String prints the attribute map. If any key or values throughout the map
+// implement fmt.Stringer, it calls that method and appends.
+func (a *Attributes) String() string {
+	var sb strings.Builder
+	sb.WriteString("{")
+	for k, v := range a.m {
+		if str, ok := k.(interface{ String() string }); ok {
+			sb.WriteString(str.String())
+			sb.WriteString(", ")
+		}
+		if str, ok := v.(interface{ String() string }); ok {
+			sb.WriteString(str.String())
+			sb.WriteString(", ")
+		}
+	}
+	sb.WriteString("}")
+	return sb.String()
 }

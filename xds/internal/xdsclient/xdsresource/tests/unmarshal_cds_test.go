@@ -357,7 +357,6 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf,
-				LBPolicy: &xdsresource.ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
 			},
 			wantLBConfig: &internalserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
@@ -589,11 +588,11 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			// compare JSON bytes in a test. Thus, marshal into a Balancer
 			// Config struct and compare on that. Only need to test this JSON
 			// emission here, as this covers the possible output space.
-			if diff := cmp.Diff(update, test.wantUpdate, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "LBPolicy", "LBPolicyJSON")); diff != "" {
+			if diff := cmp.Diff(update, test.wantUpdate, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "LBPolicy")); diff != "" {
 				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) got diff: %v (-got, +want)", test.cluster, diff)
 			}
 			bc := &internalserviceconfig.BalancerConfig{}
-			if err := json.Unmarshal(update.LBPolicyJSON, bc); err != nil {
+			if err := json.Unmarshal(update.LBPolicy, bc); err != nil {
 				t.Fatalf("failed to unmarshal JSON: %v", err)
 			}
 			if diff := cmp.Diff(bc, test.wantLBConfig); diff != "" {

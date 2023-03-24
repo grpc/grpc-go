@@ -22,13 +22,13 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/url"
 	"strings"
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -124,7 +124,7 @@ type Address struct {
 	Attributes *attributes.Attributes
 
 	// BalancerAttributes contains arbitrary data about this address intended
-	// for consumption by the LB policy.  These attribes do not affect SubConn
+	// for consumption by the LB policy.  These attributes do not affect SubConn
 	// creation, connection establishment, handshaking, etc.
 	BalancerAttributes *attributes.Attributes
 
@@ -151,7 +151,20 @@ func (a Address) Equal(o Address) bool {
 
 // String returns JSON formatted string representation of the address.
 func (a Address) String() string {
-	return pretty.ToJSON(a)
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("{Addr: %v, ", a.Addr))
+	sb.WriteString(fmt.Sprintf("ServerName: %v, ", a.ServerName))
+	var atrStr string
+	if a.Attributes != nil {
+		atrStr = a.Attributes.String()
+	}
+	sb.WriteString(fmt.Sprintf("Attributes: %v, ", atrStr))
+	var balAtrStr string
+	if a.BalancerAttributes != nil {
+		balAtrStr = a.BalancerAttributes.String()
+	}
+	sb.WriteString(fmt.Sprintf("BalancerAttributes: %v}", balAtrStr))
+	return sb.String()
 }
 
 // BuildOptions includes additional information for the builder to create

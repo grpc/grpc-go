@@ -38,7 +38,6 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
@@ -394,23 +393,22 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 			dms[i].OutlierDetection = outlierDetectionToConfig(cu.OutlierDetection)
 		}
 	}
+
 	lbCfg := &clusterresolver.LBConfig{
 		DiscoveryMechanisms: dms,
 	}
 
-	// lbPolicy is set only when the policy is ringhash. The default (when it's
-	// not set) is roundrobin. And similarly, we only need to set XDSLBPolicy
-	// for ringhash (it also defaults to roundrobin).
-	if lbp := update.lbPolicy; lbp != nil {
-		lbCfg.XDSLBPolicy = &internalserviceconfig.BalancerConfig{
-			Name: ringhash.Name,
-			Config: &ringhash.LBConfig{
-				MinRingSize: lbp.MinimumRingSize,
-				MaxRingSize: lbp.MaximumRingSize,
-			},
-		}
+	bc := &internalserviceconfig.BalancerConfig{}
+	if err := json.Unmarshal(update.lbPolicy, bc); err != nil {
+		// This will never occur, valid configuration is emitted from the xDS
+		// Client. Validity is already checked in the xDS Client, however, this
+		// double validation is present because Unmarshalling and Validating are
+		// coupled into one json.Unmarshal operation). We will switch this in
+		// the future to two separate operations.
+		b.logger.Infof("emitted lbPolicy %s from xDS Client is invalid: %v", update.lbPolicy, err)
+		return
 	}
-
+	lbCfg.XDSLBPolicy = bc
 	ccState := balancer.ClientConnState{
 		ResolverState:  xdsclient.SetClient(resolver.State{}, b.xdsClient),
 		BalancerConfig: lbCfg,
