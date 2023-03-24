@@ -30,6 +30,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/resolver"
@@ -89,8 +91,8 @@ func (s) TestClientSideFederation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
-	port, cleanup := startTestService(t, nil)
-	defer cleanup()
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
 
 	const serviceName = "my-service-client-side-xds"
 	// LDS is old style name.
@@ -115,7 +117,7 @@ func (s) TestClientSideFederation(t *testing.T) {
 		NodeID: nodeID,
 		// This has only RDS and EDS.
 		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, ldsName, cdsName)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsName, "localhost", []uint32{port})},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
 		SkipValidation: true,
 	}
 
@@ -161,15 +163,15 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
-	port, cleanup2 := startTestService(t, nil)
-	defer cleanup2()
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
 
 	const serviceName = "my-service-client-side-xds"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
 		Host:       "localhost",
-		Port:       port,
+		Port:       testutils.ParsePort(t, server.Address),
 		SecLevel:   e2e.SecurityLevelNone,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

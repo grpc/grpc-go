@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 
@@ -123,15 +124,15 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 	})
 	defer cleanup1()
 
-	port, cleanup2 := startTestService(t, nil)
-	defer cleanup2()
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
 
 	const serviceName = "my-service-client-side-xds"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
 		Host:       "localhost",
-		Port:       port,
+		Port:       testutils.ParsePort(t, server.Address),
 		SecLevel:   e2e.SecurityLevelNone,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

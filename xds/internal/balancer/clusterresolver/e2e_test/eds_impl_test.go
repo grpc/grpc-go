@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +31,7 @@ import (
 	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	rrutil "google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/resolver"
@@ -78,21 +77,9 @@ func backendAddressesAndPorts(t *testing.T, servers []*stubserver.StubServer) ([
 	ports := make([]uint32, len(servers))
 	for i := 0; i < len(servers); i++ {
 		addrs[i] = resolver.Address{Addr: servers[i].Address}
-		ports[i] = extractPortFromAddress(t, servers[i].Address)
+		ports[i] = testutils.ParsePort(t, servers[i].Address)
 	}
 	return addrs, ports
-}
-
-func extractPortFromAddress(t *testing.T, address string) uint32 {
-	_, p, err := net.SplitHostPort(address)
-	if err != nil {
-		t.Fatalf("invalid server address %q: %v", address, err)
-	}
-	port, err := strconv.ParseUint(p, 10, 32)
-	if err != nil {
-		t.Fatalf("invalid server address %q: %v", address, err)
-	}
-	return uint32(port)
 }
 
 func startTestServiceBackends(t *testing.T, numBackends int) ([]*stubserver.StubServer, func()) {
