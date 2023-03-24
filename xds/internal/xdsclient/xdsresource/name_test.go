@@ -92,13 +92,11 @@ func TestParseName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if !tt.env {
-				defer func() func() {
-					oldEnv := envconfig.XDSFederation
-					envconfig.XDSFederation = false
-					return func() { envconfig.XDSFederation = oldEnv }
-				}()()
-			}
+			defer func() func() {
+				oldEnv := envconfig.XDSFederation
+				envconfig.XDSFederation = tt.env
+				return func() { envconfig.XDSFederation = oldEnv }
+			}()()
 			got := ParseName(tt.in)
 			if !cmp.Equal(got, tt.want, cmpopts.IgnoreFields(Name{}, "processingDirective")) {
 				t.Errorf("ParseName() = %#v, want %#v", got, tt.want)
@@ -113,10 +111,6 @@ func TestParseName(t *testing.T) {
 // TestNameStringCtxParamsOrder covers the case that if two names differ only in
 // context parameter __order__, the parsed name.String() has the same value.
 func TestNameStringCtxParamsOrder(t *testing.T) {
-	oldEnv := envconfig.XDSFederation
-	envconfig.XDSFederation = true
-	defer func() { envconfig.XDSFederation = oldEnv }()
-
 	const (
 		a = "xdstp://auth/type/id?a=1&b=2"
 		b = "xdstp://auth/type/id?b=2&a=1"
