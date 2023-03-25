@@ -34,9 +34,9 @@ type CallbackSerializer struct {
 	callbacks *buffer.Unbounded
 }
 
-// newCallbackSerializer returns a new callbackSerializer instance. The provided
+// NewCallbackSerializer returns a new CallbackSerializer instance. The provided
 // context will be passed to the scheduled callbacks. Users should cancel the
-// provided context to shutdown the callbackSerializer. It is guaranteed that no
+// provided context to shutdown the CallbackSerializer. It is guaranteed that no
 // callbacks will be executed once this context is canceled.
 func NewCallbackSerializer(ctx context.Context) *CallbackSerializer {
 	t := &CallbackSerializer{callbacks: buffer.NewUnbounded()}
