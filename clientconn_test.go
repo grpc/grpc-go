@@ -36,7 +36,9 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
+	"google.golang.org/grpc/internal/connectivitystate"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/transport"
@@ -1077,6 +1079,33 @@ func (s) TestDefaultServiceConfig(t *testing.T) {
 	testDefaultServiceConfigWhenResolverServiceConfigDisabled(t, r, addr, js)
 	testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t, r, addr, js)
 	testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t, r, addr, js)
+}
+
+type watcher struct{}
+
+func (w *watcher) OnStateChange(state connectivity.State) {
+	if state == connectivity.Shutdown {
+
+	}
+}
+
+// 1. ClientConnを生成する
+// 2. Watcherを生成
+// 3. ClientConnにWatcherを登録する
+// 4. ClientConnの状態を変更し、Callbackが呼び出されるか確認する
+// 5. 連続でClientConnの状態を変更し、Schedule通りにCallbackが呼ばれるか検証
+// 6. ClientConnをCloseし、Watcherのリソースが解放されていることを検証
+func (s) TestWatcher(t *testing.T) {
+	addr := "nonexist:///non.existent"
+	// タイムアウトで、ClientConnがCloseされるように、DialOptionsを設定する
+	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	w := watcher{}
+	// interface型の internal.AddConnectivityStateWatcher を型変換して、引数を与えて実行している
+	internal.AddConnectivityStateWatcher.(func(cc *ClientConn, w connectivitystate.Watcher) func())(cc, &w)
+	cc.Close()
 }
 
 func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
