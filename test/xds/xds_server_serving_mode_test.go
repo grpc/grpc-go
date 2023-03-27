@@ -34,8 +34,8 @@ import (
 	"google.golang.org/grpc/xds"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 // TestServerSideXDS_RedundantUpdateSuppression tests the scenario where the
@@ -207,7 +207,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
 	server := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	defer server.Stop()
-	testpb.RegisterTestServiceServer(server, &testService{})
+	testgrpc.RegisterTestServiceServer(server, &testService{})
 
 	// Setup the management server to respond with server-side Listener
 	// resources for both listeners.

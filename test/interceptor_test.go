@@ -27,7 +27,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 type parentCtxkey struct{}
@@ -252,7 +254,7 @@ func (s) TestChainStreamClientInterceptor_ContextValuePropagation(t *testing.T) 
 	// Start a stub server and use the above chain of interceptors while creating
 	// a ClientConn to it.
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			if _, err := stream.Recv(); err != nil {
 				return err
 			}

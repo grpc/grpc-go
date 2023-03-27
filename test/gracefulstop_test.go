@@ -32,7 +32,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/status"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 type delayListener struct {
@@ -111,7 +113,7 @@ func (s) TestGracefulStop(t *testing.T) {
 	d := func(ctx context.Context, _ string) (net.Conn, error) { return dlis.Dial(ctx) }
 
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			_, err := stream.Recv()
 			if err != nil {
 				return err
@@ -120,7 +122,7 @@ func (s) TestGracefulStop(t *testing.T) {
 		},
 	}
 	s := grpc.NewServer()
-	testpb.RegisterTestServiceServer(s, ss)
+	testgrpc.RegisterTestServiceServer(s, ss)
 
 	// 1. Start Server
 	wg := sync.WaitGroup{}
@@ -152,7 +154,7 @@ func (s) TestGracefulStop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grpc.DialContext(_, %q, _) = %v", lis.Addr().String(), err)
 	}
-	client := testpb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 	defer cc.Close()
 
 	// 4. Send an RPC on the new connection.
@@ -173,7 +175,7 @@ func (s) TestGracefulStopClosesConnAfterLastStream(t *testing.T) {
 	handlerCalled := make(chan struct{})
 	gracefulStopCalled := make(chan struct{})
 
-	ts := &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
+	ts := &funcServer{streamingInputCall: func(stream testgrpc.TestService_StreamingInputCallServer) error {
 		close(handlerCalled) // Initiate call to GracefulStop.
 		<-gracefulStopCalled // Wait for GOAWAYs to be received by the client.
 		return nil

@@ -39,8 +39,8 @@ import (
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 // TestClientSideFederation tests that federation is supported.
@@ -187,7 +187,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	defer cc.Close()
 	t.Log("Created ClientConn to test service")
 
-	client := testpb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() RPC: %v", err)
 	}
@@ -260,7 +260,7 @@ func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
 	defer cc.Close()
 	t.Log("Created ClientConn to test service")
 
-	client := testpb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 	_, err = client.EmptyCall(ctx, &testpb.Empty{})
 	if err == nil {
 		t.Fatal("EmptyCall RPC succeeded for target with unknown authority when expected to fail")

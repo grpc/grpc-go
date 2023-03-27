@@ -54,7 +54,8 @@ import (
 	durationpb "github.com/golang/protobuf/ptypes/duration"
 	lbgrpc "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var (
@@ -298,7 +299,7 @@ func (b *remoteBalancer) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServe
 }
 
 type testServer struct {
-	testpb.UnimplementedTestServiceServer
+	testgrpc.UnimplementedTestServiceServer
 
 	addr     string
 	fallback bool
@@ -318,7 +319,7 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 	return &testpb.Empty{}, nil
 }
 
-func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
+func (s *testServer) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallServer) error {
 	return nil
 }
 
@@ -328,7 +329,7 @@ func startBackends(t *testing.T, sn string, fallback bool, lis ...net.Listener) 
 			sn: sn,
 		}
 		s := grpc.NewServer(grpc.Creds(creds))
-		testpb.RegisterTestServiceServer(s, &testServer{addr: l.Addr().String(), fallback: fallback})
+		testgrpc.RegisterTestServiceServer(s, &testServer{addr: l.Addr().String(), fallback: fallback})
 		servers = append(servers, s)
 		go func(s *grpc.Server, l net.Listener) {
 			s.Serve(l)
@@ -466,7 +467,7 @@ func (s) TestGRPCLB_Basic(t *testing.T) {
 	// Make one successful RPC.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	testC := testpb.NewTestServiceClient(cc)
+	testC := testgrpc.NewTestServiceClient(cc)
 	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 	}
@@ -539,7 +540,7 @@ func (s) TestGRPCLB_Weighted(t *testing.T) {
 		}
 		tss.ls.sls <- &lbpb.ServerList{Servers: backends}
 
-		testC := testpb.NewTestServiceClient(cc)
+		testC := testgrpc.NewTestServiceClient(cc)
 		if err := roundrobin.CheckWeightedRoundRobinRPCs(ctx, testC, wantAddrs); err != nil {
 			t.Fatal(err)
 		}
@@ -599,7 +600,7 @@ func (s) TestGRPCLB_DropRequest(t *testing.T) {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	defer cc.Close()
-	testC := testpb.NewTestServiceClient(cc)
+	testC := testgrpc.NewTestServiceClient(cc)
 
 	var (
 		i int
@@ -771,7 +772,7 @@ func (s) TestGRPCLB_BalancerDisconnects(t *testing.T) {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	defer cc.Close()
-	testC := testpb.NewTestServiceClient(cc)
+	testC := testgrpc.NewTestServiceClient(cc)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -836,7 +837,7 @@ func (s) TestGRPCLB_Fallback(t *testing.T) {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	defer cc.Close()
-	testC := testpb.NewTestServiceClient(cc)
+	testC := testgrpc.NewTestServiceClient(cc)
 
 	// Push an update to the resolver with fallback backend address stored in
 	// the `Addresses` field and an invalid remote balancer address stored in
@@ -942,7 +943,7 @@ func (s) TestGRPCLB_ExplicitFallback(t *testing.T) {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	defer cc.Close()
-	testC := testpb.NewTestServiceClient(cc)
+	testC := testgrpc.NewTestServiceClient(cc)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -1012,7 +1013,7 @@ func (s) TestGRPCLB_FallBackWithNoServerAddress(t *testing.T) {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	defer cc.Close()
-	testC := testpb.NewTestServiceClient(cc)
+	testC := testgrpc.NewTestServiceClient(cc)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -1151,7 +1152,7 @@ func (s) TestGRPCLB_PickFirst(t *testing.T) {
 	}
 	rs = grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)}, s)
 	r.UpdateState(rs)
-	testC := testpb.NewTestServiceClient(cc)
+	testC := testgrpc.NewTestServiceClient(cc)
 	if err := roundrobin.CheckRoundRobinRPCs(ctx, testC, beServerAddrs[1:]); err != nil {
 		t.Fatal(err)
 	}
@@ -1194,7 +1195,7 @@ func (s) TestGRPCLB_BackendConnectionErrorPropagation(t *testing.T) {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	defer cc.Close()
-	testC := testpb.NewTestServiceClient(cc)
+	testC := testgrpc.NewTestServiceClient(cc)
 
 	rs := resolver.State{
 		Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
@@ -1246,7 +1247,7 @@ func testGRPCLBEmptyServerList(t *testing.T, svcfg string) {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	defer cc.Close()
-	testC := testpb.NewTestServiceClient(cc)
+	testC := testgrpc.NewTestServiceClient(cc)
 
 	tss.ls.sls <- &lbpb.ServerList{Servers: beServers}
 
@@ -1320,7 +1321,7 @@ func (s) TestGRPCLBWithTargetNameFieldInConfig(t *testing.T) {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	defer cc.Close()
-	testC := testpb.NewTestServiceClient(cc)
+	testC := testgrpc.NewTestServiceClient(cc)
 
 	// Push a resolver update with grpclb configuration which does not contain the
 	// target_name field. Our fake remote balancer is configured to always
@@ -1453,7 +1454,7 @@ const (
 
 func (s) TestGRPCLBStatsUnarySuccess(t *testing.T) {
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
-		testC := testpb.NewTestServiceClient(cc)
+		testC := testgrpc.NewTestServiceClient(cc)
 		ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTimeout)
 		defer cancel()
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1474,7 +1475,7 @@ func (s) TestGRPCLBStatsUnarySuccess(t *testing.T) {
 
 func (s) TestGRPCLBStatsUnaryDrop(t *testing.T) {
 	if err := runAndCheckStats(t, true, nil, func(cc *grpc.ClientConn) {
-		testC := testpb.NewTestServiceClient(cc)
+		testC := testgrpc.NewTestServiceClient(cc)
 		ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTimeout)
 		defer cancel()
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1496,7 +1497,7 @@ func (s) TestGRPCLBStatsUnaryDrop(t *testing.T) {
 
 func (s) TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
-		testC := testpb.NewTestServiceClient(cc)
+		testC := testgrpc.NewTestServiceClient(cc)
 		ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTimeout)
 		defer cancel()
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1518,7 +1519,7 @@ func (s) TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 
 func (s) TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
-		testC := testpb.NewTestServiceClient(cc)
+		testC := testgrpc.NewTestServiceClient(cc)
 		ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTimeout)
 		defer cancel()
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1553,7 +1554,7 @@ func (s) TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 
 func (s) TestGRPCLBStatsStreamingDrop(t *testing.T) {
 	if err := runAndCheckStats(t, true, nil, func(cc *grpc.ClientConn) {
-		testC := testpb.NewTestServiceClient(cc)
+		testC := testgrpc.NewTestServiceClient(cc)
 		ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTimeout)
 		defer cancel()
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -1589,7 +1590,7 @@ func (s) TestGRPCLBStatsStreamingDrop(t *testing.T) {
 
 func (s) TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 	if err := runAndCheckStats(t, false, nil, func(cc *grpc.ClientConn) {
-		testC := testpb.NewTestServiceClient(cc)
+		testC := testgrpc.NewTestServiceClient(cc)
 		ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTimeout)
 		defer cancel()
 		// The first non-failfast RPC succeeds, all connections are up.
