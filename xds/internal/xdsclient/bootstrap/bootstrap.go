@@ -42,11 +42,6 @@ import (
 )
 
 const (
-	// The "server_features" field in the bootstrap file contains a list of
-	// features supported by the server. A value of "xds_v3" indicates that the
-	// server supports the v3 version of the xDS transport protocol.
-	serverFeaturesV3 = "xds_v3"
-
 	gRPCUserAgentName               = "gRPC Go"
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
 	clientFeatureResourceWrapper    = "xds.config.resource-in-sotw"
@@ -189,10 +184,7 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		if err != nil {
 			return fmt.Errorf("failed to build credentials bundle from bootstrap for %q: %v", cc.Type, err)
 		}
-		sc.Creds = ChannelCreds{
-			Type:   cc.Type,
-			Config: cc.Config,
-		}
+		sc.Creds = ChannelCreds(cc)
 		sc.credsDialOption = grpc.WithCredentialsBundle(bundle)
 		break
 	}

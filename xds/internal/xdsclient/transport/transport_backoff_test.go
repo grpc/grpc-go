@@ -62,7 +62,7 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 	streamErr := errors.New("ADS stream error")
 	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
 		// Push on a channel whenever the stream is closed.
-		OnStreamClosed: func(int64) {
+		OnStreamClosed: func(int64, *v3corepb.Node) {
 			select {
 			case streamCloseCh <- struct{}{}:
 			default:

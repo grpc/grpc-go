@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	testgrpc "google.golang.org/grpc/test/grpc_testing"
@@ -68,7 +69,7 @@ func (s) TestErrorFromParentLB_ConnectionError(t *testing.T) {
 	streamClosedCh := make(chan struct{}, 1)
 	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
 		Listener: lis,
-		OnStreamClosed: func(int64) {
+		OnStreamClosed: func(int64, *v3corepb.Node) {
 			select {
 			case streamClosedCh <- struct{}{}:
 			default:
