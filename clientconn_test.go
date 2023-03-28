@@ -1081,31 +1081,119 @@ func (s) TestDefaultServiceConfig(t *testing.T) {
 	testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t, r, addr, js)
 }
 
-type watcher struct{}
+// チャンネルを作成して、OnStateChangeで変更する？順番も検証する？
+type watcher struct {
+	t                  *testing.T
+	executionOrderCh   chan string
+	shutdownCh         chan string
+	stateChangesResult []string
+}
 
 func (w *watcher) OnStateChange(state connectivity.State) {
-	if state == connectivity.Shutdown {
-
+	defer w.t.Log(w.stateChangesResult)
+	switch state {
+	case connectivity.Idle:
+		w.stateChangesResult = append(w.stateChangesResult, state.String())
+		// w.executionOrderCh <- connectivity.Idle.String()
+	case connectivity.Connecting:
+		w.stateChangesResult = append(w.stateChangesResult, state.String())
+		// w.executionOrderCh <- connectivity.Connecting.String()
+	case connectivity.Ready:
+		w.stateChangesResult = append(w.stateChangesResult, state.String())
+		// w.executionOrderCh <- connectivity.Ready.String()
+	case connectivity.TransientFailure:
+		w.stateChangesResult = append(w.stateChangesResult, state.String())
+		// w.executionOrderCh <- connectivity.TransientFailure.String()
+	case connectivity.Shutdown:
+		w.stateChangesResult = append(w.stateChangesResult, state.String())
+		w.executionOrderCh <- connectivity.Shutdown.String()
+		// w.shutdownCh <- connectivity.Shutdown.String()
 	}
 }
 
+// 以下は、多分複数のテストケースに分けられる
 // 1. ClientConnを生成する
 // 2. Watcherを生成
 // 3. ClientConnにWatcherを登録する
 // 4. ClientConnの状態を変更し、Callbackが呼び出されるか確認する
 // 5. 連続でClientConnの状態を変更し、Schedule通りにCallbackが呼ばれるか検証
 // 6. ClientConnをCloseし、Watcherのリソースが解放されていることを検証
+// 7. internal.AddConnectivityStateWatcherの呼出で与えられたcancel関数を実行した挙動を確認
 func (s) TestWatcher(t *testing.T) {
-	addr := "nonexist:///non.existent"
-	// タイムアウトで、ClientConnがCloseされるように、DialOptionsを設定する
-	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()))
+	// アクセス可能なサーバーを生成する
+	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+		t.Fatalf("Unexpected error from net.Listen(%q, %q): %v", "tcp", "localhost:0", err)
 	}
-	w := watcher{}
+	defer lis.Close()
+	done := make(chan struct{})
+	go func() { // Launch the server.
+		defer close(done)
+		conn, err := lis.Accept()
+		defer conn.Close()
+		if err != nil {
+			t.Errorf("Error while accepting. Err: %v", err)
+			return
+		}
+	}()
+
+	stateChangesList := []connectivity.State{
+		connectivity.Idle,
+		connectivity.Connecting,
+		connectivity.Ready,
+		connectivity.TransientFailure,
+	}
+	numStateChanges := len(stateChangesList)
+	// Closeは最後に、別関数経由で呼ばれるので、ここでは設定しない
+
+	cc, err := Dial(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Unexpected error from Dial(%v) = %v", lis.Addr(), err)
+	}
+
+	executionOrderCh := make(chan string, numStateChanges)
+	shutdownCh := make(chan string)
+	var stateChangesResult []string
+	w := watcher{
+		t:                  t,
+		executionOrderCh:   executionOrderCh,
+		shutdownCh:         shutdownCh,
+		stateChangesResult: stateChangesResult,
+	}
 	// interface型の internal.AddConnectivityStateWatcher を型変換して、引数を与えて実行している
 	internal.AddConnectivityStateWatcher.(func(cc *ClientConn, w connectivitystate.Watcher) func())(cc, &w)
+
+	// var mu sync.Mutex
+	// for i := 0; i < numStateChanges; i++ {
+	// 	go func(id int) {
+	// 		mu.Lock()
+	// 		defer mu.Unlock()
+	// 		cc.csMgr.updateState(stateChangesList[id])
+	// 	}(i)
+	// }
+
+	// complete := make(chan struct{})
+	// go func() {
+	// 	expectedOrder := make([]string, numStateChanges)
+	// 	for i := 0; i < numStateChanges; i++ {
+	// 		select {
+	// 		case state := <-executionOrderCh:
+	// 			expectedOrder[i] = state
+	// 			t.Log(expectedOrder)
+	// 		}
+	// 	}
+	// 	close(complete)
+	// }()
+
+	// <-complete
+	// cc.Close()の実行により、Watcherが使っていたリソースが解放されることを確認する
+	// time.Sleep(time.Second * 2)
+	cc.WaitForStateChange(context.Background(), connectivity.Ready)
 	cc.Close()
+	t.Log(w.stateChangesResult)
+	t.Log("The ClientConn is closed and test is done!!!")
+	// time.Sleep(time.Second * 1)
+	<-done
 }
 
 func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
