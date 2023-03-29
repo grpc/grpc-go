@@ -21,6 +21,7 @@ package xdsclient
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -172,21 +173,36 @@ func (s) TestTimerAndWatchStateOnErrorCallback(t *testing.T) {
 
 // This tests the case where the ADS stream breaks after successfully receiving
 // a message on the stream. The test performs the following:
-//   - configures the management server with resourceA.
+//   - configures the management server with the ability to dropRequests based on
+//     a boolean flag.
+//   - update the mgmt server with resourceA.
 //   - registers a watch for resourceA and verifies that the watcher's update
 //     callback is invoked.
 //   - registers a watch for resourceB and verifies that the watcher's update
 //     callback is not invoked. This is because the management server does not
 //     contain resourceB.
-//   - stops the management server to verify that the error propagated to the
-//     watcher is a connection error. This happens when the authority attempts
-//     to create a new stream.
+//   - force mgmt server to drop requests. Verify that watcher for resourceB gets
+//     connection error.
+//   - resume mgmt server to accept requests.
+//   - update the mgmt server with resourceB and verifies that the watcher's
+//     update callback is invoked.
 func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Using a shorter expiry timeout to verify that the watch timeout was never fired.
-	a, ms, nodeID := setupTest(ctx, t, emptyServerOpts, defaultTestWatchExpiryTimeout)
+	serverDropRequests := atomic.Bool{}
+	serverOpt := e2e.ManagementServerOptions{
+		OnStreamRequest: func(int64, *v3discoverypb.DiscoveryRequest) error {
+			if serverDropRequests.Load() {
+				t.Log("Management server is forced to drop this request and return error.")
+				return fmt.Errorf("request was forced to drop")
+			}
+			return nil
+		},
+	}
+
+	a, ms, nodeID := setupTest(ctx, t, serverOpt, defaultTestTimeout)
+	defer ms.Stop()
 	defer a.close()
 
 	nameA := "xdsclient-test-lds-resourceA"
@@ -207,6 +223,9 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	case <-watcherA.UpdateCh:
 	}
 
+	cancelA()
+	serverDropRequests.Store(true)
+
 	nameB := "xdsclient-test-lds-resourceB"
 	watcherB := testutils.NewTestResourceWatcher()
 	cancelB := a.watchResource(listenerResourceType, nameB, watcherB)
@@ -214,14 +233,16 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 
 	// Blocking on resource B watcher's error channel. This error should be due to
 	// connectivity issue when reconnecting because the mgmt server was already been
-	// stopped. ALl other errors or an update will fail the test.
+	// stopped. Also verifying that OnResourceDoesNotExist() method was not invoked
+	// on the watcher.
 	cancelA()
-	ms.Stop()
 	select {
 	case <-ctx.Done():
 		t.Fatal("Test timed out before mgmt server got the request.")
 	case u := <-watcherB.UpdateCh:
 		t.Fatalf("Watch got an unexpected resource update: %v.", u)
+	case <-watcherB.ResourceDoesNotExistCh:
+		t.Fatalf("Illegal invocation of OnResourceDoesNotExist() method on the watcher.")
 	case gotErr := <-watcherB.ErrorCh:
 		wantErr := xdsresource.ErrorTypeConnection
 		if xdsresource.ErrType(gotErr) != wantErr {
@@ -229,13 +250,18 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 		}
 	}
 
-	// Since there was already a response on the stream, the timer for resource B
-	// should not fire. If the timer did fire, watch state would be in `watchStateTimeout`.
-	<-time.After(defaultTestWatchExpiryTimeout)
-	if err := compareWatchState(a, nameB, watchStateStarted); err != nil {
-		t.Fatalf("Invalid watch state: %v.", err)
+	// Updating server with resource B and also re-enabling requests on the server.
+	if err := updateResourceInServer(ctx, ms, nameB, nodeID); err != nil {
+		t.Fatalf("Failed to update server with resource: %q; err: %q", nameB, err)
 	}
-
+	serverDropRequests.Store(false)
+	select {
+	case <-ctx.Done():
+		t.Fatal("Test timed out before watcher received the update.")
+	case err := <-watcherB.ErrorCh:
+		t.Fatalf("Watch got an unexpected error update: %q; want: valid update.", err)
+	case <-watcherB.UpdateCh:
+	}
 }
 
 func compareWatchState(a *authority, rn string, wantState watchState) error {
