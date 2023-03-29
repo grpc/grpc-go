@@ -42,5 +42,3 @@ require (
 replace google.golang.org/grpc => ../..
 
 replace google.golang.org/grpc/gcp/observability => ../../gcp/observability
-
-replace google.golang.org/grpc/stats/opencensus => ../../stats/opencensus
