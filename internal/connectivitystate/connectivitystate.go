@@ -84,10 +84,11 @@ func (t *Tracker) AddWatcher(watcher Watcher) func() {
 
 	t.watchers[watcher] = true
 
+	state := t.state
 	t.cs.Schedule(func(context.Context) {
 		t.mu.Lock()
 		defer t.mu.Unlock()
-		watcher.OnStateChange(t.state)
+		watcher.OnStateChange(state)
 	})
 
 	return func() {
@@ -111,7 +112,7 @@ func (t *Tracker) SetState(state connectivity.State) {
 		t.cs.Schedule(func(context.Context) {
 			t.mu.Lock()
 			defer t.mu.Unlock()
-			watcher.OnStateChange(t.state)
+			watcher.OnStateChange(state)
 		})
 	}
 }

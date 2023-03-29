@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
@@ -1081,33 +1082,27 @@ func (s) TestDefaultServiceConfig(t *testing.T) {
 	testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t, r, addr, js)
 }
 
-// チャンネルを作成して、OnStateChangeで変更する？順番も検証する？
 type watcher struct {
-	t                  *testing.T
-	executionOrderCh   chan string
-	shutdownCh         chan string
-	stateChangesResult []string
+	mu                  sync.Mutex
+	connectingCh        chan struct{}
+	onStateChangeResult []string
 }
 
 func (w *watcher) OnStateChange(state connectivity.State) {
-	defer w.t.Log(w.stateChangesResult)
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	switch state {
 	case connectivity.Idle:
-		w.stateChangesResult = append(w.stateChangesResult, state.String())
-		// w.executionOrderCh <- connectivity.Idle.String()
+		w.onStateChangeResult = append(w.onStateChangeResult, state.String())
 	case connectivity.Connecting:
-		w.stateChangesResult = append(w.stateChangesResult, state.String())
-		// w.executionOrderCh <- connectivity.Connecting.String()
+		w.onStateChangeResult = append(w.onStateChangeResult, state.String())
+		close(w.connectingCh)
 	case connectivity.Ready:
-		w.stateChangesResult = append(w.stateChangesResult, state.String())
-		// w.executionOrderCh <- connectivity.Ready.String()
+		w.onStateChangeResult = append(w.onStateChangeResult, state.String())
 	case connectivity.TransientFailure:
-		w.stateChangesResult = append(w.stateChangesResult, state.String())
-		// w.executionOrderCh <- connectivity.TransientFailure.String()
+		w.onStateChangeResult = append(w.onStateChangeResult, state.String())
 	case connectivity.Shutdown:
-		w.stateChangesResult = append(w.stateChangesResult, state.String())
-		w.executionOrderCh <- connectivity.Shutdown.String()
-		// w.shutdownCh <- connectivity.Shutdown.String()
+		w.onStateChangeResult = append(w.onStateChangeResult, state.String())
 	}
 }
 
@@ -1119,81 +1114,89 @@ func (w *watcher) OnStateChange(state connectivity.State) {
 // 5. 連続でClientConnの状態を変更し、Schedule通りにCallbackが呼ばれるか検証
 // 6. ClientConnをCloseし、Watcherのリソースが解放されていることを検証
 // 7. internal.AddConnectivityStateWatcherの呼出で与えられたcancel関数を実行した挙動を確認
-func (s) TestWatcher(t *testing.T) {
-	// アクセス可能なサーバーを生成する
+
+func (s) TestReportStateChangesToWatcher(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatalf("Unexpected error from net.Listen(%q, %q): %v", "tcp", "localhost:0", err)
+		t.Fatalf("Error while listening. Err: %v", err)
 	}
 	defer lis.Close()
 	done := make(chan struct{})
+	sent := make(chan struct{})
+	dialDone := make(chan struct{})
 	go func() { // Launch the server.
-		defer close(done)
+		defer func() {
+			close(done)
+		}()
 		conn, err := lis.Accept()
-		defer conn.Close()
 		if err != nil {
 			t.Errorf("Error while accepting. Err: %v", err)
 			return
 		}
+		defer conn.Close()
+		// Sleep for a little bit to make sure that Dial on client
+		// side blocks until settings are received.
+		time.Sleep(100 * time.Millisecond)
+		framer := http2.NewFramer(conn, conn)
+		close(sent)
+		if err := framer.WriteSettings(http2.Setting{}); err != nil {
+			t.Errorf("Error while writing settings. Err: %v", err)
+			return
+		}
+		<-dialDone // Close conn only after dial returns.
 	}()
-
-	stateChangesList := []connectivity.State{
-		connectivity.Idle,
-		connectivity.Connecting,
-		connectivity.Ready,
-		connectivity.TransientFailure,
-	}
-	numStateChanges := len(stateChangesList)
-	// Closeは最後に、別関数経由で呼ばれるので、ここでは設定しない
-
-	cc, err := Dial(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	client, err := DialContext(ctx, lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), WithBlock())
 	if err != nil {
-		t.Fatalf("Unexpected error from Dial(%v) = %v", lis.Addr(), err)
+		t.Fatalf("Error while dialing. Err: %v", err)
 	}
 
-	executionOrderCh := make(chan string, numStateChanges)
-	shutdownCh := make(chan string)
-	var stateChangesResult []string
+	// Wait until connectivity state of client changes to Ready
+	for client.GetState() != connectivity.Ready {
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	var onStateChangeResult []string
+	connectingCh := make(chan struct{})
 	w := watcher{
-		t:                  t,
-		executionOrderCh:   executionOrderCh,
-		shutdownCh:         shutdownCh,
-		stateChangesResult: stateChangesResult,
+		connectingCh:        connectingCh,
+		onStateChangeResult: onStateChangeResult,
 	}
-	// interface型の internal.AddConnectivityStateWatcher を型変換して、引数を与えて実行している
-	internal.AddConnectivityStateWatcher.(func(cc *ClientConn, w connectivitystate.Watcher) func())(cc, &w)
+	internal.AddConnectivityStateWatcher.(func(cc *ClientConn, w connectivitystate.Watcher) func())(client, &w)
 
-	// var mu sync.Mutex
-	// for i := 0; i < numStateChanges; i++ {
-	// 	go func(id int) {
-	// 		mu.Lock()
-	// 		defer mu.Unlock()
-	// 		cc.csMgr.updateState(stateChangesList[id])
-	// 	}(i)
-	// }
+	close(dialDone)
 
-	// complete := make(chan struct{})
-	// go func() {
-	// 	expectedOrder := make([]string, numStateChanges)
-	// 	for i := 0; i < numStateChanges; i++ {
-	// 		select {
-	// 		case state := <-executionOrderCh:
-	// 			expectedOrder[i] = state
-	// 			t.Log(expectedOrder)
-	// 		}
-	// 	}
-	// 	close(complete)
-	// }()
+	// Wait until sourceState changes from Ready to Idle
+	client.WaitForStateChange(ctx, connectivity.Ready)
 
-	// <-complete
-	// cc.Close()の実行により、Watcherが使っていたリソースが解放されることを確認する
-	// time.Sleep(time.Second * 2)
-	cc.WaitForStateChange(context.Background(), connectivity.Ready)
-	cc.Close()
-	t.Log(w.stateChangesResult)
-	t.Log("The ClientConn is closed and test is done!!!")
-	// time.Sleep(time.Second * 1)
+	client.Connect()
+
+	// Wait until sourceState changes from Idle to Connecting
+	client.WaitForStateChange(ctx, connectivity.Idle)
+
+	select {
+	case <-sent:
+	default:
+		t.Fatalf("Dial returned before server settings were sent")
+	}
 	<-done
+
+	client.Close()
+
+	expectedStateChangeResult := []string{
+		connectivity.Ready.String(),
+		connectivity.Idle.String(),
+		connectivity.Connecting.String(),
+	}
+	<-w.connectingCh
+	if diff := cmp.Diff(w.onStateChangeResult, expectedStateChangeResult); diff != "" {
+		t.Fatalf("OnStateChange methods of Watcher are not executed in scheduled order. diff(-want, +got):\n%s", diff)
+	}
+
+	if client.csMgr.connectivityStateTracker != nil {
+		t.Fatalf("client.csMgr.connectivityStateTracker is not <nil> (actual: %v)", client.csMgr.connectivityStateTracker)
+	}
 }
 
 func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {

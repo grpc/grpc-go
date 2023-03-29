@@ -1048,6 +1048,13 @@ func (cc *ClientConn) ResetConnectBackoff() {
 func (cc *ClientConn) Close() error {
 	defer cc.cancel()
 
+	cc.csMgr.mu.Lock()
+	if cc.csMgr.connectivityStateTracker != nil {
+		cc.csMgr.connectivityStateTracker.Stop()
+		cc.csMgr.connectivityStateTracker = nil
+	}
+	cc.csMgr.mu.Unlock()
+
 	cc.mu.Lock()
 	if cc.conns == nil {
 		cc.mu.Unlock()
@@ -1070,10 +1077,6 @@ func (cc *ClientConn) Close() error {
 	}
 	if rWrapper != nil {
 		rWrapper.close()
-	}
-
-	if cc.csMgr.connectivityStateTracker != nil {
-		cc.csMgr.connectivityStateTracker.Stop()
 	}
 
 	for ac := range conns {
