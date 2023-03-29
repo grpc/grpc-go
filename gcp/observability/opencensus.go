@@ -88,16 +88,16 @@ func newStackdriverExporter(config *config) (tracingMetricsExporter, error) {
 	// library, including their label that uniquely identifies the process.
 	// Thus, generate a unique process identifier here to uniquely identify
 	// process for metrics exporting to function correctly.
-	traceLabels := make(map[string]string, len(config.Labels))
+	metricsLabels := make(map[string]string, len(config.Labels))
 	for k, v := range config.Labels {
-		traceLabels[k] = v
+		metricsLabels[k] = v
 	}
-	traceLabels["opencensus_task"] = generateUniqueProcessIdentifier()
+	metricsLabels["opencensus_task"] = generateUniqueProcessIdentifier()
 	exporter, err := stackdriver.NewExporter(stackdriver.Options{
 		ProjectID:               config.ProjectID,
 		MonitoredResource:       mr,
-		DefaultMonitoringLabels: labelsToMonitoringLabels(config.Labels),
-		DefaultTraceAttributes:  labelsToTraceAttributes(traceLabels),
+		DefaultMonitoringLabels: labelsToMonitoringLabels(metricsLabels),
+		DefaultTraceAttributes:  labelsToTraceAttributes(config.Labels),
 		MonitoringClientOptions: cOptsDisableLogTrace,
 		TraceClientOptions:      cOptsDisableLogTrace,
 	})
