@@ -1106,15 +1106,6 @@ func (w *watcher) OnStateChange(state connectivity.State) {
 	}
 }
 
-// 以下は、多分複数のテストケースに分けられる
-// 1. ClientConnを生成する
-// 2. Watcherを生成
-// 3. ClientConnにWatcherを登録する
-// 4. ClientConnの状態を変更し、Callbackが呼び出されるか確認する
-// 5. 連続でClientConnの状態を変更し、Schedule通りにCallbackが呼ばれるか検証
-// 6. ClientConnをCloseし、Watcherのリソースが解放されていることを検証
-// 7. internal.AddConnectivityStateWatcherの呼出で与えられたcancel関数を実行した挙動を確認
-
 func (s) TestReportStateChangesToWatcher(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
