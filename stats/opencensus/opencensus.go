@@ -159,15 +159,16 @@ func getRPCInfo(ctx context.Context) *rpcInfo {
 	return ri
 }
 
-// GetTraceAndSpanID returns the trace and span ID of the span in the context.
-// Returns true if IDs present and false if IDs not present.
-func GetTraceAndSpanID(ctx context.Context) (trace.TraceID, trace.SpanID, bool) {
+// GetTraceAndSpanIDAndIsSampled returns the trace and span ID of the span in
+// the context, and if the span is sampled. Returns true (as the last bool) if
+// IDs present and false if IDs not present.
+func GetTraceAndSpanIDAndIsSampled(ctx context.Context) (trace.TraceID, trace.SpanID, bool, bool) {
 	ri, ok := ctx.Value(rpcInfoKey{}).(*rpcInfo)
 	if !ok {
-		return trace.TraceID{}, trace.SpanID{}, false
+		return trace.TraceID{}, trace.SpanID{}, false, false
 	}
 	sc := ri.ti.span.SpanContext()
-	return sc.TraceID, sc.SpanID, true
+	return sc.TraceID, sc.SpanID, sc.IsSampled(), true
 }
 
 type clientStatsHandler struct {
