@@ -196,7 +196,6 @@ func securityToProto(se credentials.ChannelzSecurityValue) *channelzpb.Security 
 		return &channelzpb.Security{Model: &channelzpb.Security_Other{Other: otherSecurity}}
 	}
 	return nil
-
 }
 
 func addrToProto(a net.Addr) *channelzpb.Address {
