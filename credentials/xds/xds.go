@@ -165,7 +165,7 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 		if cert := certs[0]; !hi.MatchingSANExists(cert) {
 			// TODO: Print the complete certificate once the x509 package
 			// supports a String() method on the Certificate type.
-			return fmt.Errorf("Received SANs {DNSNames: %v, EmailAddresses: %v, IPAddresses: %v, URIs: %v} do not match any of the accepted SANs", cert.DNSNames, cert.EmailAddresses, cert.IPAddresses, cert.URIs)
+			return fmt.Errorf("xds: received SANs {DNSNames: %v, EmailAddresses: %v, IPAddresses: %v, URIs: %v} do not match any of the accepted SANs", cert.DNSNames, cert.EmailAddresses, cert.IPAddresses, cert.URIs)
 		}
 		return nil
 	}
