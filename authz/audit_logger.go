@@ -27,7 +27,7 @@ var (
 	m  = make(map[string]AuditLoggerBuilder)
 )
 
-// ReigsterAuditLoggerBuilder registers the builder in a global map
+// RegisterAuditLoggerBuilder registers the builder in a global map
 // using b.Name() as the key.
 // This should only be called during initialization time (i.e. in an init() function).
 // If multiple builders are registered with the same name, the one registered last
