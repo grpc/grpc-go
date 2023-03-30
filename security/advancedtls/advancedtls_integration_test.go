@@ -41,8 +41,6 @@ import (
 const (
 	// Default timeout for normal connections.
 	defaultTestTimeout = 5 * time.Second
-	// Default timeout for failed connections.
-	defaultTestShortTimeout = 10 * time.Millisecond
 	// Intervals that set to monitor the credential updates.
 	credRefreshingInterval = 200 * time.Millisecond
 	// Time we wait for the credential updates to be picked up.
@@ -400,18 +398,19 @@ func (s) TestEnd2End(t *testing.T) {
 			}
 			// ------------------------Scenario 3------------------------------------
 			// stage = 1, new connection should fail
-			shortCtx, shortCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-			defer shortCancel()
-			conn2, greetClient, err := callAndVerifyWithClientConn(shortCtx, addr, "rpc call 3", clientTLSCreds, true)
+			ctx2, cancel2 := context.WithTimeout(context.Background(), defaultTestTimeout)
+			conn2, _, err := callAndVerifyWithClientConn(ctx2, addr, "rpc call 3", clientTLSCreds, true)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer conn2.Close()
+			// Immediately cancel the context so the dialing won't drag the entire timeout still it stops.
+			cancel2()
 			// ----------------------------------------------------------------------
 			stage.increase()
 			// ------------------------Scenario 4------------------------------------
 			// stage = 2,  new connection should succeed
-			conn3, greetClient, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 4", clientTLSCreds, false)
+			conn3, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 4", clientTLSCreds, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -691,7 +690,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			}
 			// New connections should still be good, because the Provider didn't pick
 			// up the changes due to key-cert mismatch.
-			conn2, greetClient, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 3", clientTLSCreds, false)
+			conn2, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 3", clientTLSCreds, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -703,20 +702,21 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			// New connections should fail now, because the Provider picked the
 			// change, and *_cert_2.pem is not trusted by *_trust_cert_1.pem on the
 			// other side.
-			shortCtx, shortCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-			defer shortCancel()
-			conn3, greetClient, err := callAndVerifyWithClientConn(shortCtx, addr, "rpc call 4", clientTLSCreds, true)
+			ctx2, cancel2 := context.WithTimeout(context.Background(), defaultTestTimeout)
+			conn3, _, err := callAndVerifyWithClientConn(ctx2, addr, "rpc call 4", clientTLSCreds, true)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer conn3.Close()
+			// Immediately cancel the context so the dialing won't drag the entire timeout still it stops.
+			cancel2()
 			// Make the trust cert change on the other side, and wait 1 second for
 			// the provider to pick up the change.
 			test.trustCertUpdateFunc()
 			time.Sleep(sleepInterval)
 			// New connections should be good, because the other side is using
 			// *_trust_cert_2.pem now.
-			conn4, greetClient, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 5", clientTLSCreds, false)
+			conn4, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 5", clientTLSCreds, false)
 			if err != nil {
 				t.Fatal(err)
 			}

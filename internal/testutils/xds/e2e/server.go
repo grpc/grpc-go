@@ -26,17 +26,21 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
+
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
+	v3lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
 	v3cache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	v3resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	v3server "github.com/envoyproxy/go-control-plane/pkg/server/v3"
-	"google.golang.org/grpc"
 )
 
 // ManagementServer is a thin wrapper around the xDS control plane
@@ -45,6 +49,11 @@ type ManagementServer struct {
 	// Address is the host:port on which the management server is listening for
 	// new connections.
 	Address string
+
+	// LRSServer points to the fake LRS server implementation. Set only if the
+	// SupportLoadReportingService option was set to true when creating this
+	// management server.
+	LRSServer *fakeserver.Server
 
 	cancel  context.CancelFunc    // To stop the v3 ADS service.
 	xs      v3server.Server       // v3 implementation of ADS.
@@ -59,6 +68,10 @@ type ManagementServerOptions struct {
 	// Listener to accept connections on. If nil, a TPC listener on a local port
 	// will be created and used.
 	Listener net.Listener
+
+	// SupportLoadReportingService, if set, results in the load reporting
+	// service being registered on the same port as that of ADS.
+	SupportLoadReportingService bool
 
 	// AllowResourceSubSet allows the management server to respond to requests
 	// before all configured resources are explicitly named in the request. The
@@ -81,7 +94,7 @@ type ManagementServerOptions struct {
 
 	// OnStreamClosed is called immediately prior to closing an xDS stream. The
 	// callback is invoked with the stream ID of the stream being closed.
-	OnStreamClosed func(int64)
+	OnStreamClosed func(int64, *v3corepb.Node)
 
 	// OnStreamRequest is called when a request is received on the stream. The
 	// callback is invoked with the stream ID of the stream on which the request
@@ -138,18 +151,26 @@ func StartManagementServer(opts ManagementServerOptions) (*ManagementServer, err
 	v3discoverygrpc.RegisterAggregatedDiscoveryServiceServer(gs, xs)
 	logger.Infof("Registered Aggregated Discovery Service (ADS)...")
 
-	// Start serving.
-	go gs.Serve(lis)
-	logger.Infof("xDS management server serving at: %v...", lis.Addr().String())
-
-	return &ManagementServer{
+	mgmtServer := &ManagementServer{
 		Address: lis.Addr().String(),
 		cancel:  cancel,
 		version: 0,
 		gs:      gs,
 		xs:      xs,
 		cache:   cache,
-	}, nil
+	}
+	if opts.SupportLoadReportingService {
+		lrs := fakeserver.NewServer(lis.Addr().String())
+		v3lrsgrpc.RegisterLoadReportingServiceServer(gs, lrs)
+		mgmtServer.LRSServer = lrs
+		logger.Infof("Registered Load Reporting Service (LRS)...")
+	}
+
+	// Start serving.
+	go gs.Serve(lis)
+	logger.Infof("xDS management server serving at: %v...", lis.Addr().String())
+
+	return mgmtServer, nil
 }
 
 // UpdateOptions wraps parameters to be passed to the Update() method.

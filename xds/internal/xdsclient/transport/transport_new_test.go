@@ -21,8 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 
@@ -48,37 +47,42 @@ func (s) TestNew(t *testing.T) {
 			wantErrStr: "missing credentials when creating a new transport",
 		},
 		{
-			name: "missing update handler",
-			opts: transport.Options{ServerCfg: bootstrap.ServerConfig{
-				ServerURI: "server-address",
-				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-			},
+			name: "missing onRecv handler",
+			opts: transport.Options{
+				ServerCfg: *testutils.ServerConfigForAddress(t, "server-address"),
 				NodeProto: &v3corepb.Node{},
 			},
-			wantErrStr: "missing update handler when creating a new transport",
+			wantErrStr: "missing OnRecv callback handler when creating a new transport",
 		},
 		{
-			name: "missing stream error handler",
+			name: "missing onError handler",
 			opts: transport.Options{
-				ServerCfg: bootstrap.ServerConfig{
-					ServerURI: "server-address",
-					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				},
+				ServerCfg:     *testutils.ServerConfigForAddress(t, "server-address"),
 				NodeProto:     &v3corepb.Node{},
-				UpdateHandler: func(transport.ResourceUpdate) error { return nil },
+				OnRecvHandler: func(transport.ResourceUpdate) error { return nil },
+				OnSendHandler: func(*transport.ResourceSendInfo) {},
 			},
-			wantErrStr: "missing stream error handler when creating a new transport",
+			wantErrStr: "missing OnError callback handler when creating a new transport",
+		},
+
+		{
+			name: "missing onSend handler",
+			opts: transport.Options{
+				ServerCfg:      *testutils.ServerConfigForAddress(t, "server-address"),
+				NodeProto:      &v3corepb.Node{},
+				OnRecvHandler:  func(transport.ResourceUpdate) error { return nil },
+				OnErrorHandler: func(error) {},
+			},
+			wantErrStr: "missing OnSend callback handler when creating a new transport",
 		},
 		{
 			name: "happy case",
 			opts: transport.Options{
-				ServerCfg: bootstrap.ServerConfig{
-					ServerURI: "server-address",
-					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				},
-				NodeProto:          &v3corepb.Node{},
-				UpdateHandler:      func(transport.ResourceUpdate) error { return nil },
-				StreamErrorHandler: func(error) {},
+				ServerCfg:      *testutils.ServerConfigForAddress(t, "server-address"),
+				NodeProto:      &v3corepb.Node{},
+				OnRecvHandler:  func(transport.ResourceUpdate) error { return nil },
+				OnErrorHandler: func(error) {},
+				OnSendHandler:  func(*transport.ResourceSendInfo) {},
 			},
 		},
 	}

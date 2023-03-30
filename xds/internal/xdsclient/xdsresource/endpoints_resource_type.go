@@ -19,6 +19,7 @@ package xdsresource
 
 import (
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -31,7 +32,7 @@ var (
 	// Singleton instantiation of the resource type implementation.
 	endpointsType = endpointsResourceType{
 		resourceTypeState: resourceTypeState{
-			typeURL:                    "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+			typeURL:                    version.V3EndpointsURL,
 			typeEnum:                   EndpointsResource,
 			allResourcesRequiredInSotW: false,
 		},

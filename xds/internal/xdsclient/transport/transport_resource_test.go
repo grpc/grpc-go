@@ -26,12 +26,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -60,7 +58,7 @@ const (
 // cleanup function to close the fake server.
 func startFakeManagementServer(t *testing.T) (*fakeserver.Server, func()) {
 	t.Helper()
-	fs, sCleanup, err := fakeserver.StartServer()
+	fs, sCleanup, err := fakeserver.StartServer(nil)
 	if err != nil {
 		t.Fatalf("Failed to start fake xDS server: %v", err)
 	}
@@ -176,19 +174,12 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 			t.Logf("Started xDS management server on %s", mgmtServer.Address)
 			mgmtServer.XDSResponseChan <- &fakeserver.Response{Resp: test.managementServerResponse}
 
-			// Construct the server config to represent the management server.
-			serverCfg := bootstrap.ServerConfig{
-				ServerURI: mgmtServer.Address,
-				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				CredsType: "insecure",
-			}
-
 			// Create a new transport.
 			resourcesCh := testutils.NewChannel()
 			tr, err := transport.New(transport.Options{
-				ServerCfg: serverCfg,
+				ServerCfg: *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
 				// No validation. Simply push received resources on a channel.
-				UpdateHandler: func(update transport.ResourceUpdate) error {
+				OnRecvHandler: func(update transport.ResourceUpdate) error {
 					resourcesCh.Send(&resourcesWithTypeURL{
 						resources: update.Resources,
 						url:       update.URL,
@@ -196,9 +187,10 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 					})
 					return nil
 				},
-				StreamErrorHandler: func(error) {},                                      // No stream error handling.
-				Backoff:            func(int) time.Duration { return time.Duration(0) }, // No backoff.
-				NodeProto:          &v3corepb.Node{Id: uuid.New().String()},
+				OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No onSend handling.
+				OnErrorHandler: func(error) {},                                      // No stream error handling.
+				Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.
+				NodeProto:      &v3corepb.Node{Id: uuid.New().String()},
 			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS transport: %v", err)

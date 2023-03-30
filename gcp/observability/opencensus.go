@@ -20,21 +20,36 @@ package observability
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"time"
 
 	"contrib.go.opencensus.io/exporter/stackdriver"
 	"contrib.go.opencensus.io/exporter/stackdriver/monitoredresource"
 
-	"go.opencensus.io/plugin/ocgrpc"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/stats/opencensus"
 )
 
 var (
 	// It's a variable instead of const to speed up testing
 	defaultMetricsReportingInterval = time.Second * 30
+	defaultViews                    = []*view.View{
+		opencensus.ClientStartedRPCsView,
+		opencensus.ClientCompletedRPCsView,
+		opencensus.ClientRoundtripLatencyView,
+		opencensus.ClientSentCompressedMessageBytesPerRPCView,
+		opencensus.ClientReceivedCompressedMessageBytesPerRPCView,
+		opencensus.ClientAPILatencyView,
+		opencensus.ServerStartedRPCsView,
+		opencensus.ServerCompletedRPCsView,
+		opencensus.ServerSentCompressedMessageBytesPerRPCView,
+		opencensus.ServerReceivedCompressedMessageBytesPerRPCView,
+		opencensus.ServerLatencyView,
+	}
 )
 
 func labelsToMonitoringLabels(labels map[string]string) *stackdriver.Labels {
@@ -69,16 +84,39 @@ func newStackdriverExporter(config *config) (tracingMetricsExporter, error) {
 	mr := monitoredresource.Autodetect()
 	logger.Infof("Detected MonitoredResource:: %+v", mr)
 	var err error
+	// Custom labels completly overwrite any labels generated in the OpenCensus
+	// library, including their label that uniquely identifies the process.
+	// Thus, generate a unique process identifier here to uniquely identify
+	// process for metrics exporting to function correctly.
+	metricsLabels := make(map[string]string, len(config.Labels)+1)
+	for k, v := range config.Labels {
+		metricsLabels[k] = v
+	}
+	metricsLabels["opencensus_task"] = generateUniqueProcessIdentifier()
 	exporter, err := stackdriver.NewExporter(stackdriver.Options{
 		ProjectID:               config.ProjectID,
 		MonitoredResource:       mr,
-		DefaultMonitoringLabels: labelsToMonitoringLabels(config.Labels),
+		DefaultMonitoringLabels: labelsToMonitoringLabels(metricsLabels),
 		DefaultTraceAttributes:  labelsToTraceAttributes(config.Labels),
+		MonitoringClientOptions: cOptsDisableLogTrace,
+		TraceClientOptions:      cOptsDisableLogTrace,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Stackdriver exporter: %v", err)
 	}
 	return exporter, nil
+}
+
+// generateUniqueProcessIdentifier returns a unique process identifier for the
+// process this code is running in. This is the same way the OpenCensus library
+// generates the unique process identifier, in the format of
+// "go-<pid>@<hostname>".
+func generateUniqueProcessIdentifier() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "localhost"
+	}
+	return "go-" + strconv.Itoa(os.Getpid()) + "@" + hostname
 }
 
 // This method accepts config and exporter; the exporter argument is exposed to
@@ -96,28 +134,24 @@ func startOpenCensus(config *config) error {
 		return err
 	}
 
-	var so trace.StartOptions
+	var to opencensus.TraceOptions
 	if config.CloudTrace != nil {
-		so.Sampler = trace.ProbabilitySampler(config.CloudTrace.SamplingRate)
+		to.TS = trace.ProbabilitySampler(config.CloudTrace.SamplingRate)
 		trace.RegisterExporter(exporter.(trace.Exporter))
 		logger.Infof("Start collecting and exporting trace spans with global_trace_sampling_rate=%.2f", config.CloudTrace.SamplingRate)
 	}
 
 	if config.CloudMonitoring != nil {
-		if err := view.Register(ocgrpc.ServerStartedRPCsView, ocgrpc.ClientCompletedRPCsView); err != nil {
-			return fmt.Errorf("failed to register default client views: %v", err)
-		}
-		if err := view.Register(ocgrpc.ClientStartedRPCsView, ocgrpc.ServerCompletedRPCsView); err != nil {
-			return fmt.Errorf("failed to register default server views: %v", err)
+		if err := view.Register(defaultViews...); err != nil {
+			return fmt.Errorf("failed to register observability views: %v", err)
 		}
 		view.SetReportingPeriod(defaultMetricsReportingInterval)
 		view.RegisterExporter(exporter.(view.Exporter))
 		logger.Infof("Start collecting and exporting metrics")
 	}
 
-	// Only register default StatsHandlers if other things are setup correctly.
-	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(grpc.StatsHandler(&ocgrpc.ServerHandler{StartOptions: so}))
-	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(grpc.WithStatsHandler(&ocgrpc.ClientHandler{StartOptions: so}))
+	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(opencensus.ServerOption(to))
+	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(opencensus.DialOption(to))
 	logger.Infof("Enabled OpenCensus StatsHandlers for clients and servers")
 
 	return nil
@@ -129,11 +163,16 @@ func stopOpenCensus() {
 	if exporter != nil {
 		internal.ClearGlobalDialOptions()
 		internal.ClearGlobalServerOptions()
+		// This Unregister call guarantees the data recorded gets sent to
+		// exporter, synchronising the view package and exporter. Doesn't matter
+		// if views not registered, will be a noop if not registered.
+		view.Unregister(defaultViews...)
 		// Call these unconditionally, doesn't matter if not registered, will be
 		// a noop if not registered.
 		trace.UnregisterExporter(exporter)
 		view.UnregisterExporter(exporter)
 
+		// This Flush call makes sure recorded telemetry get sent to backend.
 		exporter.Flush()
 		exporter.Close()
 	}

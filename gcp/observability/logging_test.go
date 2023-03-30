@@ -68,6 +68,8 @@ type fakeLoggingExporter struct {
 
 	mu      sync.Mutex
 	entries []*grpcLogEntry
+
+	idsSeen []*traceAndSpanIDString
 }
 
 func (fle *fakeLoggingExporter) EmitGcpLoggingEntry(entry gcplogging.Entry) {
@@ -76,6 +78,13 @@ func (fle *fakeLoggingExporter) EmitGcpLoggingEntry(entry gcplogging.Entry) {
 	if entry.Severity != 100 {
 		fle.t.Errorf("entry.Severity is not 100, this should be hardcoded")
 	}
+
+	ids := &traceAndSpanIDString{
+		traceID: entry.Trace,
+		spanID:  entry.SpanID,
+	}
+	fle.idsSeen = append(fle.idsSeen, ids)
+
 	grpcLogEntry, ok := entry.Payload.(*grpcLogEntry)
 	if !ok {
 		fle.t.Errorf("payload passed in isn't grpcLogEntry")
@@ -222,7 +231,8 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 			SequenceID:  5,
 			Authority:   ss.Address,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
@@ -310,7 +320,8 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 			Authority:   ss.Address,
 			SequenceID:  6,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
@@ -429,7 +440,8 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 			SequenceID:  5,
 			Authority:   ss.Address,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
@@ -516,7 +528,8 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 			Authority:   ss.Address,
 			SequenceID:  6,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
@@ -736,7 +749,8 @@ func (s) TestClientRPCEventsTruncateHeaderAndMetadata(t *testing.T) {
 			SequenceID:  5,
 			Authority:   ss.Address,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
@@ -883,7 +897,8 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 			SequenceID:  5,
 			Authority:   ss.Address,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
@@ -950,7 +965,8 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 			Authority:   ss.Address,
 			SequenceID:  3,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
@@ -1062,65 +1078,6 @@ func (s) TestTranslateMetadata(t *testing.T) {
 	}
 }
 
-// TestCloudLoggingAPICallsFiltered tests that the observability plugin does not
-// emit logs for cloud logging API calls.
-func (s) TestCloudLoggingAPICallsFiltered(t *testing.T) {
-	fle := &fakeLoggingExporter{
-		t: t,
-	}
-
-	defer func(ne func(ctx context.Context, config *config) (loggingExporter, error)) {
-		newLoggingExporter = ne
-	}(newLoggingExporter)
-
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
-		return fle, nil
-	}
-	configLogAll := &config{
-		ProjectID: "fake",
-		CloudLogging: &cloudLogging{
-			ClientRPCEvents: []clientRPCEvents{
-				{
-					Methods:          []string{"*"},
-					MaxMetadataBytes: 30,
-					MaxMessageBytes:  30,
-				},
-			},
-		},
-	}
-	cleanup, err := setupObservabilitySystemWithConfig(configLogAll)
-	if err != nil {
-		t.Fatalf("error setting up observability %v", err)
-	}
-	defer cleanup()
-
-	ss := &stubserver.StubServer{}
-	if err := ss.Start(nil); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
-	}
-	defer ss.Stop()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	// Any of the three cloud logging API calls should not cause any logs to be
-	// emitted, even though the configuration specifies to log any rpc
-	// regardless of method.
-	req := &grpc_testing.SimpleRequest{}
-	resp := &grpc_testing.SimpleResponse{}
-
-	ss.CC.Invoke(ctx, "/google.logging.v2.LoggingServiceV2/some-method", req, resp)
-	ss.CC.Invoke(ctx, "/google.monitoring.v3.MetricService/some-method", req, resp)
-	ss.CC.Invoke(ctx, "/google.devtools.cloudtrace.v2.TraceService/some-method", req, resp)
-	// The exporter should have received no new log entries due to these three
-	// calls, as they should be filtered out.
-	fle.mu.Lock()
-	defer fle.mu.Unlock()
-	if len(fle.entries) != 0 {
-		t.Fatalf("Unexpected length of entries %v, want 0", len(fle.entries))
-	}
-}
-
 func (s) TestMarshalJSON(t *testing.T) {
 	logEntry := &grpcLogEntry{
 		CallID:     "300-300-300",
@@ -1130,14 +1087,14 @@ func (s) TestMarshalJSON(t *testing.T) {
 		Payload: payload{
 			Metadata:      map[string]string{"header1": "value1"},
 			Timeout:       20,
-			StatusCode:    3,
+			StatusCode:    "UNKNOWN",
 			StatusMessage: "ok",
 			StatusDetails: []byte("ok"),
 			MessageLength: 3,
 			Message:       []byte("wow"),
 		},
 		Peer: address{
-			Type:    typeIPv4,
+			Type:    ipv4,
 			Address: "localhost",
 			IPPort:  16000,
 		},
@@ -1264,7 +1221,8 @@ func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
 			SequenceID:  5,
 			Authority:   ss.Address,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}

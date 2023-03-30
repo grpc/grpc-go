@@ -33,6 +33,7 @@ import (
 	"go.opencensus.io/trace"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/stubserver"
@@ -192,7 +193,7 @@ func (vi *viewInformation) Equal(vi2 *viewInformation) bool {
 // less. This must be called with non nil view information that is aggregated
 // with distribution data. Returns a nil error if correct count information
 // found, non nil error if correct information not found.
-func distributionDataLatencyCount(vi *viewInformation, countWant int64) error {
+func distributionDataLatencyCount(vi *viewInformation, countWant int64, wantTags [][]tag.Tag) error {
 	var totalCount int64
 	var largestIndexWithFive int
 	for i, bucket := range vi.aggBuckets {
@@ -203,9 +204,21 @@ func distributionDataLatencyCount(vi *viewInformation, countWant int64) error {
 			break
 		}
 	}
+	// Sort rows by string name. This is to take away non determinism in the row
+	// ordering passed to the Exporter, while keeping the row data.
+	sort.Slice(vi.rows, func(i, j int) bool {
+		return vi.rows[i].String() > vi.rows[j].String()
+	})
 	// Iterating through rows sums up data points for all methods. In this case,
 	// a data point for the unary and for the streaming RPC.
-	for _, row := range vi.rows {
+	for i, row := range vi.rows {
+		// The method names corresponding to unary and streaming call should
+		// have the leading slash removed.
+		if diff := cmp.Diff(row.Tags, wantTags[i], cmp.Comparer(func(a tag.Key, b tag.Key) bool {
+			return a.Name() == b.Name()
+		})); diff != "" {
+			return fmt.Errorf("wrong tag keys for unary method -got, +want: %v", diff)
+		}
 		// This could potentially have an extra measurement in buckets above 5s,
 		// but that's fine. Count of buckets that could contain up to 5s is a
 		// good enough assertion.
@@ -235,15 +248,20 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		ClientCompletedRPCsView,
 		ServerCompletedRPCsView,
 		ClientSentBytesPerRPCView,
+		ClientSentCompressedMessageBytesPerRPCView,
 		ServerSentBytesPerRPCView,
+		ServerSentCompressedMessageBytesPerRPCView,
 		ClientReceivedBytesPerRPCView,
+		ClientReceivedCompressedMessageBytesPerRPCView,
 		ServerReceivedBytesPerRPCView,
+		ServerReceivedCompressedMessageBytesPerRPCView,
 		ClientSentMessagesPerRPCView,
 		ServerSentMessagesPerRPCView,
 		ClientReceivedMessagesPerRPCView,
 		ServerReceivedMessagesPerRPCView,
 		ClientRoundtripLatencyView,
 		ServerLatencyView,
+		ClientAPILatencyView,
 	}
 	view.Register(allViews...)
 	// Unregister unconditionally in this defer to correctly cleanup globals in
@@ -258,7 +276,9 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{}, nil
+			return &grpc_testing.SimpleResponse{Payload: &grpc_testing.Payload{
+				Body: make([]byte, 10000),
+			}}, nil
 		},
 		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
 			for {
@@ -277,7 +297,9 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	defer cancel()
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
 	// certain metrics to be emitted.
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{
+		Body: make([]byte, 10000),
+	}}, grpc.UseCompressor(gzip.Name)); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 	stream, err := ss.Client.FullDuplexCall(ctx)
@@ -295,8 +317,9 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	cstk := tag.MustNewKey("grpc_client_status")
 	sstk := tag.MustNewKey("grpc_server_status")
 	wantMetrics := []struct {
-		metric *view.View
-		wantVI *viewInformation
+		metric   *view.View
+		wantVI   *viewInformation
+		wantTags [][]tag.Tag // for non determinstic (i.e. latency) metrics. First dimension represents rows.
 	}{
 		{
 			metric: ClientStartedRPCsView,
@@ -476,6 +499,43 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 						},
 						Data: &view.DistributionData{
 							Count:          1,
+							CountPerBucket: []int64{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   cmtk,
+								Value: "grpc.testing.TestService/FullDuplexCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
+							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+				},
+			},
+		},
+		{
+			metric: ClientSentCompressedMessageBytesPerRPCView,
+			wantVI: &viewInformation{
+				aggType:    view.AggTypeDistribution,
+				aggBuckets: bytesDistributionBounds,
+				desc:       "Distribution of sent compressed message bytes per RPC, by method.",
+				tagKeys: []tag.Key{
+					cmtk,
+				},
+				rows: []*view.Row{
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   cmtk,
+								Value: "grpc.testing.TestService/UnaryCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
 							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 						},
 					},
@@ -513,6 +573,43 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 						},
 						Data: &view.DistributionData{
 							Count:          1,
+							CountPerBucket: []int64{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   smtk,
+								Value: "grpc.testing.TestService/FullDuplexCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
+							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+				},
+			},
+		},
+		{
+			metric: ServerSentCompressedMessageBytesPerRPCView,
+			wantVI: &viewInformation{
+				aggType:    view.AggTypeDistribution,
+				aggBuckets: bytesDistributionBounds,
+				desc:       "Distribution of sent compressed message bytes per RPC, by method.",
+				tagKeys: []tag.Key{
+					smtk,
+				},
+				rows: []*view.Row{
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   smtk,
+								Value: "grpc.testing.TestService/UnaryCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
 							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 						},
 					},
@@ -531,13 +628,49 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 				},
 			},
 		},
-
 		{
 			metric: ClientReceivedBytesPerRPCView,
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
 				desc:       "Distribution of received bytes per RPC, by method.",
+				tagKeys: []tag.Key{
+					cmtk,
+				},
+				rows: []*view.Row{
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   cmtk,
+								Value: "grpc.testing.TestService/UnaryCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
+							CountPerBucket: []int64{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   cmtk,
+								Value: "grpc.testing.TestService/FullDuplexCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
+							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+				},
+			},
+		},
+		{
+			metric: ClientReceivedCompressedMessageBytesPerRPCView,
+			wantVI: &viewInformation{
+				aggType:    view.AggTypeDistribution,
+				aggBuckets: bytesDistributionBounds,
+				desc:       "Distribution of received compressed message bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					cmtk,
 				},
@@ -575,6 +708,43 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
 				desc:       "Distribution of received bytes per RPC, by method.",
+				tagKeys: []tag.Key{
+					smtk,
+				},
+				rows: []*view.Row{
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   smtk,
+								Value: "grpc.testing.TestService/UnaryCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
+							CountPerBucket: []int64{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   smtk,
+								Value: "grpc.testing.TestService/FullDuplexCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
+							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+				},
+			},
+		},
+		{
+			metric: ServerReceivedCompressedMessageBytesPerRPCView,
+			wantVI: &viewInformation{
+				aggType:    view.AggTypeDistribution,
+				aggBuckets: bytesDistributionBounds,
+				desc:       "Distribution of received compressed message bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					smtk,
 				},
@@ -756,9 +926,63 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		},
 		{
 			metric: ClientRoundtripLatencyView,
+			wantTags: [][]tag.Tag{
+				{
+					{
+						Key:   cmtk,
+						Value: "grpc.testing.TestService/UnaryCall",
+					},
+				},
+				{
+					{
+						Key:   cmtk,
+						Value: "grpc.testing.TestService/FullDuplexCall",
+					},
+				},
+			},
 		},
 		{
 			metric: ServerLatencyView,
+			wantTags: [][]tag.Tag{
+				{
+					{
+						Key:   smtk,
+						Value: "grpc.testing.TestService/UnaryCall",
+					},
+				},
+				{
+					{
+						Key:   smtk,
+						Value: "grpc.testing.TestService/FullDuplexCall",
+					},
+				},
+			},
+		},
+		// Per call metrics:
+		{
+			metric: ClientAPILatencyView,
+			wantTags: [][]tag.Tag{
+				{
+					{
+						Key:   cmtk,
+						Value: "grpc.testing.TestService/UnaryCall",
+					},
+					{
+						Key:   cstk,
+						Value: "OK",
+					},
+				},
+				{
+					{
+						Key:   cmtk,
+						Value: "grpc.testing.TestService/FullDuplexCall",
+					},
+					{
+						Key:   cstk,
+						Value: "OK",
+					},
+				},
+			},
 		},
 	}
 	// Unregister all the views. Unregistering a view causes a synchronous
@@ -780,11 +1004,11 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		// declare the exact data you want, make sure the latency
 		// measurement points for the two RPCs above fall within buckets
 		// that fall into less than 5 seconds, which is the rpc timeout.
-		if metricName == "grpc.io/client/roundtrip_latency" || metricName == "grpc.io/server/server_latency" {
+		if metricName == "grpc.io/client/roundtrip_latency" || metricName == "grpc.io/server/server_latency" || metricName == "grpc.io/client/api_latency" {
 			// RPCs have a context timeout of 5s, so all the recorded
 			// measurements (one per RPC - two total) should fall within 5
 			// second buckets.
-			if err := distributionDataLatencyCount(vi, 2); err != nil {
+			if err := distributionDataLatencyCount(vi, 2, wantMetric.wantTags); err != nil {
 				t.Fatalf("Invalid OpenCensus export view data for metric %v: %v", metricName, err)
 			}
 			continue
@@ -1181,12 +1405,11 @@ func (s) TestSpan(t *testing.T) {
 					EventType:            trace.MessageEventTypeRecv,
 					MessageID:            1, // First msg recv so 1 (see comment above)
 					UncompressedByteSize: 2,
-					CompressedByteSize:   7,
+					CompressedByteSize:   2,
 				},
 				{
-					EventType:          trace.MessageEventTypeSent,
-					MessageID:          1, // First msg send so 1 (see comment above)
-					CompressedByteSize: 5,
+					EventType: trace.MessageEventTypeSent,
+					MessageID: 1, // First msg send so 1 (see comment above)
 				},
 			},
 			links: []trace.Link{
@@ -1204,21 +1427,29 @@ func (s) TestSpan(t *testing.T) {
 				TraceOptions: 1,
 			},
 			spanKind: trace.SpanKindClient,
-			name:     "grpc.testing.TestService.UnaryCall",
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
 			messageEvents: []trace.MessageEvent{
 				{
 					EventType:            trace.MessageEventTypeSent,
 					MessageID:            1, // First msg send so 1 (see comment above)
 					UncompressedByteSize: 2,
-					CompressedByteSize:   7,
+					CompressedByteSize:   2,
 				},
 				{
-					EventType:          trace.MessageEventTypeRecv,
-					MessageID:          1, // First msg recv so 1 (see comment above)
-					CompressedByteSize: 5,
+					EventType: trace.MessageEventTypeRecv,
+					MessageID: 1, // First msg recv so 1 (see comment above)
 				},
 			},
 			hasRemoteParent: false,
+		},
+		{
+			sc: trace.SpanContext{
+				TraceOptions: 1,
+			},
+			spanKind:        trace.SpanKindClient,
+			name:            "Sent.grpc.testing.TestService.UnaryCall",
+			hasRemoteParent: false,
+			childSpanCount:  1,
 		},
 	}
 	if diff := cmp.Diff(fe.seenSpans, wantSI); diff != "" {
@@ -1229,6 +1460,13 @@ func (s) TestSpan(t *testing.T) {
 		fe.mu.Unlock()
 		t.Fatalf("Error in runtime data assertions: %v", err)
 	}
+	if !cmp.Equal(fe.seenSpans[0].parentSpanID, fe.seenSpans[1].sc.SpanID) {
+		t.Fatalf("server span should point to the client attempt span as its parent. parentSpanID: %v, clientAttemptSpanID: %v", fe.seenSpans[0].parentSpanID, fe.seenSpans[1].sc.SpanID)
+	}
+	if !cmp.Equal(fe.seenSpans[1].parentSpanID, fe.seenSpans[2].sc.SpanID) {
+		t.Fatalf("client attempt span should point to the client call span as its parent. parentSpanID: %v, clientCallSpanID: %v", fe.seenSpans[1].parentSpanID, fe.seenSpans[2].sc.SpanID)
+	}
+
 	fe.seenSpans = nil
 	fe.mu.Unlock()
 
@@ -1264,14 +1502,12 @@ func (s) TestSpan(t *testing.T) {
 			},
 			messageEvents: []trace.MessageEvent{
 				{
-					EventType:          trace.MessageEventTypeRecv,
-					MessageID:          1, // First msg recv so 1
-					CompressedByteSize: 5,
+					EventType: trace.MessageEventTypeRecv,
+					MessageID: 1, // First msg recv so 1
 				},
 				{
-					EventType:          trace.MessageEventTypeRecv,
-					MessageID:          2, // Second msg recv so 2
-					CompressedByteSize: 5,
+					EventType: trace.MessageEventTypeRecv,
+					MessageID: 2, // Second msg recv so 2
 				},
 			},
 			hasRemoteParent: true,
@@ -1280,29 +1516,42 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
+			spanKind:        trace.SpanKindClient,
+			name:            "Sent.grpc.testing.TestService.FullDuplexCall",
+			hasRemoteParent: false,
+			childSpanCount:  1,
+		},
+		{
+			sc: trace.SpanContext{
+				TraceOptions: 1,
+			},
 			spanKind: trace.SpanKindClient,
-			name:     "grpc.testing.TestService.FullDuplexCall",
+			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
 			messageEvents: []trace.MessageEvent{
 				{
-					EventType:          trace.MessageEventTypeSent,
-					MessageID:          1, // First msg send so 1
-					CompressedByteSize: 5,
+					EventType: trace.MessageEventTypeSent,
+					MessageID: 1, // First msg send so 1
 				},
 				{
-					EventType:          trace.MessageEventTypeSent,
-					MessageID:          2, // Second msg send so 2
-					CompressedByteSize: 5,
+					EventType: trace.MessageEventTypeSent,
+					MessageID: 2, // Second msg send so 2
 				},
 			},
 			hasRemoteParent: false,
 		},
 	}
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
 	if diff := cmp.Diff(fe.seenSpans, wantSI); diff != "" {
 		t.Fatalf("got unexpected spans, diff (-got, +want): %v", diff)
 	}
-	fe.mu.Lock()
-	defer fe.mu.Unlock()
 	if err := validateTraceAndSpanIDs(fe.seenSpans); err != nil {
 		t.Fatalf("Error in runtime data assertions: %v", err)
+	}
+	if !cmp.Equal(fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID) {
+		t.Fatalf("server span should point to the client attempt span as its parent. parentSpanID: %v, clientAttemptSpanID: %v", fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID)
+	}
+	if !cmp.Equal(fe.seenSpans[2].parentSpanID, fe.seenSpans[1].sc.SpanID) {
+		t.Fatalf("client attempt span should point to the client call span as its parent. parentSpanID: %v, clientCallSpanID: %v", fe.seenSpans[2].parentSpanID, fe.seenSpans[1].sc.SpanID)
 	}
 }

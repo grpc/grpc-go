@@ -16,7 +16,7 @@
  *
  */
 
-package e2e_test
+package xdsclient_test
 
 import (
 	"context"
@@ -28,11 +28,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -617,15 +616,16 @@ func (s) TestRDSWatch_ResourceCaching(t *testing.T) {
 // verifies that the watch callback is invoked with an error once the
 // watchExpiryTimer fires.
 func (s) TestRDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
-	// No need to spin up a management server since we don't want the client to
-	// receive a response for the watch being registered by the test.
+	overrideFedEnvVar(t)
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
+	if err != nil {
+		t.Fatalf("Failed to spin up the xDS management server: %v", err)
+	}
+	defer mgmtServer.Stop()
 
 	// Create an xDS client talking to a non-existent management server.
 	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		XDSServer: &bootstrap.ServerConfig{
-			ServerURI: "dummy management server address",
-			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-		},
+		XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
 		NodeProto: &v3corepb.Node{},
 	}, defaultTestWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
@@ -668,10 +668,7 @@ func (s) TestRDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	// Create an xDS client talking to the above management server.
 	nodeID := uuid.New().String()
 	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		XDSServer: &bootstrap.ServerConfig{
-			ServerURI: mgmtServer.Address,
-			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-		},
+		XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
 		NodeProto: &v3corepb.Node{Id: nodeID},
 	}, defaultTestWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
