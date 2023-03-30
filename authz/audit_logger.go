@@ -1,7 +1,6 @@
 package authz
 
 import (
-	"context"
 	"sync"
 )
 
@@ -23,29 +22,41 @@ func RegisterAuditLoggerBuilder(b AuditLoggerBuilder) {
 
 // AuditInfo contains information used by the audit logger during an audit logging event.
 type AuditInfo struct {
-	RPCMethod   string `json:"rpc_method,omitempty"`
-	Principal   string `json:"principal,omitempty"`
-	PolicyName  string `json:"policy_name,omitempty"`
+	// RPCMethod is the method of the audited RPC.
+	RPCMethod string `json:"rpc_method,omitempty"`
+	// Principal is the identity of the RPC. Currently it will only be available in
+	// certificate-based TLS authentication.
+	Principal string `json:"principal,omitempty"`
+	// PolicyName is the authorization policy name (or the xDS RBAC filter name).
+	PolicyName string `json:"policy_name,omitempty"`
+	// MatchedRule is the matched rule (or policy name in the xDS RBAC filter). It will be
+	// empty if there is no match.
 	MatchedRule string `json:"matched_rule,omitempty"`
-	Authorized  bool   `json:"bool,omitempty"`
+	// Authorized indicates whether the audited RPC is authorized or not.
+	Authorized bool `json:"bool,omitempty"`
 }
 
 // AuditLoggerConfig defines the configuration for a particular implementation of audit logger.
-// The returned value from Name() should serve as a sanity check against the Name() of the
-// logger builder.
 type AuditLoggerConfig interface {
+	// Name() returns the same name as that returned by its supported builder.
 	Name() string
 }
 
 // AuditLogger is the interface for an audit logger.
 type AuditLogger interface {
-	Log(context.Context, *AuditInfo)
+	// Log logs the auditing event with the given information.
+	Log(*AuditInfo)
 }
 
 // AuditLoggerBuilder is the interface for an audit logger builder.
 type AuditLoggerBuilder interface {
+	// ParseAuditLoggerConfig parses an implementation-specific config into a
+	// structured logger config this builder can use to build an audit logger.
 	ParseAuditLoggerConfig(config interface{}) (AuditLoggerConfig, error)
+	// Build builds an audit logger with the given logger config.
 	Build(AuditLoggerConfig) AuditLogger
+	// Name returns the name of logger built by this builder.
+	// This is used to register and pick the builder.
 	Name() string
 }
 
