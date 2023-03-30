@@ -350,7 +350,11 @@ func (t *Transport) send(ctx context.Context) {
 				// only be made after a new stream is created.
 				stream = nil
 			}
-		case u := <-t.adsRequestCh.Get():
+		case u, ok := <-t.adsRequestCh.Get():
+			if !ok {
+				// No requests will be sent after the channel is closed.
+				return
+			}
 			t.adsRequestCh.Load()
 
 			var (

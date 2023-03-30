@@ -507,7 +507,10 @@ func (b *clusterImplBalancer) run() {
 	defer b.done.Fire()
 	for {
 		select {
-		case update := <-b.pickerUpdateCh.Get():
+		case update, ok := <-b.pickerUpdateCh.Get():
+			if !ok {
+				return
+			}
 			b.pickerUpdateCh.Load()
 			b.mu.Lock()
 			if b.closed.HasFired() {

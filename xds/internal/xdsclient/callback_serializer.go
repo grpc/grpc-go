@@ -58,7 +58,10 @@ func (t *callbackSerializer) run(ctx context.Context) {
 		case <-ctx.Done():
 			t.callbacks.Close()
 			return
-		case callback := <-t.callbacks.Get():
+		case callback, ok := <-t.callbacks.Get():
+			if !ok {
+				return
+			}
 			t.callbacks.Load()
 			callback.(func(ctx context.Context))(ctx)
 		}

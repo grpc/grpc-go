@@ -113,7 +113,10 @@ type subConnUpdate struct {
 func (ccb *ccBalancerWrapper) watcher() {
 	for {
 		select {
-		case u := <-ccb.updateCh.Get():
+		case u, ok := <-ccb.updateCh.Get():
+			if !ok {
+				break
+			}
 			ccb.updateCh.Load()
 			if ccb.closed.HasFired() {
 				break
@@ -155,8 +158,13 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 	ccb.updateCh.Put(&ccStateUpdate{ccs: ccs})
 
 	var res interface{}
+	var ok bool
 	select {
-	case res = <-ccb.resultCh.Get():
+	case res, ok = <-ccb.resultCh.Get():
+		if !ok {
+			// The result channel is closed only when the balancer wrapper is closed.
+			return nil
+		}
 		ccb.resultCh.Load()
 	case <-ccb.closed.Done():
 		// Return early if the balancer wrapper is closed while we are waiting for

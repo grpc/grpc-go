@@ -684,7 +684,10 @@ func (b *outlierDetectionBalancer) run() {
 	defer b.done.Fire()
 	for {
 		select {
-		case update := <-b.scUpdateCh.Get():
+		case update, ok := <-b.scUpdateCh.Get():
+			if !ok {
+				return
+			}
 			b.scUpdateCh.Load()
 			if b.closed.HasFired() { // don't send SubConn updates to child after the balancer has been closed
 				return
@@ -695,7 +698,10 @@ func (b *outlierDetectionBalancer) run() {
 			case *ejectionUpdate:
 				b.handleEjectedUpdate(u)
 			}
-		case update := <-b.pickerUpdateCh.Get():
+		case update, ok := <-b.pickerUpdateCh.Get():
+			if !ok {
+				return
+			}
 			b.pickerUpdateCh.Load()
 			if b.closed.HasFired() { // don't send picker updates to grpc after the balancer has been closed
 				return

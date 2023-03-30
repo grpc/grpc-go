@@ -296,7 +296,10 @@ func (s *GRPCServer) handleServingModeChanges(updateCh *buffer.Unbounded) {
 		select {
 		case <-s.quit.Done():
 			return
-		case u := <-updateCh.Get():
+		case u, ok := <-updateCh.Get():
+			if !ok {
+				return
+			}
 			updateCh.Load()
 			args := u.(*modeChangeArgs)
 			if args.mode == connectivity.ServingModeNotServing {

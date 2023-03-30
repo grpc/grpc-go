@@ -188,7 +188,10 @@ func (b *rlsBalancer) run() {
 
 	for {
 		select {
-		case u := <-b.updateCh.Get():
+		case u, ok := <-b.updateCh.Get():
+			if !ok {
+				return
+			}
 			b.updateCh.Load()
 			switch update := u.(type) {
 			case childPolicyIDAndState:
