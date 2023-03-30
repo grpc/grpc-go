@@ -166,6 +166,9 @@ func SpanContextFromContext(ctx context.Context) (trace.SpanContext, bool) {
 	if !ok {
 		return trace.SpanContext{}, false
 	}
+	if ri.ti == nil || ri.ti.span == nil {
+		return trace.SpanContext{}, false
+	}
 	sc := ri.ti.span.SpanContext()
 	return sc, true
 }
