@@ -197,7 +197,7 @@ func (s) TestFromErrorWrapped(t *testing.T) {
 	const code, message = codes.Internal, "test description"
 	err := fmt.Errorf("wrapped error: %w", Error(code, message))
 	s, ok := FromError(err)
-	if !ok || s.Code() != code || s.Message() != message || s.Err() == nil {
+	if !ok || s.Code() != code || s.Message() != err.Error() || s.Err() == nil {
 		t.Fatalf("FromError(%v) = %v, %v; want <Code()=%s, Message()=%q, Err()!=nil>, true", err, s, ok, code, message)
 	}
 }
@@ -206,7 +206,7 @@ func (s) TestFromErrorImplementsInterfaceWrapped(t *testing.T) {
 	const code, message = codes.Internal, "test description"
 	err := fmt.Errorf("wrapped error: %w", customError{Code: code, Message: message})
 	s, ok := FromError(err)
-	if !ok || s.Code() != code || s.Message() != message || s.Err() == nil {
+	if !ok || s.Code() != code || s.Message() != err.Error() || s.Err() == nil {
 		t.Fatalf("FromError(%v) = %v, %v; want <Code()=%s, Message()=%q, Err()!=nil>, true", err, s, ok, code, message)
 	}
 }

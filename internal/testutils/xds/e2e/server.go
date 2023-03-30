@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -99,7 +100,7 @@ type ManagementServerOptions struct {
 
 	// OnStreamClosed is called immediately prior to closing an xDS stream. The
 	// callback is invoked with the stream ID of the stream being closed.
-	OnStreamClosed func(int64)
+	OnStreamClosed func(int64, *v3corepb.Node)
 
 	// OnStreamRequest is called when a request is received on the stream. The
 	// callback is invoked with the stream ID of the stream on which the request

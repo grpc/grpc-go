@@ -212,15 +212,6 @@ var (
 		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
 		ClientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
 	}
-	nilCredsConfigV3 = &Config{
-		XDSServer: &ServerConfig{
-			ServerURI:      "trafficdirector.googleapis.com:443",
-			Creds:          ChannelCreds{Type: "insecure"},
-			ServerFeatures: []string{"xds_v3"},
-		},
-		NodeProto: v3NodeProto,
-		ClientDefaultListenerResourceNameTemplate: "%s",
-	}
 	nilCredsConfigNoServerFeatures = &Config{
 		XDSServer: &ServerConfig{
 			ServerURI: "trafficdirector.googleapis.com:443",
