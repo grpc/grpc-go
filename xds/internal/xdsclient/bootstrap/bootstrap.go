@@ -43,10 +43,10 @@ import (
 
 const (
 	// The "server_features" field in the bootstrap file contains a list of
-	// features supported by the server.
-	// + A value of "xds_v3" indicates that the server supports the v3 version of
+	// features supported by the server:
+	// - A value of "xds_v3" indicates that the server supports the v3 version of
 	//   the xDS transport protocol.
-	// + A value of "ignore_resource_deletion" indicates that the client should
+	// - A value of "ignore_resource_deletion" indicates that the client should
 	//   ignore deletion of Listener and Cluster resources in updates from the
 	//   server.
 	serverFeaturesV3                     = "xds_v3"

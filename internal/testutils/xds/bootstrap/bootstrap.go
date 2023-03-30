@@ -37,8 +37,9 @@ type Options struct {
 	NodeID string
 	// ServerURI is the address of the management server.
 	ServerURI string
-	// IgnoreResourceDeletion if true implies that the management server features
-	// ignore_resource_deletion.
+	// IgnoreResourceDeletion, if true, results in a bootstrap config with the
+	// `server_features` list containing `ignore_resource_deletion`. This results
+	// in gRPC ignoring resource deletions from the management server, as per A53.
 	IgnoreResourceDeletion bool
 	// ClientDefaultListenerResourceNameTemplate is the default listener
 	// resource name template to be used on the gRPC client.
