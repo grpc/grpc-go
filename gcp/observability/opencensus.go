@@ -88,7 +88,7 @@ func newStackdriverExporter(config *config) (tracingMetricsExporter, error) {
 	// library, including their label that uniquely identifies the process.
 	// Thus, generate a unique process identifier here to uniquely identify
 	// process for metrics exporting to function correctly.
-	metricsLabels := make(map[string]string, len(config.Labels))
+	metricsLabels := make(map[string]string, len(config.Labels) + 1)
 	for k, v := range config.Labels {
 		metricsLabels[k] = v
 	}
