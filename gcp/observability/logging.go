@@ -318,28 +318,27 @@ func (bml *binaryMethodLogger) buildGCPLoggingEntry(ctx context.Context, c iblog
 	grpcLogEntry.MethodName = bml.methodName
 	grpcLogEntry.Authority = bml.authority
 
-	var scPresent *trace.SpanContext
+	var sc trace.SpanContext
+	var ok bool
 	if bml.clientSide {
 		// client side span, populated through opencensus trace package.
 		if span := trace.FromContext(ctx); span != nil {
-			sc := span.SpanContext()
-			scPresent = &sc
+			sc = span.SpanContext()
+			ok = true
 		}
 	} else {
 		// server side span, populated through stats/opencensus package.
-		if sc, ok := opencensus.SpanContextFromContext(ctx); ok {
-			scPresent = &sc
-		}
+		sc, ok = opencensus.SpanContextFromContext(ctx)
 	}
 	gcploggingEntry := gcplogging.Entry{
 		Timestamp: binLogEntry.GetTimestamp().AsTime(),
 		Severity:  100,
 		Payload:   grpcLogEntry,
 	}
-	if scPresent != nil {
-		gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + scPresent.TraceID.String()
-		gcploggingEntry.SpanID = scPresent.SpanID.String()
-		gcploggingEntry.TraceSampled = scPresent.IsSampled()
+	if ok {
+		gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + sc.TraceID.String()
+		gcploggingEntry.SpanID = sc.SpanID.String()
+		gcploggingEntry.TraceSampled = sc.IsSampled()
 	}
 	return gcploggingEntry
 }
