@@ -56,7 +56,7 @@ type AuditInfo struct {
 
 // AuditLoggerConfig defines the configuration for a particular implementation of audit logger.
 type AuditLoggerConfig interface {
-	// Name() returns the same name as that returned by its supported builder.
+	// Name returns the same name as that returned by its supported builder.
 	Name() string
 }
 
