@@ -161,7 +161,7 @@ func getRPCInfo(ctx context.Context) *rpcInfo {
 
 // SpanContextFromContext returns the Span Context about the Span in the
 // context. Returns false if no Span in the context.
-func SpanInfoFromContext(ctx context.Context) (trace.SpanContext, bool) {
+func SpanContextFromContext(ctx context.Context) (trace.SpanContext, bool) {
 	ri, ok := ctx.Value(rpcInfoKey{}).(*rpcInfo)
 	if !ok {
 		return trace.SpanContext{}, false
