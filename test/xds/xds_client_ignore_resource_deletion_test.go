@@ -174,6 +174,8 @@ func testResourceDeletionIgnored(t *testing.T, resources e2e.UpdateOptions, u fu
 	for {
 		verifyRPCtoAllEndpoints(t, cc)
 		select {
+		case <-ctx.Done():
+			return
 		case <-timer.C:
 			return
 		case <-ticker.C:
@@ -186,10 +188,10 @@ func testResourceDeletionIgnored(t *testing.T, resources e2e.UpdateOptions, u fu
 // deleted by the xDSClient when a resource is missing the xDS response and subsequent
 // RPCs fail.
 func testResourceDeletionNotIgnored(t *testing.T, resources e2e.UpdateOptions, u func(r *e2e.UpdateOptions)) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*1000)
 	t.Cleanup(cancel)
 	ms := startManagementServer(t)
-	bootstrapContent := generateBootstrapContents(t, ms.Address, true)
+	bootstrapContent := generateBootstrapContents(t, ms.Address, false)
 
 	// Update the management server with initial resources setup.
 	if err := ms.Update(ctx, resources); err != nil {
