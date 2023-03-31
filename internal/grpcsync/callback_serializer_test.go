@@ -29,9 +29,8 @@ import (
 )
 
 const (
-	defaultTestWatchExpiryTimeout = 100 * time.Millisecond
-	defaultTestTimeout            = 5 * time.Second
-	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
+	defaultTestTimeout      = 5 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
 )
 
 // TestCallbackSerializer_Schedule_FIFO verifies that callbacks are executed in
