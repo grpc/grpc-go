@@ -24,6 +24,12 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
+const (
+	// ClusterResourceTypeName represents the transport agnostic name for the
+	// cluster resource.
+	ClusterResourceTypeName = "ClusterResource"
+)
+
 var (
 	// Compile time interface checks.
 	_ Type         = clusterResourceType{}
@@ -33,7 +39,7 @@ var (
 	clusterType = clusterResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3ClusterURL,
-			typeEnum:                   ClusterResource,
+			typeName:                   ClusterResourceTypeName,
 			allResourcesRequiredInSotW: true,
 		},
 	}

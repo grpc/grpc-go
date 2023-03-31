@@ -29,16 +29,16 @@ import (
 
 // BuildResourceName returns the resource name in the format of an xdstp://
 // resource.
-func BuildResourceName(typ xdsresource.ResourceType, auth, id string, ctxParams map[string]string) string {
+func BuildResourceName(typeName, auth, id string, ctxParams map[string]string) string {
 	var typS string
-	switch typ {
-	case xdsresource.ListenerResource:
+	switch typeName {
+	case xdsresource.ListenerResourceTypeName:
 		typS = version.V3ListenerType
-	case xdsresource.RouteConfigResource:
+	case xdsresource.RouteConfigTypeName:
 		typS = version.V3RouteConfigType
-	case xdsresource.ClusterResource:
+	case xdsresource.ClusterResourceTypeName:
 		typS = version.V3ClusterType
-	case xdsresource.EndpointsResource:
+	case xdsresource.EndpointsResourceTypeName:
 		typS = version.V3EndpointsType
 	}
 	return (&xdsresource.Name{

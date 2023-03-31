@@ -84,14 +84,14 @@ type Type interface {
 	// TypeURL is the xDS type URL of this resource type for v3 transport.
 	TypeURL() string
 
-	// TypeEnum is an enumerated value for this resource type. This can be used
-	// for logging/debugging purposes, as well in cases where the resource type
-	// is to be uniquely identified but the actual functionality provided by the
-	// resource type is not required.
+	// TypeName identifies resources in a transport protocol agnostic way. This
+	// can be used for logging/debugging purposes, as well in cases where the
+	// resource type name is to be uniquely identified but the actual
+	// functionality provided by the resource type is not required.
 	//
-	// TODO: once Type is renamed to ResourceType, rename ResourceType to
-	// ResourceTypeEnum.
-	TypeEnum() ResourceType
+	// TODO: once Type is renamed to ResourceType, rename TypeName to
+	// ResourceTypeName.
+	TypeName() string
 
 	// AllResourcesRequiredInSotW indicates whether this resource type requires
 	// that all resources be present in every SotW response from the server. If
@@ -147,7 +147,7 @@ type DecodeResult struct {
 // implemented here for free.
 type resourceTypeState struct {
 	typeURL                    string
-	typeEnum                   ResourceType
+	typeName                   string
 	allResourcesRequiredInSotW bool
 }
 
@@ -155,8 +155,8 @@ func (r resourceTypeState) TypeURL() string {
 	return r.typeURL
 }
 
-func (r resourceTypeState) TypeEnum() ResourceType {
-	return r.typeEnum
+func (r resourceTypeState) TypeName() string {
+	return r.typeName
 }
 
 func (r resourceTypeState) AllResourcesRequiredInSotW() bool {
