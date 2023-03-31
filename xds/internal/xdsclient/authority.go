@@ -484,6 +484,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 		// There are no more watchers for this resource, delete the state
 		// associated with it, and instruct the transport to send a request
 		// which does not include this resource name.
+		a.logger.Debugf("Removing last watch for type %q, resource name %q", rType.TypeEnum(), resourceName)
 		delete(resources, resourceName)
 		a.sendDiscoveryRequestLocked(rType, resources)
 	}

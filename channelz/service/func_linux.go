@@ -25,6 +25,7 @@ import (
 	durpb "github.com/golang/protobuf/ptypes/duration"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
@@ -34,7 +35,7 @@ func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
 func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {
 	var opts []*channelzpb.SocketOption
 	if skopts.Linger != nil {
-		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionLinger{
+		additional, err := anypb.New(&channelzpb.SocketOptionLinger{
 			Active:   skopts.Linger.Onoff != 0,
 			Duration: convertToPtypesDuration(int64(skopts.Linger.Linger), 0),
 		})
@@ -48,7 +49,7 @@ func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOptio
 		}
 	}
 	if skopts.RecvTimeout != nil {
-		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionTimeout{
+		additional, err := anypb.New(&channelzpb.SocketOptionTimeout{
 			Duration: convertToPtypesDuration(int64(skopts.RecvTimeout.Sec), int64(skopts.RecvTimeout.Usec)),
 		})
 		if err == nil {
@@ -61,7 +62,7 @@ func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOptio
 		}
 	}
 	if skopts.SendTimeout != nil {
-		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionTimeout{
+		additional, err := anypb.New(&channelzpb.SocketOptionTimeout{
 			Duration: convertToPtypesDuration(int64(skopts.SendTimeout.Sec), int64(skopts.SendTimeout.Usec)),
 		})
 		if err == nil {
@@ -74,7 +75,7 @@ func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOptio
 		}
 	}
 	if skopts.TCPInfo != nil {
-		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionTcpInfo{
+		additional, err := anypb.New(&channelzpb.SocketOptionTcpInfo{
 			TcpiState:       uint32(skopts.TCPInfo.State),
 			TcpiCaState:     uint32(skopts.TCPInfo.Ca_state),
 			TcpiRetransmits: uint32(skopts.TCPInfo.Retransmits),
