@@ -471,19 +471,3 @@ func verifyRPCtoAllEndpoints(cc grpc.ClientConnInterface) error {
 	}
 	return nil
 }
-
-//func defaultClientCluster(cdsName string, edsName string) *clusterpb.Cluster {
-//	return &clusterpb.Cluster{
-//		Name:                 cdsName,
-//		ClusterDiscoveryType: &clusterpb.Cluster_Type{Type: clusterpb.Cluster_EDS},
-//		EdsClusterConfig: &clusterpb.Cluster_EdsClusterConfig{
-//			EdsConfig: &corepb.ConfigSource{
-//				ConfigSourceSpecifier: &corepb.ConfigSource_Ads{
-//					Ads: &corepb.AggregatedConfigSource{},
-//				},
-//			},
-//			ServiceName: edsName,
-//		},
-//		LbPolicy: clusterpb.Cluster_ROUND_ROBIN,
-//	}
-//}
