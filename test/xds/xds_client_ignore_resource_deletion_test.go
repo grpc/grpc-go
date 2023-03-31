@@ -41,7 +41,7 @@ import (
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	testServicepb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/test/grpc_testing"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
@@ -224,7 +224,7 @@ func testResourceDeletionNotIgnored(t *testing.T, resources e2e.UpdateOptions, u
 	}
 
 	// Spin up go routines to verify RPCs fail after the update.
-	client := testServicepb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
@@ -462,7 +462,7 @@ func (s) TestListenerResourceDeletionOnServerNotIgnored(t *testing.T) {
 func verifyRPCtoAllEndpoints(cc grpc.ClientConnInterface) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	client := testServicepb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		return fmt.Errorf("rpc EmptyCall() failed: %v", err)
 	}
