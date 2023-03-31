@@ -110,22 +110,25 @@ func (fe *fakeOpenCensusExporter) ExportView(vd *view.Data) {
 }
 
 type traceAndSpanID struct {
-	spanName string
-	traceID  trace.TraceID
-	spanID   trace.SpanID
+	spanName  string
+	traceID   trace.TraceID
+	spanID    trace.SpanID
+	isSampled bool
 }
 
 type traceAndSpanIDString struct {
-	traceID string
-	spanID  string
+	traceID   string
+	spanID    string
+	isSampled bool
 }
 
 // idsToString is a helper that converts from generated trace and span IDs to
 // the string version stored in trace message events.
-func idsToString(tasi traceAndSpanID, projectID string) traceAndSpanIDString {
+func (tasi *traceAndSpanID) idsToString(projectID string) traceAndSpanIDString {
 	return traceAndSpanIDString{
-		traceID: "projects/" + projectID + "/traces/" + tasi.traceID.String(),
-		spanID:  tasi.spanID.String(),
+		traceID:   "projects/" + projectID + "/traces/" + tasi.traceID.String(),
+		spanID:    tasi.spanID.String(),
+		isSampled: tasi.isSampled,
 	}
 }
 
@@ -135,9 +138,10 @@ func (fe *fakeOpenCensusExporter) ExportSpan(vd *trace.SpanData) {
 		// will populate different contexts throughout the system, convert in
 		// caller to string version as the logging code does.
 		fe.idCh.Send(traceAndSpanID{
-			spanName: vd.Name,
-			traceID:  vd.TraceID,
-			spanID:   vd.SpanID,
+			spanName:  vd.Name,
+			traceID:   vd.TraceID,
+			spanID:    vd.SpanID,
+			isSampled: vd.IsSampled(),
 		})
 	}
 
@@ -650,7 +654,7 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 		var tasiSent traceAndSpanIDString
 		for _, tasi := range traceAndSpanIDs {
 			if strings.HasPrefix(tasi.spanName, "Sent.") {
-				tasiSent = idsToString(tasi, projectID)
+				tasiSent = tasi.idsToString(projectID)
 				continue
 			}
 		}
@@ -792,7 +796,7 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 		var tasiServer traceAndSpanIDString
 		for _, tasi := range traceAndSpanIDs {
 			if strings.HasPrefix(tasi.spanName, "grpc.") {
-				tasiServer = idsToString(tasi, projectID)
+				tasiServer = tasi.idsToString(projectID)
 				continue
 			}
 		}
@@ -944,11 +948,11 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 		var tasiServer traceAndSpanIDString
 		for _, tasi := range traceAndSpanIDs {
 			if strings.HasPrefix(tasi.spanName, "Sent.") {
-				tasiSent = idsToString(tasi, projectID)
+				tasiSent = tasi.idsToString(projectID)
 				continue
 			}
 			if strings.HasPrefix(tasi.spanName, "grpc.") {
-				tasiServer = idsToString(tasi, projectID)
+				tasiServer = tasi.idsToString(projectID)
 			}
 		}
 
@@ -1024,11 +1028,11 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 		var tasiServer traceAndSpanIDString
 		for _, tasi := range traceAndSpanIDs {
 			if strings.HasPrefix(tasi.spanName, "Sent.") {
-				tasiSent = idsToString(tasi, projectID)
+				tasiSent = tasi.idsToString(projectID)
 				continue
 			}
 			if strings.HasPrefix(tasi.spanName, "grpc.") {
-				tasiServer = idsToString(tasi, projectID)
+				tasiServer = tasi.idsToString(projectID)
 			}
 		}
 

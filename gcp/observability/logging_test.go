@@ -80,8 +80,9 @@ func (fle *fakeLoggingExporter) EmitGcpLoggingEntry(entry gcplogging.Entry) {
 	}
 
 	ids := &traceAndSpanIDString{
-		traceID: entry.Trace,
-		spanID:  entry.SpanID,
+		traceID:   entry.Trace,
+		spanID:    entry.SpanID,
+		isSampled: entry.TraceSampled,
 	}
 	fle.idsSeen = append(fle.idsSeen, ids)
 

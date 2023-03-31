@@ -598,8 +598,8 @@ google.golang.org/grpc v1.40.0/go.mod h1:ogyxbiOoUXAkP+4+xa6PZSE9DZgIHtSpzjDTB9K
 google.golang.org/grpc v1.53.0-dev.0.20230315171901-a1e657ce53ba h1:puuDphNHQZRngQpzUGvfXMBFBv6DuahfWMZaj0jVtjw=
 google.golang.org/grpc v1.53.0-dev.0.20230315171901-a1e657ce53ba/go.mod h1:PUSEXI6iWghWaB6lXM4knEgpJNu2qUcKfDtNci3EC2g=
 google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0/go.mod h1:6Kw0yEErY5E/yWrBtf03jp27GLLJujG4z/JK95pnjjw=
-google.golang.org/grpc/stats/opencensus v0.0.0-20230317183452-b638faff2204 h1:MeDNVH2KmQ9Z3AbXKsvU9UcbRR8LfpZVLmZAVWIX0nI=
-google.golang.org/grpc/stats/opencensus v0.0.0-20230317183452-b638faff2204/go.mod h1:Dg7VaOjf0r9QhRn/YpwSf3vKQz1ixulffTlhEarxEXA=
+google.golang.org/grpc/stats/opencensus v0.0.0-20230330193705-4a12595692ae h1:40UWCQ40A2NTDabsmbZNznFf9SUftDlaBASj7OCdKDY=
+google.golang.org/grpc/stats/opencensus v0.0.0-20230330193705-4a12595692ae/go.mod h1:qPsHQZhltTPryCUC0naykSpbIJDodlCLM/vNa607CrE=
 google.golang.org/protobuf v0.0.0-20200109180630-ec00e32a8dfd/go.mod h1:DFci5gLYBciE7Vtevhsrf46CRTquxDuWsQurQQe4oz8=
 google.golang.org/protobuf v0.0.0-20200221191635-4d8936d0db64/go.mod h1:kwYJMbMJ01Woi6D6+Kah6886xMZcty6N08ah7+eCXa0=
 google.golang.org/protobuf v0.0.0-20200228230310-ab0ca4ff8a60/go.mod h1:cfTl7dwQJ+fmap5saPgwCLgHXTUD7jkjRqWcaiX5VyM=
