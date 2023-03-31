@@ -19,6 +19,7 @@
 package authz
 
 import (
+	"context"
 	"sync"
 )
 
@@ -73,7 +74,7 @@ type AuditLoggerConfig interface {
 // Please refer to https://github.com/grpc/proposal/pull/346 for more details about audit logging.
 type AuditLogger interface {
 	// Log logs the auditing event with the given information.
-	Log(*AuditInfo)
+	Log(context.Context, *AuditInfo)
 }
 
 // AuditLoggerBuilder is the interface for an audit logger builder.
