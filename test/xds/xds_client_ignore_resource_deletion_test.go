@@ -38,7 +38,6 @@ import (
 	"google.golang.org/grpc/xds"
 
 	clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
-	corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -56,8 +55,10 @@ const (
 )
 
 var (
-	resolverBuilder                 = internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))
-	nodeID                          = uuid.New().String()
+	nodeID = uuid.New().String()
+	// This route configuration resource contains two routes:
+	// - a route for the EmptyCall rpc, to be sent to cluster1
+	// - a route for the UnaryCall rpc, to be sent to cluster2
 	defaultRouteConfigWithTwoRoutes = &routepb.RouteConfiguration{
 		Name: rdsName,
 		VirtualHosts: []*routepb.VirtualHost{{
@@ -100,8 +101,8 @@ func (s) TestIgnoreResourceDeletionOnClient(t *testing.T) {
 		Listeners: []*listenerpb.Listener{e2e.DefaultClientListener(serviceName, rdsName)},
 		Routes:    []*routepb.RouteConfiguration{defaultRouteConfigWithTwoRoutes},
 		Clusters: []*clusterpb.Cluster{
-			defaultClientCluster(cdsName1, edsName1),
-			defaultClientCluster(cdsName2, edsName2),
+			e2e.DefaultCluster(cdsName1, edsName1, e2e.SecurityLevelNone),
+			e2e.DefaultCluster(cdsName2, edsName2, e2e.SecurityLevelNone),
 		},
 		Endpoints: []*endpointpb.ClusterLoadAssignment{
 			e2e.DefaultEndpoint(edsName1, "localhost", []uint32{port1}),
@@ -141,38 +142,45 @@ func (s) TestIgnoreResourceDeletionOnClient(t *testing.T) {
 // set in "server_features" field. This subtest verifies that the resource was
 // not deleted by the xDSClient when a resource is missing the xDS response and
 // RPCs continue to succeed.
-func testResourceDeletionIgnored(t *testing.T, resources e2e.UpdateOptions, u func(r *e2e.UpdateOptions)) {
+func testResourceDeletionIgnored(t *testing.T, resources e2e.UpdateOptions, updateResource func(r *e2e.UpdateOptions)) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	t.Cleanup(cancel)
-	ms := startManagementServer(t)
-	bootstrapContent := generateBootstrapContents(t, ms.Address, true)
+	mgmtServer := startManagementServer(t)
+	bs := generateBootstrapContents(t, mgmtServer.Address, true)
+	xdsR := xdsResolverBuilder(t, bs)
 
 	// Update the management server with initial resources setup.
-	if err := ms.Update(ctx, resources); err != nil {
+	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
-	cResolver := generateCustomResolver(t, bootstrapContent)
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(cResolver))
+	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("Failed to dial local test server: %v.", err)
 	}
 	t.Cleanup(func() { cc.Close() })
 
-	verifyRPCtoAllEndpoints(t, cc)
-
-	// Mutate resource and update on the server.
-	u(&resources)
-	if err := ms.Update(ctx, resources); err != nil {
+	if err := verifyRPCtoAllEndpoints(cc); err != nil {
 		t.Fatal(err)
 	}
 
-	// Make RPCs for every 50ms for the next 500ms.
+	// Mutate resource and update on the server.
+	updateResource(&resources)
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make an RPC every 50ms for the next 500ms. This is to ensure that the
+	// updated resource is received from the management server and is processed by
+	// gRPC. Since resource deletions are ignored by the xDS client, we expect RPCs
+	// to all endpoints to keep succeeding.
 	timer := time.NewTimer(500 * time.Millisecond)
 	ticker := time.NewTicker(50 * time.Millisecond)
 	t.Cleanup(ticker.Stop)
 	for {
-		verifyRPCtoAllEndpoints(t, cc)
+		if err := verifyRPCtoAllEndpoints(cc); err != nil {
+			t.Fatal(err)
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -190,26 +198,28 @@ func testResourceDeletionIgnored(t *testing.T, resources e2e.UpdateOptions, u fu
 func testResourceDeletionNotIgnored(t *testing.T, resources e2e.UpdateOptions, u func(r *e2e.UpdateOptions)) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*1000)
 	t.Cleanup(cancel)
-	ms := startManagementServer(t)
-	bootstrapContent := generateBootstrapContents(t, ms.Address, false)
+	mgmtServer := startManagementServer(t)
+	bs := generateBootstrapContents(t, mgmtServer.Address, false)
+	xdsR := xdsResolverBuilder(t, bs)
 
 	// Update the management server with initial resources setup.
-	if err := ms.Update(ctx, resources); err != nil {
+	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
-	cResolver := generateCustomResolver(t, bootstrapContent)
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(cResolver))
+	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	t.Cleanup(func() { cc.Close() })
 
-	verifyRPCtoAllEndpoints(t, cc)
+	if err := verifyRPCtoAllEndpoints(cc); err != nil {
+		t.Fatal(err)
+	}
 
 	// Mutate resource and update on the server.
 	u(&resources)
-	if err := ms.Update(ctx, resources); err != nil {
+	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -218,21 +228,19 @@ func testResourceDeletionNotIgnored(t *testing.T, resources e2e.UpdateOptions, u
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
-		for ctx.Err() == nil {
+		defer wg.Done()
+		for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
 			if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-				wg.Done()
-				break
+				return
 			}
-			time.Sleep(50 * time.Millisecond)
 		}
 	}()
 	go func() {
-		for ctx.Err() == nil {
+		defer wg.Done()
+		for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
 			if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
-				wg.Done()
-				break
+				return
 			}
-			time.Sleep(50 * time.Millisecond)
 		}
 	}()
 
@@ -245,12 +253,12 @@ func testResourceDeletionNotIgnored(t *testing.T, resources e2e.UpdateOptions, u
 // This helper creates a management server for the test.
 func startManagementServer(t *testing.T) *e2e.ManagementServer {
 	t.Helper()
-	ms, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatalf("Failed to start management server: %v", err)
 	}
-	t.Cleanup(ms.Stop)
-	return ms
+	t.Cleanup(mgmtServer.Stop)
+	return mgmtServer
 }
 
 // This helper generates a custom bootstrap config for the test.
@@ -268,13 +276,15 @@ func generateBootstrapContents(t *testing.T, serverURI string, ignoreResourceDel
 	return bootstrapContents
 }
 
-// This helper generates a custom bootstrap config for the test.
-func generateCustomResolver(t *testing.T, bootstrapContents []byte) resolver.Builder {
-	cResolver, err := resolverBuilder(bootstrapContents)
+// This helper creates in a bootstrapConfig and .
+func xdsResolverBuilder(t *testing.T, bs []byte) resolver.Builder {
+	t.Helper()
+	resolverBuilder := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))
+	xdsR, err := resolverBuilder(bs)
 	if err != nil {
 		t.Fatalf("Creating xDS resolver for testing: %v", err)
 	}
-	return cResolver
+	return xdsR
 }
 
 // This helper creates an xDS-enabled gRPC server using the listener and the
@@ -329,16 +339,17 @@ func resourceWithListenerForGRPCServer(t *testing.T) (e2e.UpdateOptions, net.Lis
 // RPCs to server. The test then removes the listener resource from the server
 // and verifies that server continues to server requests.
 func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
-	ms := startManagementServer(t)
-	bootstrapContents := generateBootstrapContents(t, ms.Address, true)
+	mgmtServer := startManagementServer(t)
+	bs := generateBootstrapContents(t, mgmtServer.Address, true)
+	xdsR := xdsResolverBuilder(t, bs)
 	resources, lis := resourceWithListenerForGRPCServer(t)
-	updateCh, serve := setupGRPCServerWithModeChangeChannel(t, bootstrapContents, lis)
+	updateCh, serve := setupGRPCServerWithModeChangeChannel(t, bs, lis)
 
 	go serve()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := ms.Update(ctx, resources); err != nil {
+	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -352,32 +363,34 @@ func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
 		}
 	}
 
-	cResolver := generateCustomResolver(t, bootstrapContents)
-
 	// Create a ClientConn and make a successful RPCs.
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(cResolver))
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 
-	verifyRPCtoAllEndpoints(t, cc)
+	if err := verifyRPCtoAllEndpoints(cc); err != nil {
+		t.Fatal(err)
+	}
 
 	// Update without a listener resource.
-	if err := ms.Update(ctx, e2e.UpdateOptions{
+	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*listenerpb.Listener{},
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	// Make RPCs every 100 ms for 1s and verify that the serving mode does
+	// Make RPCs every 100 mgmtServer for 1s and verify that the serving mode does
 	// not change on server.
 	timer := time.NewTimer(500 * time.Millisecond)
 	ticker := time.NewTicker(50 * time.Millisecond)
 	t.Cleanup(ticker.Stop)
 	for {
-		verifyRPCtoAllEndpoints(t, cc)
+		if err := verifyRPCtoAllEndpoints(cc); err != nil {
+			t.Fatal(err)
+		}
 		select {
 		case <-timer.C:
 			return
@@ -393,16 +406,17 @@ func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
 // working as expected. The test then removes the listener resource from the server
 // and verifies that server should enter "non_serving" mode as expected.
 func (s) TestListenerResourceDeletionOnServerNotIgnored(t *testing.T) {
-	ms := startManagementServer(t)
-	bootstrapContents := generateBootstrapContents(t, ms.Address, false)
+	mgmtServer := startManagementServer(t)
+	bs := generateBootstrapContents(t, mgmtServer.Address, false)
+	xdsR := xdsResolverBuilder(t, bs)
 	resources, lis := resourceWithListenerForGRPCServer(t)
-	updateCh, serve := setupGRPCServerWithModeChangeChannel(t, bootstrapContents, lis)
+	updateCh, serve := setupGRPCServerWithModeChangeChannel(t, bs, lis)
 
 	go serve()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := ms.Update(ctx, resources); err != nil {
+	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -417,15 +431,16 @@ func (s) TestListenerResourceDeletionOnServerNotIgnored(t *testing.T) {
 	}
 
 	// Create a ClientConn and make a successful RPCs.
-	cResolver := generateCustomResolver(t, bootstrapContents)
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(cResolver))
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
-	verifyRPCtoAllEndpoints(t, cc)
+	if err := verifyRPCtoAllEndpoints(cc); err != nil {
+		t.Fatal(err)
+	}
 
-	if err := ms.Update(ctx, e2e.UpdateOptions{
+	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*listenerpb.Listener{}, // empty listener resource
 	}); err != nil {
@@ -444,31 +459,31 @@ func (s) TestListenerResourceDeletionOnServerNotIgnored(t *testing.T) {
 
 // This helper makes both UnaryCall and EmptyCall RPCs using the ClientConn that
 // is passed to this function. This helper panics for any failed RPCs.
-func verifyRPCtoAllEndpoints(t *testing.T, cc grpc.ClientConnInterface) {
-	t.Helper()
+func verifyRPCtoAllEndpoints(cc grpc.ClientConnInterface) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	client := testServicepb.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("rpc EmptyCall() failed: %v", err)
+		return fmt.Errorf("rpc EmptyCall() failed: %v", err)
 	}
 	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
-		t.Fatalf("rpc UnaryCall() failed: %v", err)
+		return fmt.Errorf("rpc UnaryCall() failed: %v", err)
 	}
+	return nil
 }
 
-func defaultClientCluster(cdsName string, edsName string) *clusterpb.Cluster {
-	return &clusterpb.Cluster{
-		Name:                 cdsName,
-		ClusterDiscoveryType: &clusterpb.Cluster_Type{Type: clusterpb.Cluster_EDS},
-		EdsClusterConfig: &clusterpb.Cluster_EdsClusterConfig{
-			EdsConfig: &corepb.ConfigSource{
-				ConfigSourceSpecifier: &corepb.ConfigSource_Ads{
-					Ads: &corepb.AggregatedConfigSource{},
-				},
-			},
-			ServiceName: edsName,
-		},
-		LbPolicy: clusterpb.Cluster_ROUND_ROBIN,
-	}
-}
+//func defaultClientCluster(cdsName string, edsName string) *clusterpb.Cluster {
+//	return &clusterpb.Cluster{
+//		Name:                 cdsName,
+//		ClusterDiscoveryType: &clusterpb.Cluster_Type{Type: clusterpb.Cluster_EDS},
+//		EdsClusterConfig: &clusterpb.Cluster_EdsClusterConfig{
+//			EdsConfig: &corepb.ConfigSource{
+//				ConfigSourceSpecifier: &corepb.ConfigSource_Ads{
+//					Ads: &corepb.AggregatedConfigSource{},
+//				},
+//			},
+//			ServiceName: edsName,
+//		},
+//		LbPolicy: clusterpb.Cluster_ROUND_ROBIN,
+//	}
+//}
