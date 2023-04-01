@@ -250,7 +250,7 @@ func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 			PermitWithoutStream: true,
 		},
 	}
-	client, cancel := setUpWithNoPingServer(t, copts, connCh)
+	client, cancel := setUpWithNoPingServer(t, copts, connCh, false)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
 
@@ -279,7 +279,7 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 			Timeout: 10 * time.Millisecond,
 		},
 	}
-	client, cancel := setUpWithNoPingServer(t, copts, connCh)
+	client, cancel := setUpWithNoPingServer(t, copts, connCh, false)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
 
@@ -311,7 +311,7 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	}
 	// TODO(i/6099): Setup a server which can ping and no-ping based on a flag to
 	// reduce the flakiness in this test.
-	client, cancel := setUpWithNoPingServer(t, copts, connCh)
+	client, cancel := setUpWithNoPingServer(t, copts, connCh, true)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
 
@@ -327,6 +327,10 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("Stream creation failed: %v", err)
 	}
+
+	// Now switch to a server that doesn't respond to pings.
+	client, cancel = setUpWithNoPingServer(t, copts, connCh, false)
+	defer cancel()
 
 	if err := pollForStreamCreationError(client); err != nil {
 		t.Fatal(err)

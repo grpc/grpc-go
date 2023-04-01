@@ -15,7 +15,6 @@
  * limitations under the License.
  *
  */
-
 package transport
 
 import (
@@ -460,12 +459,28 @@ func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts 
 	return server, ct.(*http2Client), cancel
 }
 
-func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.Conn) (*http2Client, func()) {
+// / noPingConn is a custom net.Conn wrapper that disables read deadlines
+// by overriding SetReadDeadline. It simulates a server that may or may
+// not respond to keepalive pings, controlled by the respondToPings flag.
+type noPingConn struct {
+	net.Conn
+}
+
+// SetReadDeadline is an overridden method for the noPingConn struct.
+// It does nothing and always returns nil, effectively disabling the
+// read deadline for the connection. This ensures that the connection
+// will not be closed due to read timeout, simulating a server that
+// does not respond to pings.
+func (n *noPingConn) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.Conn, respondToPings bool) (*http2Client, func()) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	// Launch a non responsive server.
+	// Launch a non-responsive server.
 	go func() {
 		defer lis.Close()
 		conn, err := lis.Accept()
@@ -474,6 +489,11 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 			close(connCh)
 			return
 		}
+
+		if !respondToPings {
+			conn = &noPingConn{Conn: conn}
+		}
+
 		framer := http2.NewFramer(conn, conn)
 		if err := framer.WriteSettings(); err != nil {
 			t.Errorf("Error at server-side while writing settings: %v", err)
