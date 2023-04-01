@@ -74,8 +74,6 @@ func (clusterResourceType) Decode(opts *DecodeOptions, resource *anypb.Any) (*De
 //
 // Implements the ResourceData interface.
 type ClusterResourceData struct {
-	ResourceData
-
 	// TODO: We have always stored update structs by value. See if this can be
 	// switched to a pointer?
 	Resource ClusterUpdate

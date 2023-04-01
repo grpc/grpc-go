@@ -69,8 +69,6 @@ func (routeConfigResourceType) Decode(opts *DecodeOptions, resource *anypb.Any) 
 //
 // Implements the ResourceData interface.
 type RouteConfigResourceData struct {
-	ResourceData
-
 	// TODO: We have always stored update structs by value. See if this can be
 	// switched to a pointer?
 	Resource RouteConfigUpdate

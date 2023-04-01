@@ -113,8 +113,6 @@ type Type interface {
 // provide an implementation of this interface to represent the configuration
 // received from the xDS management server.
 type ResourceData interface {
-	isResourceData()
-
 	// Equal returns true if the passed in resource data is equal to that of the
 	// receiver.
 	Equal(ResourceData) bool

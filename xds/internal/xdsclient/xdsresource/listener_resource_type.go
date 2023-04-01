@@ -106,8 +106,6 @@ func (listenerResourceType) Decode(opts *DecodeOptions, resource *anypb.Any) (*D
 //
 // Implements the ResourceData interface.
 type ListenerResourceData struct {
-	ResourceData
-
 	// TODO: We have always stored update structs by value. See if this can be
 	// switched to a pointer?
 	Resource ListenerUpdate
