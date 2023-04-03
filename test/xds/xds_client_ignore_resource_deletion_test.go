@@ -198,7 +198,7 @@ func testResourceDeletionIgnored(t *testing.T, initialResource func(string) e2e.
 // not set in "server_features" field. This subtest verifies that the resource was
 // deleted by the xDSClient when a resource is missing the xDS response and subsequent
 // RPCs fail.
-func testResourceDeletionNotIgnored(t *testing.T, initialResource func(string) e2e.UpdateOptions, u func(r *e2e.UpdateOptions)) {
+func testResourceDeletionNotIgnored(t *testing.T, initialResource func(string) e2e.UpdateOptions, updateResource func(r *e2e.UpdateOptions)) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*1000)
 	t.Cleanup(cancel)
 	mgmtServer := startManagementServer(t)
@@ -223,7 +223,7 @@ func testResourceDeletionNotIgnored(t *testing.T, initialResource func(string) e
 	}
 
 	// Mutate resource and update on the server.
-	u(&resources)
+	updateResource(&resources)
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -281,39 +281,42 @@ func generateBootstrapContents(t *testing.T, serverURI string, ignoreResourceDel
 	return bootstrapContents
 }
 
-// This helper creates in a bootstrapConfig and .
+// This helper creates an XDS resolver Builder from the bootstrap config passed
+// as parameter.
 func xdsResolverBuilder(t *testing.T, bs []byte) resolver.Builder {
 	t.Helper()
 	resolverBuilder := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))
 	xdsR, err := resolverBuilder(bs)
 	if err != nil {
-		t.Fatalf("Creating xDS resolver for testing: %v", err)
+		t.Fatalf("Creating xDS resolver for testing failed for config %q: %v", string(bs), err)
 	}
 	return xdsR
 }
 
 // This helper creates an xDS-enabled gRPC server using the listener and the
-// bootstrap config passed. This helper then registers the server to testService
-// and returns a func to accept requests.
-func setupGRPCServerWithModeChangeChannel(t *testing.T, bootstrapContents []byte, lis net.Listener) (chan connectivity.ServingMode, func()) {
+// bootstrap config passed. It then registers the test service on the newly
+// created gRPC server and starts serving.
+func setupGRPCServerWithModeChangeChannelAndServe(t *testing.T, bootstrapContents []byte, lis net.Listener) chan connectivity.ServingMode {
 	t.Helper()
 	updateCh := make(chan connectivity.ServingMode, 1)
 
 	// Create a server option to get notified about serving mode changes.
 	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
-		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
+		t.Logf("Serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
 		updateCh <- args.Mode
 	})
-
 	server := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	t.Cleanup(server.Stop)
 	testpb.RegisterTestServiceServer(server, &testService{})
 
-	return updateCh, func() {
+	// Serve.
+	go func() {
 		if err := server.Serve(lis); err != nil {
 			t.Errorf("Serve() failed: %v", err)
 		}
-	}
+	}()
+
+	return updateCh
 }
 
 // This helper creates a listener resource with using a custom listener created.
@@ -329,7 +332,7 @@ func resourceWithListenerForGRPCServer(t *testing.T, nodeID string) (e2e.UpdateO
 	// Setup the management server to respond with the listener resources.
 	host, port, err := hostPortFromListener(lis)
 	if err != nil {
-		t.Fatalf("failed to retrieve host and port of server: %v", err)
+		t.Fatalf("Failed to retrieve host and port of listener at %q: %v", lis.Addr(), err)
 	}
 	listener := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone)
 	resources := e2e.UpdateOptions{
@@ -339,19 +342,18 @@ func resourceWithListenerForGRPCServer(t *testing.T, nodeID string) (e2e.UpdateO
 	return resources, lis
 }
 
-// This test creates a xds-enabled gRPC server with a listener resource and this
-// server features "ignore_resource_deletion". The test then verifies successful
-// RPCs to server. The test then removes the listener resource from the server
-// and verifies that server continues to server requests.
+// This test creates a gRPC server which provides server-side xDS functionality
+// by talking to a custom management server. This tests the scenario where bootstrap
+// config with "server_features" includes "ignore_resource_deletion". In which
+// case, when the listener resource is deleted on the management server, the gRPC
+// server should continue to serve RPCs.
 func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
 	mgmtServer := startManagementServer(t)
 	nodeID := uuid.New().String()
 	bs := generateBootstrapContents(t, mgmtServer.Address, true, nodeID)
 	xdsR := xdsResolverBuilder(t, bs)
 	resources, lis := resourceWithListenerForGRPCServer(t, nodeID)
-	updateCh, serve := setupGRPCServerWithModeChangeChannel(t, bs, lis)
-
-	go serve()
+	modeChangeCh := setupGRPCServerWithModeChangeChannelAndServe(t, bs, lis)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -359,13 +361,13 @@ func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Wait for the server to update to "serving" mode.
+	// Wait for the server to update to ServingModeServing mode.
 	select {
 	case <-ctx.Done():
-		t.Fatal("Test timed out waiting for a mode change update.")
-	case mode := <-updateCh:
+		t.Fatal("Test timed out waiting for a server to change to ServingModeServing.")
+	case mode := <-modeChangeCh:
 		if mode != connectivity.ServingModeServing {
-			t.Fatalf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
+			t.Fatalf("Server switched to mode %v, want %v", mode, connectivity.ServingModeServing)
 		}
 	}
 
@@ -388,8 +390,8 @@ func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Make RPCs every 100 mgmtServer for 1s and verify that the serving mode does
-	// not change on server.
+	// Perform RPCs every 100 ms for 1s and verify that the serving mode does not
+	// change on gRPC server.
 	timer := time.NewTimer(500 * time.Millisecond)
 	ticker := time.NewTicker(50 * time.Millisecond)
 	t.Cleanup(ticker.Stop)
@@ -400,26 +402,25 @@ func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
 		select {
 		case <-timer.C:
 			return
-		case mode := <-updateCh:
-			t.Fatalf("Listener received new mode: %v", mode)
+		case mode := <-modeChangeCh:
+			t.Fatalf("Server switched to mode: %v when no switch was expected", mode)
 		case <-ticker.C:
 		}
 	}
 }
 
-// This test creates a xds-enabled gRPC server with a listener resource and this
-// server does not feature "ignore_resource_deletion". The test verifies RPCs are
-// working as expected. The test then removes the listener resource from the server
-// and verifies that server should enter "non_serving" mode as expected.
+// This test creates a gRPC server which provides server-side xDS functionality
+// by talking to a custom management server. This tests the scenario where bootstrap
+// config with "server_features" does not include "ignore_resource_deletion". In
+// which case, when the listener resource is deleted on the management server, the
+// gRPC server should stop serving RPCs and switch mode to ServingModeNotServing.
 func (s) TestListenerResourceDeletionOnServerNotIgnored(t *testing.T) {
 	mgmtServer := startManagementServer(t)
 	nodeID := uuid.New().String()
 	bs := generateBootstrapContents(t, mgmtServer.Address, false, nodeID)
 	xdsR := xdsResolverBuilder(t, bs)
 	resources, lis := resourceWithListenerForGRPCServer(t, nodeID)
-	updateCh, serve := setupGRPCServerWithModeChangeChannel(t, bs, lis)
-
-	go serve()
+	updateCh := setupGRPCServerWithModeChangeChannelAndServe(t, bs, lis)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
