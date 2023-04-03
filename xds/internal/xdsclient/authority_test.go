@@ -197,7 +197,7 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 	lis := util.NewRestartableListener(l)
-
+	defer lis.Close()
 	streamRestarted := grpcsync.NewEvent()
 	serverOpt := e2e.ManagementServerOptions{
 		Listener: lis,
@@ -209,9 +209,6 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	a, ms, nodeID := setupTest(ctx, t, serverOpt, defaultTestTimeout)
 	defer ms.Stop()
 	defer a.close()
-	//if _, err := lis.Accept(); err != nil {
-	//	t.Fatal(err)
-	//}
 
 	nameA := "xdsclient-test-lds-resourceA"
 	watcherA := testutils.NewTestResourceWatcher()
@@ -243,7 +240,6 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	// connectivity issue when reconnecting because the mgmt server was already been
 	// stopped. Also verifying that OnResourceDoesNotExist() method was not invoked
 	// on the watcher.
-	cancelA()
 	select {
 	case <-ctx.Done():
 		t.Fatal("Test timed out before mgmt server got the request.")
