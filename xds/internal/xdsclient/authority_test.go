@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils"
@@ -69,7 +70,7 @@ func setupTest(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptio
 		bootstrapCfg: &bootstrap.Config{
 			NodeProto: &v3corepb.Node{Id: nodeID},
 		},
-		serializer:         newCallbackSerializer(ctx),
+		serializer:         grpcsync.NewCallbackSerializer(ctx),
 		resourceTypeGetter: rtRegistry.get,
 		watchExpiryTimeout: watchExpiryTimeout,
 		logger:             nil,
