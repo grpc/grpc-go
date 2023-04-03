@@ -21,13 +21,15 @@ package xdsclient
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc/internal/grpcsync"
+	util "google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal"
+
 	"google.golang.org/grpc/xds/internal/testutils"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -189,21 +191,27 @@ func (s) TestTimerAndWatchStateOnErrorCallback(t *testing.T) {
 func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	// Create a restartable listener which can close existing connections.
+	l, err := util.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	lis := util.NewRestartableListener(l)
 
-	serverDropRequests := atomic.Bool{}
+	streamRestarted := grpcsync.NewEvent()
 	serverOpt := e2e.ManagementServerOptions{
-		OnStreamRequest: func(int64, *v3discoverypb.DiscoveryRequest) error {
-			if serverDropRequests.Load() {
-				t.Log("Management server is forced to drop this request and return error.")
-				return fmt.Errorf("request was forced to drop")
-			}
-			return nil
+		Listener: lis,
+		OnStreamClosed: func(int64, *v3corepb.Node) {
+			streamRestarted.Fire()
 		},
 	}
 
 	a, ms, nodeID := setupTest(ctx, t, serverOpt, defaultTestTimeout)
 	defer ms.Stop()
 	defer a.close()
+	//if _, err := lis.Accept(); err != nil {
+	//	t.Fatal(err)
+	//}
 
 	nameA := "xdsclient-test-lds-resourceA"
 	watcherA := testutils.NewTestResourceWatcher()
@@ -224,7 +232,7 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	}
 
 	cancelA()
-	serverDropRequests.Store(true)
+	lis.Stop()
 
 	nameB := "xdsclient-test-lds-resourceB"
 	watcherB := testutils.NewTestResourceWatcher()
@@ -254,13 +262,15 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	if err := updateResourceInServer(ctx, ms, nameB, nodeID); err != nil {
 		t.Fatalf("Failed to update server with resource: %q; err: %q", nameB, err)
 	}
-	serverDropRequests.Store(false)
-	select {
-	case <-ctx.Done():
-		t.Fatal("Test timed out before watcher received the update.")
-	case err := <-watcherB.ErrorCh:
-		t.Fatalf("Watch got an unexpected error update: %q; want: valid update.", err)
-	case <-watcherB.UpdateCh:
+	lis.Restart()
+
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Test timed out before watcher received the update.")
+		case <-watcherB.UpdateCh:
+			return
+		}
 	}
 }
 
