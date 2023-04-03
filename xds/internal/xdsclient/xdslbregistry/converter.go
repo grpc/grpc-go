@@ -73,7 +73,7 @@ func ConvertToServiceConfig(policy *v3clusterpb.LoadBalancingPolicy, depth int) 
 			}
 			return convertRingHash(rhProto)
 		case "type.googleapis.com/envoy.extensions.load_balancing_policies.round_robin.v3.RoundRobin":
-			return makeJSONValueOfName("round_robin", json.RawMessage("{}")), nil
+			return makeBalancerConfigJSON("round_robin", json.RawMessage("{}")), nil
 		case "type.googleapis.com/envoy.extensions.load_balancing_policies.wrr_locality.v3.WrrLocality":
 			wrrlProto := &v3wrrlocalitypb.WrrLocality{}
 			if err := proto.Unmarshal(plcy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), wrrlProto); err != nil {
@@ -123,7 +123,7 @@ func convertRingHash(rhCfg *v3ringhashpb.RingHash) (json.RawMessage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling json in ring hash converter: %v", err)
 	}
-	return makeJSONValueOfName(ringhash.Name, rhLBCfgJSON), nil
+	return makeBalancerConfigJSON(ringhash.Name, rhLBCfgJSON), nil
 }
 
 func convertWrrLocality(wrrlCfg *v3wrrlocalitypb.WrrLocality, depth int) (json.RawMessage, error) {
@@ -132,7 +132,7 @@ func convertWrrLocality(wrrlCfg *v3wrrlocalitypb.WrrLocality, depth int) (json.R
 		return nil, fmt.Errorf("error converting endpoint picking policy: %v for %+v", err, wrrlCfg)
 	}
 	wrrCfgJSON := createWRRConfig(epJSON)
-	return makeJSONValueOfName(wrrlocality.Name, wrrCfgJSON), nil
+	return makeBalancerConfigJSON(wrrlocality.Name, wrrCfgJSON), nil
 }
 
 func createWRRConfig(epCfgJSON json.RawMessage) json.RawMessage {
@@ -162,9 +162,9 @@ func convertCustomPolicy(typeURL string, s *structpb.Struct) (json.RawMessage, e
 	}
 	// The Struct contained in the TypedStruct will be returned as-is as the
 	// configuration JSON object.
-	return makeJSONValueOfName(plcyName, rawJSON), nil
+	return makeBalancerConfigJSON(plcyName, rawJSON), nil
 }
 
-func makeJSONValueOfName(name string, value json.RawMessage) []byte {
+func makeBalancerConfigJSON(name string, value json.RawMessage) []byte {
 	return []byte(fmt.Sprintf(`[{%q: %s}]`, name, value))
 }

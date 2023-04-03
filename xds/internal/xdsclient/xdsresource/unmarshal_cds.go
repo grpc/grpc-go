@@ -139,9 +139,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	} else {
 		switch cluster.GetLbPolicy() {
 		case v3clusterpb.Cluster_ROUND_ROBIN:
-			rrLBCfgJSON := []byte(`[{"round_robin": {}}]`)
-			wrrCfgJSON := []byte(fmt.Sprintf(`{"childPolicy": %s}`, rrLBCfgJSON))
-			lbCfgJSON = []byte(fmt.Sprintf(`[{%q: %s}]`, wrrlocality.Name, wrrCfgJSON))
+			lbCfgJSON = []byte(fmt.Sprintf(`[{%q: {"childPolicy": [{"round_robin": {}}]}}]`, wrrlocality.Name))
 		case v3clusterpb.Cluster_RING_HASH:
 			if !envconfig.XDSRingHash {
 				return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
