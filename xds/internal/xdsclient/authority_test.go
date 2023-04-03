@@ -72,7 +72,7 @@ func setupTest(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptio
 		bootstrapCfg: &bootstrap.Config{
 			NodeProto: &v3corepb.Node{Id: nodeID},
 		},
-		serializer:         newCallbackSerializer(ctx),
+		serializer:         grpcsync.NewCallbackSerializer(ctx),
 		resourceTypeGetter: rtRegistry.get,
 		watchExpiryTimeout: watchExpiryTimeout,
 		logger:             nil,

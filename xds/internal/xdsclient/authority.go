@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
@@ -65,7 +66,7 @@ type authority struct {
 	serverCfg          *bootstrap.ServerConfig       // Server config for this authority
 	bootstrapCfg       *bootstrap.Config             // Full bootstrap configuration
 	refCount           int                           // Reference count of watches referring to this authority
-	serializer         *callbackSerializer           // Callback serializer for invoking watch callbacks
+	serializer         *grpcsync.CallbackSerializer  // Callback serializer for invoking watch callbacks
 	resourceTypeGetter func(string) xdsresource.Type // ResourceType registry lookup
 	transport          *transport.Transport          // Underlying xDS transport to the management server
 	watchExpiryTimeout time.Duration                 // Resource watch expiry timeout
@@ -99,7 +100,7 @@ type authorityArgs struct {
 	// the second case.
 	serverCfg          *bootstrap.ServerConfig
 	bootstrapCfg       *bootstrap.Config
-	serializer         *callbackSerializer
+	serializer         *grpcsync.CallbackSerializer
 	resourceTypeGetter func(string) xdsresource.Type
 	watchExpiryTimeout time.Duration
 	logger             *grpclog.PrefixLogger

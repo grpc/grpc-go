@@ -35,12 +35,10 @@ require (
 	google.golang.org/api v0.110.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230306155012-7f2fa6fef1f4 // indirect
-	google.golang.org/grpc/stats/opencensus v0.0.0-20230317183452-b638faff2204 // indirect
+	google.golang.org/grpc/stats/opencensus v0.0.0-20230330193705-4a12595692ae // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 )
 
 replace google.golang.org/grpc => ../..
 
 replace google.golang.org/grpc/gcp/observability => ../../gcp/observability
-
-replace google.golang.org/grpc/stats/opencensus => ../../stats/opencensus

@@ -16,7 +16,7 @@
  *
  */
 
-package xdsclient
+package grpcsync
 
 import (
 	"context"
@@ -24,22 +24,22 @@ import (
 	"google.golang.org/grpc/internal/buffer"
 )
 
-// callbackSerializer provides a mechanism to schedule callbacks in a
+// CallbackSerializer provides a mechanism to schedule callbacks in a
 // synchronized manner. It provides a FIFO guarantee on the order of execution
 // of scheduled callbacks. New callbacks can be scheduled by invoking the
 // Schedule() method.
 //
 // This type is safe for concurrent access.
-type callbackSerializer struct {
+type CallbackSerializer struct {
 	callbacks *buffer.Unbounded
 }
 
-// newCallbackSerializer returns a new callbackSerializer instance. The provided
+// NewCallbackSerializer returns a new CallbackSerializer instance. The provided
 // context will be passed to the scheduled callbacks. Users should cancel the
-// provided context to shutdown the callbackSerializer. It is guaranteed that no
+// provided context to shutdown the CallbackSerializer. It is guaranteed that no
 // callbacks will be executed once this context is canceled.
-func newCallbackSerializer(ctx context.Context) *callbackSerializer {
-	t := &callbackSerializer{callbacks: buffer.NewUnbounded()}
+func NewCallbackSerializer(ctx context.Context) *CallbackSerializer {
+	t := &CallbackSerializer{callbacks: buffer.NewUnbounded()}
 	go t.run(ctx)
 	return t
 }
@@ -48,11 +48,11 @@ func newCallbackSerializer(ctx context.Context) *callbackSerializer {
 //
 // Callbacks are expected to honor the context when performing any blocking
 // operations, and should return early when the context is canceled.
-func (t *callbackSerializer) Schedule(f func(ctx context.Context)) {
+func (t *CallbackSerializer) Schedule(f func(ctx context.Context)) {
 	t.callbacks.Put(f)
 }
 
-func (t *callbackSerializer) run(ctx context.Context) {
+func (t *CallbackSerializer) run(ctx context.Context) {
 	for ctx.Err() == nil {
 		select {
 		case <-ctx.Done():
