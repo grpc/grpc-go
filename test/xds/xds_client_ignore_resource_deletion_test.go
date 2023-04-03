@@ -55,7 +55,6 @@ const (
 )
 
 var (
-	nodeID = uuid.New().String()
 	// This route configuration resource contains two routes:
 	// - a route for the EmptyCall rpc, to be sent to cluster1
 	// - a route for the UnaryCall rpc, to be sent to cluster2
@@ -96,19 +95,21 @@ func (s) TestIgnoreResourceDeletionOnClient(t *testing.T) {
 	port2, cleanup := startTestService(t, nil)
 	t.Cleanup(cleanup)
 
-	initialResourceOnServer := e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*listenerpb.Listener{e2e.DefaultClientListener(serviceName, rdsName)},
-		Routes:    []*routepb.RouteConfiguration{defaultRouteConfigWithTwoRoutes},
-		Clusters: []*clusterpb.Cluster{
-			e2e.DefaultCluster(cdsName1, edsName1, e2e.SecurityLevelNone),
-			e2e.DefaultCluster(cdsName2, edsName2, e2e.SecurityLevelNone),
-		},
-		Endpoints: []*endpointpb.ClusterLoadAssignment{
-			e2e.DefaultEndpoint(edsName1, "localhost", []uint32{port1}),
-			e2e.DefaultEndpoint(edsName2, "localhost", []uint32{port2}),
-		},
-		SkipValidation: true,
+	initialResourceOnServer := func(nodeID string) e2e.UpdateOptions {
+		return e2e.UpdateOptions{
+			NodeID:    nodeID,
+			Listeners: []*listenerpb.Listener{e2e.DefaultClientListener(serviceName, rdsName)},
+			Routes:    []*routepb.RouteConfiguration{defaultRouteConfigWithTwoRoutes},
+			Clusters: []*clusterpb.Cluster{
+				e2e.DefaultCluster(cdsName1, edsName1, e2e.SecurityLevelNone),
+				e2e.DefaultCluster(cdsName2, edsName2, e2e.SecurityLevelNone),
+			},
+			Endpoints: []*endpointpb.ClusterLoadAssignment{
+				e2e.DefaultEndpoint(edsName1, "localhost", []uint32{port1}),
+				e2e.DefaultEndpoint(edsName2, "localhost", []uint32{port2}),
+			},
+			SkipValidation: true,
+		}
 	}
 
 	tests := []struct {
@@ -142,12 +143,14 @@ func (s) TestIgnoreResourceDeletionOnClient(t *testing.T) {
 // set in "server_features" field. This subtest verifies that the resource was
 // not deleted by the xDSClient when a resource is missing the xDS response and
 // RPCs continue to succeed.
-func testResourceDeletionIgnored(t *testing.T, resources e2e.UpdateOptions, updateResource func(r *e2e.UpdateOptions)) {
+func testResourceDeletionIgnored(t *testing.T, initialResource func(string) e2e.UpdateOptions, updateResource func(r *e2e.UpdateOptions)) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	t.Cleanup(cancel)
 	mgmtServer := startManagementServer(t)
-	bs := generateBootstrapContents(t, mgmtServer.Address, true)
+	nodeID := uuid.New().String()
+	bs := generateBootstrapContents(t, mgmtServer.Address, true, nodeID)
 	xdsR := xdsResolverBuilder(t, bs)
+	resources := initialResource(nodeID)
 
 	// Update the management server with initial resources setup.
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -195,12 +198,14 @@ func testResourceDeletionIgnored(t *testing.T, resources e2e.UpdateOptions, upda
 // not set in "server_features" field. This subtest verifies that the resource was
 // deleted by the xDSClient when a resource is missing the xDS response and subsequent
 // RPCs fail.
-func testResourceDeletionNotIgnored(t *testing.T, resources e2e.UpdateOptions, u func(r *e2e.UpdateOptions)) {
+func testResourceDeletionNotIgnored(t *testing.T, initialResource func(string) e2e.UpdateOptions, u func(r *e2e.UpdateOptions)) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*1000)
 	t.Cleanup(cancel)
 	mgmtServer := startManagementServer(t)
-	bs := generateBootstrapContents(t, mgmtServer.Address, false)
+	nodeID := uuid.New().String()
+	bs := generateBootstrapContents(t, mgmtServer.Address, false, nodeID)
 	xdsR := xdsResolverBuilder(t, bs)
+	resources := initialResource(nodeID)
 
 	// Update the management server with initial resources setup.
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -262,7 +267,7 @@ func startManagementServer(t *testing.T) *e2e.ManagementServer {
 }
 
 // This helper generates a custom bootstrap config for the test.
-func generateBootstrapContents(t *testing.T, serverURI string, ignoreResourceDeletion bool) []byte {
+func generateBootstrapContents(t *testing.T, serverURI string, ignoreResourceDeletion bool, nodeID string) []byte {
 	t.Helper()
 	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
 		NodeID:                             nodeID,
@@ -313,7 +318,7 @@ func setupGRPCServerWithModeChangeChannel(t *testing.T, bootstrapContents []byte
 
 // This helper creates a listener resource with using a custom listener created.
 // The test uses this listener to serve the gRPC server that is set up.
-func resourceWithListenerForGRPCServer(t *testing.T) (e2e.UpdateOptions, net.Listener) {
+func resourceWithListenerForGRPCServer(t *testing.T, nodeID string) (e2e.UpdateOptions, net.Listener) {
 	t.Helper()
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -340,9 +345,10 @@ func resourceWithListenerForGRPCServer(t *testing.T) (e2e.UpdateOptions, net.Lis
 // and verifies that server continues to server requests.
 func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
 	mgmtServer := startManagementServer(t)
-	bs := generateBootstrapContents(t, mgmtServer.Address, true)
+	nodeID := uuid.New().String()
+	bs := generateBootstrapContents(t, mgmtServer.Address, true, nodeID)
 	xdsR := xdsResolverBuilder(t, bs)
-	resources, lis := resourceWithListenerForGRPCServer(t)
+	resources, lis := resourceWithListenerForGRPCServer(t, nodeID)
 	updateCh, serve := setupGRPCServerWithModeChangeChannel(t, bs, lis)
 
 	go serve()
@@ -407,9 +413,10 @@ func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
 // and verifies that server should enter "non_serving" mode as expected.
 func (s) TestListenerResourceDeletionOnServerNotIgnored(t *testing.T) {
 	mgmtServer := startManagementServer(t)
-	bs := generateBootstrapContents(t, mgmtServer.Address, false)
+	nodeID := uuid.New().String()
+	bs := generateBootstrapContents(t, mgmtServer.Address, false, nodeID)
 	xdsR := xdsResolverBuilder(t, bs)
-	resources, lis := resourceWithListenerForGRPCServer(t)
+	resources, lis := resourceWithListenerForGRPCServer(t, nodeID)
 	updateCh, serve := setupGRPCServerWithModeChangeChannel(t, bs, lis)
 
 	go serve()
