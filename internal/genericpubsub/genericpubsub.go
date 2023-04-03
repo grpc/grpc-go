@@ -106,12 +106,17 @@ func (t *Tracker) SetTarget(target interface{}) {
 	if t.stopped {
 		return
 	}
+
 	t.target = target
+
 	for watcher := range t.watchers {
+		// Prevent the watcher which is passed to the closure function
+		// from being changed by this loop.
+		w := watcher
 		t.cs.Schedule(func(context.Context) {
 			t.mu.Lock()
 			defer t.mu.Unlock()
-			watcher.OnTargetChange(target)
+			w.OnTargetChange(target)
 		})
 	}
 }
