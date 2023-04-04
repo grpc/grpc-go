@@ -40,6 +40,10 @@ func BuildResourceName(typeName, auth, id string, ctxParams map[string]string) s
 		typS = version.V3ClusterType
 	case xdsresource.EndpointsResourceTypeName:
 		typS = version.V3EndpointsType
+	default:
+		// If the name doesn't match any of the standard resources fallback
+		// to the type name.
+		typS = typeName
 	}
 	return (&xdsresource.Name{
 		Scheme:        "xdstp",
