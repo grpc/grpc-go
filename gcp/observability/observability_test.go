@@ -21,7 +21,6 @@ package observability
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -31,6 +30,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc/internal/envconfig"
@@ -114,12 +114,15 @@ type traceAndSpanID struct {
 	traceID   trace.TraceID
 	spanID    trace.SpanID
 	isSampled bool
+	spanKind  int
 }
 
 type traceAndSpanIDString struct {
 	traceID   string
 	spanID    string
 	isSampled bool
+	// SpanKind is the type of span.
+	SpanKind int
 }
 
 // idsToString is a helper that converts from generated trace and span IDs to
@@ -129,6 +132,7 @@ func (tasi *traceAndSpanID) idsToString(projectID string) traceAndSpanIDString {
 		traceID:   "projects/" + projectID + "/traces/" + tasi.traceID.String(),
 		spanID:    tasi.spanID.String(),
 		isSampled: tasi.isSampled,
+		SpanKind:  tasi.spanKind,
 	}
 }
 
@@ -142,6 +146,7 @@ func (fe *fakeOpenCensusExporter) ExportSpan(vd *trace.SpanData) {
 			traceID:   vd.TraceID,
 			spanID:    vd.SpanID,
 			isSampled: vd.IsSampled(),
+			spanKind:  vd.SpanKind,
 		})
 	}
 
@@ -653,7 +658,7 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 		<-unaryDone.Done()
 		var tasiSent traceAndSpanIDString
 		for _, tasi := range traceAndSpanIDs {
-			if strings.HasPrefix(tasi.spanName, "Sent.") {
+			if strings.HasPrefix(tasi.spanName, "grpc.") && tasi.spanKind == trace.SpanKindClient {
 				tasiSent = tasi.idsToString(projectID)
 				continue
 			}
@@ -661,8 +666,8 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 
 		fle.mu.Lock()
 		for _, tasiSeen := range fle.idsSeen {
-			if diff := cmp.Diff(tasiSeen, &tasiSent, cmp.AllowUnexported(traceAndSpanIDString{})); diff != "" {
-				readerErrCh.Send(errors.New("got unexpected id, should be a client span"))
+			if diff := cmp.Diff(tasiSeen, &tasiSent, cmp.AllowUnexported(traceAndSpanIDString{}), cmpopts.IgnoreFields(traceAndSpanIDString{}, "SpanKind")); diff != "" {
+				readerErrCh.Send(fmt.Errorf("got unexpected id, should be a client span (-got, +want): %v", diff))
 			}
 		}
 
@@ -795,7 +800,7 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 		<-unaryDone.Done()
 		var tasiServer traceAndSpanIDString
 		for _, tasi := range traceAndSpanIDs {
-			if strings.HasPrefix(tasi.spanName, "grpc.") {
+			if strings.HasPrefix(tasi.spanName, "grpc.") && tasi.spanKind == trace.SpanKindServer {
 				tasiServer = tasi.idsToString(projectID)
 				continue
 			}
@@ -803,8 +808,8 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 
 		fle.mu.Lock()
 		for _, tasiSeen := range fle.idsSeen {
-			if diff := cmp.Diff(tasiSeen, &tasiServer, cmp.AllowUnexported(traceAndSpanIDString{})); diff != "" {
-				readerErrCh.Send(errors.New("got unexpected id, should be a server span"))
+			if diff := cmp.Diff(tasiSeen, &tasiServer, cmp.AllowUnexported(traceAndSpanIDString{}), cmpopts.IgnoreFields(traceAndSpanIDString{}, "SpanKind")); diff != "" {
+				readerErrCh.Send(fmt.Errorf("got unexpected id, should be a server span (-got, +want): %v", diff))
 			}
 		}
 
@@ -947,20 +952,20 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 		var tasiSent traceAndSpanIDString
 		var tasiServer traceAndSpanIDString
 		for _, tasi := range traceAndSpanIDs {
-			if strings.HasPrefix(tasi.spanName, "Sent.") {
+			if strings.HasPrefix(tasi.spanName, "grpc.") && tasi.spanKind == trace.SpanKindClient {
 				tasiSent = tasi.idsToString(projectID)
 				continue
 			}
-			if strings.HasPrefix(tasi.spanName, "grpc.") {
+			if strings.HasPrefix(tasi.spanName, "grpc.") && tasi.spanKind == trace.SpanKindServer {
 				tasiServer = tasi.idsToString(projectID)
 			}
 		}
 
 		fle.mu.Lock()
 		for _, tasiSeen := range fle.idsSeen {
-			if diff := cmp.Diff(tasiSeen, &tasiSent, cmp.AllowUnexported(traceAndSpanIDString{})); diff != "" {
-				if diff2 := cmp.Diff(tasiSeen, &tasiServer, cmp.AllowUnexported(traceAndSpanIDString{})); diff2 != "" {
-					readerErrCh.Send(errors.New("got unexpected id, should be client or server span"))
+			if diff := cmp.Diff(tasiSeen, &tasiSent, cmp.AllowUnexported(traceAndSpanIDString{}), cmpopts.IgnoreFields(traceAndSpanIDString{}, "SpanKind")); diff != "" {
+				if diff2 := cmp.Diff(tasiSeen, &tasiServer, cmp.AllowUnexported(traceAndSpanIDString{}), cmpopts.IgnoreFields(traceAndSpanIDString{}, "SpanKind")); diff2 != "" {
+					readerErrCh.Send(fmt.Errorf("got unexpected id, should be a client or server span (-got, +want): %v, %v", diff, diff2))
 				}
 			}
 		}
@@ -1027,20 +1032,20 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 		var tasiSent traceAndSpanIDString
 		var tasiServer traceAndSpanIDString
 		for _, tasi := range traceAndSpanIDs {
-			if strings.HasPrefix(tasi.spanName, "Sent.") {
+			if strings.HasPrefix(tasi.spanName, "grpc.") && tasi.spanKind == trace.SpanKindClient {
 				tasiSent = tasi.idsToString(projectID)
 				continue
 			}
-			if strings.HasPrefix(tasi.spanName, "grpc.") {
+			if strings.HasPrefix(tasi.spanName, "grpc.") && tasi.spanKind == trace.SpanKindServer {
 				tasiServer = tasi.idsToString(projectID)
 			}
 		}
 
 		fle.mu.Lock()
 		for _, tasiSeen := range fle.idsSeen {
-			if diff := cmp.Diff(tasiSeen, &tasiSent, cmp.AllowUnexported(traceAndSpanIDString{})); diff != "" {
-				if diff2 := cmp.Diff(tasiSeen, &tasiServer, cmp.AllowUnexported(traceAndSpanIDString{})); diff2 != "" {
-					readerErrCh.Send(errors.New("got unexpected id, should be client or server span"))
+			if diff := cmp.Diff(tasiSeen, &tasiSent, cmp.AllowUnexported(traceAndSpanIDString{}), cmpopts.IgnoreFields(traceAndSpanIDString{}, "SpanKind")); diff != "" {
+				if diff2 := cmp.Diff(tasiSeen, &tasiServer, cmp.AllowUnexported(traceAndSpanIDString{}), cmpopts.IgnoreFields(traceAndSpanIDString{}, "SpanKind")); diff2 != "" {
+					readerErrCh.Send(fmt.Errorf("got unexpected id, should be a client or server span (-got, +want): %v, %v", diff, diff2))
 				}
 			}
 		}
