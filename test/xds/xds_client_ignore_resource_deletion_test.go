@@ -319,8 +319,9 @@ func setupGRPCServerWithModeChangeChannelAndServe(t *testing.T, bootstrapContent
 	return updateCh
 }
 
-// This helper creates a listener resource with using a custom listener created.
-// The test uses this listener to serve the gRPC server that is set up.
+// This helper creates a new TCP listener. This helper also uses this listener to
+// create a resource update with a listener resource. This helper returns the
+// resource update and the TCP listener.
 func resourceWithListenerForGRPCServer(t *testing.T, nodeID string) (e2e.UpdateOptions, net.Listener) {
 	t.Helper()
 	lis, err := testutils.LocalTCPListener()
@@ -328,8 +329,6 @@ func resourceWithListenerForGRPCServer(t *testing.T, nodeID string) (e2e.UpdateO
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 	t.Cleanup(func() { lis.Close() })
-
-	// Setup the management server to respond with the listener resources.
 	host, port, err := hostPortFromListener(lis)
 	if err != nil {
 		t.Fatalf("Failed to retrieve host and port of listener at %q: %v", lis.Addr(), err)
