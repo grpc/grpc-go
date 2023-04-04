@@ -1,30 +1,35 @@
-## Dialing In gRPC
+## Anti-Patterns
 
+### Dialing in gRPC
 `grpc.Dial` is a function in the gRPC library that creates a virtual connection
-from the gRPC client to the gRPC server.  It takes a server URI (which can
+from the gRPC client to the gRPC server.  It takes a target URI (which can
 represent the name of a logical backend service and could resolve to multiple
 actual addresses) and a list of options, and returns a `ClientConn` object that
 represents the connection to the server. The `ClientConn` contains one or more
 actual connections to real server backends and attempts to keep these
-connections healthy by automatically reconnecting to them (with an exponential
-backoff) when they break.
+connections healthy by automatically reconnecting to them when they break.
 
-The `grpc.Dial` function can also be configured with various options to
+The `Dial` function can also be configured with various options to
 customize the behavior of the client connection. For example, developers could
-use options such a `WithTransportCredentials()` to configure the transport
+use options such a `WithTransportCredentials` to configure the transport
 credentials to use.
 
-While `grpc.Dial` is commonly referred to as a "dialing" function, it doesn't
-actually perform the low-level network dialing operation like a typical TCP
-dialing function would. Instead, it creates a virtual connection from the gRPC
+While `Dial` is commonly referred to as a "dialing" function, it doesn't
+actually perform the low-level network dialing operation like `net.Dial` would.
+Instead, it creates a virtual connection from the gRPC
 client to the gRPC server.
 
-`grpc.Dial` does initiate the process of connecting to the server, but it uses
+`Dial` does initiate the process of connecting to the server, but it uses
 the ClientConn object to manage and maintain that connection over time. This is
 why errors encountered during the initial connection are no different from those
 that occur later on, and why it's important to handle errors from RPCs rather
 than relying on options like `FailOnNonTempDialError`, `WithBlock`, and
 `WithReturnConnectionError`.
+In fact, `Dial` does not always establish a connection to servers by default. The connection
+behavior is determined by the load balancing policy being used. For instance, an "active"
+load balancing policy such as Round Robin attempts to maintain a constant connection, while the default "pick first"
+policy delays connection until an RPC is executed. To explicitly initiate a connection, you can employ
+the WithBlock option.
 
 ### Using `FailOnNonTempDialError`, `WithBlock`, and `WithReturnConnectionError`
 
@@ -72,7 +77,7 @@ gRPC:
   as these options can introduce race conditions and result in unreliable and
   difficult-to-debug code.
 
-## Example: Handling errors from an RPC
+### Example: Handling errors from an RPC
 
 The following code snippet demonstrates how to handle errors from an RPC in
 gRPC:
@@ -120,7 +125,7 @@ if err != nil {
 log.Printf("Response received: %v", resp) 
 ```
 
-## Example: Using a backoff strategy
+### Example: Using a backoff strategy
 
 
 When retrying failed RPCs, use a backoff strategy to avoid overwhelming the
