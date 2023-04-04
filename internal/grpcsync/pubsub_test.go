@@ -16,7 +16,7 @@
  *
  */
 
-package genericpubsub
+package grpcsync
 
 import (
 	"sync"
@@ -24,16 +24,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/internal/grpctest"
 )
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
 
 type mockWatcher struct {
 	mu      sync.Mutex

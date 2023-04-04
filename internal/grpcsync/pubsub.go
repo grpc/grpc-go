@@ -16,15 +16,11 @@
  *
  */
 
-// Package genericpubsub provides functionality to report and track
-// target changes of struct which is registered as a subscriber.
-package genericpubsub
+package grpcsync
 
 import (
 	"context"
 	"sync"
-
-	"google.golang.org/grpc/internal/grpcsync"
 )
 
 // Watcher wraps the functionality to be implemented by components
@@ -43,7 +39,7 @@ type Watcher interface {
 // Components interested in target updates of the tracked entity
 // subscribe to updates by calling the AddWatcher() method.
 type Tracker struct {
-	cs     *grpcsync.CallbackSerializer
+	cs     *CallbackSerializer
 	cancel context.CancelFunc
 
 	// Access to the below fields are guarded by this mutex.
@@ -58,7 +54,7 @@ type Tracker struct {
 func NewTracker(target interface{}) *Tracker {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Tracker{
-		cs:       grpcsync.NewCallbackSerializer(ctx),
+		cs:       NewCallbackSerializer(ctx),
 		cancel:   cancel,
 		target:   target,
 		watchers: map[Watcher]bool{},
