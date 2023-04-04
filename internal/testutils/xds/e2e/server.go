@@ -81,6 +81,12 @@ type ManagementServerOptions struct {
 	// set to true only for tests which explicitly require the other behavior.
 	AllowResourceSubset bool
 
+	// ServerFeaturesIgnoreResourceDeletion, if set, results in a bootstrap config
+	// where the server features list contains `ignore_resource_deletion`. This
+	// results in gRPC ignoring resource deletions from the management server, as
+	// per A53.
+	ServerFeaturesIgnoreResourceDeletion bool
+
 	// The callbacks defined below correspond to the state of the world (sotw)
 	// version of the xDS API on the management server.
 
