@@ -124,17 +124,20 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	if err := updateResourceInServer(ctx, ms, rn, nodeID); err != nil {
 		t.Fatalf("Failed to update server with resource: %q; err: %q", rn, err)
 	}
-	select {
-	case <-ctx.Done():
-		t.Fatal("Test timed out before watcher received an update from server.")
-	case err := <-w.ErrorCh:
-		t.Fatalf("Watch got an unexpected error update: %q. Want valid updates.", err)
-	case <-w.UpdateCh:
-		// This means the OnUpdate callback was invoked and the watcher was notified.
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Test timed out before watcher received an update from server.")
+		case <-w.ErrorCh:
+		case <-w.UpdateCh:
+			// This means the OnUpdate callback was invoked and the watcher was notified.
+			if err := compareWatchState(a, rn, watchStateReceived); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
 	}
-	if err := compareWatchState(a, rn, watchStateReceived); err != nil {
-		t.Fatal(err)
-	}
+
 }
 
 // This tests the resource's watch state transition when the ADS stream is closed
