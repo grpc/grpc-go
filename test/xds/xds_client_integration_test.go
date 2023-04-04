@@ -58,6 +58,9 @@ func startTestService(t *testing.T, server *stubserver.StubServer) (uint32, func
 	if server == nil {
 		server = &stubserver.StubServer{
 			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+			UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				return &testpb.SimpleResponse{}, nil
+			},
 		}
 	}
 	server.StartServer()

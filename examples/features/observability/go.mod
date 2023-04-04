@@ -5,7 +5,7 @@ go 1.17
 require (
 	google.golang.org/grpc v1.54.0
 	google.golang.org/grpc/examples v0.0.0-20230323213306-0fdfd40215dc
-	google.golang.org/grpc/gcp/observability v0.0.0-20230323213306-0fdfd40215dc
+	google.golang.org/grpc/gcp/observability v0.0.0-20230331001051-113d75fb4561
 )
 
 require (
@@ -36,6 +36,6 @@ require (
 	google.golang.org/api v0.109.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230125152338-dcaf20b6aeaa // indirect
-	google.golang.org/grpc/stats/opencensus v0.0.0-20230317183452-b638faff2204 // indirect
-	google.golang.org/protobuf v1.29.1 // indirect
+	google.golang.org/grpc/stats/opencensus v0.0.0-20230330193705-4a12595692ae // indirect
+	google.golang.org/protobuf v1.30.0 // indirect
 )

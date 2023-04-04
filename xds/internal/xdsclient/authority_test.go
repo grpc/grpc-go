@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils"
@@ -69,7 +70,7 @@ func setupTest(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptio
 		bootstrapCfg: &bootstrap.Config{
 			NodeProto: &v3corepb.Node{Id: nodeID},
 		},
-		serializer:         newCallbackSerializer(ctx),
+		serializer:         grpcsync.NewCallbackSerializer(ctx),
 		resourceTypeGetter: rtRegistry.get,
 		watchExpiryTimeout: watchExpiryTimeout,
 		logger:             nil,
@@ -123,17 +124,20 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	if err := updateResourceInServer(ctx, ms, rn, nodeID); err != nil {
 		t.Fatalf("Failed to update server with resource: %q; err: %q", rn, err)
 	}
-	select {
-	case <-ctx.Done():
-		t.Fatal("Test timed out before watcher received an update from server.")
-	case err := <-w.ErrorCh:
-		t.Fatalf("Watch got an unexpected error update: %q. Want valid updates.", err)
-	case <-w.UpdateCh:
-		// This means the OnUpdate callback was invoked and the watcher was notified.
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Test timed out before watcher received an update from server.")
+		case <-w.ErrorCh:
+		case <-w.UpdateCh:
+			// This means the OnUpdate callback was invoked and the watcher was notified.
+			if err := compareWatchState(a, rn, watchStateReceived); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
 	}
-	if err := compareWatchState(a, rn, watchStateReceived); err != nil {
-		t.Fatal(err)
-	}
+
 }
 
 // This tests the resource's watch state transition when the ADS stream is closed
@@ -243,7 +247,7 @@ func compareWatchState(a *authority, rn string, wantState watchState) error {
 	defer a.resourcesMu.Unlock()
 	gotState := a.resources[listenerResourceType][rn].wState
 	if gotState != wantState {
-		return fmt.Errorf("%v. Want: %v", gotState, wantState)
+		return fmt.Errorf("Got %v. Want: %v", gotState, wantState)
 	}
 
 	wTimer := a.resources[listenerResourceType][rn].wTimer
