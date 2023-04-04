@@ -247,7 +247,7 @@ func compareWatchState(a *authority, rn string, wantState watchState) error {
 	defer a.resourcesMu.Unlock()
 	gotState := a.resources[listenerResourceType][rn].wState
 	if gotState != wantState {
-		return fmt.Errorf("%v. Want: %v", gotState, wantState)
+		return fmt.Errorf("Got %v. Want: %v", gotState, wantState)
 	}
 
 	wTimer := a.resources[listenerResourceType][rn].wTimer
