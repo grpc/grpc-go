@@ -250,7 +250,7 @@ func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 			PermitWithoutStream: true,
 		},
 	}
-	client, cancel := setUpWithNoPingServer(t, copts, connCh, false)
+	client, cancel := setUpWithNoPingServer(t, copts, connCh)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
 
@@ -279,7 +279,7 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 			Timeout: 10 * time.Millisecond,
 		},
 	}
-	client, cancel := setUpWithNoPingServer(t, copts, connCh, false)
+	client, cancel := setUpWithNoPingServer(t, copts, connCh)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
 
@@ -301,7 +301,9 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 // respond to keepalive pings, and makes sure that the client closes the
 // transport even when there is an active stream.
 func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
+
 	connCh := make(chan net.Conn, 1)
+	controlCh := make(chan bool)
 	copts := ConnectOptions{
 		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
 		KeepaliveParams: keepalive.ClientParameters{
@@ -309,9 +311,7 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 			Timeout: 500 * time.Millisecond,
 		},
 	}
-	// TODO(i/6099): Setup a server which can ping and no-ping based on a flag to
-	// reduce the flakiness in this test.
-	client, cancel := setUpWithNoPingServer(t, copts, connCh, true)
+	client, cancel := setUpConfigurablePingServer(t, copts, connCh, controlCh)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
 
@@ -328,9 +328,8 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 		t.Fatalf("Stream creation failed: %v", err)
 	}
 
-	// Now switch to a server that doesn't respond to pings.
-	client, cancel = setUpWithNoPingServer(t, copts, connCh, false)
-	defer cancel()
+	// Make the server non-responsive by sending a false value through controlCh.
+	controlCh <- false
 
 	if err := pollForStreamCreationError(client); err != nil {
 		t.Fatal(err)

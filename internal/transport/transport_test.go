@@ -464,23 +464,29 @@ func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts 
 // not respond to keepalive pings, controlled by the respondToPings flag.
 type noPingConn struct {
 	net.Conn
+	enforceReadDeadline bool
 }
 
-// SetReadDeadline is an overridden method for the noPingConn struct.
-// It does nothing and always returns nil, effectively disabling the
-// read deadline for the connection. This ensures that the connection
-// will not be closed due to read timeout, simulating a server that
-// does not respond to pings.
 func (n *noPingConn) SetReadDeadline(t time.Time) error {
+	if n.enforceReadDeadline {
+		return n.Conn.SetReadDeadline(t)
+	}
 	return nil
 }
 
-func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.Conn, respondToPings bool) (*http2Client, func()) {
+// setUpConfigurablePingServer sets up a server with controllable ping responsiveness.
+// It takes a testing.T, ConnectOptions, a connection channel, and a control channel.
+// Returns a connected http2Client and a cancel function.
+// Use the control channel to toggle the server's ping responsiveness (true: responsive, false: unresponsive).
+func setUpConfigurablePingServer(t *testing.T, copts ConnectOptions, connCh chan net.Conn, controlCh chan bool) (*http2Client, func()) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	// Launch a non-responsive server.
+
+	stopCh := make(chan struct{})
+
+	// Launch a configurable server.
 	go func() {
 		defer lis.Close()
 		conn, err := lis.Accept()
@@ -490,10 +496,58 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 			return
 		}
 
-		if !respondToPings {
-			conn = &noPingConn{Conn: conn}
-		}
+		// Wrap the connection with noPingConn.
+		configurableConn := &noPingConn{Conn: conn, enforceReadDeadline: true}
+		framer := http2.NewFramer(configurableConn, configurableConn)
 
+		if err := framer.WriteSettings(); err != nil {
+			t.Errorf("Error at server-side while writing settings: %v", err)
+			close(connCh)
+			return
+		}
+		connCh <- conn
+
+		for {
+			select {
+			case enforceReadDeadline := <-controlCh:
+				configurableConn.enforceReadDeadline = enforceReadDeadline
+			case <-stopCh:
+				return
+			}
+		}
+	}()
+
+	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
+	tr, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	if err != nil {
+		cancel() // Do not cancel in success path.
+		// Server clean-up.
+		lis.Close()
+		if conn, ok := <-connCh; ok {
+			conn.Close()
+		}
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	return tr.(*http2Client), func() {
+		cancel()
+		close(stopCh)
+	}
+}
+
+func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.Conn) (*http2Client, func()) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	// Launch a non responsive server.
+	go func() {
+		defer lis.Close()
+		conn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Error at server-side while accepting: %v", err)
+			close(connCh)
+			return
+		}
 		framer := http2.NewFramer(conn, conn)
 		if err := framer.WriteSettings(); err != nil {
 			t.Errorf("Error at server-side while writing settings: %v", err)
