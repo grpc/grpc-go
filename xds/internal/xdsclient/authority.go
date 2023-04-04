@@ -45,9 +45,10 @@ const (
 )
 
 type resourceState struct {
-	watchers map[xdsresource.ResourceWatcher]bool // Set of watchers for this resource
-	cache    xdsresource.ResourceData             // Most recent ACKed update for this resource
-	md       xdsresource.UpdateMetadata           // Metadata for the most recent update
+	watchers        map[xdsresource.ResourceWatcher]bool // Set of watchers for this resource
+	cache           xdsresource.ResourceData             // Most recent ACKed update for this resource
+	md              xdsresource.UpdateMetadata           // Metadata for the most recent update
+	deletionIgnored bool                                 // True if resource deletion was ignored for a prior update
 
 	// Common watch state for all watchers of this resource.
 	wTimer *time.Timer // Expiry timer
@@ -211,8 +212,12 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 				}
 				continue
 			}
-			// If we get here, it means that the update is a valid one. Notify
-			// watchers only if this is a first time update or it is different
+
+			if state.deletionIgnored {
+				state.deletionIgnored = false
+				a.logger.Infof("A valid update was received for resource %q of type %q after previously ignoring a deletion", name, rType.TypeEnum())
+			}
+			// Notify watchers only if this is a first time update or it is different
 			// from the one currently cached.
 			if state.cache == nil || !state.cache.Equal(uErr.resource) {
 				for watcher := range state.watchers {
@@ -239,7 +244,8 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 	// If this resource type requires that all resources be present in every
 	// SotW response from the server, a response that does not include a
 	// previously seen resource will be interpreted as a deletion of that
-	// resource.
+	// resource unless ignore_resource_deletion option was set in the server
+	// config.
 	if !rType.AllResourcesRequiredInSotW() {
 		return
 	}
@@ -270,7 +276,18 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 			if state.md.Status == xdsresource.ServiceStatusNotExist {
 				continue
 			}
-
+			// Per A53, resource deletions are ignored if the `ignore_resource_deletion`
+			// server feature is enabled through the bootstrap configuration. If the
+			// resource deletion is to be ignored, the resource is not removed from
+			// the cache and the corresponding OnResourceDoesNotExist() callback is
+			// not invoked on the watchers.
+			if a.serverCfg.IgnoreResourceDeletion {
+				if !state.deletionIgnored {
+					state.deletionIgnored = true
+					a.logger.Warningf("Ignoring resource deletion for resource %q of type %q", name, rType.TypeEnum())
+				}
+				continue
+			}
 			// If resource exists in cache, but not in the new update, delete
 			// the resource from cache, and also send a resource not found error
 			// to indicate resource removed. Metadata for the resource is still
