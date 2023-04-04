@@ -215,7 +215,7 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 
 			if state.deletionIgnored {
 				state.deletionIgnored = false
-				a.logger.Infof("A valid update was received for resource %q of type %q after previously ignoring a deletion", name, rType.TypeEnum())
+				a.logger.Infof("A valid update was received for resource %q of type %q after previously ignoring a deletion", name, rType.TypeName())
 			}
 			// Notify watchers only if this is a first time update or it is different
 			// from the one currently cached.
@@ -284,7 +284,7 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 			if a.serverCfg.IgnoreResourceDeletion {
 				if !state.deletionIgnored {
 					state.deletionIgnored = true
-					a.logger.Warningf("Ignoring resource deletion for resource %q of type %q", name, rType.TypeEnum())
+					a.logger.Warningf("Ignoring resource deletion for resource %q of type %q", name, rType.TypeName())
 				}
 				continue
 			}
