@@ -327,9 +327,8 @@ func decodeAllResources(opts *xdsresource.DecodeOptions, rType xdsresource.Type,
 		return ret, md, nil
 	}
 
-	typeName := rType.TypeName()
 	md.Status = xdsresource.ServiceStatusNACKed
-	errRet := combineErrors(typeName, topLevelErrors, perResourceErrors)
+	errRet := combineErrors(rType.TypeName(), topLevelErrors, perResourceErrors)
 	md.ErrState = &xdsresource.UpdateErrorMetadata{
 		Version:   update.Version,
 		Err:       errRet,
