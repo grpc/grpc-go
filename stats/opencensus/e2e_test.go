@@ -1426,8 +1426,7 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
-			spanKind: trace.SpanKindClient,
-			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			name: "Attempt.grpc.testing.TestService.UnaryCall",
 			messageEvents: []trace.MessageEvent{
 				{
 					EventType:            trace.MessageEventTypeSent,
@@ -1447,7 +1446,7 @@ func (s) TestSpan(t *testing.T) {
 				TraceOptions: 1,
 			},
 			spanKind:        trace.SpanKindClient,
-			name:            "Sent.grpc.testing.TestService.UnaryCall",
+			name:            "grpc.testing.TestService.UnaryCall",
 			hasRemoteParent: false,
 			childSpanCount:  1,
 		},
@@ -1517,7 +1516,7 @@ func (s) TestSpan(t *testing.T) {
 				TraceOptions: 1,
 			},
 			spanKind:        trace.SpanKindClient,
-			name:            "Sent.grpc.testing.TestService.FullDuplexCall",
+			name:            "grpc.testing.TestService.FullDuplexCall",
 			hasRemoteParent: false,
 			childSpanCount:  1,
 		},
@@ -1525,8 +1524,7 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
-			spanKind: trace.SpanKindClient,
-			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
+			name: "Attempt.grpc.testing.TestService.FullDuplexCall",
 			messageEvents: []trace.MessageEvent{
 				{
 					EventType: trace.MessageEventTypeSent,

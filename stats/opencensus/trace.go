@@ -42,7 +42,7 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 	mn := "Attempt." + strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
 	// Returned context is ignored because will populate context with data
 	// that wraps the span instead.
-	_, span := trace.StartSpan(ctx, mn, trace.WithSampler(csh.to.TS), trace.WithSpanKind(trace.SpanKindClient))
+	_, span := trace.StartSpan(ctx, mn, trace.WithSampler(csh.to.TS))
 
 	tcBin := propagation.Binary(span.SpanContext())
 	return stats.SetTrace(ctx, tcBin), &traceInfo{
