@@ -48,20 +48,18 @@ func NewUnbounded() *Unbounded {
 // Put adds t to the unbounded buffer.
 func (b *Unbounded) Put(t interface{}) {
 	b.mu.Lock()
+	defer b.mu.Unlock()
 	if b.closed {
-		b.mu.Unlock()
 		return
 	}
 	if len(b.backlog) == 0 {
 		select {
 		case b.c <- t:
-			b.mu.Unlock()
 			return
 		default:
 		}
 	}
 	b.backlog = append(b.backlog, t)
-	b.mu.Unlock()
 }
 
 // Load sends the earliest buffered data, if any, onto the read channel
@@ -69,8 +67,8 @@ func (b *Unbounded) Put(t interface{}) {
 // value from the read channel.
 func (b *Unbounded) Load() {
 	b.mu.Lock()
+	defer b.mu.Unlock()
 	if b.closed {
-		b.mu.Unlock()
 		return
 	}
 	if len(b.backlog) > 0 {
@@ -81,7 +79,6 @@ func (b *Unbounded) Load() {
 		default:
 		}
 	}
-	b.mu.Unlock()
 }
 
 // Get returns a read channel on which values added to the buffer, via Put(),
@@ -97,11 +94,10 @@ func (b *Unbounded) Get() <-chan interface{} {
 // Close closes the unbounded buffer.
 func (b *Unbounded) Close() {
 	b.mu.Lock()
+	defer b.mu.Unlock()
 	if b.closed {
-		b.mu.Unlock()
 		return
 	}
 	b.closed = true
 	close(b.c)
-	b.mu.Unlock()
 }
