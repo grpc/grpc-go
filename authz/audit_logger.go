@@ -25,7 +25,9 @@ import (
 
 var (
 	mu sync.Mutex
-	m  = make(map[string]AuditLoggerBuilder)
+	// m is a map from the name to the audit logger builder.
+	// This backs the RegisterAuditLoggerBuilder API.
+	m = make(map[string]AuditLoggerBuilder)
 )
 
 // RegisterAuditLoggerBuilder registers the builder in a global map
