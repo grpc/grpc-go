@@ -60,6 +60,8 @@ func Dial(hsAddress string) (*grpc.ClientConn, error) {
 }
 
 // Close closes all open connections to the handshaker service.
+//
+// For testing purposes only.
 func Close() error {
 	for _, hsConn := range hsConnMap {
 		if hsConn == nil {
