@@ -25,6 +25,7 @@ import (
 	"context"
 	"net"
 	"reflect"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -296,6 +297,13 @@ func (s) TestCheckRPCVersions(t *testing.T) {
 }
 
 func TestFullHandshake(t *testing.T) {
+	// If GOMAXPROCS is set to less than 2, do not run this test. This test
+	// requires at least 2 goroutines to succeed (one goroutine where a
+	// server listens, another goroutine where a client runs).
+	if runtime.GOMAXPROCS(0) < 2 {
+		return
+	}
+
 	// Start the fake handshaker service and the server.
 	var wait sync.WaitGroup
 	defer wait.Wait()
