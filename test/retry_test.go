@@ -39,7 +39,9 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 func (s) TestRetryUnary(t *testing.T) {
@@ -174,12 +176,12 @@ func (s) TestRetryStreaming(t *testing.T) {
 
 	largePayload, _ := newPayload(testpb.PayloadType_COMPRESSABLE, 500)
 
-	type serverOp func(stream testpb.TestService_FullDuplexCallServer) error
-	type clientOp func(stream testpb.TestService_FullDuplexCallClient) error
+	type serverOp func(stream testgrpc.TestService_FullDuplexCallServer) error
+	type clientOp func(stream testgrpc.TestService_FullDuplexCallClient) error
 
 	// Server Operations
 	sAttempts := func(n int) serverOp {
-		return func(stream testpb.TestService_FullDuplexCallServer) error {
+		return func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			const key = "grpc-previous-rpc-attempts"
 			md, ok := metadata.FromIncomingContext(stream.Context())
 			if !ok {
@@ -192,7 +194,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		}
 	}
 	sReq := func(b byte) serverOp {
-		return func(stream testpb.TestService_FullDuplexCallServer) error {
+		return func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			want := req(b)
 			if got, err := stream.Recv(); err != nil || !proto.Equal(got, want) {
 				return status.Errorf(codes.Internal, "server: Recv() = %v, %v; want %v, <nil>", got, err, want)
@@ -201,7 +203,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		}
 	}
 	sReqPayload := func(p *testpb.Payload) serverOp {
-		return func(stream testpb.TestService_FullDuplexCallServer) error {
+		return func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			want := &testpb.StreamingOutputCallRequest{Payload: p}
 			if got, err := stream.Recv(); err != nil || !proto.Equal(got, want) {
 				return status.Errorf(codes.Internal, "server: Recv() = %v, %v; want %v, <nil>", got, err, want)
@@ -210,7 +212,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		}
 	}
 	sRes := func(b byte) serverOp {
-		return func(stream testpb.TestService_FullDuplexCallServer) error {
+		return func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			msg := res(b)
 			if err := stream.Send(msg); err != nil {
 				return status.Errorf(codes.Internal, "server: Send(%v) = %v; want <nil>", msg, err)
@@ -219,12 +221,12 @@ func (s) TestRetryStreaming(t *testing.T) {
 		}
 	}
 	sErr := func(c codes.Code) serverOp {
-		return func(stream testpb.TestService_FullDuplexCallServer) error {
+		return func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			return status.New(c, "").Err()
 		}
 	}
 	sCloseSend := func() serverOp {
-		return func(stream testpb.TestService_FullDuplexCallServer) error {
+		return func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			if msg, err := stream.Recv(); msg != nil || err != io.EOF {
 				return status.Errorf(codes.Internal, "server: Recv() = %v, %v; want <nil>, io.EOF", msg, err)
 			}
@@ -232,7 +234,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		}
 	}
 	sPushback := func(s string) serverOp {
-		return func(stream testpb.TestService_FullDuplexCallServer) error {
+		return func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			stream.SetTrailer(metadata.MD{"grpc-retry-pushback-ms": []string{s}})
 			return nil
 		}
@@ -240,7 +242,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 
 	// Client Operations
 	cReq := func(b byte) clientOp {
-		return func(stream testpb.TestService_FullDuplexCallClient) error {
+		return func(stream testgrpc.TestService_FullDuplexCallClient) error {
 			msg := req(b)
 			if err := stream.Send(msg); err != nil {
 				return fmt.Errorf("client: Send(%v) = %v; want <nil>", msg, err)
@@ -249,7 +251,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		}
 	}
 	cReqPayload := func(p *testpb.Payload) clientOp {
-		return func(stream testpb.TestService_FullDuplexCallClient) error {
+		return func(stream testgrpc.TestService_FullDuplexCallClient) error {
 			msg := &testpb.StreamingOutputCallRequest{Payload: p}
 			if err := stream.Send(msg); err != nil {
 				return fmt.Errorf("client: Send(%v) = %v; want <nil>", msg, err)
@@ -258,7 +260,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		}
 	}
 	cRes := func(b byte) clientOp {
-		return func(stream testpb.TestService_FullDuplexCallClient) error {
+		return func(stream testgrpc.TestService_FullDuplexCallClient) error {
 			want := res(b)
 			if got, err := stream.Recv(); err != nil || !proto.Equal(got, want) {
 				return fmt.Errorf("client: Recv() = %v, %v; want %v, <nil>", got, err, want)
@@ -267,7 +269,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		}
 	}
 	cErr := func(c codes.Code) clientOp {
-		return func(stream testpb.TestService_FullDuplexCallClient) error {
+		return func(stream testgrpc.TestService_FullDuplexCallClient) error {
 			want := status.New(c, "").Err()
 			if c == codes.OK {
 				want = io.EOF
@@ -282,7 +284,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		}
 	}
 	cCloseSend := func() clientOp {
-		return func(stream testpb.TestService_FullDuplexCallClient) error {
+		return func(stream testgrpc.TestService_FullDuplexCallClient) error {
 			if err := stream.CloseSend(); err != nil {
 				return fmt.Errorf("client: CloseSend() = %v; want <nil>", err)
 			}
@@ -291,13 +293,13 @@ func (s) TestRetryStreaming(t *testing.T) {
 	}
 	var curTime time.Time
 	cGetTime := func() clientOp {
-		return func(_ testpb.TestService_FullDuplexCallClient) error {
+		return func(_ testgrpc.TestService_FullDuplexCallClient) error {
 			curTime = time.Now()
 			return nil
 		}
 	}
 	cCheckElapsed := func(d time.Duration) clientOp {
-		return func(_ testpb.TestService_FullDuplexCallClient) error {
+		return func(_ testgrpc.TestService_FullDuplexCallClient) error {
 			if elapsed := time.Since(curTime); elapsed < d {
 				return fmt.Errorf("elapsed time: %v; want >= %v", elapsed, d)
 			}
@@ -305,13 +307,13 @@ func (s) TestRetryStreaming(t *testing.T) {
 		}
 	}
 	cHdr := func() clientOp {
-		return func(stream testpb.TestService_FullDuplexCallClient) error {
+		return func(stream testgrpc.TestService_FullDuplexCallClient) error {
 			_, err := stream.Header()
 			return err
 		}
 	}
 	cCtx := func() clientOp {
-		return func(stream testpb.TestService_FullDuplexCallClient) error {
+		return func(stream testgrpc.TestService_FullDuplexCallClient) error {
 			stream.Context()
 			return nil
 		}
@@ -400,7 +402,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 	var serverOpIter int
 	var serverOps []serverOp
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for serverOpIter < len(serverOps) {
 				op := serverOps[serverOpIter]
 				serverOpIter++
@@ -533,7 +535,7 @@ func (s) TestRetryStats(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	client := testpb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("unexpected EmptyCall error: %v", err)
@@ -641,7 +643,7 @@ func (s) TestRetryTransparentWhenCommitted(t *testing.T) {
 
 	first := grpcsync.NewEvent()
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			// signal?
 			if !first.HasFired() {
 				first.Fire()

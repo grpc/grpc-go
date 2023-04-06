@@ -40,7 +40,9 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 type s struct {
@@ -381,10 +383,10 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{}, nil
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
 		},
-		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for {
 				_, err := stream.Recv()
 				if err == io.EOF {
@@ -401,7 +403,7 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 	for i := 0; i < defaultRequestCount; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
-		if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{Body: testOkPayload}}); err != nil {
+		if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}); err != nil {
 			t.Fatalf("Unexpected error from UnaryCall: %v", err)
 		}
 	}
@@ -599,10 +601,10 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 	}
 	defer cleanup()
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{}, nil
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
 		},
-		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			_, err := stream.Recv()
 			if err != io.EOF {
 				return err
@@ -675,7 +677,7 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 		fle.mu.Unlock()
 		readerErrCh.Send(nil)
 	}()
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{Body: testOkPayload}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 	unaryDone.Fire()
@@ -741,10 +743,10 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 	}
 	defer cleanup()
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{}, nil
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
 		},
-		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			_, err := stream.Recv()
 			if err != io.EOF {
 				return err
@@ -817,7 +819,7 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 		fle.mu.Unlock()
 		readerErrCh.Send(nil)
 	}()
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{Body: testOkPayload}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 	unaryDone.Fire()
@@ -892,10 +894,10 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 	}
 	defer cleanup()
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{}, nil
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
 		},
-		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			_, err := stream.Recv()
 			if err != io.EOF {
 				return err
@@ -974,7 +976,7 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 		fle.mu.Unlock()
 		readerErrCh.Send(nil)
 	}()
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{Body: testOkPayload}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 	unaryDone.Fire()
