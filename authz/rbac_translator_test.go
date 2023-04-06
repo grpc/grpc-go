@@ -24,7 +24,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 
+	v3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
@@ -42,7 +45,7 @@ func TestTranslatePolicy(t *testing.T) {
 						"deny_rules": [
 						{
 							"name": "deny_policy_1",
-							"source": {								
+							"source": {
 								"principals":[
 								"spiffe://foo.abc",
 								"spiffe://bar*",
@@ -117,6 +120,7 @@ func TestTranslatePolicy(t *testing.T) {
 							},
 						},
 					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{},
 				},
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
@@ -202,6 +206,7 @@ func TestTranslatePolicy(t *testing.T) {
 							},
 						},
 					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{},
 				},
 			},
 		},
@@ -239,6 +244,354 @@ func TestTranslatePolicy(t *testing.T) {
 							},
 							Permissions: []*v3rbacpb.Permission{
 								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{},
+				},
+			},
+		},
+		"audit logging DENY no config": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_condition": "ON_DENY",
+					"audit_loggers": [
+						{
+							"name": "stdout_logger",
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantPolicies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"authz_allow_authenticated": {
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
+									Ids: []*v3rbacpb.Principal{
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: ".+"}},
+											}},
+										}},
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""},
+											}},
+										}},
+									},
+								}}},
+							},
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(map[string]interface{}{})},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+			},
+		},
+		"audit_logging_ALLOW empty config": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_condition": "ON_ALLOW",
+					"audit_loggers": [
+						{
+							"name": "stdout_logger",
+							"config": {},
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantPolicies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"authz_allow_authenticated": {
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
+									Ids: []*v3rbacpb.Principal{
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: ".+"}},
+											}},
+										}},
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""},
+											}},
+										}},
+									},
+								}}},
+							},
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(map[string]interface{}{})},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+			},
+		},
+		"audit_logging_DENY_AND_ALLOW": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_condition": "ON_DENY_AND_ALLOW",
+					"audit_loggers": [
+						{
+							"name": "stdout_logger",
+							"config": {},
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantPolicies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"authz_allow_authenticated": {
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
+									Ids: []*v3rbacpb.Principal{
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: ".+"}},
+											}},
+										}},
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""},
+											}},
+										}},
+									},
+								}}},
+							},
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY_AND_ALLOW,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(map[string]interface{}{})},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+			},
+		},
+		"audit_logging_NONE": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_condition": "NONE",
+					"audit_loggers": [
+						{
+							"name": "stdout_logger",
+							"config": {},
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantPolicies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"authz_allow_authenticated": {
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
+									Ids: []*v3rbacpb.Principal{
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: ".+"}},
+											}},
+										}},
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""},
+											}},
+										}},
+									},
+								}}},
+							},
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(map[string]interface{}{})},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+			},
+		},
+		"audit_logging_custom_config simple": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_condition": "NONE",
+					"audit_loggers": [
+						{
+							"name": "stdout_logger",
+							"config": {"abc":123, "xyz":"123"},
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantPolicies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"authz_allow_authenticated": {
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
+									Ids: []*v3rbacpb.Principal{
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: ".+"}},
+											}},
+										}},
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""},
+											}},
+										}},
+									},
+								}}},
+							},
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(map[string]interface{}{"abc": 123, "xyz": "123"})},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+			},
+		},
+		"audit_logging_custom_config nested": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_condition": "NONE",
+					"audit_loggers": [
+						{
+							"name": "stdout_logger",
+							"config": {"abc":123, "xyz":{"abc":123}},
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantPolicies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"authz_allow_authenticated": {
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
+									Ids: []*v3rbacpb.Principal{
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: ".+"}},
+											}},
+										}},
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""},
+											}},
+										}},
+									},
+								}}},
+							},
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(map[string]interface{}{"abc": 123, "xyz": map[string]interface{}{"abc": 123}})},
+								IsOptional: false,
 							},
 						},
 					},
@@ -298,6 +651,90 @@ func TestTranslatePolicy(t *testing.T) {
 			}`,
 			wantErr: `"allow_rules" 0: "headers" 0: unsupported "key" :method`,
 		},
+		"bad audit condition": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_condition": "ABC",
+					"audit_loggers": [
+						{
+							"name": "stdout_logger",
+							"config": {},
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantErr: `Failed to parse AuditCondition ABC`,
+		},
+		"bad audit logger config": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_condition": "NONE",
+					"audit_loggers": [
+						{
+							"name": "stdout_logger",
+							"config": "abc",
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantErr: `failed to unmarshal policy`,
+		},
+		"missing audit logger config": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_condition": "NONE"
+				}
+			}`,
+			wantErr: `AuditCondition present but missing AuditLogger config`,
+		},
+		"missing audit condition": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_loggers": [
+						{
+							"name": "stdout_logger",
+							"config": {},
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantErr: `AuditLogger config present but missing AuditCondition`,
+		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -310,4 +747,16 @@ func TestTranslatePolicy(t *testing.T) {
 			}
 		})
 	}
+}
+
+func anyPbHelper(in map[string]interface{}) *anypb.Any {
+	pb, err := structpb.NewStruct(in)
+	if err != nil {
+		panic(err)
+	}
+	ret, err := anypb.New(pb)
+	if err != nil {
+		panic(err)
+	}
+	return ret
 }
