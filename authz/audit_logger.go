@@ -25,9 +25,9 @@ import (
 
 var (
 	mu sync.Mutex
-	// m is a map from the name to the audit logger builder.
+	// auditLoggerBuilderRegistry is a map from the name to the audit logger builder.
 	// This backs the RegisterAuditLoggerBuilder API.
-	m = make(map[string]AuditLoggerBuilder)
+	auditLoggerBuilderRegistry = make(map[string]AuditLoggerBuilder)
 )
 
 // RegisterAuditLoggerBuilder registers the builder in a global map
@@ -38,7 +38,7 @@ var (
 func RegisterAuditLoggerBuilder(b AuditLoggerBuilder) {
 	mu.Lock()
 	defer mu.Unlock()
-	m[b.Name()] = b
+	auditLoggerBuilderRegistry[b.Name()] = b
 }
 
 // AuditInfo contains information used by the audit logger during an audit logging event.
@@ -107,5 +107,5 @@ type AuditLoggerBuilder interface {
 func GetAuditLoggerBuilder(name string) AuditLoggerBuilder {
 	mu.Lock()
 	defer mu.Unlock()
-	return m[name]
+	return auditLoggerBuilderRegistry[name]
 }
