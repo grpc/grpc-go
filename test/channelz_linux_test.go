@@ -27,7 +27,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc/internal/channelz"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
 
 func (s) TestCZSocketMetricsSocketOption(t *testing.T) {
@@ -44,7 +45,7 @@ func testCZSocketMetricsSocketOption(t *testing.T, e env) {
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	doSuccessfulUnaryCall(tc, t)
 
 	time.Sleep(10 * time.Millisecond)

@@ -38,8 +38,8 @@ import (
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	v3orcaservicegrpc "github.com/cncf/xds/go/xds/service/orca/v3"
 	v3orcaservicepb "github.com/cncf/xds/go/xds/service/orca/v3"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const requestsMetricKey = "test-service-requests"
@@ -98,7 +98,7 @@ func (s) Test_E2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	}
 
 	// Register the test service implementation on the same grpc server, and start serving.
-	testpb.RegisterTestServiceServer(s, &testServiceImpl{orcaSrv: orcaSrv})
+	testgrpc.RegisterTestServiceServer(s, &testServiceImpl{orcaSrv: orcaSrv})
 	go s.Serve(lis)
 	defer s.Stop()
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
