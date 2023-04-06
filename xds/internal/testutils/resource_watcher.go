@@ -31,6 +31,8 @@ type TestResourceWatcher struct {
 	UpdateCh chan *xdsresource.ResourceData
 	// ErrorCh is the channel on which errors from the xDS client are delivered.
 	ErrorCh chan error
+	// ResourceDoesNotExistCh is the channel used to indicate calls to OnResourceDoesNotExist
+	ResourceDoesNotExistCh chan struct{}
 }
 
 // OnUpdate is invoked by the xDS client to report an update on the resource
@@ -52,7 +54,12 @@ func (w *TestResourceWatcher) OnError(err error) {
 
 // OnResourceDoesNotExist is used by the xDS client to report that the resource
 // being watched no longer exists.
-func (w *TestResourceWatcher) OnResourceDoesNotExist() {}
+func (w *TestResourceWatcher) OnResourceDoesNotExist() {
+	select {
+	case w.ResourceDoesNotExistCh <- struct{}{}:
+	default:
+	}
+}
 
 // NewTestResourceWatcher returns a TestResourceWatcher to watch for resources
 // via the xDS client.

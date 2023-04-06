@@ -50,7 +50,8 @@ import (
 	fpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/fault/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	tpb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 
 	_ "google.golang.org/grpc/xds/internal/balancer" // Register the balancers.
 	_ "google.golang.org/grpc/xds/internal/resolver" // Register the xds_resolver.
@@ -67,14 +68,14 @@ func Test(t *testing.T) {
 }
 
 type testService struct {
-	testpb.TestServiceServer
+	testgrpc.TestServiceServer
 }
 
 func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 	return &testpb.Empty{}, nil
 }
 
-func (*testService) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
+func (*testService) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallServer) error {
 	// End RPC after client does a CloseSend.
 	for {
 		if _, err := stream.Recv(); err == io.EOF {
@@ -116,7 +117,7 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 
 	// Initialize a gRPC server and register the stubServer on it.
 	server := grpc.NewServer()
-	testpb.RegisterTestServiceServer(server, &testService{})
+	testgrpc.RegisterTestServiceServer(server, &testService{})
 
 	// Create a local listener and pass it to Serve().
 	lis, err := testutils.LocalTCPListener()
@@ -532,7 +533,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 			}
 			defer cc.Close()
 
-			client := testpb.NewTestServiceClient(cc)
+			client := testgrpc.NewTestServiceClient(cc)
 			count := 0
 			for _, want := range tc.want {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -607,9 +608,9 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 	}
 	defer cc.Close()
 
-	client := testpb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 
-	streams := make(chan testpb.TestService_FullDuplexCallClient, 5) // startStream() is called 5 times
+	streams := make(chan testgrpc.TestService_FullDuplexCallClient, 5) // startStream() is called 5 times
 	startStream := func() {
 		str, err := client.FullDuplexCall(ctx)
 		if err != nil {

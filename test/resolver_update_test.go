@@ -39,7 +39,9 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 // TestResolverUpdateDuringBuild_ServiceConfigParseError makes the
@@ -62,7 +64,7 @@ func (s) TestResolverUpdateDuringBuild_ServiceConfigParseError(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	client := testpb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 	const wantMsg = "error parsing service config"
 	const wantCode = codes.Unavailable
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != wantCode || !strings.Contains(status.Convert(err).Message(), wantMsg) {
@@ -94,7 +96,7 @@ func (s) TestResolverUpdateDuringBuild_ServiceConfigInvalidTypeError(t *testing.
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	client := testpb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 	const wantMsg = "illegal service config type"
 	const wantCode = codes.Unavailable
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != wantCode || !strings.Contains(status.Convert(err).Message(), wantMsg) {
@@ -120,7 +122,7 @@ func (s) TestResolverUpdate_InvalidServiceConfigAsFirstUpdate(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	client := testpb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 	const wantMsg = "error parsing service config"
 	const wantCode = codes.Unavailable
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != wantCode || !strings.Contains(status.Convert(err).Message(), wantMsg) {
@@ -232,7 +234,7 @@ func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
 	}
 
 	// Ensure RPCs are successful.
-	client := testpb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall RPC failed: %v", err)
 	}

@@ -26,7 +26,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/test/grpc_testing"
+
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 type s struct {
@@ -49,7 +50,7 @@ func errWithDetails(t *testing.T, s *status.Status, details ...proto.Message) er
 func (s) TestErrorIs(t *testing.T) {
 	// Test errors.
 	testErr := status.Error(codes.Internal, "internal server error")
-	testErrWithDetails := errWithDetails(t, status.New(codes.Internal, "internal server error"), &grpc_testing.Empty{})
+	testErrWithDetails := errWithDetails(t, status.New(codes.Internal, "internal server error"), &testpb.Empty{})
 
 	// Test cases.
 	testCases := []struct {
@@ -62,8 +63,8 @@ func (s) TestErrorIs(t *testing.T) {
 		{err1: testErr, err2: status.Error(codes.Unknown, "internal server error"), want: false},
 		{err1: testErr, err2: errors.New("non-grpc error"), want: false},
 		{err1: testErrWithDetails, err2: status.Error(codes.Internal, "internal server error"), want: false},
-		{err1: testErrWithDetails, err2: errWithDetails(t, status.New(codes.Internal, "internal server error"), &grpc_testing.Empty{}), want: true},
-		{err1: testErrWithDetails, err2: errWithDetails(t, status.New(codes.Internal, "internal server error"), &grpc_testing.Empty{}, &grpc_testing.Empty{}), want: false},
+		{err1: testErrWithDetails, err2: errWithDetails(t, status.New(codes.Internal, "internal server error"), &testpb.Empty{}), want: true},
+		{err1: testErrWithDetails, err2: errWithDetails(t, status.New(codes.Internal, "internal server error"), &testpb.Empty{}, &testpb.Empty{}), want: false},
 	}
 
 	for _, tc := range testCases {

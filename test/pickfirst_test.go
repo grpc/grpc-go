@@ -34,8 +34,8 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const pickFirstServiceConfig = `{"loadBalancingConfig": [{"pick_first":{}}]}`
@@ -257,7 +257,7 @@ func (s) TestPickFirst_NewAddressWhileBlocking(t *testing.T) {
 	}
 
 	doneCh := make(chan struct{})
-	client := testpb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 	go func() {
 		// The channel is currently in TransientFailure and this RPC will block
 		// until the channel becomes Ready, which will only happen when we push a
