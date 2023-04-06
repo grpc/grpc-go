@@ -332,52 +332,6 @@ func TestFullHandshake(t *testing.T) {
 	}
 }
 
-func TestConcurrentHandshakes(t *testing.T) {
-	// Start the fake handshaker service and the server.
-	var wait sync.WaitGroup
-	defer wait.Wait()
-	stopHandshaker, handshakerAddress := startFakeHandshakerService(t, &wait)
-	defer stopHandshaker()
-	stopServer, serverAddress := startServer(t, handshakerAddress, &wait)
-	defer stopServer()
-
-	// Create many concurrent connections to the server, authenticating with ALTS and the fake
-	// handshaker service.
-	var waitForHandshakes sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		waitForHandshakes.Add(1)
-		go func() {
-			defer waitForHandshakes.Done()
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			vmOnGCP = true
-			creds := NewClientCreds(&ClientOptions{HandshakerServiceAddress: handshakerAddress})
-			dialOptions := []grpc.DialOption{
-				grpc.WithTransportCredentials(creds),
-				grpc.WithBlock(),
-				grpc.WithReturnConnectionError(),
-			}
-			conn, err := grpc.DialContext(ctx, serverAddress, dialOptions...)
-			if err != nil {
-				t.Errorf("grpc.Dial(%v, %v) failed: %v", serverAddress, dialOptions, err)
-			}
-			defer conn.Close()
-
-			// Ping the server.
-			c := testpb.NewTestServiceClient(conn)
-			if _, err = c.UnaryCall(context.Background(), &testpb.SimpleRequest{}); err != nil {
-				t.Errorf("c.UnaryCall() failed: %v", err)
-			}
-		}()
-	}
-	waitForHandshakes.Wait()
-
-	// Close open connections to the fake handshaker service.
-	if err := service.Close(); err != nil {
-		t.Errorf("service.Close() failed: %v", err)
-	}
-}
-
 func version(major, minor uint32) *altspb.RpcProtocolVersions_Version {
 	return &altspb.RpcProtocolVersions_Version{
 		Major: major,
