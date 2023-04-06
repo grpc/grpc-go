@@ -27,106 +27,93 @@ import (
 )
 
 type mockWatcher struct {
-	mu      sync.Mutex
-	t       *testing.T
-	targets []string
-	wg      *sync.WaitGroup
+	mu   sync.Mutex
+	msgs []string
+	wg   *sync.WaitGroup
 }
 
-func (mw *mockWatcher) OnTargetChange(target interface{}) {
+func (mw *mockWatcher) OnChange(target interface{}) {
 	mw.mu.Lock()
 	defer mw.mu.Unlock()
-	mw.t.Logf("OnTargetChange %p", mw)
-	mw.targets = append(mw.targets, target.(string))
+	mw.msgs = append(mw.msgs, target.(string))
 	mw.wg.Done()
 }
 
-func (s) TestTracker(t *testing.T) {
-	tracker := NewTracker("initial")
-	defer tracker.Stop()
+func (s) TestPubSub(t *testing.T) {
+	pubsub := NewPubSub()
+	defer pubsub.Stop()
 
-	// Add a watcher and verify that its OnTargetChange is called with the initial target.
 	wg := sync.WaitGroup{}
-	expectedTarget := []string{}
+	expectedMsg := []string{}
 	mw := &mockWatcher{
-		t:  t,
-		wg: &wg,
+		msgs: []string{},
+		wg:   &wg,
+	}
+	pubsub.Subscribe(mw)
+	if diff := cmp.Diff(mw.msgs, expectedMsg); diff != "" {
+		t.Errorf("Difference between mw.msgs and expectedMsg for initial situation. diff(-want, +got):\n%s", diff)
 	}
 
-	tracker.AddWatcher(mw)
+	// Update the target and verify that Publish is called again.
+	pubsub.Publish("set")
 	wg.Add(1)
 	wg.Wait()
-	t.Log(tracker.watchers)
-	expectedTarget = append(expectedTarget, "initial")
-	if diff := cmp.Diff(mw.targets, expectedTarget); diff != "" {
-		t.Errorf("Difference between mw.targets and expectedTarget for initial watcher callback. diff(-want, +got):\n%s", diff)
+	expectedMsg = append(expectedMsg, "set")
+	if diff := cmp.Diff(mw.msgs, expectedMsg); diff != "" {
+		t.Errorf("Difference between mw.msgs and expectedMsg for updated watcher callback. diff(-want, +got):\n%s", diff)
 	}
 
-	// Update the target and verify that OnTargetChange is called again.
-	tracker.SetTarget("set")
-	wg.Add(1)
-	wg.Wait()
-	t.Log(tracker.watchers)
-	expectedTarget = append(expectedTarget, "set")
-	if diff := cmp.Diff(mw.targets, expectedTarget); diff != "" {
-		t.Errorf("Difference between mw.targets and expectedTarget for updated watcher callback. diff(-want, +got):\n%s", diff)
-	}
-
-	// Add another watcher and verify that its OnTargetChange is called with the current target.
-	expectedTarget2 := []string{}
+	// Add another watcher and verify that its Publish is called with the current target.
+	expectedMsg2 := []string{}
 	mw2 := &mockWatcher{
-		t:  t,
-		wg: &wg,
+		msgs: []string{},
+		wg:   &wg,
 	}
-	cancelFunc2 := tracker.AddWatcher(mw2)
+	cancelFunc2 := pubsub.Subscribe(mw2)
 	wg.Add(1)
 	wg.Wait()
-	t.Log(tracker.watchers)
-	expectedTarget2 = append(expectedTarget2, "set")
-	if diff := cmp.Diff(mw.targets, expectedTarget); diff != "" {
-		t.Errorf("Difference between mw.targets and expectedTarget after adding second  watcher. diff(-want, +got):\n%s", diff)
+	expectedMsg2 = append(expectedMsg2, "set")
+	if diff := cmp.Diff(mw.msgs, expectedMsg); diff != "" {
+		t.Errorf("Difference between mw.msgs and expectedMsg after adding second watcher. diff(-want, +got):\n%s", diff)
 	}
-	if diff := cmp.Diff(mw2.targets, expectedTarget2); diff != "" {
-		t.Errorf("Difference between mw2.targets and expectedTarget2 after adding second watcher. diff(-want, +got):\n%s", diff)
+	if diff := cmp.Diff(mw2.msgs, expectedMsg2); diff != "" {
+		t.Errorf("Difference between mw2.targets and expectedMsg2 after adding second watcher. diff(-want, +got):\n%s", diff)
 	}
 
 	// Update the target again and verify that both watchers receive the update.
-	tracker.SetTarget("set2")
+	pubsub.Publish("set2")
 	wg.Add(2)
 	wg.Wait()
-	t.Log(tracker.watchers)
-	expectedTarget = append(expectedTarget, "set2")
-	expectedTarget2 = append(expectedTarget2, "set2")
-	if diff := cmp.Diff(mw.targets, expectedTarget); diff != "" {
-		t.Errorf("Difference between mw.targets and expectedTarget after sending message to both watchers. diff(-want, +got):\n%s", diff)
+	expectedMsg = append(expectedMsg, "set2")
+	expectedMsg2 = append(expectedMsg2, "set2")
+	if diff := cmp.Diff(mw.msgs, expectedMsg); diff != "" {
+		t.Errorf("Difference between mw.msgs and expectedMsg after sending message to both watchers. diff(-want, +got):\n%s", diff)
 	}
-	if diff := cmp.Diff(mw2.targets, expectedTarget2); diff != "" {
-		t.Errorf("Difference between mw2.targets and expectedTarget2 after sending message to both watchers. diff(-want, +got):\n%s", diff)
+	if diff := cmp.Diff(mw2.msgs, expectedMsg2); diff != "" {
+		t.Errorf("Difference between mw2.targets and expectedMsg2 after sending message to both watchers. diff(-want, +got):\n%s", diff)
 	}
 
 	// Remove the second watcher and verify that its callback is no longer received.
 	cancelFunc2()
-	tracker.SetTarget("set3")
-	expectedTarget = append(expectedTarget, "set3")
+	pubsub.Publish("set3")
 	wg.Add(1)
 	wg.Wait()
-	t.Log(tracker.watchers)
-	if diff := cmp.Diff(mw.targets, expectedTarget); diff != "" {
-		t.Errorf("Difference between mw.targets and expectedTarget after removing second watcher. diff(-want, +got):\n%s", diff)
+	expectedMsg = append(expectedMsg, "set3")
+	if diff := cmp.Diff(mw.msgs, expectedMsg); diff != "" {
+		t.Errorf("Difference between mw.msgs and expectedMsg after removing second watcher. diff(-want, +got):\n%s", diff)
 	}
-	if diff := cmp.Diff(mw2.targets, expectedTarget2); diff != "" {
-		t.Errorf("Difference between mw2.targets and expectedTarget2 after removing second watcher. diff(-want, +got):\n%s", diff)
+	if diff := cmp.Diff(mw2.msgs, expectedMsg2); diff != "" {
+		t.Errorf("Difference between mw2.targets and expectedMsg2 after removing second watcher. diff(-want, +got):\n%s", diff)
 	}
 
-	// Stop the tracker and verify that no more callbacks are received.
-	tracker.Stop()
-	tracker.SetTarget("set4")
+	// Stop the pubsub and verify that no more callbacks are received.
+	pubsub.Stop()
+	pubsub.Publish("set4")
 	time.Sleep(10 * time.Millisecond)
-	t.Log(tracker.watchers)
-	if diff := cmp.Diff(mw.targets, expectedTarget); diff != "" {
-		t.Errorf("Difference between mw.targets and expectedTarget after stopping tracker. diff(-want, +got):\n%s", diff)
+	if diff := cmp.Diff(mw.msgs, expectedMsg); diff != "" {
+		t.Errorf("Difference between mw.msgs and expectedMsg after stopping pubsub. diff(-want, +got):\n%s", diff)
 	}
-	if diff := cmp.Diff(mw2.targets, expectedTarget2); diff != "" {
-		t.Errorf("Difference between mw2.targets and expectedTarget2 after stopping tracker. diff(-want, +got):\n%s", diff)
+	if diff := cmp.Diff(mw2.msgs, expectedMsg2); diff != "" {
+		t.Errorf("Difference between mw2.targets and expectedMsg2 after stopping pubsub. diff(-want, +got):\n%s", diff)
 	}
 }

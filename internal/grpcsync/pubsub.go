@@ -24,106 +24,106 @@ import (
 )
 
 // Watcher wraps the functionality to be implemented by components
-// interested in watching target changes.
+// interested in watching msg changes.
 type Watcher interface {
-	// OnTargetChange is invoked to report target changes on the
+	// OnChange is invoked to report msg changes on the
 	// entity being watched.
-	OnTargetChange(target interface{})
+	OnChange(msg interface{})
 }
 
-// Tracker provides pubsub-like functionality for target changes.
+// PubSub provides pubsub-like functionality for msg changes.
 //
-// The entity whose target is being tracked publishes updates by
-// calling the SetTarget() method.
+// The entity whose message is being tracked publishes updates by
+// calling the Publish() method.
 //
-// Components interested in target updates of the tracked entity
-// subscribe to updates by calling the AddWatcher() method.
-type Tracker struct {
+// Components interested in msg updates of the tracked entity
+// subscribe to updates by calling the Subscribe() method.
+type PubSub struct {
 	cs     *CallbackSerializer
 	cancel context.CancelFunc
 
 	// Access to the below fields are guarded by this mutex.
 	mu       sync.Mutex
-	target   interface{}
+	msg      interface{}
 	watchers map[Watcher]bool
 	stopped  bool
 }
 
-// NewTracker returns a new Tracker instance initialized with the provided
-// target.
-func NewTracker(target interface{}) *Tracker {
+// NewPubSub returns a new PubSub instance to track msg changes.
+func NewPubSub() *PubSub {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Tracker{
+	return &PubSub{
 		cs:       NewCallbackSerializer(ctx),
 		cancel:   cancel,
-		target:   target,
 		watchers: map[Watcher]bool{},
 	}
 }
 
-// AddWatcher adds the provided watcher to the set of watchers in Tracker.
-// The OnTargetChange() callback will be invoked asynchronously with the current
-// state of the tracked entity to begin with, and subsequently for every target
+// Subscribe adds the provided watcher to the set of watchers in PubSub.
+// The Publish() callback will be invoked asynchronously with the current
+// msg of the tracked entity to begin with, and subsequently for every msg
 // change.
 //
 // Returns a function to remove the provided watcher from the set of watchers.
 // The caller of this method is responsible for invoking this function when it
-// no longer needs to monitor the target changes on the channel.
-func (t *Tracker) AddWatcher(watcher Watcher) func() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+// no longer needs to monitor the msg changes on the channel.
+func (ps *PubSub) Subscribe(watcher Watcher) func() {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
 
-	if t.stopped {
+	if ps.stopped {
 		return func() {}
 	}
 
-	t.watchers[watcher] = true
+	ps.watchers[watcher] = true
 
-	target := t.target
-	t.cs.Schedule(func(context.Context) {
-		t.mu.Lock()
-		defer t.mu.Unlock()
-		watcher.OnTargetChange(target)
-	})
+	if ps.msg != nil {
+		msg := ps.msg
+		ps.cs.Schedule(func(context.Context) {
+			ps.mu.Lock()
+			defer ps.mu.Unlock()
+			watcher.OnChange(msg)
+		})
+	}
 
 	return func() {
-		t.mu.Lock()
-		defer t.mu.Unlock()
-		delete(t.watchers, watcher)
+		ps.mu.Lock()
+		defer ps.mu.Unlock()
+		delete(ps.watchers, watcher)
 	}
 }
 
-// SetTarget updates the target of the entity being tracked, and
-// invokes the OnTargetChange callback of all registered watchers.
-func (t *Tracker) SetTarget(target interface{}) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+// Publish updates the msg of the entity being tracked, and
+// invokes the Publish callback of all registered watchers.
+func (ps *PubSub) Publish(msg interface{}) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
 
-	if t.stopped {
+	if ps.stopped {
 		return
 	}
 
-	t.target = target
+	ps.msg = msg
 
-	for watcher := range t.watchers {
+	for watcher := range ps.watchers {
 		// Prevent the watcher which is passed to the closure function
-		// from being changed by this loop.
+		// from being changed while this loop.
 		w := watcher
-		t.cs.Schedule(func(context.Context) {
-			t.mu.Lock()
-			defer t.mu.Unlock()
-			w.OnTargetChange(target)
+		ps.cs.Schedule(func(context.Context) {
+			ps.mu.Lock()
+			defer ps.mu.Unlock()
+			w.OnChange(msg)
 		})
 	}
 }
 
-// Stop shuts down the Tracker and releases any resources allocated by it.
+// Stop shuts down the PubSub and releases any resources allocated by it.
 // It is guaranteed that no Watcher callbacks would be invoked once this
 // method returns.
-func (t *Tracker) Stop() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.stopped = true
+func (ps *PubSub) Stop() {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	ps.stopped = true
 
-	t.cancel()
+	ps.cancel()
 }
