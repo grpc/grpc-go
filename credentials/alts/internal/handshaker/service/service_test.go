@@ -80,4 +80,12 @@ func TestDial(t *testing.T) {
 	if got, want := conn2 == conn3, false; got != want {
 		t.Fatalf("(conn2==conn3)=%v, want %v", got, want)
 	}
+
+	// Check that the connection map is empty after calling Close.
+	if err := Close(); err != nil {
+		t.Errorf("Close() failed: %v", err)
+	}
+	if len(hsConnMap) != 0 {
+		t.Errorf("len(hsConnMap) is nonzero: %v", len(hsConnMap))
+	}
 }
