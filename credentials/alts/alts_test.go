@@ -328,7 +328,7 @@ func TestFullHandshake(t *testing.T) {
 	// Start the server and make a unary RPC.
 	ss := &stubserver.StubServer{UnaryCallF: unaryCall}
 	if err := ss.Start(serverOpts, grpc.WithTransportCredentials(clientCreds)); err != nil {
-		t.Errorf("ss.Start() failed: %v", err)
+		t.Fatalf("ss.Start() failed: %v", err)
 	}
 	defer ss.Stop()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
