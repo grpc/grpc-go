@@ -25,9 +25,8 @@ import (
 
 var (
 	mu sync.Mutex
-	// auditLoggerBuilderRegistry is a map from the name to the audit logger builder.
-	// This backs the RegisterAuditLoggerBuilder API.
-	auditLoggerBuilderRegistry = make(map[string]AuditLoggerBuilder)
+	// loggerBuilderRegistry is a map from the name to the audit logger builder.
+	loggerBuilderRegistry = make(map[string]AuditLoggerBuilder)
 )
 
 // RegisterAuditLoggerBuilder registers the builder in a global map
@@ -38,30 +37,36 @@ var (
 func RegisterAuditLoggerBuilder(b AuditLoggerBuilder) {
 	mu.Lock()
 	defer mu.Unlock()
-	auditLoggerBuilderRegistry[b.Name()] = b
+	loggerBuilderRegistry[b.Name()] = b
+}
+
+// GetAuditLoggerBuilder returns a builder with the given name.
+// It returns nil if the builder is not found in the registry.
+func GetAuditLoggerBuilder(name string) AuditLoggerBuilder {
+	mu.Lock()
+	defer mu.Unlock()
+	return loggerBuilderRegistry[name]
 }
 
 // AuditInfo contains information used by the audit logger during an audit logging event.
 type AuditInfo struct {
 	// RPCMethod is the method of the audited RPC, in the format of "/pkg.Service/Method".
 	// For example, "/helloworld.Greeter/SayHello".
-	RPCMethod string `json:"rpc_method,omitempty"`
+	RPCMethod string
 	// Principal is the identity of the RPC. Currently it will only be available in
 	// certificate-based TLS authentication.
-	Principal string `json:"principal,omitempty"`
+	Principal string
 	// PolicyName is the authorization policy name (or the xDS RBAC filter name).
-	PolicyName string `json:"policy_name,omitempty"`
+	PolicyName string
 	// MatchedRule is the matched rule (or policy name in the xDS RBAC filter). It will be
 	// empty if there is no match.
-	MatchedRule string `json:"matched_rule,omitempty"`
+	MatchedRule string
 	// Authorized indicates whether the audited RPC is authorized or not.
-	Authorized bool `json:"bool,omitempty"`
+	Authorized bool
 }
 
 // AuditLoggerConfig defines the configuration for a particular implementation of audit logger.
 type AuditLoggerConfig interface {
-	// Name returns the same name as that returned by its supported builder.
-	Name() string
 	// auditLoggerConfig is a dummy interface requiring users to embed this
 	// interface to implement it.
 	auditLoggerConfig()
@@ -73,10 +78,11 @@ type AuditLoggerConfig interface {
 // configured audit loggers' Log() method will be invoked to log that event with the AuditInfo.
 // The method will be executed synchronously before the authorization is complete and the call is
 // denied or allowed.
+//
 // Please refer to https://github.com/grpc/proposal/pull/346 for more details about audit logging.
 type AuditLogger interface {
 	// Log logs the auditing event with the given information.
-	Log(context.Context, *AuditInfo)
+	Log(context.Context, *AuditInfo) error
 }
 
 // AuditLoggerBuilder is the interface for an audit logger builder.
@@ -85,6 +91,7 @@ type AuditLogger interface {
 // Users that want to implement their own audit logging logic should implement this along with
 // the AuditLogger interface and register this builder by calling RegisterAuditLoggerBuilder()
 // before they start the gRPC server.
+//
 // Please refer to https://github.com/grpc/proposal/pull/346 for more details about audit logging.
 type AuditLoggerBuilder interface {
 	// ParseAuditLoggerConfig parses an implementation-specific config into a
@@ -100,12 +107,4 @@ type AuditLoggerBuilder interface {
 	// Name returns the name of logger built by this builder.
 	// This is used to register and pick the builder.
 	Name() string
-}
-
-// GetAuditLoggerBuilder returns a builder with the given name.
-// It returns nil if the builder is not found in the registry.
-func GetAuditLoggerBuilder(name string) AuditLoggerBuilder {
-	mu.Lock()
-	defer mu.Unlock()
-	return auditLoggerBuilderRegistry[name]
 }
