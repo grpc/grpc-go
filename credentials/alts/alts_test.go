@@ -32,6 +32,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/alts/internal/handshaker/service"
+	altsgrpc "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 	"google.golang.org/grpc/credentials/alts/internal/testutil"
 	"google.golang.org/grpc/internal/grpctest"
@@ -341,8 +342,8 @@ func TestFullHandshake(t *testing.T) {
 	}
 
 	// Close open connections to the fake handshaker service.
-	if err := service.Close(); err != nil {
-		t.Errorf("service.Close() failed: %v", err)
+	if err := service.CloseForTesting(); err != nil {
+		t.Errorf("service.CloseForTesting() failed: %v", err)
 	}
 }
 
@@ -366,7 +367,7 @@ func startFakeHandshakerService(t *testing.T, wait *sync.WaitGroup) (stop func()
 		t.Fatalf("LocalTCPListener() failed: %v", err)
 	}
 	s := grpc.NewServer()
-	altspb.RegisterHandshakerServiceServer(s, &testutil.FakeHandshaker{})
+	altsgrpc.RegisterHandshakerServiceServer(s, &testutil.FakeHandshaker{})
 	wait.Add(1)
 	go func() {
 		defer wait.Done()
