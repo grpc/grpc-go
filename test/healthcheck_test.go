@@ -265,6 +265,7 @@ func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 	defer s.Stop()
 
 	cc, r := setupClient(t, nil)
+	defer cc.Close()
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
