@@ -19,7 +19,7 @@
 package authz
 
 import (
-	"context"
+	"encoding/json"
 	"sync"
 )
 
@@ -79,10 +79,14 @@ type AuditLoggerConfig interface {
 // The method will be executed synchronously before the authorization is complete and the call is
 // denied or allowed.
 //
+// TODO(lwge): Change the link to the merged gRFC once it's ready.
 // Please refer to https://github.com/grpc/proposal/pull/346 for more details about audit logging.
 type AuditLogger interface {
 	// Log logs the auditing event with the given information.
-	Log(context.Context, *AuditInfo) error
+	// This method will be executed synchronously by gRPC so implementers must keep in mind it should
+	// not block the RPC. Specifically, time-consuming processes should be fired asynchronously such
+	// that this method can return immediately.
+	Log(*AuditInfo)
 }
 
 // AuditLoggerBuilder is the interface for an audit logger builder.
@@ -92,17 +96,19 @@ type AuditLogger interface {
 // the AuditLogger interface and register this builder by calling RegisterAuditLoggerBuilder()
 // before they start the gRPC server.
 //
+// TODO(lwge): Change the link to the merged gRFC once it's ready.
 // Please refer to https://github.com/grpc/proposal/pull/346 for more details about audit logging.
 type AuditLoggerBuilder interface {
-	// ParseAuditLoggerConfig parses an implementation-specific config into a
-	// structured logger config this builder can use to build an audit logger.
-	// When users implement this method, its returned type must embed the
+	// ParseAuditLoggerConfig parses the given JSON bytes into a structured
+	// logger config this builder can use to build an audit logger.
+	// When users implement this method, its return type must embed the
 	// AuditLoggerConfig interface.
-	ParseAuditLoggerConfig(config interface{}) (AuditLoggerConfig, error)
+	ParseAuditLoggerConfig(config json.RawMessage) (AuditLoggerConfig, error)
 	// Build builds an audit logger with the given logger config.
 	// This will only be called with valid configs returned from ParseAuditLoggerConfig()
-	// so implementers need to make sure it can return a logger without error
-	// at this stage.
+	// and any runtime issues such as failing to create a file should be handled by the
+	// logger implementation instead of failing the logger instantiation. So implementers
+	// need to make sure it can return a logger without error at this stage.
 	Build(AuditLoggerConfig) AuditLogger
 	// Name returns the name of logger built by this builder.
 	// This is used to register and pick the builder.
