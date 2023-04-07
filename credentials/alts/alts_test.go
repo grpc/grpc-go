@@ -327,14 +327,14 @@ func TestFullHandshake(t *testing.T) {
 
 	// Start the server and make a unary RPC.
 	ss := &stubserver.StubServer{UnaryCallF: unaryCall}
-        if err := ss.Start(serverOpts, grpc.WithTransportCredentials(clientCreds)); err != nil {
-                t.Errorf("ss.Start() failed: %v", err)
-        }
+	if err := ss.Start(serverOpts, grpc.WithTransportCredentials(clientCreds)); err != nil {
+		t.Errorf("ss.Start() failed: %v", err)
+	}
 	defer ss.Stop()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-        defer cancel()
+	defer cancel()
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
-              t.Errorf("c.UnaryCall() failed: %v", err)
+		t.Errorf("c.UnaryCall() failed: %v", err)
 	}
 
 	// Close open connections to the fake handshaker service.
