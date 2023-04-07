@@ -295,6 +295,8 @@ func withBackoff(bs internalbackoff.Strategy) DialOption {
 // WithBlock returns a DialOption which makes callers of Dial block until the
 // underlying connection is up. Without this, Dial returns immediately and
 // connecting the server happens in background.
+// For more information about this anti-pattern
+// see https://github.com/grpc/grpc-go/blob/master/Documentation/anti-patterns.md.
 func WithBlock() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.block = true
@@ -310,6 +312,8 @@ func WithBlock() DialOption {
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
+// For more information about this anti-pattern
+// see https://github.com/grpc/grpc-go/blob/master/Documentation/anti-patterns.md.
 func WithReturnConnectionError() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.block = true
@@ -452,6 +456,8 @@ func withBinaryLogger(bl binarylog.Logger) DialOption {
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
+// For more information about this anti-pattern
+// see https://github.com/grpc/grpc-go/blob/master/Documentation/anti-patterns.md.
 func FailOnNonTempDialError(f bool) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.FailOnNonTempDialError = f
