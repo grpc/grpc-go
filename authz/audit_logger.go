@@ -23,10 +23,17 @@ import (
 	"sync"
 )
 
+// loggerBuilderRegistry holds a map of audit logger builders and a mutex
+// to facilitate thread-safe reading/writing operations.
+type loggerBuilderRegistry struct {
+	mu       sync.Mutex
+	builders map[string]AuditLoggerBuilder
+}
+
 var (
-	mu sync.Mutex
-	// loggerBuilderRegistry is a map from the name to the audit logger builder.
-	loggerBuilderRegistry = make(map[string]AuditLoggerBuilder)
+	registry = loggerBuilderRegistry{
+		builders: make(map[string]AuditLoggerBuilder),
+	}
 )
 
 // RegisterAuditLoggerBuilder registers the builder in a global map
@@ -35,24 +42,24 @@ var (
 // If multiple builders are registered with the same name, the one registered last
 // will take effect.
 func RegisterAuditLoggerBuilder(b AuditLoggerBuilder) {
-	mu.Lock()
-	defer mu.Unlock()
-	loggerBuilderRegistry[b.Name()] = b
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	registry.builders[b.Name()] = b
 }
 
 // GetAuditLoggerBuilder returns a builder with the given name.
 // It returns nil if the builder is not found in the registry.
 func GetAuditLoggerBuilder(name string) AuditLoggerBuilder {
-	mu.Lock()
-	defer mu.Unlock()
-	return loggerBuilderRegistry[name]
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	return registry.builders[name]
 }
 
-// AuditInfo contains information used by the audit logger during an audit logging event.
-type AuditInfo struct {
-	// RPCMethod is the method of the audited RPC, in the format of "/pkg.Service/Method".
+// AuditEvent contains information used by the audit logger during an audit logging event.
+type AuditEvent struct {
+	// FullMethodName is the full method name of the audited RPC, in the format of "/pkg.Service/Method".
 	// For example, "/helloworld.Greeter/SayHello".
-	RPCMethod string
+	FullMethodName string
 	// Principal is the identity of the RPC. Currently it will only be available in
 	// certificate-based TLS authentication.
 	Principal string
@@ -82,11 +89,11 @@ type AuditLoggerConfig interface {
 // TODO(lwge): Change the link to the merged gRFC once it's ready.
 // Please refer to https://github.com/grpc/proposal/pull/346 for more details about audit logging.
 type AuditLogger interface {
-	// Log logs the auditing event with the given information.
-	// This method will be executed synchronously by gRPC so implementers must keep in mind it should
+	// Log performs audit logging with the given information in the audit event.
+	// This method will be executed synchronously by gRPC so implementers must keep in mind it must
 	// not block the RPC. Specifically, time-consuming processes should be fired asynchronously such
 	// that this method can return immediately.
-	Log(*AuditInfo)
+	Log(*AuditEvent)
 }
 
 // AuditLoggerBuilder is the interface for an audit logger builder.
