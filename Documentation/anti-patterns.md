@@ -94,7 +94,7 @@ gRPC:
   documentation](https://github.com/grpc/grpc-go/blob/master/examples/features/retry/README.md)
   for more information.
 - Avoid using `FailOnNonTempDialError`, `WithBlock`, and
-`WithReturnConnectionError`,
+  `WithReturnConnectionError`,
   as these options can introduce race conditions and result in unreliable and
   difficult-to-debug code.
 - If making the outgoing RPC in order to handle an incoming RPC, be sure to
