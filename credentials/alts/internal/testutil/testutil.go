@@ -29,6 +29,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/alts/internal/conn"
+	altsgrpc "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 )
 
@@ -129,11 +130,11 @@ func MakeFrame(pl string) []byte {
 
 // FakeHandshaker is a fake implementation of the ALTS handshaker service.
 type FakeHandshaker struct {
-	altspb.HandshakerServiceServer
+	altsgrpc.HandshakerServiceServer
 }
 
 // DoHandshake performs a fake ALTS handshake.
-func (h *FakeHandshaker) DoHandshake(stream altspb.HandshakerService_DoHandshakeServer) error {
+func (h *FakeHandshaker) DoHandshake(stream altsgrpc.HandshakerService_DoHandshakeServer) error {
 	var isAssistingClient bool
 	for {
 		req, err := stream.Recv()

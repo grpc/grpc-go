@@ -23,7 +23,6 @@ package alts
 
 import (
 	"context"
-	"net"
 	"reflect"
 	"runtime"
 	"sync"
@@ -31,11 +30,14 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	grpc "google.golang.org/grpc"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/alts/internal/handshaker/service"
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 	"google.golang.org/grpc/credentials/alts/internal/testutil"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
@@ -296,6 +298,9 @@ func (s) TestCheckRPCVersions(t *testing.T) {
 	}
 }
 
+// TestFullHandshake performs a full ALTS handshake between a test client and
+// server, where both client and server offload to a local, fake handshaker
+// service.
 func TestFullHandshake(t *testing.T) {
 	// If GOMAXPROCS is set to less than 2, do not run this test. This test
 	// requires at least 2 goroutines to succeed (one goroutine where a
@@ -309,28 +314,28 @@ func TestFullHandshake(t *testing.T) {
 	defer wait.Wait()
 	stopHandshaker, handshakerAddress := startFakeHandshakerService(t, &wait)
 	defer stopHandshaker()
-	stopServer, serverAddress := startServer(t, handshakerAddress, &wait)
+	stopServer, serverAddress := startServer(t, handshakerAddress)
 	defer stopServer()
 
-	// Connect to the server, authenticating with ALTS and the fake handshaker service.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	// The vmOnGCP global variable MUST be reset to true after the server has
+	// started but before the ALTS handshake begins. If vmOnGCP is not reset
+	// and this test is run anywhere except for a GCP VM, then the ALTS
+	// handshake will immediately fail.
 	vmOnGCP = true
+
+	// Connect to the server, authenticating with ALTS and the fake handshaker service.
 	creds := NewClientCreds(&ClientOptions{HandshakerServiceAddress: handshakerAddress})
-	dialOptions := []grpc.DialOption{
-		grpc.WithTransportCredentials(creds),
-		grpc.WithBlock(),
-		grpc.WithReturnConnectionError(),
-	}
-	conn, err := grpc.DialContext(ctx, serverAddress, dialOptions...)
+	conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(creds))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%v, %v) failed: %v", serverAddress, dialOptions, err)
+		t.Fatalf("grpc.Dial(%v) failed: %v", serverAddress, err)
 	}
 	defer conn.Close()
 
 	// Ping the server.
-	c := testpb.NewTestServiceClient(conn)
-	if _, err = c.UnaryCall(context.Background(), &testpb.SimpleRequest{}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	c := testgrpc.NewTestServiceClient(conn)
+	if _, err = c.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Errorf("c.UnaryCall() failed: %v", err)
 	}
 
@@ -355,9 +360,9 @@ func versions(minMajor, minMinor, maxMajor, maxMinor uint32) *altspb.RpcProtocol
 }
 
 func startFakeHandshakerService(t *testing.T, wait *sync.WaitGroup) (stop func(), address string) {
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := testutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("Failed to listen on address %s: %v", address, err)
+		t.Fatalf("LocalTCPListener() failed: %v", err)
 	}
 	s := grpc.NewServer()
 	altspb.RegisterHandshakerServiceServer(s, &testutil.FakeHandshaker{})
@@ -371,30 +376,17 @@ func startFakeHandshakerService(t *testing.T, wait *sync.WaitGroup) (stop func()
 	return func() { s.Stop() }, listener.Addr().String()
 }
 
-func startServer(t *testing.T, handshakerServiceAddress string, wait *sync.WaitGroup) (stop func(), address string) {
-	lis, err := net.Listen("tcp", ":0")
-	if err != nil {
-		t.Errorf("net.Listen(tcp, :0) failed: %v", err)
-	}
+func startServer(t *testing.T, handshakerServiceAddress string) (stop func(), address string) {
 	serverOpts := &ServerOptions{HandshakerServiceAddress: handshakerServiceAddress}
 	creds := NewServerCreds(serverOpts)
-	s := grpc.NewServer(grpc.Creds(creds))
-	testpb.RegisterTestServiceServer(s, &testServer{})
-	wait.Add(1)
-	go func() {
-		defer wait.Done()
-		if err := s.Serve(lis); err != nil {
-			t.Errorf("s.Serve(%v) failed: %v", lis, err)
-		}
-	}()
-	return func() { s.Stop() }, lis.Addr().String()
+	s := &stubserver.StubServer{UnaryCallF: unaryCall}
+	if err := s.StartServer(grpc.Creds(creds)); err != nil {
+		t.Errorf("s.StartServer() failed: %v", err)
+	}
+	return func() { s.Stop() }, s.Address
 }
 
-type testServer struct {
-	testpb.UnimplementedTestServiceServer
-}
-
-func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+func unaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	return &testpb.SimpleResponse{
 		Payload: &testpb.Payload{},
 	}, nil
