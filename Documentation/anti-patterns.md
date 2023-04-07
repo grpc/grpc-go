@@ -88,7 +88,7 @@ gRPC:
 - Use the `status` field of the error response to determine the type of error that
   occurred.
 - When retrying failed RPCs, consider using the built-in retry mechanism
-provided by gRPC-Go,
+  provided by gRPC-Go,
   if available, instead of manually implementing retries. Refer to the [gRPC-Go
   retry example
   documentation](https://github.com/grpc/grpc-go/blob/master/examples/features/retry/README.md)
