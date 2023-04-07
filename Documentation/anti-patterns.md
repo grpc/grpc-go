@@ -88,15 +88,13 @@ gRPC:
 - Use the `status` field of the error response to determine the type of error that
   occurred.
 - When retrying failed RPCs, consider using the built-in retry mechanism
-  provided by gRPC-Go,
-  if available, instead of manually implementing retries. Refer to the [gRPC-Go
-  retry example
+  provided by gRPC-Go, if available, instead of manually implementing retries.
+  Refer to the [gRPC-Go retry example
   documentation](https://github.com/grpc/grpc-go/blob/master/examples/features/retry/README.md)
   for more information.
 - Avoid using `FailOnNonTempDialError`, `WithBlock`, and
-  `WithReturnConnectionError`,
-  as these options can introduce race conditions and result in unreliable and
-  difficult-to-debug code.
+  `WithReturnConnectionError`, as these options can introduce race conditions and
+  result in unreliable and difficult-to-debug code.
 - If making the outgoing RPC in order to handle an incoming RPC, be sure to
   translate the status code before returning the error from your method handler.
   For example, if the error is an `INVALID_ARGUMENT` error, that probably means
