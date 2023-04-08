@@ -31,10 +31,10 @@ type Subscriber interface {
 }
 
 // PubSub is a simple one-to-many publish-subscribe system that supports messages
-// of arbitrary type. 
+// of arbitrary type.
 //
 // Publisher invokes the Publish() method to publish new messages, while
-// subscribers interested in receiving these messages register a callback 
+// subscribers interested in receiving these messages register a callback
 // via the Subscribe() method. It guarantees that messages are delivered in
 // the same order in which they were published.
 //
@@ -45,31 +45,31 @@ type PubSub struct {
 	cancel context.CancelFunc
 
 	// Access to the below fields are guarded by this mutex.
-	mu       sync.Mutex
-	msg      interface{}
-	subscribers map[Watcher]bool
-	stopped  bool
+	mu          sync.Mutex
+	msg         interface{}
+	subscribers map[Subscriber]bool
+	stopped     bool
 }
 
-// NewPubSub returns a new PubSub instance to track msg changes.
+// NewPubSub returns a new PubSub instance.
 func NewPubSub() *PubSub {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &PubSub{
-		cs:       NewCallbackSerializer(ctx),
-		cancel:   cancel,
-		watchers: map[Watcher]bool{},
+		cs:          NewCallbackSerializer(ctx),
+		cancel:      cancel,
+		subscribers: map[Subscriber]bool{},
 	}
 }
 
-// Subscribe adds the provided watcher to the set of watchers in PubSub.
-// The Publish() callback will be invoked asynchronously with the current
-// msg of the tracked entity to begin with, and subsequently for every msg
-// change.
+// Subscribe registers the provided Subscriber to the PubSub.
 //
-// Returns a function to remove the provided watcher from the set of watchers.
-// The caller of this method is responsible for invoking this function when it
-// no longer needs to monitor the msg changes on the channel.
-func (ps *PubSub) Subscribe(watcher Watcher) func() {
+// If the PubSub contains a previously published message, the Subscriber's
+// OnMessage() callback will be invoked asynchronously with the existing
+// message to begin with, and subsequently for every newly published message.
+//
+// The caller is responsible for invoking the returned function to unsubscribe
+// itself from the PubSub.
+func (ps *PubSub) Subscribe(sub Subscriber) func() {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -77,26 +77,26 @@ func (ps *PubSub) Subscribe(watcher Watcher) func() {
 		return func() {}
 	}
 
-	ps.watchers[watcher] = true
+	ps.subscribers[sub] = true
 
 	if ps.msg != nil {
 		msg := ps.msg
 		ps.cs.Schedule(func(context.Context) {
 			ps.mu.Lock()
 			defer ps.mu.Unlock()
-			watcher.OnChange(msg)
+			sub.OnMessage(msg)
 		})
 	}
 
 	return func() {
 		ps.mu.Lock()
 		defer ps.mu.Unlock()
-		delete(ps.watchers, watcher)
+		delete(ps.subscribers, sub)
 	}
 }
 
-// Publish updates the msg of the entity being tracked, and
-// invokes the Publish callback of all registered watchers.
+// Publish publishes the provided message to the PubSub, and invokes
+// callbacks registered by subscribers asynchronously.
 func (ps *PubSub) Publish(msg interface{}) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
@@ -106,21 +106,18 @@ func (ps *PubSub) Publish(msg interface{}) {
 	}
 
 	ps.msg = msg
-
-	for watcher := range ps.watchers {
-		// Prevent the watcher which is passed to the closure function
-		// from being changed while this loop.
-		w := watcher
+	for sub := range ps.subscribers {
+		s := sub
 		ps.cs.Schedule(func(context.Context) {
 			ps.mu.Lock()
 			defer ps.mu.Unlock()
-			w.OnChange(msg)
+			s.OnMessage(msg)
 		})
 	}
 }
 
 // Stop shuts down the PubSub and releases any resources allocated by it.
-// It is guaranteed that no Watcher callbacks would be invoked once this
+// It is guaranteed that no subscriber callbacks would be invoked once this
 // method returns.
 func (ps *PubSub) Stop() {
 	ps.mu.Lock()
