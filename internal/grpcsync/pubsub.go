@@ -31,13 +31,16 @@ type Watcher interface {
 	OnChange(msg interface{})
 }
 
-// PubSub provides pubsub-like functionality for msg changes.
+// PubSub is a simple one-to-many publish-subscribe system that supports messages
+// of arbitrary type. 
 //
-// The entity whose message is being tracked publishes updates by
-// calling the Publish() method.
+// Publisher invokes the Publish() method to publish new messages, while
+// subscribers interested in receiving these messages register a callback 
+// via the Subscribe() method. It guarantees that messages are delivered in
+// the same order in which they were published.
 //
-// Components interested in msg updates of the tracked entity
-// subscribe to updates by calling the Subscribe() method.
+// Once a PubSub is stopped, no more messages can be published, and
+// it is guaranteed that no more subscriber callback will be invoked.
 type PubSub struct {
 	cs     *CallbackSerializer
 	cancel context.CancelFunc
@@ -45,7 +48,7 @@ type PubSub struct {
 	// Access to the below fields are guarded by this mutex.
 	mu       sync.Mutex
 	msg      interface{}
-	watchers map[Watcher]bool
+	subscribers map[Watcher]bool
 	stopped  bool
 }
 
