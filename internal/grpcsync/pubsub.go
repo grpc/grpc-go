@@ -23,12 +23,11 @@ import (
 	"sync"
 )
 
-// Watcher wraps the functionality to be implemented by components
-// interested in watching msg changes.
-type Watcher interface {
-	// OnChange is invoked to report msg changes on the
-	// entity being watched.
-	OnChange(msg interface{})
+// Subscriber represents an entity that is subscribed to messages published on a PubSub.
+// It wraps the callback to be invoked by the PubSub when a new message is published.
+type Subscriber interface {
+	// OnMessage is invoked to when a new message is published.
+	OnMessage(msg interface{})
 }
 
 // PubSub is a simple one-to-many publish-subscribe system that supports messages
