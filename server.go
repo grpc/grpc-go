@@ -1272,7 +1272,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			logEntry.PeerAddr = peer.Addr
 		}
 		for _, binlog := range binlogs {
-			binlog.Log(logEntry)
+			binlog.Log(ctx, logEntry)
 		}
 	}
 
@@ -1352,7 +1352,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				Message: d,
 			}
 			for _, binlog := range binlogs {
-				binlog.Log(cm)
+				binlog.Log(stream.Context(), cm)
 			}
 		}
 		if trInfo != nil {
@@ -1385,7 +1385,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 					Header: h,
 				}
 				for _, binlog := range binlogs {
-					binlog.Log(sh)
+					binlog.Log(stream.Context(), sh)
 				}
 			}
 			st := &binarylog.ServerTrailer{
@@ -1393,7 +1393,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				Err:     appErr,
 			}
 			for _, binlog := range binlogs {
-				binlog.Log(st)
+				binlog.Log(stream.Context(), st)
 			}
 		}
 		return appErr
@@ -1435,8 +1435,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				Err:     appErr,
 			}
 			for _, binlog := range binlogs {
-				binlog.Log(sh)
-				binlog.Log(st)
+				binlog.Log(stream.Context(), sh)
+				binlog.Log(stream.Context(), st)
 			}
 		}
 		return err
@@ -1450,8 +1450,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			Message: reply,
 		}
 		for _, binlog := range binlogs {
-			binlog.Log(sh)
-			binlog.Log(sm)
+			binlog.Log(stream.Context(), sh)
+			binlog.Log(stream.Context(), sm)
 		}
 	}
 	if channelz.IsOn() {
@@ -1469,7 +1469,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			Err:     appErr,
 		}
 		for _, binlog := range binlogs {
-			binlog.Log(st)
+			binlog.Log(stream.Context(), st)
 		}
 	}
 	return t.WriteStatus(stream, statusOK)
@@ -1606,7 +1606,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			logEntry.PeerAddr = peer.Addr
 		}
 		for _, binlog := range ss.binlogs {
-			binlog.Log(logEntry)
+			binlog.Log(stream.Context(), logEntry)
 		}
 	}
 
@@ -1684,7 +1684,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 				Err:     appErr,
 			}
 			for _, binlog := range ss.binlogs {
-				binlog.Log(st)
+				binlog.Log(stream.Context(), st)
 			}
 		}
 		t.WriteStatus(ss.s, appStatus)
@@ -1702,7 +1702,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			Err:     appErr,
 		}
 		for _, binlog := range ss.binlogs {
-			binlog.Log(st)
+			binlog.Log(stream.Context(), st)
 		}
 	}
 	return t.WriteStatus(ss.s, statusOK)

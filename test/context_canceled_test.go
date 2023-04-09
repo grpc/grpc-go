@@ -29,12 +29,14 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 func (s) TestContextCanceled(t *testing.T) {
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			stream.SetTrailer(metadata.New(map[string]string{"a": "b"}))
 			return status.Error(codes.PermissionDenied, "perm denied")
 		},
@@ -123,7 +125,7 @@ func (s) TestContextCanceled(t *testing.T) {
 // will be inconsistent, and it causes internal error.
 func (s) TestCancelWhileRecvingWithCompression(t *testing.T) {
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for {
 				if err := stream.Send(&testpb.StreamingOutputCallResponse{
 					Payload: nil,

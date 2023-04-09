@@ -37,8 +37,10 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
-	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const (
@@ -92,7 +94,7 @@ func (s) TestCredsBundleBoth(t *testing.T) {
 	defer te.tearDown()
 
 	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -116,7 +118,7 @@ func (s) TestCredsBundleTransportCredentials(t *testing.T) {
 	defer te.tearDown()
 
 	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -134,7 +136,7 @@ func (s) TestCredsBundlePerRPCCredentials(t *testing.T) {
 	defer te.tearDown()
 
 	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -170,7 +172,7 @@ func (s) TestNonFailFastRPCSucceedOnTimeoutCreds(t *testing.T) {
 	defer te.tearDown()
 
 	cc := te.clientConn(grpc.WithTransportCredentials(&clientTimeoutCreds{}))
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	// This unary call should succeed, because ClientHandshake will succeed for the second time.
@@ -196,7 +198,7 @@ func (s) TestGRPCMethodAccessibleToCredsViaContextRequestInfo(t *testing.T) {
 	defer te.tearDown()
 
 	cc := te.clientConn(grpc.WithPerRPCCredentials(&methodTestCreds{}))
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -239,7 +241,7 @@ func (s) TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 	}
 	defer cc.Close()
 
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	for i := 0; i < 1000; i++ {
 		// This loop runs for at most 1 second. The first several RPCs will fail
 		// with Unavailable because the connection hasn't started. When the
@@ -267,7 +269,7 @@ func (s) TestWaitForReadyRPCErrorOnBadCertificates(t *testing.T) {
 	}
 	defer cc.Close()
 
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	if _, err = tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
@@ -332,7 +334,7 @@ func testPerRPCCredentialsViaDialOptions(t *testing.T, e env) {
 	defer te.tearDown()
 
 	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -353,7 +355,7 @@ func testPerRPCCredentialsViaCallOptions(t *testing.T, e env) {
 	defer te.tearDown()
 
 	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.PerRPCCredentials(testPerRPCCredentials{authdata: authdata})); err != nil {
@@ -395,7 +397,7 @@ func testPerRPCCredentialsViaDialOptionsAndCallOptions(t *testing.T, e env) {
 	defer te.tearDown()
 
 	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.PerRPCCredentials(testPerRPCCredentials{authdata: authdata})); err != nil {

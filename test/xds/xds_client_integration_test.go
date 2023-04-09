@@ -32,8 +32,8 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 type s struct {
@@ -58,6 +58,9 @@ func startTestService(t *testing.T, server *stubserver.StubServer) (uint32, func
 	if server == nil {
 		server = &stubserver.StubServer{
 			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+			UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				return &testpb.SimpleResponse{}, nil
+			},
 		}
 	}
 	server.StartServer()

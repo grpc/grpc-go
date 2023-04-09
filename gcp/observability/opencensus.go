@@ -20,6 +20,8 @@ package observability
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"time"
 
 	"contrib.go.opencensus.io/exporter/stackdriver"
@@ -35,6 +37,19 @@ import (
 var (
 	// It's a variable instead of const to speed up testing
 	defaultMetricsReportingInterval = time.Second * 30
+	defaultViews                    = []*view.View{
+		opencensus.ClientStartedRPCsView,
+		opencensus.ClientCompletedRPCsView,
+		opencensus.ClientRoundtripLatencyView,
+		opencensus.ClientSentCompressedMessageBytesPerRPCView,
+		opencensus.ClientReceivedCompressedMessageBytesPerRPCView,
+		opencensus.ClientAPILatencyView,
+		opencensus.ServerStartedRPCsView,
+		opencensus.ServerCompletedRPCsView,
+		opencensus.ServerSentCompressedMessageBytesPerRPCView,
+		opencensus.ServerReceivedCompressedMessageBytesPerRPCView,
+		opencensus.ServerLatencyView,
+	}
 )
 
 func labelsToMonitoringLabels(labels map[string]string) *stackdriver.Labels {
@@ -69,10 +84,19 @@ func newStackdriverExporter(config *config) (tracingMetricsExporter, error) {
 	mr := monitoredresource.Autodetect()
 	logger.Infof("Detected MonitoredResource:: %+v", mr)
 	var err error
+	// Custom labels completly overwrite any labels generated in the OpenCensus
+	// library, including their label that uniquely identifies the process.
+	// Thus, generate a unique process identifier here to uniquely identify
+	// process for metrics exporting to function correctly.
+	metricsLabels := make(map[string]string, len(config.Labels)+1)
+	for k, v := range config.Labels {
+		metricsLabels[k] = v
+	}
+	metricsLabels["opencensus_task"] = generateUniqueProcessIdentifier()
 	exporter, err := stackdriver.NewExporter(stackdriver.Options{
 		ProjectID:               config.ProjectID,
 		MonitoredResource:       mr,
-		DefaultMonitoringLabels: labelsToMonitoringLabels(config.Labels),
+		DefaultMonitoringLabels: labelsToMonitoringLabels(metricsLabels),
 		DefaultTraceAttributes:  labelsToTraceAttributes(config.Labels),
 		MonitoringClientOptions: cOptsDisableLogTrace,
 		TraceClientOptions:      cOptsDisableLogTrace,
@@ -81,6 +105,18 @@ func newStackdriverExporter(config *config) (tracingMetricsExporter, error) {
 		return nil, fmt.Errorf("failed to create Stackdriver exporter: %v", err)
 	}
 	return exporter, nil
+}
+
+// generateUniqueProcessIdentifier returns a unique process identifier for the
+// process this code is running in. This is the same way the OpenCensus library
+// generates the unique process identifier, in the format of
+// "go-<pid>@<hostname>".
+func generateUniqueProcessIdentifier() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "localhost"
+	}
+	return "go-" + strconv.Itoa(os.Getpid()) + "@" + hostname
 }
 
 // This method accepts config and exporter; the exporter argument is exposed to
@@ -106,11 +142,8 @@ func startOpenCensus(config *config) error {
 	}
 
 	if config.CloudMonitoring != nil {
-		if err := view.Register(opencensus.ClientAPILatencyView, opencensus.ClientStartedRPCsView, opencensus.ClientCompletedRPCsView, opencensus.ClientRoundtripLatencyView); err != nil {
-			return fmt.Errorf("failed to register default client views: %v", err)
-		}
-		if err := view.Register(opencensus.ServerStartedRPCsView, opencensus.ServerCompletedRPCsView, opencensus.ServerLatencyView); err != nil {
-			return fmt.Errorf("failed to register default server views: %v", err)
+		if err := view.Register(defaultViews...); err != nil {
+			return fmt.Errorf("failed to register observability views: %v", err)
 		}
 		view.SetReportingPeriod(defaultMetricsReportingInterval)
 		view.RegisterExporter(exporter.(view.Exporter))
@@ -130,11 +163,16 @@ func stopOpenCensus() {
 	if exporter != nil {
 		internal.ClearGlobalDialOptions()
 		internal.ClearGlobalServerOptions()
+		// This Unregister call guarantees the data recorded gets sent to
+		// exporter, synchronising the view package and exporter. Doesn't matter
+		// if views not registered, will be a noop if not registered.
+		view.Unregister(defaultViews...)
 		// Call these unconditionally, doesn't matter if not registered, will be
 		// a noop if not registered.
 		trace.UnregisterExporter(exporter)
 		view.UnregisterExporter(exporter)
 
+		// This Flush call makes sure recorded telemetry get sent to backend.
 		exporter.Flush()
 		exporter.Close()
 	}

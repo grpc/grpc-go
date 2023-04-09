@@ -17,7 +17,7 @@
  */
 
 // Package stubserver is a stubbable implementation of
-// google.golang.org/grpc/test/grpc_testing for testing purposes.
+// google.golang.org/grpc/interop/grpc_testing for testing purposes.
 package stubserver
 
 import (
@@ -33,22 +33,23 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 // StubServer is a server that is easy to customize within individual test
 // cases.
 type StubServer struct {
 	// Guarantees we satisfy this interface; panics if unimplemented methods are called.
-	testpb.TestServiceServer
+	testgrpc.TestServiceServer
 
 	// Customizable implementations of server handlers.
 	EmptyCallF      func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error)
 	UnaryCallF      func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
-	FullDuplexCallF func(stream testpb.TestService_FullDuplexCallServer) error
+	FullDuplexCallF func(stream testgrpc.TestService_FullDuplexCallServer) error
 
 	// A client connected to this service the test may use.  Created in Start().
-	Client testpb.TestServiceClient
+	Client testgrpc.TestServiceClient
 	CC     *grpc.ClientConn
 	S      *grpc.Server
 
@@ -75,7 +76,7 @@ func (ss *StubServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (
 }
 
 // FullDuplexCall is the handler for testpb.FullDuplexCall
-func (ss *StubServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
+func (ss *StubServer) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallServer) error {
 	return ss.FullDuplexCallF(stream)
 }
 
@@ -107,7 +108,7 @@ func (ss *StubServer) StartServer(sopts ...grpc.ServerOption) error {
 	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
 
 	s := grpc.NewServer(sopts...)
-	testpb.RegisterTestServiceServer(s, ss)
+	testgrpc.RegisterTestServiceServer(s, ss)
 	go s.Serve(lis)
 	ss.cleanups = append(ss.cleanups, s.Stop)
 	ss.S = s
@@ -137,7 +138,7 @@ func (ss *StubServer) StartClient(dopts ...grpc.DialOption) error {
 
 	ss.cleanups = append(ss.cleanups, func() { cc.Close() })
 
-	ss.Client = testpb.NewTestServiceClient(cc)
+	ss.Client = testgrpc.NewTestServiceClient(cc)
 	return nil
 }
 

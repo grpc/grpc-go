@@ -100,6 +100,12 @@ func (dr *dnsDiscoveryMechanism) resolveNow() {
 	}
 }
 
+// The definition of stop() mentions that implementations must not invoke any
+// methods on the topLevelResolver once the call to `stop()` returns. The
+// underlying dns resolver does not send any updates to the resolver.ClientConn
+// interface passed to it (implemented by dnsDiscoveryMechanism in this case)
+// after its `Close()` returns. Therefore, we can guarantee that no methods of
+// the topLevelResolver are invoked after we return from this method.
 func (dr *dnsDiscoveryMechanism) stop() {
 	if dr.dnsR != nil {
 		dr.dnsR.Close()

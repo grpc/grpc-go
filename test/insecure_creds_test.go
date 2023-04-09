@@ -32,7 +32,8 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 // testLegacyPerRPCCredentials is a PerRPCCredentials that has yet incorporated security level.
@@ -111,7 +112,7 @@ func (s) TestInsecureCreds(t *testing.T) {
 			s := grpc.NewServer(sOpts...)
 			defer s.Stop()
 
-			testpb.RegisterTestServiceServer(s, ss)
+			testgrpc.RegisterTestServiceServer(s, ss)
 
 			lis, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
@@ -131,7 +132,7 @@ func (s) TestInsecureCreds(t *testing.T) {
 			}
 			defer cc.Close()
 
-			c := testpb.NewTestServiceClient(cc)
+			c := testgrpc.NewTestServiceClient(cc)
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			if _, err = c.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -150,7 +151,7 @@ func (s) TestInsecureCreds_WithPerRPCCredentials_AsCallOption(t *testing.T) {
 
 	s := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
 	defer s.Stop()
-	testpb.RegisterTestServiceServer(s, ss)
+	testgrpc.RegisterTestServiceServer(s, ss)
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -171,7 +172,7 @@ func (s) TestInsecureCreds_WithPerRPCCredentials_AsCallOption(t *testing.T) {
 	defer cc.Close()
 
 	const wantErr = "transport: cannot send secure credentials on an insecure connection"
-	c := testpb.NewTestServiceClient(cc)
+	c := testgrpc.NewTestServiceClient(cc)
 	if _, err = c.EmptyCall(ctx, &testpb.Empty{}, copts...); err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("insecure credentials with per-RPC credentials requiring transport security returned error: %v; want %s", err, wantErr)
 	}
@@ -186,7 +187,7 @@ func (s) TestInsecureCreds_WithPerRPCCredentials_AsDialOption(t *testing.T) {
 
 	s := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
 	defer s.Stop()
-	testpb.RegisterTestServiceServer(s, ss)
+	testgrpc.RegisterTestServiceServer(s, ss)
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {

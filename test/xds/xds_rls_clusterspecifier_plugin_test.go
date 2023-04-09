@@ -37,8 +37,8 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 
 	_ "google.golang.org/grpc/balancer/rls" // Register the RLS Load Balancing policy.
 )
@@ -61,7 +61,7 @@ func defaultClientResourcesWithRLSCSP(lb e2e.LoadBalancingPolicy, params e2e.Res
 				RouteLookupConfig: rlsProto,
 			}),
 		})},
-		Clusters: []*v3clusterpb.Cluster{e2e.ClusterResourceWithOptions(&e2e.ClusterOptions{
+		Clusters: []*v3clusterpb.Cluster{e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 			ClusterName:   clusterName,
 			ServiceName:   endpointsName,
 			Policy:        lb,

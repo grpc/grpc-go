@@ -19,23 +19,31 @@
 package testutils
 
 import (
+	"fmt"
+	"testing"
+
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
 // BuildResourceName returns the resource name in the format of an xdstp://
 // resource.
-func BuildResourceName(typ xdsresource.ResourceType, auth, id string, ctxParams map[string]string) string {
+func BuildResourceName(typeName, auth, id string, ctxParams map[string]string) string {
 	var typS string
-	switch typ {
-	case xdsresource.ListenerResource:
+	switch typeName {
+	case xdsresource.ListenerResourceTypeName:
 		typS = version.V3ListenerType
-	case xdsresource.RouteConfigResource:
+	case xdsresource.RouteConfigTypeName:
 		typS = version.V3RouteConfigType
-	case xdsresource.ClusterResource:
+	case xdsresource.ClusterResourceTypeName:
 		typS = version.V3ClusterType
-	case xdsresource.EndpointsResource:
+	case xdsresource.EndpointsResourceTypeName:
 		typS = version.V3EndpointsType
+	default:
+		// If the name doesn't match any of the standard resources fallback
+		// to the type name.
+		typS = typeName
 	}
 	return (&xdsresource.Name{
 		Scheme:        "xdstp",
@@ -44,4 +52,21 @@ func BuildResourceName(typ xdsresource.ResourceType, auth, id string, ctxParams 
 		ID:            id,
 		ContextParams: ctxParams,
 	}).String()
+}
+
+// ServerConfigForAddress returns a bootstrap.ServerConfig for the given address
+// with default values of insecure channel_creds and v3 server_features.
+func ServerConfigForAddress(t *testing.T, addr string) *bootstrap.ServerConfig {
+	t.Helper()
+
+	jsonCfg := fmt.Sprintf(`{
+		"server_uri": "%s",
+		"channel_creds": [{"type": "insecure"}],
+		"server_features": ["xds_v3"]
+	}`, addr)
+	sc, err := bootstrap.ServerConfigFromJSON([]byte(jsonCfg))
+	if err != nil {
+		t.Fatalf("Failed to create server config from JSON %s: %v", jsonCfg, err)
+	}
+	return sc
 }

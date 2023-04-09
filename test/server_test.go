@@ -27,7 +27,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/status"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 type ctxKey string
@@ -40,7 +42,7 @@ func (s) TestServerReturningContextError(t *testing.T) {
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return nil, context.DeadlineExceeded
 		},
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			return context.DeadlineExceeded
 		},
 	}
@@ -286,7 +288,7 @@ func (s) TestChainStreamServerInterceptor(t *testing.T) {
 	}
 
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			if callCounts[0] != 1 {
 				return status.Errorf(codes.Internal, "callCounts[0] should be 1, but got=%d", callCounts[0])
 			}

@@ -38,7 +38,9 @@ import (
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 type s struct {
@@ -193,7 +195,7 @@ func (vi *viewInformation) Equal(vi2 *viewInformation) bool {
 // less. This must be called with non nil view information that is aggregated
 // with distribution data. Returns a nil error if correct count information
 // found, non nil error if correct information not found.
-func distributionDataLatencyCount(vi *viewInformation, countWant int64) error {
+func distributionDataLatencyCount(vi *viewInformation, countWant int64, wantTags [][]tag.Tag) error {
 	var totalCount int64
 	var largestIndexWithFive int
 	for i, bucket := range vi.aggBuckets {
@@ -204,9 +206,21 @@ func distributionDataLatencyCount(vi *viewInformation, countWant int64) error {
 			break
 		}
 	}
+	// Sort rows by string name. This is to take away non determinism in the row
+	// ordering passed to the Exporter, while keeping the row data.
+	sort.Slice(vi.rows, func(i, j int) bool {
+		return vi.rows[i].String() > vi.rows[j].String()
+	})
 	// Iterating through rows sums up data points for all methods. In this case,
 	// a data point for the unary and for the streaming RPC.
-	for _, row := range vi.rows {
+	for i, row := range vi.rows {
+		// The method names corresponding to unary and streaming call should
+		// have the leading slash removed.
+		if diff := cmp.Diff(row.Tags, wantTags[i], cmp.Comparer(func(a tag.Key, b tag.Key) bool {
+			return a.Name() == b.Name()
+		})); diff != "" {
+			return fmt.Errorf("wrong tag keys for unary method -got, +want: %v", diff)
+		}
 		// This could potentially have an extra measurement in buckets above 5s,
 		// but that's fine. Count of buckets that could contain up to 5s is a
 		// good enough assertion.
@@ -236,13 +250,13 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		ClientCompletedRPCsView,
 		ServerCompletedRPCsView,
 		ClientSentBytesPerRPCView,
-		ClientSentCompressedBytesPerRPCView,
+		ClientSentCompressedMessageBytesPerRPCView,
 		ServerSentBytesPerRPCView,
-		ServerSentCompressedBytesPerRPCView,
+		ServerSentCompressedMessageBytesPerRPCView,
 		ClientReceivedBytesPerRPCView,
-		ClientReceivedCompressedBytesPerRPCView,
+		ClientReceivedCompressedMessageBytesPerRPCView,
 		ServerReceivedBytesPerRPCView,
-		ServerReceivedCompressedBytesPerRPCView,
+		ServerReceivedCompressedMessageBytesPerRPCView,
 		ClientSentMessagesPerRPCView,
 		ServerSentMessagesPerRPCView,
 		ClientReceivedMessagesPerRPCView,
@@ -263,12 +277,12 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	defer view.UnregisterExporter(fe)
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{Payload: &grpc_testing.Payload{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Payload: &testpb.Payload{
 				Body: make([]byte, 10000),
 			}}, nil
 		},
-		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for {
 				_, err := stream.Recv()
 				if err == io.EOF {
@@ -285,7 +299,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	defer cancel()
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
 	// certain metrics to be emitted.
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
 		Body: make([]byte, 10000),
 	}}, grpc.UseCompressor(gzip.Name)); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
@@ -305,8 +319,9 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	cstk := tag.MustNewKey("grpc_client_status")
 	sstk := tag.MustNewKey("grpc_server_status")
 	wantMetrics := []struct {
-		metric *view.View
-		wantVI *viewInformation
+		metric   *view.View
+		wantVI   *viewInformation
+		wantTags [][]tag.Tag // for non determinstic (i.e. latency) metrics. First dimension represents rows.
 	}{
 		{
 			metric: ClientStartedRPCsView,
@@ -505,11 +520,11 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			},
 		},
 		{
-			metric: ClientSentCompressedBytesPerRPCView,
+			metric: ClientSentCompressedMessageBytesPerRPCView,
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
-				desc:       "Distribution of sent compressed bytes per RPC, by method.",
+				desc:       "Distribution of sent compressed message bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					cmtk,
 				},
@@ -579,11 +594,11 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			},
 		},
 		{
-			metric: ServerSentCompressedBytesPerRPCView,
+			metric: ServerSentCompressedMessageBytesPerRPCView,
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
-				desc:       "Distribution of sent compressed bytes per RPC, by method.",
+				desc:       "Distribution of sent compressed message bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					smtk,
 				},
@@ -653,11 +668,11 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			},
 		},
 		{
-			metric: ClientReceivedCompressedBytesPerRPCView,
+			metric: ClientReceivedCompressedMessageBytesPerRPCView,
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
-				desc:       "Distribution of received compressed bytes per RPC, by method.",
+				desc:       "Distribution of received compressed message bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					cmtk,
 				},
@@ -727,11 +742,11 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			},
 		},
 		{
-			metric: ServerReceivedCompressedBytesPerRPCView,
+			metric: ServerReceivedCompressedMessageBytesPerRPCView,
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
-				desc:       "Distribution of received compressed bytes per RPC, by method.",
+				desc:       "Distribution of received compressed message bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					smtk,
 				},
@@ -913,13 +928,63 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		},
 		{
 			metric: ClientRoundtripLatencyView,
+			wantTags: [][]tag.Tag{
+				{
+					{
+						Key:   cmtk,
+						Value: "grpc.testing.TestService/UnaryCall",
+					},
+				},
+				{
+					{
+						Key:   cmtk,
+						Value: "grpc.testing.TestService/FullDuplexCall",
+					},
+				},
+			},
 		},
 		{
 			metric: ServerLatencyView,
+			wantTags: [][]tag.Tag{
+				{
+					{
+						Key:   smtk,
+						Value: "grpc.testing.TestService/UnaryCall",
+					},
+				},
+				{
+					{
+						Key:   smtk,
+						Value: "grpc.testing.TestService/FullDuplexCall",
+					},
+				},
+			},
 		},
 		// Per call metrics:
 		{
 			metric: ClientAPILatencyView,
+			wantTags: [][]tag.Tag{
+				{
+					{
+						Key:   cmtk,
+						Value: "grpc.testing.TestService/UnaryCall",
+					},
+					{
+						Key:   cstk,
+						Value: "OK",
+					},
+				},
+				{
+					{
+						Key:   cmtk,
+						Value: "grpc.testing.TestService/FullDuplexCall",
+					},
+					{
+						Key:   cstk,
+						Value: "OK",
+					},
+				},
+			},
 		},
 	}
 	// Unregister all the views. Unregistering a view causes a synchronous
@@ -945,7 +1010,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			// RPCs have a context timeout of 5s, so all the recorded
 			// measurements (one per RPC - two total) should fall within 5
 			// second buckets.
-			if err := distributionDataLatencyCount(vi, 2); err != nil {
+			if err := distributionDataLatencyCount(vi, 2, wantMetric.wantTags); err != nil {
 				t.Fatalf("Invalid OpenCensus export view data for metric %v: %v", metricName, err)
 			}
 			continue
@@ -974,7 +1039,7 @@ func (s) TestOpenCensusTags(t *testing.T) {
 	// populated at the client side application layer if populated.
 	tmCh := testutils.NewChannel()
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			// Do the sends of the tag maps for assertions in this main testing
 			// goroutine. Do the receives and assertions in a forked goroutine.
 			if tm := tag.FromContext(ctx); tm != nil {
@@ -982,7 +1047,7 @@ func (s) TestOpenCensusTags(t *testing.T) {
 			} else {
 				tmCh.Send(errors.New("no tag map received server side"))
 			}
-			return &grpc_testing.SimpleResponse{}, nil
+			return &testpb.SimpleResponse{}, nil
 		},
 	}
 	if err := ss.Start([]grpc.ServerOption{ServerOption(TraceOptions{})}, DialOption(TraceOptions{})); err != nil {
@@ -1057,7 +1122,7 @@ func (s) TestOpenCensusTags(t *testing.T) {
 	// keyServerMethod.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 
@@ -1087,7 +1152,7 @@ func (s) TestOpenCensusTags(t *testing.T) {
 	// Make a unary RPC with a populated OpenCensus tag map. The server side
 	// should receive an OpenCensus tag map containing this populated tag map
 	// with the keyServerMethod tag appended to it.
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 	if chErr, err := readerErrCh.Receive(ctx); chErr != nil || err != nil {
@@ -1289,10 +1354,10 @@ func (s) TestSpan(t *testing.T) {
 		DisableTrace: false,
 	}
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{}, nil
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
 		},
-		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for {
 				_, err := stream.Recv()
 				if err == io.EOF {
@@ -1313,7 +1378,7 @@ func (s) TestSpan(t *testing.T) {
 	// both from the client and the server. Note that RPCs trigger exports of
 	// corresponding span data synchronously, thus the Span Data is guaranteed
 	// to have been read by exporter and is ready to make assertions on.
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 
@@ -1363,8 +1428,7 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
-			spanKind: trace.SpanKindClient,
-			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			name: "Attempt.grpc.testing.TestService.UnaryCall",
 			messageEvents: []trace.MessageEvent{
 				{
 					EventType:            trace.MessageEventTypeSent,
@@ -1384,7 +1448,7 @@ func (s) TestSpan(t *testing.T) {
 				TraceOptions: 1,
 			},
 			spanKind:        trace.SpanKindClient,
-			name:            "Sent.grpc.testing.TestService.UnaryCall",
+			name:            "grpc.testing.TestService.UnaryCall",
 			hasRemoteParent: false,
 			childSpanCount:  1,
 		},
@@ -1413,10 +1477,10 @@ func (s) TestSpan(t *testing.T) {
 	}
 	// Send two messages. This should be recorded in the emitted spans message
 	// events, with message IDs which increase for each message.
-	if err := stream.Send(&grpc_testing.StreamingOutputCallRequest{}); err != nil {
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
 		t.Fatalf("stream.Send failed: %v", err)
 	}
-	if err := stream.Send(&grpc_testing.StreamingOutputCallRequest{}); err != nil {
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
 		t.Fatalf("stream.Send failed: %v", err)
 	}
 
@@ -1454,7 +1518,7 @@ func (s) TestSpan(t *testing.T) {
 				TraceOptions: 1,
 			},
 			spanKind:        trace.SpanKindClient,
-			name:            "Sent.grpc.testing.TestService.FullDuplexCall",
+			name:            "grpc.testing.TestService.FullDuplexCall",
 			hasRemoteParent: false,
 			childSpanCount:  1,
 		},
@@ -1462,8 +1526,7 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
-			spanKind: trace.SpanKindClient,
-			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
+			name: "Attempt.grpc.testing.TestService.FullDuplexCall",
 			messageEvents: []trace.MessageEvent{
 				{
 					EventType: trace.MessageEventTypeSent,
@@ -1477,11 +1540,11 @@ func (s) TestSpan(t *testing.T) {
 			hasRemoteParent: false,
 		},
 	}
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
 	if diff := cmp.Diff(fe.seenSpans, wantSI); diff != "" {
 		t.Fatalf("got unexpected spans, diff (-got, +want): %v", diff)
 	}
-	fe.mu.Lock()
-	defer fe.mu.Unlock()
 	if err := validateTraceAndSpanIDs(fe.seenSpans); err != nil {
 		t.Fatalf("Error in runtime data assertions: %v", err)
 	}

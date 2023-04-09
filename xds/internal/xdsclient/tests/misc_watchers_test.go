@@ -27,9 +27,9 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/xds/internal"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
@@ -190,12 +190,24 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 	}
 	defer close()
 
-	// Configure a listener resource on the fake xDS server.
 	const (
 		serviceName     = "my-service-client-side-xds"
 		routeConfigName = "route-" + serviceName
 		clusterName     = "cluster-" + serviceName
 	)
+
+	// Register a watch for the Listener resource.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	watcher := xdstestutils.NewTestResourceWatcher()
+	client.WatchResource(listenerResourceType, serviceName, watcher)
+
+	// Ensure the watch results in a discovery request with an empty node proto.
+	if err := readDiscoveryResponseAndCheckForNonEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
+		t.Fatal(err)
+	}
+
+	// Configure a listener resource on the fake xDS server.
 	lisAny, err := anypb.New(e2e.DefaultClientListener(serviceName, routeConfigName))
 	if err != nil {
 		t.Fatalf("Failed to marshal listener resource into an Any proto: %v", err)
@@ -208,19 +220,16 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 		},
 	}
 
-	// Register a watch for the Listener resource.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	watcher := xdstestutils.NewTestResourceWatcher()
-	client.WatchResource(listenerResourceType, serviceName, watcher)
-
-	// The first request on the stream must contain a non-empty node proto.
-	if err := readDiscoveryResponseAndCheckForNonEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
+	// The xDS client is expected to ACK the Listener resource. The discovery
+	// request corresponding to the ACK must contain a nil node proto.
+	if err := readDiscoveryResponseAndCheckForEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
 		t.Fatal(err)
 	}
 
-	// The xDS client is expected to ACK the Listener resource. The discovery
-	// request corresponding to the ACK must contain a nil node proto.
+	// Register a watch for a RouteConfiguration resource.
+	client.WatchResource(routeConfigResourceType, routeConfigName, watcher)
+
+	// Ensure the watch results in a discovery request with an empty node proto.
 	if err := readDiscoveryResponseAndCheckForEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
 		t.Fatal(err)
 	}
@@ -238,13 +247,7 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 		},
 	}
 
-	// Register a watch for a RouteConfiguration resource. Ensure that the
-	// discovery requests for the route configuration resource and the
-	// subsequent ACK contains an empty node proto.
-	client.WatchResource(routeConfigResourceType, routeConfigName, watcher)
-	if err := readDiscoveryResponseAndCheckForEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
-		t.Fatal(err)
-	}
+	// Ensure the discovery request for the ACK contains an empty node proto.
 	if err := readDiscoveryResponseAndCheckForEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
 		t.Fatal(err)
 	}
@@ -262,17 +265,14 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 
 	// The xDS client is expected to re-request previously requested resources.
 	// Hence, we expect two DiscoveryRequest messages (one for the Listener and
-	// one for the RouteConfiguration resource). The first message should
-	// contain a non-nil node proto and second one should contain a nil-proto.
+	// one for the RouteConfiguration resource). The first message should contain
+	// a non-nil node proto and the second should contain a nil-proto.
 	//
 	// And since we don't push any responses on the response channel of the fake
 	// server, we do not expect any ACKs here.
 	if err := readDiscoveryResponseAndCheckForNonEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
 		t.Fatal(err)
 	}
-
-	// The xDS client is expected to ACK the Listener resource. The discovery
-	// request corresponding to the ACK must contain a nil node proto.
 	if err := readDiscoveryResponseAndCheckForEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
 		t.Fatal(err)
 	}

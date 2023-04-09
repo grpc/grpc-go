@@ -31,7 +31,6 @@ import (
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -53,6 +52,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -213,10 +213,7 @@ func (s) TestResolverBuilder_DifferentBootstrapConfigs(t *testing.T) {
 
 			// Add top-level xDS server config corresponding to the above
 			// management server.
-			test.bootstrapCfg.XDSServer = &bootstrap.ServerConfig{
-				ServerURI: mgmtServer.Address,
-				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-			}
+			test.bootstrapCfg.XDSServer = xdstestutils.ServerConfigForAddress(t, mgmtServer.Address)
 
 			// Override xDS client creation to use bootstrap configuration
 			// specified by the test.
@@ -463,12 +460,15 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 	// it receives a discovery request for a route configuration resource. And
 	// the test goroutine signals the management server when the resolver is
 	// closed.
-	waitForRouteConfigDiscoveryReqCh := make(chan struct{})
+	waitForRouteConfigDiscoveryReqCh := make(chan struct{}, 1)
 	waitForResolverCloseCh := make(chan struct{})
 	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3RouteConfigURL {
-				close(waitForRouteConfigDiscoveryReqCh)
+				select {
+				case waitForRouteConfigDiscoveryReqCh <- struct{}{}:
+				default:
+				}
 				<-waitForResolverCloseCh
 			}
 			return nil
@@ -535,10 +535,7 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 // closes the xDS client.
 func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 	bootstrapCfg := &bootstrap.Config{
-		XDSServer: &bootstrap.ServerConfig{
-			ServerURI: "dummy-management-server-address",
-			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-		},
+		XDSServer: xdstestutils.ServerConfigForAddress(t, "dummy-management-server-address"),
 	}
 
 	// Override xDS client creation to use bootstrap configuration pointing to a

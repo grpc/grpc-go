@@ -36,8 +36,8 @@ import (
 	"google.golang.org/grpc/orca"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 type s struct {
@@ -268,7 +268,7 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 			}
 
 			// Send one request to the server.
-			payload := &testpb.Payload{Type: testpb.PayloadType_RANDOM, Body: make([]byte, 32)}
+			payload := &testpb.Payload{Body: make([]byte, 32)}
 			req := &testpb.StreamingOutputCallRequest{Payload: payload}
 			if err := stream.Send(req); err != nil {
 				t.Fatalf("stream.Send() failed: %v", err)

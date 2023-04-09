@@ -161,7 +161,9 @@ const (
 
 var testLRSServerConfig = &bootstrap.ServerConfig{
 	ServerURI: "trafficdirector.googleapis.com:443",
-	CredsType: "google_default",
+	Creds: bootstrap.ChannelCreds{
+		Type: "google_default",
+	},
 }
 
 func TestParseConfig(t *testing.T) {

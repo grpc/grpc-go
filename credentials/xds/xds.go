@@ -162,8 +162,10 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 		}
 		// The SANs sent by the MeshCA are encoded as SPIFFE IDs. We need to
 		// only look at the SANs on the leaf cert.
-		if !hi.MatchingSANExists(certs[0]) {
-			return fmt.Errorf("SANs received in leaf certificate %+v does not match any of the accepted SANs", certs[0])
+		if cert := certs[0]; !hi.MatchingSANExists(cert) {
+			// TODO: Print the complete certificate once the x509 package
+			// supports a String() method on the Certificate type.
+			return fmt.Errorf("xds: received SANs {DNSNames: %v, EmailAddresses: %v, IPAddresses: %v, URIs: %v} do not match any of the accepted SANs", cert.DNSNames, cert.EmailAddresses, cert.IPAddresses, cert.URIs)
 		}
 		return nil
 	}

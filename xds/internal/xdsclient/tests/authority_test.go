@@ -24,8 +24,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
@@ -47,16 +45,16 @@ var (
 	// These two resources use `testAuthority1`, which contains an empty server
 	// config in the bootstrap file, and therefore will use the default
 	// management server.
-	authorityTestResourceName11 = xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority1, cdsName+"1", nil)
-	authorityTestResourceName12 = xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority1, cdsName+"2", nil)
+	authorityTestResourceName11 = xdstestutils.BuildResourceName(xdsresource.ClusterResourceTypeName, testAuthority1, cdsName+"1", nil)
+	authorityTestResourceName12 = xdstestutils.BuildResourceName(xdsresource.ClusterResourceTypeName, testAuthority1, cdsName+"2", nil)
 	// This resource uses `testAuthority2`, which contains an empty server
 	// config in the bootstrap file, and therefore will use the default
 	// management server.
-	authorityTestResourceName2 = xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority2, cdsName+"3", nil)
+	authorityTestResourceName2 = xdstestutils.BuildResourceName(xdsresource.ClusterResourceTypeName, testAuthority2, cdsName+"3", nil)
 	// This resource uses `testAuthority3`, which contains a non-empty server
 	// config in the bootstrap file, and therefore will use the non-default
 	// management server.
-	authorityTestResourceName3 = xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority3, cdsName+"3", nil)
+	authorityTestResourceName3 = xdstestutils.BuildResourceName(xdsresource.ClusterResourceTypeName, testAuthority3, cdsName+"3", nil)
 )
 
 // setupForAuthorityTests spins up two management servers, one to act as the
@@ -94,20 +92,12 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	// config, which points to the above management server.
 	nodeID := uuid.New().String()
 	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		XDSServer: &bootstrap.ServerConfig{
-			ServerURI: defaultAuthorityServer.Address,
-			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-		},
+		XDSServer: xdstestutils.ServerConfigForAddress(t, defaultAuthorityServer.Address),
 		NodeProto: &v3corepb.Node{Id: nodeID},
 		Authorities: map[string]*bootstrap.Authority{
 			testAuthority1: {},
 			testAuthority2: {},
-			testAuthority3: {
-				XDSServer: &bootstrap.ServerConfig{
-					ServerURI: nonDefaultAuthorityServer.Address,
-					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				},
-			},
+			testAuthority3: {XDSServer: xdstestutils.ServerConfigForAddress(t, nonDefaultAuthorityServer.Address)},
 		},
 	}, defaultTestWatchExpiryTimeout, idleTimeout)
 	if err != nil {
