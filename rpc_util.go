@@ -613,11 +613,7 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 	if int(length) > maxReceiveMessageSize {
 		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
-	if p.sharedRecvBufferPool != nil {
-		msg = p.sharedRecvBufferPool.Get(int(length))
-	} else {
-		msg = make([]byte, int(length))
-	}
+	msg = p.sharedRecvBufferPool.Get(int(length))
 	if _, err := p.r.Read(msg); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
@@ -805,16 +801,8 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 		return status.Errorf(codes.Internal, "grpc: failed to unmarshal the received message: %v", err)
 	}
 	if payInfo != nil {
-		if p.sharedRecvBufferPool != nil {
-			if len(buf) != 0 {
-				payInfo.uncompressedBytes = make([]byte, len(buf))
-				copy(payInfo.uncompressedBytes, buf)
-			}
-		} else {
-			payInfo.uncompressedBytes = buf
-		}
-	}
-	if p.sharedRecvBufferPool != nil {
+		payInfo.uncompressedBytes = buf
+	} else {
 		p.sharedRecvBufferPool.Put(&buf)
 	}
 	return nil

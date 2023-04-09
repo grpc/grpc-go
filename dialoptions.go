@@ -619,6 +619,7 @@ func defaultDialOptions() dialOptions {
 			ReadBufferSize:  defaultReadBufSize,
 			UseProxy:        true,
 		},
+		sharedRecvBufferPool: nopBufferPool{},
 	}
 }
 

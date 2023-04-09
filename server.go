@@ -184,6 +184,7 @@ var defaultServerOptions = serverOptions{
 	connectionTimeout:     120 * time.Second,
 	writeBufferSize:       defaultWriteBufSize,
 	readBufferSize:        defaultReadBufSize,
+	sharedRecvBufferPool:  nopBufferPool{},
 }
 var globalServerOptions []ServerOption
 

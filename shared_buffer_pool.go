@@ -151,3 +151,15 @@ func makeFallbackBytesPool() bufferPool {
 		},
 	}
 }
+
+// nopBufferPool is a buffer pool just makes new buffer without pooling.
+type nopBufferPool struct {
+}
+
+func (nopBufferPool) Get(length int) []byte {
+	return make([]byte, length)
+}
+
+func (nopBufferPool) Put(*[]byte) {
+
+}

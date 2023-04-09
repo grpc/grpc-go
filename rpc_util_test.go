@@ -65,7 +65,7 @@ func (s) TestSimpleParsing(t *testing.T) {
 		{append([]byte{0, 1, 0, 0, 0}, bigMsg...), nil, bigMsg, compressionNone},
 	} {
 		buf := fullReader{bytes.NewReader(test.p)}
-		parser := &parser{r: buf}
+		parser := &parser{r: buf, sharedRecvBufferPool: nopBufferPool{}}
 		pt, b, err := parser.recvMsg(math.MaxInt32)
 		if err != test.err || !bytes.Equal(b, test.b) || pt != test.pt {
 			t.Fatalf("parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, %v", test.p, pt, b, err, test.pt, test.b, test.err)
@@ -77,7 +77,7 @@ func (s) TestMultipleParsing(t *testing.T) {
 	// Set a byte stream consists of 3 messages with their headers.
 	p := []byte{0, 0, 0, 0, 1, 'a', 0, 0, 0, 0, 2, 'b', 'c', 0, 0, 0, 0, 1, 'd'}
 	b := fullReader{bytes.NewReader(p)}
-	parser := &parser{r: b}
+	parser := &parser{r: b, sharedRecvBufferPool: nopBufferPool{}}
 
 	wantRecvs := []struct {
 		pt   payloadFormat
