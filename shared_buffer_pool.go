@@ -46,56 +46,44 @@ type SharedBufferPool interface {
 // later release.
 func NewSimpleSharedBufferPool() SharedBufferPool {
 	return &simpleSharedBufferPool{
-		pool0:   makeBytesPool(level0PoolMaxSize),
-		pool1:   makeBytesPool(level1PoolMaxSize),
-		pool2:   makeBytesPool(level2PoolMaxSize),
-		pool3:   makeBytesPool(level3PoolMaxSize),
-		pool4:   makeBytesPool(level4PoolMaxSize),
-		poolMax: makeFallbackBytesPool(),
+		pools: [poolArraySize]bufferPool{
+			makeBytesPool(level0PoolMaxSize),
+			makeBytesPool(level1PoolMaxSize),
+			makeBytesPool(level2PoolMaxSize),
+			makeBytesPool(level3PoolMaxSize),
+			makeBytesPool(level4PoolMaxSize),
+			makeFallbackBytesPool(),
+		},
 	}
 }
 
 // simpleSharedBufferPool is a simple implementation of SharedBufferPool.
 type simpleSharedBufferPool struct {
-	pool0   bufferPool
-	pool1   bufferPool
-	pool2   bufferPool
-	pool3   bufferPool
-	pool4   bufferPool
-	poolMax bufferPool
+	pools [poolArraySize]bufferPool
 }
 
 func (p *simpleSharedBufferPool) Get(size int) []byte {
-	switch {
-	case size <= level0PoolMaxSize:
-		return p.pool0.Get(size)
-	case size <= level1PoolMaxSize:
-		return p.pool1.Get(size)
-	case size <= level2PoolMaxSize:
-		return p.pool2.Get(size)
-	case size <= level3PoolMaxSize:
-		return p.pool3.Get(size)
-	case size <= level4PoolMaxSize:
-		return p.pool4.Get(size)
-	default:
-		return p.poolMax.Get(size)
-	}
+	return p.pools[p.poolIdx(size)].Get(size)
 }
 
 func (p *simpleSharedBufferPool) Put(bs *[]byte) {
-	switch size := cap(*bs); {
+	p.pools[p.poolIdx(cap(*bs))].Put(bs)
+}
+
+func (p *simpleSharedBufferPool) poolIdx(size int) int {
+	switch {
 	case size <= level0PoolMaxSize:
-		p.pool0.Put(bs)
+		return level0PoolIdx
 	case size <= level1PoolMaxSize:
-		p.pool1.Put(bs)
+		return level1PoolIdx
 	case size <= level2PoolMaxSize:
-		p.pool2.Put(bs)
+		return level2PoolIdx
 	case size <= level3PoolMaxSize:
-		p.pool3.Put(bs)
+		return level3PoolIdx
 	case size <= level4PoolMaxSize:
-		p.pool4.Put(bs)
+		return level4PoolIdx
 	default:
-		p.poolMax.Put(bs)
+		return levelMaxPoolIdx
 	}
 }
 
@@ -105,6 +93,16 @@ const (
 	level2PoolMaxSize = level1PoolMaxSize * 16 //   4 KB
 	level3PoolMaxSize = level2PoolMaxSize * 16 //  64 KB
 	level4PoolMaxSize = level3PoolMaxSize * 16 //   1 MB
+)
+
+const (
+	level0PoolIdx = iota
+	level1PoolIdx
+	level2PoolIdx
+	level3PoolIdx
+	level4PoolIdx
+	levelMaxPoolIdx
+	poolArraySize
 )
 
 type bufferPool struct {
