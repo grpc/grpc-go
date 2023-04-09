@@ -46,20 +46,20 @@ type SharedBufferPool interface {
 // later release.
 func NewSimpleSharedBufferPool() SharedBufferPool {
 	return &simpleSharedBufferPool{
-		pools: [poolArraySize]bufferPool{
-			makeBytesPool(level0PoolMaxSize),
-			makeBytesPool(level1PoolMaxSize),
-			makeBytesPool(level2PoolMaxSize),
-			makeBytesPool(level3PoolMaxSize),
-			makeBytesPool(level4PoolMaxSize),
-			makeFallbackBytesPool(),
+		pools: [poolArraySize]simpleSharedBufferChildPool{
+			newBytesPool(level0PoolMaxSize),
+			newBytesPool(level1PoolMaxSize),
+			newBytesPool(level2PoolMaxSize),
+			newBytesPool(level3PoolMaxSize),
+			newBytesPool(level4PoolMaxSize),
+			newFallbackBytesPool(),
 		},
 	}
 }
 
 // simpleSharedBufferPool is a simple implementation of SharedBufferPool.
 type simpleSharedBufferPool struct {
-	pools [poolArraySize]bufferPool
+	pools [poolArraySize]simpleSharedBufferChildPool
 }
 
 func (p *simpleSharedBufferPool) Get(size int) []byte {
@@ -105,6 +105,11 @@ const (
 	poolArraySize
 )
 
+type simpleSharedBufferChildPool interface {
+	Get(size int) []byte
+	Put(interface{})
+}
+
 type bufferPool struct {
 	sync.Pool
 }
@@ -115,8 +120,8 @@ func (p *bufferPool) Get(size int) []byte {
 	return (*bs)[:size]
 }
 
-func makeBytesPool(size int) bufferPool {
-	return bufferPool{
+func newBytesPool(size int) simpleSharedBufferChildPool {
+	return &bufferPool{
 		sync.Pool{
 			New: func() interface{} {
 				bs := make([]byte, size)
@@ -140,8 +145,8 @@ func (p *fallbackBufferPool) Get(size int) []byte {
 	return (*bs)[:size]
 }
 
-func makeFallbackBytesPool() bufferPool {
-	return bufferPool{
+func newFallbackBytesPool() simpleSharedBufferChildPool {
+	return &fallbackBufferPool{
 		sync.Pool{
 			New: func() interface{} {
 				return new([]byte)
