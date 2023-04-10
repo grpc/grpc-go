@@ -329,7 +329,7 @@ func TestFullHandshake(t *testing.T) {
 
 	// Ping the server, authenticating with ALTS.
 	clientCreds := NewClientCreds(&ClientOptions{HandshakerServiceAddress: handshakerAddress})
-	conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(clientCreds))
+	conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(clientCreds), grpc.WithBlock())
 	if err != nil {
 		t.Fatalf("grpc.Dial(%v) failed: %v", serverAddress, err)
 	}
