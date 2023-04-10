@@ -307,7 +307,7 @@ func setupGRPCServerWithModeChangeChannelAndServe(t *testing.T, bootstrapContent
 	})
 	server := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	t.Cleanup(server.Stop)
-	testpb.RegisterTestServiceServer(server, &testService{})
+	testgrpc.RegisterTestServiceServer(server, &testService{})
 
 	// Serve.
 	go func() {
