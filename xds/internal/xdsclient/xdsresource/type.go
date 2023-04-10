@@ -78,9 +78,9 @@ func IsEndpointsResource(url string) bool {
 	return url == version.V3EndpointsURL
 }
 
-// unwrapResource unwraps and returns the inner resource if it's in a resource
+// UnwrapResource unwraps and returns the inner resource if it's in a resource
 // wrapper. The original resource is returned if it's not wrapped.
-func unwrapResource(r *anypb.Any) (*anypb.Any, error) {
+func UnwrapResource(r *anypb.Any) (*anypb.Any, error) {
 	url := r.GetTypeUrl()
 	if url != version.V3ResourceWrapperURL {
 		// Not wrapped.

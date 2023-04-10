@@ -34,7 +34,7 @@ import (
 )
 
 func unmarshalListenerResource(r *anypb.Any) (string, ListenerUpdate, error) {
-	r, err := unwrapResource(r)
+	r, err := UnwrapResource(r)
 	if err != nil {
 		return "", ListenerUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
 	}
