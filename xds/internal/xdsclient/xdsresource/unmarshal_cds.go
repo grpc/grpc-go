@@ -31,6 +31,7 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/pretty"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
@@ -75,9 +76,12 @@ const (
 
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	var lbPolicy *ClusterLBPolicyRingHash
+	var lbCfgJSON json.RawMessage
+	var err error
 	switch cluster.GetLbPolicy() {
 	case v3clusterpb.Cluster_ROUND_ROBIN:
 		lbPolicy = nil // The default is round_robin, and there's no config to set.
+		lbCfgJSON = []byte(fmt.Sprintf(`[{%q: {"childPolicy": [{"round_robin": {}}]}}]`, wrrlocality.Name))
 	case v3clusterpb.Cluster_RING_HASH:
 		if !envconfig.XDSRingHash {
 			return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
@@ -99,6 +103,16 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 			return ClusterUpdate{}, fmt.Errorf("ring_hash config min size %v is greater than max %v", minSize, maxSize)
 		}
 		lbPolicy = &ClusterLBPolicyRingHash{MinimumRingSize: minSize, MaximumRingSize: maxSize}
+		rhLBCfg := ringhash.LBConfig{
+			MinRingSize: minSize,
+			MaxRingSize: maxSize,
+		}
+		rhLBCfgJSON, err := json.Marshal(rhLBCfg)
+		// Shouldn't happen.
+		if err != nil {
+			return ClusterUpdate{}, fmt.Errorf("error marshalling prepared rh config json: %v", err)
+		}
+		lbCfgJSON = []byte(fmt.Sprintf(`[{%q: %s}]`, "ring_hash_experimental", rhLBCfgJSON))
 	default:
 		return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
@@ -122,8 +136,6 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		}
 	}
 
-	var lbCfgJSON json.RawMessage
-	var err error
 	if cluster.GetLoadBalancingPolicy() != nil && envconfig.XDSCustomLBPolicy {
 		lbCfgJSON, err = xdslbregistry.ConvertToServiceConfig(cluster.GetLoadBalancingPolicy(), 0)
 		if err != nil {
@@ -134,41 +146,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		// registry parse the configuration." - A52
 		bc := &internalserviceconfig.BalancerConfig{}
 		if err := json.Unmarshal(lbCfgJSON, bc); err != nil {
-			return ClusterUpdate{}, fmt.Errorf("JSON generated from xDS LB policy registry is invalid: %v", err)
-		}
-	} else {
-		switch cluster.GetLbPolicy() {
-		case v3clusterpb.Cluster_ROUND_ROBIN:
-			lbCfgJSON = []byte(fmt.Sprintf(`[{%q: {"childPolicy": [{"round_robin": {}}]}}]`, wrrlocality.Name))
-		case v3clusterpb.Cluster_RING_HASH:
-			if !envconfig.XDSRingHash {
-				return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
-			}
-			rhc := cluster.GetRingHashLbConfig()
-			if rhc.GetHashFunction() != v3clusterpb.Cluster_RingHashLbConfig_XX_HASH {
-				return ClusterUpdate{}, fmt.Errorf("unsupported ring_hash hash function %v in response: %+v", rhc.GetHashFunction(), cluster)
-			}
-
-			var minSize, maxSize uint64 = defaultRingHashMinSize, defaultRingHashMaxSize
-			if min := rhc.GetMinimumRingSize(); min != nil {
-				minSize = min.GetValue()
-			}
-			if max := rhc.GetMaximumRingSize(); max != nil {
-				maxSize = max.GetValue()
-			}
-
-			rhLBCfg := ringhash.LBConfig{
-				MinRingSize: minSize,
-				MaxRingSize: maxSize,
-			}
-			rhLBCfgJSON, err := json.Marshal(rhLBCfg)
-			// Shouldn't happen.
-			if err != nil {
-				return ClusterUpdate{}, fmt.Errorf("error marshalling prepared rh config json: %v", err)
-			}
-			lbCfgJSON = []byte(fmt.Sprintf(`[{%q: %s}]`, "ring_hash_experimental", rhLBCfgJSON))
-		default:
-			return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
+			return ClusterUpdate{}, fmt.Errorf("JSON generated from xDS LB policy registry: %s is invalid: %v", pretty.FormatJSON(lbCfgJSON), err)
 		}
 	}
 

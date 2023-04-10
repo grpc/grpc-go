@@ -46,10 +46,10 @@ func parseConfig(c json.RawMessage) (*LBConfig, error) {
 		return nil, err
 	}
 	if cfg.MinRingSize > ringHashSizeUpperBound {
-		return nil, fmt.Errorf("unexpected ring_hash mininum ring size %v", cfg.MinRingSize)
+		return nil, fmt.Errorf("min_ring_size value of %d is greater than max supported value %d for this field", cfg.MinRingSize, ringHashSizeUpperBound)
 	}
 	if cfg.MaxRingSize > ringHashSizeUpperBound {
-		return nil, fmt.Errorf("unexpected ring_hash maximum ring size %v", cfg.MaxRingSize)
+		return nil, fmt.Errorf("max_ring_size value of %d is greater than max supported value %d for this field", cfg.MaxRingSize, ringHashSizeUpperBound)
 	}
 	if cfg.MinRingSize == 0 {
 		cfg.MinRingSize = defaultMinSize

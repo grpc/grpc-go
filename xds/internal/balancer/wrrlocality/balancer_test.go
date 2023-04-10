@@ -104,17 +104,17 @@ func (s) TestParseConfig(t *testing.T) {
 			// is important to distinguish the different types of error messages
 			// possible as the parser has a few defined buckets of ways it can
 			// error out.
-			if gotErr != nil && !strings.Contains(gotErr.Error(), test.wantErr) {
+			if (gotErr != nil) != (test.wantErr != "") {
 				t.Fatalf("ParseConfig(%v) = %v, wantErr %v", test.input, gotErr, test.wantErr)
 			}
-			if (gotErr != nil) != (test.wantErr != "") {
+			if gotErr != nil && !strings.Contains(gotErr.Error(), test.wantErr) {
 				t.Fatalf("ParseConfig(%v) = %v, wantErr %v", test.input, gotErr, test.wantErr)
 			}
 			if test.wantErr != "" {
 				return
 			}
 			if diff := cmp.Diff(gotCfg, test.wantCfg); diff != "" {
-				t.Fatalf("parseConfig(%v) got unexpected output, diff (-got +want): %v", string(test.input), diff)
+				t.Fatalf("ParseConfig(%v) got unexpected output, diff (-got +want): %v", test.input, diff)
 			}
 		})
 	}
