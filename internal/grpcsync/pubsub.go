@@ -27,7 +27,8 @@ import (
 // a PubSub. It wraps the callback to be invoked by the PubSub when a new
 // message is published.
 type Subscriber interface {
-	// OnMessage is invoked to when a new message is published.
+	// OnMessage is invoked to when a new message is published. Implementations
+	// must not block in this method.
 	OnMessage(msg interface{})
 }
 
