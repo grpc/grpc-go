@@ -331,7 +331,7 @@ func (s) TestFullHandshake(t *testing.T) {
 
 	// Ping the server, authenticating with ALTS.
 	clientCreds := NewClientCreds(&ClientOptions{HandshakerServiceAddress: handshakerAddress})
-	conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(clientCreds), grpc.WithBlock())
+	conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(clientCreds))
 	if err != nil {
 		t.Fatalf("grpc.Dial(%v) failed: %v", serverAddress, err)
 	}
@@ -339,7 +339,7 @@ func (s) TestFullHandshake(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	c := testgrpc.NewTestServiceClient(conn)
-	for ; ctx.Err() == nil; <-time.After(10 * time.Second) {
+	for ; ctx.Err() == nil; <-time.After(5 * time.Second) {
 		if _, err = c.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.WaitForReady(true)); err != nil {
 			status, ok := status.FromError(err)
 			if ok && status.Code() == codes.DeadlineExceeded {
