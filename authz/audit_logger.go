@@ -74,41 +74,39 @@ type AuditEvent struct {
 	Authorized bool
 }
 
-// AuditLoggerConfig defines the configuration for a particular implementation
-// of audit logger.
+// AuditLoggerConfig represents an opaque data structure holding an audit
+// logger configuration. Concrete types representing configuration of specific
+// audit loggers must embed this interface to implement it.
 type AuditLoggerConfig interface {
 	// auditLoggerConfig is a dummy interface requiring users to embed this
 	// interface to implement it.
 	auditLoggerConfig()
 }
 
-// AuditLogger is the interface for an audit logger.
-// An audit logger is a logger instance that can be configured to use via the
-// authorization policy or xDS HTTP RBAC filters. When the authorization
+// AuditLogger is the interface to be implemented by audit loggers.
+//
+// An audit logger is a logger instance that can be configured via the
+// authorization policy API or xDS HTTP RBAC filters. When the authorization
 // decision meets the condition for audit, all the configured audit loggers'
-// Log() method will be invoked to log that event with the AuditInfo.
-// The method will be executed synchronously before the authorization is
-// complete and the call is denied or allowed.
+// Log() method will be invoked to log that event.
 //
 // TODO(lwge): Change the link to the merged gRFC once it's ready.
 // Please refer to https://github.com/grpc/proposal/pull/346 for more details
 // about audit logging.
 type AuditLogger interface {
-	// Log does audit logging with the given information in the audit event.
-	// This method will be executed synchronously by gRPC so implementers must
-	// keep in mind it must not block the RPC. Specifically, time-consuming
-	// processes should be fired asynchronously such that this method can
-	// return immediately.
+	// Log performs audit logging for the provided audit event.
+	//
+	// This method is invoked in the RPC path and therefore implementations
+	// must not block.
 	Log(*AuditEvent)
 }
 
-// AuditLoggerBuilder is the interface for an audit logger builder.
-// It parses and validates a config, and builds an audit logger from the parsed
-// config. This enables configuring and instantiating audit loggers in the
-// runtime. Users that want to implement their own audit logging logic should
-// implement this along with the AuditLogger interface and register this
-// builder by calling RegisterAuditLoggerBuilder() before they start the gRPC
-// server.
+// AuditLoggerBuilder is the interface to be implemented by audit logger
+// builders that are used at runtime to configure and instantiate audit loggers.
+//
+// Users who want to implement their own audit logging logic should
+// implement this interface, along with the AuditLogger interface, and register
+// it by calling RegisterAuditLoggerBuilder() at init time.
 //
 // TODO(lwge): Change the link to the merged gRFC once it's ready.
 // Please refer to https://github.com/grpc/proposal/pull/346 for more details
@@ -116,8 +114,6 @@ type AuditLogger interface {
 type AuditLoggerBuilder interface {
 	// ParseAuditLoggerConfig parses the given JSON bytes into a structured
 	// logger config this builder can use to build an audit logger.
-	// When users implement this method, its return type must embed the
-	// AuditLoggerConfig interface.
 	ParseAuditLoggerConfig(config json.RawMessage) (AuditLoggerConfig, error)
 	// Build builds an audit logger with the given logger config.
 	// This will only be called with valid configs returned from
