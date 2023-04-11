@@ -341,7 +341,7 @@ func (s) TestFullHandshake(t *testing.T) {
 		t.Fatalf("grpc.Dial(%v) failed: %v", serverAddress, err)
 	}
 	defer conn.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestLongTimeout)
 	defer cancel()
 	c := testgrpc.NewTestServiceClient(conn)
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
