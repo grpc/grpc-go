@@ -30,6 +30,8 @@ import "sync"
 // later release.
 type SharedBufferPool interface {
 	// Get returns a buffer with specified length from the pool.
+	//
+	// The returned byte slice may be not zero initialized.
 	Get(length int) []byte
 
 	// Put returns a buffer to the pool.

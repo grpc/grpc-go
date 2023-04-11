@@ -42,12 +42,6 @@ func (s) TestSharedBufferPool(t *testing.T) {
 				t.Fatalf("Expected buffer of length %d, got %d", l, len(bs))
 			}
 
-			for i, b := range bs {
-				if b != 0 {
-					t.Fatalf("Expected buffer to be zeroed, got %d at index %d", b, i)
-				}
-			}
-
 			p.Put(&bs)
 		}
 	}
