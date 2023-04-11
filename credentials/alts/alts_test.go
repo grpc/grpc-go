@@ -43,6 +43,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	defaultTestLongTimeout  = 10 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond
+)
+
 type s struct {
 	grpctest.Tester
 }
@@ -339,15 +344,16 @@ func (s) TestFullHandshake(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	c := testgrpc.NewTestServiceClient(conn)
-	for ; ctx.Err() == nil; <-time.After(5 * time.Second) {
-		if _, err = c.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.WaitForReady(true)); err != nil {
-			status, ok := status.FromError(err)
-			if ok && status.Code() == codes.DeadlineExceeded {
-				continue
-			} else {
-				t.Errorf("c.UnaryCall() failed: %v", err)
-			}
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		_, err = c.UnaryCall(ctx, &testpb.SimpleRequest{})
+		if err == nil {
+			break
 		}
+		if code := status.Code(err); code == codes.Unavailable {
+			// The server is not ready yet. Try again.
+			continue
+		}
+		t.Fatalf("c.UnaryCall() failed: %v", err)
 	}
 
 	// Close open connections to the fake handshaker service.
