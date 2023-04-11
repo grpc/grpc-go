@@ -26,94 +26,200 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-type mockSubscriber struct {
+type testSubscriber struct {
 	mu   sync.Mutex
 	msgs []string
-	wg   *sync.WaitGroup
 }
 
-func (ms *mockSubscriber) OnMessage(msg interface{}) {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
-	ms.msgs = append(ms.msgs, msg.(string))
-	ms.wg.Done()
+func (ts *testSubscriber) OnMessage(msg interface{}) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.msgs = append(ts.msgs, msg.(string))
 }
 
-func (s) TestPubSub(t *testing.T) {
+func (s) TestPubSub_PublishNoMsg(t *testing.T) {
 	pubsub := NewPubSub()
 	defer pubsub.Stop()
 
-	wg := sync.WaitGroup{}
-	expectedMsg := []string{}
-	ms := &mockSubscriber{
+	done := make(chan struct{})
+	ts := &testSubscriber{
 		msgs: []string{},
-		wg:   &wg,
 	}
-	pubsub.Subscribe(ms)
-	if diff := cmp.Diff(ms.msgs, expectedMsg); diff != "" {
-		t.Errorf("Difference between ms.msgs and expectedMsg for initial situation. diff(-want, +got):\n%s", diff)
-	}
+	pubsub.Subscribe(ts)
 
-	// Update the target and verify that Publish is called again.
-	pubsub.Publish("set")
-	wg.Add(1)
-	wg.Wait()
-	expectedMsg = append(expectedMsg, "set")
-	if diff := cmp.Diff(ms.msgs, expectedMsg); diff != "" {
-		t.Errorf("Difference between ms.msgs and expectedMsg for updated subscriber callback. diff(-want, +got):\n%s", diff)
-	}
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		done <- struct{}{}
+	}()
 
-	// Add another watcher and verify that its Publish is called with the current target.
-	expectedMsg2 := []string{}
-	ms2 := &mockSubscriber{
+	select {
+	case <-done:
+		if len(ts.msgs) != 0 {
+			t.Fatalf("The callback was invoked within 10ms")
+		}
+	case <-time.After(20 * time.Millisecond):
+		t.Fatalf("The callback was invoked within 20ms")
+	}
+}
+
+func (s) TestPubSub_PublishOneMsg(t *testing.T) {
+	pubsub := NewPubSub()
+	defer pubsub.Stop()
+
+	done := make(chan struct{})
+	ts := &testSubscriber{
 		msgs: []string{},
-		wg:   &wg,
 	}
-	cancelFunc2 := pubsub.Subscribe(ms2)
-	wg.Add(1)
-	wg.Wait()
-	expectedMsg2 = append(expectedMsg2, "set")
-	if diff := cmp.Diff(ms.msgs, expectedMsg); diff != "" {
-		t.Errorf("Difference between ms.msgs and expectedMsg after adding second subscriber. diff(-want, +got):\n%s", diff)
+	pubsub.Subscribe(ts)
+
+	pubsub.Publish("p1")
+
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		done <- struct{}{}
+	}()
+
+	expectedMsg := []string{"p1"}
+	select {
+	case <-done:
+		if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
+			t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
+		}
+	case <-time.After(20 * time.Millisecond):
+		t.Fatalf("The callback was invoked within 20ms")
 	}
-	if diff := cmp.Diff(ms2.msgs, expectedMsg2); diff != "" {
-		t.Errorf("Difference between ms2.msgs and expectedMsg2 after adding second subscriber. diff(-want, +got):\n%s", diff)
+}
+
+func (s) TestPubSub_PublishMultiMsgs_And_Stop(t *testing.T) {
+	pubsub := NewPubSub()
+
+	done := make(chan struct{})
+	ts := &testSubscriber{
+		msgs: []string{},
+	}
+	pubsub.Subscribe(ts)
+
+	pubsub.Publish("p1")
+	pubsub.Publish("p2")
+	pubsub.Publish("p3")
+
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		done <- struct{}{}
+	}()
+
+	expectedMsg := []string{"p1", "p2", "p3"}
+	select {
+	case <-done:
+		if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
+			t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
+		}
+	case <-time.After(20 * time.Millisecond):
+		t.Fatalf("The callback was invoked within 20ms")
 	}
 
-	// Update the msg again and verify that both subscribers receive the update.
-	pubsub.Publish("set2")
-	wg.Add(2)
-	wg.Wait()
-	expectedMsg = append(expectedMsg, "set2")
-	expectedMsg2 = append(expectedMsg2, "set2")
-	if diff := cmp.Diff(ms.msgs, expectedMsg); diff != "" {
-		t.Errorf("Difference between ms.msgs and expectedMsg after sending message to both watchers. diff(-want, +got):\n%s", diff)
-	}
-	if diff := cmp.Diff(ms2.msgs, expectedMsg2); diff != "" {
-		t.Errorf("Difference between ms2.msgs and expectedMsg2 after sending message to both watchers. diff(-want, +got):\n%s", diff)
-	}
-
-	// Remove the second subscriber and verify that its callback is no longer received.
-	cancelFunc2()
-	pubsub.Publish("set3")
-	wg.Add(1)
-	wg.Wait()
-	expectedMsg = append(expectedMsg, "set3")
-	if diff := cmp.Diff(ms.msgs, expectedMsg); diff != "" {
-		t.Errorf("Difference between ms.msgs and expectedMsg after removing second subscriber. diff(-want, +got):\n%s", diff)
-	}
-	if diff := cmp.Diff(ms2.msgs, expectedMsg2); diff != "" {
-		t.Errorf("Difference between ms2.msgs and expectedMsg2 after removing second subscriber. diff(-want, +got):\n%s", diff)
-	}
-
-	// Stop the pubsub and verify that no more callbacks are received.
 	pubsub.Stop()
-	pubsub.Publish("set4")
 	time.Sleep(10 * time.Millisecond)
-	if diff := cmp.Diff(ms.msgs, expectedMsg); diff != "" {
-		t.Errorf("Difference between ms.msgs and expectedMsg after stopping pubsub. diff(-want, +got):\n%s", diff)
+
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		done <- struct{}{}
+	}()
+
+	pubsub.Publish("p4")
+
+	select {
+	case <-done:
+		if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
+			t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
+		}
+	case <-time.After(20 * time.Millisecond):
+		t.Fatalf("The callback was invoked within 20ms")
 	}
-	if diff := cmp.Diff(ms2.msgs, expectedMsg2); diff != "" {
-		t.Errorf("Difference between ms2.msgs and expectedMsg2 after stopping pubsub. diff(-want, +got):\n%s", diff)
+}
+
+func (s) TestPubSub_PublishMultiMsgs_BeforeRegisterSubscriber(t *testing.T) {
+	pubsub := NewPubSub()
+	defer pubsub.Stop()
+
+	done := make(chan struct{})
+	ts := &testSubscriber{
+		msgs: []string{},
+	}
+
+	pubsub.Publish("p1")
+	pubsub.Publish("p2")
+	pubsub.Publish("p3")
+
+	pubsub.Subscribe(ts)
+
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		done <- struct{}{}
+	}()
+
+	expectedMsg := []string{"p3"}
+	select {
+	case <-done:
+		if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
+			t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
+		}
+	case <-time.After(20 * time.Millisecond):
+		t.Fatalf("The callback was invoked within 20ms")
+	}
+}
+
+func (s) TestPutSub_PubslishMultiMsgs_RegisterMultiSubs(t *testing.T) {
+	pubsub := NewPubSub()
+	defer pubsub.Stop()
+
+	done := make(chan struct{})
+	ts := &testSubscriber{
+		msgs: []string{},
+	}
+	pubsub.Subscribe(ts)
+
+	pubsub.Publish("p1")
+	pubsub.Publish("p2")
+
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		done <- struct{}{}
+	}()
+
+	expectedMsg := []string{"p1", "p2"}
+	select {
+	case <-done:
+		if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
+			t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
+		}
+	case <-time.After(20 * time.Millisecond):
+		t.Fatalf("The callback was invoked within 20ms")
+	}
+
+	ts2 := &testSubscriber{
+		msgs: []string{},
+	}
+	pubsub.Subscribe(ts2)
+
+	pubsub.Publish("p3")
+
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		done <- struct{}{}
+	}()
+
+	expectedMsg = []string{"p1", "p2", "p3"}
+	expectedMsg2 := []string{"p2", "p3"}
+	select {
+	case <-done:
+		if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
+			t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
+		}
+		if diff := cmp.Diff(ts2.msgs, expectedMsg2); diff != "" {
+			t.Errorf("Difference between ts2.msgs and expectedMsg2. diff(-want, +got):\n%s", diff)
+		}
+	case <-time.After(20 * time.Millisecond):
+		t.Fatalf("The callback was invoked within 20ms")
 	}
 }
