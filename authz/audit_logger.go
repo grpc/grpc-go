@@ -78,8 +78,6 @@ type AuditEvent struct {
 // logger configuration. Concrete types representing configuration of specific
 // audit loggers must embed this interface to implement it.
 type AuditLoggerConfig interface {
-	// auditLoggerConfig is a dummy interface requiring users to embed this
-	// interface to implement it.
 	auditLoggerConfig()
 }
 
