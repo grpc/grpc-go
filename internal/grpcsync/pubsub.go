@@ -23,15 +23,16 @@ import (
 	"sync"
 )
 
-// Subscriber represents an entity that is subscribed to messages published on a PubSub.
-// It wraps the callback to be invoked by the PubSub when a new message is published.
+// Subscriber represents an entity that is subscribed to messages published on
+// a PubSub. It wraps the callback to be invoked by the PubSub when a new
+// message is published.
 type Subscriber interface {
 	// OnMessage is invoked to when a new message is published.
 	OnMessage(msg interface{})
 }
 
-// PubSub is a simple one-to-many publish-subscribe system that supports messages
-// of arbitrary type.
+// PubSub is a simple one-to-many publish-subscribe system that supports
+// messages of arbitrary type.
 //
 // Publisher invokes the Publish() method to publish new messages, while
 // subscribers interested in receiving these messages register a callback
@@ -84,6 +85,9 @@ func (ps *PubSub) Subscribe(sub Subscriber) func() {
 		ps.cs.Schedule(func(context.Context) {
 			ps.mu.Lock()
 			defer ps.mu.Unlock()
+			if !ps.subscribers[sub] {
+				return
+			}
 			sub.OnMessage(msg)
 		})
 	}
@@ -111,6 +115,9 @@ func (ps *PubSub) Publish(msg interface{}) {
 		ps.cs.Schedule(func(context.Context) {
 			ps.mu.Lock()
 			defer ps.mu.Unlock()
+			if !ps.subscribers[s] {
+				return
+			}
 			s.OnMessage(msg)
 		})
 	}
