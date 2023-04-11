@@ -69,9 +69,9 @@ func NewPubSub() *PubSub {
 // OnMessage() callback will be invoked asynchronously with the existing
 // message to begin with, and subsequently for every newly published message.
 //
-// The caller is responsible for invoking the returned function to unsubscribe
-// itself from the PubSub.
-func (ps *PubSub) Subscribe(sub Subscriber) func() {
+// The caller is responsible for invoking the returned cancel function to
+// unsubscribe itself from the PubSub.
+func (ps *PubSub) Subscribe(sub Subscriber) (cancel func()) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
