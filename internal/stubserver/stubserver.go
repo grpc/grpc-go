@@ -133,6 +133,7 @@ func (ss *StubServer) StartClient(dopts ...grpc.DialOption) error {
 		ss.R.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
 	}
 	if err := waitForReady(cc); err != nil {
+		cc.Close()
 		return err
 	}
 
