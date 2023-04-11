@@ -38,10 +38,10 @@ var (
 
 // RegisterAuditLoggerBuilder registers the builder in a global map
 // using b.Name() as the key.
+//
 // This should only be called during initialization time (i.e. in an init()
-// function).
-// If multiple builders are registered with the same name, the one registered
-// last will take effect.
+// function). If multiple builders are registered with the same name,
+// the one registered last will take effect.
 func RegisterAuditLoggerBuilder(b AuditLoggerBuilder) {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
@@ -56,8 +56,8 @@ func GetAuditLoggerBuilder(name string) AuditLoggerBuilder {
 	return registry.builders[name]
 }
 
-// AuditEvent contains information used by the audit logger during an audit
-// logging event.
+// AuditEvent contains information passed to the audit logger as part of an
+// audit logging event.
 type AuditEvent struct {
 	// FullMethodName is the full method name of the audited RPC, in the format
 	// of "/pkg.Service/Method". For example, "/helloworld.Greeter/SayHello".
