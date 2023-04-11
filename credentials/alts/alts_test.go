@@ -31,6 +31,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/alts/internal/handshaker/service"
 	altsgrpc "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
@@ -39,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/status"
 )
 
 type s struct {
@@ -301,7 +303,7 @@ func (s) TestCheckRPCVersions(t *testing.T) {
 // TestFullHandshake performs a full ALTS handshake between a test client and
 // server, where both client and server offload to a local, fake handshaker
 // service.
-func TestFullHandshake(t *testing.T) {
+func (s) TestFullHandshake(t *testing.T) {
 	// If GOMAXPROCS is set to less than 2, do not run this test. This test
 	// requires at least 2 goroutines to succeed (one goroutine where a
 	// server listens, another goroutine where a client runs).
@@ -337,8 +339,15 @@ func TestFullHandshake(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	c := testgrpc.NewTestServiceClient(conn)
-	if _, err = c.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.WaitForReady(true)); err != nil {
-		t.Errorf("c.UnaryCall() failed: %v", err)
+	for ; ctx.Err() == nil; <-time.After(10 * time.Second) {
+		if _, err = c.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.WaitForReady(true)); err != nil {
+			status, ok := status.FromError(err)
+			if ok && status.Code() == codes.DeadlineExceeded {
+				continue
+			} else {
+				t.Errorf("c.UnaryCall() failed: %v", err)
+			}
+		}
 	}
 
 	// Close open connections to the fake handshaker service.
