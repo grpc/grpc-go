@@ -517,25 +517,14 @@ func (s) TestEDS_ClusterResourceDoesNotContainEDSServiceName(t *testing.T) {
 	defer cleanup()
 
 	// Start a test backend and extract its host and port.
-	backend := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
-	}
-	backend.StartServer()
-	defer backend.Stop()
-	_, p, err := net.SplitHostPort(backend.Address)
-	if err != nil {
-		t.Fatalf("Failed to split test backend address %q: %v", backend.Address, err)
-	}
-	port, err := strconv.ParseUint(p, 10, 32)
-	if err != nil {
-		t.Fatalf("Failed to parse test backend port %q: %v", backend.Address, err)
-	}
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
 
 	// Configure cluster and endpoints resources with the same name in the management server. The cluster resource does not specify an EDS service name.
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, "", e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(clusterName, "localhost", []uint32{uint32(port)})},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(clusterName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -591,12 +580,12 @@ func (s) TestEDS_ClusterResourceDoesNotContainEDSServiceName(t *testing.T) {
 // cluster resource updates.
 //
 //   - The first cluster resource contains an eds_service_name. The test verifies
-//     that an EDS request with sent for the recieved eds_service_name. It also
+//     that an EDS request with sent for the received eds_service_name. It also
 //     verifies that a subsequent RPC gets routed to a backend belonging to that
 //     service name.
 //   - The next cluster resource update contains no eds_service_name. The test
 //     verifies that a subsequent EDS request is sent for the cluster_name and
-//     that the previously recieved eds_service_name is no longer requested. It
+//     that the previously received eds_service_name is no longer requested. It
 //     also verifies that a subsequent RPC gets routed to a backend belonging to
 //     service represented by the cluster_name.
 //   - The next cluster resource update changes the circuit breaking

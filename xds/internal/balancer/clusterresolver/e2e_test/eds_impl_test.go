@@ -83,11 +83,9 @@ func backendAddressesAndPorts(t *testing.T, servers []*stubserver.StubServer) ([
 }
 
 func startTestServiceBackends(t *testing.T, numBackends int) ([]*stubserver.StubServer, func()) {
-	servers := make([]*stubserver.StubServer, numBackends)
+	var servers []*stubserver.StubServer
 	for i := 0; i < numBackends; i++ {
-		servers[i] = &stubserver.StubServer{
-			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
-		}
+		servers = append(servers, stubserver.StartTestService(t, nil))
 		servers[i].StartServer()
 	}
 
