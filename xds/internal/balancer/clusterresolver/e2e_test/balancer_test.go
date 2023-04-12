@@ -19,6 +19,7 @@ package e2e_test
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -709,11 +710,16 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 	}
 
 	// Make RPC, and ensure that it gets routed to the second backend.
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
-		t.Fatalf("EmptyCall() RPC failed: %v", err)
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
+			continue
+		}
+		if peer.Addr.String() == addrs[1].Addr {
+			break
+		}
 	}
-	if peer.Addr.String() != addrs[1].Addr {
-		t.Fatalf("EmptyCall() RPC routed to backend %q, want %q", peer.Addr, addrs[1].Addr)
+	if ctx.Err() != nil {
+		t.Fatal("Timeout when waiting for EmptyCall() RPC routed to correct backend")
 	}
 
 	// Change cluster resource circuit breaking count.
@@ -760,8 +766,8 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 				return nil
 			}
 			select {
-			case <-ctx.Done():
 			case edsResourceNameCh <- req.GetResourceNames():
+			case <-ctx.Done():
 			}
 			return nil
 		},
@@ -779,8 +785,8 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	// Configure an aggregate cluster, two EDS clusters and only one endpoints
 	// resource (corresponding to the first EDS cluster) in the management
 	// server.
-	const clusterName1 = clusterName + "cluster-1"
-	const clusterName2 = clusterName + "cluster-2"
+	const clusterName1 = clusterName + "-cluster-1"
+	const clusterName2 = clusterName + "-cluster-2"
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Clusters: []*v3clusterpb.Cluster{
@@ -824,12 +830,23 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	defer cc.Close()
 
 	// Wait for both EDS resources to be requested.
-	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		names := <-edsResourceNameCh
-		if cmp.Equal(names, []string{clusterName1, clusterName2}) {
-			break
+	func() {
+		for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+			select {
+			case n := <-edsResourceNameCh:
+				// A data race is reported between here and the OnStreamRequest
+				// if this code attempts to sort the names without a copy.
+				names := make([]string, len(n))
+				copy(names, n)
+				sort.Strings(names)
+				t.Logf("easwars: sorted names: %v", names)
+				if cmp.Equal(names, []string{clusterName1, clusterName2}) {
+					return
+				}
+			default:
+			}
 		}
-	}
+	}()
 	if ctx.Err() != nil {
 		t.Fatalf("Timeout when waiting for all EDS resources to be requested")
 	}
