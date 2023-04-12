@@ -27,18 +27,18 @@ import (
 // a PubSub. It wraps the callback to be invoked by the PubSub when a new
 // message is published.
 type Subscriber interface {
-	// OnMessage is invoked to when a new message is published. Implementations
+	// OnMessage is invoked when a new message is published. Implementations
 	// must not block in this method.
 	OnMessage(msg interface{})
 }
 
 // PubSub is a simple one-to-many publish-subscribe system that supports
-// messages of arbitrary type.
+// messages of arbitrary type. It guarantees that messages are delivered in
+// the same order in which they were published.
 //
 // Publisher invokes the Publish() method to publish new messages, while
 // subscribers interested in receiving these messages register a callback
-// via the Subscribe() method. It guarantees that messages are delivered in
-// the same order in which they were published.
+// via the Subscribe() method.
 //
 // Once a PubSub is stopped, no more messages can be published, and
 // it is guaranteed that no more subscriber callback will be invoked.

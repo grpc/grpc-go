@@ -27,199 +27,196 @@ import (
 )
 
 type testSubscriber struct {
-	mu   sync.Mutex
-	msgs []string
+	mu      sync.Mutex
+	msgs    []int
+	onMsgCh chan struct{}
 }
 
 func (ts *testSubscriber) OnMessage(msg interface{}) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	ts.msgs = append(ts.msgs, msg.(string))
+	ts.msgs = append(ts.msgs, msg.(int))
+	ts.onMsgCh <- struct{}{}
 }
 
 func (s) TestPubSub_PublishNoMsg(t *testing.T) {
+	// Create a new pubsub.
 	pubsub := NewPubSub()
 	defer pubsub.Stop()
 
-	done := make(chan struct{})
 	ts := &testSubscriber{
-		msgs: []string{},
+		msgs:    []int{},
+		onMsgCh: make(chan struct{}),
 	}
 	pubsub.Subscribe(ts)
 
-	go func() {
-		time.Sleep(10 * time.Millisecond)
-		done <- struct{}{}
-	}()
-
 	select {
-	case <-done:
-		if len(ts.msgs) != 0 {
-			t.Fatalf("The callback was invoked within 10ms")
-		}
-	case <-time.After(20 * time.Millisecond):
-		t.Fatalf("The callback was invoked within 20ms")
+	case <-ts.onMsgCh:
+		t.Fatalf("Subscriber callback invoked when no message was published")
+	case <-time.After(defaultTestShortTimeout):
 	}
 }
 
 func (s) TestPubSub_PublishOneMsg(t *testing.T) {
+	// Create a new pubsub.
 	pubsub := NewPubSub()
 	defer pubsub.Stop()
 
-	done := make(chan struct{})
 	ts := &testSubscriber{
-		msgs: []string{},
+		msgs:    []int{},
+		onMsgCh: make(chan struct{}),
 	}
 	pubsub.Subscribe(ts)
 
-	pubsub.Publish("p1")
+	pubsub.Publish(1)
 
-	go func() {
-		time.Sleep(10 * time.Millisecond)
-		done <- struct{}{}
-	}()
-
-	expectedMsg := []string{"p1"}
+	expectedMsg := []int{1}
 	select {
-	case <-done:
+	case <-ts.onMsgCh:
 		if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
 			t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
 		}
-	case <-time.After(20 * time.Millisecond):
-		t.Fatalf("The callback was invoked within 20ms")
+	case <-time.After(defaultTestShortTimeout):
+		t.Fatalf("The callback was invoked within defaultTestShortTimeout")
 	}
 }
 
 func (s) TestPubSub_PublishMultiMsgs_And_Stop(t *testing.T) {
+	// Create a new pubsub.
 	pubsub := NewPubSub()
 
-	done := make(chan struct{})
 	ts := &testSubscriber{
-		msgs: []string{},
+		msgs:    []int{},
+		onMsgCh: make(chan struct{}),
 	}
 	pubsub.Subscribe(ts)
 
-	pubsub.Publish("p1")
-	pubsub.Publish("p2")
-	pubsub.Publish("p3")
+	expectedMsg := []int{}
 
-	go func() {
-		time.Sleep(10 * time.Millisecond)
-		done <- struct{}{}
-	}()
-
-	expectedMsg := []string{"p1", "p2", "p3"}
-	select {
-	case <-done:
-		if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
-			t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
+	const numPublished = 10
+	for i := 0; i < numPublished; i++ {
+		pubsub.Publish(i)
+		expectedMsg = append(expectedMsg, i)
+		select {
+		case <-ts.onMsgCh:
+			if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
+				t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
+			}
+		case <-time.After(defaultTestShortTimeout):
+			t.Fatalf("The callback was invoked within defaultTestShortTimeout")
 		}
-	case <-time.After(20 * time.Millisecond):
-		t.Fatalf("The callback was invoked within 20ms")
 	}
 
 	pubsub.Stop()
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(defaultTestShortTimeout)
 
-	go func() {
-		time.Sleep(10 * time.Millisecond)
-		done <- struct{}{}
-	}()
-
-	pubsub.Publish("p4")
-
+	pubsub.Publish(99)
+	// Ensure that the subscriber callback is not invoked as instantiated
+	// pubsub has already closed.
 	select {
-	case <-done:
+	case <-ts.onMsgCh:
 		if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
 			t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
 		}
-	case <-time.After(20 * time.Millisecond):
-		t.Fatalf("The callback was invoked within 20ms")
+	case <-time.After(defaultTestShortTimeout):
 	}
 }
 
 func (s) TestPubSub_PublishMultiMsgs_BeforeRegisterSubscriber(t *testing.T) {
+	// Create a new pubsub.
 	pubsub := NewPubSub()
 	defer pubsub.Stop()
 
-	done := make(chan struct{})
 	ts := &testSubscriber{
-		msgs: []string{},
+		msgs:    []int{},
+		onMsgCh: make(chan struct{}),
 	}
 
-	pubsub.Publish("p1")
-	pubsub.Publish("p2")
-	pubsub.Publish("p3")
+	pubsub.Publish(1)
+	pubsub.Publish(2)
+	pubsub.Publish(3)
 
 	pubsub.Subscribe(ts)
 
-	go func() {
-		time.Sleep(10 * time.Millisecond)
-		done <- struct{}{}
-	}()
-
-	expectedMsg := []string{"p3"}
+	expectedMsg := []int{3}
+	// Ensure that the subscriber callback is invoked with a previously
+	// published message.
 	select {
-	case <-done:
+	case <-ts.onMsgCh:
 		if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
 			t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
 		}
-	case <-time.After(20 * time.Millisecond):
-		t.Fatalf("The callback was invoked within 20ms")
+	case <-time.After(defaultTestShortTimeout):
+		t.Fatalf("The callback was invoked within defaultTestShortTimeout")
 	}
 }
 
 func (s) TestPutSub_PubslishMultiMsgs_RegisterMultiSubs(t *testing.T) {
+	// Create a new pubsub.
 	pubsub := NewPubSub()
 	defer pubsub.Stop()
 
-	done := make(chan struct{})
+	onMsgCh := make(chan struct{})
+
 	ts := &testSubscriber{
-		msgs: []string{},
+		msgs:    []int{},
+		onMsgCh: onMsgCh,
 	}
 	pubsub.Subscribe(ts)
+	expectedMsg := []int{}
 
-	pubsub.Publish("p1")
-	pubsub.Publish("p2")
-
-	go func() {
-		time.Sleep(10 * time.Millisecond)
-		done <- struct{}{}
-	}()
-
-	expectedMsg := []string{"p1", "p2"}
-	select {
-	case <-done:
-		if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
-			t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
+	const numPublished = 10
+	for i := 0; i < numPublished; i++ {
+		pubsub.Publish(i)
+		expectedMsg = append(expectedMsg, i)
+		select {
+		case <-ts.onMsgCh:
+			if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
+				t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
+			}
+		case <-time.After(defaultTestShortTimeout):
+			t.Fatalf("The callback was invoked within defaultTestShortTimeout")
 		}
-	case <-time.After(20 * time.Millisecond):
-		t.Fatalf("The callback was invoked within 20ms")
 	}
 
 	ts2 := &testSubscriber{
-		msgs: []string{},
+		msgs:    []int{},
+		onMsgCh: onMsgCh,
 	}
 	pubsub.Subscribe(ts2)
+	expectedMsg2 := []int{}
 
-	pubsub.Publish("p3")
-
-	go func() {
-		time.Sleep(10 * time.Millisecond)
-		done <- struct{}{}
-	}()
-
-	expectedMsg = []string{"p1", "p2", "p3"}
-	expectedMsg2 := []string{"p2", "p3"}
+	expectedMsg2 = append(expectedMsg2, numPublished-1)
 	select {
-	case <-done:
+	case <-ts.onMsgCh:
 		if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
 			t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
 		}
-		if diff := cmp.Diff(ts2.msgs, expectedMsg2); diff != "" {
-			t.Errorf("Difference between ts2.msgs and expectedMsg2. diff(-want, +got):\n%s", diff)
+	case <-time.After(defaultTestShortTimeout):
+		t.Fatalf("The callback was invoked within defaultTestShortTimeout")
+	}
+
+	for i := 0; i < numPublished; i++ {
+		pubsub.Publish(i)
+
+		expectedMsg = append(expectedMsg, i)
+		select {
+		case <-ts.onMsgCh:
+			if diff := cmp.Diff(ts.msgs, expectedMsg); diff != "" {
+				t.Errorf("Difference between ts.msgs and expectedMsg. diff(-want, +got):\n%s", diff)
+			}
+		case <-time.After(defaultTestShortTimeout):
+			t.Fatalf("The callback was invoked within defaultTestShortTimeout")
 		}
-	case <-time.After(20 * time.Millisecond):
-		t.Fatalf("The callback was invoked within 20ms")
+
+		expectedMsg2 = append(expectedMsg2, i)
+		select {
+		case <-ts.onMsgCh:
+			if diff := cmp.Diff(ts2.msgs, expectedMsg2); diff != "" {
+				t.Errorf("Difference between ts2.msgs and expectedMsg2. diff(-want, +got):\n%s", diff)
+			}
+		case <-time.After(defaultTestShortTimeout):
+			t.Fatalf("The callback was invoked within defaultTestShortTimeout")
+		}
 	}
 }
