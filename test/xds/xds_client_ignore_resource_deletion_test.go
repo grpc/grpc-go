@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -89,11 +90,11 @@ var (
 //
 // Resource deletion is only applicable to Listener and Cluster resources.
 func (s) TestIgnoreResourceDeletionOnClient(t *testing.T) {
-	port1, cleanup := startTestService(t, nil)
-	t.Cleanup(cleanup)
+	server1 := stubserver.StartTestService(t, nil)
+	t.Cleanup(server1.Stop)
 
-	port2, cleanup := startTestService(t, nil)
-	t.Cleanup(cleanup)
+	server2 := stubserver.StartTestService(t, nil)
+	t.Cleanup(server2.Stop)
 
 	initialResourceOnServer := func(nodeID string) e2e.UpdateOptions {
 		return e2e.UpdateOptions{
@@ -105,8 +106,8 @@ func (s) TestIgnoreResourceDeletionOnClient(t *testing.T) {
 				e2e.DefaultCluster(cdsName2, edsName2, e2e.SecurityLevelNone),
 			},
 			Endpoints: []*endpointpb.ClusterLoadAssignment{
-				e2e.DefaultEndpoint(edsName1, "localhost", []uint32{port1}),
-				e2e.DefaultEndpoint(edsName2, "localhost", []uint32{port2}),
+				e2e.DefaultEndpoint(edsName1, "localhost", []uint32{testutils.ParsePort(t, server1.Address)}),
+				e2e.DefaultEndpoint(edsName2, "localhost", []uint32{testutils.ParsePort(t, server2.Address)}),
 			},
 			SkipValidation: true,
 		}

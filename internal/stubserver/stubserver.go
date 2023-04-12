@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"testing"
 	"time"
 
 	"google.golang.org/grpc"
@@ -178,4 +179,22 @@ func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
 		panic(fmt.Sprintf("Error parsing config %q: %v", s, g.Err))
 	}
 	return g
+}
+
+// StartTestService spins up a stub server exposing the TestService on a local
+// port. If the passed in server is nil, a stub server that implements only the
+// EmptyCall and UnaryCall RPCs is started.
+func StartTestService(t *testing.T, server *StubServer) *StubServer {
+	if server == nil {
+		server = &StubServer{
+			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+			UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				return &testpb.SimpleResponse{}, nil
+			},
+		}
+	}
+	server.StartServer()
+
+	t.Logf("Started test service backend at %q", server.Address)
+	return server
 }
