@@ -86,7 +86,11 @@ func (ss *StubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	if err := ss.StartServer(sopts...); err != nil {
 		return err
 	}
-	return ss.StartClient(dopts...)
+	if err := ss.StartClient(dopts...); err != nil {
+		ss.Stop()
+		return err
+	}
+	return nil
 }
 
 // StartServer only starts the server. It does not create a client to it.
