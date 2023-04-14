@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"strings"
 
-	v3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
@@ -311,7 +311,7 @@ func parseAuditLoggingOptions(options auditLoggingOptions) (*v3rbacpb.RBAC_Audit
 		if err != nil {
 			return &optionsRbac, fmt.Errorf("Error parsing custom audit logger config: %v", err)
 		}
-		logger := &v3.TypedExtensionConfig{Name: config.Name, TypedConfig: customConfig}
+		logger := &v3corepb.TypedExtensionConfig{Name: config.Name, TypedConfig: customConfig}
 		rbacConfig := v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 			IsOptional:  config.IsOptional,
 			AuditLogger: logger,
