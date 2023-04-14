@@ -87,49 +87,39 @@ func (i codeBench) StringUsingMap() string {
 }
 
 func BenchmarkCodeStringStringer(b *testing.B) {
-	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c := codeBench(uint32(i % 17))
 		_ = c.String()
 	}
-	b.StopTimer()
 }
 
 func BenchmarkCodeStringMap(b *testing.B) {
-	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c := codeBench(uint32(i % 17))
 		_ = c.StringUsingMap()
 	}
-	b.StopTimer()
 }
 
 // codes.Code.String() does a switch.
 func BenchmarkCodeStringSwitch(b *testing.B) {
-	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c := codes.Code(uint32(i % 17))
 		_ = c.String()
 	}
-	b.StopTimer()
 }
 
 // Testing all codes (0<=c<=16) and also one overflow (17).
 func BenchmarkCodeStringStringerWithOverflow(b *testing.B) {
-	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c := codeBench(uint32(i % 18))
 		_ = c.String()
 	}
-	b.StopTimer()
 }
 
 // Testing all codes (0<=c<=16) and also one overflow (17).
 func BenchmarkCodeStringSwitchWithOverflow(b *testing.B) {
-	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c := codes.Code(uint32(i % 18))
 		_ = c.String()
 	}
-	b.StopTimer()
 }
