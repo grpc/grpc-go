@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -52,15 +53,19 @@ func (s) TestOutlierDetection_NoopConfig(t *testing.T) {
 	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
-	port, cleanup2 := startTestService(t, nil)
-	defer cleanup2()
+	server := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+	}
+	server.StartServer()
+	t.Logf("Started test service backend at %q", server.Address)
+	defer server.Stop()
 
 	const serviceName = "my-service-client-side-xds"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
 		Host:       "localhost",
-		Port:       port,
+		Port:       testutils.ParsePort(t, server.Address),
 		SecLevel:   e2e.SecurityLevelNone,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -170,31 +175,21 @@ func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
 	defer cleanup()
 
 	// Working backend 1.
-	backend1 := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-	port1, cleanup1 := startTestService(t, backend1)
-	defer cleanup1()
+	backend1 := stubserver.StartTestService(t, nil)
+	port1 := testutils.ParsePort(t, backend1.Address)
+	defer backend1.Stop()
 
 	// Working backend 2.
-	backend2 := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-	port2, cleanup2 := startTestService(t, backend2)
-	defer cleanup2()
+	backend2 := stubserver.StartTestService(t, nil)
+	port2 := testutils.ParsePort(t, backend2.Address)
+	defer backend2.Stop()
 
 	// Backend 3 that will always return an error and eventually ejected.
-	backend3 := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			return nil, errors.New("some error")
-		},
-	}
-	port3, cleanup3 := startTestService(t, backend3)
-	defer cleanup3()
+	backend3 := stubserver.StartTestService(t, &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return nil, errors.New("some error") },
+	})
+	port3 := testutils.ParsePort(t, backend3.Address)
+	defer backend3.Stop()
 
 	const serviceName = "my-service-client-side-xds"
 	resources := clientResourcesMultipleBackendsAndOD(e2e.ResourceParams{

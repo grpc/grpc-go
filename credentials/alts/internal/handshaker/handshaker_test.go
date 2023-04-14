@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	grpc "google.golang.org/grpc"
 	core "google.golang.org/grpc/credentials/alts/internal"
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
@@ -282,4 +284,68 @@ func (s) TestPeerNotResponding(t *testing.T) {
 	if got, want := err, core.PeerNotRespondingError; got != want {
 		t.Errorf("ClientHandshake() = %v, want %v", got, want)
 	}
+}
+
+func (s) TestNewClientHandshaker(t *testing.T) {
+	conn := testutil.NewTestConn(nil, nil)
+	clientConn := &grpc.ClientConn{}
+	opts := &ClientHandshakerOptions{}
+	hs, err := NewClientHandshaker(context.Background(), clientConn, conn, opts)
+	if err != nil {
+		t.Errorf("NewClientHandshaker returned unexpected error: %v", err)
+	}
+	expectedHs := &altsHandshaker{
+		stream:     nil,
+		conn:       conn,
+		clientConn: clientConn,
+		clientOpts: opts,
+		serverOpts: nil,
+		side:       core.ClientSide,
+	}
+	cmpOpts := []cmp.Option{
+		cmp.AllowUnexported(altsHandshaker{}),
+		cmpopts.IgnoreFields(altsHandshaker{}, "conn", "clientConn"),
+	}
+	if got, want := hs.(*altsHandshaker), expectedHs; !cmp.Equal(got, want, cmpOpts...) {
+		t.Errorf("NewClientHandshaker() returned unexpected handshaker: got: %v, want: %v", got, want)
+	}
+	if hs.(*altsHandshaker).stream != nil {
+		t.Errorf("NewClientHandshaker() returned handshaker with non-nil stream")
+	}
+	if hs.(*altsHandshaker).clientConn != clientConn {
+		t.Errorf("NewClientHandshaker() returned handshaker with unexpected clientConn")
+	}
+	hs.Close()
+}
+
+func (s) TestNewServerHandshaker(t *testing.T) {
+	conn := testutil.NewTestConn(nil, nil)
+	clientConn := &grpc.ClientConn{}
+	opts := &ServerHandshakerOptions{}
+	hs, err := NewServerHandshaker(context.Background(), clientConn, conn, opts)
+	if err != nil {
+		t.Errorf("NewServerHandshaker returned unexpected error: %v", err)
+	}
+	expectedHs := &altsHandshaker{
+		stream:     nil,
+		conn:       conn,
+		clientConn: clientConn,
+		clientOpts: nil,
+		serverOpts: opts,
+		side:       core.ServerSide,
+	}
+	cmpOpts := []cmp.Option{
+		cmp.AllowUnexported(altsHandshaker{}),
+		cmpopts.IgnoreFields(altsHandshaker{}, "conn", "clientConn"),
+	}
+	if got, want := hs.(*altsHandshaker), expectedHs; !cmp.Equal(got, want, cmpOpts...) {
+		t.Errorf("NewServerHandshaker() returned unexpected handshaker: got: %v, want: %v", got, want)
+	}
+	if hs.(*altsHandshaker).stream != nil {
+		t.Errorf("NewServerHandshaker() returned handshaker with non-nil stream")
+	}
+	if hs.(*altsHandshaker).clientConn != clientConn {
+		t.Errorf("NewServerHandshaker() returned handshaker with unexpected clientConn")
+	}
+	hs.Close()
 }

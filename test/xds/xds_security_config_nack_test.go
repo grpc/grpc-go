@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 
@@ -323,8 +324,8 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 			managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 			defer cleanup1()
 
-			port, cleanup2 := startTestService(t, nil)
-			defer cleanup2()
+			server := stubserver.StartTestService(t, nil)
+			defer server.Stop()
 
 			// This creates a `Cluster` resource with a security config which
 			// refers to `e2e.ClientSideCertProviderInstance` for both root and
@@ -333,7 +334,7 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 				DialTarget: serviceName,
 				NodeID:     nodeID,
 				Host:       "localhost",
-				Port:       port,
+				Port:       testutils.ParsePort(t, server.Address),
 				SecLevel:   e2e.SecurityLevelMTLS,
 			})
 			resources.Clusters[0].TransportSocket = test.securityConfig
