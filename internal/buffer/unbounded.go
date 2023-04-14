@@ -86,7 +86,9 @@ func (b *Unbounded) Load() {
 //
 // Upon reading a value from this channel, users are expected to call Load() to
 // send the next buffered value onto the channel if there is any.
-// If the unbounded buffer is closed, a read channel returned by this method is closed.
+//
+// If the unbounded buffer is closed, the read channel returned by this method
+// is closed.
 func (b *Unbounded) Get() <-chan interface{} {
 	return b.c
 }

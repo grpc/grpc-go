@@ -402,7 +402,7 @@ func (t *Transport) send(ctx context.Context) {
 			sendNodeProto = false
 		case u, ok := <-t.adsRequestCh.Get():
 			if !ok {
-				// No requests will be sent after the channel is closed.
+				// No requests will be sent after the unbounded buffer is closed.
 				return
 			}
 			t.adsRequestCh.Load()
