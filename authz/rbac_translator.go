@@ -281,15 +281,15 @@ func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, e
 	return policies, nil
 }
 
-func parseAuditLoggingOptions(options auditLoggingOptions) (v3rbacpb.RBAC_AuditLoggingOptions, error) {
+func parseAuditLoggingOptions(options auditLoggingOptions) (*v3rbacpb.RBAC_AuditLoggingOptions, error) {
 	optionsRbac := v3rbacpb.RBAC_AuditLoggingOptions{}
 	if options.AuditCondition == "" && len(options.AuditLoggers) == 0 {
 		// No audit logger parsed - fine
-		return optionsRbac, nil
+		return &optionsRbac, nil
 	} else if options.AuditCondition == "" {
-		return optionsRbac, fmt.Errorf("AuditLogger config present but missing AuditCondition")
+		return &optionsRbac, fmt.Errorf("AuditLogger config present but missing AuditCondition")
 	} else if len(options.AuditLoggers) == 0 {
-		return optionsRbac, fmt.Errorf("AuditCondition present but missing AuditLogger config")
+		return &optionsRbac, fmt.Errorf("AuditCondition present but missing AuditLogger config")
 	}
 
 	switch options.AuditCondition {
@@ -302,13 +302,14 @@ func parseAuditLoggingOptions(options auditLoggingOptions) (v3rbacpb.RBAC_AuditL
 	case "ON_DENY_AND_ALLOW":
 		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY_AND_ALLOW
 	default:
-		return optionsRbac, fmt.Errorf("Failed to parse AuditCondition %v. Allowed values {NONE, ON_DENY, ON_ALLOW, ON_DENY_AND_ALLOW}", options.AuditCondition)
+		return &optionsRbac, fmt.Errorf("Failed to parse AuditCondition %v. Allowed values {NONE, ON_DENY, ON_ALLOW, ON_DENY_AND_ALLOW}", options.AuditCondition)
 	}
 
-	for _, config := range options.AuditLoggers {
+	for i := range options.AuditLoggers {
+		config := &options.AuditLoggers[i]
 		customConfig, err := anypb.New(&config.Config)
 		if err != nil {
-			return optionsRbac, fmt.Errorf("Error parsing custom audit logger config: %v", err)
+			return &optionsRbac, fmt.Errorf("Error parsing custom audit logger config: %v", err)
 		}
 		logger := &v3.TypedExtensionConfig{Name: config.Name, TypedConfig: customConfig}
 		rbacConfig := v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
@@ -318,7 +319,7 @@ func parseAuditLoggingOptions(options auditLoggingOptions) (v3rbacpb.RBAC_AuditL
 		optionsRbac.LoggerConfigs = append(optionsRbac.LoggerConfigs, &rbacConfig)
 	}
 
-	return optionsRbac, nil
+	return &optionsRbac, nil
 
 }
 
@@ -352,7 +353,7 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 		denyRBAC := &v3rbacpb.RBAC{
 			Action:              v3rbacpb.RBAC_DENY,
 			Policies:            denyPolicies,
-			AuditLoggingOptions: &auditLoggers,
+			AuditLoggingOptions: auditLoggers,
 		}
 		rbacs = append(rbacs, denyRBAC)
 	}
@@ -360,7 +361,7 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 	if err != nil {
 		return nil, fmt.Errorf(`"allow_rules" %v`, err)
 	}
-	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies, AuditLoggingOptions: &auditLoggers}
+	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies, AuditLoggingOptions: auditLoggers}
 	rbacs = append(rbacs, allowRBAC)
 	return rbacs, nil
 }
