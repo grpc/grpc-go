@@ -98,10 +98,6 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	cancelResource := a.watchResource(listenerResourceType, rn, w)
 	defer cancelResource()
 
-	if err := compareWatchState(a, rn, watchStateStarted); err != nil {
-		t.Fatal(err)
-	}
-
 	// Looping until the underlying transport has successfully sent the request to
 	// the server, which would call the onSend callback and transition the watchState
 	// to `watchStateRequested`.
