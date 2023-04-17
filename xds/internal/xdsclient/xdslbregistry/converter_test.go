@@ -23,8 +23,8 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/cncf/xds/go/udpa/type/v1"
-	v3 "github.com/cncf/xds/go/xds/type/v3"
+	v1udpatypepb "github.com/cncf/xds/go/udpa/type/v1"
+	v3cncftypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
@@ -37,6 +37,7 @@ import (
 
 	_ "google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
@@ -71,6 +72,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 		name       string
 		policy     *v3clusterpb.LoadBalancingPolicy
 		wantConfig *internalserviceconfig.BalancerConfig
+		rhDisabled bool
 	}{
 		{
 			name: "ring_hash",
@@ -78,7 +80,6 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							Name: "noop name",
 							TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
 								HashFunction:    v3ringhashpb.RingHash_XX_HASH,
 								MinimumRingSize: wrapperspb.UInt64(10),
@@ -86,8 +87,6 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 							}),
 						},
 					},
-					// TODO: Add a test case that the next node in the list gets
-					// ignored.
 				},
 			},
 			wantConfig: &internalserviceconfig.BalancerConfig{
@@ -104,7 +103,6 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							Name:        "noop name",
 							TypedConfig: testutils.MarshalAny(&v3roundrobinpb.RoundRobin{}),
 						},
 					},
@@ -115,13 +113,61 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 			},
 		},
 		{
+			name: "round_robin_ring_hash_use_first_supported",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3roundrobinpb.RoundRobin{}),
+						},
+					},
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
+								HashFunction:    v3ringhashpb.RingHash_XX_HASH,
+								MinimumRingSize: wrapperspb.UInt64(10),
+								MaximumRingSize: wrapperspb.UInt64(100),
+							}),
+						},
+					},
+				},
+			},
+			wantConfig: &internalserviceconfig.BalancerConfig{
+				Name: "round_robin",
+			},
+		},
+		{
+			name: "ring_hash_disabled_rh_rr_use_first_supported",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
+								HashFunction:    v3ringhashpb.RingHash_XX_HASH,
+								MinimumRingSize: wrapperspb.UInt64(10),
+								MaximumRingSize: wrapperspb.UInt64(100),
+							}),
+						},
+					},
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3roundrobinpb.RoundRobin{}),
+						},
+					},
+				},
+			},
+			wantConfig: &internalserviceconfig.BalancerConfig{
+				Name: "round_robin",
+			},
+			rhDisabled: true,
+		},
+		{
 			name: "custom_lb_type_v3_struct",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							Name: "noop name",
-							TypedConfig: testutils.MarshalAny(&v3.TypedStruct{
+							TypedConfig: testutils.MarshalAny(&v3cncftypepb.TypedStruct{
 								TypeUrl: "type.googleapis.com/myorg.MyCustomLeastRequestPolicy",
 								Value:   &structpb.Struct{},
 							}),
@@ -140,8 +186,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							Name: "noop name",
-							TypedConfig: testutils.MarshalAny(&v1.TypedStruct{
+							TypedConfig: testutils.MarshalAny(&v1udpatypepb.TypedStruct{
 								TypeUrl: "type.googleapis.com/myorg.MyCustomLeastRequestPolicy",
 								Value:   &structpb.Struct{},
 							}),
@@ -160,7 +205,6 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							Name:        "what is this used for?",
 							TypedConfig: wrrLocalityAny(&v3roundrobinpb.RoundRobin{}),
 						},
 					},
@@ -175,15 +219,13 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				},
 			},
 		},
-		// Best practices way of deploying custom lb (typed struct as a child of WrrLocalityPolicy):
 		{
 			name: "wrr_locality_child_custom_lb_type_v3_struct",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							Name: "noop name",
-							TypedConfig: wrrLocalityAny(&v3.TypedStruct{
+							TypedConfig: wrrLocalityAny(&v3cncftypepb.TypedStruct{
 								TypeUrl: "type.googleapis.com/myorg.MyCustomLeastRequestPolicy",
 								Value:   &structpb.Struct{},
 							}),
@@ -205,25 +247,33 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			rawJSON, err := ConvertToServiceConfig(test.policy, 0)
+			if test.rhDisabled {
+				oldRingHashSupport := envconfig.XDSRingHash
+				envconfig.XDSRingHash = false
+				defer func() {
+					envconfig.XDSRingHash = oldRingHashSupport
+				}()
+			}
+			rawJSON, err := ConvertToServiceConfig(test.policy)
 			if err != nil {
 				t.Fatalf("unwanted error in ConvertToServiceConfig: %v", err)
 			}
 			bc := &internalserviceconfig.BalancerConfig{}
 			// The converter registry is not guaranteed to emit json that is
 			// valid. It's scope is to simply convert from a proto message to
-			// internal gRPC JSON format. Thus, I have emitted valid JSON in the
-			// tests, but this leaves this test brittle over time in case
-			// balancer validations change over time and add more failure cases.
-			// I think this simplicity of using this type (to get rid of non
-			// determinism in JSON strings) outweighs this brittleness, and also
-			// the team plans on decoupling the unmarshalling and validation
-			// step both present in this function in the future. In the future
-			// if we change balancer validations, we will need to fix any
-			// configurations in this test that become invalid (need to make
-			// sure emissions above are valid configuration). Also, once we
-			// partition this Unmarshal into Unmarshal vs. Validation in separate
-			// operations, the brittleness of this test will go away.
+			// internal gRPC JSON format. Thus, the tests cause valid JSON to
+			// eventually be emitted from ConvertToServiceConfig(), but this
+			// leaves this test brittle over time in case balancer validations
+			// change over time and add more failure cases. The simplicity of
+			// using this type (to get rid of non determinism in JSON strings)
+			// outweighs this brittleness, and also there are plans on
+			// decoupling the unmarshalling and validation step both present in
+			// this function in the future. In the future if balancer
+			// validations change, any configurations in this test that become
+			// invalid will need to be fixed. (need to make sure emissions above
+			// are valid configuration). Also, once this Unmarshal call is
+			// partitioned into Unmarshal vs. Validation in separate operations,
+			// the brittleness of this test will go away.
 			if err := json.Unmarshal(rawJSON, bc); err != nil {
 				t.Fatalf("failed to unmarshal JSON: %v", err)
 			}
@@ -248,7 +298,6 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							Name: "what is this used for?",
 							TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
 								HashFunction:    v3ringhashpb.RingHash_MURMUR_HASH_2,
 								MinimumRingSize: wrapperspb.UInt64(10),
@@ -266,7 +315,7 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							Name:        "unsupported proto type",
+							// Not supported by gRPC-Go.
 							TypedConfig: testutils.MarshalAny(&v3leastrequestpb.LeastRequest{}),
 						},
 					},
@@ -282,7 +331,6 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							Name:        "first level",
 							TypedConfig: wrrLocalityAny(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(&v3roundrobinpb.RoundRobin{}))))))))))))))))))))))),
 						},
 					},
@@ -294,12 +342,12 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, gotErr := ConvertToServiceConfig(test.policy, 0)
+			_, gotErr := ConvertToServiceConfig(test.policy)
 			// Test the error substring to test the different root causes of
-			// errors. More brittle over time, but I think it's important to
-			// test the root cause of the errors emitted here. Also, this
-			// package owns the error strings so breakages won't come
-			// unexpectedly.
+			// errors. This is more brittle over time, but it's important to
+			// test the root cause of the errors emitted from the
+			// ConvertToServiceConfig function call. Also, this package owns the
+			// error strings so breakages won't come unexpectedly.
 			if gotErr == nil || !strings.Contains(gotErr.Error(), test.wantErr) {
 				t.Fatalf("ConvertToServiceConfig() = %v, wantErr %v", gotErr, test.wantErr)
 			}
@@ -316,7 +364,6 @@ func wrrLocality(m proto.Message) *v3wrrlocalitypb.WrrLocality {
 			Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 				{
 					TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-						Name:        "what is this used for?",
 						TypedConfig: testutils.MarshalAny(m),
 					},
 				},

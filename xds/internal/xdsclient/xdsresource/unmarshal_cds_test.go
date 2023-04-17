@@ -204,7 +204,6 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								Name: "noop config",
 								TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
 									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
 									MinimumRingSize: wrapperspb.UInt64(10),
@@ -212,11 +211,6 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 								}),
 							},
 						},
-					},
-				},
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
 					},
 				},
 			},
@@ -240,15 +234,9 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								Name:        "unsupported proto type",
 								TypedConfig: testutils.MarshalAny(&v3leastrequestpb.LeastRequest{}),
 							},
 						},
-					},
-				},
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
 					},
 				},
 			},
@@ -310,7 +298,6 @@ func wrrLocality(m proto.Message) *v3wrrlocalitypb.WrrLocality {
 			Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 				{
 					TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-						Name:        "what is this used for?",
 						TypedConfig: testutils.MarshalAny(m),
 					},
 				},
@@ -341,10 +328,11 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		envconfig.XDSCustomLBPolicy = oldCustomLBSupport
 	}()
 	tests := []struct {
-		name         string
-		cluster      *v3clusterpb.Cluster
-		wantUpdate   ClusterUpdate
-		wantLBConfig *internalserviceconfig.BalancerConfig
+		name             string
+		cluster          *v3clusterpb.Cluster
+		wantUpdate       ClusterUpdate
+		wantLBConfig     *internalserviceconfig.BalancerConfig
+		customLBDisabled bool
 	}{
 		{
 			name: "happy-case-logical-dns",
@@ -622,7 +610,6 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								Name: "noop-name",
 								TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
 									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
 									MinimumRingSize: wrapperspb.UInt64(10),
@@ -632,14 +619,9 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 						},
 					},
 				},
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
-					},
-				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf,
+				ClusterName: clusterName, EDSServiceName: serviceName,
 			},
 			wantLBConfig: &internalserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
@@ -666,20 +648,14 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								Name:        "noop-name",
 								TypedConfig: wrrLocalityAny(&v3roundrobinpb.RoundRobin{}),
 							},
 						},
 					},
 				},
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
-					},
-				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf,
+				ClusterName: clusterName, EDSServiceName: serviceName,
 			},
 			wantLBConfig: &internalserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
@@ -707,7 +683,6 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								Name: "noop-name",
 								TypedConfig: wrrLocalityAny(&v3.TypedStruct{
 									TypeUrl: "type.googleapis.com/myorg.MyCustomLeastRequestPolicy",
 									Value:   &structpb.Struct{},
@@ -716,14 +691,9 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 						},
 					},
 				},
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
-					},
-				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf,
+				ClusterName: clusterName, EDSServiceName: serviceName,
 			},
 			wantLBConfig: &internalserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
@@ -732,6 +702,97 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 						Name:   "myorg.MyCustomLeastRequestPolicy",
 						Config: customLBConfig{},
 					},
+				},
+			},
+		},
+		{
+			name: "custom-lb-env-var-not-set-ignore-load-balancing-policy-use-lb-policy-and-enum",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_RING_HASH,
+				LbConfig: &v3clusterpb.Cluster_RingHashLbConfig_{
+					RingHashLbConfig: &v3clusterpb.Cluster_RingHashLbConfig{
+						MinimumRingSize: wrapperspb.UInt64(20),
+						MaximumRingSize: wrapperspb.UInt64(200),
+					},
+				},
+				LoadBalancingPolicy: &v3clusterpb.LoadBalancingPolicy{
+					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+						{
+							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+								TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
+									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
+									MinimumRingSize: wrapperspb.UInt64(10),
+									MaximumRingSize: wrapperspb.UInt64(100),
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName: clusterName, EDSServiceName: serviceName,
+			},
+			wantLBConfig: &internalserviceconfig.BalancerConfig{
+				Name: "ring_hash_experimental",
+				Config: &ringhash.LBConfig{
+					MinRingSize: 20,
+					MaxRingSize: 200,
+				},
+			},
+			customLBDisabled: true,
+		},
+		{
+			name: "load-balancing-policy-takes-precedence-over-lb-policy-and-enum",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_RING_HASH,
+				LbConfig: &v3clusterpb.Cluster_RingHashLbConfig_{
+					RingHashLbConfig: &v3clusterpb.Cluster_RingHashLbConfig{
+						MinimumRingSize: wrapperspb.UInt64(20),
+						MaximumRingSize: wrapperspb.UInt64(200),
+					},
+				},
+				LoadBalancingPolicy: &v3clusterpb.LoadBalancingPolicy{
+					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+						{
+							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+								TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
+									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
+									MinimumRingSize: wrapperspb.UInt64(10),
+									MaximumRingSize: wrapperspb.UInt64(100),
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName: clusterName, EDSServiceName: serviceName,
+			},
+			wantLBConfig: &internalserviceconfig.BalancerConfig{
+				Name: "ring_hash_experimental",
+				Config: &ringhash.LBConfig{
+					MinRingSize: 10,
+					MaxRingSize: 100,
 				},
 			},
 		},
@@ -745,6 +806,12 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 	defer func() { envconfig.XDSRingHash = oldRingHashSupport }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			if test.customLBDisabled {
+				envconfig.XDSCustomLBPolicy = false
+				defer func() {
+					envconfig.XDSCustomLBPolicy = true
+				}()
+			}
 			update, err := validateClusterAndConstructClusterUpdate(test.cluster)
 			if err != nil {
 				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) failed: %v", test.cluster, err)
@@ -754,7 +821,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			// compare JSON bytes in a test. Thus, marshal into a Balancer
 			// Config struct and compare on that. Only need to test this JSON
 			// emission here, as this covers the possible output space.
-			if diff := cmp.Diff(update, test.wantUpdate, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(ClusterUpdate{}, "LBPolicyJSON")); diff != "" {
+			if diff := cmp.Diff(update, test.wantUpdate, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(ClusterUpdate{}, "LBPolicy", "LBPolicyJSON")); diff != "" {
 				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) got diff: %v (-got, +want)", test.cluster, diff)
 			}
 			bc := &internalserviceconfig.BalancerConfig{}

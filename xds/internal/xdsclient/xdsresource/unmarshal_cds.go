@@ -110,7 +110,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		rhLBCfgJSON, err := json.Marshal(rhLBCfg)
 		// Shouldn't happen.
 		if err != nil {
-			return ClusterUpdate{}, fmt.Errorf("error marshalling prepared rh config json: %v", err)
+			return ClusterUpdate{}, fmt.Errorf("error marshalling ring hash config JSON generated from xDS LB policy registry: %s: %v", pretty.FormatJSON(rhLBCfgJSON), err)
 		}
 		lbCfgJSON = []byte(fmt.Sprintf(`[{%q: %s}]`, "ring_hash_experimental", rhLBCfgJSON))
 	default:
@@ -137,7 +137,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	}
 
 	if cluster.GetLoadBalancingPolicy() != nil && envconfig.XDSCustomLBPolicy {
-		lbCfgJSON, err = xdslbregistry.ConvertToServiceConfig(cluster.GetLoadBalancingPolicy(), 0)
+		lbCfgJSON, err = xdslbregistry.ConvertToServiceConfig(cluster.GetLoadBalancingPolicy())
 		if err != nil {
 			return ClusterUpdate{}, fmt.Errorf("error converting LoadBalancingPolicy %v in response: %+v: %v", cluster.GetLoadBalancingPolicy(), cluster, err)
 		}

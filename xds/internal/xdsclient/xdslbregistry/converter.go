@@ -16,8 +16,9 @@
  *
  */
 
-// Package xdslbregistry provides utilities to convert proto Load Balancing
-// configuration to JSON Load Balancing configuration.
+// Package xdslbregistry provides utilities to convert proto load balancing
+// configuration, defined by the xDS API spec, to JSON load balancing
+// configuration.
 package xdslbregistry
 
 import (
@@ -25,13 +26,14 @@ import (
 	"fmt"
 	"strings"
 
-	v1 "github.com/cncf/xds/go/udpa/type/v1"
-	v3 "github.com/cncf/xds/go/xds/type/v3"
+	v1udpatypepb "github.com/cncf/xds/go/udpa/type/v1"
+	v3cncftypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3ringhashpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/ring_hash/v3"
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
 	"github.com/golang/protobuf/proto"
 	structpb "github.com/golang/protobuf/ptypes/struct"
+
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
@@ -43,32 +45,37 @@ const (
 )
 
 // ConvertToServiceConfig converts a proto Load Balancing Policy configuration
-// into a json string. Returns an error if no supported policy found, or if
-// there is more than 16 layers of recursion in the configuration, or a failure
-// to convert the policy.
-func ConvertToServiceConfig(policy *v3clusterpb.LoadBalancingPolicy, depth int) (json.RawMessage, error) {
+// into a json string. Returns an error if:
+//   - no supported policy found
+//   - there is more than 16 layers of recursion in the configuration
+//   - a failure occurs when converting the policy
+func ConvertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy) (json.RawMessage, error) {
+	return convertToServiceConfig(lbPolicy, 0)
+}
+
+func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int) (json.RawMessage, error) {
 	// "Configurations that require more than 16 levels of recursion are
 	// considered invalid and should result in a NACK response." - A51
 	if depth > 15 {
-		return nil, fmt.Errorf("lb policy %v exceeds max depth supported: 16 layers", policy)
+		return nil, fmt.Errorf("lb policy %v exceeds max depth supported: 16 layers", lbPolicy)
 	}
 
 	// "This function iterate over the list of policy messages in
 	// LoadBalancingPolicy, attempting to convert each one to gRPC form,
 	// stopping at the first supported policy." - A52
-	for _, plcy := range policy.GetPolicies() {
+	for _, policy := range lbPolicy.GetPolicies() {
 		// The policy message contains a TypedExtensionConfig
 		// message with the configuration information. TypedExtensionConfig in turn
 		// uses an Any typed typed_config field to store policy configuration of any
 		// type. This typed_config field is used to determine both the name of a
 		// policy and the configuration for it, depending on its type:
-		switch plcy.GetTypedExtensionConfig().GetTypedConfig().GetTypeUrl() {
+		switch policy.GetTypedExtensionConfig().GetTypedConfig().GetTypeUrl() {
 		case "type.googleapis.com/envoy.extensions.load_balancing_policies.ring_hash.v3.RingHash":
 			if !envconfig.XDSRingHash {
-				return nil, fmt.Errorf("unexpected lbPolicy %v", policy)
+				continue
 			}
 			rhProto := &v3ringhashpb.RingHash{}
-			if err := proto.Unmarshal(plcy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), rhProto); err != nil {
+			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), rhProto); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 			}
 			return convertRingHash(rhProto)
@@ -76,7 +83,7 @@ func ConvertToServiceConfig(policy *v3clusterpb.LoadBalancingPolicy, depth int) 
 			return makeBalancerConfigJSON("round_robin", json.RawMessage("{}")), nil
 		case "type.googleapis.com/envoy.extensions.load_balancing_policies.wrr_locality.v3.WrrLocality":
 			wrrlProto := &v3wrrlocalitypb.WrrLocality{}
-			if err := proto.Unmarshal(plcy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), wrrlProto); err != nil {
+			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), wrrlProto); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 			}
 			return convertWrrLocality(wrrlProto, depth)
@@ -84,77 +91,66 @@ func ConvertToServiceConfig(policy *v3clusterpb.LoadBalancingPolicy, depth int) 
 		// This includes Least Request as well, since grpc-go does not support
 		// the Least Request Load Balancing Policy.
 		case "type.googleapis.com/xds.type.v3.TypedStruct":
-			tsProto := &v3.TypedStruct{}
-			if err := proto.Unmarshal(plcy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), tsProto); err != nil {
+			tsProto := &v3cncftypepb.TypedStruct{}
+			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), tsProto); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 			}
-			return convertCustomPolicyV3(tsProto)
+			return convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
 		case "type.googleapis.com/udpa.type.v1.TypedStruct":
-			tsProto := &v1.TypedStruct{}
-			if err := proto.Unmarshal(plcy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), tsProto); err != nil {
+			tsProto := &v1udpatypepb.TypedStruct{}
+			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), tsProto); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 			}
-			return convertCustomPolicyV1(tsProto)
+			return convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
 		}
 	}
-	return nil, fmt.Errorf("no supported policy found in policy list +%v", policy)
+	return nil, fmt.Errorf("no supported policy found in policy list +%v", lbPolicy)
 }
 
-// "the registry will maintain a set of converters that are able to map
-// from the xDS LoadBalancingPolicy to the internal gRPC JSON format"
-func convertRingHash(rhCfg *v3ringhashpb.RingHash) (json.RawMessage, error) {
-	if rhCfg.GetHashFunction() != v3ringhashpb.RingHash_XX_HASH {
-		return nil, fmt.Errorf("unsupported ring_hash hash function %v", rhCfg.GetHashFunction())
+// The following functions implement the converters defined in this line in A52:
+// "the registry will maintain a set of converters that are able to map from the
+// xDS LoadBalancingPolicy to the internal gRPC JSON format".
+func convertRingHash(cfg *v3ringhashpb.RingHash) (json.RawMessage, error) {
+	if cfg.GetHashFunction() != v3ringhashpb.RingHash_XX_HASH {
+		return nil, fmt.Errorf("unsupported ring_hash hash function %v", cfg.GetHashFunction())
 	}
 
 	var minSize, maxSize uint64 = defaultRingHashMinSize, defaultRingHashMaxSize
-	if min := rhCfg.GetMinimumRingSize(); min != nil {
+	if min := cfg.GetMinimumRingSize(); min != nil {
 		minSize = min.GetValue()
 	}
-	if max := rhCfg.GetMaximumRingSize(); max != nil {
+	if max := cfg.GetMaximumRingSize(); max != nil {
 		maxSize = max.GetValue()
 	}
 
-	rhLBCfg := ringhash.LBConfig{
+	lbCfg := ringhash.LBConfig{
 		MinRingSize: minSize,
 		MaxRingSize: maxSize,
 	}
-	rhLBCfgJSON, err := json.Marshal(rhLBCfg)
+	lbCfgJSON, err := json.Marshal(lbCfg)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling json in ring hash converter: %v", err)
 	}
-	return makeBalancerConfigJSON(ringhash.Name, rhLBCfgJSON), nil
+	return makeBalancerConfigJSON(ringhash.Name, lbCfgJSON), nil
 }
 
-func convertWrrLocality(wrrlCfg *v3wrrlocalitypb.WrrLocality, depth int) (json.RawMessage, error) {
-	epJSON, err := ConvertToServiceConfig(wrrlCfg.GetEndpointPickingPolicy(), depth+1)
+func convertWrrLocality(cfg *v3wrrlocalitypb.WrrLocality, depth int) (json.RawMessage, error) {
+	epJSON, err := convertToServiceConfig(cfg.GetEndpointPickingPolicy(), depth+1)
 	if err != nil {
-		return nil, fmt.Errorf("error converting endpoint picking policy: %v for %+v", err, wrrlCfg)
+		return nil, fmt.Errorf("error converting endpoint picking policy: %v for %+v", err, cfg)
 	}
-	wrrCfgJSON := createWRRConfig(epJSON)
-	return makeBalancerConfigJSON(wrrlocality.Name, wrrCfgJSON), nil
-}
-
-func createWRRConfig(epCfgJSON json.RawMessage) json.RawMessage {
-	return []byte(fmt.Sprintf(`{"childPolicy": %s}`, epCfgJSON))
+	lbCfgJSON := []byte(fmt.Sprintf(`{"childPolicy": %s}`, epJSON))
+	return makeBalancerConfigJSON(wrrlocality.Name, lbCfgJSON), nil
 }
 
 // A52 defines a LeastRequest converter but grpc-go does not support least_request.
-
-func convertCustomPolicyV3(typedStruct *v3.TypedStruct) (json.RawMessage, error) {
-	return convertCustomPolicy(typedStruct.GetTypeUrl(), typedStruct.GetValue())
-}
-
-func convertCustomPolicyV1(typedStruct *v1.TypedStruct) (json.RawMessage, error) {
-	return convertCustomPolicy(typedStruct.GetTypeUrl(), typedStruct.GetValue())
-}
 
 func convertCustomPolicy(typeURL string, s *structpb.Struct) (json.RawMessage, error) {
 	// The gRPC policy name will be the "type name" part of the value of the
 	// type_url field in the TypedStruct. We get this by using the part after
 	// the last / character. Can assume a valid type_url from the control plane.
-	urlsSplt := strings.Split(typeURL, "/")
-	plcyName := urlsSplt[len(urlsSplt)-1]
+	urls := strings.Split(typeURL, "/")
+	name := urls[len(urls)-1]
 
 	rawJSON, err := json.Marshal(s)
 	if err != nil {
@@ -162,7 +158,7 @@ func convertCustomPolicy(typeURL string, s *structpb.Struct) (json.RawMessage, e
 	}
 	// The Struct contained in the TypedStruct will be returned as-is as the
 	// configuration JSON object.
-	return makeBalancerConfigJSON(plcyName, rawJSON), nil
+	return makeBalancerConfigJSON(name, rawJSON), nil
 }
 
 func makeBalancerConfigJSON(name string, value json.RawMessage) []byte {

@@ -17,8 +17,9 @@
  */
 
 // Package wrrlocality provides an implementation of the wrr locality LB policy,
-// as defined in
-// https://github.com/grpc/proposal/blob/master/A52-xds-custom-lb-policies.md.
+// as defined in [A52 - xDS Custom LB Policies].
+//
+// [A52 - xDS Custom LB Policies]: https://github.com/grpc/proposal/blob/master/A52-xds-custom-lb-policies.md
 package wrrlocality
 
 import (
@@ -50,10 +51,10 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	var lbCfg *LBConfig
 	if err := json.Unmarshal(s, &lbCfg); err != nil {
-		return nil, fmt.Errorf("xds: unable to unmarshal LBConfig for wrrlocality: %s, error: %v", string(s), err)
+		return nil, fmt.Errorf("xds: invalid LBConfig for wrrlocality: %s, error: %v", string(s), err)
 	}
 	if lbCfg == nil || lbCfg.ChildPolicy == nil {
-		return nil, errors.New("xds: unable to unmarshal LBConfig for wrrlocality: child policy field must be set")
+		return nil, errors.New("xds: invalidw LBConfig for wrrlocality: child policy field must be set")
 	}
 	return lbCfg, nil
 }
