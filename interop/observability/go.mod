@@ -3,7 +3,7 @@ module google.golang.org/grpc/interop/observability
 go 1.17
 
 require (
-	google.golang.org/grpc v1.53.0
+	google.golang.org/grpc v1.54.1-0.20230322004705-d200af566284
 	google.golang.org/grpc/gcp/observability v0.0.0-20230214181353-f4feddb37523
 )
 
@@ -35,7 +35,7 @@ require (
 	google.golang.org/api v0.110.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230306155012-7f2fa6fef1f4 // indirect
-	google.golang.org/grpc/stats/opencensus v0.0.0-20230330193705-4a12595692ae // indirect
+	google.golang.org/grpc/stats/opencensus v0.0.0-20230414222620-eab9e20d1bbe // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 )
 
