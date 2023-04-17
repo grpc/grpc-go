@@ -302,14 +302,14 @@ func parseAuditLoggingOptions(options auditLoggingOptions) (*v3rbacpb.RBAC_Audit
 	case "ON_DENY_AND_ALLOW":
 		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY_AND_ALLOW
 	default:
-		return nil, fmt.Errorf("Failed to parse AuditCondition %v. Allowed values {NONE, ON_DENY, ON_ALLOW, ON_DENY_AND_ALLOW}", options.AuditCondition)
+		return nil, fmt.Errorf("failed to parse AuditCondition %v. Allowed values {NONE, ON_DENY, ON_ALLOW, ON_DENY_AND_ALLOW}", options.AuditCondition)
 	}
 
 	for i := range options.AuditLoggers {
 		config := &options.AuditLoggers[i]
 		customConfig, err := anypb.New(&config.Config)
 		if err != nil {
-			return nil, fmt.Errorf("Error parsing custom audit logger config: %v", err)
+			return nil, fmt.Errorf("error parsing custom audit logger config: %v", err)
 		}
 		logger := &v3corepb.TypedExtensionConfig{Name: config.Name, TypedConfig: customConfig}
 		rbacConfig := v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
