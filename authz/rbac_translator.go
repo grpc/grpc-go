@@ -362,6 +362,5 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 		return nil, fmt.Errorf(`"allow_rules" %v`, err)
 	}
 	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies, AuditLoggingOptions: auditLoggers}
-	rbacs = append(rbacs, allowRBAC)
-	return rbacs, nil
+	return append(rbacs, allowRBAC), nil
 }
