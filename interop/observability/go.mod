@@ -3,7 +3,7 @@ module google.golang.org/grpc/interop/observability
 go 1.17
 
 require (
-	google.golang.org/grpc v1.54.1-0.20230322004705-d200af566284
+	google.golang.org/grpc v1.54.0
 	google.golang.org/grpc/gcp/observability v0.0.0-20230214181353-f4feddb37523
 )
 
