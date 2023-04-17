@@ -87,9 +87,7 @@ func setupTest(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptio
 func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	// Setting up a mgmt server with a done channel when OnStreamRequest is invoked.
-	serverOpt := e2e.ManagementServerOptions{}
-	a, ms, nodeID := setupTest(ctx, t, serverOpt, defaultTestTimeout)
+	a, ms, nodeID := setupTest(ctx, t, emptyServerOpts, defaultTestTimeout)
 	defer ms.Stop()
 	defer a.close()
 
