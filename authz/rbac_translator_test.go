@@ -672,7 +672,7 @@ func TestTranslatePolicy(t *testing.T) {
 					]
 				}
 			}`,
-			wantErr: `Failed to parse AuditCondition ABC`,
+			wantErr: `failed to parse AuditCondition ABC`,
 		},
 		"bad audit logger config": {
 			authzPolicy: `{
