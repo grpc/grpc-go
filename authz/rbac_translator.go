@@ -283,14 +283,6 @@ func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, e
 
 func parseAuditLoggingOptions(options auditLoggingOptions) (*v3rbacpb.RBAC_AuditLoggingOptions, error) {
 	optionsRbac := v3rbacpb.RBAC_AuditLoggingOptions{}
-	if options.AuditCondition == "" && len(options.AuditLoggers) == 0 {
-		// No audit logger parsed - fine
-		return &optionsRbac, nil
-	} else if options.AuditCondition == "" {
-		return nil, fmt.Errorf("AuditLogger config present but missing AuditCondition")
-	} else if len(options.AuditLoggers) == 0 {
-		return nil, fmt.Errorf("AuditCondition present but missing AuditLogger config")
-	}
 
 	switch options.AuditCondition {
 	case "NONE":
@@ -301,6 +293,9 @@ func parseAuditLoggingOptions(options auditLoggingOptions) (*v3rbacpb.RBAC_Audit
 		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW
 	case "ON_DENY_AND_ALLOW":
 		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY_AND_ALLOW
+	case "":
+		// An empty AuditCondition is considered NONE rather than erroring
+		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_NONE
 	default:
 		return nil, fmt.Errorf("failed to parse AuditCondition %v. Allowed values {NONE, ON_DENY, ON_ALLOW, ON_DENY_AND_ALLOW}", options.AuditCondition)
 	}

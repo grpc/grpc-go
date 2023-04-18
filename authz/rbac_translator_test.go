@@ -598,6 +598,110 @@ func TestTranslatePolicy(t *testing.T) {
 				},
 			},
 		},
+		"missing audit logger config": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_condition": "NONE"
+				}
+			}`,
+			wantPolicies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"authz_allow_authenticated": {
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
+									Ids: []*v3rbacpb.Principal{
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: ".+"}},
+											}},
+										}},
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""},
+											}},
+										}},
+									},
+								}}},
+							},
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
+						LoggerConfigs:  []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{},
+					},
+				},
+			},
+		},
+		"missing audit condition": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_loggers": [
+						{
+							"name": "stdout_logger",
+							"config": {},
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantPolicies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"authz_allow_authenticated": {
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
+									Ids: []*v3rbacpb.Principal{
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: ".+"}},
+											}},
+										}},
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""},
+											}},
+										}},
+									},
+								}}},
+							},
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(map[string]interface{}{}, t)},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+			},
+		},
 		"unknown field": {
 			authzPolicy: `{"random": 123}`,
 			wantErr:     "failed to unmarshal policy",
@@ -696,44 +800,6 @@ func TestTranslatePolicy(t *testing.T) {
 				}
 			}`,
 			wantErr: `failed to unmarshal policy`,
-		},
-		"missing audit logger config": {
-			authzPolicy: `{
-				"name": "authz",
-				"allow_rules": [
-				{
-					"name": "allow_authenticated",
-					"source": {
-						"principals":["*", ""]
-					}
-				}],
-				"audit_logging_options": {
-					"audit_condition": "NONE"
-				}
-			}`,
-			wantErr: `AuditCondition present but missing AuditLogger config`,
-		},
-		"missing audit condition": {
-			authzPolicy: `{
-				"name": "authz",
-				"allow_rules": [
-				{
-					"name": "allow_authenticated",
-					"source": {
-						"principals":["*", ""]
-					}
-				}],
-				"audit_logging_options": {
-					"audit_loggers": [
-						{
-							"name": "stdout_logger",
-							"config": {},
-							"is_optional": false
-						}
-					]
-				}
-			}`,
-			wantErr: `AuditLogger config present but missing AuditCondition`,
 		},
 	}
 	for name, test := range tests {
