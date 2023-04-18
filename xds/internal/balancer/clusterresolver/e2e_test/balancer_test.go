@@ -156,7 +156,6 @@ func (s) TestErrorFromParentLB_ConnectionError(t *testing.T) {
 	})
 	defer cleanup()
 
-	// Start a test backend and extract its host and port.
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
@@ -263,7 +262,6 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	})
 	defer cleanup()
 
-	// Start a test backend and extract its host and port.
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
@@ -426,7 +424,6 @@ func (s) TestEDS_ResourceRemoved(t *testing.T) {
 	})
 	defer cleanup()
 
-	// Start a test backend and extract its host and port.
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
@@ -517,7 +514,6 @@ func (s) TestEDS_ClusterResourceDoesNotContainEDSServiceName(t *testing.T) {
 	})
 	defer cleanup()
 
-	// Start a test backend and extract its host and port.
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
