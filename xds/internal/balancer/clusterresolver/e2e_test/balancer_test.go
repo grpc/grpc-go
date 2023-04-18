@@ -105,7 +105,7 @@ func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clus
 // addresses of the test backends.
 //
 // Returns the following:
-//   - a channel on to which the DNS target being resolved is written to by the
+//   - a channel onto which the DNS target being resolved is written to by the
 //     mock DNS resolver
 //   - a channel to notify close of the DNS resolver
 //   - a channel to notify re-resolution requests to the DNS resolver
@@ -577,14 +577,14 @@ func (s) TestEDS_ClusterResourceDoesNotContainEDSServiceName(t *testing.T) {
 // cluster resource updates.
 //
 //   - The first cluster resource contains an eds_service_name. The test verifies
-//     that an EDS request with sent for the received eds_service_name. It also
+//     that an EDS request is sent for the received eds_service_name. It also
 //     verifies that a subsequent RPC gets routed to a backend belonging to that
 //     service name.
 //   - The next cluster resource update contains no eds_service_name. The test
 //     verifies that a subsequent EDS request is sent for the cluster_name and
 //     that the previously received eds_service_name is no longer requested. It
 //     also verifies that a subsequent RPC gets routed to a backend belonging to
-//     service represented by the cluster_name.
+//     the service represented by the cluster_name.
 //   - The next cluster resource update changes the circuit breaking
 //     configuration, but does not change the service name. The test verifies
 //     that a subsequent RPC gets routed to the same backend as before.
@@ -592,7 +592,7 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Start an xDS management server that pushes the EDS resource names on to a
+	// Start an xDS management server that pushes the EDS resource names onto a
 	// channel.
 	edsResourceNameCh := make(chan []string, 1)
 	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
@@ -749,7 +749,7 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Start an xDS management server that pushes the EDS resource names on to a
+	// Start an xDS management server that pushes the EDS resource names onto a
 	// channel.
 	edsResourceNameCh := make(chan []string, 1)
 	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
@@ -1080,7 +1080,7 @@ func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 	defer cleanup1()
 
 	// Start an xDS management server that pushes the name of the requested EDS
-	// resource on to a channel.
+	// resource onto a channel.
 	edsResourceCh := make(chan string, 1)
 	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
