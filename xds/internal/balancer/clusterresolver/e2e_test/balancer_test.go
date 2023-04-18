@@ -172,7 +172,7 @@ func (s) TestErrorFromParentLB_ConnectionError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -278,7 +278,7 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -440,7 +440,7 @@ func (s) TestEDS_ResourceRemoved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -530,7 +530,7 @@ func (s) TestEDS_ClusterResourceDoesNotContainEDSServiceName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -636,7 +636,7 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -797,7 +797,7 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -916,7 +916,7 @@ func (s) TestAggregateCluster_WithTwoEDSClusters_PrioritiesChange(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -1017,7 +1017,7 @@ func (s) TestAggregateCluster_WithOneDNSCluster(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -1130,7 +1130,7 @@ func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -1251,7 +1251,7 @@ func (s) TestAggregateCluster_SwitchEDSAndDNS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -1366,7 +1366,7 @@ func (s) TestAggregateCluster_ErrorsFromEDSAndDNS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
