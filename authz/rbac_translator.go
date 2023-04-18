@@ -284,9 +284,7 @@ func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, e
 func parseAuditLoggingOptions(options auditLoggingOptions) (*v3rbacpb.RBAC_AuditLoggingOptions, error) {
 	optionsRbac := v3rbacpb.RBAC_AuditLoggingOptions{}
 
-	if options.AuditCondition == "" {
-		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_NONE
-	} else {
+	if options.AuditCondition != "" {
 		rbacCondition, ok := v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition_value[options.AuditCondition]
 		if !ok {
 			return nil, fmt.Errorf("failed to parse AuditCondition %v. Allowed values {NONE, ON_DENY, ON_ALLOW, ON_DENY_AND_ALLOW}", options.AuditCondition)
