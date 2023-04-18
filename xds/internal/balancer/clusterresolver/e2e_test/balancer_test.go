@@ -108,24 +108,24 @@ func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clus
 //   - a channel on to which the DNS target being resolved is written to by the
 //     mock DNS resolver
 //   - a channel to notify close of the DNS resolver
-//   - a channel to notify re-resolution requests for the DNS resolver
+//   - a channel to notify re-resolution requests to the DNS resolver
 //   - a manual resolver which is used to mock the actual DNS resolution
 //   - a cleanup function which re-registers the original DNS resolver
 func setupDNS() (chan resolver.Target, chan struct{}, chan resolver.ResolveNowOptions, *manual.Resolver, func()) {
-	dnsTargetCh := make(chan resolver.Target, 1)
-	dnsCloseCh := make(chan struct{}, 1)
+	targetCh := make(chan resolver.Target, 1)
+	closeCh := make(chan struct{}, 1)
 	resolveNowCh := make(chan resolver.ResolveNowOptions, 1)
 
 	mr := manual.NewBuilderWithScheme("dns")
-	mr.BuildCallback = func(target resolver.Target, _ resolver.ClientConn, _ resolver.BuildOptions) { dnsTargetCh <- target }
-	mr.CloseCallback = func() { dnsCloseCh <- struct{}{} }
+	mr.BuildCallback = func(target resolver.Target, _ resolver.ClientConn, _ resolver.BuildOptions) { targetCh <- target }
+	mr.CloseCallback = func() { closeCh <- struct{}{} }
 	mr.ResolveNowCallback = func(opts resolver.ResolveNowOptions) { resolveNowCh <- opts }
 
 	dnsResolverBuilder := resolver.Get("dns")
 	resolver.UnregisterForTesting("dns")
 	resolver.Register(mr)
 
-	return dnsTargetCh, dnsCloseCh, resolveNowCh, mr, func() { resolver.Register(dnsResolverBuilder) }
+	return targetCh, closeCh, resolveNowCh, mr, func() { resolver.Register(dnsResolverBuilder) }
 }
 
 // TestErrorFromParentLB_ConnectionError tests the case where the parent of the
