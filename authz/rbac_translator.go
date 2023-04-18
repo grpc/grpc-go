@@ -284,20 +284,14 @@ func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, e
 func parseAuditLoggingOptions(options auditLoggingOptions) (*v3rbacpb.RBAC_AuditLoggingOptions, error) {
 	optionsRbac := v3rbacpb.RBAC_AuditLoggingOptions{}
 
-	switch options.AuditCondition {
-	case "NONE":
+	if options.AuditCondition == "" {
 		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_NONE
-	case "ON_DENY":
-		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY
-	case "ON_ALLOW":
-		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW
-	case "ON_DENY_AND_ALLOW":
-		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY_AND_ALLOW
-	case "":
-		// An empty AuditCondition is considered NONE rather than erroring
-		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_NONE
-	default:
-		return nil, fmt.Errorf("failed to parse AuditCondition %v. Allowed values {NONE, ON_DENY, ON_ALLOW, ON_DENY_AND_ALLOW}", options.AuditCondition)
+	} else {
+		rbacCondition, ok := v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition_value[options.AuditCondition]
+		if !ok {
+			return nil, fmt.Errorf("failed to parse AuditCondition %v. Allowed values {NONE, ON_DENY, ON_ALLOW, ON_DENY_AND_ALLOW}", options.AuditCondition)
+		}
+		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition(rbacCondition)
 	}
 
 	for i := range options.AuditLoggers {
