@@ -312,6 +312,28 @@ func parseAuditLoggingOptions(options auditLoggingOptions) (*v3rbacpb.RBAC_Audit
 
 }
 
+func buildAllowAndDenyAuditLogger(options *v3rbacpb.RBAC_AuditLoggingOptions) (*v3rbacpb.RBAC_AuditLoggingOptions, *v3rbacpb.RBAC_AuditLoggingOptions) {
+	// Mapping the overall policy AuditCondition to what it must be for the Deny and Allow RBAC
+	// See gRPC A59 for details - https://github.com/grpc/proposal/pull/346/files
+	// |Authorization Policy  |DENY RBAC          |ALLOW RBAC           |
+	// |----------------------|-------------------|---------------------|
+	// |NONE                  |NONE               |NONE                 |
+	// |ON_DENY               |ON_DENY            |ON_DENY              |
+	// |ON_ALLOW              |NONE               |ON_ALLOW             |
+	// |ON_DENY_AND_ALLOW     |ON_DENY            |ON_DENY_AND_ALLOW    |
+	allow := *options
+	deny := *options
+	switch condition := options.AuditCondition; condition {
+	case v3rbacpb.RBAC_AuditLoggingOptions_NONE:
+	case v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY:
+	case v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW:
+		deny.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_NONE
+	case v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY_AND_ALLOW:
+		deny.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY
+	}
+	return &allow, &deny
+}
+
 // translatePolicy translates SDK authorization policy in JSON format to two
 // Envoy RBAC polices (deny followed by allow policy) or only one Envoy RBAC
 // allow policy. If the input policy cannot be parsed or is invalid, an error
@@ -333,6 +355,7 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 	if err != nil {
 		return nil, err
 	}
+	allowLogger, denyLogger := buildAllowAndDenyAuditLogger(auditLoggers)
 	rbacs := make([]*v3rbacpb.RBAC, 0, 2)
 	if len(policy.DenyRules) > 0 {
 		denyPolicies, err := parseRules(policy.DenyRules, policy.Name)
@@ -342,7 +365,7 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 		denyRBAC := &v3rbacpb.RBAC{
 			Action:              v3rbacpb.RBAC_DENY,
 			Policies:            denyPolicies,
-			AuditLoggingOptions: auditLoggers,
+			AuditLoggingOptions: denyLogger,
 		}
 		rbacs = append(rbacs, denyRBAC)
 	}
@@ -350,6 +373,6 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 	if err != nil {
 		return nil, fmt.Errorf(`"allow_rules" %v`, err)
 	}
-	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies, AuditLoggingOptions: auditLoggers}
+	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies, AuditLoggingOptions: allowLogger}
 	return append(rbacs, allowRBAC), nil
 }
