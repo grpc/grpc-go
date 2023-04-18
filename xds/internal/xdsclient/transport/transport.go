@@ -400,7 +400,11 @@ func (t *Transport) send(ctx context.Context) {
 				continue
 			}
 			sendNodeProto = false
-		case u := <-t.adsRequestCh.Get():
+		case u, ok := <-t.adsRequestCh.Get():
+			if !ok {
+				// No requests will be sent after the adsRequestCh buffer is closed.
+				return
+			}
 			t.adsRequestCh.Load()
 
 			var (
@@ -621,6 +625,7 @@ func (t *Transport) processAckRequest(ack *ackRequest, stream grpc.ClientStream)
 func (t *Transport) Close() {
 	t.adsRunnerCancel()
 	<-t.adsRunnerDoneCh
+	t.adsRequestCh.Close()
 	t.cc.Close()
 }
 
