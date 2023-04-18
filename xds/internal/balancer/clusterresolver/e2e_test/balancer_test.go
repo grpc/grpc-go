@@ -71,7 +71,7 @@ func makeAggregateClusterResource(name string, childNames []string) *v3clusterpb
 }
 
 // makeLogicalDNSClusterResource returns a LOGICAL_DNS cluster resource with the
-// given name and given dns host and port.
+// given name and given DNS host and port.
 func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clusterpb.Cluster {
 	return &v3clusterpb.Cluster{
 		Name:                 name,
@@ -105,7 +105,7 @@ func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clus
 // addresses of the test backends.
 //
 // Returns the following:
-//   - a channel on to which the dns target being resolved is written to by the
+//   - a channel on to which the DNS target being resolved is written to by the
 //     mock DNS resolver
 //   - a channel to notify close of the DNS resolver
 //   - a channel to notify re-resolution requests for the DNS resolver
