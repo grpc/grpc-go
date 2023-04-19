@@ -674,14 +674,14 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 // TestAggregateCluster_WithTwoEDSClusters tests the case where the top-level
 // cluster resource is an aggregate cluster. It verifies that RPCs fail when the
 // management server has not responded to all requested EDS resources, and also
-// that RPCs are routed to the highest priority cluster once all resources have
-// been sent by the management server.
+// that RPCs are routed to the highest priority cluster once all requested EDS
+// resources have been sent by the management server.
 func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// Start an xDS management server that pushes the EDS resource names onto a
-	// channel.
+	// channel when requested.
 	edsResourceNameCh := make(chan []string, 1)
 	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
@@ -737,14 +737,13 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	func() {
 		for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 			select {
-			case n := <-edsResourceNameCh:
-				// A data race is reported between here and the OnStreamRequest
-				// if this code attempts to sort the names without a copy.
-				names := make([]string, len(n))
-				copy(names, n)
-				sort.Strings(names)
-				t.Logf("easwars: sorted names: %v", names)
-				if cmp.Equal(names, []string{clusterName1, clusterName2}) {
+			case names := <-edsResourceNameCh:
+				// Copy and sort the sortedNames to avoid racing with an
+				// OnStreamRequest call.
+				sortedNames := make([]string, len(names))
+				copy(sortedNames, names)
+				sort.Strings(sortedNames)
+				if cmp.Equal(sortedNames, []string{clusterName1, clusterName2}) {
 					return
 				}
 			default:
@@ -752,12 +751,12 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 		}
 	}()
 	if ctx.Err() != nil {
-		t.Fatalf("Timeout when waiting for all EDS resources to be requested")
+		t.Fatalf("Timeout when waiting for all EDS resources %v to be requested", []string{clusterName1, clusterName2})
 	}
 
 	// Make an RPC with a short deadline. We expect this RPC to not succeed
-	// because the management server has not yet responded with all EDS
-	// resources requested.
+	// because the management server has not responded with all EDS resources
+	// requested.
 	client := testgrpc.NewTestServiceClient(cc)
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
