@@ -630,10 +630,11 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 		}
 	}
 	if ctx.Err() != nil {
-		t.Fatalf("Timeout when waiting for old EDS watch to be canceled and new one to be registered")
+		t.Fatalf("Timeout when waiting for old EDS watch %q to be canceled and new one %q to be registered", edsServiceName, clusterName)
 	}
 
-	// Make RPC, and ensure that it gets routed to the second backend.
+	// Make a RPC, and ensure that it gets routed to second backend,
+	// corresponding to the cluster_name.
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
 			continue
@@ -643,7 +644,7 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 		}
 	}
 	if ctx.Err() != nil {
-		t.Fatal("Timeout when waiting for EmptyCall() to be routed to correct backend")
+		t.Fatalf("Timeout when waiting for EmptyCall() to be routed to correct backend %q", addrs[1].Addr)
 	}
 
 	// Change cluster resource circuit breaking count.
@@ -659,12 +660,14 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Make RPC, and ensure that it still gets routed to the second backend.
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
-		t.Fatalf("EmptyCall() failed: %v", err)
-	}
-	if peer.Addr.String() != addrs[1].Addr {
-		t.Fatalf("EmptyCall() routed to backend %q, want %q", peer.Addr, addrs[1].Addr)
+	// Ensure that RPCs continue to get routed to the second backend for the next one second.
+	for end := time.Now().Add(time.Second); time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
+			t.Fatalf("EmptyCall() failed: %v", err)
+		}
+		if peer.Addr.String() != addrs[1].Addr {
+			t.Fatalf("EmptyCall() routed to backend %q, want %q", peer.Addr, addrs[1].Addr)
+		}
 	}
 }
 
