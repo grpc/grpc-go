@@ -56,7 +56,7 @@ const (
 	ClientWriteBufferSize
 	ServerReadBufferSize
 	ServerWriteBufferSize
-	SharedRecvBufferPool
+	RecvBufferPool
 
 	// MaxFeatureIndex is a place holder to indicate the total number of feature
 	// indices we have. Any new feature indices should be added above this.
@@ -122,8 +122,8 @@ type Features struct {
 	ServerReadBufferSize int
 	// ServerWriteBufferSize is the size of the server write buffer in bytes. If negative, use the default buffer size.
 	ServerWriteBufferSize int
-	// SharedRecvBufferPool represents the shared recv buffer pool used.
-	SharedRecvBufferPool string
+	// RecvBufferPool represents the shared recv buffer pool used.
+	RecvBufferPool string
 }
 
 // String returns all the feature values as a string.
@@ -143,12 +143,12 @@ func (f Features) String() string {
 		"trace_%v-latency_%v-kbps_%v-MTU_%v-maxConcurrentCalls_%v-%s-%s-"+
 		"compressor_%v-channelz_%v-preloader_%v-clientReadBufferSize_%v-"+
 		"clientWriteBufferSize_%v-serverReadBufferSize_%v-serverWriteBufferSize_%v-"+
-		"sharedRecvBufferPool_%v-",
+		"recvBufferPool_%v-",
 		f.NetworkMode, f.UseBufConn, f.EnableKeepalive, f.BenchTime, f.EnableTrace,
 		f.Latency, f.Kbps, f.MTU, f.MaxConcurrentCalls, reqPayloadString,
 		respPayloadString, f.ModeCompressor, f.EnableChannelz, f.EnablePreloader,
 		f.ClientReadBufferSize, f.ClientWriteBufferSize, f.ServerReadBufferSize,
-		f.ServerWriteBufferSize, f.SharedRecvBufferPool)
+		f.ServerWriteBufferSize, f.RecvBufferPool)
 }
 
 // SharedFeatures returns the shared features as a pretty printable string.
@@ -220,8 +220,8 @@ func (f Features) partialString(b *bytes.Buffer, wantFeatures []bool, sep, delim
 				b.WriteString(fmt.Sprintf("ServerReadBufferSize%v%v%v", sep, f.ServerReadBufferSize, delim))
 			case ServerWriteBufferSize:
 				b.WriteString(fmt.Sprintf("ServerWriteBufferSize%v%v%v", sep, f.ServerWriteBufferSize, delim))
-			case SharedRecvBufferPool:
-				b.WriteString(fmt.Sprintf("SharedRecvBufferPool%v%v%v", sep, f.SharedRecvBufferPool, delim))
+			case RecvBufferPool:
+				b.WriteString(fmt.Sprintf("RecvBufferPool%v%v%v", sep, f.RecvBufferPool, delim))
 			default:
 				log.Fatalf("Unknown feature index %v. maxFeatureIndex is %v", i, MaxFeatureIndex)
 			}

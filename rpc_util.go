@@ -578,8 +578,8 @@ type parser struct {
 	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md
 	header [5]byte
 
-	// sharedRecvBufferPool is the pool of shared receive buffers.
-	sharedRecvBufferPool SharedBufferPool
+	// recvBufferPool is the pool of shared receive buffers.
+	recvBufferPool SharedBufferPool
 }
 
 // recvMsg reads a complete gRPC message from the stream.
@@ -613,7 +613,7 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 	if int(length) > maxReceiveMessageSize {
 		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
-	msg = p.sharedRecvBufferPool.Get(int(length))
+	msg = p.recvBufferPool.Get(int(length))
 	if _, err := p.r.Read(msg); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
@@ -803,7 +803,7 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 	if payInfo != nil {
 		payInfo.uncompressedBytes = buf
 	} else {
-		p.sharedRecvBufferPool.Put(&buf)
+		p.recvBufferPool.Put(&buf)
 	}
 	return nil
 }
