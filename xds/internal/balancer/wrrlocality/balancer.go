@@ -28,6 +28,7 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/balancer"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -46,6 +47,13 @@ func (bb) Name() string {
 
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	return nil
+}
+
+// LBConfig is the config for the wrr locality balancer.
+type LBConfig struct {
+	serviceconfig.LoadBalancingConfig
+	// ChildPolicy is the config for the child policy.
+	ChildPolicy *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
 
 func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {

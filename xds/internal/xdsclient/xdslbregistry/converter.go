@@ -35,8 +35,6 @@ import (
 	structpb "github.com/golang/protobuf/ptypes/struct"
 
 	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
-	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
 )
 
 const (
@@ -123,15 +121,8 @@ func convertRingHash(cfg *v3ringhashpb.RingHash) (json.RawMessage, error) {
 		maxSize = max.GetValue()
 	}
 
-	lbCfg := ringhash.LBConfig{
-		MinRingSize: minSize,
-		MaxRingSize: maxSize,
-	}
-	lbCfgJSON, err := json.Marshal(lbCfg)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling json in ring hash converter: %v", err)
-	}
-	return makeBalancerConfigJSON(ringhash.Name, lbCfgJSON), nil
+	lbCfgJSON := []byte(fmt.Sprintf("{\"minRingSize\": %d, \"maxRingSize\": %d}", minSize, maxSize))
+	return makeBalancerConfigJSON("ring_hash_experimental", lbCfgJSON), nil
 }
 
 func convertWrrLocality(cfg *v3wrrlocalitypb.WrrLocality, depth int) (json.RawMessage, error) {
@@ -140,7 +131,7 @@ func convertWrrLocality(cfg *v3wrrlocalitypb.WrrLocality, depth int) (json.RawMe
 		return nil, fmt.Errorf("error converting endpoint picking policy: %v for %+v", err, cfg)
 	}
 	lbCfgJSON := []byte(fmt.Sprintf(`{"childPolicy": %s}`, epJSON))
-	return makeBalancerConfigJSON(wrrlocality.Name, lbCfgJSON), nil
+	return makeBalancerConfigJSON("xds_wrr_locality_experimental", lbCfgJSON), nil
 }
 
 // A52 defines a LeastRequest converter but grpc-go does not support least_request.

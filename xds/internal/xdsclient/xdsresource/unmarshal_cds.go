@@ -34,8 +34,6 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
-	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdslbregistry"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -81,7 +79,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	switch cluster.GetLbPolicy() {
 	case v3clusterpb.Cluster_ROUND_ROBIN:
 		lbPolicy = nil // The default is round_robin, and there's no config to set.
-		lbCfgJSON = []byte(fmt.Sprintf(`[{%q: {"childPolicy": [{"round_robin": {}}]}}]`, wrrlocality.Name))
+		lbCfgJSON = []byte(fmt.Sprintf(`[{%q: {"childPolicy": [{"round_robin": {}}]}}]`, "xds_wrr_locality_experimental"))
 	case v3clusterpb.Cluster_RING_HASH:
 		if !envconfig.XDSRingHash {
 			return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
@@ -103,15 +101,8 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 			return ClusterUpdate{}, fmt.Errorf("ring_hash config min size %v is greater than max %v", minSize, maxSize)
 		}
 		lbPolicy = &ClusterLBPolicyRingHash{MinimumRingSize: minSize, MaximumRingSize: maxSize}
-		rhLBCfg := ringhash.LBConfig{
-			MinRingSize: minSize,
-			MaxRingSize: maxSize,
-		}
-		rhLBCfgJSON, err := json.Marshal(rhLBCfg)
-		// Shouldn't happen.
-		if err != nil {
-			return ClusterUpdate{}, fmt.Errorf("error marshalling ring hash config JSON generated from xDS LB policy registry: %s: %v", pretty.FormatJSON(rhLBCfgJSON), err)
-		}
+
+		rhLBCfgJSON := []byte(fmt.Sprintf("{\"minRingSize\": %d, \"maxRingSize\": %d}", minSize, maxSize))
 		lbCfgJSON = []byte(fmt.Sprintf(`[{%q: %s}]`, "ring_hash_experimental", rhLBCfgJSON))
 	default:
 		return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
