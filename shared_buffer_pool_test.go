@@ -23,7 +23,7 @@ import "testing"
 func (s) TestSharedBufferPool(t *testing.T) {
 	pools := []SharedBufferPool{
 		nopBufferPool{},
-		NewSimpleSharedBufferPool(),
+		NewsimpleSharedBufferPool(),
 	}
 
 	lengths := []int{
