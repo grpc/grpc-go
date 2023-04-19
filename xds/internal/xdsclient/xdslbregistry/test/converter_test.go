@@ -16,7 +16,8 @@
  *
  */
 
-package xdslbregistry
+// Package test contains test cases for the xDS LB Policy Registry.
+package test
 
 import (
 	"encoding/json"
@@ -44,6 +45,7 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdslbregistry"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -254,7 +256,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 					envconfig.XDSRingHash = oldRingHashSupport
 				}()
 			}
-			rawJSON, err := ConvertToServiceConfig(test.policy)
+			rawJSON, err := xdslbregistry.ConvertToServiceConfig(test.policy)
 			if err != nil {
 				t.Fatalf("unwanted error in ConvertToServiceConfig: %v", err)
 			}
@@ -342,7 +344,7 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, gotErr := ConvertToServiceConfig(test.policy)
+			_, gotErr := xdslbregistry.ConvertToServiceConfig(test.policy)
 			// Test the error substring to test the different root causes of
 			// errors. This is more brittle over time, but it's important to
 			// test the root cause of the errors emitted from the

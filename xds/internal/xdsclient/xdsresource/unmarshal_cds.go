@@ -39,6 +39,10 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
+// ValidateClusterAndConstructClusterUpdateForTesting exports the
+// validateClusterAndConstructClusterUpdate function for testing purposes.
+var ValidateClusterAndConstructClusterUpdateForTesting = validateClusterAndConstructClusterUpdate
+
 // TransportSocket proto message has a `name` field which is expected to be set
 // to this value by the management server.
 const transportSocketName = "envoy.transport_sockets.tls"
