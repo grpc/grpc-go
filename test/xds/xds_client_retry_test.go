@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -39,7 +40,11 @@ import (
 func (s) TestClientSideRetry(t *testing.T) {
 	ctr := 0
 	errs := []codes.Code{codes.ResourceExhausted}
-	ss := &stubserver.StubServer{
+
+	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+	defer cleanup1()
+
+	server := stubserver.StartTestService(t, &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			defer func() { ctr++ }()
 			if ctr < len(errs) {
@@ -47,20 +52,15 @@ func (s) TestClientSideRetry(t *testing.T) {
 			}
 			return &testpb.Empty{}, nil
 		},
-	}
-
-	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup1()
-
-	port, cleanup2 := startTestService(t, ss)
-	defer cleanup2()
+	})
+	defer server.Stop()
 
 	const serviceName = "my-service-client-side-xds"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
 		Host:       "localhost",
-		Port:       port,
+		Port:       testutils.ParsePort(t, server.Address),
 		SecLevel:   e2e.SecurityLevelNone,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

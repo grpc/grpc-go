@@ -265,7 +265,10 @@ func (b *clusterResolverBalancer) handleErrorFromUpdate(err error, fromParent bo
 func (b *clusterResolverBalancer) run() {
 	for {
 		select {
-		case u := <-b.updateCh.Get():
+		case u, ok := <-b.updateCh.Get():
+			if !ok {
+				return
+			}
 			b.updateCh.Load()
 			switch update := u.(type) {
 			case *ccUpdate:
@@ -303,6 +306,7 @@ func (b *clusterResolverBalancer) run() {
 				b.child.Close()
 				b.child = nil
 			}
+			b.updateCh.Close()
 			// This is the *ONLY* point of return from this function.
 			b.logger.Infof("Shutdown")
 			b.done.Fire()

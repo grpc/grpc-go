@@ -34,7 +34,7 @@ import (
 )
 
 func unmarshalRouteConfigResource(r *anypb.Any) (string, RouteConfigUpdate, error) {
-	r, err := unwrapResource(r)
+	r, err := UnwrapResource(r)
 	if err != nil {
 		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
 	}

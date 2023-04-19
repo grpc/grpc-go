@@ -119,3 +119,19 @@ func (s) TestMultipleWriters(t *testing.T) {
 		t.Errorf("reads: %#v, wantReads: %#v", reads, wantReads)
 	}
 }
+
+// TestClose closes the buffer and makes sure that nothing is sent after the
+// buffer is closed.
+func (s) TestClose(t *testing.T) {
+	ub := NewUnbounded()
+	ub.Close()
+	if v, ok := <-ub.Get(); ok {
+		t.Errorf("Unbounded.Get() = %v, want closed channel", v)
+	}
+	ub.Put(1)
+	ub.Load()
+	if v, ok := <-ub.Get(); ok {
+		t.Errorf("Unbounded.Get() = %v, want closed channel", v)
+	}
+	ub.Close()
+}
