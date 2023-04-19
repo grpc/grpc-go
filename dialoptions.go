@@ -665,6 +665,10 @@ func WithResolvers(rs ...resolver.Builder) DialOption {
 // If you are unsure about how to implement a memory pool but want to utilize one,
 // begin with grpc.NewSimpleSharedBufferPool.
 //
+// Note: The shared buffer pool feature will not be active if any of the following
+// options are used: WithStatsHandler, EnableTracing, or binary logging. In such
+// cases, the shared buffer pool will be ignored.
+//
 // # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
