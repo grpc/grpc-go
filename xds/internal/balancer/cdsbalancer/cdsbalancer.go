@@ -426,7 +426,10 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 func (b *cdsBalancer) run() {
 	for {
 		select {
-		case u := <-b.updateCh.Get():
+		case u, ok := <-b.updateCh.Get():
+			if !ok {
+				return
+			}
 			b.updateCh.Load()
 			switch update := u.(type) {
 			case *ccUpdate:
@@ -466,6 +469,7 @@ func (b *cdsBalancer) run() {
 			if b.cachedIdentity != nil {
 				b.cachedIdentity.Close()
 			}
+			b.updateCh.Close()
 			b.logger.Infof("Shutdown")
 			b.done.Fire()
 			return

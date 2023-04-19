@@ -38,8 +38,6 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
 )
 
@@ -89,18 +87,7 @@ func setupTest(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptio
 func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	// Setting up a mgmt server with a done channel when OnStreamRequest is invoked.
-	serverOnReqDoneCh := make(chan struct{})
-	serverOpt := e2e.ManagementServerOptions{
-		OnStreamRequest: func(int64, *v3discoverypb.DiscoveryRequest) error {
-			select {
-			case serverOnReqDoneCh <- struct{}{}:
-			default:
-			}
-			return nil
-		},
-	}
-	a, ms, nodeID := setupTest(ctx, t, serverOpt, defaultTestTimeout)
+	a, ms, nodeID := setupTest(ctx, t, emptyServerOpts, defaultTestTimeout)
 	defer ms.Stop()
 	defer a.close()
 
@@ -109,16 +96,16 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	cancelResource := a.watchResource(listenerResourceType, rn, w)
 	defer cancelResource()
 
-	if err := compareWatchState(a, rn, watchStateStarted); err != nil {
-		t.Fatal(err)
+	// Looping until the underlying transport has successfully sent the request to
+	// the server, which would call the onSend callback and transition the watchState
+	// to `watchStateRequested`.
+	for ctx.Err() == nil {
+		if err := compareWatchState(a, rn, watchStateRequested); err == nil {
+			break
+		}
 	}
-
-	// This blocking read is to verify that the underlying transport has successfully
-	// sent the request to the server, hence the onSend callback was already invoked.
-	// onSend callback should transition the watchState to `watchStateRequested`.
-	<-serverOnReqDoneCh
-	if err := compareWatchState(a, rn, watchStateRequested); err != nil {
-		t.Fatal(err)
+	if ctx.Err() != nil {
+		t.Fatalf("Test timed out before state transiton to %q was verified.", watchStateRequested)
 	}
 
 	// Updating mgmt server with the same lds resource. Blocking on watcher's update
@@ -139,7 +126,6 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 			return
 		}
 	}
-
 }
 
 // This tests the resource's watch state transition when the ADS stream is closed
