@@ -128,6 +128,49 @@ func setupDNS() (chan resolver.Target, chan struct{}, chan resolver.ResolveNowOp
 	return targetCh, closeCh, resolveNowCh, mr, func() { resolver.Register(dnsResolverBuilder) }
 }
 
+// setupAndDial performs common setup across all tests
+//
+//   - creates an xDS client with the passed in bootstrap contents
+//   - creates a  manual resolver that configures `cds_experimental` as the
+//     top-level LB policy.
+//   - creates a ClientConn to talk to the test backends
+//
+// Returns a function to close the ClientConn and the xDS client.
+func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, func()) {
+	t.Helper()
+
+	// Create an xDS client for use by the cluster_resolver LB policy.
+	xdsC, xdsClose, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+
+	// Create a manual resolver and push a service config specifying the use of
+	// the cds LB policy as the top-level LB policy, and a corresponding config
+	// with a single cluster.
+	r := manual.NewBuilderWithScheme("whatever")
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": "%s"
+				}
+			}]
+		}`, clusterName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsC))
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		xdsClose()
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	return cc, func() {
+		xdsClose()
+		cc.Close()
+	}
+}
+
 // TestErrorFromParentLB_ConnectionError tests the case where the parent of the
 // clusterresolver LB policy sends its a connection error. The parent policy,
 // CDS LB policy, sends a connection error when the ADS stream to the management
@@ -172,33 +215,10 @@ func (s) TestErrorFromParentLB_ConnectionError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push a service config specifying the use of
-	// the cds LB policy as the top-level LB policy, and a corresponding config
-	// with a single cluster.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -278,33 +298,10 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push a service config specifying the use of
-	// the cds LB policy as the top-level LB policy, and a corresponding config
-	// with a single cluster.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn that kick starts the xDS workflow.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
 	// Wait for the EDS resource to be requested.
 	select {
@@ -440,33 +437,10 @@ func (s) TestEDS_ResourceRemoved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push a service config specifying the use of
-	// the cds LB policy as the top-level LB policy, and a corresponding config
-	// with a single cluster.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -530,33 +504,10 @@ func (s) TestEDS_ClusterResourceDoesNotContainEDSServiceName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push a service config specifying the use of
-	// the cds LB policy as the top-level LB policy, and a corresponding config
-	// with a single cluster.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -636,33 +587,10 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push a service config specifying the use of
-	// the cds LB policy as the top-level LB policy, and a corresponding config
-	// with a single cluster.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
 	client := testgrpc.NewTestServiceClient(cc)
 	peer := &peer.Peer{}
@@ -797,33 +725,10 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push a service config specifying the use of
-	// the cds LB policy as the top-level LB policy, and a corresponding config
-	// with a single cluster.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
 	// Wait for both EDS resources to be requested.
 	func() {
@@ -853,7 +758,7 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	_, err = client.EmptyCall(sCtx, &testpb.Empty{})
+	_, err := client.EmptyCall(sCtx, &testpb.Empty{})
 	if err == nil {
 		t.Fatal("EmptyCall() succeeded when expected to fail")
 	}
@@ -916,33 +821,10 @@ func (s) TestAggregateCluster_WithTwoEDSClusters_PrioritiesChange(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push a service config specifying the use of
-	// the cds LB policy as the top-level LB policy, and a corresponding config
-	// with a single cluster.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
 	// Make an RPC and ensure that it gets routed to cluster-1 since it is
 	// implicitly higher priority than cluster-2.
@@ -1017,33 +899,10 @@ func (s) TestAggregateCluster_WithOneDNSCluster(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push a service config specifying the use of
-	// the cds LB policy as the top-level LB policy, and a corresponding config
-	// with a single cluster.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
 	// Ensure that the DNS resolver is started for the expected target.
 	select {
@@ -1130,33 +989,10 @@ func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push a service config specifying the use of
-	// the cds LB policy as the top-level LB policy, and a corresponding config
-	// with a single cluster.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
 	// Ensure that an EDS request is sent for the expected resource name.
 	select {
@@ -1184,7 +1020,7 @@ func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	_, err = client.EmptyCall(sCtx, &testpb.Empty{})
+	_, err := client.EmptyCall(sCtx, &testpb.Empty{})
 	if err == nil {
 		t.Fatal("EmptyCall() succeeded when expected to fail")
 	}
@@ -1251,33 +1087,10 @@ func (s) TestAggregateCluster_SwitchEDSAndDNS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push a service config specifying the use of
-	// the cds LB policy as the top-level LB policy, and a corresponding config
-	// with a single cluster.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
 	// Ensure that the RPC is routed to the appropriate backend.
 	client := testgrpc.NewTestServiceClient(cc)
@@ -1366,33 +1179,10 @@ func (s) TestAggregateCluster_ErrorsFromEDSAndDNS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push a service config specifying the use of
-	// the cds LB policy as the top-level LB policy, and a corresponding config
-	// with a single cluster.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
 	// Make an RPC with a short deadline. We expect this RPC to not succeed
 	// because the EDS resource came back with an error, and we are yet to push
@@ -1400,7 +1190,7 @@ func (s) TestAggregateCluster_ErrorsFromEDSAndDNS(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	_, err = client.EmptyCall(sCtx, &testpb.Empty{}, grpc.WaitForReady(true))
+	_, err := client.EmptyCall(sCtx, &testpb.Empty{}, grpc.WaitForReady(true))
 	if err == nil {
 		t.Fatal("EmptyCall() succeeded when expected to fail")
 	}
