@@ -760,12 +760,8 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	_, err := client.EmptyCall(sCtx, &testpb.Empty{})
-	if err == nil {
-		t.Fatal("EmptyCall() succeeded when expected to fail")
-	}
-	if code := status.Code(err); code != codes.DeadlineExceeded {
-		t.Fatalf("EmptyCall() failed with code %s, want %s", code, codes.DeadlineExceeded)
+	if _, err := client.EmptyCall(sCtx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("EmptyCall() code %s, want %s", status.Code(err), codes.DeadlineExceeded)
 	}
 
 	// Update the management server with the second EDS resource.
@@ -876,12 +872,12 @@ func (s) TestAggregateCluster_WithOneDNSCluster(t *testing.T) {
 	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer cleanup2()
 
-	// Start two test backends and extract their host and port.
+	// Start two test backends.
 	servers, cleanup3 := startTestServiceBackends(t, 2)
 	defer cleanup3()
 	addrs, _ := backendAddressesAndPorts(t, servers)
 
-	// Configure an aggregate cluster pointing to a single DNS cluster.
+	// Configure an aggregate cluster pointing to a single LOGICAL_DNS cluster.
 	const (
 		dnsClusterName = clusterName + "-dns"
 		dnsHostName    = "dns_host"
@@ -933,9 +929,9 @@ func (s) TestAggregateCluster_WithOneDNSCluster(t *testing.T) {
 }
 
 // TestAggregateCluster_WithEDSAndDNS tests the case where the top-level cluster
-// resource is an aggregate cluster that resolves to an EDS and a DNS cluster.
-// The test verifies that RPCs fail until both clusters are resolved, and RPCs
-// are routed to the higher priority EDS cluster.
+// resource is an aggregate cluster that resolves to an EDS and a LOGICAL_DNS
+// cluster. The test verifies that RPCs fail until both clusters are resolved to
+// endpoints, and RPCs are routed to the higher priority EDS cluster.
 func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 	dnsTargetCh, _, _, dnsR, cleanup1 := setupDNS()
 	defer cleanup1()
@@ -1022,12 +1018,8 @@ func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	_, err := client.EmptyCall(sCtx, &testpb.Empty{})
-	if err == nil {
-		t.Fatal("EmptyCall() succeeded when expected to fail")
-	}
-	if code := status.Code(err); code != codes.DeadlineExceeded {
-		t.Fatalf("EmptyCall() failed with code %s, want %s", code, codes.DeadlineExceeded)
+	if _, err := client.EmptyCall(sCtx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("EmptyCall() code %s, want %s", status.Code(err), codes.DeadlineExceeded)
 	}
 
 	// Update DNS resolver with test backend addresses.
@@ -1192,12 +1184,8 @@ func (s) TestAggregateCluster_ErrorsFromEDSAndDNS(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	_, err := client.EmptyCall(sCtx, &testpb.Empty{}, grpc.WaitForReady(true))
-	if err == nil {
-		t.Fatal("EmptyCall() succeeded when expected to fail")
-	}
-	if code := status.Code(err); code != codes.DeadlineExceeded {
-		t.Fatalf("EmptyCall() failed with code %s, want %s", code, codes.DeadlineExceeded)
+	if _, err := client.EmptyCall(sCtx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("EmptyCall() code %s, want %s", status.Code(err), codes.DeadlineExceeded)
 	}
 
 	// Ensure that the DNS resolver is started for the expected target.
@@ -1217,7 +1205,7 @@ func (s) TestAggregateCluster_ErrorsFromEDSAndDNS(t *testing.T) {
 
 	// Ensure that the error returned from the DNS resolver is reported to the
 	// caller of the RPC.
-	_, err = client.EmptyCall(ctx, &testpb.Empty{})
+	_, err := client.EmptyCall(ctx, &testpb.Empty{})
 	if code := status.Code(err); code != codes.Unavailable {
 		t.Fatalf("EmptyCall() failed with code %s, want %s", code, codes.Unavailable)
 	}
