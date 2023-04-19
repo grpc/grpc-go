@@ -774,8 +774,8 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Make an RPC and ensure that it gets routed to cluster-1 since it is
-	// implicitly higher priority than cluster-2.
+	// Make an RPC and ensure that it gets routed to cluster-1, implicitly
+	// higher priority than cluster-2.
 	peer := &peer.Peer{}
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
@@ -828,8 +828,8 @@ func (s) TestAggregateCluster_WithTwoEDSClusters_PrioritiesChange(t *testing.T) 
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
-	// Make an RPC and ensure that it gets routed to cluster-1 since it is
-	// implicitly higher priority than cluster-2.
+	// Make an RPC and ensure that it gets routed to cluster-1, implicitly
+	// higher priority than cluster-2.
 	client := testgrpc.NewTestServiceClient(cc)
 	peer := &peer.Peer{}
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
@@ -849,8 +849,8 @@ func (s) TestAggregateCluster_WithTwoEDSClusters_PrioritiesChange(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	// Make an RPC and ensure that it gets routed to cluster-1 since it is
-	// implicitly higher priority than cluster-2.
+	// Wait for RPCs to get routed to cluster-2, which is now implicitly higher
+	// priority than cluster-1, after the priority switch above.
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
 			t.Fatalf("EmptyCall() failed: %v", err)
