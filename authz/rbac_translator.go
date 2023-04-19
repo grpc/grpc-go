@@ -281,36 +281,39 @@ func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, e
 	return policies, nil
 }
 
-func parseAuditLoggingOptions(options auditLoggingOptions) (*v3rbacpb.RBAC_AuditLoggingOptions, error) {
-	optionsRbac := v3rbacpb.RBAC_AuditLoggingOptions{}
+func parseAuditLoggingOptions(options auditLoggingOptions) (*v3rbacpb.RBAC_AuditLoggingOptions, *v3rbacpb.RBAC_AuditLoggingOptions, error) {
+	allowRbac := v3rbacpb.RBAC_AuditLoggingOptions{}
+	denyRbac := v3rbacpb.RBAC_AuditLoggingOptions{}
 
 	if options.AuditCondition != "" {
 		rbacCondition, ok := v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition_value[options.AuditCondition]
 		if !ok {
-			return nil, fmt.Errorf("failed to parse AuditCondition %v. Allowed values {NONE, ON_DENY, ON_ALLOW, ON_DENY_AND_ALLOW}", options.AuditCondition)
+			return nil, nil, fmt.Errorf("failed to parse AuditCondition %v. Allowed values {NONE, ON_DENY, ON_ALLOW, ON_DENY_AND_ALLOW}", options.AuditCondition)
 		}
-		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition(rbacCondition)
+		allowRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition(rbacCondition)
+		denyRbac.AuditCondition = toDenyCondition(v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition(rbacCondition))
 	}
 
 	for i := range options.AuditLoggers {
 		config := &options.AuditLoggers[i]
 		customConfig, err := anypb.New(&config.Config)
 		if err != nil {
-			return nil, fmt.Errorf("error parsing custom audit logger config: %v", err)
+			return nil, nil, fmt.Errorf("error parsing custom audit logger config: %v", err)
 		}
 		logger := &v3corepb.TypedExtensionConfig{Name: config.Name, TypedConfig: customConfig}
 		rbacConfig := v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 			IsOptional:  config.IsOptional,
 			AuditLogger: logger,
 		}
-		optionsRbac.LoggerConfigs = append(optionsRbac.LoggerConfigs, &rbacConfig)
+		allowRbac.LoggerConfigs = append(allowRbac.LoggerConfigs, &rbacConfig)
+		denyRbac.LoggerConfigs = append(denyRbac.LoggerConfigs, &rbacConfig)
 	}
 
-	return &optionsRbac, nil
+	return &allowRbac, &denyRbac, nil
 
 }
 
-func buildAllowAndDenyAuditLogger(options *v3rbacpb.RBAC_AuditLoggingOptions) (*v3rbacpb.RBAC_AuditLoggingOptions, *v3rbacpb.RBAC_AuditLoggingOptions) {
+func toDenyCondition(condition v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition) v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition {
 	// Mapping the overall policy AuditCondition to what it must be for the Deny and Allow RBAC
 	// See gRPC A59 for details - https://github.com/grpc/proposal/pull/346/files
 	// |Authorization Policy  |DENY RBAC          |ALLOW RBAC           |
@@ -319,17 +322,20 @@ func buildAllowAndDenyAuditLogger(options *v3rbacpb.RBAC_AuditLoggingOptions) (*
 	// |ON_DENY               |ON_DENY            |ON_DENY              |
 	// |ON_ALLOW              |NONE               |ON_ALLOW             |
 	// |ON_DENY_AND_ALLOW     |ON_DENY            |ON_DENY_AND_ALLOW    |
-	allow := *options
-	deny := *options
-	switch condition := options.AuditCondition; condition {
+	// allow := *options
+	// deny := *options
+	switch condition {
 	case v3rbacpb.RBAC_AuditLoggingOptions_NONE:
+		return v3rbacpb.RBAC_AuditLoggingOptions_NONE
 	case v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY:
+		return v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY
 	case v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW:
-		deny.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_NONE
+		return v3rbacpb.RBAC_AuditLoggingOptions_NONE
 	case v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY_AND_ALLOW:
-		deny.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY
+		return v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY
+	default:
+		return v3rbacpb.RBAC_AuditLoggingOptions_NONE
 	}
-	return &allow, &deny
 }
 
 // translatePolicy translates SDK authorization policy in JSON format to two
@@ -349,11 +355,10 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 	if len(policy.AllowRules) == 0 {
 		return nil, fmt.Errorf(`"allow_rules" is not present`)
 	}
-	auditLoggers, err := parseAuditLoggingOptions(policy.AuditLoggingOptions)
+	allowLogger, denyLogger, err := parseAuditLoggingOptions(policy.AuditLoggingOptions)
 	if err != nil {
 		return nil, err
 	}
-	allowLogger, denyLogger := buildAllowAndDenyAuditLogger(auditLoggers)
 	rbacs := make([]*v3rbacpb.RBAC, 0, 2)
 	if len(policy.DenyRules) > 0 {
 		denyPolicies, err := parseRules(policy.DenyRules, policy.Name)
