@@ -851,7 +851,7 @@ func (s) TestAggregateCluster_WithTwoEDSClusters_PrioritiesChange(t *testing.T) 
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
 			t.Fatalf("EmptyCall() failed: %v", err)
 		}
-		if peer.Addr.String() != addrs[1].Addr {
+		if peer.Addr.String() == addrs[1].Addr {
 			break
 		}
 	}
@@ -1120,8 +1120,8 @@ func (s) TestAggregateCluster_SwitchEDSAndDNS(t *testing.T) {
 	// Update DNS resolver with test backend addresses.
 	dnsR.UpdateState(resolver.State{Addresses: addrs[1:]})
 
-	// Make an RPC and ensure that it gets routed to the backend corresponding
-	// to the LOGICAL_DNS cluster.
+	// Ensure that start getting routed to the backend corresponding to the
+	// LOGICAL_DNS cluster.
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer))
 		if peer.Addr.String() == addrs[1].Addr {
@@ -1129,15 +1129,15 @@ func (s) TestAggregateCluster_SwitchEDSAndDNS(t *testing.T) {
 		}
 	}
 	if ctx.Err() != nil {
-		t.Fatal("Timeout when waiting for RPCs to be routed to backends in the DNS cluster")
+		t.Fatalf("Timeout when waiting for RPCs to be routed to backend %q in the DNS cluster", addrs[1].Addr)
 	}
 }
 
 // TestAggregateCluster_ErrorsFromEDSAndDNS tests the case where the top-level
-// cluster is an aggregate cluster which resolves to an EDS and DNS cluster.
-// When the EDS cluster resports errors, the test verifies that we switch to the
-// DNS cluster. And once the DNS cluster also returns an error, the test
-// verifies that the error is reported to the caller of the RPC.
+// cluster is an aggregate cluster that resolves to an EDS and LOGICAL_DNS
+// cluster. When the EDS cluster reports errors, the test verifies that we
+// switch to the DNS cluster. And once the DNS cluster also returns an error,
+// the test verifies that the error is reported to the caller of the RPC.
 func (s) TestAggregateCluster_ErrorsFromEDSAndDNS(t *testing.T) {
 	dnsTargetCh, _, _, dnsR, cleanup1 := setupDNS()
 	defer cleanup1()
