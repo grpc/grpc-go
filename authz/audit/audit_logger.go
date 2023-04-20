@@ -16,7 +16,7 @@
  *
  */
 
-package authz
+package audit
 
 import (
 	"encoding/json"
