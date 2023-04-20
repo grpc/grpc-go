@@ -26,6 +26,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -41,9 +42,7 @@ const (
 	// The maximum byte size of receive frames.
 	frameLimit              = 64 * 1024 // 64 KB
 	rekeyRecordProtocolName = "ALTSRP_GCM_AES128_REKEY"
-	// maxPendingHandshakes represents the maximum number of concurrent
-	// handshakes.
-	maxPendingHandshakes = 100
+	queuedHandshakeTimeout  = 10 * time.Second
 )
 
 var (
@@ -59,9 +58,12 @@ var (
 			return conn.NewAES128GCMRekey(s, keyData)
 		},
 	}
-	// control number of concurrent created (but not closed) handshakers.
+	maxPendingHandshakes = int64(100)
+	// cap the number of concurrent handshakes, and queue subsequent
+	// handshakes once we have reached the cap.
 	mu                   sync.Mutex
 	concurrentHandshakes = int64(0)
+	queuedHandshakes     [](chan bool)
 	// errDropped occurs when maxPendingHandshakes is reached.
 	errDropped = errors.New("maximum number of concurrent ALTS handshakes is reached")
 	// errOutOfBound occurs when the handshake service returns a consumed
@@ -81,24 +83,43 @@ func acquire() bool {
 	mu.Lock()
 	// If we need n to be configurable, we can pass it as an argument.
 	n := int64(1)
-	success := maxPendingHandshakes-concurrentHandshakes >= n
-	if success {
+	if maxPendingHandshakes-concurrentHandshakes >= n {
+		defer mu.Unlock()
 		concurrentHandshakes += n
+		return true
 	}
+
+	// If we have hit the max number of concurrent handshakes, queue this
+	// handshake and wait until it is popped from the queue or a timeout
+	// occurs.
+	handshakeIsReady := make(chan bool)
+	queuedHandshakes = append(queuedHandshakes, handshakeIsReady)
 	mu.Unlock()
-	return success
+
+	select {
+	case <-handshakeIsReady:
+		return true
+	case <-time.After(queuedHandshakeTimeout):
+		return false
+	}
 }
 
 func release() {
 	mu.Lock()
+	defer mu.Unlock()
 	// If we need n to be configurable, we can pass it as an argument.
 	n := int64(1)
+	// If there are queued handshakes, do not decrease the number of concurrent handshakes.
+	if len(queuedHandshakes) > 0 {
+		isHandshakeReady := queuedHandshakes[0]
+		queuedHandshakes = queuedHandshakes[1:]
+		isHandshakeReady <- true
+		return
+	}
 	concurrentHandshakes -= n
 	if concurrentHandshakes < 0 {
-		mu.Unlock()
 		panic("bad release")
 	}
-	mu.Unlock()
 }
 
 // ClientHandshakerOptions contains the client handshaker options that can
@@ -390,4 +411,10 @@ func (h *altsHandshaker) Close() {
 	if h.stream != nil {
 		h.stream.CloseSend()
 	}
+}
+
+// SetMaxConcurrentHandshakesForTesting sets the number of max concurrent
+// handshakes, for testing purposes only.
+func SetMaxConcurrentHandshakesForTesting(maxHandshakes int64) {
+	maxPendingHandshakes = maxHandshakes
 }
