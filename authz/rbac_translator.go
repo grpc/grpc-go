@@ -57,9 +57,9 @@ type rule struct {
 }
 
 type auditLogger struct {
-	Name       string
-	Config     structpb.Struct
-	IsOptional bool `json:"is_optional"`
+	Name       string          `json:"name"`
+	Config     structpb.Struct `json:"config"`
+	IsOptional bool            `json:"is_optional"`
 }
 
 type auditLoggingOptions struct {
@@ -281,7 +281,10 @@ func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, e
 	return policies, nil
 }
 
-func parseAuditLoggingOptions(options auditLoggingOptions) (*v3rbacpb.RBAC_AuditLoggingOptions, *v3rbacpb.RBAC_AuditLoggingOptions, error) {
+// Parse auditLoggingOptions to the associated RBAC protos. The single
+// auditLoggingOptions results in two different parsed protos, one for the allow
+// policy and one for the deny policy
+func (options *auditLoggingOptions) toProtos() (allow *v3rbacpb.RBAC_AuditLoggingOptions, deny *v3rbacpb.RBAC_AuditLoggingOptions, err error) {
 	allowRbac := v3rbacpb.RBAC_AuditLoggingOptions{}
 	denyRbac := v3rbacpb.RBAC_AuditLoggingOptions{}
 
@@ -313,6 +316,8 @@ func parseAuditLoggingOptions(options auditLoggingOptions) (*v3rbacpb.RBAC_Audit
 
 }
 
+// Maps the AuditCondition coming from AuditLoggingOptions to the proper
+// condition for the deny policy RBAC proto
 func toDenyCondition(condition v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition) v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition {
 	// Mapping the overall policy AuditCondition to what it must be for the Deny and Allow RBAC
 	// See gRPC A59 for details - https://github.com/grpc/proposal/pull/346/files
@@ -322,8 +327,6 @@ func toDenyCondition(condition v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition)
 	// |ON_DENY               |ON_DENY            |ON_DENY              |
 	// |ON_ALLOW              |NONE               |ON_ALLOW             |
 	// |ON_DENY_AND_ALLOW     |ON_DENY            |ON_DENY_AND_ALLOW    |
-	// allow := *options
-	// deny := *options
 	switch condition {
 	case v3rbacpb.RBAC_AuditLoggingOptions_NONE:
 		return v3rbacpb.RBAC_AuditLoggingOptions_NONE
@@ -355,7 +358,7 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 	if len(policy.AllowRules) == 0 {
 		return nil, fmt.Errorf(`"allow_rules" is not present`)
 	}
-	allowLogger, denyLogger, err := parseAuditLoggingOptions(policy.AuditLoggingOptions)
+	allowLogger, denyLogger, err := policy.AuditLoggingOptions.toProtos()
 	if err != nil {
 		return nil, err
 	}
