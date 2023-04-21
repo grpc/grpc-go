@@ -30,7 +30,7 @@ import (
 
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/authz"
+	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
@@ -114,7 +114,7 @@ type engine struct {
 	policies map[string]*policyMatcher
 	// action must be ALLOW or DENY.
 	action       v3rbacpb.RBAC_Action
-	auditLoggers v3rbacpb.RBAC_AuditLoggingOptions
+	auditLoggers []*audit.Logger
 }
 
 // newEngine creates an RBAC Engine based on the contents of policy. Returns a
@@ -136,7 +136,8 @@ func newEngine(config *v3rbacpb.RBAC) (*engine, error) {
 
 	auditOptions := config.GetAuditLoggingOptions()
 	for _, logger := range auditOptions.LoggerConfigs {
-		auditLoggerFactory := authz.GetAuditLoggerBuilder(logger.AuditLogger.Name)
+		auditLoggerFactory := audit.GetLoggerBuilder(logger.AuditLogger.Name)
+		fmt.Println(auditLoggerFactory)
 	}
 	return &engine{
 		policies:     policies,
