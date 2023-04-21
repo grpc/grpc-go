@@ -251,101 +251,6 @@ func TestTranslatePolicy(t *testing.T) {
 				},
 			},
 		},
-		"audit logging DENY no config": {
-			authzPolicy: `{
-				"name": "authz",
-				"allow_rules": [
-				{
-					"name": "allow_authenticated",
-					"source": {
-						"principals":["*", ""]
-					}
-				}],
-				"deny_rules": [
-				{
-					"name": "deny_policy_1",
-					"source": {
-						"principals":[
-						"spiffe://foo.abc"
-						]
-					}
-				}],
-				"audit_logging_options": {
-					"audit_condition": "ON_DENY",
-					"audit_loggers": [
-						{
-							"name": "stdout_logger",
-							"is_optional": false
-						}
-					]
-				}
-			}`,
-			wantPolicies: []*v3rbacpb.RBAC{
-				{
-					Action: v3rbacpb.RBAC_DENY,
-					Policies: map[string]*v3rbacpb.Policy{
-						"authz_deny_policy_1": {
-							Principals: []*v3rbacpb.Principal{
-								{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
-									Ids: []*v3rbacpb.Principal{
-										{Identifier: &v3rbacpb.Principal_Authenticated_{
-											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
-												MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "spiffe://foo.abc"},
-											}},
-										}},
-									},
-								}}},
-							},
-							Permissions: []*v3rbacpb.Permission{
-								{Rule: &v3rbacpb.Permission_Any{Any: true}},
-							},
-						},
-					},
-					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
-						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY,
-						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
-								IsOptional: false,
-							},
-						},
-					},
-				},
-				{
-					Action: v3rbacpb.RBAC_ALLOW,
-					Policies: map[string]*v3rbacpb.Policy{
-						"authz_allow_authenticated": {
-							Principals: []*v3rbacpb.Principal{
-								{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
-									Ids: []*v3rbacpb.Principal{
-										{Identifier: &v3rbacpb.Principal_Authenticated_{
-											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
-												MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: ".+"}},
-											}},
-										}},
-										{Identifier: &v3rbacpb.Principal_Authenticated_{
-											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
-												MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""},
-											}},
-										}},
-									},
-								}}},
-							},
-							Permissions: []*v3rbacpb.Permission{
-								{Rule: &v3rbacpb.Permission_Any{Any: true}},
-							},
-						},
-					},
-					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
-						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY,
-						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
-								IsOptional: false,
-							},
-						},
-					},
-				},
-			},
-		},
 		"audit_logging_ALLOW empty config": {
 			authzPolicy: `{
 				"name": "authz",
@@ -990,6 +895,37 @@ func TestTranslatePolicy(t *testing.T) {
 				}
 			}`,
 			wantErr: `failed to unmarshal policy`,
+		},
+		"missing custom config audit logger": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"deny_rules": [
+				{
+					"name": "deny_policy_1",
+					"source": {
+						"principals":[
+						"spiffe://foo.abc"
+						]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_condition": "ON_DENY",
+					"audit_loggers": [
+						{
+							"name": "stdout_logger",
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantErr: "AuditLogger Config field cannot be nil",
 		},
 	}
 	for name, test := range tests {

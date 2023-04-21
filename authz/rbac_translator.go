@@ -57,9 +57,9 @@ type rule struct {
 }
 
 type auditLogger struct {
-	Name       string          `json:"name"`
-	Config     structpb.Struct `json:"config"`
-	IsOptional bool            `json:"is_optional"`
+	Name       string           `json:"name"`
+	Config     *structpb.Struct `json:"config"`
+	IsOptional bool             `json:"is_optional"`
 }
 
 type auditLoggingOptions struct {
@@ -299,7 +299,10 @@ func (options *auditLoggingOptions) toProtos() (allow *v3rbacpb.RBAC_AuditLoggin
 
 	for i := range options.AuditLoggers {
 		config := &options.AuditLoggers[i]
-		customConfig, err := anypb.New(&config.Config)
+		if config.Config == nil {
+			return nil, nil, fmt.Errorf("AuditLogger Config field cannot be nil")
+		}
+		customConfig, err := anypb.New(config.Config)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error parsing custom audit logger config: %v", err)
 		}
