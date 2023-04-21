@@ -35,7 +35,6 @@ import (
 	binlogpb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/binarylog"
 	iblog "google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/stats/opencensus"
@@ -438,7 +437,7 @@ func registerClientRPCEvents(config *config, exporter loggingExporter) {
 		projectID:    config.ProjectID,
 		clientSide:   true,
 	}
-	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl binarylog.Logger) grpc.DialOption)(clientSideLogger))
+	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl iblog.Logger) grpc.DialOption)(clientSideLogger))
 }
 
 func registerServerRPCEvents(config *config, exporter loggingExporter) {
@@ -478,7 +477,7 @@ func registerServerRPCEvents(config *config, exporter loggingExporter) {
 		projectID:    config.ProjectID,
 		clientSide:   false,
 	}
-	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl binarylog.Logger) grpc.ServerOption)(serverSideLogger))
+	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl iblog.Logger) grpc.ServerOption)(serverSideLogger))
 }
 
 func startLogging(ctx context.Context, config *config) error {
