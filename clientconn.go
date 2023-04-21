@@ -176,7 +176,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	// Register ClientConn with channelz.
 	cc.channelzRegistration(target)
 
-	// Validate configured transport credentials.
 	if err := cc.validateTransportCredentials(); err != nil {
 		return nil, err
 	}
@@ -224,8 +223,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if err := cc.parseTargetAndFindResolver(); err != nil {
 		return nil, err
 	}
-
-	// Determine the channel authority.
 	if err = cc.determineAuthority(); err != nil {
 		return nil, err
 	}
@@ -1661,6 +1658,9 @@ func parseTarget(target string) (resolver.Target, error) {
 // - endpoint from dial target of the form "scheme://[authority]/endpoint"
 //
 // Stores the determined authority in `cc.authority`.
+//
+// Returns a non-nil error if the authority returned by the transport
+// credentials do not match the authority configured through the dial option.
 //
 // Doesn't grab cc.mu as this method is expected to be called only at Dial time.
 func (cc *ClientConn) determineAuthority() error {
