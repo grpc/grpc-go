@@ -16,6 +16,7 @@
  *
  */
 
+// Package audit contains interfaces for audit logging during authorization.
 package audit
 
 import (
