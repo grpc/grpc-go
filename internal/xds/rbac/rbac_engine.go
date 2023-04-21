@@ -96,13 +96,15 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 		switch {
 		case engine.action == v3rbacpb.RBAC_ALLOW && !ok:
 			cre.logRequestDetails(rpcData)
-			doAuditLogging(engine.auditLoggers, rpcData)
+			doAuditLogging(engine.auditLoggers, rpcData, matchingPolicyName, false)
 			return status.Errorf(codes.PermissionDenied, "incoming RPC did not match an allow policy")
 		case engine.action == v3rbacpb.RBAC_DENY && ok:
 			cre.logRequestDetails(rpcData)
-			doAuditLogging(engine.auditLoggers, rpcData)
+			doAuditLogging(engine.auditLoggers, rpcData, matchingPolicyName, false)
 			return status.Errorf(codes.PermissionDenied, "incoming RPC matched a deny policy %q", matchingPolicyName)
 		}
+		// TODO default? This is only logging on problems? If we get here it means we've passed a matching check
+
 		// Every policy in the engine list must be queried. Thus, iterate to the
 		// next policy.
 	}
@@ -264,7 +266,18 @@ type rpcData struct {
 	certs []*x509.Certificate
 }
 
-func doAuditLogging(loggers []*audit.Logger, rpcData *rpcData) error {
+func doAuditLogging(loggers []*audit.Logger, rpcData *rpcData, policyName string, authorized bool) error {
 	// TODO implement audit logging
+	event := audit.Event{
+		FullMethodName: rpcData.fullMethod,
+		Principal:      rpcData.peerInfo.Addr.String(),
+		PolicyName:     policyName,
+		MatchedRule:    "TODO",
+		Authorized:     authorized,
+	}
+	for _, logger := range loggers {
+		// TODO
+
+	}
 	return nil
 }
