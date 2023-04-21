@@ -23,6 +23,7 @@ package rbac
 import (
 	"context"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -95,9 +96,11 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 		switch {
 		case engine.action == v3rbacpb.RBAC_ALLOW && !ok:
 			cre.logRequestDetails(rpcData)
+			doAuditLogging(engine.auditLoggers, rpcData)
 			return status.Errorf(codes.PermissionDenied, "incoming RPC did not match an allow policy")
 		case engine.action == v3rbacpb.RBAC_DENY && ok:
 			cre.logRequestDetails(rpcData)
+			doAuditLogging(engine.auditLoggers, rpcData)
 			return status.Errorf(codes.PermissionDenied, "incoming RPC matched a deny policy %q", matchingPolicyName)
 		}
 		// Every policy in the engine list must be queried. Thus, iterate to the
@@ -135,14 +138,27 @@ func newEngine(config *v3rbacpb.RBAC) (*engine, error) {
 	}
 
 	auditOptions := config.GetAuditLoggingOptions()
-	for _, logger := range auditOptions.LoggerConfigs {
-		auditLoggerFactory := audit.GetLoggerBuilder(logger.AuditLogger.Name)
-		fmt.Println(auditLoggerFactory)
+	auditLoggers := []*audit.Logger{}
+	if auditOptions != nil {
+		for _, logger := range auditOptions.LoggerConfigs {
+			auditLoggerFactory := audit.GetLoggerBuilder(logger.AuditLogger.Name)
+			customConfig := logger.AuditLogger.TypedConfig
+			jsonConfig, err := json.Marshal(&customConfig)
+			if err != nil {
+				return nil, fmt.Errorf("could not convert audit logger custom config to json: %v", err)
+			}
+			auditLoggerConfig, err := auditLoggerFactory.ParseLoggerConfig(jsonConfig)
+			if err != nil {
+				return nil, fmt.Errorf("audit logger custom config did not match LoggerConfig: %v", err)
+			}
+			auditLogger := auditLoggerFactory.Build(auditLoggerConfig)
+			auditLoggers = append(auditLoggers, &auditLogger)
+		}
 	}
 	return &engine{
 		policies:     policies,
 		action:       a,
-		auditLoggers: *config.GetAuditLoggingOptions(),
+		auditLoggers: auditLoggers,
 	}, nil
 }
 
@@ -246,4 +262,9 @@ type rpcData struct {
 	// certs are the certificates presented by the peer during a TLS
 	// handshake.
 	certs []*x509.Certificate
+}
+
+func doAuditLogging(loggers []*audit.Logger, rpcData *rpcData) error {
+	// TODO implement audit logging
+	return nil
 }
