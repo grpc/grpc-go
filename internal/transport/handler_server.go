@@ -453,8 +453,8 @@ func (ht *serverHandlerTransport) IncrMsgSent() {}
 
 func (ht *serverHandlerTransport) IncrMsgRecv() {}
 
-func (ht *serverHandlerTransport) Drain() {
-	panic("Drain() is not implemented")
+func (ht *serverHandlerTransport) Drain(debugData ...string) {
+	panic("Drain(debugData ...string) is not implemented")
 }
 
 // mapRecvMsgError returns the non-nil err into the appropriate
