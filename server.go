@@ -1856,7 +1856,7 @@ func (s *Server) GracefulStop() {
 	if !s.drain {
 		for _, conns := range s.conns {
 			for st := range conns {
-				st.Drain()
+				st.Drain("graceful_stop")
 			}
 		}
 		s.drain = true
