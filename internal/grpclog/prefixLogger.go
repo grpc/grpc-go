@@ -87,6 +87,11 @@ func (pl *PrefixLogger) V(l int) bool {
 	return Logger.V(l)
 }
 
+// AddPrefix adds a prefix to the prefix logger.
+func (pl *PrefixLogger) AddPrefix(prefix string) *PrefixLogger {
+	return &PrefixLogger{logger: pl.logger, prefix: pl.prefix + prefix}
+}
+
 // NewPrefixLogger creates a prefix logger with the given prefix.
 func NewPrefixLogger(logger DepthLoggerV2, prefix string) *PrefixLogger {
 	return &PrefixLogger{logger: logger, prefix: prefix}

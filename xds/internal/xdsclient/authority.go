@@ -107,13 +107,15 @@ type authorityArgs struct {
 }
 
 func newAuthority(args authorityArgs) (*authority, error) {
+	logger := prefixLoggerAuthorityArgs(args)
+
 	ret := &authority{
 		serverCfg:          args.serverCfg,
 		bootstrapCfg:       args.bootstrapCfg,
 		serializer:         args.serializer,
 		resourceTypeGetter: args.resourceTypeGetter,
 		watchExpiryTimeout: args.watchExpiryTimeout,
-		logger:             args.logger,
+		logger:             logger,
 		resources:          make(map[xdsresource.Type]map[string]*resourceState),
 	}
 
@@ -122,7 +124,7 @@ func newAuthority(args authorityArgs) (*authority, error) {
 		OnRecvHandler:  ret.handleResourceUpdate,
 		OnErrorHandler: ret.newConnectionError,
 		OnSendHandler:  ret.transportOnSendHandler,
-		Logger:         args.logger,
+		Logger:         logger,
 		NodeProto:      args.bootstrapCfg.NodeProto,
 	})
 	if err != nil {
