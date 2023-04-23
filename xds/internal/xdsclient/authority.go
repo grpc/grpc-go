@@ -107,7 +107,7 @@ type authorityArgs struct {
 }
 
 func newAuthority(args authorityArgs) (*authority, error) {
-	logger := prefixLoggerAuthorityArgs(args)
+	logger := prefixLoggerAuthorityArgs(&args)
 
 	ret := &authority{
 		serverCfg:          args.serverCfg,

@@ -39,7 +39,7 @@ func prefixLoggerClient(p *clientImpl) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefixC, p))
 }
 
-func prefixLoggerAuthorityArgs(a authorityArgs) *internalgrpclog.PrefixLogger {
+func prefixLoggerAuthorityArgs(a *authorityArgs) *internalgrpclog.PrefixLogger {
 	if a.serverCfg == nil || a.serverCfg.ServerURI == "" {
 		if a.logger != nil {
 			return a.logger.AddPrefix(fmt.Sprintf(prefixA, "<unknown>"))
