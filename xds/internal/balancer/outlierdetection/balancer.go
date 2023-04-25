@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -827,8 +828,7 @@ func (b *outlierDetectionBalancer) successRateAlgorithm() {
 		successRate := float64(bucket.numSuccesses) / float64(bucket.numSuccesses+bucket.numFailures)
 		requiredSuccessRate := mean - stddev*(float64(ejectionCfg.StdevFactor)/1000)
 		if successRate < requiredSuccessRate {
-			channelz.Infof(logger, b.channelzParentID, "SuccessRate algorithm detected outlier: %s. "+
-				"Parameters: successRate=%f, mean=%f, stddev=%f, requiredSuccessRate=%f",
+			channelz.Infof(logger, b.channelzParentID, "SuccessRate algorithm detected outlier: %s. Parameters: successRate=%f, mean=%f, stddev=%f, requiredSuccessRate=%f",
 				addrInfo.string(), successRate, mean, stddev, requiredSuccessRate)
 			if uint32(grpcrand.Int31n(100)) < ejectionCfg.EnforcementPercentage {
 				b.ejectAddress(addrInfo)
@@ -909,12 +909,13 @@ type addressInfo struct {
 }
 
 func (a *addressInfo) string() string {
-	res := "["
+	var res strings.Builder
+	res.WriteString("[")
 	for _, sw := range a.sws {
-		res += sw.string()
+		res.WriteString(sw.string())
 	}
-	res += "]"
-	return res
+	res.WriteString("]")
+	return res.String()
 }
 
 func newAddressInfo() *addressInfo {
