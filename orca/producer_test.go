@@ -128,11 +128,11 @@ func (s) TestProducer(t *testing.T) {
 
 	// Register the OpenRCAService with a very short metrics reporting interval.
 	const shortReportingInterval = 50 * time.Millisecond
-	opts := orca.ServiceOptions{MinReportingInterval: shortReportingInterval}
+	smr := orca.NewServerMetricsRecorder()
+	opts := orca.ServiceOptions{MinReportingInterval: shortReportingInterval, ServerMetricsProvider: smr}
 	internal.AllowAnyMinReportingInterval.(func(*orca.ServiceOptions))(&opts)
 	s := grpc.NewServer()
-	orcaSrv, err := orca.Register(s, opts)
-	if err != nil {
+	if err := orca.Register(s, opts); err != nil {
 		t.Fatalf("orca.Register failed: %v", err)
 	}
 	go s.Serve(lis)
@@ -157,9 +157,9 @@ func (s) TestProducer(t *testing.T) {
 	defer oobLis.Stop()
 
 	// Set a few metrics and wait for them on the client side.
-	orcaSrv.SetCPUUtilization(10)
-	orcaSrv.SetMemoryUtilization(100)
-	orcaSrv.SetUtilization("bob", 555)
+	smr.SetCPUUtilization(10)
+	smr.SetMemoryUtilization(100)
+	smr.SetNamedUtilization("bob", 555)
 	loadReportWant := &v3orcapb.OrcaLoadReport{
 		CpuUtilization: 10,
 		MemUtilization: 100,
@@ -181,9 +181,9 @@ testReport:
 	}
 
 	// Change and add metrics and wait for them on the client side.
-	orcaSrv.SetCPUUtilization(50)
-	orcaSrv.SetMemoryUtilization(200)
-	orcaSrv.SetUtilization("mary", 321)
+	smr.SetCPUUtilization(50)
+	smr.SetMemoryUtilization(200)
+	smr.SetNamedUtilization("mary", 321)
 	loadReportWant = &v3orcapb.OrcaLoadReport{
 		CpuUtilization: 50,
 		MemUtilization: 200,
