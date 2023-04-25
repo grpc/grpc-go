@@ -88,25 +88,24 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 		return status.Errorf(codes.Internal, "gRPC RBAC: %v", err)
 	}
 	for _, engine := range cre.chainedEngines {
-		matchingPolicyName, ok := engine.findMatchingPolicy(rpcData)
+		matchedRule, ok := engine.findMatchingPolicy(rpcData)
 		if logger.V(2) && ok {
-			logger.Infof("incoming RPC matched to policy %v in engine with action %v", matchingPolicyName, engine.action)
+			logger.Infof("incoming RPC matched to policy %v in engine with action %v", matchedRule, engine.action)
 		}
 
 		switch {
 		case engine.action == v3rbacpb.RBAC_ALLOW && !ok:
 			cre.logRequestDetails(rpcData)
-			doAuditLogging(engine.auditLoggers, rpcData, matchingPolicyName, false)
+			doAuditLogging(engine, rpcData, matchedRule, false)
 			return status.Errorf(codes.PermissionDenied, "incoming RPC did not match an allow policy")
 		case engine.action == v3rbacpb.RBAC_DENY && ok:
 			cre.logRequestDetails(rpcData)
-			doAuditLogging(engine.auditLoggers, rpcData, matchingPolicyName, false)
-			return status.Errorf(codes.PermissionDenied, "incoming RPC matched a deny policy %q", matchingPolicyName)
+			doAuditLogging(engine, rpcData, matchedRule, false)
+			return status.Errorf(codes.PermissionDenied, "incoming RPC matched a deny policy %q", matchedRule)
 		}
-		// TODO default? This is only logging on problems? If we get here it means we've passed a matching check
-
 		// Every policy in the engine list must be queried. Thus, iterate to the
 		// next policy.
+		doAuditLogging(engine, rpcData, matchedRule, true)
 	}
 	// If the incoming RPC gets through all of the engines successfully (i.e.
 	// doesn't not match an allow or match a deny engine), the RPC is authorized
@@ -118,8 +117,9 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 type engine struct {
 	policies map[string]*policyMatcher
 	// action must be ALLOW or DENY.
-	action       v3rbacpb.RBAC_Action
-	auditLoggers []*audit.Logger
+	action         v3rbacpb.RBAC_Action
+	auditLoggers   []*audit.Logger
+	auditCondition v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition
 }
 
 // newEngine creates an RBAC Engine based on the contents of policy. Returns a
@@ -158,9 +158,10 @@ func newEngine(config *v3rbacpb.RBAC) (*engine, error) {
 		}
 	}
 	return &engine{
-		policies:     policies,
-		action:       a,
-		auditLoggers: auditLoggers,
+		policies:       policies,
+		action:         a,
+		auditLoggers:   auditLoggers,
+		auditCondition: auditOptions.GetAuditCondition(),
 	}, nil
 }
 
@@ -266,18 +267,30 @@ type rpcData struct {
 	certs []*x509.Certificate
 }
 
-func doAuditLogging(loggers []*audit.Logger, rpcData *rpcData, policyName string, authorized bool) error {
+func doAuditLogging(engine *engine, rpcData *rpcData, rule string, authorized bool) error {
 	// TODO implement audit logging
-	event := audit.Event{
+	event := &audit.Event{
 		FullMethodName: rpcData.fullMethod,
 		Principal:      rpcData.peerInfo.Addr.String(),
-		PolicyName:     policyName,
-		MatchedRule:    "TODO",
+		PolicyName:     "",
+		MatchedRule:    rule,
 		Authorized:     authorized,
 	}
-	for _, logger := range loggers {
-		// TODO
-
+	for _, logger := range engine.auditLoggers {
+		switch engine.auditCondition {
+		case v3rbacpb.RBAC_AuditLoggingOptions_NONE:
+			continue
+		case v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY:
+			if !authorized {
+				(*logger).Log(event)
+			}
+		case v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW:
+			if authorized {
+				(*logger).Log(event)
+			}
+		case v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY_AND_ALLOW:
+			(*logger).Log(event)
+		}
 	}
 	return nil
 }
