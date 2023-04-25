@@ -68,6 +68,6 @@ func (scw *subConnWrapper) uneject() {
 	})
 }
 
-func (scw *subConnWrapper) string() string {
+func (scw *subConnWrapper) String() string {
 	return fmt.Sprintf("%+v", scw.addresses)
 }

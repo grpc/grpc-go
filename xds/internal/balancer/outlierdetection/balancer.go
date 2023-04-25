@@ -829,7 +829,7 @@ func (b *outlierDetectionBalancer) successRateAlgorithm() {
 		requiredSuccessRate := mean - stddev*(float64(ejectionCfg.StdevFactor)/1000)
 		if successRate < requiredSuccessRate {
 			channelz.Infof(logger, b.channelzParentID, "SuccessRate algorithm detected outlier: %s. Parameters: successRate=%f, mean=%f, stddev=%f, requiredSuccessRate=%f",
-				addrInfo.string(), successRate, mean, stddev, requiredSuccessRate)
+				addrInfo, successRate, mean, stddev, requiredSuccessRate)
 			if uint32(grpcrand.Int31n(100)) < ejectionCfg.EnforcementPercentage {
 				b.ejectAddress(addrInfo)
 			}
@@ -857,7 +857,7 @@ func (b *outlierDetectionBalancer) failurePercentageAlgorithm() {
 		failurePercentage := (float64(bucket.numFailures) / float64(bucket.numSuccesses+bucket.numFailures)) * 100
 		if failurePercentage > float64(b.cfg.FailurePercentageEjection.Threshold) {
 			channelz.Infof(logger, b.channelzParentID, "FailurePercentage algorithm detected outlier: %s, failurePercentage=%f",
-				addrInfo.string(), failurePercentage)
+				addrInfo, failurePercentage)
 			if uint32(grpcrand.Int31n(100)) < ejectionCfg.EnforcementPercentage {
 				b.ejectAddress(addrInfo)
 			}
@@ -872,7 +872,7 @@ func (b *outlierDetectionBalancer) ejectAddress(addrInfo *addressInfo) {
 	addrInfo.ejectionTimeMultiplier++
 	for _, sbw := range addrInfo.sws {
 		sbw.eject()
-		channelz.Infof(logger, b.channelzParentID, "Subchannel ejected: %s", sbw.string())
+		channelz.Infof(logger, b.channelzParentID, "Subchannel ejected: %s", sbw)
 	}
 
 }
@@ -883,7 +883,7 @@ func (b *outlierDetectionBalancer) unejectAddress(addrInfo *addressInfo) {
 	addrInfo.latestEjectionTimestamp = time.Time{}
 	for _, sbw := range addrInfo.sws {
 		sbw.uneject()
-		channelz.Infof(logger, b.channelzParentID, "Subchannel unejected: %s", sbw.string())
+		channelz.Infof(logger, b.channelzParentID, "Subchannel unejected: %s", sbw)
 	}
 }
 
@@ -908,11 +908,11 @@ type addressInfo struct {
 	sws []*subConnWrapper
 }
 
-func (a *addressInfo) string() string {
+func (a *addressInfo) String() string {
 	var res strings.Builder
 	res.WriteString("[")
 	for _, sw := range a.sws {
-		res.WriteString(sw.string())
+		res.WriteString(sw.String())
 	}
 	res.WriteString("]")
 	return res.String()
