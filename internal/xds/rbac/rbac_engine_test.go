@@ -21,6 +21,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
+	"fmt"
 	"net"
 	"net/url"
 	"testing"
@@ -32,12 +34,15 @@ import (
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type s struct {
@@ -61,6 +66,10 @@ func (a *addr) String() string { return a.ipAddress }
 // RBAC Configurations deemed successful and also RBAC Configurations that will
 // raise errors.
 func (s) TestNewChainEngine(t *testing.T) {
+	b := TestAuditLoggerBufferBuilder{}
+	audit.RegisterLoggerBuilder(b)
+	b2 := TestAuditLoggerCustomConfigBuilder{}
+	audit.RegisterLoggerBuilder(b2)
 	tests := []struct {
 		name     string
 		policies []*v3rbacpb.RBAC
@@ -418,6 +427,58 @@ func (s) TestNewChainEngine(t *testing.T) {
 							},
 							Principals: []*v3rbacpb.Principal{
 								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "SimpleAuditLogger",
+			policies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"anyone": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "AuditLoggerCustomConfig",
+			policies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"anyone": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerCustomConfig", TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": 123, "xyz": "123"})},
+								IsOptional: false,
 							},
 						},
 					},
@@ -1088,4 +1149,92 @@ func (sts *ServerTransportStreamWithMethod) SendHeader(md metadata.MD) error {
 
 func (sts *ServerTransportStreamWithMethod) SetTrailer(md metadata.MD) error {
 	return nil
+}
+
+type TestAuditLoggerBuffer struct {
+	logs []*audit.Event
+}
+
+func (logger TestAuditLoggerBuffer) Log(e *audit.Event) {
+	logger.logs = append(logger.logs, e)
+}
+
+type TestAuditLoggerBufferBuilder struct {
+}
+
+type TestAuditLoggerBufferConfig struct {
+	audit.LoggerConfig
+}
+
+func (builder TestAuditLoggerBufferBuilder) ParseLoggerConfig(configJson json.RawMessage) (config audit.LoggerConfig, err error) {
+	return TestAuditLoggerBufferConfig{}, nil
+}
+
+func (builder TestAuditLoggerBufferBuilder) Build(config audit.LoggerConfig) audit.Logger {
+	return TestAuditLoggerBuffer{}
+}
+
+func (builder TestAuditLoggerBufferBuilder) Name() string {
+	return "TestAuditLoggerBuffer"
+}
+
+type TestAuditLoggerCustomConfig struct {
+	logs []*audit.Event
+}
+
+func (logger TestAuditLoggerCustomConfig) Log(e *audit.Event) {
+	logger.logs = append(logger.logs, e)
+}
+
+type TestAuditLoggerCustomConfigBuilder struct {
+}
+
+type TestAuditLoggerCustomConfigConfig struct {
+	audit.LoggerConfig
+	Abc int
+	Xyz string
+}
+
+func (builder TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJson json.RawMessage) (config audit.LoggerConfig, err error) {
+	c := TestAuditLoggerCustomConfigConfig{}
+	pb, err := anypb.New(nil)
+	st := new(structpb.Struct)
+	err = json.Unmarshal(configJson, &pb)
+	if err != nil {
+		return nil, err
+	}
+	err = pb.UnmarshalTo(st)
+	if err != nil {
+		return nil, err
+	}
+	m := st.AsMap()
+	c.Abc = int(m["abc"].(float64))
+	c.Xyz = m["xyz"].(string)
+
+	// Hard coded to a test condition in test named "AuditLoggerCustomConfig"
+	if c.Abc != 123 || c.Xyz != "123" {
+		return nil, fmt.Errorf("Couldn't parse custom config")
+	}
+	return c, nil
+}
+
+func (builder TestAuditLoggerCustomConfigBuilder) Build(config audit.LoggerConfig) audit.Logger {
+	return TestAuditLoggerCustomConfig{}
+}
+
+func (builder TestAuditLoggerCustomConfigBuilder) Name() string {
+	return "TestAuditLoggerCustomConfig"
+}
+
+func anyPbHelper(t *testing.T, in map[string]interface{}) *anypb.Any {
+	t.Helper()
+	pb, err := structpb.NewStruct(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ret, err := anypb.New(pb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ret
 }
