@@ -285,16 +285,16 @@ func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, e
 // auditLoggingOptions results in two different parsed protos, one for the allow
 // policy and one for the deny policy
 func (options *auditLoggingOptions) toProtos() (allow *v3rbacpb.RBAC_AuditLoggingOptions, deny *v3rbacpb.RBAC_AuditLoggingOptions, err error) {
-	allowRbac := v3rbacpb.RBAC_AuditLoggingOptions{}
-	denyRbac := v3rbacpb.RBAC_AuditLoggingOptions{}
+	allow = &v3rbacpb.RBAC_AuditLoggingOptions{}
+	deny = &v3rbacpb.RBAC_AuditLoggingOptions{}
 
 	if options.AuditCondition != "" {
 		rbacCondition, ok := v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition_value[options.AuditCondition]
 		if !ok {
 			return nil, nil, fmt.Errorf("failed to parse AuditCondition %v. Allowed values {NONE, ON_DENY, ON_ALLOW, ON_DENY_AND_ALLOW}", options.AuditCondition)
 		}
-		allowRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition(rbacCondition)
-		denyRbac.AuditCondition = toDenyCondition(v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition(rbacCondition))
+		allow.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition(rbacCondition)
+		deny.AuditCondition = toDenyCondition(v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition(rbacCondition))
 	}
 
 	for i := range options.AuditLoggers {
@@ -311,11 +311,11 @@ func (options *auditLoggingOptions) toProtos() (allow *v3rbacpb.RBAC_AuditLoggin
 			IsOptional:  config.IsOptional,
 			AuditLogger: logger,
 		}
-		allowRbac.LoggerConfigs = append(allowRbac.LoggerConfigs, &rbacConfig)
-		denyRbac.LoggerConfigs = append(denyRbac.LoggerConfigs, &rbacConfig)
+		allow.LoggerConfigs = append(allow.LoggerConfigs, &rbacConfig)
+		deny.LoggerConfigs = append(deny.LoggerConfigs, &rbacConfig)
 	}
 
-	return &allowRbac, &denyRbac, nil
+	return allow, deny, nil
 
 }
 
