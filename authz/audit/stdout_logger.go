@@ -25,18 +25,13 @@ import (
 
 type StdOutLogger struct{}
 
-func (logger *StdOutLogger) Log(event *Event) error {
+func (logger *StdOutLogger) Log(event *Event) {
 	jsonBytes, err := json.Marshal(event)
 	if err != nil {
-		return fmt.Errorf("failed to marshal log data to JSON: %v", err)
+		fmt.Errorf("failed to marshal log data to JSON: %v", err)
 	}
 
 	fmt.Println(string(jsonBytes))
-	return nil
-}
-
-func (logger *StdOutLogger) Configure(configJSON string) {
-	fmt.Println("StdOutLogger doesn't support any configs")
 }
 
 func (logger *StdOutLogger) ToJSON() ([]byte, error) {
@@ -46,4 +41,24 @@ func (logger *StdOutLogger) ToJSON() ([]byte, error) {
 	}
 
 	return jsonBytes, nil
+}
+
+const (
+	stdName = "stdout"
+)
+
+type StdOutLoggerBuilder struct{}
+
+func (StdOutLoggerBuilder) Name() string {
+	return stdName
+}
+
+func (StdOutLoggerBuilder) Build(LoggerConfig) Logger {
+	return &StdOutLogger{}
+}
+
+func (StdOutLoggerBuilder) ParseLoggerConfig(config json.RawMessage) (LoggerConfig, error) {
+	fmt.Println("Config value ignored, " +
+		"StdOutLogger doesn't support any configs")
+	return nil, nil
 }
