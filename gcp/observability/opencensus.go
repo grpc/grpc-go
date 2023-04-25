@@ -20,6 +20,8 @@ package observability
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"time"
 
 	"contrib.go.opencensus.io/exporter/stackdriver"
@@ -82,10 +84,19 @@ func newStackdriverExporter(config *config) (tracingMetricsExporter, error) {
 	mr := monitoredresource.Autodetect()
 	logger.Infof("Detected MonitoredResource:: %+v", mr)
 	var err error
+	// Custom labels completly overwrite any labels generated in the OpenCensus
+	// library, including their label that uniquely identifies the process.
+	// Thus, generate a unique process identifier here to uniquely identify
+	// process for metrics exporting to function correctly.
+	metricsLabels := make(map[string]string, len(config.Labels)+1)
+	for k, v := range config.Labels {
+		metricsLabels[k] = v
+	}
+	metricsLabels["opencensus_task"] = generateUniqueProcessIdentifier()
 	exporter, err := stackdriver.NewExporter(stackdriver.Options{
 		ProjectID:               config.ProjectID,
 		MonitoredResource:       mr,
-		DefaultMonitoringLabels: labelsToMonitoringLabels(config.Labels),
+		DefaultMonitoringLabels: labelsToMonitoringLabels(metricsLabels),
 		DefaultTraceAttributes:  labelsToTraceAttributes(config.Labels),
 		MonitoringClientOptions: cOptsDisableLogTrace,
 		TraceClientOptions:      cOptsDisableLogTrace,
@@ -94,6 +105,18 @@ func newStackdriverExporter(config *config) (tracingMetricsExporter, error) {
 		return nil, fmt.Errorf("failed to create Stackdriver exporter: %v", err)
 	}
 	return exporter, nil
+}
+
+// generateUniqueProcessIdentifier returns a unique process identifier for the
+// process this code is running in. This is the same way the OpenCensus library
+// generates the unique process identifier, in the format of
+// "go-<pid>@<hostname>".
+func generateUniqueProcessIdentifier() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "localhost"
+	}
+	return "go-" + strconv.Itoa(os.Getpid()) + "@" + hostname
 }
 
 // This method accepts config and exporter; the exporter argument is exposed to

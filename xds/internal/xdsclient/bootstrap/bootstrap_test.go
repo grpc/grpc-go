@@ -181,6 +181,22 @@ var (
 				}
 			]
 		}`,
+		"serverSupportsIgnoreResourceDeletion": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "google_default" }
+				],
+				"server_features" : ["ignore_resource_deletion", "xds_v3"]
+			}]
+		}`,
 	}
 	metadata = &structpb.Struct{
 		Fields: map[string]*structpb.Value{
@@ -196,15 +212,6 @@ var (
 		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
 		ClientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
 	}
-	nilCredsConfigV3 = &Config{
-		XDSServer: &ServerConfig{
-			ServerURI:      "trafficdirector.googleapis.com:443",
-			Creds:          ChannelCreds{Type: "insecure"},
-			ServerFeatures: []string{"xds_v3"},
-		},
-		NodeProto: v3NodeProto,
-		ClientDefaultListenerResourceNameTemplate: "%s",
-	}
 	nilCredsConfigNoServerFeatures = &Config{
 		XDSServer: &ServerConfig{
 			ServerURI: "trafficdirector.googleapis.com:443",
@@ -218,6 +225,16 @@ var (
 			ServerURI:      "trafficdirector.googleapis.com:443",
 			Creds:          ChannelCreds{Type: "google_default"},
 			ServerFeatures: []string{"xds_v3"},
+		},
+		NodeProto: v3NodeProto,
+		ClientDefaultListenerResourceNameTemplate: "%s",
+	}
+	nonNilCredsConfigWithDeletionIgnored = &Config{
+		XDSServer: &ServerConfig{
+			ServerURI:              "trafficdirector.googleapis.com:443",
+			Creds:                  ChannelCreds{Type: "google_default"},
+			IgnoreResourceDeletion: true,
+			ServerFeatures:         []string{"ignore_resource_deletion", "xds_v3"},
 		},
 		NodeProto: v3NodeProto,
 		ClientDefaultListenerResourceNameTemplate: "%s",
@@ -402,6 +419,7 @@ func TestNewConfigV3ProtoSuccess(t *testing.T) {
 		{"multipleChannelCreds", nonNilCredsConfigV3},
 		{"goodBootstrap", nonNilCredsConfigV3},
 		{"multipleXDSServers", nonNilCredsConfigV3},
+		{"serverSupportsIgnoreResourceDeletion", nonNilCredsConfigWithDeletionIgnored},
 	}
 
 	for _, test := range tests {

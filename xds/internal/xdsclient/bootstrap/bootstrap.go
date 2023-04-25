@@ -43,9 +43,14 @@ import (
 
 const (
 	// The "server_features" field in the bootstrap file contains a list of
-	// features supported by the server. A value of "xds_v3" indicates that the
-	// server supports the v3 version of the xDS transport protocol.
-	serverFeaturesV3 = "xds_v3"
+	// features supported by the server:
+	// - A value of "xds_v3" indicates that the server supports the v3 version of
+	//   the xDS transport protocol.
+	// - A value of "ignore_resource_deletion" indicates that the client should
+	//   ignore deletion of Listener and Cluster resources in updates from the
+	//   server.
+	serverFeaturesV3                     = "xds_v3"
+	serverFeaturesIgnoreResourceDeletion = "ignore_resource_deletion"
 
 	gRPCUserAgentName               = "gRPC Go"
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
@@ -139,6 +144,13 @@ type ServerConfig struct {
 	// credentials and store it here as a grpc.DialOption for easy access when
 	// dialing this xDS server.
 	credsDialOption grpc.DialOption
+
+	// IgnoreResourceDeletion controls the behavior of the xDS client when the
+	// server deletes a previously sent Listener or Cluster resource. If set, the
+	// xDS client will not invoke the watchers' OnResourceDoesNotExist() method
+	// when a resource is deleted, nor will it remove the existing resource value
+	// from its cache.
+	IgnoreResourceDeletion bool
 }
 
 // CredsDialOption returns the configured credentials as a grpc dial option.
@@ -167,6 +179,10 @@ func (sc ServerConfig) MarshalJSON() ([]byte, error) {
 		ChannelCreds:   []channelCreds{{Type: sc.Creds.Type, Config: sc.Creds.Config}},
 		ServerFeatures: sc.ServerFeatures,
 	}
+	server.ServerFeatures = []string{serverFeaturesV3}
+	if sc.IgnoreResourceDeletion {
+		server.ServerFeatures = append(server.ServerFeatures, serverFeaturesIgnoreResourceDeletion)
+	}
 	return json.Marshal(server)
 }
 
@@ -179,6 +195,11 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 
 	sc.ServerURI = server.ServerURI
 	sc.ServerFeatures = server.ServerFeatures
+	for _, f := range server.ServerFeatures {
+		if f == serverFeaturesIgnoreResourceDeletion {
+			sc.IgnoreResourceDeletion = true
+		}
+	}
 	for _, cc := range server.ChannelCreds {
 		// We stop at the first credential type that we support.
 		c := bootstrap.GetCredentials(cc.Type)
@@ -189,10 +210,7 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		if err != nil {
 			return fmt.Errorf("failed to build credentials bundle from bootstrap for %q: %v", cc.Type, err)
 		}
-		sc.Creds = ChannelCreds{
-			Type:   cc.Type,
-			Config: cc.Config,
-		}
+		sc.Creds = ChannelCreds(cc)
 		sc.credsDialOption = grpc.WithCredentialsBundle(bundle)
 		break
 	}

@@ -19,8 +19,6 @@ package e2e_test
 import (
 	"context"
 	"fmt"
-	"net"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -41,10 +39,11 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // Register the "cds_experimental" LB policy.
 )
@@ -68,7 +67,7 @@ func (s) TestErrorFromParentLB_ConnectionError(t *testing.T) {
 	streamClosedCh := make(chan struct{}, 1)
 	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
 		Listener: lis,
-		OnStreamClosed: func(int64) {
+		OnStreamClosed: func(int64, *v3corepb.Node) {
 			select {
 			case streamClosedCh <- struct{}{}:
 			default:
@@ -78,25 +77,14 @@ func (s) TestErrorFromParentLB_ConnectionError(t *testing.T) {
 	defer cleanup()
 
 	// Start a test backend and extract its host and port.
-	backend := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
-	}
-	backend.StartServer()
-	defer backend.Stop()
-	_, p, err := net.SplitHostPort(backend.Address)
-	if err != nil {
-		t.Fatalf("Failed to split test backend address %q: %v", backend.Address, err)
-	}
-	port, err := strconv.ParseUint(p, 10, 32)
-	if err != nil {
-		t.Fatalf("Failed to parse test backend port %q: %v", backend.Address, err)
-	}
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
 
 	// Configure cluster and endpoints resources in the management server.
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{uint32(port)})},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -196,25 +184,14 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	defer cleanup()
 
 	// Start a test backend and extract its host and port.
-	backend := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
-	}
-	backend.StartServer()
-	defer backend.Stop()
-	_, p, err := net.SplitHostPort(backend.Address)
-	if err != nil {
-		t.Fatalf("Failed to split test backend address %q: %v", backend.Address, err)
-	}
-	port, err := strconv.ParseUint(p, 10, 32)
-	if err != nil {
-		t.Fatalf("Failed to parse test backend port %q: %v", backend.Address, err)
-	}
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
 
 	// Configure cluster and endpoints resources in the management server.
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{uint32(port)})},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -302,7 +279,7 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	resources = e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{uint32(port)})},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
 		SkipValidation: true,
 	}
 	if err := managementServer.Update(ctx, resources); err != nil {
@@ -370,25 +347,14 @@ func (s) TestEDSResourceRemoved(t *testing.T) {
 	defer cleanup()
 
 	// Start a test backend and extract its host and port.
-	backend := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
-	}
-	backend.StartServer()
-	defer backend.Stop()
-	_, p, err := net.SplitHostPort(backend.Address)
-	if err != nil {
-		t.Fatalf("Failed to split test backend address %q: %v", backend.Address, err)
-	}
-	port, err := strconv.ParseUint(p, 10, 32)
-	if err != nil {
-		t.Fatalf("Failed to parse test backend port %q: %v", backend.Address, err)
-	}
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
 
 	// Configure cluster and endpoints resources in the management server.
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{uint32(port)})},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

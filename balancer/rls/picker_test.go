@@ -35,8 +35,8 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 // Test verifies the scenario where there is no matching entry in the data cache

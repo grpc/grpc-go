@@ -315,6 +315,7 @@ func (s) TestNewClientHandshaker(t *testing.T) {
 	if hs.(*altsHandshaker).clientConn != clientConn {
 		t.Errorf("NewClientHandshaker() returned handshaker with unexpected clientConn")
 	}
+	hs.Close()
 }
 
 func (s) TestNewServerHandshaker(t *testing.T) {
@@ -346,4 +347,5 @@ func (s) TestNewServerHandshaker(t *testing.T) {
 	if hs.(*altsHandshaker).clientConn != clientConn {
 		t.Errorf("NewServerHandshaker() returned handshaker with unexpected clientConn")
 	}
+	hs.Close()
 }

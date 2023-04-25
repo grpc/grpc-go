@@ -48,7 +48,7 @@ const (
 )
 
 var (
-	errBalancerClosed = errors.New("cdsBalancer is closed")
+	errBalancerClosed = errors.New("cds_experimental LB policy is closed")
 
 	// newChildBalancer is a helper function to build a new cluster_resolver
 	// balancer and will be overridden in unittests.
@@ -327,7 +327,7 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 		return
 	}
 
-	b.logger.Infof("Watch update from xds-client %p, content: %+v, security config: %v", b.xdsClient, pretty.ToJSON(update.updates), pretty.ToJSON(update.securityCfg))
+	b.logger.Infof("Received Cluster resource contains content: %s, security config: %s", pretty.ToJSON(update.updates), pretty.ToJSON(update.securityCfg))
 
 	// Process the security config from the received update before building the
 	// child policy or forwarding the update to it. We do this because the child
@@ -338,7 +338,7 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 		// If the security config is invalid, for example, if the provider
 		// instance is not found in the bootstrap config, we need to put the
 		// channel in transient failure.
-		b.logger.Warningf("Invalid security config update from xds-client %p: %v", b.xdsClient, err)
+		b.logger.Warningf("Received Cluster resource contains invalid security config: %v", err)
 		b.handleErrorFromUpdate(err, false)
 		return
 	}
@@ -388,7 +388,7 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 				DNSHostname: cu.DNSHostName,
 			}
 		default:
-			b.logger.Infof("unexpected cluster type %v when handling update from cluster handler", cu.ClusterType)
+			b.logger.Infof("Unexpected cluster type %v when handling update from cluster handler", cu.ClusterType)
 		}
 		if envconfig.XDSOutlierDetection {
 			dms[i].OutlierDetection = outlierDetectionToConfig(cu.OutlierDetection)
@@ -416,7 +416,7 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 		BalancerConfig: lbCfg,
 	}
 	if err := b.childLB.UpdateClientConnState(ccState); err != nil {
-		b.logger.Errorf("xds: cluster_resolver balancer.UpdateClientConnState(%+v) returned error: %v", ccState, err)
+		b.logger.Errorf("Encountered error when sending config {%+v} to child policy: %v", ccState, err)
 	}
 }
 
@@ -426,7 +426,10 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 func (b *cdsBalancer) run() {
 	for {
 		select {
-		case u := <-b.updateCh.Get():
+		case u, ok := <-b.updateCh.Get():
+			if !ok {
+				return
+			}
 			b.updateCh.Load()
 			switch update := u.(type) {
 			case *ccUpdate:
@@ -435,13 +438,13 @@ func (b *cdsBalancer) run() {
 				// SubConn updates are passthrough and are simply handed over to
 				// the underlying cluster_resolver balancer.
 				if b.childLB == nil {
-					b.logger.Errorf("xds: received scUpdate {%+v} with no cluster_resolver balancer", update)
+					b.logger.Errorf("Received SubConn update with no child policy: %+v", update)
 					break
 				}
 				b.childLB.UpdateSubConnState(update.subConn, update.state)
 			case exitIdle:
 				if b.childLB == nil {
-					b.logger.Errorf("xds: received ExitIdle with no child balancer")
+					b.logger.Errorf("Received ExitIdle with no child policy")
 					break
 				}
 				// This implementation assumes the child balancer supports
@@ -466,6 +469,7 @@ func (b *cdsBalancer) run() {
 			if b.cachedIdentity != nil {
 				b.cachedIdentity.Close()
 			}
+			b.updateCh.Close()
 			b.logger.Infof("Shutdown")
 			b.done.Fire()
 			return
@@ -515,7 +519,7 @@ func (b *cdsBalancer) handleErrorFromUpdate(err error, fromParent bool) {
 // xdsResolver.
 func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	if b.closed.HasFired() {
-		b.logger.Warningf("xds: received ClientConnState {%+v} after cdsBalancer was closed", state)
+		b.logger.Errorf("Received balancer config after close")
 		return errBalancerClosed
 	}
 
@@ -526,18 +530,18 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 		}
 		b.xdsClient = c
 	}
+	b.logger.Infof("Received balancer config update: %s", pretty.ToJSON(state.BalancerConfig))
 
-	b.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(state.BalancerConfig))
 	// The errors checked here should ideally never happen because the
 	// ServiceConfig in this case is prepared by the xdsResolver and is not
 	// something that is received on the wire.
 	lbCfg, ok := state.BalancerConfig.(*lbConfig)
 	if !ok {
-		b.logger.Warningf("xds: unexpected LoadBalancingConfig type: %T", state.BalancerConfig)
+		b.logger.Warningf("Received unexpected balancer config type: %T", state.BalancerConfig)
 		return balancer.ErrBadResolverState
 	}
 	if lbCfg.ClusterName == "" {
-		b.logger.Warningf("xds: no clusterName found in LoadBalancingConfig: %+v", lbCfg)
+		b.logger.Warningf("Received balancer config with no cluster name")
 		return balancer.ErrBadResolverState
 	}
 	b.updateCh.Put(&ccUpdate{clusterName: lbCfg.ClusterName})
@@ -547,7 +551,7 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 // ResolverError handles errors reported by the xdsResolver.
 func (b *cdsBalancer) ResolverError(err error) {
 	if b.closed.HasFired() {
-		b.logger.Warningf("xds: received resolver error {%v} after cdsBalancer was closed", err)
+		b.logger.Warningf("Received resolver error after close: %v", err)
 		return
 	}
 	b.updateCh.Put(&ccUpdate{err: err})
@@ -556,7 +560,7 @@ func (b *cdsBalancer) ResolverError(err error) {
 // UpdateSubConnState handles subConn updates from gRPC.
 func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	if b.closed.HasFired() {
-		b.logger.Warningf("xds: received subConn update {%v, %v} after cdsBalancer was closed", sc, state)
+		b.logger.Warningf("Received subConn update after close: {%v, %v}", sc, state)
 		return
 	}
 	b.updateCh.Put(&scUpdate{subConn: sc, state: state})

@@ -40,7 +40,7 @@ import (
 const transportSocketName = "envoy.transport_sockets.tls"
 
 func unmarshalClusterResource(r *anypb.Any) (string, ClusterUpdate, error) {
-	r, err := unwrapResource(r)
+	r, err := UnwrapResource(r)
 	if err != nil {
 		return "", ClusterUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
 	}

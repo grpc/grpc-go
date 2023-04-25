@@ -21,7 +21,6 @@ package observability
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -31,6 +30,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc/internal/envconfig"
@@ -40,7 +40,9 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 type s struct {
@@ -110,22 +112,29 @@ func (fe *fakeOpenCensusExporter) ExportView(vd *view.Data) {
 }
 
 type traceAndSpanID struct {
-	spanName string
-	traceID  trace.TraceID
-	spanID   trace.SpanID
+	spanName  string
+	traceID   trace.TraceID
+	spanID    trace.SpanID
+	isSampled bool
+	spanKind  int
 }
 
 type traceAndSpanIDString struct {
-	traceID string
-	spanID  string
+	traceID   string
+	spanID    string
+	isSampled bool
+	// SpanKind is the type of span.
+	SpanKind int
 }
 
 // idsToString is a helper that converts from generated trace and span IDs to
 // the string version stored in trace message events.
-func idsToString(tasi traceAndSpanID, projectID string) traceAndSpanIDString {
+func (tasi *traceAndSpanID) idsToString(projectID string) traceAndSpanIDString {
 	return traceAndSpanIDString{
-		traceID: "projects/" + projectID + "/traces/" + tasi.traceID.String(),
-		spanID:  tasi.spanID.String(),
+		traceID:   "projects/" + projectID + "/traces/" + tasi.traceID.String(),
+		spanID:    tasi.spanID.String(),
+		isSampled: tasi.isSampled,
+		SpanKind:  tasi.spanKind,
 	}
 }
 
@@ -135,9 +144,11 @@ func (fe *fakeOpenCensusExporter) ExportSpan(vd *trace.SpanData) {
 		// will populate different contexts throughout the system, convert in
 		// caller to string version as the logging code does.
 		fe.idCh.Send(traceAndSpanID{
-			spanName: vd.Name,
-			traceID:  vd.TraceID,
-			spanID:   vd.SpanID,
+			spanName:  vd.Name,
+			traceID:   vd.TraceID,
+			spanID:    vd.SpanID,
+			isSampled: vd.IsSampled(),
+			spanKind:  vd.SpanKind,
 		})
 	}
 
@@ -372,10 +383,10 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{}, nil
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
 		},
-		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for {
 				_, err := stream.Recv()
 				if err == io.EOF {
@@ -392,7 +403,7 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 	for i := 0; i < defaultRequestCount; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
-		if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{Body: testOkPayload}}); err != nil {
+		if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}); err != nil {
 			t.Fatalf("Unexpected error from UnaryCall: %v", err)
 		}
 	}
@@ -590,10 +601,10 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 	}
 	defer cleanup()
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{}, nil
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
 		},
-		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			_, err := stream.Recv()
 			if err != io.EOF {
 				return err
@@ -649,16 +660,16 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 		<-unaryDone.Done()
 		var tasiSent traceAndSpanIDString
 		for _, tasi := range traceAndSpanIDs {
-			if strings.HasPrefix(tasi.spanName, "Sent.") {
-				tasiSent = idsToString(tasi, projectID)
+			if strings.HasPrefix(tasi.spanName, "grpc.") && tasi.spanKind == trace.SpanKindClient {
+				tasiSent = tasi.idsToString(projectID)
 				continue
 			}
 		}
 
 		fle.mu.Lock()
 		for _, tasiSeen := range fle.idsSeen {
-			if diff := cmp.Diff(tasiSeen, &tasiSent, cmp.AllowUnexported(traceAndSpanIDString{})); diff != "" {
-				readerErrCh.Send(errors.New("got unexpected id, should be a client span"))
+			if diff := cmp.Diff(tasiSeen, &tasiSent, cmp.AllowUnexported(traceAndSpanIDString{}), cmpopts.IgnoreFields(traceAndSpanIDString{}, "SpanKind")); diff != "" {
+				readerErrCh.Send(fmt.Errorf("got unexpected id, should be a client span (-got, +want): %v", diff))
 			}
 		}
 
@@ -666,7 +677,7 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 		fle.mu.Unlock()
 		readerErrCh.Send(nil)
 	}()
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{Body: testOkPayload}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 	unaryDone.Fire()
@@ -732,10 +743,10 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 	}
 	defer cleanup()
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{}, nil
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
 		},
-		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			_, err := stream.Recv()
 			if err != io.EOF {
 				return err
@@ -791,16 +802,16 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 		<-unaryDone.Done()
 		var tasiServer traceAndSpanIDString
 		for _, tasi := range traceAndSpanIDs {
-			if strings.HasPrefix(tasi.spanName, "grpc.") {
-				tasiServer = idsToString(tasi, projectID)
+			if strings.HasPrefix(tasi.spanName, "grpc.") && tasi.spanKind == trace.SpanKindServer {
+				tasiServer = tasi.idsToString(projectID)
 				continue
 			}
 		}
 
 		fle.mu.Lock()
 		for _, tasiSeen := range fle.idsSeen {
-			if diff := cmp.Diff(tasiSeen, &tasiServer, cmp.AllowUnexported(traceAndSpanIDString{})); diff != "" {
-				readerErrCh.Send(errors.New("got unexpected id, should be a server span"))
+			if diff := cmp.Diff(tasiSeen, &tasiServer, cmp.AllowUnexported(traceAndSpanIDString{}), cmpopts.IgnoreFields(traceAndSpanIDString{}, "SpanKind")); diff != "" {
+				readerErrCh.Send(fmt.Errorf("got unexpected id, should be a server span (-got, +want): %v", diff))
 			}
 		}
 
@@ -808,7 +819,7 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 		fle.mu.Unlock()
 		readerErrCh.Send(nil)
 	}()
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{Body: testOkPayload}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 	unaryDone.Fire()
@@ -883,10 +894,10 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 	}
 	defer cleanup()
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{}, nil
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
 		},
-		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			_, err := stream.Recv()
 			if err != io.EOF {
 				return err
@@ -943,20 +954,20 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 		var tasiSent traceAndSpanIDString
 		var tasiServer traceAndSpanIDString
 		for _, tasi := range traceAndSpanIDs {
-			if strings.HasPrefix(tasi.spanName, "Sent.") {
-				tasiSent = idsToString(tasi, projectID)
+			if strings.HasPrefix(tasi.spanName, "grpc.") && tasi.spanKind == trace.SpanKindClient {
+				tasiSent = tasi.idsToString(projectID)
 				continue
 			}
-			if strings.HasPrefix(tasi.spanName, "grpc.") {
-				tasiServer = idsToString(tasi, projectID)
+			if strings.HasPrefix(tasi.spanName, "grpc.") && tasi.spanKind == trace.SpanKindServer {
+				tasiServer = tasi.idsToString(projectID)
 			}
 		}
 
 		fle.mu.Lock()
 		for _, tasiSeen := range fle.idsSeen {
-			if diff := cmp.Diff(tasiSeen, &tasiSent, cmp.AllowUnexported(traceAndSpanIDString{})); diff != "" {
-				if diff2 := cmp.Diff(tasiSeen, &tasiServer, cmp.AllowUnexported(traceAndSpanIDString{})); diff2 != "" {
-					readerErrCh.Send(errors.New("got unexpected id, should be client or server span"))
+			if diff := cmp.Diff(tasiSeen, &tasiSent, cmp.AllowUnexported(traceAndSpanIDString{}), cmpopts.IgnoreFields(traceAndSpanIDString{}, "SpanKind")); diff != "" {
+				if diff2 := cmp.Diff(tasiSeen, &tasiServer, cmp.AllowUnexported(traceAndSpanIDString{}), cmpopts.IgnoreFields(traceAndSpanIDString{}, "SpanKind")); diff2 != "" {
+					readerErrCh.Send(fmt.Errorf("got unexpected id, should be a client or server span (-got, +want): %v, %v", diff, diff2))
 				}
 			}
 		}
@@ -965,7 +976,7 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 		fle.mu.Unlock()
 		readerErrCh.Send(nil)
 	}()
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{Body: testOkPayload}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 	unaryDone.Fire()
@@ -1023,20 +1034,20 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 		var tasiSent traceAndSpanIDString
 		var tasiServer traceAndSpanIDString
 		for _, tasi := range traceAndSpanIDs {
-			if strings.HasPrefix(tasi.spanName, "Sent.") {
-				tasiSent = idsToString(tasi, projectID)
+			if strings.HasPrefix(tasi.spanName, "grpc.") && tasi.spanKind == trace.SpanKindClient {
+				tasiSent = tasi.idsToString(projectID)
 				continue
 			}
-			if strings.HasPrefix(tasi.spanName, "grpc.") {
-				tasiServer = idsToString(tasi, projectID)
+			if strings.HasPrefix(tasi.spanName, "grpc.") && tasi.spanKind == trace.SpanKindServer {
+				tasiServer = tasi.idsToString(projectID)
 			}
 		}
 
 		fle.mu.Lock()
 		for _, tasiSeen := range fle.idsSeen {
-			if diff := cmp.Diff(tasiSeen, &tasiSent, cmp.AllowUnexported(traceAndSpanIDString{})); diff != "" {
-				if diff2 := cmp.Diff(tasiSeen, &tasiServer, cmp.AllowUnexported(traceAndSpanIDString{})); diff2 != "" {
-					readerErrCh.Send(errors.New("got unexpected id, should be client or server span"))
+			if diff := cmp.Diff(tasiSeen, &tasiSent, cmp.AllowUnexported(traceAndSpanIDString{}), cmpopts.IgnoreFields(traceAndSpanIDString{}, "SpanKind")); diff != "" {
+				if diff2 := cmp.Diff(tasiSeen, &tasiServer, cmp.AllowUnexported(traceAndSpanIDString{}), cmpopts.IgnoreFields(traceAndSpanIDString{}, "SpanKind")); diff2 != "" {
+					readerErrCh.Send(fmt.Errorf("got unexpected id, should be a client or server span (-got, +want): %v, %v", diff, diff2))
 				}
 			}
 		}

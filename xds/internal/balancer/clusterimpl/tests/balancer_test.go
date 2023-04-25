@@ -21,8 +21,6 @@ package clusterimpl_test
 import (
 	"context"
 	"fmt"
-	"net"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -32,13 +30,14 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/status"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 
 	_ "google.golang.org/grpc/xds"
 )
@@ -68,22 +67,8 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 	defer mgmtServerCleanup()
 
 	// Start a server backend exposing the test service.
-	backend := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
-	}
-	backend.StartServer()
-	defer backend.Stop()
-
-	// Extract the host and port where the server backend is running.
-	_, p, err := net.SplitHostPort(backend.Address)
-	if err != nil {
-		t.Fatalf("Invalid serving address for server backend: %v", err)
-	}
-	port, err := strconv.ParseUint(p, 10, 32)
-	if err != nil {
-		t.Fatalf("Invalid serving port for server backend: %v", err)
-	}
-	t.Logf("Started server backend at %q", backend.Address)
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
 
 	// Configure the xDS management server with default resources. Override the
 	// default cluster to include an LRS server config pointing to self.
@@ -92,7 +77,7 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 		DialTarget: serviceName,
 		NodeID:     nodeID,
 		Host:       "localhost",
-		Port:       uint32(port),
+		Port:       testutils.ParsePort(t, server.Address),
 		SecLevel:   e2e.SecurityLevelNone,
 	})
 	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
@@ -129,7 +114,7 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 		e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 			ClusterName:  "endpoints-" + serviceName,
 			Host:         "localhost",
-			Ports:        []uint32{uint32(port)},
+			Ports:        []uint32{testutils.ParsePort(t, server.Address)},
 			DropPercents: map[string]int{"test-drop-everything": 100},
 		}),
 	}

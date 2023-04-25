@@ -38,7 +38,9 @@ import (
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 type s struct {
@@ -275,12 +277,12 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	defer view.UnregisterExporter(fe)
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{Payload: &grpc_testing.Payload{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Payload: &testpb.Payload{
 				Body: make([]byte, 10000),
 			}}, nil
 		},
-		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for {
 				_, err := stream.Recv()
 				if err == io.EOF {
@@ -297,7 +299,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	defer cancel()
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
 	// certain metrics to be emitted.
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
 		Body: make([]byte, 10000),
 	}}, grpc.UseCompressor(gzip.Name)); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
@@ -1037,7 +1039,7 @@ func (s) TestOpenCensusTags(t *testing.T) {
 	// populated at the client side application layer if populated.
 	tmCh := testutils.NewChannel()
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			// Do the sends of the tag maps for assertions in this main testing
 			// goroutine. Do the receives and assertions in a forked goroutine.
 			if tm := tag.FromContext(ctx); tm != nil {
@@ -1045,7 +1047,7 @@ func (s) TestOpenCensusTags(t *testing.T) {
 			} else {
 				tmCh.Send(errors.New("no tag map received server side"))
 			}
-			return &grpc_testing.SimpleResponse{}, nil
+			return &testpb.SimpleResponse{}, nil
 		},
 	}
 	if err := ss.Start([]grpc.ServerOption{ServerOption(TraceOptions{})}, DialOption(TraceOptions{})); err != nil {
@@ -1120,7 +1122,7 @@ func (s) TestOpenCensusTags(t *testing.T) {
 	// keyServerMethod.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 
@@ -1150,7 +1152,7 @@ func (s) TestOpenCensusTags(t *testing.T) {
 	// Make a unary RPC with a populated OpenCensus tag map. The server side
 	// should receive an OpenCensus tag map containing this populated tag map
 	// with the keyServerMethod tag appended to it.
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 	if chErr, err := readerErrCh.Receive(ctx); chErr != nil || err != nil {
@@ -1352,10 +1354,10 @@ func (s) TestSpan(t *testing.T) {
 		DisableTrace: false,
 	}
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{}, nil
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
 		},
-		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for {
 				_, err := stream.Recv()
 				if err == io.EOF {
@@ -1376,7 +1378,7 @@ func (s) TestSpan(t *testing.T) {
 	// both from the client and the server. Note that RPCs trigger exports of
 	// corresponding span data synchronously, thus the Span Data is guaranteed
 	// to have been read by exporter and is ready to make assertions on.
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 
@@ -1426,8 +1428,7 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
-			spanKind: trace.SpanKindClient,
-			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			name: "Attempt.grpc.testing.TestService.UnaryCall",
 			messageEvents: []trace.MessageEvent{
 				{
 					EventType:            trace.MessageEventTypeSent,
@@ -1447,7 +1448,7 @@ func (s) TestSpan(t *testing.T) {
 				TraceOptions: 1,
 			},
 			spanKind:        trace.SpanKindClient,
-			name:            "Sent.grpc.testing.TestService.UnaryCall",
+			name:            "grpc.testing.TestService.UnaryCall",
 			hasRemoteParent: false,
 			childSpanCount:  1,
 		},
@@ -1476,10 +1477,10 @@ func (s) TestSpan(t *testing.T) {
 	}
 	// Send two messages. This should be recorded in the emitted spans message
 	// events, with message IDs which increase for each message.
-	if err := stream.Send(&grpc_testing.StreamingOutputCallRequest{}); err != nil {
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
 		t.Fatalf("stream.Send failed: %v", err)
 	}
-	if err := stream.Send(&grpc_testing.StreamingOutputCallRequest{}); err != nil {
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
 		t.Fatalf("stream.Send failed: %v", err)
 	}
 
@@ -1517,7 +1518,7 @@ func (s) TestSpan(t *testing.T) {
 				TraceOptions: 1,
 			},
 			spanKind:        trace.SpanKindClient,
-			name:            "Sent.grpc.testing.TestService.FullDuplexCall",
+			name:            "grpc.testing.TestService.FullDuplexCall",
 			hasRemoteParent: false,
 			childSpanCount:  1,
 		},
@@ -1525,8 +1526,7 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
-			spanKind: trace.SpanKindClient,
-			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
+			name: "Attempt.grpc.testing.TestService.FullDuplexCall",
 			messageEvents: []trace.MessageEvent{
 				{
 					EventType: trace.MessageEventTypeSent,

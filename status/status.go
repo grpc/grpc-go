@@ -78,7 +78,8 @@ func FromProto(s *spb.Status) *Status {
 //
 //   - If err was produced by this package or implements the method `GRPCStatus()
 //     *Status`, or if err wraps a type satisfying this, the appropriate Status is
-//     returned.
+//     returned.  For wrapped errors, the message returned contains the entire
+//     err.Error() text and not just the wrapped status.
 //
 //   - If err is nil, a Status is returned with codes.OK and no message.
 //
@@ -89,9 +90,15 @@ func FromError(err error) (s *Status, ok bool) {
 	if err == nil {
 		return nil, true
 	}
-	var se interface{ GRPCStatus() *Status }
-	if errors.As(err, &se) {
-		return se.GRPCStatus(), true
+	type grpcstatus interface{ GRPCStatus() *Status }
+	if gs, ok := err.(grpcstatus); ok {
+		return gs.GRPCStatus(), true
+	}
+	var gs grpcstatus
+	if errors.As(err, &gs) {
+		p := gs.GRPCStatus().Proto()
+		p.Message = err.Error()
+		return status.FromProto(p), true
 	}
 	return New(codes.Unknown, err.Error()), false
 }

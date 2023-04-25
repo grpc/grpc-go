@@ -35,7 +35,6 @@ import (
 	binlogpb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/binarylog"
 	iblog "google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/stats/opencensus"
@@ -318,24 +317,27 @@ func (bml *binaryMethodLogger) buildGCPLoggingEntry(ctx context.Context, c iblog
 	grpcLogEntry.MethodName = bml.methodName
 	grpcLogEntry.Authority = bml.authority
 
+	var sc trace.SpanContext
+	var ok bool
+	if bml.clientSide {
+		// client side span, populated through opencensus trace package.
+		if span := trace.FromContext(ctx); span != nil {
+			sc = span.SpanContext()
+			ok = true
+		}
+	} else {
+		// server side span, populated through stats/opencensus package.
+		sc, ok = opencensus.SpanContextFromContext(ctx)
+	}
 	gcploggingEntry := gcplogging.Entry{
 		Timestamp: binLogEntry.GetTimestamp().AsTime(),
 		Severity:  100,
 		Payload:   grpcLogEntry,
 	}
-	if bml.clientSide {
-		// client side span, populated through opencensus trace package.
-		if span := trace.FromContext(ctx); span != nil {
-			sc := span.SpanContext()
-			gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + sc.TraceID.String()
-			gcploggingEntry.SpanID = sc.SpanID.String()
-		}
-	} else {
-		// server side span, populated through stats/opencensus package.
-		if tID, sID, ok := opencensus.GetTraceAndSpanID(ctx); ok {
-			gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + tID.String()
-			gcploggingEntry.SpanID = sID.String()
-		}
+	if ok {
+		gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + sc.TraceID.String()
+		gcploggingEntry.SpanID = sc.SpanID.String()
+		gcploggingEntry.TraceSampled = sc.IsSampled()
 	}
 	return gcploggingEntry
 }
@@ -435,7 +437,7 @@ func registerClientRPCEvents(config *config, exporter loggingExporter) {
 		projectID:    config.ProjectID,
 		clientSide:   true,
 	}
-	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl binarylog.Logger) grpc.DialOption)(clientSideLogger))
+	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl iblog.Logger) grpc.DialOption)(clientSideLogger))
 }
 
 func registerServerRPCEvents(config *config, exporter loggingExporter) {
@@ -475,7 +477,7 @@ func registerServerRPCEvents(config *config, exporter loggingExporter) {
 		projectID:    config.ProjectID,
 		clientSide:   false,
 	}
-	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl binarylog.Logger) grpc.ServerOption)(serverSideLogger))
+	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl iblog.Logger) grpc.ServerOption)(serverSideLogger))
 }
 
 func startLogging(ctx context.Context, config *config) error {
