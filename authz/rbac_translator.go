@@ -316,7 +316,6 @@ func (options *auditLoggingOptions) toProtos() (allow *v3rbacpb.RBAC_AuditLoggin
 	}
 
 	return allow, deny, nil
-
 }
 
 // Maps the AuditCondition coming from AuditLoggingOptions to the proper
