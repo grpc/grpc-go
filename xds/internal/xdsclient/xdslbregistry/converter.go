@@ -85,9 +85,6 @@ func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int
 				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 			}
 			return convertWrrLocality(wrrlProto, depth)
-		// Any entry not in the above list is unsupported and will be skipped.
-		// This includes Least Request as well, since grpc-go does not support
-		// the Least Request Load Balancing Policy.
 		case "type.googleapis.com/xds.type.v3.TypedStruct":
 			tsProto := &v3cncftypepb.TypedStruct{}
 			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), tsProto); err != nil {
@@ -101,13 +98,15 @@ func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int
 			}
 			return convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
 		}
+		// Any entry not in the above list is unsupported and will be skipped.
+		// This includes Least Request as well, since grpc-go does not support
+		// the Least Request Load Balancing Policy.
 	}
 	return nil, fmt.Errorf("no supported policy found in policy list +%v", lbPolicy)
 }
 
-// The following functions implement the converters defined in this line in A52:
-// "the registry will maintain a set of converters that are able to map from the
-// xDS LoadBalancingPolicy to the internal gRPC JSON format".
+// convertRingHash converts a proto representation of the ring_hash LB policy's
+// configuration to gRPC JSON format.
 func convertRingHash(cfg *v3ringhashpb.RingHash) (json.RawMessage, error) {
 	if cfg.GetHashFunction() != v3ringhashpb.RingHash_XX_HASH {
 		return nil, fmt.Errorf("unsupported ring_hash hash function %v", cfg.GetHashFunction())
@@ -133,8 +132,6 @@ func convertWrrLocality(cfg *v3wrrlocalitypb.WrrLocality, depth int) (json.RawMe
 	lbCfgJSON := []byte(fmt.Sprintf(`{"childPolicy": %s}`, epJSON))
 	return makeBalancerConfigJSON("xds_wrr_locality_experimental", lbCfgJSON), nil
 }
-
-// A52 defines a LeastRequest converter but grpc-go does not support least_request.
 
 func convertCustomPolicy(typeURL string, s *structpb.Struct) (json.RawMessage, error) {
 	// The gRPC policy name will be the "type name" part of the value of the

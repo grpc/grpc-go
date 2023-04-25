@@ -61,11 +61,10 @@ var (
 	// have a brand new API on the server-side and users explicitly need to use
 	// the new API to get security integration on the server.
 	XDSClientSideSecurity = boolFromEnv("GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT", true)
-	// XDSAggregateAndDNS indicates whether processing of aggregated cluster
-	// and DNS cluster is enabled, which can be enabled by setting the
-	// environment variable
-	// "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER" to
-	// "true".
+	// XDSAggregateAndDNS indicates whether processing of aggregated cluster and
+	// DNS cluster is enabled, which can be disabled by setting the environment
+	// variable "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER"
+	// to "false".
 	XDSAggregateAndDNS = boolFromEnv("GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER", true)
 
 	// XDSRBAC indicates whether xDS configured RBAC HTTP Filter is enabled,

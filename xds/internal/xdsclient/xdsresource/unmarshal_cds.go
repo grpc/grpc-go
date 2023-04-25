@@ -101,9 +101,6 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		if max := rhc.GetMaximumRingSize(); max != nil {
 			maxSize = max.GetValue()
 		}
-		if minSize > maxSize {
-			return ClusterUpdate{}, fmt.Errorf("ring_hash config min size %v is greater than max %v", minSize, maxSize)
-		}
 		lbPolicy = &ClusterLBPolicyRingHash{MinimumRingSize: minSize, MaximumRingSize: maxSize}
 
 		rhLBCfgJSON := []byte(fmt.Sprintf("{\"minRingSize\": %d, \"maxRingSize\": %d}", minSize, maxSize))

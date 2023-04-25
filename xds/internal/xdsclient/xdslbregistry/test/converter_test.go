@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/pretty"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/serviceconfig"
@@ -258,7 +259,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 			}
 			rawJSON, err := xdslbregistry.ConvertToServiceConfig(test.policy)
 			if err != nil {
-				t.Fatalf("unwanted error in ConvertToServiceConfig: %v", err)
+				t.Fatalf("ConvertToServiceConfig(%s) failed: %v", pretty.ToJSON(test.policy), err)
 			}
 			bc := &internalserviceconfig.BalancerConfig{}
 			// The converter registry is not guaranteed to emit json that is

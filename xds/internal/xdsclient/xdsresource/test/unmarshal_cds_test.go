@@ -25,7 +25,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	_ "google.golang.org/grpc/balancer/roundrobin"
+	_ "google.golang.org/grpc/balancer/roundrobin" // To register round_robin load balancer.
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
@@ -34,11 +34,10 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
-	_ "google.golang.org/grpc/xds/internal/balancer/wrrlocality"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	v3 "github.com/cncf/xds/go/xds/type/v3"
+	v3cncftypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
@@ -456,7 +455,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: wrrLocalityAny(&v3.TypedStruct{
+								TypedConfig: wrrLocalityAny(&v3cncftypepb.TypedStruct{
 									TypeUrl: "type.googleapis.com/myorg.MyCustomLeastRequestPolicy",
 									Value:   &structpb.Struct{},
 								}),
@@ -571,12 +570,6 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		},
 	}
 
-	oldAggregateAndDNSSupportEnv := envconfig.XDSAggregateAndDNS
-	envconfig.XDSAggregateAndDNS = true
-	defer func() { envconfig.XDSAggregateAndDNS = oldAggregateAndDNSSupportEnv }()
-	oldRingHashSupport := envconfig.XDSRingHash
-	envconfig.XDSRingHash = true
-	defer func() { envconfig.XDSRingHash = oldRingHashSupport }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if test.customLBDisabled {
