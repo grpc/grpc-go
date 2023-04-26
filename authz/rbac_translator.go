@@ -345,28 +345,28 @@ func toDenyCondition(condition v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition)
 // Envoy RBAC polices (deny followed by allow policy) or only one Envoy RBAC
 // allow policy. If the input policy cannot be parsed or is invalid, an error
 // will be returned.
-func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
+func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, string, error) {
 	policy := &authorizationPolicy{}
 	d := json.NewDecoder(bytes.NewReader([]byte(policyStr)))
 	d.DisallowUnknownFields()
 	if err := d.Decode(policy); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal policy: %v", err)
+		return nil, "", fmt.Errorf("failed to unmarshal policy: %v", err)
 	}
 	if policy.Name == "" {
-		return nil, fmt.Errorf(`"name" is not present`)
+		return nil, "", fmt.Errorf(`"name" is not present`)
 	}
 	if len(policy.AllowRules) == 0 {
-		return nil, fmt.Errorf(`"allow_rules" is not present`)
+		return nil, "", fmt.Errorf(`"allow_rules" is not present`)
 	}
 	allowLogger, denyLogger, err := policy.AuditLoggingOptions.toProtos()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	rbacs := make([]*v3rbacpb.RBAC, 0, 2)
 	if len(policy.DenyRules) > 0 {
 		denyPolicies, err := parseRules(policy.DenyRules, policy.Name)
 		if err != nil {
-			return nil, fmt.Errorf(`"deny_rules" %v`, err)
+			return nil, "", fmt.Errorf(`"deny_rules" %v`, err)
 		}
 		denyRBAC := &v3rbacpb.RBAC{
 			Action:              v3rbacpb.RBAC_DENY,
@@ -377,8 +377,8 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 	}
 	allowPolicies, err := parseRules(policy.AllowRules, policy.Name)
 	if err != nil {
-		return nil, fmt.Errorf(`"allow_rules" %v`, err)
+		return nil, "", fmt.Errorf(`"allow_rules" %v`, err)
 	}
 	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies, AuditLoggingOptions: allowLogger}
-	return append(rbacs, allowRBAC), nil
+	return append(rbacs, allowRBAC), policy.Name, nil
 }

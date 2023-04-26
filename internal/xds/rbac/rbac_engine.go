@@ -65,6 +65,20 @@ func NewChainEngine(policies []*v3rbacpb.RBAC) (*ChainEngine, error) {
 	return &ChainEngine{chainedEngines: engines}, nil
 }
 
+// NewChainEngine returns a chain of RBAC engines, used to make authorization
+// decisions on incoming RPCs. Returns a non-nil error for invalid policies.
+func NewChainEngineWithPolicyName(policies []*v3rbacpb.RBAC, policyName string) (*ChainEngine, error) {
+	engines := make([]*engine, 0, len(policies))
+	for _, policy := range policies {
+		engine, err := newEngineWithPolicyName(policy, policyName)
+		if err != nil {
+			return nil, err
+		}
+		engines = append(engines, engine)
+	}
+	return &ChainEngine{chainedEngines: engines}, nil
+}
+
 func (cre *ChainEngine) logRequestDetails(rpcData *rpcData) {
 	if logger.V(2) {
 		logger.Infof("checking request: url path=%s", rpcData.fullMethod)
@@ -115,11 +129,21 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 
 // engine is used for matching incoming RPCs to policies.
 type engine struct {
-	policies map[string]*policyMatcher
+	policyName string
+	policies   map[string]*policyMatcher
 	// action must be ALLOW or DENY.
 	action         v3rbacpb.RBAC_Action
 	auditLoggers   []*audit.Logger
 	auditCondition v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition
+}
+
+func newEngineWithPolicyName(config *v3rbacpb.RBAC, policyName string) (*engine, error) {
+	engine, err := newEngine(config)
+	if err != nil {
+		return nil, err
+	}
+	engine.policyName = policyName
+	return engine, nil
 }
 
 // newEngine creates an RBAC Engine based on the contents of policy. Returns a

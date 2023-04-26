@@ -35,9 +35,10 @@ import (
 
 func TestTranslatePolicy(t *testing.T) {
 	tests := map[string]struct {
-		authzPolicy  string
-		wantErr      string
-		wantPolicies []*v3rbacpb.RBAC
+		authzPolicy    string
+		wantErr        string
+		wantPolicies   []*v3rbacpb.RBAC
+		wantPolicyName string
 	}{
 		"valid policy": {
 			authzPolicy: `{
@@ -209,6 +210,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{},
 				},
 			},
+			wantPolicyName: "authz",
 		},
 		"allow authenticated": {
 			authzPolicy: `{
@@ -994,12 +996,15 @@ func TestTranslatePolicy(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			gotPolicies, gotErr := translatePolicy(test.authzPolicy)
+			gotPolicies, gotPolicyName, gotErr := translatePolicy(test.authzPolicy)
 			if gotErr != nil && !strings.HasPrefix(gotErr.Error(), test.wantErr) {
 				t.Fatalf("unexpected error\nwant:%v\ngot:%v", test.wantErr, gotErr)
 			}
 			if diff := cmp.Diff(gotPolicies, test.wantPolicies, protocmp.Transform()); diff != "" {
 				t.Fatalf("unexpected policy\ndiff (-want +got):\n%s", diff)
+			}
+			if test.wantPolicyName != "" && gotPolicyName != test.wantPolicyName {
+				t.Fatalf("policy name mistmach\nwant:%v\ngot:%v", test.wantPolicyName, gotPolicyName)
 			}
 		})
 	}
