@@ -56,7 +56,7 @@ type ChainEngine struct {
 func NewChainEngine(policies []*v3rbacpb.RBAC, policyName string) (*ChainEngine, error) {
 	engines := make([]*engine, 0, len(policies))
 	for _, policy := range policies {
-		engine, err := newEngineWithPolicyName(policy, policyName)
+		engine, err := newEngine(policy, policyName)
 		if err != nil {
 			return nil, err
 		}
@@ -123,18 +123,9 @@ type engine struct {
 	auditCondition v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition
 }
 
-func newEngineWithPolicyName(config *v3rbacpb.RBAC, policyName string) (*engine, error) {
-	engine, err := newEngine(config)
-	if err != nil {
-		return nil, err
-	}
-	engine.policyName = policyName
-	return engine, nil
-}
-
 // newEngine creates an RBAC Engine based on the contents of policy. Returns a
 // non-nil error if the policy is invalid.
-func newEngine(config *v3rbacpb.RBAC) (*engine, error) {
+func newEngine(config *v3rbacpb.RBAC, policyName string) (*engine, error) {
 	a := config.GetAction()
 	if a != v3rbacpb.RBAC_ALLOW && a != v3rbacpb.RBAC_DENY {
 		return nil, fmt.Errorf("unsupported action %s", config.Action)
@@ -172,6 +163,7 @@ func newEngine(config *v3rbacpb.RBAC) (*engine, error) {
 		action:         a,
 		auditLoggers:   auditLoggers,
 		auditCondition: auditOptions.GetAuditCondition(),
+		policyName:     policyName,
 	}, nil
 }
 
