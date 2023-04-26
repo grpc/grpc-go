@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -304,7 +305,7 @@ func setup(t *testing.T) (*outlierDetectionBalancer, *testutils.TestClientConn, 
 		t.Fatalf("balancer.Get(%q) returned nil", Name)
 	}
 	tcc := testutils.NewTestClientConn(t)
-	odB := builder.Build(tcc, balancer.BuildOptions{})
+	odB := builder.Build(tcc, balancer.BuildOptions{ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefChannel, time.Now().Unix(), nil)})
 	return odB.(*outlierDetectionBalancer), tcc, odB.Close
 }
 

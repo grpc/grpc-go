@@ -253,6 +253,7 @@ func TestTranslatePolicy(t *testing.T) {
 				},
 			},
 		},
+<<<<<<< HEAD
 		"audit logging DENY no config": {
 			authzPolicy: `{
 				"name": "authz",
@@ -348,6 +349,8 @@ func TestTranslatePolicy(t *testing.T) {
 				},
 			},
 		},
+=======
+>>>>>>> master
 		"audit_logging_ALLOW empty config": {
 			authzPolicy: `{
 				"name": "authz",
@@ -993,6 +996,40 @@ func TestTranslatePolicy(t *testing.T) {
 			}`,
 			wantErr: `failed to unmarshal policy`,
 		},
+<<<<<<< HEAD
+=======
+		"missing custom config audit logger": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"deny_rules": [
+				{
+					"name": "deny_policy_1",
+					"source": {
+						"principals":[
+						"spiffe://foo.abc"
+						]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_condition": "ON_DENY",
+					"audit_loggers": [
+						{
+							"name": "stdout_logger",
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantErr: "AuditLogger Config field cannot be nil",
+		},
+>>>>>>> master
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
