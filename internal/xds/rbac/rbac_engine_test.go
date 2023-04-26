@@ -72,9 +72,10 @@ func (s) TestNewChainEngine(t *testing.T) {
 	b2 := TestAuditLoggerCustomConfigBuilder{}
 	audit.RegisterLoggerBuilder(b2)
 	tests := []struct {
-		name     string
-		policies []*v3rbacpb.RBAC
-		wantErr  bool
+		name       string
+		policies   []*v3rbacpb.RBAC
+		wantErr    bool
+		policyName string
 	}{
 		{
 			name: "SuccessCaseAnyMatchSingular",
@@ -485,11 +486,12 @@ func (s) TestNewChainEngine(t *testing.T) {
 					},
 				},
 			},
+			policyName: "test_policy",
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := NewChainEngine(test.policies, ""); (err != nil) != test.wantErr {
+			if _, err := NewChainEngine(test.policies, test.policyName); (err != nil) != test.wantErr {
 				t.Fatalf("NewChainEngine(%+v) returned err: %v, wantErr: %v", test.policies, err, test.wantErr)
 			}
 		})
@@ -515,6 +517,7 @@ func (s) TestChainEngine(t *testing.T) {
 		name        string
 		rbacConfigs []*v3rbacpb.RBAC
 		rbacQueries []rbacQuery
+		policyName  string
 	}{
 		// SuccessCaseAnyMatch tests a single RBAC Engine instantiated with
 		// a config with a policy with any rules for both permissions and
@@ -1129,7 +1132,8 @@ func (s) TestChainEngine(t *testing.T) {
 		// Further, it tests that the audit logger works properly in each
 		// scenario
 		{
-			name: "AuditLoggingAllowAndDenyPolicy_ON_ALLOW",
+			name:       "AuditLoggingAllowAndDenyPolicy_ON_ALLOW",
+			policyName: "test_policy",
 			rbacConfigs: []*v3rbacpb.RBAC{
 				{
 					Policies: map[string]*v3rbacpb.Policy{
@@ -1189,7 +1193,7 @@ func (s) TestChainEngine(t *testing.T) {
 						{
 							FullMethodName: "",
 							Principal:      "0.0.0.0",
-							PolicyName:     "",
+							PolicyName:     "test_policy",
 							MatchedRule:    "certain-source-ip",
 							Authorized:     true,
 						},
@@ -1230,7 +1234,8 @@ func (s) TestChainEngine(t *testing.T) {
 			},
 		},
 		{
-			name: "AuditLoggingAllowAndDenyPolicy_ON_DENY",
+			name:       "AuditLoggingAllowAndDenyPolicy_ON_DENY",
+			policyName: "test_policy",
 			rbacConfigs: []*v3rbacpb.RBAC{
 				{
 					Policies: map[string]*v3rbacpb.Policy{
@@ -1303,7 +1308,7 @@ func (s) TestChainEngine(t *testing.T) {
 						{
 							FullMethodName: "localhost-fan-page",
 							Principal:      "0.0.0.0",
-							PolicyName:     "",
+							PolicyName:     "test_policy",
 							MatchedRule:    "localhost-fan",
 							Authorized:     false,
 						},
@@ -1323,7 +1328,7 @@ func (s) TestChainEngine(t *testing.T) {
 						{
 							FullMethodName: "",
 							Principal:      "10.0.0.0",
-							PolicyName:     "",
+							PolicyName:     "test_policy",
 							MatchedRule:    "",
 							Authorized:     false,
 						},
@@ -1344,7 +1349,7 @@ func (s) TestChainEngine(t *testing.T) {
 						{
 							FullMethodName: "localhost-fan-page",
 							Principal:      "10.0.0.0",
-							PolicyName:     "",
+							PolicyName:     "test_policy",
 							MatchedRule:    "localhost-fan",
 							Authorized:     false,
 						},
@@ -1353,7 +1358,8 @@ func (s) TestChainEngine(t *testing.T) {
 			},
 		},
 		{
-			name: "AuditLoggingAllowAndDenyPolicy_NONE",
+			name:       "AuditLoggingAllowAndDenyPolicy_NONE",
+			policyName: "test_policy",
 			rbacConfigs: []*v3rbacpb.RBAC{
 				{
 					Policies: map[string]*v3rbacpb.Policy{
@@ -1449,7 +1455,8 @@ func (s) TestChainEngine(t *testing.T) {
 			},
 		},
 		{
-			name: "AuditLoggingAllowAndDenyPolicy_ON_DENY_AND_ALLOW",
+			name:       "AuditLoggingAllowAndDenyPolicy_ON_DENY_AND_ALLOW",
+			policyName: "test_policy",
 			rbacConfigs: []*v3rbacpb.RBAC{
 				{
 					Policies: map[string]*v3rbacpb.Policy{
@@ -1510,7 +1517,7 @@ func (s) TestChainEngine(t *testing.T) {
 						{
 							FullMethodName: "",
 							Principal:      "0.0.0.0",
-							PolicyName:     "",
+							PolicyName:     "test_policy",
 							MatchedRule:    "certain-source-ip",
 							Authorized:     true,
 						},
@@ -1531,7 +1538,7 @@ func (s) TestChainEngine(t *testing.T) {
 						{
 							FullMethodName: "localhost-fan-page",
 							Principal:      "0.0.0.0",
-							PolicyName:     "",
+							PolicyName:     "test_policy",
 							MatchedRule:    "localhost-fan",
 							Authorized:     false,
 						},
@@ -1551,7 +1558,7 @@ func (s) TestChainEngine(t *testing.T) {
 						{
 							FullMethodName: "",
 							Principal:      "10.0.0.0",
-							PolicyName:     "",
+							PolicyName:     "test_policy",
 							MatchedRule:    "",
 							Authorized:     false,
 						},
@@ -1572,7 +1579,7 @@ func (s) TestChainEngine(t *testing.T) {
 						{
 							FullMethodName: "localhost-fan-page",
 							Principal:      "10.0.0.0",
-							PolicyName:     "",
+							PolicyName:     "test_policy",
 							MatchedRule:    "localhost-fan",
 							Authorized:     false,
 						},
@@ -1589,7 +1596,7 @@ func (s) TestChainEngine(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Instantiate the chainedRBACEngine with different configurations that are
 			// interesting to test and to query.
-			cre, err := NewChainEngine(test.rbacConfigs, "")
+			cre, err := NewChainEngine(test.rbacConfigs, test.policyName)
 			if err != nil {
 				t.Fatalf("Error constructing RBAC Engine: %v", err)
 			}
