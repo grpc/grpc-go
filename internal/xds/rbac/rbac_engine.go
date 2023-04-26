@@ -145,6 +145,12 @@ func newEngine(config *v3rbacpb.RBAC, policyName string) (*engine, error) {
 	if auditOptions != nil {
 		for _, logger := range auditOptions.LoggerConfigs {
 			auditLoggerFactory := audit.GetLoggerBuilder(logger.AuditLogger.Name)
+			if auditLoggerFactory == nil {
+				if logger.IsOptional {
+					continue
+				}
+				return nil, fmt.Errorf("No builder registered for %v", logger.AuditLogger.Name)
+			}
 			customConfig := logger.AuditLogger.TypedConfig
 			jsonConfig, err := json.Marshal(&customConfig)
 			if err != nil {
