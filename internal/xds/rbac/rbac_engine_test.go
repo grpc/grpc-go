@@ -1122,111 +1122,236 @@ func (s) TestChainEngine(t *testing.T) {
 		// 		},
 		// 	},
 		// },
-		// // AllowAndDenyPolicy tests a policy with an allow (on path) and
-		// // deny (on port) policy chained together. This represents how a user
-		// // configured interceptor would use this, and also is a potential
-		// // configuration for a dynamic xds interceptor.
-		// {
-		// 	name: "AuditLoggingAllowAndDenyPolicy_ON_ALLOW",
-		// 	rbacConfigs: []*v3rbacpb.RBAC{
-		// 		{
-		// 			Policies: map[string]*v3rbacpb.Policy{
-		// 				"certain-source-ip": {
-		// 					Permissions: []*v3rbacpb.Permission{
-		// 						{Rule: &v3rbacpb.Permission_Any{Any: true}},
-		// 					},
-		// 					Principals: []*v3rbacpb.Principal{
-		// 						{Identifier: &v3rbacpb.Principal_DirectRemoteIp{DirectRemoteIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
-		// 					},
-		// 				},
-		// 			},
-		// 			Action: v3rbacpb.RBAC_ALLOW,
-		// 			AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
-		// 				AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
-		// 				LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-		// 					{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
-		// 						IsOptional: false,
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 		{
-		// 			Policies: map[string]*v3rbacpb.Policy{
-		// 				"localhost-fan": {
-		// 					Permissions: []*v3rbacpb.Permission{
-		// 						{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "localhost-fan-page"}}}}}},
-		// 					},
-		// 					Principals: []*v3rbacpb.Principal{
-		// 						{Identifier: &v3rbacpb.Principal_Any{Any: true}},
-		// 					},
-		// 				},
-		// 			},
-		// 			Action: v3rbacpb.RBAC_DENY,
-		// 			AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
-		// 				AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
-		// 				LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-		// 					{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
-		// 						IsOptional: false,
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// 	rbacQueries: []rbacQuery{
-		// 		// This RPC should match with the allow policy, and shouldn't
-		// 		// match with the deny and thus should be allowed to proceed.
-		// 		{
-		// 			rpcData: &rpcData{
-		// 				fullMethod: "",
-		// 				peerInfo: &peer.Peer{
-		// 					Addr: &addr{ipAddress: "0.0.0.0"},
-		// 				},
-		// 			},
-		// 			wantStatusCode: codes.OK,
-		// 			wantAuditEvents: []*audit.Event{
-		// 				{
-		// 					FullMethodName: "",
-		// 					Principal:      "0.0.0.0",
-		// 					PolicyName:     "",
-		// 					MatchedRule:    "localhost-fan",
-		// 					Authorized:     true,
-		// 				},
-		// 			},
-		// 		},
-		// 		// This RPC should match with both the allow policy and deny policy
-		// 		// and thus shouldn't be allowed to proceed as matched with deny.
-		// 		{
-		// 			rpcData: &rpcData{
-		// 				fullMethod: "localhost-fan-page",
-		// 				peerInfo: &peer.Peer{
-		// 					Addr: &addr{ipAddress: "0.0.0.0"},
-		// 				},
-		// 			},
-		// 			wantStatusCode: codes.PermissionDenied,
-		// 		},
-		// 		// This RPC shouldn't match with either policy, and thus
-		// 		// shouldn't be allowed to proceed as didn't match with allow.
-		// 		{
-		// 			rpcData: &rpcData{
-		// 				peerInfo: &peer.Peer{
-		// 					Addr: &addr{ipAddress: "10.0.0.0"},
-		// 				},
-		// 			},
-		// 			wantStatusCode: codes.PermissionDenied,
-		// 		},
-		// 		// This RPC shouldn't match with allow, match with deny, and
-		// 		// thus shouldn't be allowed to proceed.
-		// 		{
-		// 			rpcData: &rpcData{
-		// 				fullMethod: "localhost-fan-page",
-		// 				peerInfo: &peer.Peer{
-		// 					Addr: &addr{ipAddress: "10.0.0.0"},
-		// 				},
-		// 			},
-		// 			wantStatusCode: codes.PermissionDenied,
-		// 		},
-		// 	},
-		// },
+		// AllowAndDenyPolicy tests a policy with an allow (on path) and
+		// deny (on port) policy chained together. This represents how a user
+		// configured interceptor would use this, and also is a potential
+		// configuration for a dynamic xds interceptor.
+		// Further, it tests that the audit logger works properly in each
+		// scenario
+		{
+			name: "AuditLoggingAllowAndDenyPolicy_ON_ALLOW",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"localhost-fan": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "localhost-fan-page"}}}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+					Action: v3rbacpb.RBAC_DENY,
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"certain-source-ip": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_DirectRemoteIp{DirectRemoteIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
+							},
+						},
+					},
+					Action: v3rbacpb.RBAC_ALLOW,
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []rbacQuery{
+				// This RPC should match with the allow policy, and shouldn't
+				// match with the deny and thus should be allowed to proceed.
+				{
+					rpcData: &rpcData{
+						fullMethod: "",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.OK,
+					wantAuditEvents: []*audit.Event{
+						{
+							FullMethodName: "",
+							Principal:      "0.0.0.0",
+							PolicyName:     "",
+							MatchedRule:    "certain-source-ip",
+							Authorized:     true,
+						},
+					},
+				},
+				// This RPC should match with both the allow policy and deny policy
+				// and thus shouldn't be allowed to proceed as matched with deny.
+				{
+					rpcData: &rpcData{
+						fullMethod: "localhost-fan-page",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+				// This RPC shouldn't match with either policy, and thus
+				// shouldn't be allowed to proceed as didn't match with allow.
+				{
+					rpcData: &rpcData{
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "10.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+				// This RPC shouldn't match with allow, match with deny, and
+				// thus shouldn't be allowed to proceed.
+				{
+					rpcData: &rpcData{
+						fullMethod: "localhost-fan-page",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "10.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+			},
+		},
+		{
+			name: "AuditLoggingAllowAndDenyPolicy_ON_DENY",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"localhost-fan": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "localhost-fan-page"}}}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+					Action: v3rbacpb.RBAC_DENY,
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"certain-source-ip": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_DirectRemoteIp{DirectRemoteIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
+							},
+						},
+					},
+					Action: v3rbacpb.RBAC_ALLOW,
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []rbacQuery{
+				// This RPC should match with the allow policy, and shouldn't
+				// match with the deny and thus should be allowed to proceed.
+				// Audit logging matches with nothing
+				{
+					rpcData: &rpcData{
+						fullMethod: "",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.OK,
+				},
+				// This RPC should match with both the allow policy and deny policy
+				// and thus shouldn't be allowed to proceed as matched with deny.
+				// Audit logging matches with deny and short circuits
+				{
+					rpcData: &rpcData{
+						fullMethod: "localhost-fan-page",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+					wantAuditEvents: []*audit.Event{
+						{
+							FullMethodName: "localhost-fan-page",
+							Principal:      "0.0.0.0",
+							PolicyName:     "",
+							MatchedRule:    "localhost-fan",
+							Authorized:     false,
+						},
+					},
+				},
+				// This RPC shouldn't match with either policy, and thus
+				// shouldn't be allowed to proceed as didn't match with allow.
+				// Audit logging matches with the allow policy
+				{
+					rpcData: &rpcData{
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "10.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+					wantAuditEvents: []*audit.Event{
+						{
+							FullMethodName: "",
+							Principal:      "10.0.0.0",
+							PolicyName:     "",
+							MatchedRule:    "",
+							Authorized:     false,
+						},
+					},
+				},
+				// This RPC shouldn't match with allow, match with deny, and
+				// thus shouldn't be allowed to proceed.
+				// Audit logging will have the deny logged
+				{
+					rpcData: &rpcData{
+						fullMethod: "localhost-fan-page",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "10.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+					wantAuditEvents: []*audit.Event{
+						{
+							FullMethodName: "localhost-fan-page",
+							Principal:      "10.0.0.0",
+							PolicyName:     "",
+							MatchedRule:    "localhost-fan",
+							Authorized:     false,
+						},
+					},
+				},
+			},
+		},
 	}
 	b := TestAuditLoggerBufferBuilder{}
 	audit.RegisterLoggerBuilder(b)
@@ -1242,7 +1367,7 @@ func (s) TestChainEngine(t *testing.T) {
 			}
 			// Query the created chain of RBAC Engines with different args to see
 			// if the chain of RBAC Engines configured as such works as intended.
-			for _, data := range test.rbacQueries {
+			for i, data := range test.rbacQueries {
 				func() {
 					auditEvents = nil
 					// Construct the context with three data points that have enough
@@ -1290,7 +1415,8 @@ func (s) TestChainEngine(t *testing.T) {
 						t.Fatalf("IsAuthorized(%+v, %+v) returned (%+v), want(%+v)", ctx, data.rpcData.fullMethod, gotCode, data.wantStatusCode)
 					}
 					if !reflect.DeepEqual(auditEvents, data.wantAuditEvents) {
-						t.Fatalf("bad audit event")
+						// t.Fatalf("bad audit event.\nwant:%v\ngot:%v\n", data.wantAuditEvents, auditEvents)
+						t.Fatalf("bad audit event req %v", i)
 					}
 					// if auditEvent != nil && *auditEvent != data.wantAuditEvent {
 					// 	t.Fatalf("bad audit event")
