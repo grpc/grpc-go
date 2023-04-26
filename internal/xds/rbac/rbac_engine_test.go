@@ -489,7 +489,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := NewChainEngineWithPolicyName(test.policies, ""); (err != nil) != test.wantErr {
+			if _, err := NewChainEngine(test.policies, ""); (err != nil) != test.wantErr {
 				t.Fatalf("NewChainEngine(%+v) returned err: %v, wantErr: %v", test.policies, err, test.wantErr)
 			}
 		})
@@ -1236,7 +1236,7 @@ func (s) TestChainEngine(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Instantiate the chainedRBACEngine with different configurations that are
 			// interesting to test and to query.
-			cre, err := NewChainEngineWithPolicyName(test.rbacConfigs, "")
+			cre, err := NewChainEngine(test.rbacConfigs, "")
 			if err != nil {
 				t.Fatalf("Error constructing RBAC Engine: %v", err)
 			}

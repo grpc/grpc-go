@@ -129,7 +129,7 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 	// TODO - change the call chain to here so we have the filter name. It will
 	// come from here:
 	// https://github.com/grpc/grpc-go/blob/eff0942e95d93112921414aee758e619ec86f26f/xds/internal/xdsclient/xdsresource/unmarshal_lds.go#L199
-	ce, err := rbac.NewChainEngineWithPolicyName([]*v3rbacpb.RBAC{rbacCfg.GetRules()}, "")
+	ce, err := rbac.NewChainEngine([]*v3rbacpb.RBAC{rbacCfg.GetRules()}, "")
 	if err != nil {
 		// "At this time, if the RBAC.action is Action.LOG then the policy will be
 		// completely ignored, as if RBAC was not configurated." - A41
