@@ -1670,7 +1670,7 @@ type TestAuditLoggerBufferConfig struct {
 	audit.LoggerConfig
 }
 
-func (builder TestAuditLoggerBufferBuilder) ParseLoggerConfig(configJson json.RawMessage) (config audit.LoggerConfig, err error) {
+func (builder TestAuditLoggerBufferBuilder) ParseLoggerConfig(configJSON json.RawMessage) (config audit.LoggerConfig, err error) {
 	return TestAuditLoggerBufferConfig{}, nil
 }
 
@@ -1702,11 +1702,11 @@ type TestAuditLoggerCustomConfigConfig struct {
 
 // Parses TestAuditLoggerCustomConfigConfig
 // Hard-coded to match with it's test case above
-func (builder TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJson json.RawMessage) (config audit.LoggerConfig, err error) {
+func (builder TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJSON json.RawMessage) (config audit.LoggerConfig, err error) {
 	c := TestAuditLoggerCustomConfigConfig{}
 	pb, err := anypb.New(nil)
 	st := new(structpb.Struct)
-	err = json.Unmarshal(configJson, &pb)
+	err = json.Unmarshal(configJSON, &pb)
 	if err != nil {
 		return nil, err
 	}
