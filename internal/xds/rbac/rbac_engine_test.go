@@ -488,6 +488,60 @@ func (s) TestNewChainEngine(t *testing.T) {
 			},
 			policyName: "test_policy",
 		},
+		{
+			name: "Cannot_parse_missing_CustomConfig",
+			policies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"anyone": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerCustomConfig"},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Cannot_parse_bad_CustomConfig",
+			policies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"anyone": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerCustomConfig", TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": "BADVALUE", "xyz": "123"})},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1661,12 +1715,20 @@ func (builder TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJson j
 		return nil, err
 	}
 	m := st.AsMap()
-	c.Abc = int(m["abc"].(float64))
-	c.Xyz = m["xyz"].(string)
+	abc, ok := m["abc"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("Couldn't parse custom config. Value abc:%v couldn't be converted to float64", m["abc"])
+	}
+	c.Abc = int(abc)
+	xyz, ok := m["xyz"].(string)
+	if !ok {
+		return nil, fmt.Errorf("Couldn't parse custom config. Value xyz:%v couldn't be converted to string", m["xyz"])
+	}
+	c.Xyz = xyz
 
 	// Hard coded to a test condition in test named "AuditLoggerCustomConfig"
 	if c.Abc != 123 || c.Xyz != "123" {
-		return nil, fmt.Errorf("Couldn't parse custom config")
+		return nil, fmt.Errorf("TestAuditLoggerCustomConfigConfig was not parsed correctly")
 	}
 	return c, nil
 }
