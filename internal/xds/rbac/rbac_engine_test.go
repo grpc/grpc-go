@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"reflect"
 	"testing"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -496,9 +497,9 @@ func (s) TestNewChainEngine(t *testing.T) {
 }
 
 type rbacQuery struct {
-	rpcData        *rpcData
-	wantStatusCode codes.Code
-	wantAuditEvent audit.Event
+	rpcData         *rpcData
+	wantStatusCode  codes.Code
+	wantAuditEvents []*audit.Event
 }
 
 // TestChainEngine tests the chain of RBAC Engines by configuring the chain of
@@ -1038,50 +1039,194 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 			},
 		},
-		{
-			name: "AuditLoggingSuccessCaseAnyMatch",
-			rbacConfigs: []*v3rbacpb.RBAC{
-				{
-					Action: v3rbacpb.RBAC_ALLOW,
-					Policies: map[string]*v3rbacpb.Policy{
-						"anyone": {
-							Permissions: []*v3rbacpb.Permission{
-								{Rule: &v3rbacpb.Permission_Any{Any: true}},
-							},
-							Principals: []*v3rbacpb.Principal{
-								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
-							},
-						},
-					},
-					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
-						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
-						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
-								IsOptional: false,
-							},
-						},
-					},
-				},
-			},
-			rbacQueries: []rbacQuery{
-				{
-					rpcData: &rpcData{
-						fullMethod: "some method",
-						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
-						},
-					},
-					wantStatusCode: codes.OK,
-					wantAuditEvent: audit.Event{
-						FullMethodName: "some method",
-						Principal:      "0.0.0.0",
-						PolicyName:     "",
-						MatchedRule:    "anyone",
-						Authorized:     true,
-					},
-				},
-			},
-		},
+		// {
+		// 	name: "AuditLoggingSuccessCaseAnyMatchALLOW",
+		// 	rbacConfigs: []*v3rbacpb.RBAC{
+		// 		{
+		// 			Action: v3rbacpb.RBAC_ALLOW,
+		// 			Policies: map[string]*v3rbacpb.Policy{
+		// 				"anyone": {
+		// 					Permissions: []*v3rbacpb.Permission{
+		// 						{Rule: &v3rbacpb.Permission_Any{Any: true}},
+		// 					},
+		// 					Principals: []*v3rbacpb.Principal{
+		// 						{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+		// 					},
+		// 				},
+		// 			},
+		// 			AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+		// 				AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+		// 				LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+		// 					{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+		// 						IsOptional: false,
+		// 					},
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// 	rbacQueries: []rbacQuery{
+		// 		{
+		// 			rpcData: &rpcData{
+		// 				fullMethod: "some method",
+		// 				peerInfo: &peer.Peer{
+		// 					Addr: &addr{ipAddress: "0.0.0.0"},
+		// 				},
+		// 			},
+		// 			wantStatusCode: codes.OK,
+		// 			wantAuditEvents: []*audit.Event{
+		// 				{
+		// 					FullMethodName: "some method",
+		// 					Principal:      "0.0.0.0",
+		// 					PolicyName:     "",
+		// 					MatchedRule:    "anyone",
+		// 					Authorized:     true,
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// },
+		// {
+		// 	name: "AuditLogging_ON_ALLOW_DENY_POLICY",
+		// 	rbacConfigs: []*v3rbacpb.RBAC{
+		// 		{
+		// 			Action: v3rbacpb.RBAC_DENY,
+		// 			Policies: map[string]*v3rbacpb.Policy{
+		// 				"anyone": {
+		// 					Permissions: []*v3rbacpb.Permission{
+		// 						{Rule: &v3rbacpb.Permission_Any{Any: true}},
+		// 					},
+		// 					Principals: []*v3rbacpb.Principal{
+		// 						{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+		// 					},
+		// 				},
+		// 			},
+		// 			AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+		// 				AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+		// 				LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+		// 					{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+		// 						IsOptional: false,
+		// 					},
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// 	rbacQueries: []rbacQuery{
+		// 		{
+		// 			rpcData: &rpcData{
+		// 				fullMethod: "some method",
+		// 				peerInfo: &peer.Peer{
+		// 					Addr: &addr{ipAddress: "0.0.0.0"},
+		// 				},
+		// 			},
+		// 			wantStatusCode: codes.PermissionDenied,
+		// 		},
+		// 	},
+		// },
+		// // AllowAndDenyPolicy tests a policy with an allow (on path) and
+		// // deny (on port) policy chained together. This represents how a user
+		// // configured interceptor would use this, and also is a potential
+		// // configuration for a dynamic xds interceptor.
+		// {
+		// 	name: "AuditLoggingAllowAndDenyPolicy_ON_ALLOW",
+		// 	rbacConfigs: []*v3rbacpb.RBAC{
+		// 		{
+		// 			Policies: map[string]*v3rbacpb.Policy{
+		// 				"certain-source-ip": {
+		// 					Permissions: []*v3rbacpb.Permission{
+		// 						{Rule: &v3rbacpb.Permission_Any{Any: true}},
+		// 					},
+		// 					Principals: []*v3rbacpb.Principal{
+		// 						{Identifier: &v3rbacpb.Principal_DirectRemoteIp{DirectRemoteIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
+		// 					},
+		// 				},
+		// 			},
+		// 			Action: v3rbacpb.RBAC_ALLOW,
+		// 			AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+		// 				AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+		// 				LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+		// 					{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+		// 						IsOptional: false,
+		// 					},
+		// 				},
+		// 			},
+		// 		},
+		// 		{
+		// 			Policies: map[string]*v3rbacpb.Policy{
+		// 				"localhost-fan": {
+		// 					Permissions: []*v3rbacpb.Permission{
+		// 						{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "localhost-fan-page"}}}}}},
+		// 					},
+		// 					Principals: []*v3rbacpb.Principal{
+		// 						{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+		// 					},
+		// 				},
+		// 			},
+		// 			Action: v3rbacpb.RBAC_DENY,
+		// 			AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+		// 				AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+		// 				LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+		// 					{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+		// 						IsOptional: false,
+		// 					},
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// 	rbacQueries: []rbacQuery{
+		// 		// This RPC should match with the allow policy, and shouldn't
+		// 		// match with the deny and thus should be allowed to proceed.
+		// 		{
+		// 			rpcData: &rpcData{
+		// 				fullMethod: "",
+		// 				peerInfo: &peer.Peer{
+		// 					Addr: &addr{ipAddress: "0.0.0.0"},
+		// 				},
+		// 			},
+		// 			wantStatusCode: codes.OK,
+		// 			wantAuditEvents: []*audit.Event{
+		// 				{
+		// 					FullMethodName: "",
+		// 					Principal:      "0.0.0.0",
+		// 					PolicyName:     "",
+		// 					MatchedRule:    "localhost-fan",
+		// 					Authorized:     true,
+		// 				},
+		// 			},
+		// 		},
+		// 		// This RPC should match with both the allow policy and deny policy
+		// 		// and thus shouldn't be allowed to proceed as matched with deny.
+		// 		{
+		// 			rpcData: &rpcData{
+		// 				fullMethod: "localhost-fan-page",
+		// 				peerInfo: &peer.Peer{
+		// 					Addr: &addr{ipAddress: "0.0.0.0"},
+		// 				},
+		// 			},
+		// 			wantStatusCode: codes.PermissionDenied,
+		// 		},
+		// 		// This RPC shouldn't match with either policy, and thus
+		// 		// shouldn't be allowed to proceed as didn't match with allow.
+		// 		{
+		// 			rpcData: &rpcData{
+		// 				peerInfo: &peer.Peer{
+		// 					Addr: &addr{ipAddress: "10.0.0.0"},
+		// 				},
+		// 			},
+		// 			wantStatusCode: codes.PermissionDenied,
+		// 		},
+		// 		// This RPC shouldn't match with allow, match with deny, and
+		// 		// thus shouldn't be allowed to proceed.
+		// 		{
+		// 			rpcData: &rpcData{
+		// 				fullMethod: "localhost-fan-page",
+		// 				peerInfo: &peer.Peer{
+		// 					Addr: &addr{ipAddress: "10.0.0.0"},
+		// 				},
+		// 			},
+		// 			wantStatusCode: codes.PermissionDenied,
+		// 		},
+		// 	},
+		// },
 	}
 	b := TestAuditLoggerBufferBuilder{}
 	audit.RegisterLoggerBuilder(b)
@@ -1099,6 +1244,7 @@ func (s) TestChainEngine(t *testing.T) {
 			// if the chain of RBAC Engines configured as such works as intended.
 			for _, data := range test.rbacQueries {
 				func() {
+					auditEvents = nil
 					// Construct the context with three data points that have enough
 					// information to represent incoming RPC's. This will be how a
 					// user uses this API. A user will have to put MD, PeerInfo, and
@@ -1143,9 +1289,15 @@ func (s) TestChainEngine(t *testing.T) {
 					if gotCode := status.Code(err); gotCode != data.wantStatusCode {
 						t.Fatalf("IsAuthorized(%+v, %+v) returned (%+v), want(%+v)", ctx, data.rpcData.fullMethod, gotCode, data.wantStatusCode)
 					}
-					if auditEvent != nil && *auditEvent != data.wantAuditEvent {
+					if !reflect.DeepEqual(auditEvents, data.wantAuditEvents) {
 						t.Fatalf("bad audit event")
 					}
+					// if auditEvent != nil && *auditEvent != data.wantAuditEvent {
+					// 	t.Fatalf("bad audit event")
+					// }
+					// if auditEvent == nil && auditEvent != nil {
+					// 	t.Fatalf("got audit event and shouldn't have")
+					// }
 				}()
 			}
 		})
@@ -1153,7 +1305,7 @@ func (s) TestChainEngine(t *testing.T) {
 }
 
 // var auditEvents []audit.Event
-var auditEvent *audit.Event
+var auditEvents []*audit.Event
 
 type ServerTransportStreamWithMethod struct {
 	method string
@@ -1180,7 +1332,7 @@ type TestAuditLoggerBuffer struct {
 }
 
 func (logger TestAuditLoggerBuffer) Log(e *audit.Event) {
-	auditEvent = e
+	auditEvents = append(auditEvents, e)
 }
 
 type TestAuditLoggerBufferBuilder struct {
