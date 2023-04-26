@@ -1325,12 +1325,6 @@ func (t *http2Server) Drain(debugData string) {
 		return
 	}
 	t.drainEvent = grpcsync.NewEvent()
-	//just use the first string in the varargs if provided
-	// data := []byte{}
-	// if len(debugData) > 0 {
-	// 	data = []byte(debugData[0])
-	// }
-	// t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: data, headsUp: true})
 	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(debugData), headsUp: true})
 }
 
