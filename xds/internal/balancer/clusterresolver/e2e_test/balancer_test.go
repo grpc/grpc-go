@@ -233,7 +233,7 @@ func (s) TestErrorFromParentLB_ConnectionError(t *testing.T) {
 	default:
 	}
 
-	// Ensure that RPCs continue to succeed for the next one second.
+	// Ensure that RPCs continue to succeed for the next second.
 	for end := time.Now().Add(time.Second); time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			t.Fatalf("EmptyCall() failed: %v", err)
@@ -453,7 +453,8 @@ func (s) TestEDS_ResourceRemoved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Ensure that RPCs continue to succeed for the next one second, and that the EDS watch is not canceled.
+	// Ensure that RPCs continue to succeed for the next second, and that the
+	// EDS watch is not canceled.
 	for end := time.Now().Add(time.Second); time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			t.Fatalf("EmptyCall() failed: %v", err)
@@ -660,7 +661,8 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Ensure that RPCs continue to get routed to the second backend for the next one second.
+	// Ensure that RPCs continue to get routed to the second backend for the
+	// next second.
 	for end := time.Now().Add(time.Second); time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
 			t.Fatalf("EmptyCall() failed: %v", err)
@@ -1135,12 +1137,13 @@ func (s) TestAggregateCluster_SwitchEDSAndDNS(t *testing.T) {
 
 // TestAggregateCluster_BadEDS_GoodToBadDNS tests the case where the top-level
 // cluster is an aggregate cluster that resolves to an EDS and LOGICAL_DNS
-// cluster. When the EDS request returns a resource that contains no endpoints,
-// the test verifies that we switch to the DNS cluster and can make a successful
-// RPC. At this point when the DNS cluster returns an error, the test verifies
-// that RPCs are still successful. This is the expected behavior because
-// pick_first (the leaf policy) ignores resolver errors when it is not in
-// TransientFailure.
+// cluster. The test first asserts that no RPCs can be made after receiving an
+// EDS response with zero endpoints because no update has been received from the
+// DNS resolver yet. Once the DNS resolver pushes an update, the test verifies
+// that we switch to the DNS cluster and can make a successful RPC. At this
+// point when the DNS cluster returns an error, the test verifies that RPCs are
+// still successful. This is the expected behavior because pick_first (the leaf
+// policy) ignores resolver errors when it is not in TransientFailure.
 func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 	dnsTargetCh, _, _, dnsR, cleanup1 := setupDNS()
 	defer cleanup1()
@@ -1229,7 +1232,7 @@ func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 	dnsErr := fmt.Errorf("DNS error")
 	dnsR.ReportError(dnsErr)
 
-	// Ensure that RPCs continue to succeed for the next one second.
+	// Ensure that RPCs continue to succeed for the next second.
 	for end := time.Now().Add(time.Second); time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
 		peer := &peer.Peer{}
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
@@ -1244,11 +1247,10 @@ func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 // TestAggregateCluster_BadEDS_BadDNS tests the case where the top-level cluster
 // is an aggregate cluster that resolves to an EDS and LOGICAL_DNS cluster. When
 // the EDS request returns a resource that contains no endpoints, the test
-// verifies that we switch to the DNS cluster.  When the DNS cluster returns an
+// verifies that we switch to the DNS cluster. When the DNS cluster returns an
 // error, the test verifies that RPCs fail with the error returned by the DNS
-// resolver. This is the expected behavior because pick_first puts the channel
-// in TransientFailure upon receipt of a resolver error when it does not have a
-// valid subchannel.
+// resolver, and thus, ensures that pick_first (the leaf policy) does not ignore
+// resolver errors.
 func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 	dnsTargetCh, _, _, dnsR, cleanup1 := setupDNS()
 	defer cleanup1()
