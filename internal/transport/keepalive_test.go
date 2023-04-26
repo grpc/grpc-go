@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,8 +70,12 @@ func (s) TestMaxConnectionIdle(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("context expired before receiving GoAway from the server.")
 	case <-client.GoAway():
-		if reason, _ := client.GetGoAwayReason(); reason != GoAwayNoReason {
+		reason, debugMsg := client.GetGoAwayReason()
+		if reason != GoAwayNoReason {
 			t.Fatalf("GoAwayReason is %v, want %v", reason, GoAwayNoReason)
+		}
+		if !strings.Contains(debugMsg, "max_idle") {
+			t.Fatalf("GoAwayDebugMessage is %v, want %v", debugMsg, "max_idle")
 		}
 	}
 }
@@ -135,8 +140,12 @@ func (s) TestMaxConnectionAge(t *testing.T) {
 	// for more than MaxConnectionIdle time.
 	select {
 	case <-client.GoAway():
-		if reason, _ := client.GetGoAwayReason(); reason != GoAwayNoReason {
+		reason, debugMsg := client.GetGoAwayReason()
+		if reason != GoAwayNoReason {
 			t.Fatalf("GoAwayReason is %v, want %v", reason, GoAwayNoReason)
+		}
+		if !strings.Contains(debugMsg, "max_age") {
+			t.Fatalf("GoAwayDebugMessage is %v, want %v", debugMsg, "max_age")
 		}
 	case <-ctx.Done():
 		t.Fatalf("timed out before getting a GoAway from the server.")
@@ -705,6 +714,7 @@ func waitForGoAwayTooManyPings(client *http2Client) error {
 		if reason, _ := client.GetGoAwayReason(); reason != GoAwayTooManyPings {
 			return fmt.Errorf("goAwayReason is %v, want %v", reason, GoAwayTooManyPings)
 		}
+
 	case <-ctx.Done():
 		return fmt.Errorf("test timed out before getting GoAway with reason:GoAwayTooManyPings from server")
 	}
