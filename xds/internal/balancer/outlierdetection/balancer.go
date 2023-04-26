@@ -828,8 +828,7 @@ func (b *outlierDetectionBalancer) successRateAlgorithm() {
 		successRate := float64(bucket.numSuccesses) / float64(bucket.numSuccesses+bucket.numFailures)
 		requiredSuccessRate := mean - stddev*(float64(ejectionCfg.StdevFactor)/1000)
 		if successRate < requiredSuccessRate {
-			channelz.Infof(logger, b.channelzParentID, "SuccessRate algorithm detected outlier: %s. Parameters: successRate=%f, mean=%f, stddev=%f, requiredSuccessRate=%f",
-				addrInfo, successRate, mean, stddev, requiredSuccessRate)
+			channelz.Infof(logger, b.channelzParentID, "SuccessRate algorithm detected outlier: %s. Parameters: successRate=%f, mean=%f, stddev=%f, requiredSuccessRate=%f", addrInfo, successRate, mean, stddev, requiredSuccessRate)
 			if uint32(grpcrand.Int31n(100)) < ejectionCfg.EnforcementPercentage {
 				b.ejectAddress(addrInfo)
 			}
@@ -856,8 +855,7 @@ func (b *outlierDetectionBalancer) failurePercentageAlgorithm() {
 		}
 		failurePercentage := (float64(bucket.numFailures) / float64(bucket.numSuccesses+bucket.numFailures)) * 100
 		if failurePercentage > float64(b.cfg.FailurePercentageEjection.Threshold) {
-			channelz.Infof(logger, b.channelzParentID, "FailurePercentage algorithm detected outlier: %s, failurePercentage=%f",
-				addrInfo, failurePercentage)
+			channelz.Infof(logger, b.channelzParentID, "FailurePercentage algorithm detected outlier: %s, failurePercentage=%f", addrInfo, failurePercentage)
 			if uint32(grpcrand.Int31n(100)) < ejectionCfg.EnforcementPercentage {
 				b.ejectAddress(addrInfo)
 			}
