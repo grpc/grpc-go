@@ -495,6 +495,11 @@ func (s) TestNewChainEngine(t *testing.T) {
 	}
 }
 
+type rbacQuery struct {
+	rpcData        *rpcData
+	wantStatusCode codes.Code
+}
+
 // TestChainEngine tests the chain of RBAC Engines by configuring the chain of
 // engines in a certain way in different scenarios. After configuring the chain
 // of engines in a certain way, this test pings the chain of engines with
@@ -507,10 +512,7 @@ func (s) TestChainEngine(t *testing.T) {
 	tests := []struct {
 		name        string
 		rbacConfigs []*v3rbacpb.RBAC
-		rbacQueries []struct {
-			rpcData        *rpcData
-			wantStatusCode codes.Code
-		}
+		rbacQueries []rbacQuery
 	}{
 		// SuccessCaseAnyMatch tests a single RBAC Engine instantiated with
 		// a config with a policy with any rules for both permissions and
@@ -532,10 +534,7 @@ func (s) TestChainEngine(t *testing.T) {
 					},
 				},
 			},
-			rbacQueries: []struct {
-				rpcData        *rpcData
-				wantStatusCode codes.Code
-			}{
+			rbacQueries: []rbacQuery{
 				{
 					rpcData: &rpcData{
 						fullMethod: "some method",
@@ -566,10 +565,7 @@ func (s) TestChainEngine(t *testing.T) {
 					},
 				},
 			},
-			rbacQueries: []struct {
-				rpcData        *rpcData
-				wantStatusCode codes.Code
-			}{
+			rbacQueries: []rbacQuery{
 				// This RPC should match with the local host fan policy. Thus,
 				// this RPC should be allowed to proceed.
 				{
@@ -632,10 +628,7 @@ func (s) TestChainEngine(t *testing.T) {
 					},
 				},
 			},
-			rbacQueries: []struct {
-				rpcData        *rpcData
-				wantStatusCode codes.Code
-			}{
+			rbacQueries: []rbacQuery{
 				// This incoming RPC Call should match with the service admin
 				// policy.
 				{
@@ -720,10 +713,7 @@ func (s) TestChainEngine(t *testing.T) {
 					},
 				},
 			},
-			rbacQueries: []struct {
-				rpcData        *rpcData
-				wantStatusCode codes.Code
-			}{
+			rbacQueries: []rbacQuery{
 				// This incoming RPC Call should match with the not-secret-content policy.
 				{
 					rpcData: &rpcData{
@@ -762,10 +752,7 @@ func (s) TestChainEngine(t *testing.T) {
 					},
 				},
 			},
-			rbacQueries: []struct {
-				rpcData        *rpcData
-				wantStatusCode codes.Code
-			}{
+			rbacQueries: []rbacQuery{
 				// This incoming RPC Call should match with the certain-direct-remote-ip policy.
 				{
 					rpcData: &rpcData{
@@ -806,10 +793,7 @@ func (s) TestChainEngine(t *testing.T) {
 					},
 				},
 			},
-			rbacQueries: []struct {
-				rpcData        *rpcData
-				wantStatusCode codes.Code
-			}{
+			rbacQueries: []rbacQuery{
 				// This incoming RPC Call should match with the certain-remote-ip policy.
 				{
 					rpcData: &rpcData{
@@ -846,10 +830,7 @@ func (s) TestChainEngine(t *testing.T) {
 					},
 				},
 			},
-			rbacQueries: []struct {
-				rpcData        *rpcData
-				wantStatusCode codes.Code
-			}{
+			rbacQueries: []rbacQuery{
 				// This incoming RPC Call shouldn't match with the
 				// certain-destination-ip policy, as the test listens on local
 				// host.
@@ -897,10 +878,7 @@ func (s) TestChainEngine(t *testing.T) {
 					Action: v3rbacpb.RBAC_DENY,
 				},
 			},
-			rbacQueries: []struct {
-				rpcData        *rpcData
-				wantStatusCode codes.Code
-			}{
+			rbacQueries: []rbacQuery{
 				// This RPC should match with the allow policy, and shouldn't
 				// match with the deny and thus should be allowed to proceed.
 				{
@@ -964,10 +942,7 @@ func (s) TestChainEngine(t *testing.T) {
 					},
 				},
 			},
-			rbacQueries: []struct {
-				rpcData        *rpcData
-				wantStatusCode codes.Code
-			}{
+			rbacQueries: []rbacQuery{
 				// This incoming RPC Call should match with the service admin
 				// policy. No authentication info is provided, so the
 				// authenticated matcher should match to the string matcher on
@@ -1017,10 +992,7 @@ func (s) TestChainEngine(t *testing.T) {
 					},
 				},
 			},
-			rbacQueries: []struct {
-				rpcData        *rpcData
-				wantStatusCode codes.Code
-			}{
+			rbacQueries: []rbacQuery{
 				{
 					rpcData: &rpcData{
 						fullMethod: "some method",
@@ -1053,10 +1025,7 @@ func (s) TestChainEngine(t *testing.T) {
 					},
 				},
 			},
-			rbacQueries: []struct {
-				rpcData        *rpcData
-				wantStatusCode codes.Code
-			}{
+			rbacQueries: []rbacQuery{
 				{
 					rpcData: &rpcData{
 						fullMethod: "some method",
