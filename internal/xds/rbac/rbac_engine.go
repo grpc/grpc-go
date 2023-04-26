@@ -270,7 +270,6 @@ type rpcData struct {
 }
 
 func doAuditLogging(engine *engine, rpcData *rpcData, rule string, authorized bool) error {
-	// TODO implement audit logging
 	event := &audit.Event{
 		FullMethodName: rpcData.fullMethod,
 		Principal:      rpcData.peerInfo.Addr.String(),

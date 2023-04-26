@@ -1042,89 +1042,6 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 			},
 		},
-		// {
-		// 	name: "AuditLoggingSuccessCaseAnyMatchALLOW",
-		// 	rbacConfigs: []*v3rbacpb.RBAC{
-		// 		{
-		// 			Action: v3rbacpb.RBAC_ALLOW,
-		// 			Policies: map[string]*v3rbacpb.Policy{
-		// 				"anyone": {
-		// 					Permissions: []*v3rbacpb.Permission{
-		// 						{Rule: &v3rbacpb.Permission_Any{Any: true}},
-		// 					},
-		// 					Principals: []*v3rbacpb.Principal{
-		// 						{Identifier: &v3rbacpb.Principal_Any{Any: true}},
-		// 					},
-		// 				},
-		// 			},
-		// 			AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
-		// 				AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
-		// 				LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-		// 					{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
-		// 						IsOptional: false,
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// 	rbacQueries: []rbacQuery{
-		// 		{
-		// 			rpcData: &rpcData{
-		// 				fullMethod: "some method",
-		// 				peerInfo: &peer.Peer{
-		// 					Addr: &addr{ipAddress: "0.0.0.0"},
-		// 				},
-		// 			},
-		// 			wantStatusCode: codes.OK,
-		// 			wantAuditEvents: []*audit.Event{
-		// 				{
-		// 					FullMethodName: "some method",
-		// 					Principal:      "0.0.0.0",
-		// 					PolicyName:     "",
-		// 					MatchedRule:    "anyone",
-		// 					Authorized:     true,
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	name: "AuditLogging_ON_ALLOW_DENY_POLICY",
-		// 	rbacConfigs: []*v3rbacpb.RBAC{
-		// 		{
-		// 			Action: v3rbacpb.RBAC_DENY,
-		// 			Policies: map[string]*v3rbacpb.Policy{
-		// 				"anyone": {
-		// 					Permissions: []*v3rbacpb.Permission{
-		// 						{Rule: &v3rbacpb.Permission_Any{Any: true}},
-		// 					},
-		// 					Principals: []*v3rbacpb.Principal{
-		// 						{Identifier: &v3rbacpb.Principal_Any{Any: true}},
-		// 					},
-		// 				},
-		// 			},
-		// 			AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
-		// 				AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
-		// 				LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-		// 					{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
-		// 						IsOptional: false,
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// 	rbacQueries: []rbacQuery{
-		// 		{
-		// 			rpcData: &rpcData{
-		// 				fullMethod: "some method",
-		// 				peerInfo: &peer.Peer{
-		// 					Addr: &addr{ipAddress: "0.0.0.0"},
-		// 				},
-		// 			},
-		// 			wantStatusCode: codes.PermissionDenied,
-		// 		},
-		// 	},
-		// },
 		// AllowAndDenyPolicy tests a policy with an allow (on path) and
 		// deny (on port) policy chained together. This represents how a user
 		// configured interceptor would use this, and also is a potential
@@ -1602,7 +1519,7 @@ func (s) TestChainEngine(t *testing.T) {
 			}
 			// Query the created chain of RBAC Engines with different args to see
 			// if the chain of RBAC Engines configured as such works as intended.
-			for i, data := range test.rbacQueries {
+			for _, data := range test.rbacQueries {
 				func() {
 					auditEvents = nil
 					// Construct the context with three data points that have enough
@@ -1650,23 +1567,13 @@ func (s) TestChainEngine(t *testing.T) {
 						t.Fatalf("IsAuthorized(%+v, %+v) returned (%+v), want(%+v)", ctx, data.rpcData.fullMethod, gotCode, data.wantStatusCode)
 					}
 					if !reflect.DeepEqual(auditEvents, data.wantAuditEvents) {
-						// t.Fatalf("bad audit event.\nwant:%v\ngot:%v\n", data.wantAuditEvents, auditEvents)
-						t.Fatalf("bad audit event req %v", i)
+						t.Fatalf("Unexpected audit event for query:%v", data)
 					}
-					// if auditEvent != nil && *auditEvent != data.wantAuditEvent {
-					// 	t.Fatalf("bad audit event")
-					// }
-					// if auditEvent == nil && auditEvent != nil {
-					// 	t.Fatalf("got audit event and shouldn't have")
-					// }
 				}()
 			}
 		})
 	}
 }
-
-// var auditEvents []audit.Event
-var auditEvents []*audit.Event
 
 type ServerTransportStreamWithMethod struct {
 	method string
@@ -1688,17 +1595,23 @@ func (sts *ServerTransportStreamWithMethod) SetTrailer(md metadata.MD) error {
 	return nil
 }
 
+// A list of audit events that we can configure a logger to push to such that we
+// can access the contents during a test
+var auditEvents []*audit.Event
+
+// An audit logger that will log to the auditEvents slice
 type TestAuditLoggerBuffer struct {
-	// logs []*audit.Event
 }
 
 func (logger TestAuditLoggerBuffer) Log(e *audit.Event) {
 	auditEvents = append(auditEvents, e)
 }
 
+// Builds TestAuditLoggerBuffer
 type TestAuditLoggerBufferBuilder struct {
 }
 
+// The required config for TestAuditLoggerBuffer
 type TestAuditLoggerBufferConfig struct {
 	audit.LoggerConfig
 }
@@ -1715,23 +1628,26 @@ func (builder TestAuditLoggerBufferBuilder) Name() string {
 	return "TestAuditLoggerBuffer"
 }
 
+// An audit logger to test using a custom config
 type TestAuditLoggerCustomConfig struct {
 	logs []*audit.Event
 }
 
-func (logger TestAuditLoggerCustomConfig) Log(e *audit.Event) {
-	logger.logs = append(logger.logs, e)
-}
+func (logger TestAuditLoggerCustomConfig) Log(*audit.Event) {}
 
+// Build TestAuditLoggerCustomConfig
 type TestAuditLoggerCustomConfigBuilder struct {
 }
 
+// The custom config for the TestAuditLoggerCustomConfig logger
 type TestAuditLoggerCustomConfigConfig struct {
 	audit.LoggerConfig
 	Abc int
 	Xyz string
 }
 
+// Parses TestAuditLoggerCustomConfigConfig
+// Hard-coded to match with it's test case above
 func (builder TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJson json.RawMessage) (config audit.LoggerConfig, err error) {
 	c := TestAuditLoggerCustomConfigConfig{}
 	pb, err := anypb.New(nil)
@@ -1763,6 +1679,7 @@ func (builder TestAuditLoggerCustomConfigBuilder) Name() string {
 	return "TestAuditLoggerCustomConfig"
 }
 
+// Builds custom configs for audit logger RBAC protos
 func anyPbHelper(t *testing.T, in map[string]interface{}) *anypb.Any {
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
