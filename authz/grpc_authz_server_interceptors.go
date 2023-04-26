@@ -44,11 +44,11 @@ type StaticInterceptor struct {
 // NewStatic returns a new StaticInterceptor from a static authorization policy
 // JSON string.
 func NewStatic(authzPolicy string) (*StaticInterceptor, error) {
-	rbacs, _, err := translatePolicy(authzPolicy)
+	rbacs, policyName, err := translatePolicy(authzPolicy)
 	if err != nil {
 		return nil, err
 	}
-	chainEngine, err := rbac.NewChainEngine(rbacs)
+	chainEngine, err := rbac.NewChainEngineWithPolicyName(rbacs, policyName)
 	if err != nil {
 		return nil, err
 	}

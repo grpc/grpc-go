@@ -53,20 +53,6 @@ type ChainEngine struct {
 
 // NewChainEngine returns a chain of RBAC engines, used to make authorization
 // decisions on incoming RPCs. Returns a non-nil error for invalid policies.
-func NewChainEngine(policies []*v3rbacpb.RBAC) (*ChainEngine, error) {
-	engines := make([]*engine, 0, len(policies))
-	for _, policy := range policies {
-		engine, err := newEngine(policy)
-		if err != nil {
-			return nil, err
-		}
-		engines = append(engines, engine)
-	}
-	return &ChainEngine{chainedEngines: engines}, nil
-}
-
-// NewChainEngine returns a chain of RBAC engines, used to make authorization
-// decisions on incoming RPCs. Returns a non-nil error for invalid policies.
 func NewChainEngineWithPolicyName(policies []*v3rbacpb.RBAC, policyName string) (*ChainEngine, error) {
 	engines := make([]*engine, 0, len(policies))
 	for _, policy := range policies {
@@ -296,7 +282,7 @@ func doAuditLogging(engine *engine, rpcData *rpcData, rule string, authorized bo
 	event := &audit.Event{
 		FullMethodName: rpcData.fullMethod,
 		Principal:      rpcData.peerInfo.Addr.String(),
-		PolicyName:     "",
+		PolicyName:     engine.policyName,
 		MatchedRule:    rule,
 		Authorized:     authorized,
 	}

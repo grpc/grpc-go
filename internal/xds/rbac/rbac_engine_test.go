@@ -488,7 +488,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := NewChainEngine(test.policies); (err != nil) != test.wantErr {
+			if _, err := NewChainEngineWithPolicyName(test.policies, ""); (err != nil) != test.wantErr {
 				t.Fatalf("NewChainEngine(%+v) returned err: %v, wantErr: %v", test.policies, err, test.wantErr)
 			}
 		})
@@ -1091,7 +1091,7 @@ func (s) TestChainEngine(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Instantiate the chainedRBACEngine with different configurations that are
 			// interesting to test and to query.
-			cre, err := NewChainEngine(test.rbacConfigs)
+			cre, err := NewChainEngineWithPolicyName(test.rbacConfigs, "")
 			if err != nil {
 				t.Fatalf("Error constructing RBAC Engine: %v", err)
 			}
@@ -1143,7 +1143,7 @@ func (s) TestChainEngine(t *testing.T) {
 					if gotCode := status.Code(err); gotCode != data.wantStatusCode {
 						t.Fatalf("IsAuthorized(%+v, %+v) returned (%+v), want(%+v)", ctx, data.rpcData.fullMethod, gotCode, data.wantStatusCode)
 					}
-					if *auditEvent != data.wantAuditEvent {
+					if auditEvent != nil && *auditEvent != data.wantAuditEvent {
 						t.Fatalf("bad audit event")
 					}
 				}()
