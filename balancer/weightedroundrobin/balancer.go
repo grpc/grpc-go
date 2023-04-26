@@ -1,0 +1,493 @@
+/*
+ *
+ * Copyright 2023 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+package weightedroundrobin
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"sync"
+	"sync/atomic"
+	"time"
+	"unsafe"
+
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/balancer/weightedroundrobin/internal"
+	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/serviceconfig"
+
+	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
+)
+
+// Name is the name of the weighted round robin balancer.
+const Name = "weighted_round_robin_experimental"
+
+func init() {
+	balancer.Register(bb{})
+}
+
+type bb struct{}
+
+func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
+	b := &wrrBalancer{
+		cc:                cc,
+		subConns:          resolver.NewAddressMap(),
+		csEvltr:           &balancer.ConnectivityStateEvaluator{},
+		scMap:             make(map[balancer.SubConn]*weightedSubConn),
+		connectivityState: connectivity.Connecting,
+	}
+	b.logger = prefixLogger(b)
+	b.logger.Infof("Created")
+	b.regeneratePicker()
+	return b
+}
+
+func (bb) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+	lbCfg := &lbConfig{
+		// Default values as documented in A58.
+		OOBReportingPeriod:     10 * time.Second,
+		BlackoutPeriod:         10 * time.Second,
+		WeightExpirationPeriod: 3 * time.Minute,
+		WeightUpdatePeriod:     time.Second,
+	}
+	if err := json.Unmarshal(js, lbCfg); err != nil {
+		return nil, fmt.Errorf("wrr: unable to unmarshal LB policy config: %s, error: %v", string(js), err)
+	}
+
+	if lbCfg.ErrorUtilizationPenalty < 0 {
+		return nil, fmt.Errorf("wrr: errorUtilizationPenalty must be non-negative")
+	}
+
+	// For easier comparisons later, ensure the OOB reporting period is unset
+	// (0s) when OOB reports are disabled.
+	if !lbCfg.EnableOOBLoadReport {
+		lbCfg.OOBReportingPeriod = 0
+	}
+
+	// Impose lower bound of 100ms on weightUpdatePeriod.
+	if !internal.AllowAnyWeightUpdatePeriod && lbCfg.WeightUpdatePeriod < 100*time.Millisecond {
+		lbCfg.WeightUpdatePeriod = 100 * time.Millisecond
+	}
+
+	return lbCfg, nil
+}
+
+func (bb) Name() string {
+	return Name
+}
+
+type wrrBalancer struct {
+	cc     balancer.ClientConn
+	logger *grpclog.PrefixLogger
+
+	// The following fields are only accessed on calls into the LB policy, and
+	// do not need a mutex.
+	cfg               *lbConfig            // active config
+	subConns          *resolver.AddressMap // active weightedSubConns mapped by address
+	scMap             map[balancer.SubConn]*weightedSubConn
+	connectivityState connectivity.State // aggregate state
+	csEvltr           *balancer.ConnectivityStateEvaluator
+	resolverErr       error // the last error reported by the resolver; cleared on successful resolution
+	connErr           error // the last connection error; cleared upon leaving TransientFailure
+	stopPicker        func()
+}
+
+func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
+	b.logger.Infof("UpdateCCS: %v", ccs)
+	b.resolverErr = nil
+	cfg, ok := ccs.BalancerConfig.(*lbConfig)
+	if !ok {
+		return fmt.Errorf("wrr: received nil or illegal BalancerConfig: %v", ccs.BalancerConfig)
+	}
+
+	b.cfg = cfg
+	b.updateAddressesLocked(ccs.ResolverState.Addresses)
+
+	if len(ccs.ResolverState.Addresses) == 0 {
+		b.ResolverError(errors.New("resolver produced zero addresses")) // will call regeneratePicker
+		return balancer.ErrBadResolverState
+	}
+
+	// Regenerate & send picker.
+	b.regeneratePicker()
+
+	return nil
+}
+
+func (b *wrrBalancer) updateAddressesLocked(addrs []resolver.Address) {
+	addrsSet := resolver.NewAddressMap()
+
+	// Loop through new addresses
+	for _, addr := range addrs {
+		if _, ok := addrsSet.Get(addr); ok {
+			// Redundant address; skip.
+			continue
+		}
+		addrsSet.Set(addr, nil)
+
+		var wsc *weightedSubConn
+		wsci, ok := b.subConns.Get(addr)
+		if ok {
+			wsc = wsci.(*weightedSubConn)
+		} else {
+			// addr is a new address (not existing in b.subConns).
+			sc, err := b.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{})
+			if err != nil {
+				b.logger.Warningf("wrr: failed to create new SubConn: %v", err)
+				continue
+			}
+			wsc = &weightedSubConn{
+				SubConn:           sc,
+				logger:            b.logger,
+				connectivityState: connectivity.Idle,
+			}
+			b.subConns.Set(addr, wsc)
+			b.scMap[sc] = wsc
+			b.csEvltr.RecordTransition(connectivity.Shutdown, connectivity.Idle)
+			sc.Connect()
+		}
+		// Update config for existing weightedSubConn or send update for first
+		// time to new one.  Ensures an OOB listener is running if needed.
+		wsc.updateConfig(b.cfg)
+	}
+	for _, addr := range b.subConns.Keys() {
+		if _, ok := addrsSet.Get(addr); ok {
+			// Existing address also in new address list; skip.
+			continue
+		}
+		// addr was removed by resolver.  Remove.
+		wsci, _ := b.subConns.Get(addr)
+		wsc := wsci.(*weightedSubConn)
+		b.cc.RemoveSubConn(wsc.SubConn)
+		b.subConns.Delete(addr)
+	}
+}
+
+func (b *wrrBalancer) ResolverError(err error) {
+	b.resolverErr = err
+	if b.subConns.Len() == 0 {
+		b.connectivityState = connectivity.TransientFailure
+	}
+	if b.connectivityState != connectivity.TransientFailure {
+		// No need to update the picker since no error is being returned.
+		return
+	}
+	b.regeneratePicker()
+}
+
+func (b *wrrBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	wsc := b.scMap[sc]
+	if wsc == nil {
+		b.logger.Errorf("wrr: got state changes for an unknown SubConn: %p, %v", sc, state)
+		return
+	}
+
+	cs := state.ConnectivityState
+
+	if cs == connectivity.TransientFailure {
+		// Save error to be reported via picker.
+		b.connErr = state.ConnectionError
+	}
+
+	if cs == connectivity.Shutdown {
+		delete(b.scMap, sc)
+	}
+
+	oldCS := wsc.updateConnectivityState(cs)
+	b.connectivityState = b.csEvltr.RecordTransition(oldCS, cs)
+
+	// Regenerate picker when one of the following happens:
+	//  - this sc entered or left ready
+	//  - the aggregated state of balancer is TransientFailure
+	//    (may need to update error message)
+	if (cs == connectivity.Ready) != (oldCS == connectivity.Ready) ||
+		b.connectivityState == connectivity.TransientFailure {
+		b.regeneratePicker()
+	}
+}
+
+// Close stops timers that would cause our scheduler to be reupdated
+func (b *wrrBalancer) Close() {
+	if b.stopPicker != nil {
+		b.stopPicker()
+		b.stopPicker = nil
+	}
+	for _, wsc := range b.scMap {
+		// Ensure any lingering OOB watchers are stopped.
+		wsc.updateConnectivityState(connectivity.Shutdown)
+	}
+}
+
+// ExitIdle is ignored; we always connect to all backends.
+func (b *wrrBalancer) ExitIdle() {}
+
+func (b *wrrBalancer) readySubConns() []*weightedSubConn {
+	var ret []*weightedSubConn
+	for _, v := range b.subConns.Values() {
+		wsc := v.(*weightedSubConn)
+		if wsc.connectivityState == connectivity.Ready {
+			ret = append(ret, wsc)
+		}
+	}
+	return ret
+}
+
+// mergeErrors builds an error from the last connection error and the last
+// resolver error.  Must only be called if b.connectivityState is
+// TransientFailure.
+func (b *wrrBalancer) mergeErrors() error {
+	// connErr must always be non-nil unless there are no SubConns, in which
+	// case resolverErr must be non-nil.
+	if b.connErr == nil {
+		return fmt.Errorf("last resolver error: %v", b.resolverErr)
+	}
+	if b.resolverErr == nil {
+		return fmt.Errorf("last connection error: %v", b.connErr)
+	}
+	return fmt.Errorf("last connection error: %v; last resolver error: %v", b.connErr, b.resolverErr)
+}
+
+func (b *wrrBalancer) regeneratePicker() {
+	if b.stopPicker != nil {
+		b.stopPicker()
+		b.stopPicker = nil
+	}
+
+	switch b.connectivityState {
+	case connectivity.TransientFailure:
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: connectivity.TransientFailure,
+			Picker:            base.NewErrPicker(b.mergeErrors()),
+		})
+		return
+	case connectivity.Connecting, connectivity.Idle:
+		// Idle could happen very briefly if all subconns are Idle and we've
+		// asked them to connect but they haven't reported Connecting yet.
+		// Report the same as Connecting since this is temporary.
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: connectivity.Connecting,
+			Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
+		})
+		return
+	case connectivity.Ready:
+		b.connErr = nil
+	}
+
+	p := &picker{
+		cfg:      b.cfg,
+		subConns: b.readySubConns(),
+	}
+	var ctx context.Context
+	ctx, b.stopPicker = context.WithCancel(context.Background())
+	p.start(ctx)
+	b.cc.UpdateState(balancer.State{
+		ConnectivityState: b.connectivityState,
+		Picker:            p,
+	})
+}
+
+type picker struct {
+	idx       uint32             // index used indirectly by the scheduler; accessed atomically
+	cfg       *lbConfig          // active config when picker created
+	subConns  []*weightedSubConn // all READY subconns
+	scheduler unsafe.Pointer     // *scheduler; accessed atomically
+}
+
+func (p *picker) scWeights() []float64 {
+	ws := make([]float64, len(p.subConns))
+	for i, wsc := range p.subConns {
+		ws[i] = wsc.weight(time.Now(), p.cfg.WeightExpirationPeriod, p.cfg.BlackoutPeriod)
+	}
+	return ws
+}
+
+func (p *picker) nextIdx() uint32 {
+	return atomic.AddUint32(&p.idx, 1)
+}
+
+func (p *picker) regenerateScheduler() {
+	newSched := newScheduler(p.scWeights(), p.nextIdx)
+	atomic.StorePointer(&p.scheduler, unsafe.Pointer(&newSched))
+}
+
+func (p *picker) start(ctx context.Context) {
+	p.regenerateScheduler()
+	if len(p.subConns) == 1 {
+		// No need to regenerate weights with only one backend.
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(p.cfg.WeightUpdatePeriod)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				p.regenerateScheduler()
+			}
+		}
+	}()
+}
+
+func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	sched := *(*scheduler)(atomic.LoadPointer(&p.scheduler))
+	pickedSC := p.subConns[sched.nextIndex()]
+	pr := balancer.PickResult{SubConn: pickedSC.SubConn}
+	if !p.cfg.EnableOOBLoadReport {
+		pr.Done = func(info balancer.DoneInfo) {
+			if load, ok := info.ServerLoad.(*v3orcapb.OrcaLoadReport); ok && load != nil {
+				pickedSC.OnLoadReport(load)
+			}
+		}
+	}
+	return pr, nil
+}
+
+type weightedSubConn struct {
+	balancer.SubConn
+	logger *grpclog.PrefixLogger
+
+	// The following fields are only accessed on calls into the LB policy, and
+	// do not need a mutex.
+	connectivityState connectivity.State
+	stopORCAListener  func()
+
+	// The following field are accessed asynchronously and are protected by mu.
+	mu            sync.Mutex
+	weightVal     float64
+	nonEmptySince time.Time
+	lastUpdated   time.Time
+	cfg           *lbConfig
+}
+
+func (w *weightedSubConn) OnLoadReport(load *v3orcapb.OrcaLoadReport) {
+	if w.logger.V(2) {
+		w.logger.Infof("wrr: received load report for subchannel %v: %v", w.SubConn, load)
+	}
+	// Update weights of this subchannel according to the reported load
+	if load.CpuUtilization == 0 || load.RpsFractional == 0 {
+		if w.logger.V(2) {
+			w.logger.Infof("wrr: ignoring empty load report for subchannel %v", w.SubConn)
+		}
+		return
+	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	errorRate := load.Eps / load.RpsFractional
+	w.weightVal = load.RpsFractional / (load.CpuUtilization + errorRate*w.cfg.ErrorUtilizationPenalty)
+	if w.logger.V(2) {
+		w.logger.Infof("wrr: new weight for subchannel %v: %v", w.SubConn, w.weightVal)
+	}
+
+	w.lastUpdated = time.Now()
+	if w.nonEmptySince == (time.Time{}) {
+		w.nonEmptySince = w.lastUpdated
+	}
+}
+
+func (w *weightedSubConn) updateConfig(cfg *lbConfig) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	oldCfg := w.cfg
+	if oldCfg == nil {
+		oldCfg = &lbConfig{EnableOOBLoadReport: false}
+	}
+	w.cfg = cfg
+	newPeriod := cfg.OOBReportingPeriod
+	if cfg.EnableOOBLoadReport == oldCfg.EnableOOBLoadReport &&
+		newPeriod == oldCfg.OOBReportingPeriod {
+		// Load reporting wasn't enabled before or after, or load reporting was
+		// enabled before and after, and had the same period.  (Note that with
+		// load reporting disabled, OOBReportingPeriod is always 0.)
+		return
+	}
+	// (Optionally stop and) start the listener.
+	if w.stopORCAListener != nil {
+		w.stopORCAListener()
+	}
+	if !cfg.EnableOOBLoadReport {
+		w.stopORCAListener = nil
+		return
+	}
+	w.logger.Infof("Registering listener for %v; %v", w.SubConn, newPeriod)
+	opts := orca.OOBListenerOptions{ReportInterval: newPeriod}
+	w.stopORCAListener = orca.RegisterOOBListener(w.SubConn, w, opts)
+}
+
+func (w *weightedSubConn) updateConnectivityState(cs connectivity.State) connectivity.State {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	switch cs {
+	case connectivity.Idle:
+		// Always reconnect when idle.
+		w.SubConn.Connect()
+	case connectivity.Ready:
+		// If we transition back to READY state, restart the blackout period.
+		// Note that we cannot guarantee that we will never receive lingering
+		// callbacks for backend metric reports from the previous connection
+		// after the new connection has been established, but they should be
+		// masked by new backend metric reports from the new connection by the
+		// time the blackout period ends.
+		w.nonEmptySince = time.Time{}
+	case connectivity.Shutdown:
+		if w.stopORCAListener != nil {
+			w.stopORCAListener()
+		}
+	}
+
+	old := w.connectivityState
+
+	if old == connectivity.TransientFailure &&
+		(cs == connectivity.Connecting || cs == connectivity.Idle) {
+		// Once a subconn enters TRANSIENT_FAILURE, ignore subsequent IDLE or
+		// CONNECTING transitions to prevent the aggregated state from being
+		// always CONNECTING when many backends exist but are all down.
+		return old
+	}
+
+	w.connectivityState = cs
+
+	return old
+}
+
+func (w *weightedSubConn) weight(now time.Time, weightExpirationPeriod, blackoutPeriod time.Duration) float64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	// If the most recent update was longer ago than the expiration period,
+	// reset nonEmptySince so that we apply the blackout period again if we
+	// start getting data again in the future, and return 0.
+	if now.Sub(w.lastUpdated) > weightExpirationPeriod {
+		w.nonEmptySince = time.Time{}
+		return 0
+	}
+	// If we don't have at least blackoutPeriod worth of data, return 0.
+	if blackoutPeriod != 0 && (w.nonEmptySince == (time.Time{}) || now.Sub(w.nonEmptySince) < blackoutPeriod) {
+		return 0
+	}
+	// Otherwise, return the weight.
+	return w.weightVal
+}

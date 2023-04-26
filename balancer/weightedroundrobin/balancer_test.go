@@ -1,0 +1,580 @@
+/*
+ *
+ * Copyright 2023 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+package weightedroundrobin_test
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"testing"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils/roundrobin"
+	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/resolver"
+
+	wrr "google.golang.org/grpc/balancer/weightedroundrobin"
+	iwrr "google.golang.org/grpc/balancer/weightedroundrobin/internal"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
+)
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+const defaultTestTimeout = 10 * time.Second
+const rrIterations = 100
+
+type testServer struct {
+	*stubserver.StubServer
+
+	oobMetrics  orca.ServerMetricsRecorder // Attached to the OOB stream.
+	callMetrics orca.CallMetricsRecorder   // Attached to per-call metrics.
+}
+
+type reportType int
+
+const (
+	reportNone reportType = iota
+	reportOOB
+	reportCall
+	reportBoth
+)
+
+func startServer(t *testing.T, r reportType) *testServer {
+	t.Helper()
+
+	smr := orca.NewServerMetricsRecorder()
+	cmr := orca.NewServerMetricsRecorder().(orca.CallMetricsRecorder)
+
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			if r := orca.CallMetricsRecorderFromContext(ctx); r != nil {
+				// Copy metrics from what the test set in cmr into r.
+				sm := cmr.(orca.ServerMetricsProvider).ServerMetrics()
+				r.SetCPUUtilization(sm.CPUUtilization)
+				r.SetQPS(sm.QPS)
+				r.SetEPS(sm.EPS)
+			}
+			return &testpb.Empty{}, nil
+		},
+	}
+
+	var sopts []grpc.ServerOption
+	if r == reportBoth || r == reportCall {
+		sopts = append(sopts, orca.CallMetricsServerOption(nil))
+	}
+
+	if r == reportOOB || r == reportBoth {
+		oso := orca.ServiceOptions{
+			ServerMetricsProvider: smr,
+			MinReportingInterval:  10 * time.Millisecond,
+		}
+		internal.ORCAAllowAnyMinReportingInterval.(func(so *orca.ServiceOptions))(&oso)
+		sopts = append(sopts, stubserver.RegisterServiceServerOption(func(s *grpc.Server) {
+			if err := orca.Register(s, oso); err != nil {
+				t.Fatalf("Failed to register orca service: %v", err)
+			}
+		}))
+	}
+
+	if err := ss.StartServer(sopts...); err != nil {
+		t.Fatalf("Error starting server: %v", err)
+	}
+	t.Cleanup(ss.Stop)
+
+	return &testServer{
+		StubServer:  ss,
+		oobMetrics:  smr,
+		callMetrics: cmr,
+	}
+}
+
+func svcConfig(t *testing.T, wrrCfg wrr.LBConfigForTesting) string {
+	t.Helper()
+	m, err := json.Marshal(wrrCfg)
+	if err != nil {
+		t.Fatalf("Error marshaling JSON %v: %v", wrrCfg, err)
+	}
+	sc := fmt.Sprintf(`{"loadBalancingConfig": [ {%q:%v} ] }`, wrr.Name, string(m))
+	t.Logf("Marshaled service config: %v", sc)
+	return sc
+}
+
+const weightUpdatePeriod = 50 * time.Millisecond
+const oobReportingInterval = 10 * time.Millisecond
+
+func init() {
+	iwrr.AllowAnyWeightUpdatePeriod = true
+}
+
+var (
+	perCallConfig = wrr.LBConfigForTesting{
+		EnableOOBLoadReport:    false,
+		BlackoutPeriod:         1 * time.Nanosecond,
+		OOBReportingPeriod:     5 * time.Millisecond,
+		WeightExpirationPeriod: time.Minute,
+		WeightUpdatePeriod:     weightUpdatePeriod,
+	}
+	oobConfig = wrr.LBConfigForTesting{
+		EnableOOBLoadReport:    true,
+		BlackoutPeriod:         1 * time.Nanosecond,
+		OOBReportingPeriod:     5 * time.Millisecond,
+		WeightExpirationPeriod: time.Minute,
+		WeightUpdatePeriod:     weightUpdatePeriod,
+	}
+)
+
+func (s) TestBalancer_OneAddress_ReportingDisabled(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv := startServer(t, reportNone)
+
+	sc := svcConfig(t, perCallConfig)
+	if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+
+	// Perform many RPCs to ensure the LB policy works with 1 address.
+	for i := 0; i < 100; i++ {
+		if _, err := srv.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			t.Fatalf("Error from EmptyCall: %v", err)
+		}
+		time.Sleep(time.Millisecond) // Delay; test will run 100ms and should perform ~10 weight updates
+	}
+}
+
+func (s) TestBalancer_OneAddress_ReportingEnabledPerCall(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv := startServer(t, reportCall)
+
+	sc := svcConfig(t, perCallConfig)
+	if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+
+	// Perform many RPCs to ensure the LB policy works with 1 address.
+	for i := 0; i < 100; i++ {
+		srv.callMetrics.SetQPS(float64(i))
+		if _, err := srv.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			t.Fatalf("Error from EmptyCall: %v", err)
+		}
+		time.Sleep(time.Millisecond) // Delay; test will run 100ms and should perform ~10 weight updates
+	}
+}
+
+func (s) TestBalancer_OneAddress_ReportingEnabledOOB(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv := startServer(t, reportOOB)
+
+	sc := svcConfig(t, oobConfig)
+	if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+
+	// Perform many RPCs to ensure the LB policy works with 1 address.
+	for i := 0; i < 100; i++ {
+		srv.oobMetrics.SetQPS(float64(i))
+		if _, err := srv.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			t.Fatalf("Error from EmptyCall: %v", err)
+		}
+		time.Sleep(time.Millisecond) // Delay; test will run 100ms and should perform ~10 weight updates
+	}
+}
+
+func (s) TestBalancer_TwoAddresses_ReportingDisabled(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv1 := startServer(t, reportNone)
+	srv2 := startServer(t, reportNone)
+
+	sc := svcConfig(t, perCallConfig)
+	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+	addrs := []resolver.Address{{Addr: srv1.Address}, {Addr: srv2.Address}}
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+
+	// Perform many RPCs to ensure the LB policy works with 2 addresses.
+	for i := 0; i < 20; i++ {
+		roundrobin.CheckRoundRobinRPCs(ctx, srv1.Client, addrs)
+	}
+}
+
+func (s) TestBalancer_TwoAddresses_ReportingEnabledPerCall(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv1 := startServer(t, reportCall)
+	srv2 := startServer(t, reportCall)
+
+	// srv1 starts loaded and srv2 starts without load; ensure RPCs are routed
+	// disproportionately to srv2 (10:1).
+	srv1.callMetrics.SetQPS(10.0)
+	srv1.callMetrics.SetCPUUtilization(1.0)
+
+	srv2.callMetrics.SetQPS(10.0)
+	srv2.callMetrics.SetCPUUtilization(.1)
+
+	sc := svcConfig(t, perCallConfig)
+	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+	addrs := []resolver.Address{{Addr: srv1.Address}, {Addr: srv2.Address}}
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+
+	// Call each backend once to ensure the weights have been received.
+	ensureReached(ctx, t, srv1.Client, 2)
+
+	// Wait for the weight update period to allow the new weights to be processed.
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10})
+}
+
+func (s) TestBalancer_TwoAddresses_ReportingEnabledOOB(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv1 := startServer(t, reportOOB)
+	srv2 := startServer(t, reportOOB)
+
+	// srv1 starts loaded and srv2 starts without load; ensure RPCs are routed
+	// disproportionately to srv2 (10:1).
+	srv1.oobMetrics.SetQPS(10.0)
+	srv1.oobMetrics.SetCPUUtilization(1.0)
+
+	srv2.oobMetrics.SetQPS(10.0)
+	srv2.oobMetrics.SetCPUUtilization(.1)
+
+	sc := svcConfig(t, oobConfig)
+	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+	addrs := []resolver.Address{{Addr: srv1.Address}, {Addr: srv2.Address}}
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+
+	// Call each backend once to ensure the weights have been received.
+	ensureReached(ctx, t, srv1.Client, 2)
+
+	// Wait for the weight update period to allow the new weights to be processed.
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10})
+}
+
+func (s) TestBalancer_TwoAddresses_UpdateLoads(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv1 := startServer(t, reportOOB)
+	srv2 := startServer(t, reportOOB)
+
+	// srv1 starts loaded and srv2 starts without load; ensure RPCs are routed
+	// disproportionately to srv2 (10:1).
+	srv1.oobMetrics.SetQPS(10.0)
+	srv1.oobMetrics.SetCPUUtilization(1.0)
+
+	srv2.oobMetrics.SetQPS(10.0)
+	srv2.oobMetrics.SetCPUUtilization(.1)
+
+	sc := svcConfig(t, oobConfig)
+	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+	addrs := []resolver.Address{{Addr: srv1.Address}, {Addr: srv2.Address}}
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+
+	// Call each backend once to ensure the weights have been received.
+	ensureReached(ctx, t, srv1.Client, 2)
+
+	// Wait for the weight update period to allow the new weights to be processed.
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10})
+
+	// Update the loads so srv2 is loaded and srv1 is not; ensure RPCs are
+	// routed disproportionately to srv1.
+	srv1.oobMetrics.SetQPS(10.0)
+	srv1.oobMetrics.SetCPUUtilization(.1)
+
+	srv2.oobMetrics.SetQPS(10.0)
+	srv2.oobMetrics.SetCPUUtilization(1.0)
+
+	// Wait for the weight update period to allow the new weights to be processed.
+	time.Sleep(weightUpdatePeriod + oobReportingInterval)
+	checkWeights(ctx, t, srvWeight{srv1, 10}, srvWeight{srv2, 1})
+}
+
+func (s) TestBalancer_TwoAddresses_OOBThenPerCall(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv1 := startServer(t, reportBoth)
+	srv2 := startServer(t, reportBoth)
+
+	// srv1 starts loaded and srv2 starts without load; ensure RPCs are routed
+	// disproportionately to srv2 (10:1).
+	srv1.oobMetrics.SetQPS(10.0)
+	srv1.oobMetrics.SetCPUUtilization(1.0)
+
+	srv2.oobMetrics.SetQPS(10.0)
+	srv2.oobMetrics.SetCPUUtilization(.1)
+
+	// For per-call metrics (not used initially), srv2 reports that it is
+	// loaded and srv1 reports low load.  After confirming OOB works, switch to
+	// per-call and confirm the new routing weights are applied.
+	srv1.callMetrics.SetQPS(10.0)
+	srv1.callMetrics.SetCPUUtilization(.1)
+
+	srv2.callMetrics.SetQPS(10.0)
+	srv2.callMetrics.SetCPUUtilization(1.0)
+
+	sc := svcConfig(t, oobConfig)
+	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+	addrs := []resolver.Address{{Addr: srv1.Address}, {Addr: srv2.Address}}
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+
+	// Call each backend once to ensure the weights have been received.
+	ensureReached(ctx, t, srv1.Client, 2)
+
+	// Wait for the weight update period to allow the new weights to be processed.
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10})
+
+	// Update to per-call weights.
+	c := svcConfig(t, perCallConfig)
+	parsedCfg := srv1.R.CC.ParseServiceConfig(c)
+	if parsedCfg.Err != nil {
+		panic(fmt.Sprintf("Error parsing config %q: %v", c, parsedCfg.Err))
+	}
+	srv1.R.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: parsedCfg})
+
+	// Wait for the weight update period to allow the new weights to be processed.
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 10}, srvWeight{srv2, 1})
+}
+
+func (s) TestBalancer_TwoAddresses_ErrorPenalty(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv1 := startServer(t, reportOOB)
+	srv2 := startServer(t, reportOOB)
+
+	// srv1 starts loaded and srv2 starts without load; ensure RPCs are routed
+	// disproportionately to srv2 (10:1).  Errors are set (but ignored
+	// initially) such that RPCs will be routed 50/50.
+	srv1.oobMetrics.SetQPS(10.0)
+	srv1.oobMetrics.SetCPUUtilization(1.0)
+	srv1.oobMetrics.SetEPS(0)
+	// srv1 weight before: 10.0 / 1.0 = 10.0
+	// srv1 weight after:  10.0 / 1.0 = 10.0
+
+	srv2.oobMetrics.SetQPS(10.0)
+	srv2.oobMetrics.SetCPUUtilization(.1)
+	srv2.oobMetrics.SetEPS(10.0)
+	// srv2 weight before: 10.0 / 0.1 = 100.0
+	// srv2 weight after:  10.0 / 1.0 = 10.0
+
+	sc := svcConfig(t, oobConfig)
+	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+	addrs := []resolver.Address{{Addr: srv1.Address}, {Addr: srv2.Address}}
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+
+	// Call each backend once to ensure the weights have been received.
+	ensureReached(ctx, t, srv1.Client, 2)
+
+	// Wait for the weight update period to allow the new weights to be processed.
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10})
+
+	// Update to include an error penalty in the weights.
+	newCfg := oobConfig
+	newCfg.ErrorUtilizationPenalty = 0.9
+	c := svcConfig(t, newCfg)
+	parsedCfg := srv1.R.CC.ParseServiceConfig(c)
+	if parsedCfg.Err != nil {
+		panic(fmt.Sprintf("Error parsing config %q: %v", c, parsedCfg.Err))
+	}
+	srv1.R.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: parsedCfg})
+
+	// Wait for the weight update period to allow the new weights to be processed.
+	time.Sleep(weightUpdatePeriod + oobReportingInterval)
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 1})
+}
+
+func (s) TestBalancer_TwoAddresses_BlackoutPeriod(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv1 := startServer(t, reportOOB)
+	srv2 := startServer(t, reportOOB)
+
+	// srv1 starts loaded and srv2 starts without load; ensure RPCs are routed
+	// disproportionately to srv2 (10:1).
+	srv1.oobMetrics.SetQPS(10.0)
+	srv1.oobMetrics.SetCPUUtilization(1.0)
+
+	srv2.oobMetrics.SetQPS(10.0)
+	srv2.oobMetrics.SetCPUUtilization(.1)
+
+	cfg := oobConfig
+	cfg.BlackoutPeriod = time.Second
+	sc := svcConfig(t, cfg)
+	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+	addrs := []resolver.Address{{Addr: srv1.Address}, {Addr: srv2.Address}}
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+
+	// Call each backend once to ensure the weights have been received.
+	ensureReached(ctx, t, srv1.Client, 2)
+	start := time.Now()
+
+	// Wait for the weight update period to allow the new weights to be processed.
+	time.Sleep(weightUpdatePeriod)
+
+	// During the blackout period (1s) we should route roughly 50/50.
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 1})
+
+	// Wait for the blackout period, then RPCs should be routed 10:1 to srv2.
+	time.Sleep(time.Until(start.Add(cfg.BlackoutPeriod)))
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10})
+}
+
+func (s) TestBalancer_TwoAddresses_WeightExpiration(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv1 := startServer(t, reportBoth)
+	srv2 := startServer(t, reportBoth)
+
+	// srv1 starts loaded and srv2 starts without load; ensure RPCs are routed
+	// disproportionately to srv2 (10:1).  Because the OOB reporting interval
+	// is 1 minute but the weights expire in 1 second, routing will go to 50/50
+	// after the weights expire.
+	srv1.oobMetrics.SetQPS(10.0)
+	srv1.oobMetrics.SetCPUUtilization(1.0)
+
+	srv2.oobMetrics.SetQPS(10.0)
+	srv2.oobMetrics.SetCPUUtilization(.1)
+
+	cfg := oobConfig
+	cfg.WeightExpirationPeriod = time.Second
+	cfg.OOBReportingPeriod = time.Minute
+	sc := svcConfig(t, cfg)
+	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+	addrs := []resolver.Address{{Addr: srv1.Address}, {Addr: srv2.Address}}
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+
+	// Call each backend once to ensure the weights have been received.
+	ensureReached(ctx, t, srv1.Client, 2)
+	start := time.Now()
+
+	// Wait for the weight update period to allow the new weights to be processed.
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10})
+
+	// Wait for the weight expiration period so the weights have expired.
+	time.Sleep(time.Until(start.Add(cfg.WeightExpirationPeriod)))
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 1})
+}
+
+func ensureReached(ctx context.Context, t *testing.T, c testgrpc.TestServiceClient, n int) {
+	t.Helper()
+	reached := make(map[string]struct{})
+	for len(reached) != n {
+		var peer peer.Peer
+		if _, err := c.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
+			t.Fatalf("Error from EmptyCall: %v", err)
+		}
+		reached[peer.Addr.String()] = struct{}{}
+	}
+}
+
+type srvWeight struct {
+	srv *testServer
+	w   int
+}
+
+func checkWeights(ctx context.Context, t *testing.T, sws ...srvWeight) {
+	t.Helper()
+
+	c := sws[0].srv.Client
+
+	// Replace the weights with approximate counts of RPCs wanted given the
+	// iterations performed.
+	weightSum := 0
+	for _, sw := range sws {
+		weightSum += sw.w
+	}
+	for i := range sws {
+		sws[i].w = rrIterations * sws[i].w / weightSum
+	}
+
+	for attempts := 0; attempts < 10; attempts++ {
+		serverCounts := make(map[string]int)
+		for i := 0; i < rrIterations; i++ {
+			var peer peer.Peer
+			if _, err := c.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
+				t.Fatalf("Error from EmptyCall: %v; timed out waiting for weighted RR behavior?", err)
+			}
+			serverCounts[peer.Addr.String()]++
+		}
+		if len(serverCounts) != len(sws) {
+			continue
+		}
+		success := true
+		for _, sw := range sws {
+			c := serverCounts[sw.srv.Address]
+			if c < sw.w-2 || c > sw.w+2 {
+				success = false
+				break
+			}
+		}
+		if success {
+			t.Logf("Passed iteration %v; counts: %v", attempts, serverCounts)
+			return
+		}
+		t.Logf("Failed iteration %v; counts: %v; want %+v", attempts, serverCounts, sws)
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("Failed to route RPCs with proper ratio")
+}

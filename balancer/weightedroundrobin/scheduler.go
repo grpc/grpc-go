@@ -1,0 +1,119 @@
+/*
+ *
+ * Copyright 2023 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+package weightedroundrobin
+
+import (
+	"math"
+)
+
+type scheduler interface {
+	nextIndex() int
+}
+
+func newScheduler(scWeights []float64, inc func() uint32) scheduler {
+	n := len(scWeights)
+	if n == 0 {
+		return nil
+	}
+	if n == 1 {
+		return &rrScheduler{numSCs: 1, inc: inc}
+	}
+	sum := float64(0)
+	numZero := 0
+	max := float64(0)
+	for _, w := range scWeights {
+		sum += w
+		if w > max {
+			max = w
+		}
+		if w == 0 {
+			numZero++
+		}
+	}
+	if numZero == n {
+		return &rrScheduler{numSCs: n, inc: inc}
+	}
+	unscaledMean := sum / float64(n-numZero)
+	scalingFactor := maxWeight / max
+	mean := uint16(math.Round(scalingFactor * unscaledMean))
+
+	weights := make([]uint16, n)
+	for i, w := range scWeights {
+		if w == 0 {
+			weights[i] = mean
+		} else {
+			weights[i] = uint16(math.Round(scalingFactor * w))
+		}
+	}
+
+	logger.Infof("using edf scheduler with weights: %v", weights)
+	return &edfScheduler{weights: weights, inc: inc}
+}
+
+const maxWeight = math.MaxUint16
+
+type edfScheduler struct {
+	inc     func() uint32
+	weights []uint16
+}
+
+// Returns the index in weights to choose.
+func (s *edfScheduler) nextIndex() int {
+	const offset = maxWeight / 2
+
+	for {
+		idx := uint64(s.inc())
+
+		// The sequence number (idx) is split in two: the lower %n gives the
+		// index of the backend, and the rest gives the number of times we've
+		// iterated through all backends. `generation` is used to
+		// deterministically decide whether we pick or skip the backend on this
+		// iteration, in proportion to the backend's weight.
+
+		backendIndex := idx % uint64(len(s.weights))
+		generation := idx / uint64(len(s.weights))
+		weight := uint64(s.weights[backendIndex])
+
+		// We pick a backend `weight` times per `maxWeight` generations. The
+		// multiply and modulus ~evenly spread out the picks for a given
+		// backend between different generations. The offset by `backendIndex`
+		// helps to reduce the chance of multiple consecutive non-picks: if we
+		// have two consecutive backends with an equal, say, 80% weight of the
+		// max, with no offset we would see 1/5 generations that skipped both.
+		// TODO(b/190488683): add test for offset efficacy.
+		mod := uint64(weight*generation+backendIndex*offset) % maxWeight
+
+		if mod < maxWeight-weight {
+			continue
+		}
+		return int(backendIndex)
+	}
+}
+
+// A simple RR scheduler to use for fallback when all weights are zero or only
+// one subconn exists.
+type rrScheduler struct {
+	inc    func() uint32
+	numSCs int
+}
+
+func (s *rrScheduler) nextIndex() int {
+	idx := int(s.inc())
+	return idx % s.numSCs
+}
