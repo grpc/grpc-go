@@ -25,7 +25,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/orca/internal"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 )
@@ -40,7 +40,7 @@ func TestToLoadReport(t *testing.T) {
 		{
 			name:    "no load report in metadata",
 			md:      metadata.MD{},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name: "badly marshaled load report",
@@ -71,7 +71,7 @@ func TestToLoadReport(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, err := orca.ToLoadReport(test.md)
+			got, err := internal.ToLoadReport(test.md)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("orca.ToLoadReport(%v) = %v, wantErr: %v", test.md, err, test.wantErr)
 			}

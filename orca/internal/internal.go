@@ -20,7 +20,16 @@
 // avoid polluting the godoc of the top-level orca package.
 package internal
 
-import ibackoff "google.golang.org/grpc/internal/backoff"
+import (
+	"errors"
+	"fmt"
+
+	ibackoff "google.golang.org/grpc/internal/backoff"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
+
+	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
+)
 
 // AllowAnyMinReportingInterval prevents clamping of the MinReportingInterval
 // configured via ServiceOptions, to a minimum of 30s.
@@ -32,3 +41,30 @@ var AllowAnyMinReportingInterval interface{} // func(*ServiceOptions)
 //
 // For testing purposes only.
 var DefaultBackoffFunc = ibackoff.DefaultExponential.Backoff
+
+// TrailerMetadataKey is the key in which the per-call backend metrics are
+// transmitted.
+const TrailerMetadataKey = "endpoint-load-metrics-bin"
+
+// ToLoadReport unmarshals a binary encoded [ORCA LoadReport] protobuf message
+// from md and returns the corresponding struct. The load report is expected to
+// be stored as the value for key "endpoint-load-metrics-bin".
+//
+// If no load report was found in the provided metadata, if it cannot be
+// parsed, or if multiple are found, an error is returned.
+//
+// [ORCA LoadReport]: (https://github.com/cncf/xds/blob/main/xds/data/orca/v3/orca_load_report.proto#L15)
+func ToLoadReport(md metadata.MD) (*v3orcapb.OrcaLoadReport, error) {
+	vs := md.Get(TrailerMetadataKey)
+	if len(vs) == 0 {
+		return nil, nil
+	}
+	if len(vs) != 1 {
+		return nil, errors.New("multiple orca load reports found in provided metadata")
+	}
+	ret := new(v3orcapb.OrcaLoadReport)
+	if err := proto.Unmarshal([]byte(vs[0]), ret); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal load report found in metadata: %v", err)
+	}
+	return ret, nil
+}

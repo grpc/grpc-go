@@ -120,7 +120,7 @@ func (s *Service) determineReportingInterval(req *v3orcaservicepb.OrcaLoadReport
 	}
 	dur := req.GetReportInterval().AsDuration()
 	if dur < s.minReportingInterval {
-		logger.Warningf("Received reporting interval %q is less than configured minimum: %v. Using default: %s", dur, s.minReportingInterval)
+		logger.Warningf("Received reporting interval %q is less than configured minimum: %v. Using minimum", dur, s.minReportingInterval)
 		return s.minReportingInterval
 	}
 	return dur
