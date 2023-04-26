@@ -63,6 +63,8 @@ type customLBConfig struct {
 	serviceconfig.LoadBalancingConfig
 }
 
+// We have these tests in a separate test package in order to not take a
+// dependency on the internal xDS balancer packages within the xDS Client.
 func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 	const customLBPolicyName = "myorg.MyCustomLeastRequestPolicy"
 	stub.Register(customLBPolicyName, stub.BalancerFuncs{
