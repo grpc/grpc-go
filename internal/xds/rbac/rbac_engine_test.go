@@ -1401,7 +1401,7 @@ func (s) TestChainEngine(t *testing.T) {
 			rbacQueries: []rbacQuery{
 				// This RPC should match with the allow policy, and shouldn't
 				// match with the deny and thus should be allowed to proceed.
-				// Audit logging matches with nothing
+				// Audit logging is NONE
 				{
 					rpcData: &rpcData{
 						fullMethod: "",
@@ -1413,7 +1413,7 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				// This RPC should match with both the allow policy and deny policy
 				// and thus shouldn't be allowed to proceed as matched with deny.
-				// Audit logging matches with deny and short circuits
+				// Audit logging is NONE
 				{
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
@@ -1425,7 +1425,7 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				// This RPC shouldn't match with either policy, and thus
 				// shouldn't be allowed to proceed as didn't match with allow.
-				// Audit logging matches with the allow policy
+				// Audit logging is NONE
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
@@ -1436,7 +1436,7 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				// This RPC shouldn't match with allow, match with deny, and
 				// thus shouldn't be allowed to proceed.
-				// Audit logging will have the deny logged
+				// Audit logging is NONE
 				{
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
