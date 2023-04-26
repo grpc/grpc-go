@@ -498,6 +498,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 type rbacQuery struct {
 	rpcData        *rpcData
 	wantStatusCode codes.Code
+	wantAuditEvent audit.Event
 }
 
 // TestChainEngine tests the chain of RBAC Engines by configuring the chain of
@@ -1037,7 +1038,55 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "AuditLoggingSuccessCaseAnyMatch",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"anyone": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []rbacQuery{
+				{
+					rpcData: &rpcData{
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.OK,
+					wantAuditEvent: audit.Event{
+						FullMethodName: "some method",
+						Principal:      "0.0.0.0",
+						PolicyName:     "",
+						MatchedRule:    "anyone",
+						Authorized:     true,
+					},
+				},
+			},
+		},
 	}
+	b := TestAuditLoggerBufferBuilder{}
+	audit.RegisterLoggerBuilder(b)
+	b2 := TestAuditLoggerCustomConfigBuilder{}
+	audit.RegisterLoggerBuilder(b2)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Instantiate the chainedRBACEngine with different configurations that are
@@ -1094,11 +1143,17 @@ func (s) TestChainEngine(t *testing.T) {
 					if gotCode := status.Code(err); gotCode != data.wantStatusCode {
 						t.Fatalf("IsAuthorized(%+v, %+v) returned (%+v), want(%+v)", ctx, data.rpcData.fullMethod, gotCode, data.wantStatusCode)
 					}
+					if *auditEvent != data.wantAuditEvent {
+						t.Fatalf("bad audit event")
+					}
 				}()
 			}
 		})
 	}
 }
+
+// var auditEvents []audit.Event
+var auditEvent *audit.Event
 
 type ServerTransportStreamWithMethod struct {
 	method string
@@ -1121,11 +1176,11 @@ func (sts *ServerTransportStreamWithMethod) SetTrailer(md metadata.MD) error {
 }
 
 type TestAuditLoggerBuffer struct {
-	logs []*audit.Event
+	// logs []*audit.Event
 }
 
 func (logger TestAuditLoggerBuffer) Log(e *audit.Event) {
-	logger.logs = append(logger.logs, e)
+	auditEvent = e
 }
 
 type TestAuditLoggerBufferBuilder struct {
