@@ -714,7 +714,6 @@ func waitForGoAwayTooManyPings(client *http2Client) error {
 		if reason, _ := client.GetGoAwayReason(); reason != GoAwayTooManyPings {
 			return fmt.Errorf("goAwayReason is %v, want %v", reason, GoAwayTooManyPings)
 		}
-
 	case <-ctx.Done():
 		return fmt.Errorf("test timed out before getting GoAway with reason:GoAwayTooManyPings from server")
 	}

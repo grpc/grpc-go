@@ -506,11 +506,7 @@ func (s) TestHandlerTransport_HandleStreams_ErrDetails(t *testing.T) {
 func (s) TestHandlerTransport_Drain(t *testing.T) {
 	defer func() { recover() }()
 	st := newHandleStreamTest(t)
-	st.ht.Drain("")
-	// st.ht.Drain("") should have panicked.
-	t.Errorf("st.ht.Drain() should have panicked")
 	st.ht.Drain("whatever")
-	// st.ht.Drain("whatever") should have panicked.
 	t.Errorf("st.ht.Drain(whatever) should have panicked")
 }
 
