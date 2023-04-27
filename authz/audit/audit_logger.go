@@ -22,6 +22,8 @@ package audit
 import (
 	"encoding/json"
 	"sync"
+
+	"google.golang.org/grpc/internal"
 )
 
 // loggerBuilderRegistry holds a map of audit logger builders and a mutex
@@ -36,6 +38,10 @@ var (
 		builders: make(map[string]LoggerBuilder),
 	}
 )
+
+func init() {
+	internal.UnregisterAuditLoggerBuilderForTesting = unregisterLoggerBuilder
+}
 
 // RegisterLoggerBuilder registers the builder in a global map
 // using b.Name() as the key.
@@ -55,6 +61,12 @@ func GetLoggerBuilder(name string) LoggerBuilder {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
 	return registry.builders[name]
+}
+
+func unregisterLoggerBuilder(name string) {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	delete(registry.builders, name)
 }
 
 // Event contains information passed to the audit logger as part of an

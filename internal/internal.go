@@ -140,6 +140,8 @@ var (
 
 	// ORCAAllowAnyMinReportingInterval is for examples/orca use ONLY.
 	ORCAAllowAnyMinReportingInterval interface{} // func(so *orca.ServiceOptions)
+
+	UnregisterAuditLoggerBuilderForTesting func(name string)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.

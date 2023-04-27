@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -67,10 +68,6 @@ func (a *addr) String() string { return a.ipAddress }
 // RBAC Configurations deemed successful and also RBAC Configurations that will
 // raise errors.
 func (s) TestNewChainEngine(t *testing.T) {
-	b := TestAuditLoggerBufferBuilder{}
-	audit.RegisterLoggerBuilder(&b)
-	b2 := TestAuditLoggerCustomConfigBuilder{}
-	audit.RegisterLoggerBuilder(&b2)
 	tests := []struct {
 		name       string
 		policies   []*v3rbacpb.RBAC
@@ -610,6 +607,12 @@ func (s) TestNewChainEngine(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			b := TestAuditLoggerBufferBuilder{}
+			audit.RegisterLoggerBuilder(&b)
+			b2 := TestAuditLoggerCustomConfigBuilder{}
+			audit.RegisterLoggerBuilder(&b2)
+			defer internal.UnregisterAuditLoggerBuilderForTesting(b.Name())
+			defer internal.UnregisterAuditLoggerBuilderForTesting(b2.Name())
 			if _, err := NewChainEngine(test.policies, test.policyName); (err != nil) != test.wantErr {
 				t.Fatalf("NewChainEngine(%+v) returned err: %v, wantErr: %v", test.policies, err, test.wantErr)
 			}
@@ -1640,12 +1643,15 @@ func (s) TestChainEngine(t *testing.T) {
 			},
 		},
 	}
-	b := TestAuditLoggerBufferBuilder{}
-	audit.RegisterLoggerBuilder(&b)
-	b2 := TestAuditLoggerCustomConfigBuilder{}
-	audit.RegisterLoggerBuilder(&b2)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			b := TestAuditLoggerBufferBuilder{}
+			audit.RegisterLoggerBuilder(&b)
+			b2 := TestAuditLoggerCustomConfigBuilder{}
+			audit.RegisterLoggerBuilder(&b2)
+			defer internal.UnregisterAuditLoggerBuilderForTesting(b.Name())
+			defer internal.UnregisterAuditLoggerBuilderForTesting(b2.Name())
+
 			// Instantiate the chainedRBACEngine with different configurations that are
 			// interesting to test and to query.
 			cre, err := NewChainEngine(test.rbacConfigs, test.policyName)
@@ -1656,7 +1662,6 @@ func (s) TestChainEngine(t *testing.T) {
 			// if the chain of RBAC Engines configured as such works as intended.
 			for _, data := range test.rbacQueries {
 				func() {
-					auditEvents = nil
 					// Construct the context with three data points that have enough
 					// information to represent incoming RPC's. This will be how a
 					// user uses this API. A user will have to put MD, PeerInfo, and
@@ -1701,9 +1706,12 @@ func (s) TestChainEngine(t *testing.T) {
 					if gotCode := status.Code(err); gotCode != data.wantStatusCode {
 						t.Fatalf("IsAuthorized(%+v, %+v) returned (%+v), want(%+v)", ctx, data.rpcData.fullMethod, gotCode, data.wantStatusCode)
 					}
-					if !reflect.DeepEqual(auditEvents, data.wantAuditEvents) {
+					if !reflect.DeepEqual(b.auditEvents, data.wantAuditEvents) {
 						t.Fatalf("Unexpected audit event for query:%v", data)
 					}
+
+					// this builder's auditEvents can be shared for several queries, make sure it's empty
+					b.auditEvents = nil
 				}()
 			}
 		})
@@ -1730,20 +1738,18 @@ func (sts *ServerTransportStreamWithMethod) SetTrailer(md metadata.MD) error {
 	return nil
 }
 
-// A list of audit events that we can configure a logger to push to such that we
-// can access the contents during a test
-var auditEvents []*audit.Event
-
 // An audit logger that will log to the auditEvents slice
 type TestAuditLoggerBuffer struct {
+	auditEvents *[]*audit.Event
 }
 
 func (logger *TestAuditLoggerBuffer) Log(e *audit.Event) {
-	auditEvents = append(auditEvents, e)
+	*(logger.auditEvents) = append(*(logger.auditEvents), e)
 }
 
 // Builds TestAuditLoggerBuffer
 type TestAuditLoggerBufferBuilder struct {
+	auditEvents []*audit.Event
 }
 
 // The required config for TestAuditLoggerBuffer
@@ -1756,7 +1762,7 @@ func (builder *TestAuditLoggerBufferBuilder) ParseLoggerConfig(configJSON json.R
 }
 
 func (builder *TestAuditLoggerBufferBuilder) Build(config audit.LoggerConfig) audit.Logger {
-	return &TestAuditLoggerBuffer{}
+	return &TestAuditLoggerBuffer{auditEvents: &builder.auditEvents}
 }
 
 func (builder *TestAuditLoggerBufferBuilder) Name() string {
