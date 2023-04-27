@@ -141,6 +141,10 @@ var (
 	// ORCAAllowAnyMinReportingInterval is for examples/orca use ONLY.
 	ORCAAllowAnyMinReportingInterval interface{} // func(so *orca.ServiceOptions)
 
+	// UnregisterAuditLoggerBuilderForTesting unregisters the AuditLoggerBuilder
+	// by name for testing purposes. This is needed because there is no way to
+	// unregister for repeated tests. It is set by package authz/audit in
+	// audit_logger.go
 	UnregisterAuditLoggerBuilderForTesting func(name string)
 )
 
