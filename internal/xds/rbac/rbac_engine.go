@@ -158,7 +158,7 @@ func newEngine(config *v3rbacpb.RBAC, policyName string) (*engine, error) {
 			}
 			auditLoggerConfig, err := auditLoggerFactory.ParseLoggerConfig(jsonConfig)
 			if err != nil {
-				return nil, fmt.Errorf("audit logger custom config did not match LoggerConfig: %v", err)
+				return nil, fmt.Errorf("audit logger custom config could not be parsed: %v", err)
 			}
 			auditLogger := auditLoggerFactory.Build(auditLoggerConfig)
 			auditLoggers = append(auditLoggers, auditLogger)
