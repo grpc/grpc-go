@@ -453,7 +453,9 @@ func (s) TestNewChainEngine(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name: "TestAuditLoggerBuffer",
+								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
 						},
@@ -479,7 +481,9 @@ func (s) TestNewChainEngine(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerCustomConfig", TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": 123, "xyz": "123"})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name:        "TestAuditLoggerCustomConfig",
+								TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": 123, "xyz": "123"})},
 								IsOptional: false,
 							},
 						},
@@ -506,7 +510,9 @@ func (s) TestNewChainEngine(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "UnsupportedLogger", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name: "UnsupportedLogger",
+								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: true,
 							},
 						},
@@ -532,7 +538,9 @@ func (s) TestNewChainEngine(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "UnsupportedLogger", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name: "UnsupportedLogger",
+								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
 						},
@@ -559,7 +567,8 @@ func (s) TestNewChainEngine(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerCustomConfig"},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name: "TestAuditLoggerCustomConfig",
 								IsOptional: false,
 							},
 						},
@@ -586,7 +595,9 @@ func (s) TestNewChainEngine(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerCustomConfig", TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": "BADVALUE", "xyz": "123"})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name: "TestAuditLoggerCustomConfig",
+								TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": "BADVALUE", "xyz": "123"})},
 								IsOptional: false,
 							},
 						},
@@ -1174,7 +1185,9 @@ func (s) TestChainEngine(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name: "TestAuditLoggerBuffer",
+								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
 						},
@@ -1195,7 +1208,9 @@ func (s) TestChainEngine(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name: "TestAuditLoggerBuffer",
+								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
 						},
@@ -1276,7 +1291,9 @@ func (s) TestChainEngine(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name: "TestAuditLoggerBuffer",
+								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
 						},
@@ -1297,7 +1314,9 @@ func (s) TestChainEngine(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name: "TestAuditLoggerBuffer",
+								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
 						},
@@ -1400,7 +1419,9 @@ func (s) TestChainEngine(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name: "TestAuditLoggerBuffer",
+								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
 						},
@@ -1421,7 +1442,9 @@ func (s) TestChainEngine(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name: "TestAuditLoggerBuffer",
+								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
 						},
@@ -1497,7 +1520,9 @@ func (s) TestChainEngine(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name: "TestAuditLoggerBuffer",
+								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
 						},
@@ -1518,7 +1543,9 @@ func (s) TestChainEngine(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY_AND_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "TestAuditLoggerBuffer", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name: "TestAuditLoggerBuffer",
+								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
 						},
