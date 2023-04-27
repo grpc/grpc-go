@@ -187,8 +187,8 @@ func parseCustomConfig(factory audit.LoggerBuilder, pb *anypb.Any) (audit.Logger
 // successful match, it returns the name of the matching policy and a true bool
 // to specify that there was a matching policy found.  It returns false in
 // the case of not finding a matching policy.
-func (r *engine) findMatchingPolicy(rpcData *rpcData) (string, bool) {
-	for policy, matcher := range r.policies {
+func (engine *engine) findMatchingPolicy(rpcData *rpcData) (string, bool) {
+	for policy, matcher := range engine.policies {
 		if matcher.match(rpcData) {
 			return policy, true
 		}
