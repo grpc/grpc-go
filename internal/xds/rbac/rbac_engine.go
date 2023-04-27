@@ -96,16 +96,16 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 		switch {
 		case engine.action == v3rbacpb.RBAC_ALLOW && !ok:
 			cre.logRequestDetails(rpcData)
-			doAuditLogging(engine, rpcData, matchedRule, false)
+			engine.doAuditLogging(rpcData, matchedRule, false)
 			return status.Errorf(codes.PermissionDenied, "incoming RPC did not match an allow policy")
 		case engine.action == v3rbacpb.RBAC_DENY && ok:
 			cre.logRequestDetails(rpcData)
-			doAuditLogging(engine, rpcData, matchedRule, false)
+			engine.doAuditLogging(rpcData, matchedRule, false)
 			return status.Errorf(codes.PermissionDenied, "incoming RPC matched a deny policy %q", matchedRule)
 		}
 		// Every policy in the engine list must be queried. Thus, iterate to the
 		// next policy.
-		doAuditLogging(engine, rpcData, matchedRule, true)
+		engine.doAuditLogging(rpcData, matchedRule, true)
 	}
 	// If the incoming RPC gets through all of the engines successfully (i.e.
 	// doesn't not match an allow or match a deny engine), the RPC is authorized
@@ -275,7 +275,7 @@ type rpcData struct {
 	certs []*x509.Certificate
 }
 
-func doAuditLogging(engine *engine, rpcData *rpcData, rule string, authorized bool) error {
+func (engine *engine) doAuditLogging(rpcData *rpcData, rule string, authorized bool) {
 	event := &audit.Event{
 		FullMethodName: rpcData.fullMethod,
 		Principal:      rpcData.peerInfo.Addr.String(),
@@ -285,8 +285,6 @@ func doAuditLogging(engine *engine, rpcData *rpcData, rule string, authorized bo
 	}
 	for _, logger := range engine.auditLoggers {
 		switch engine.auditCondition {
-		case v3rbacpb.RBAC_AuditLoggingOptions_NONE:
-			continue
 		case v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY:
 			if !authorized {
 				(*logger).Log(event)
@@ -299,5 +297,4 @@ func doAuditLogging(engine *engine, rpcData *rpcData, rule string, authorized bo
 			(*logger).Log(event)
 		}
 	}
-	return nil
 }
