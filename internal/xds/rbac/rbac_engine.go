@@ -88,24 +88,24 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 		return status.Errorf(codes.Internal, "gRPC RBAC: %v", err)
 	}
 	for _, engine := range cre.chainedEngines {
-		matchedRule, ok := engine.findMatchingPolicy(rpcData)
+		matchingPolicyName, ok := engine.findMatchingPolicy(rpcData)
 		if logger.V(2) && ok {
-			logger.Infof("incoming RPC matched to policy %v in engine with action %v", matchedRule, engine.action)
+			logger.Infof("incoming RPC matched to policy %v in engine with action %v", matchingPolicyName, engine.action)
 		}
 
 		switch {
 		case engine.action == v3rbacpb.RBAC_ALLOW && !ok:
 			cre.logRequestDetails(rpcData)
-			engine.doAuditLogging(rpcData, matchedRule, false)
+			engine.doAuditLogging(rpcData, matchingPolicyName, false)
 			return status.Errorf(codes.PermissionDenied, "incoming RPC did not match an allow policy")
 		case engine.action == v3rbacpb.RBAC_DENY && ok:
 			cre.logRequestDetails(rpcData)
-			engine.doAuditLogging(rpcData, matchedRule, false)
-			return status.Errorf(codes.PermissionDenied, "incoming RPC matched a deny policy %q", matchedRule)
+			engine.doAuditLogging(rpcData, matchingPolicyName, false)
+			return status.Errorf(codes.PermissionDenied, "incoming RPC matched a deny policy %q", matchingPolicyName)
 		}
 		// Every policy in the engine list must be queried. Thus, iterate to the
 		// next policy.
-		engine.doAuditLogging(rpcData, matchedRule, true)
+		engine.doAuditLogging(rpcData, matchingPolicyName, true)
 	}
 	// If the incoming RPC gets through all of the engines successfully (i.e.
 	// doesn't not match an allow or match a deny engine), the RPC is authorized
