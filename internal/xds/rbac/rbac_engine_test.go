@@ -68,9 +68,9 @@ func (a *addr) String() string { return a.ipAddress }
 // raise errors.
 func (s) TestNewChainEngine(t *testing.T) {
 	b := TestAuditLoggerBufferBuilder{}
-	audit.RegisterLoggerBuilder(b)
+	audit.RegisterLoggerBuilder(&b)
 	b2 := TestAuditLoggerCustomConfigBuilder{}
-	audit.RegisterLoggerBuilder(b2)
+	audit.RegisterLoggerBuilder(&b2)
 	tests := []struct {
 		name       string
 		policies   []*v3rbacpb.RBAC
@@ -454,7 +454,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
-								Name: "TestAuditLoggerBuffer",
+								Name:        "TestAuditLoggerBuffer",
 								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
@@ -511,7 +511,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
-								Name: "UnsupportedLogger",
+								Name:        "UnsupportedLogger",
 								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: true,
 							},
@@ -539,7 +539,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
-								Name: "UnsupportedLogger",
+								Name:        "UnsupportedLogger",
 								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
@@ -569,6 +569,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name: "TestAuditLoggerCustomConfig",
+							},
 								IsOptional: false,
 							},
 						},
@@ -596,7 +597,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
-								Name: "TestAuditLoggerCustomConfig",
+								Name:        "TestAuditLoggerCustomConfig",
 								TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": "BADVALUE", "xyz": "123"})},
 								IsOptional: false,
 							},
@@ -1186,7 +1187,7 @@ func (s) TestChainEngine(t *testing.T) {
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
-								Name: "TestAuditLoggerBuffer",
+								Name:        "TestAuditLoggerBuffer",
 								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
@@ -1209,7 +1210,7 @@ func (s) TestChainEngine(t *testing.T) {
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
-								Name: "TestAuditLoggerBuffer",
+								Name:        "TestAuditLoggerBuffer",
 								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
@@ -1292,7 +1293,7 @@ func (s) TestChainEngine(t *testing.T) {
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
-								Name: "TestAuditLoggerBuffer",
+								Name:        "TestAuditLoggerBuffer",
 								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
@@ -1315,7 +1316,7 @@ func (s) TestChainEngine(t *testing.T) {
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
-								Name: "TestAuditLoggerBuffer",
+								Name:        "TestAuditLoggerBuffer",
 								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
@@ -1420,7 +1421,7 @@ func (s) TestChainEngine(t *testing.T) {
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
-								Name: "TestAuditLoggerBuffer",
+								Name:        "TestAuditLoggerBuffer",
 								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
@@ -1443,7 +1444,7 @@ func (s) TestChainEngine(t *testing.T) {
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
-								Name: "TestAuditLoggerBuffer",
+								Name:        "TestAuditLoggerBuffer",
 								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
@@ -1521,7 +1522,7 @@ func (s) TestChainEngine(t *testing.T) {
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
-								Name: "TestAuditLoggerBuffer",
+								Name:        "TestAuditLoggerBuffer",
 								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
@@ -1544,7 +1545,7 @@ func (s) TestChainEngine(t *testing.T) {
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY_AND_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
-								Name: "TestAuditLoggerBuffer",
+								Name:        "TestAuditLoggerBuffer",
 								TypedConfig: anyPbHelper(t, map[string]interface{}{})},
 								IsOptional: false,
 							},
@@ -1640,9 +1641,9 @@ func (s) TestChainEngine(t *testing.T) {
 		},
 	}
 	b := TestAuditLoggerBufferBuilder{}
-	audit.RegisterLoggerBuilder(b)
+	audit.RegisterLoggerBuilder(&b)
 	b2 := TestAuditLoggerCustomConfigBuilder{}
-	audit.RegisterLoggerBuilder(b2)
+	audit.RegisterLoggerBuilder(&b2)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Instantiate the chainedRBACEngine with different configurations that are
@@ -1737,7 +1738,7 @@ var auditEvents []*audit.Event
 type TestAuditLoggerBuffer struct {
 }
 
-func (logger TestAuditLoggerBuffer) Log(e *audit.Event) {
+func (logger *TestAuditLoggerBuffer) Log(e *audit.Event) {
 	auditEvents = append(auditEvents, e)
 }
 
@@ -1750,24 +1751,22 @@ type TestAuditLoggerBufferConfig struct {
 	audit.LoggerConfig
 }
 
-func (builder TestAuditLoggerBufferBuilder) ParseLoggerConfig(configJSON json.RawMessage) (config audit.LoggerConfig, err error) {
+func (builder *TestAuditLoggerBufferBuilder) ParseLoggerConfig(configJSON json.RawMessage) (config audit.LoggerConfig, err error) {
 	return TestAuditLoggerBufferConfig{}, nil
 }
 
-func (builder TestAuditLoggerBufferBuilder) Build(config audit.LoggerConfig) audit.Logger {
-	return TestAuditLoggerBuffer{}
+func (builder *TestAuditLoggerBufferBuilder) Build(config audit.LoggerConfig) audit.Logger {
+	return &TestAuditLoggerBuffer{}
 }
 
-func (builder TestAuditLoggerBufferBuilder) Name() string {
+func (builder *TestAuditLoggerBufferBuilder) Name() string {
 	return "TestAuditLoggerBuffer"
 }
 
 // An audit logger to test using a custom config
-type TestAuditLoggerCustomConfig struct {
-	logs []*audit.Event
-}
+type TestAuditLoggerCustomConfig struct{}
 
-func (logger TestAuditLoggerCustomConfig) Log(*audit.Event) {}
+func (logger *TestAuditLoggerCustomConfig) Log(*audit.Event) {}
 
 // Build TestAuditLoggerCustomConfig
 type TestAuditLoggerCustomConfigBuilder struct {
@@ -1782,7 +1781,7 @@ type TestAuditLoggerCustomConfigConfig struct {
 
 // Parses TestAuditLoggerCustomConfigConfig
 // Hard-coded to match with it's test case above
-func (builder TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJSON json.RawMessage) (config audit.LoggerConfig, err error) {
+func (builder TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJSON json.RawMessage) (audit.LoggerConfig, error) {
 	c := TestAuditLoggerCustomConfigConfig{}
 	pb, err := anypb.New(nil)
 	st := new(structpb.Struct)
@@ -1813,11 +1812,11 @@ func (builder TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJSON j
 	return c, nil
 }
 
-func (builder TestAuditLoggerCustomConfigBuilder) Build(config audit.LoggerConfig) audit.Logger {
-	return TestAuditLoggerCustomConfig{}
+func (builder *TestAuditLoggerCustomConfigBuilder) Build(config audit.LoggerConfig) audit.Logger {
+	return &TestAuditLoggerCustomConfig{}
 }
 
-func (builder TestAuditLoggerCustomConfigBuilder) Name() string {
+func (builder *TestAuditLoggerCustomConfigBuilder) Name() string {
 	return "TestAuditLoggerCustomConfig"
 }
 

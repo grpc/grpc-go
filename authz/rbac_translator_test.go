@@ -940,7 +940,7 @@ func TestTranslatePolicy(t *testing.T) {
 				t.Fatalf("unexpected policy\ndiff (-want +got):\n%s", diff)
 			}
 			if test.wantPolicyName != "" && gotPolicyName != test.wantPolicyName {
-				t.Fatalf("policy name mistmach\nwant:%v\ngot:%v", test.wantPolicyName, gotPolicyName)
+				t.Fatalf("unexpected policy name\nwant:%v\ngot:%v", test.wantPolicyName, gotPolicyName)
 			}
 		})
 	}
