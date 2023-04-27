@@ -119,7 +119,7 @@ type engine struct {
 	policies   map[string]*policyMatcher
 	// action must be ALLOW or DENY.
 	action         v3rbacpb.RBAC_Action
-	auditLoggers   []*audit.Logger
+	auditLoggers   []audit.Logger
 	auditCondition v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition
 }
 
@@ -141,7 +141,7 @@ func newEngine(config *v3rbacpb.RBAC, policyName string) (*engine, error) {
 	}
 
 	auditOptions := config.GetAuditLoggingOptions()
-	auditLoggers := []*audit.Logger{}
+	auditLoggers := []audit.Logger{}
 	if auditOptions != nil {
 		for _, logger := range auditOptions.LoggerConfigs {
 			auditLoggerFactory := audit.GetLoggerBuilder(logger.AuditLogger.Name)
@@ -161,7 +161,7 @@ func newEngine(config *v3rbacpb.RBAC, policyName string) (*engine, error) {
 				return nil, fmt.Errorf("audit logger custom config did not match LoggerConfig: %v", err)
 			}
 			auditLogger := auditLoggerFactory.Build(auditLoggerConfig)
-			auditLoggers = append(auditLoggers, &auditLogger)
+			auditLoggers = append(auditLoggers, auditLogger)
 		}
 	}
 	return &engine{
@@ -287,14 +287,14 @@ func (engine *engine) doAuditLogging(rpcData *rpcData, rule string, authorized b
 		switch engine.auditCondition {
 		case v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY:
 			if !authorized {
-				(*logger).Log(event)
+				logger.Log(event)
 			}
 		case v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW:
 			if authorized {
-				(*logger).Log(event)
+				logger.Log(event)
 			}
 		case v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY_AND_ALLOW:
-			(*logger).Log(event)
+			logger.Log(event)
 		}
 	}
 }
