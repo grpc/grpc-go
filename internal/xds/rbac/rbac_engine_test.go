@@ -1789,31 +1789,9 @@ type TestAuditLoggerCustomConfigConfig struct {
 // Hard-coded to match with it's test case above
 func (builder TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJSON json.RawMessage) (audit.LoggerConfig, error) {
 	c := TestAuditLoggerCustomConfigConfig{}
-	pb, err := anypb.New(nil)
-	st := new(structpb.Struct)
-	err = json.Unmarshal(configJSON, &pb)
+	err := json.Unmarshal(configJSON, &c)
 	if err != nil {
-		return nil, err
-	}
-	err = pb.UnmarshalTo(st)
-	if err != nil {
-		return nil, err
-	}
-	m := st.AsMap()
-	abc, ok := m["abc"].(float64)
-	if !ok {
-		return nil, fmt.Errorf("Couldn't parse custom config. Value abc:%v couldn't be converted to float64", m["abc"])
-	}
-	c.Abc = int(abc)
-	xyz, ok := m["xyz"].(string)
-	if !ok {
-		return nil, fmt.Errorf("Couldn't parse custom config. Value xyz:%v couldn't be converted to string", m["xyz"])
-	}
-	c.Xyz = xyz
-
-	// Hard coded to a test condition in test named "AuditLoggerCustomConfig"
-	if c.Abc != 123 || c.Xyz != "123" {
-		return nil, fmt.Errorf("TestAuditLoggerCustomConfigConfig was not parsed correctly")
+		return nil, fmt.Errorf("could not parse custom config: %v", err)
 	}
 	return c, nil
 }

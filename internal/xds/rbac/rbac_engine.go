@@ -39,6 +39,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 var logger = grpclog.Component("rbac")
@@ -151,12 +153,7 @@ func newEngine(config *v3rbacpb.RBAC, policyName string) (*engine, error) {
 				}
 				return nil, fmt.Errorf("no builder registered for %v", logger.AuditLogger.Name)
 			}
-			customConfig := logger.AuditLogger.TypedConfig
-			jsonConfig, err := json.Marshal(&customConfig)
-			if err != nil {
-				return nil, fmt.Errorf("could not convert audit logger custom config to json: %v", err)
-			}
-			auditLoggerConfig, err := auditLoggerFactory.ParseLoggerConfig(jsonConfig)
+			auditLoggerConfig, err := parseCustomConfig(auditLoggerFactory, logger.AuditLogger.TypedConfig)
 			if err != nil {
 				return nil, fmt.Errorf("audit logger custom config could not be parsed: %v", err)
 			}
@@ -171,6 +168,19 @@ func newEngine(config *v3rbacpb.RBAC, policyName string) (*engine, error) {
 		auditCondition: auditOptions.GetAuditCondition(),
 		policyName:     policyName,
 	}, nil
+}
+
+func parseCustomConfig(factory audit.LoggerBuilder, pb *anypb.Any) (audit.LoggerConfig, error) {
+	st := new(structpb.Struct)
+	err := pb.UnmarshalTo(st)
+	if err != nil {
+		return nil, err
+	}
+	configJSON, err := json.Marshal(st)
+	if err != nil {
+		return nil, err
+	}
+	return factory.ParseLoggerConfig(configJSON)
 }
 
 // findMatchingPolicy determines if an incoming RPC matches a policy. On a
