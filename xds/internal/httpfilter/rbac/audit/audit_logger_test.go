@@ -28,7 +28,28 @@ func TestExtractXdsAuditLoggersConfig(t *testing.T) {
 					},
 				},
 			},
-			wantJsonCfg: "{\"audit_logger\":{\"name\":\"stdout_logger\",\"typed_config\":{\"type_url\":\"type.googleapis.com/google.protobuf.Struct\"}},\"is_optional\":true}",
+			wantJsonCfg: `[{"audit_logger":{"name":"stdout_logger","typed_config":{"type_url":"type.googleapis.com/google.protobuf.Struct"}},"is_optional":true}]`,
+		},
+		"valid multi logger cfg": {
+			auditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+				AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
+				LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+					{AuditLogger: &v3corepb.TypedExtensionConfig{
+						Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+						IsOptional: true,
+					},
+					{AuditLogger: &v3corepb.TypedExtensionConfig{
+						Name: "clients_magic_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+						IsOptional: false,
+					},
+				},
+			},
+			wantJsonCfg: `[{"audit_logger":{"name":"stdout_logger","typed_config":{"type_url":"type.googleapis.com/google.protobuf.Struct"}},"is_optional":true},
+										 {"audit_logger":{"name":"clients_magic_logger","typed_config":{"type_url":"type.googleapis.com/google.protobuf.Struct"}}}]`,
+		},
+		"valid empty cfg": {
+			auditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{},
+			wantJsonCfg:         "",
 		},
 	}
 
@@ -38,7 +59,7 @@ func TestExtractXdsAuditLoggersConfig(t *testing.T) {
 			if gotErr != nil && !strings.HasPrefix(gotErr.Error(), test.wantErr) {
 				t.Fatalf("unexpected error\nwant:%v\ngot:%v", test.wantErr, gotErr)
 			}
-			if diff := cmp.Diff(string(gotJsonCfg[0]), test.wantJsonCfg, protocmp.Transform()); diff != "" {
+			if diff := cmp.Diff(gotJsonCfg, test.wantJsonCfg, protocmp.Transform()); diff != "" {
 				t.Fatalf("unexpected jsonconfig\ndiff (-want +got):\n%s", diff)
 			}
 		})

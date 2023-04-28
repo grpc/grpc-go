@@ -26,14 +26,14 @@ func ConvertXdsAuditLoggerConfig(loggerCfg *v3rbacpb.RBAC_AuditLoggingOptions_Au
 	return jsonBytes, nil
 }
 
-func ExtractXdsAuditLoggersConfig(optionsCfg *v3rbacpb.RBAC_AuditLoggingOptions) ([]json.RawMessage, error) {
+func ExtractXdsAuditLoggersConfig(optionsCfg *v3rbacpb.RBAC_AuditLoggingOptions) (string, error) {
 	if optionsCfg == nil {
 		fmt.Println("rbac audit logging: nil AuditLoggingOptions message provided, audit is disabled")
-		return nil, nil
+		return "", nil
 	}
 	if optionsCfg.LoggerConfigs == nil || len(optionsCfg.LoggerConfigs) == 0 {
 		fmt.Println("rbac audit logging: no AuditLoggerConfigs found, audit is disabled")
-		return nil, nil
+		return "", nil
 	}
 	validConfigs := make([]json.RawMessage, 0)
 	for _, v := range optionsCfg.LoggerConfigs {
@@ -43,6 +43,11 @@ func ExtractXdsAuditLoggersConfig(optionsCfg *v3rbacpb.RBAC_AuditLoggingOptions)
 		}
 		validConfigs = append(validConfigs, jsonBytes)
 	}
+	result, err := json.Marshal(validConfigs)
+	if err != nil {
+		fmt.Println("rbac audit logging: nil AuditLoggingOptions message provided, audit is disabled")
+		return "", fmt.Errorf("rbac audit logging: json marshalling error, %v", err)
+	}
 
-	return validConfigs, nil
+	return string(result), nil
 }
