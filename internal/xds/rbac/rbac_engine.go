@@ -187,8 +187,8 @@ func parseCustomConfig(factory audit.LoggerBuilder, pb *anypb.Any) (audit.Logger
 // successful match, it returns the name of the matching policy and a true bool
 // to specify that there was a matching policy found.  It returns false in
 // the case of not finding a matching policy.
-func (engine *engine) findMatchingPolicy(rpcData *rpcData) (string, bool) {
-	for policy, matcher := range engine.policies {
+func (e *engine) findMatchingPolicy(rpcData *rpcData) (string, bool) {
+	for policy, matcher := range e.policies {
 		if matcher.match(rpcData) {
 			return policy, true
 		}
@@ -285,16 +285,16 @@ type rpcData struct {
 	certs []*x509.Certificate
 }
 
-func (engine *engine) doAuditLogging(rpcData *rpcData, rule string, authorized bool) {
+func (e *engine) doAuditLogging(rpcData *rpcData, rule string, authorized bool) {
 	event := &audit.Event{
 		FullMethodName: rpcData.fullMethod,
 		Principal:      rpcData.peerInfo.Addr.String(),
-		PolicyName:     engine.policyName,
+		PolicyName:     e.policyName,
 		MatchedRule:    rule,
 		Authorized:     authorized,
 	}
-	for _, logger := range engine.auditLoggers {
-		switch engine.auditCondition {
+	for _, logger := range e.auditLoggers {
+		switch e.auditCondition {
 		case v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY:
 			if !authorized {
 				logger.Log(event)
