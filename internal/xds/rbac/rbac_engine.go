@@ -159,7 +159,7 @@ func parseAuditOptions(opts *v3rbacpb.RBAC_AuditLoggingOptions) ([]audit.Logger,
 	if opts == nil {
 		return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, nil
 	}
-	auditLoggers := []audit.Logger{}
+	var auditLoggers []audit.Logger
 	for _, logger := range opts.LoggerConfigs {
 		auditLoggerFactory := audit.GetLoggerBuilder(logger.AuditLogger.Name)
 		if auditLoggerFactory == nil {
