@@ -158,6 +158,13 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 	// child.
 	weightedTargetName = "mock_weighted_target"
 	stub.Register("mock_weighted_target", stub.BalancerFuncs{
+		ParseConfig: func(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			var cfg weightedtarget.LBConfig
+			if err := json.Unmarshal(c, &cfg); err != nil {
+				return nil, err
+			}
+			return &cfg, nil
+		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			wtCfg, ok := ccs.BalancerConfig.(*weightedtarget.LBConfig)
 			if !ok {
