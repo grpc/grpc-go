@@ -142,32 +142,41 @@ func newEngine(config *v3rbacpb.RBAC, policyName string) (*engine, error) {
 		policies[name] = matcher
 	}
 
-	auditOptions := config.GetAuditLoggingOptions()
-	auditLoggers := []audit.Logger{}
-	if auditOptions != nil {
-		for _, logger := range auditOptions.LoggerConfigs {
-			auditLoggerFactory := audit.GetLoggerBuilder(logger.AuditLogger.Name)
-			if auditLoggerFactory == nil {
-				if logger.IsOptional {
-					continue
-				}
-				return nil, fmt.Errorf("no builder registered for %v", logger.AuditLogger.Name)
-			}
-			auditLoggerConfig, err := parseCustomConfig(auditLoggerFactory, logger.AuditLogger.TypedConfig)
-			if err != nil {
-				return nil, fmt.Errorf("audit logger custom config could not be parsed: %v", err)
-			}
-			auditLogger := auditLoggerFactory.Build(auditLoggerConfig)
-			auditLoggers = append(auditLoggers, auditLogger)
-		}
+	auditLoggers, auditCondition, err := parseAuditOptions(config.GetAuditLoggingOptions())
+	if err != nil {
+		return nil, err
 	}
 	return &engine{
 		policies:       policies,
 		action:         a,
 		auditLoggers:   auditLoggers,
-		auditCondition: auditOptions.GetAuditCondition(),
+		auditCondition: auditCondition,
 		policyName:     policyName,
 	}, nil
+}
+
+func parseAuditOptions(opts *v3rbacpb.RBAC_AuditLoggingOptions) ([]audit.Logger, v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition, error) {
+	if opts == nil {
+		return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, nil
+	}
+	auditLoggers := []audit.Logger{}
+	for _, logger := range opts.LoggerConfigs {
+		auditLoggerFactory := audit.GetLoggerBuilder(logger.AuditLogger.Name)
+		if auditLoggerFactory == nil {
+			if logger.IsOptional {
+				continue
+			}
+			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("no builder registered for %v", logger.AuditLogger.Name)
+		}
+		auditLoggerConfig, err := parseCustomConfig(auditLoggerFactory, logger.AuditLogger.TypedConfig)
+		if err != nil {
+			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("audit logger custom config could not be parsed: %v", err)
+		}
+		auditLogger := auditLoggerFactory.Build(auditLoggerConfig)
+		auditLoggers = append(auditLoggers, auditLogger)
+	}
+	return auditLoggers, opts.GetAuditCondition(), nil
+
 }
 
 func parseCustomConfig(factory audit.LoggerBuilder, pb *anypb.Any) (audit.LoggerConfig, error) {
