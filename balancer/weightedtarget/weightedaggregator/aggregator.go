@@ -178,6 +178,12 @@ func (wbsa *Aggregator) ResumeStateUpdates() {
 	}
 }
 
+// NeedUpdateStateOnResume sets the UpdateStateOnResume bool to true, letting a
+// picker update be sent once ResumeStateUpdates is called.
+func (wbsa *Aggregator) NeedUpdateStateOnResume() {
+	wbsa.needUpdateStateOnResume = true
+}
+
 // UpdateState is called to report a balancer state change from sub-balancer.
 // It's usually called by the balancer group.
 //

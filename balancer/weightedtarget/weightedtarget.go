@@ -143,6 +143,12 @@ func (b *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnStat
 
 	b.targets = newConfig.Targets
 
+	// To send a TF state update in the case of a configuration with no targets
+	// passed in.
+	if len(b.targets) == 0 {
+		b.stateAggregator.NeedUpdateStateOnResume()
+	}
+
 	return nil
 }
 
