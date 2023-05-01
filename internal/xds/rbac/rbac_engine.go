@@ -29,6 +29,7 @@ import (
 	"net"
 	"strconv"
 
+	v1typepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz/audit"
@@ -40,7 +41,6 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/anypb"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 var logger = grpclog.Component("rbac")
@@ -161,12 +161,18 @@ func parseAuditOptions(opts *v3rbacpb.RBAC_AuditLoggingOptions) ([]audit.Logger,
 	}
 	var auditLoggers []audit.Logger
 	for _, logger := range opts.LoggerConfigs {
-		auditLoggerFactory := audit.GetLoggerBuilder(logger.AuditLogger.Name)
+		if logger.AuditLogger.TypedConfig == nil {
+			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("AuditLogger TypedConfig cannot be nil")
+		}
+		if logger.AuditLogger.TypedConfig.TypeUrl == "" {
+			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("AuditLogger TypedConfig.TypeURL cannot be an empty string")
+		}
+		auditLoggerFactory := audit.GetLoggerBuilder(logger.AuditLogger.TypedConfig.TypeUrl)
 		if auditLoggerFactory == nil {
 			if logger.IsOptional {
 				continue
 			}
-			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("no builder registered for %v", logger.AuditLogger.Name)
+			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("no builder registered for %v", logger.AuditLogger.TypedConfig.TypeUrl)
 		}
 		auditLoggerConfig, err := parseCustomConfig(auditLoggerFactory, logger.AuditLogger.TypedConfig)
 		if err != nil {
@@ -179,13 +185,13 @@ func parseAuditOptions(opts *v3rbacpb.RBAC_AuditLoggingOptions) ([]audit.Logger,
 
 }
 
-func parseCustomConfig(factory audit.LoggerBuilder, pb *anypb.Any) (audit.LoggerConfig, error) {
-	st := new(structpb.Struct)
-	err := pb.UnmarshalTo(st)
+func parseCustomConfig(factory audit.LoggerBuilder, config *anypb.Any) (audit.LoggerConfig, error) {
+	typedStruct := &v1typepb.TypedStruct{}
+	err := config.UnmarshalTo(typedStruct)
 	if err != nil {
 		return nil, err
 	}
-	configJSON, err := json.Marshal(st)
+	configJSON, err := json.Marshal(typedStruct.GetValue().AsMap())
 	if err != nil {
 		return nil, err
 	}
