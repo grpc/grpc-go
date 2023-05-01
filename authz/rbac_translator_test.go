@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	v1typepb "github.com/cncf/xds/go/udpa/type/v1"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -305,7 +306,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{}, "stdout_logger")},
 								IsOptional: false,
 							},
 						},
@@ -339,7 +340,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{}, "stdout_logger")},
 								IsOptional: false,
 							},
 						},
@@ -401,7 +402,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{}, "stdout_logger")},
 								IsOptional: false,
 							},
 						},
@@ -435,7 +436,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY_AND_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{}, "stdout_logger")},
 								IsOptional: false,
 							},
 						},
@@ -497,7 +498,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{}, "stdout_logger")},
 								IsOptional: false,
 							},
 						},
@@ -531,7 +532,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{}, "stdout_logger")},
 								IsOptional: false,
 							},
 						},
@@ -593,7 +594,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": 123, "xyz": "123"})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": 123, "xyz": "123"}, "stdout_logger")},
 								IsOptional: false,
 							},
 						},
@@ -627,7 +628,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": 123, "xyz": "123"})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": 123, "xyz": "123"}, "stdout_logger")},
 								IsOptional: false,
 							},
 						},
@@ -685,7 +686,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": 123, "xyz": map[string]interface{}{"abc": 123}})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": 123, "xyz": map[string]interface{}{"abc": 123}}, "stdout_logger")},
 								IsOptional: false,
 							},
 						},
@@ -789,7 +790,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{})},
+							{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(t, map[string]interface{}{}, "stdout_logger")},
 								IsOptional: false,
 							},
 						},
@@ -941,15 +942,20 @@ func TestTranslatePolicy(t *testing.T) {
 	}
 }
 
-func anyPbHelper(t *testing.T, in map[string]interface{}) *anypb.Any {
+func anyPbHelper(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
 	t.Helper()
+
 	pb, err := structpb.NewStruct(in)
+	typedStruct := &v1typepb.TypedStruct{
+		TypeUrl: typedUrlPrefix + name,
+		Value:   pb,
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	ret, err := anypb.New(pb)
+	customConfig, err := anypb.New(typedStruct)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return ret
+	return customConfig
 }

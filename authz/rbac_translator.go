@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"strings"
 
+	v1typepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -35,6 +36,8 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
+
+const typedUrlPrefix = "grpc.authz.audit_logging/"
 
 type header struct {
 	Key    string
@@ -302,11 +305,20 @@ func (options *auditLoggingOptions) toProtos() (allow *v3rbacpb.RBAC_AuditLoggin
 		if config.Config == nil {
 			return nil, nil, fmt.Errorf("AuditLogger Config field cannot be nil")
 		}
-		customConfig, err := anypb.New(config.Config)
+
+		typedStruct := &v1typepb.TypedStruct{
+			TypeUrl: typedUrlPrefix + config.Name,
+			Value:   config.Config,
+		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("error creating custom config: %v", err)
+		}
+		customConfig, err := anypb.New(typedStruct)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error parsing custom audit logger config: %v", err)
 		}
-		logger := &v3corepb.TypedExtensionConfig{Name: config.Name, TypedConfig: customConfig}
+
+		logger := &v3corepb.TypedExtensionConfig{Name: config.Name /*this doesn't matter*/, TypedConfig: customConfig}
 		rbacConfig := v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 			IsOptional:  config.IsOptional,
 			AuditLogger: logger,
