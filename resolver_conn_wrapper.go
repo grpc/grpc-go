@@ -124,7 +124,6 @@ func (ccr *ccResolverWrapper) UpdateState(s resolver.State) error {
 			return
 		}
 		errCh <- nil
-		return
 	})
 
 	select {
