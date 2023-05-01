@@ -946,7 +946,7 @@ func anyPbHelper(t *testing.T, in map[string]interface{}, name string) *anypb.An
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
 	typedStruct := &v1typepb.TypedStruct{
-		TypeUrl: typedUrlPrefix + name,
+		TypeUrl: typedURLPrefix + name,
 		Value:   pb,
 	}
 	if err != nil {
