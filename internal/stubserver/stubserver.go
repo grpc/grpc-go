@@ -93,6 +93,19 @@ func (ss *StubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	return nil
 }
 
+type registerServiceServerOption struct {
+	grpc.EmptyServerOption
+	f func(*grpc.Server)
+}
+
+// RegisterServiceServerOption returns a ServerOption that will run f() in
+// Start or StartServer with the grpc.Server created before serving.  This
+// allows other services to be registered on the test server (e.g. ORCA,
+// health, or reflection).
+func RegisterServiceServerOption(f func(*grpc.Server)) grpc.ServerOption {
+	return &registerServiceServerOption{f: f}
+}
+
 // StartServer only starts the server. It does not create a client to it.
 func (ss *StubServer) StartServer(sopts ...grpc.ServerOption) error {
 	if ss.Network == "" {
@@ -113,6 +126,13 @@ func (ss *StubServer) StartServer(sopts ...grpc.ServerOption) error {
 	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
 
 	s := grpc.NewServer(sopts...)
+	for _, so := range sopts {
+		switch x := so.(type) {
+		case *registerServiceServerOption:
+			x.f(s)
+		}
+	}
+
 	testgrpc.RegisterTestServiceServer(s, ss)
 	go s.Serve(lis)
 	ss.cleanups = append(ss.cleanups, s.Stop)
