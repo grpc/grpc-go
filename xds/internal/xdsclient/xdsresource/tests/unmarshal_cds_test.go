@@ -16,8 +16,8 @@
  *
  */
 
-// Package test contains test cases for unmarshalling of CDS resources.
-package test
+// Package tests_test contains test cases for unmarshalling of CDS resources.
+package tests_test
 
 import (
 	"encoding/json"
