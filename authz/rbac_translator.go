@@ -37,6 +37,8 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+// This is used when converting a custom config from raw JSON to a TypedStruct
+// The TypeURL of the TypeStruct will be "grpc.authz.audit_logging/<name>"
 const typedUrlPrefix = "grpc.authz.audit_logging/"
 
 type header struct {
@@ -305,20 +307,16 @@ func (options *auditLoggingOptions) toProtos() (allow *v3rbacpb.RBAC_AuditLoggin
 		if config.Config == nil {
 			return nil, nil, fmt.Errorf("AuditLogger Config field cannot be nil")
 		}
-
 		typedStruct := &v1typepb.TypedStruct{
 			TypeUrl: typedUrlPrefix + config.Name,
 			Value:   config.Config,
-		}
-		if err != nil {
-			return nil, nil, fmt.Errorf("error creating custom config: %v", err)
 		}
 		customConfig, err := anypb.New(typedStruct)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error parsing custom audit logger config: %v", err)
 		}
 
-		logger := &v3corepb.TypedExtensionConfig{Name: config.Name /*this doesn't matter*/, TypedConfig: customConfig}
+		logger := &v3corepb.TypedExtensionConfig{Name: config.Name, TypedConfig: customConfig}
 		rbacConfig := v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 			IsOptional:  config.IsOptional,
 			AuditLogger: logger,

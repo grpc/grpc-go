@@ -944,7 +944,6 @@ func TestTranslatePolicy(t *testing.T) {
 
 func anyPbHelper(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
 	t.Helper()
-
 	pb, err := structpb.NewStruct(in)
 	typedStruct := &v1typepb.TypedStruct{
 		TypeUrl: typedUrlPrefix + name,
