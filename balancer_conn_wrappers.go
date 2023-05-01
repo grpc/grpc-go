@@ -102,10 +102,6 @@ type switchToUpdate struct {
 	name string
 }
 
-type subConnUpdate struct {
-	acbw *acBalancerWrapper
-}
-
 // watcher is a long-running goroutine which reads updates from a channel and
 // invokes corresponding methods on the underlying balancer. It ensures that
 // these methods are invoked in a synchronous fashion. It also ensures that
@@ -132,8 +128,6 @@ func (ccb *ccBalancerWrapper) watcher() {
 				ccb.handleResolverError(update.err)
 			case *switchToUpdate:
 				ccb.handleSwitchTo(update.name)
-			case *subConnUpdate:
-				ccb.handleRemoveSubConn(update.acbw)
 			default:
 				logger.Errorf("ccBalancerWrapper.watcher: unknown update %+v, type %T", update, update)
 			}
@@ -289,14 +283,6 @@ func (ccb *ccBalancerWrapper) handleSwitchTo(name string) {
 	ccb.curBalancerName = builder.Name()
 }
 
-// handleRemoveSucConn handles a request from the underlying balancer to remove
-// a subConn.
-//
-// See comments in RemoveSubConn() for more details.
-func (ccb *ccBalancerWrapper) handleRemoveSubConn(acbw *acBalancerWrapper) {
-	ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
-}
-
 func (ccb *ccBalancerWrapper) close() {
 	ccb.closed.Fire()
 	<-ccb.done.Done()
@@ -326,21 +312,11 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 }
 
 func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
-	// Before we switched the ccBalancerWrapper to use gracefulswitch.Balancer, it
-	// was required to handle the RemoveSubConn() method asynchronously by pushing
-	// the update onto the update channel. This was done to avoid a deadlock as
-	// switchBalancer() was holding cc.mu when calling Close() on the old
-	// balancer, which would in turn call RemoveSubConn().
-	//
-	// With the use of gracefulswitch.Balancer in ccBalancerWrapper, handling this
-	// asynchronously is probably not required anymore since the switchTo() method
-	// handles the balancer switch by pushing the update onto the channel.
-	// TODO(easwars): Handle this inline.
 	acbw, ok := sc.(*acBalancerWrapper)
 	if !ok {
 		return
 	}
-	ccb.updateCh.Put(&subConnUpdate{acbw: acbw})
+	ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 }
 
 func (ccb *ccBalancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
