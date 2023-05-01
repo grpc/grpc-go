@@ -31,6 +31,12 @@ import (
 )
 
 func TestToLoadReport(t *testing.T) {
+	goodReport := &v3orcapb.OrcaLoadReport{
+		CpuUtilization: 1.0,
+		MemUtilization: 50.0,
+		RequestCost:    map[string]float64{"queryCost": 25.0},
+		Utilization:    map[string]float64{"queueSize": 75.0},
+	}
 	tests := []struct {
 		name    string
 		md      metadata.MD
@@ -50,22 +56,20 @@ func TestToLoadReport(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "multiple load reports",
+			md: func() metadata.MD {
+				b, _ := proto.Marshal(goodReport)
+				return metadata.Pairs("endpoint-load-metrics-bin", string(b), "endpoint-load-metrics-bin", string(b))
+			}(),
+			wantErr: true,
+		},
+		{
 			name: "good load report",
 			md: func() metadata.MD {
-				b, _ := proto.Marshal(&v3orcapb.OrcaLoadReport{
-					CpuUtilization: 1.0,
-					MemUtilization: 50.0,
-					RequestCost:    map[string]float64{"queryCost": 25.0},
-					Utilization:    map[string]float64{"queueSize": 75.0},
-				})
+				b, _ := proto.Marshal(goodReport)
 				return metadata.Pairs("endpoint-load-metrics-bin", string(b))
 			}(),
-			want: &v3orcapb.OrcaLoadReport{
-				CpuUtilization: 1.0,
-				MemUtilization: 50.0,
-				RequestCost:    map[string]float64{"queryCost": 25.0},
-				Utilization:    map[string]float64{"queueSize": 75.0},
-			},
+			want: goodReport,
 		},
 	}
 

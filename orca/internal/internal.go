@@ -50,8 +50,9 @@ const TrailerMetadataKey = "endpoint-load-metrics-bin"
 // from md and returns the corresponding struct. The load report is expected to
 // be stored as the value for key "endpoint-load-metrics-bin".
 //
-// If no load report was found in the provided metadata, if it cannot be
-// parsed, or if multiple are found, an error is returned.
+// If no load report was found in the provided metadata, if multiple load
+// reports are found, or if the load report found cannot be parsed, an error is
+// returned.
 //
 // [ORCA LoadReport]: (https://github.com/cncf/xds/blob/main/xds/data/orca/v3/orca_load_report.proto#L15)
 func ToLoadReport(md metadata.MD) (*v3orcapb.OrcaLoadReport, error) {
