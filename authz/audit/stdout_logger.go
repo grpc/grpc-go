@@ -21,7 +21,11 @@ package audit
 import (
 	"encoding/json"
 	"fmt"
+
+	"google.golang.org/grpc/grpclog"
 )
+
+var logger = grpclog.Component("authz-audit")
 
 type StdOutLogger struct{}
 
@@ -30,7 +34,7 @@ func (logger *StdOutLogger) Log(event *Event) {
 	if err != nil {
 		fmt.Errorf("failed to marshal log data to JSON: %v", err)
 	}
-
+	//TODO checkinternal go log package for redirection of output
 	fmt.Println(string(jsonBytes))
 }
 
@@ -47,6 +51,10 @@ const (
 	stdName = "stdout"
 )
 
+type StdoutLoggerConfig struct{}
+
+func (StdoutLoggerConfig) loggerConfig() {}
+
 type StdOutLoggerBuilder struct{}
 
 func (StdOutLoggerBuilder) Name() string {
@@ -58,7 +66,7 @@ func (StdOutLoggerBuilder) Build(LoggerConfig) Logger {
 }
 
 func (StdOutLoggerBuilder) ParseLoggerConfig(config json.RawMessage) (LoggerConfig, error) {
-	fmt.Println("Config value ignored, " +
-		"StdOutLogger doesn't support any configs")
-	return nil, nil
+	logger.Infof("Config value %v ignored, "+
+		"StdOutLogger doesn't support custom configs", config)
+	return &StdoutLoggerConfig{}, nil
 }

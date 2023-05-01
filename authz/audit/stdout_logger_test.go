@@ -19,17 +19,20 @@
 package audit
 
 import (
+	"encoding/json"
 	"testing"
 )
 
 var (
-	builder = &StdOutLoggerBuilder{}
-	logger  = builder.Build(nil)
+	content     = json.RawMessage(`{"name": "conf", "val": "to be ignored"}`)
+	builder     = &StdOutLoggerBuilder{}
+	config, _   = builder.ParseLoggerConfig(content)
+	auditLogger = builder.Build(config)
 )
 
 func TestStdOutLogger_Log(t *testing.T) {
 	event := &Event{PolicyName: "test policy", Principal: "test principal"}
-	logger.Log(event)
+	auditLogger.Log(event)
 }
 
 //func TestMyLogger_ToJSON(t *testing.T) {
