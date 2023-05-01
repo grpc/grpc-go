@@ -37,7 +37,7 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	v3cncftypepb "github.com/cncf/xds/go/xds/type/v3"
+	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
@@ -457,7 +457,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: wrrLocalityAny(&v3cncftypepb.TypedStruct{
+								TypedConfig: wrrLocalityAny(&v3xdsxdstypepb.TypedStruct{
 									TypeUrl: "type.googleapis.com/myorg.MyCustomLeastRequestPolicy",
 									Value:   &structpb.Struct{},
 								}),
