@@ -79,8 +79,8 @@ func RegisterOOBListener(sc balancer.SubConn, l OOBListener, opts OOBListenerOpt
 	p := pr.(*producer)
 	p.registerListener(l, opts.ReportInterval)
 
-	// TODO: When we can register for SubConn state updates, don't call run()
-	// until READY and automatically call stop() on SHUTDOWN.
+	// TODO: When we can register for SubConn state updates, automatically call
+	// stop() on SHUTDOWN.
 
 	// If stop is called multiple times, prevent it from having any effect on
 	// subsequent calls.
@@ -175,12 +175,11 @@ func (p *producer) run(ctx context.Context) {
 			logger.Error("Server doesn't support ORCA OOB load reporting protocol; not listening for load reports.")
 			return
 		case status.Code(err) == codes.Unavailable:
-			// The SubConn is not currently ready; backoff silently.
-			//
-			// TODO: don't attempt the stream until the state is READY to
-			// minimize the chances of this case and to avoid using the
-			// exponential backoff mechanism, as we should know it's safe to
-			// retry when the state is READY again.
+			// TODO: this code should ideally log an error, too, but for now we
+			// receive this code when shutting down the ClientConn.  Once we
+			// can determine the state or ensure the producer is stopped before
+			// the stream ends, we can log an error when it's not a natural
+			// shutdown.
 		default:
 			// Log all other errors.
 			logger.Error("Received unexpected stream error:", err)
