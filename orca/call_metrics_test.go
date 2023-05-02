@@ -78,23 +78,24 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			// A server option to enables reporting of per-call backend metrics.
-			callMetricsServerOption := orca.CallMetricsServerOption()
+			// A server option to enable reporting of per-call backend metrics.
+			smr := orca.NewServerMetricsRecorder()
+			callMetricsServerOption := orca.CallMetricsServerOption(smr)
+			smr.SetCPUUtilization(1.0)
 
 			// An interceptor to injects custom backend metrics, added only when
 			// the injectMetrics field in the test is set.
 			injectingInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-				recorder := orca.CallMetricRecorderFromContext(ctx)
+				recorder := orca.CallMetricsRecorderFromContext(ctx)
 				if recorder == nil {
 					err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 					t.Error(err)
 					return nil, err
 				}
-				recorder.SetCPUUtilization(1.0)
 				recorder.SetMemoryUtilization(50.0)
 				// This value will be overwritten by a write to the same metric
 				// from the server handler.
-				recorder.SetUtilization("queueSize", 1.0)
+				recorder.SetNamedUtilization("queueSize", 1.0)
 				return handler(ctx, req)
 			}
 
@@ -106,14 +107,14 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 					if !test.injectMetrics {
 						return &testpb.Empty{}, nil
 					}
-					recorder := orca.CallMetricRecorderFromContext(ctx)
+					recorder := orca.CallMetricsRecorderFromContext(ctx)
 					if recorder == nil {
 						err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 						t.Error(err)
 						return nil, err
 					}
 					recorder.SetRequestCost("queryCost", 25.0)
-					recorder.SetUtilization("queueSize", 75.0)
+					recorder.SetNamedUtilization("queueSize", 75.0)
 					return &testpb.Empty{}, nil
 				},
 			}
@@ -183,23 +184,24 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			// A server option to enables reporting of per-call backend metrics.
-			callMetricsServerOption := orca.CallMetricsServerOption()
+			// A server option to enable reporting of per-call backend metrics.
+			smr := orca.NewServerMetricsRecorder()
+			callMetricsServerOption := orca.CallMetricsServerOption(smr)
+			smr.SetCPUUtilization(1.0)
 
 			// An interceptor which injects custom backend metrics, added only
 			// when the injectMetrics field in the test is set.
 			injectingInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-				recorder := orca.CallMetricRecorderFromContext(ss.Context())
+				recorder := orca.CallMetricsRecorderFromContext(ss.Context())
 				if recorder == nil {
 					err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 					t.Error(err)
 					return err
 				}
-				recorder.SetCPUUtilization(1.0)
 				recorder.SetMemoryUtilization(50.0)
 				// This value will be overwritten by a write to the same metric
 				// from the server handler.
-				recorder.SetUtilization("queueSize", 1.0)
+				recorder.SetNamedUtilization("queueSize", 1.0)
 				return handler(srv, ss)
 			}
 
@@ -209,14 +211,14 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 			srv := stubserver.StubServer{
 				FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 					if test.injectMetrics {
-						recorder := orca.CallMetricRecorderFromContext(stream.Context())
+						recorder := orca.CallMetricsRecorderFromContext(stream.Context())
 						if recorder == nil {
 							err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 							t.Error(err)
 							return err
 						}
 						recorder.SetRequestCost("queryCost", 25.0)
-						recorder.SetUtilization("queueSize", 75.0)
+						recorder.SetNamedUtilization("queueSize", 75.0)
 					}
 
 					// Streaming implementation replies with a dummy response until the
