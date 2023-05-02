@@ -34,7 +34,3 @@ type lbConfig struct {
 	WeightUpdatePeriod      time.Duration `json:"weightUpdatePeriod,omitempty"`
 	ErrorUtilizationPenalty float64       `json:"errorUtilizationPenalty,omitempty"`
 }
-
-// LBConfigForTesting allows tests to produce a JSON form of the config from
-// the struct instead of using a string.
-type LBConfigForTesting = lbConfig

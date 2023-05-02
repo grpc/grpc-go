@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/balancer/weightedroundrobin/internal"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -295,6 +296,7 @@ func (b *wrrBalancer) regeneratePicker() {
 	}
 
 	p := &picker{
+		idx:      grpcrand.Uint32(),
 		cfg:      b.cfg,
 		subConns: b.readySubConns(),
 	}
@@ -316,8 +318,9 @@ type picker struct {
 
 func (p *picker) scWeights() []float64 {
 	ws := make([]float64, len(p.subConns))
+	now := internal.TimeNow()
 	for i, wsc := range p.subConns {
-		ws[i] = wsc.weight(time.Now(), p.cfg.WeightExpirationPeriod, p.cfg.BlackoutPeriod)
+		ws[i] = wsc.weight(now, p.cfg.WeightExpirationPeriod, p.cfg.BlackoutPeriod)
 	}
 	return ws
 }
@@ -402,7 +405,7 @@ func (w *weightedSubConn) OnLoadReport(load *v3orcapb.OrcaLoadReport) {
 		w.logger.Infof("wrr: new weight for subchannel %v: %v", w.SubConn, w.weightVal)
 	}
 
-	w.lastUpdated = time.Now()
+	w.lastUpdated = internal.TimeNow()
 	if w.nonEmptySince == (time.Time{}) {
 		w.nonEmptySince = w.lastUpdated
 	}

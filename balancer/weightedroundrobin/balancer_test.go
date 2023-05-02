@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -117,7 +118,7 @@ func startServer(t *testing.T, r reportType) *testServer {
 	}
 }
 
-func svcConfig(t *testing.T, wrrCfg wrr.LBConfigForTesting) string {
+func svcConfig(t *testing.T, wrrCfg iwrr.LBConfig) string {
 	t.Helper()
 	m, err := json.Marshal(wrrCfg)
 	if err != nil {
@@ -135,20 +136,24 @@ func init() {
 	iwrr.AllowAnyWeightUpdatePeriod = true
 }
 
+func boolp(b bool) *bool                       { return &b }
+func float64p(f float64) *float64              { return &f }
+func durationp(d time.Duration) *time.Duration { return &d }
+
 var (
-	perCallConfig = wrr.LBConfigForTesting{
-		EnableOOBLoadReport:    false,
-		BlackoutPeriod:         1 * time.Nanosecond,
-		OOBReportingPeriod:     5 * time.Millisecond,
-		WeightExpirationPeriod: time.Minute,
-		WeightUpdatePeriod:     weightUpdatePeriod,
+	perCallConfig = iwrr.LBConfig{
+		EnableOOBLoadReport:    boolp(false),
+		OOBReportingPeriod:     durationp(5 * time.Millisecond),
+		BlackoutPeriod:         durationp(0),
+		WeightExpirationPeriod: durationp(time.Minute),
+		WeightUpdatePeriod:     durationp(weightUpdatePeriod),
 	}
-	oobConfig = wrr.LBConfigForTesting{
-		EnableOOBLoadReport:    true,
-		BlackoutPeriod:         1 * time.Nanosecond,
-		OOBReportingPeriod:     5 * time.Millisecond,
-		WeightExpirationPeriod: time.Minute,
-		WeightUpdatePeriod:     weightUpdatePeriod,
+	oobConfig = iwrr.LBConfig{
+		EnableOOBLoadReport:    boolp(true),
+		OOBReportingPeriod:     durationp(5 * time.Millisecond),
+		BlackoutPeriod:         durationp(0),
+		WeightExpirationPeriod: durationp(time.Minute),
+		WeightUpdatePeriod:     durationp(weightUpdatePeriod),
 	}
 )
 
@@ -425,7 +430,7 @@ func (s) TestBalancer_TwoAddresses_ErrorPenalty(t *testing.T) {
 
 	// Update to include an error penalty in the weights.
 	newCfg := oobConfig
-	newCfg.ErrorUtilizationPenalty = 0.9
+	newCfg.ErrorUtilizationPenalty = float64p(0.9)
 	c := svcConfig(t, newCfg)
 	parsedCfg := srv1.R.CC.ParseServiceConfig(c)
 	if parsedCfg.Err != nil {
@@ -442,44 +447,95 @@ func (s) TestBalancer_TwoAddresses_BlackoutPeriod(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	srv1 := startServer(t, reportOOB)
-	srv2 := startServer(t, reportOOB)
-
-	// srv1 starts loaded and srv2 starts without load; ensure RPCs are routed
-	// disproportionately to srv2 (10:1).
-	srv1.oobMetrics.SetQPS(10.0)
-	srv1.oobMetrics.SetCPUUtilization(1.0)
-
-	srv2.oobMetrics.SetQPS(10.0)
-	srv2.oobMetrics.SetCPUUtilization(.1)
-
-	cfg := oobConfig
-	cfg.BlackoutPeriod = time.Second
-	sc := svcConfig(t, cfg)
-	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
-		t.Fatalf("Error starting client: %v", err)
-	}
-	addrs := []resolver.Address{{Addr: srv1.Address}, {Addr: srv2.Address}}
-	srv1.R.UpdateState(resolver.State{Addresses: addrs})
-
-	// Call each backend once to ensure the weights have been received.
-	ensureReached(ctx, t, srv1.Client, 2)
+	var mu sync.Mutex
 	start := time.Now()
+	now := start
+	setNow := func(t time.Time) {
+		mu.Lock()
+		defer mu.Unlock()
+		now = t
+	}
+	iwrr.TimeNow = func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return now
+	}
+	defer func() { iwrr.TimeNow = time.Now }()
 
-	// Wait for the weight update period to allow the new weights to be processed.
-	time.Sleep(weightUpdatePeriod)
+	testCases := []struct {
+		blackoutPeriodCfg *time.Duration
+		blackoutPeriod    time.Duration
+	}{{
+		blackoutPeriodCfg: durationp(time.Second),
+		blackoutPeriod:    time.Second,
+	}, {
+		blackoutPeriodCfg: nil,
+		blackoutPeriod:    10 * time.Second, // the default
+	}}
+	for _, tc := range testCases {
+		setNow(start)
+		srv1 := startServer(t, reportOOB)
+		srv2 := startServer(t, reportOOB)
 
-	// During the blackout period (1s) we should route roughly 50/50.
-	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 1})
+		// srv1 starts loaded and srv2 starts without load; ensure RPCs are routed
+		// disproportionately to srv2 (10:1).
+		srv1.oobMetrics.SetQPS(10.0)
+		srv1.oobMetrics.SetCPUUtilization(1.0)
 
-	// Wait for the blackout period, then RPCs should be routed 10:1 to srv2.
-	time.Sleep(time.Until(start.Add(cfg.BlackoutPeriod)))
-	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10})
+		srv2.oobMetrics.SetQPS(10.0)
+		srv2.oobMetrics.SetCPUUtilization(.1)
+
+		cfg := oobConfig
+		cfg.BlackoutPeriod = tc.blackoutPeriodCfg
+		sc := svcConfig(t, cfg)
+		if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+			t.Fatalf("Error starting client: %v", err)
+		}
+		addrs := []resolver.Address{{Addr: srv1.Address}, {Addr: srv2.Address}}
+		srv1.R.UpdateState(resolver.State{Addresses: addrs})
+
+		// Call each backend once to ensure the weights have been received.
+		ensureReached(ctx, t, srv1.Client, 2)
+
+		// Wait for the weight update period to allow the new weights to be processed.
+		time.Sleep(weightUpdatePeriod)
+		// During the blackout period (1s) we should route roughly 50/50.
+		checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 1})
+
+		// Advance time to right before the blackout period ends and the weights
+		// should still be zero.
+		setNow(start.Add(tc.blackoutPeriod - time.Nanosecond))
+		// Wait for the weight update period to allow the new weights to be processed.
+		time.Sleep(weightUpdatePeriod)
+		checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 1})
+
+		// Advance time to right after the blackout period ends and the weights
+		// should now activate.
+		setNow(start.Add(tc.blackoutPeriod))
+		// Wait for the weight update period to allow the new weights to be processed.
+		time.Sleep(weightUpdatePeriod)
+		checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10})
+	}
 }
 
 func (s) TestBalancer_TwoAddresses_WeightExpiration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+
+	var mu sync.Mutex
+	start := time.Now()
+	now := start
+	setNow := func(t time.Time) {
+		mu.Lock()
+		defer mu.Unlock()
+		now = t
+	}
+	iwrr.TimeNow = func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return now
+	}
+	defer func() { iwrr.TimeNow = time.Now }()
 
 	srv1 := startServer(t, reportBoth)
 	srv2 := startServer(t, reportBoth)
@@ -495,8 +551,7 @@ func (s) TestBalancer_TwoAddresses_WeightExpiration(t *testing.T) {
 	srv2.oobMetrics.SetCPUUtilization(.1)
 
 	cfg := oobConfig
-	cfg.WeightExpirationPeriod = time.Second
-	cfg.OOBReportingPeriod = time.Minute
+	cfg.OOBReportingPeriod = durationp(time.Minute)
 	sc := svcConfig(t, cfg)
 	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
 		t.Fatalf("Error starting client: %v", err)
@@ -506,14 +561,25 @@ func (s) TestBalancer_TwoAddresses_WeightExpiration(t *testing.T) {
 
 	// Call each backend once to ensure the weights have been received.
 	ensureReached(ctx, t, srv1.Client, 2)
-	start := time.Now()
 
 	// Wait for the weight update period to allow the new weights to be processed.
 	time.Sleep(weightUpdatePeriod)
 	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10})
 
+	// Advance what time.Now returns to the weight expiration time minus 1s to
+	// ensure all weights are still honored.
+	setNow(start.Add(*cfg.WeightExpirationPeriod - time.Second))
+
+	// Wait for the weight update period to allow the new weights to be processed.
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10})
+
+	// Advance what time.Now returns to the weight expiration time plus 1s to
+	// ensure all weights expired and addresses are routed evenly.
+	setNow(start.Add(*cfg.WeightExpirationPeriod + time.Second))
+
 	// Wait for the weight expiration period so the weights have expired.
-	time.Sleep(time.Until(start.Add(cfg.WeightExpirationPeriod)))
+	time.Sleep(weightUpdatePeriod)
 	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 1})
 }
 
