@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	v1typepb "github.com/cncf/xds/go/udpa/type/v1"
+	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -950,7 +950,7 @@ func TestTranslatePolicy(t *testing.T) {
 func anyPbHelper(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
-	typedStruct := &v1typepb.TypedStruct{
+	typedStruct := &v1xdsudpatypepb.TypedStruct{
 		TypeUrl: typedURLPrefix + name,
 		Value:   pb,
 	}

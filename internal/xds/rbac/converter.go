@@ -25,7 +25,7 @@ import (
 	"fmt"
 	"strings"
 
-	v1typepb "github.com/cncf/xds/go/udpa/type/v1"
+	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	"google.golang.org/grpc/authz/audit"
@@ -62,7 +62,7 @@ func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConf
 func getCustomConfig(config *anypb.Any) (json.RawMessage, string, error) {
 	switch config.GetTypeUrl() {
 	case "type.googleapis.com/udpa.type.v1.TypedStruct":
-		typedStruct := &v1typepb.TypedStruct{}
+		typedStruct := &v1xdsudpatypepb.TypedStruct{}
 		if err := config.UnmarshalTo(typedStruct); err != nil {
 			return nil, "", fmt.Errorf("failed to unmarshal resource: %v", err)
 		}

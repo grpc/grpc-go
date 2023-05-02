@@ -28,7 +28,7 @@ import (
 	"reflect"
 	"testing"
 
-	v1typepb "github.com/cncf/xds/go/udpa/type/v1"
+	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
@@ -1872,7 +1872,7 @@ func anyPbHelper(t *testing.T, in map[string]interface{}, name string) *anypb.An
 	// if name != "" {
 	// 	typedURL = typedURLPrefix + name
 	// }
-	typedStruct := &v1typepb.TypedStruct{
+	typedStruct := &v1xdsudpatypepb.TypedStruct{
 		TypeUrl: typedURLPrefix + name,
 		Value:   pb,
 	}

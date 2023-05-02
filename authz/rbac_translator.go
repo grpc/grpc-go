@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"strings"
 
-	v1typepb "github.com/cncf/xds/go/udpa/type/v1"
+	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -307,7 +307,7 @@ func (options *auditLoggingOptions) toProtos() (allow *v3rbacpb.RBAC_AuditLoggin
 		if config.Config == nil {
 			return nil, nil, fmt.Errorf("AuditLogger Config field cannot be nil")
 		}
-		typedStruct := &v1typepb.TypedStruct{
+		typedStruct := &v1xdsudpatypepb.TypedStruct{
 			TypeUrl: typedURLPrefix + config.Name,
 			Value:   config.Config,
 		}
