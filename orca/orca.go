@@ -29,21 +29,19 @@ package orca
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal"
+	igrpc "google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancerload"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/orca/internal"
 	"google.golang.org/protobuf/proto"
-
-	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 )
 
 var (
 	logger            = grpclog.Component("orca-backend-metrics")
-	joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
+	joinServerOptions = igrpc.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
 )
 
 const trailerMetadataKey = "endpoint-load-metrics-bin"
@@ -144,26 +142,6 @@ func (w *wrappedStream) Context() context.Context {
 // ErrLoadReportMissing indicates no ORCA load report was found in trailers.
 var ErrLoadReportMissing = errors.New("orca load report missing in provided metadata")
 
-// ToLoadReport unmarshals a binary encoded [ORCA LoadReport] protobuf message
-// from md and returns the corresponding struct. The load report is expected to
-// be stored as the value for key "endpoint-load-metrics-bin".
-//
-// If no load report was found in the provided metadata, ErrLoadReportMissing is
-// returned.
-//
-// [ORCA LoadReport]: (https://github.com/cncf/xds/blob/main/xds/data/orca/v3/orca_load_report.proto#L15)
-func ToLoadReport(md metadata.MD) (*v3orcapb.OrcaLoadReport, error) {
-	vs := md.Get(trailerMetadataKey)
-	if len(vs) == 0 {
-		return nil, ErrLoadReportMissing
-	}
-	ret := new(v3orcapb.OrcaLoadReport)
-	if err := proto.Unmarshal([]byte(vs[0]), ret); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal load report found in metadata: %v", err)
-	}
-	return ret, nil
-}
-
 // loadParser implements the Parser interface defined in `internal/balancerload`
 // package. This interface is used by the client stream to parse load reports
 // sent by the server in trailer metadata. The parsed loads are then sent to
@@ -174,9 +152,12 @@ func ToLoadReport(md metadata.MD) (*v3orcapb.OrcaLoadReport, error) {
 type loadParser struct{}
 
 func (loadParser) Parse(md metadata.MD) interface{} {
-	lr, err := ToLoadReport(md)
+	lr, err := internal.ToLoadReport(md)
 	if err != nil {
-		logger.Errorf("Parse(%v) failed: %v", err)
+		logger.Infof("Parse failed: %v", err)
+	}
+	if lr == nil && logger.V(2) {
+		logger.Infof("Missing ORCA load report data")
 	}
 	return lr
 }
