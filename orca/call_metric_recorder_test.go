@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/orca/internal"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -58,7 +59,6 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 		desc          string
 		injectMetrics bool
 		wantProto     *v3orcapb.OrcaLoadReport
-		wantErr       error
 	}{
 		{
 			desc:          "with custom backend metrics",
@@ -73,7 +73,6 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 		{
 			desc:          "with no custom backend metrics",
 			injectMetrics: false,
-			wantErr:       orca.ErrLoadReportMissing,
 		},
 	}
 
@@ -146,9 +145,9 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 				t.Fatalf("EmptyCall failed: %v", err)
 			}
 
-			gotProto, err := orca.ToLoadReport(trailer)
-			if test.wantErr != nil && !errors.Is(err, test.wantErr) {
-				t.Fatalf("When retrieving load report, got error: %v, want: %v", err, orca.ErrLoadReportMissing)
+			gotProto, err := internal.ToLoadReport(trailer)
+			if err != nil {
+				t.Fatalf("When retrieving load report, got error: %v, want: <nil>", err)
 			}
 			if test.wantProto != nil && !cmp.Equal(gotProto, test.wantProto, cmp.Comparer(proto.Equal)) {
 				t.Fatalf("Received load report in trailer: %s, want: %s", pretty.ToJSON(gotProto), pretty.ToJSON(test.wantProto))
@@ -165,7 +164,6 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 		desc          string
 		injectMetrics bool
 		wantProto     *v3orcapb.OrcaLoadReport
-		wantErr       error
 	}{
 		{
 			desc:          "with custom backend metrics",
@@ -180,7 +178,6 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 		{
 			desc:          "with no custom backend metrics",
 			injectMetrics: false,
-			wantErr:       orca.ErrLoadReportMissing,
 		},
 	}
 
@@ -288,9 +285,9 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 				}
 			}
 
-			gotProto, err := orca.ToLoadReport(stream.Trailer())
-			if test.wantErr != nil && !errors.Is(err, test.wantErr) {
-				t.Fatalf("When retrieving load report, got error: %v, want: %v", err, orca.ErrLoadReportMissing)
+			gotProto, err := internal.ToLoadReport(stream.Trailer())
+			if err != nil {
+				t.Fatalf("When retrieving load report, got error: %v, want: <nil>", err)
 			}
 			if test.wantProto != nil && !cmp.Equal(gotProto, test.wantProto, cmp.Comparer(proto.Equal)) {
 				t.Fatalf("Received load report in trailer: %s, want: %s", pretty.ToJSON(gotProto), pretty.ToJSON(test.wantProto))
