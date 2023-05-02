@@ -25,14 +25,12 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/status"
 )
 
 // ccBalancerWrapper sits between the ClientConn and the Balancer.
@@ -405,14 +403,13 @@ func (acbw *acBalancerWrapper) getAddrConn() *addrConn {
 	return acbw.ac
 }
 
-var errSubConnNotReady = status.Error(codes.Unavailable, "SubConn not currently connected")
-
 // NewStream begins a streaming RPC on the addrConn.  If the addrConn is not
-// ready, returns errSubConnNotReady.
+// ready, blocks until it is or ctx expires.  Returns an error when the context
+// expires or the addrConn is shut down.
 func (acbw *acBalancerWrapper) NewStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (ClientStream, error) {
-	transport := acbw.ac.getReadyTransport()
-	if transport == nil {
-		return nil, errSubConnNotReady
+	transport, err := acbw.ac.getTransport(ctx)
+	if err != nil {
+		return nil, err
 	}
 	return newNonRetryClientStream(ctx, desc, method, transport, acbw.ac, opts...)
 }
