@@ -152,7 +152,7 @@ func newServerMetricsRecorder() *serverMetricsRecorder {
 func (s *serverMetricsRecorder) ServerMetrics() *ServerMetrics {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ret := &ServerMetrics{
+	return &ServerMetrics{
 		CPUUtilization: s.state.CPUUtilization,
 		MemUtilization: s.state.MemUtilization,
 		QPS:            s.state.QPS,
@@ -161,7 +161,6 @@ func (s *serverMetricsRecorder) ServerMetrics() *ServerMetrics {
 		RequestCost:    copyMap(s.state.RequestCost),
 		NamedMetrics:   copyMap(s.state.NamedMetrics),
 	}
-	return ret
 }
 
 func copyMap(m map[string]float64) map[string]float64 {

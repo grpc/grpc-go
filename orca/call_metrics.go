@@ -50,8 +50,8 @@ type CallMetricsRecorder interface {
 
 type callMetricsRecorderCtxKey struct{}
 
-// CallMetricsRecorderFromContext returns the RPC specific custom metrics
-// recorder [CallMetricsRecorder] embedded in the provided RPC context.
+// CallMetricsRecorderFromContext returns the RPC-specific custom metrics
+// recorder embedded in the provided RPC context.
 //
 // Returns nil if no custom metrics recorder is found in the provided context,
 // which will be the case when custom metrics reporting is not enabled.
@@ -99,11 +99,11 @@ func (rw *recorderWrapper) setTrailerMetadata(ctx context.Context) {
 
 	b, err := proto.Marshal(sm.toLoadReportProto())
 	if err != nil {
-		logger.Warningf("failed to marshal load report: %v", err)
+		logger.Warningf("Failed to marshal load report: %v", err)
 		return
 	}
 	if err := grpc.SetTrailer(ctx, metadata.Pairs(internal.TrailerMetadataKey, string(b))); err != nil {
-		logger.Warningf("failed to set trailer metadata: %v", err)
+		logger.Warningf("Failed to set trailer metadata: %v", err)
 	}
 }
 
