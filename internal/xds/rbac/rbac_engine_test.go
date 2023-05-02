@@ -1289,13 +1289,28 @@ func (s) TestChainEngine(t *testing.T) {
 						fullMethod: "",
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "0.0.0.0"},
+							AuthInfo: credentials.TLSInfo{
+								State: tls.ConnectionState{
+									PeerCertificates: []*x509.Certificate{
+										{
+											URIs: []*url.URL{
+												{
+													Scheme: "spiffe",
+													Host:   "cluster.local",
+													Path:   "/ns/default/sa/admin",
+												},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 					wantStatusCode: codes.OK,
 					wantAuditEvents: []*audit.Event{
 						{
 							FullMethodName: "",
-							Principal:      "0.0.0.0",
+							Principal:      "spiffe://cluster.local/ns/default/sa/admin",
 							PolicyName:     "test_policy",
 							MatchedRule:    "certain-source-ip",
 							Authorized:     true,
@@ -1408,13 +1423,26 @@ func (s) TestChainEngine(t *testing.T) {
 						fullMethod: "localhost-fan-page",
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "0.0.0.0"},
+							AuthInfo: credentials.TLSInfo{
+								State: tls.ConnectionState{
+									PeerCertificates: []*x509.Certificate{
+										{
+											URIs: []*url.URL{
+												{
+													Host: "cluster.local",
+													Path: "/ns/default/sa/admin",
+												},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
 					wantAuditEvents: []*audit.Event{
 						{
 							FullMethodName: "localhost-fan-page",
-							Principal:      "0.0.0.0",
 							PolicyName:     "test_policy",
 							MatchedRule:    "localhost-fan",
 							Authorized:     false,
@@ -1434,7 +1462,6 @@ func (s) TestChainEngine(t *testing.T) {
 					wantAuditEvents: []*audit.Event{
 						{
 							FullMethodName: "",
-							Principal:      "10.0.0.0",
 							PolicyName:     "test_policy",
 							MatchedRule:    "",
 							Authorized:     false,
@@ -1455,7 +1482,6 @@ func (s) TestChainEngine(t *testing.T) {
 					wantAuditEvents: []*audit.Event{
 						{
 							FullMethodName: "localhost-fan-page",
-							Principal:      "10.0.0.0",
 							PolicyName:     "test_policy",
 							MatchedRule:    "localhost-fan",
 							Authorized:     false,
@@ -1631,7 +1657,6 @@ func (s) TestChainEngine(t *testing.T) {
 					wantAuditEvents: []*audit.Event{
 						{
 							FullMethodName: "",
-							Principal:      "0.0.0.0",
 							PolicyName:     "test_policy",
 							MatchedRule:    "certain-source-ip",
 							Authorized:     true,
@@ -1652,7 +1677,6 @@ func (s) TestChainEngine(t *testing.T) {
 					wantAuditEvents: []*audit.Event{
 						{
 							FullMethodName: "localhost-fan-page",
-							Principal:      "0.0.0.0",
 							PolicyName:     "test_policy",
 							MatchedRule:    "localhost-fan",
 							Authorized:     false,
@@ -1672,7 +1696,6 @@ func (s) TestChainEngine(t *testing.T) {
 					wantAuditEvents: []*audit.Event{
 						{
 							FullMethodName: "",
-							Principal:      "10.0.0.0",
 							PolicyName:     "test_policy",
 							MatchedRule:    "",
 							Authorized:     false,
@@ -1693,7 +1716,6 @@ func (s) TestChainEngine(t *testing.T) {
 					wantAuditEvents: []*audit.Event{
 						{
 							FullMethodName: "localhost-fan-page",
-							Principal:      "10.0.0.0",
 							PolicyName:     "test_policy",
 							MatchedRule:    "localhost-fan",
 							Authorized:     false,

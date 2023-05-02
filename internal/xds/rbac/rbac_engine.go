@@ -274,9 +274,17 @@ type rpcData struct {
 }
 
 func (e *engine) doAuditLogging(rpcData *rpcData, rule string, authorized bool) {
+	// In the RBAC world, we need to have a SPIFFE ID as the principal for this
+	// to be meaningful
+	principal := ""
+	if len(rpcData.certs) != 0 && len(rpcData.certs[0].URIs) != 0 &&
+		rpcData.certs[0].URIs[0].Scheme == "spiffe" {
+		principal = rpcData.certs[0].URIs[0].String()
+	}
+
 	event := &audit.Event{
 		FullMethodName: rpcData.fullMethod,
-		Principal:      rpcData.peerInfo.Addr.String(),
+		Principal:      principal,
 		PolicyName:     e.policyName,
 		MatchedRule:    rule,
 		Authorized:     authorized,
