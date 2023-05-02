@@ -216,7 +216,7 @@ func TestBuildXDS(t *testing.T) {
 			wantServerConfig, err := bootstrap.ServerConfigFromJSON([]byte(fmt.Sprintf(`{
 				"server_uri": "%s",
 				"channel_creds": [{"type": "google_default"}],
-				"server_features": ["xds_v3"]
+				"server_features": ["xds_v3", "ignore_resource_deletion"]
 			}`, tdURL)))
 			if err != nil {
 				t.Fatalf("Failed to build server bootstrap config: %v", err)
