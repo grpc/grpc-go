@@ -1011,10 +1011,11 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 // pushes the resulting error (expected to be nil) to rpcErrChan.
 type producerTestBalancerBuilder struct {
 	rpcErrChan chan error
+	ctxChan    chan context.Context
 }
 
 func (bb *producerTestBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &producerTestBalancer{cc: cc, rpcErrChan: bb.rpcErrChan}
+	return &producerTestBalancer{cc: cc, rpcErrChan: bb.rpcErrChan, ctxChan: bb.ctxChan}
 }
 
 const producerTestBalancerName = "producer_test_balancer"
@@ -1024,6 +1025,7 @@ func (bb *producerTestBalancerBuilder) Name() string { return producerTestBalanc
 type producerTestBalancer struct {
 	cc         balancer.ClientConn
 	rpcErrChan chan error
+	ctxChan    chan context.Context
 }
 
 func (b *producerTestBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
@@ -1035,7 +1037,7 @@ func (b *producerTestBalancer) UpdateClientConnState(ccs balancer.ClientConnStat
 
 	// Create the producer.  This will call the producer builder's Build
 	// method, which will try to start an RPC in a goroutine.
-	p := &testProducerBuilder{start: grpcsync.NewEvent(), rpcErrChan: b.rpcErrChan}
+	p := &testProducerBuilder{start: grpcsync.NewEvent(), rpcErrChan: b.rpcErrChan, ctxChan: b.ctxChan}
 	sc.GetOrBuildProducer(p)
 
 	// Wait here until the producer is about to perform the RPC, which should
@@ -1046,7 +1048,7 @@ func (b *producerTestBalancer) UpdateClientConnState(ccs balancer.ClientConnStat
 	// subconn.
 	select {
 	case err := <-b.rpcErrChan:
-		b.rpcErrChan <- fmt.Errorf("Got unexpected data on rpcErrChan: %v", err)
+		go func() { b.rpcErrChan <- fmt.Errorf("Got unexpected data on rpcErrChan: %v", err) }()
 	default:
 	}
 
@@ -1069,6 +1071,7 @@ func (b *producerTestBalancer) Close()                                          
 type testProducerBuilder struct {
 	start      *grpcsync.Event
 	rpcErrChan chan error
+	ctxChan    chan context.Context
 }
 
 func (b *testProducerBuilder) Build(cci interface{}) (balancer.Producer, func()) {
@@ -1076,8 +1079,7 @@ func (b *testProducerBuilder) Build(cci interface{}) (balancer.Producer, func())
 	// Perform the RPC in a goroutine instead of during build because the
 	// subchannel's mutex is held here.
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
+		ctx := <-b.ctxChan
 		b.start.Fire()
 		_, err := c.EmptyCall(ctx, &testpb.Empty{})
 		b.rpcErrChan <- err
@@ -1090,8 +1092,12 @@ func (b *testProducerBuilder) Build(cci interface{}) (balancer.Producer, func())
 func (s) TestBalancerProducerBlockUntilReady(t *testing.T) {
 	// rpcErrChan is given to the LB policy to report the status of the
 	// producer's one RPC.
+	ctxChan := make(chan context.Context, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	ctxChan <- ctx
 	rpcErrChan := make(chan error)
-	balancer.Register(&producerTestBalancerBuilder{rpcErrChan: rpcErrChan})
+	balancer.Register(&producerTestBalancerBuilder{rpcErrChan: rpcErrChan, ctxChan: ctxChan})
 
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
@@ -1108,6 +1114,39 @@ func (s) TestBalancerProducerBlockUntilReady(t *testing.T) {
 
 	// Receive the error from the producer's RPC, which should be nil.
 	if err := <-rpcErrChan; err != nil {
+		t.Fatalf("Received unexpected error from producer RPC: %v", err)
+	}
+}
+
+// TestBalancerProducerHonorsContext tests that producers that perform RPC get
+// context errors correctly.
+func (s) TestBalancerProducerHonorsContext(t *testing.T) {
+	// rpcErrChan is given to the LB policy to report the status of the
+	// producer's one RPC.
+	ctxChan := make(chan context.Context, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	ctxChan <- ctx
+
+	rpcErrChan := make(chan error)
+	balancer.Register(&producerTestBalancerBuilder{rpcErrChan: rpcErrChan, ctxChan: ctxChan})
+
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
+
+	// Start the server & client with the test producer LB policy.
+	svcCfg := fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, producerTestBalancerName)
+	if err := ss.Start(nil, grpc.WithDefaultServiceConfig(svcCfg)); err != nil {
+		t.Fatalf("Error starting testing server: %v", err)
+	}
+	defer ss.Stop()
+
+	cancel()
+
+	// Receive the error from the producer's RPC, which should be nil.
+	if err := <-rpcErrChan; status.Code(err) != codes.Canceled {
 		t.Fatalf("Received unexpected error from producer RPC: %v", err)
 	}
 }
