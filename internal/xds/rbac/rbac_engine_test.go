@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	v1typepb "github.com/cncf/xds/go/udpa/type/v1"
+	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -482,6 +483,35 @@ func (s) TestNewChainEngine(t *testing.T) {
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerCustomConfig",
 								TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": 123, "xyz": "123"}, "TestAuditLoggerCustomConfig")},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+			},
+			policyName: "test_policy",
+		},
+		{
+			name: "AuditLoggerCustomConfigXdsTypedStruct",
+			policies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"anyone": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name:        "TestAuditLoggerCustomConfig",
+								TypedConfig: anyPbHelperXds(t, map[string]interface{}{"abc": 123, "xyz": "123"}, "TestAuditLoggerCustomConfig")},
 								IsOptional: false,
 							},
 						},
@@ -1843,6 +1873,24 @@ func anyPbHelper(t *testing.T, in map[string]interface{}, name string) *anypb.An
 	// 	typedURL = typedURLPrefix + name
 	// }
 	typedStruct := &v1typepb.TypedStruct{
+		TypeUrl: typedURLPrefix + name,
+		Value:   pb,
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	customConfig, err := anypb.New(typedStruct)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return customConfig
+}
+
+// Builds custom configs for audit logger RBAC protos
+func anyPbHelperXds(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
+	t.Helper()
+	pb, err := structpb.NewStruct(in)
+	typedStruct := &v3xdsxdstypepb.TypedStruct{
 		TypeUrl: typedURLPrefix + name,
 		Value:   pb,
 	}

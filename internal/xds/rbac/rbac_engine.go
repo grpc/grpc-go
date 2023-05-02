@@ -23,14 +23,11 @@ package rbac
 import (
 	"context"
 	"crypto/x509"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 
-	v1typepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz/audit"
@@ -41,7 +38,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 var logger = grpclog.Component("rbac")
@@ -162,57 +158,17 @@ func parseAuditOptions(opts *v3rbacpb.RBAC_AuditLoggingOptions) ([]audit.Logger,
 	}
 	var auditLoggers []audit.Logger
 	for _, logger := range opts.LoggerConfigs {
-		if logger.AuditLogger.TypedConfig == nil {
-			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("AuditLogger TypedConfig cannot be nil")
-		}
-		customConfig, err := getCustomConfig(logger.AuditLogger.TypedConfig)
+		auditLogger, err := buildLogger(logger)
 		if err != nil {
 			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, err
 		}
-
-		loggerName := nameFromConfig(customConfig)
-		if loggerName == "" {
-			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("AuditLogger TypedConfig.TypeURL cannot be an empty string")
+		if auditLogger == nil {
+			continue
 		}
-
-		auditLoggerFactory := audit.GetLoggerBuilder(loggerName)
-		if auditLoggerFactory == nil {
-			if logger.IsOptional {
-				continue
-			}
-			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("no builder registered for %v", logger.AuditLogger.TypedConfig.TypeUrl)
-		}
-		auditLoggerConfig, err := parseCustomConfig(auditLoggerFactory, customConfig)
-		if err != nil {
-			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("audit logger custom config could not be parsed: %v", err)
-		}
-		auditLogger := auditLoggerFactory.Build(auditLoggerConfig)
 		auditLoggers = append(auditLoggers, auditLogger)
 	}
 	return auditLoggers, opts.GetAuditCondition(), nil
 
-}
-
-func nameFromConfig(config *v1typepb.TypedStruct) string {
-	url := config.GetTypeUrl()
-	return strings.TrimPrefix(url, typedURLPrefix)
-}
-
-func getCustomConfig(config *anypb.Any) (*v1typepb.TypedStruct, error) {
-	typedStruct := &v1typepb.TypedStruct{}
-	err := config.UnmarshalTo(typedStruct)
-	if err != nil {
-		return nil, err
-	}
-	return typedStruct, nil
-}
-
-func parseCustomConfig(factory audit.LoggerBuilder, config *v1typepb.TypedStruct) (audit.LoggerConfig, error) {
-	configJSON, err := json.Marshal(config.GetValue().AsMap())
-	if err != nil {
-		return nil, err
-	}
-	return factory.ParseLoggerConfig(configJSON)
 }
 
 // findMatchingPolicy determines if an incoming RPC matches a policy. On a
