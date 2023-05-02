@@ -1443,8 +1443,9 @@ func (ac *addrConn) getReadyTransport() transport.ClientTransport {
 	return nil
 }
 
-// getTransport waits until the addrconn is ready or TF and returns the
-// transport or an error.
+// getTransport waits until the addrconn is ready and returns the transport.
+// If the context expires first, returns an appropriate status.  If the
+// addrConn is stopped first, returns an Unavailable status error.
 func (ac *addrConn) getTransport(ctx context.Context) (transport.ClientTransport, error) {
 	for ctx.Err() == nil {
 		ac.mu.Lock()

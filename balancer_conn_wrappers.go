@@ -428,7 +428,8 @@ func (acbw *acBalancerWrapper) getAddrConn() *addrConn {
 }
 
 // NewStream begins a streaming RPC on the addrConn.  If the addrConn is not
-// ready, returns errSubConnNotReady.
+// ready, blocks until it is or ctx expires.  Returns an error when the context
+// expires or the addrConn is shut down.
 func (acbw *acBalancerWrapper) NewStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (ClientStream, error) {
 	transport, err := acbw.ac.getTransport(ctx)
 	if err != nil {

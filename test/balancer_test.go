@@ -1007,7 +1007,7 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 }
 
 // producerTestBalancerBuilder and producerTestBalancer start a producer which
-// makes an RPC before the SubConn is READY, then connects the subconn, and
+// makes an RPC before the subconn is READY, then connects the subconn, and
 // pushes the resulting error (expected to be nil) to rpcErrChan.
 type producerTestBalancerBuilder struct {
 	rpcErrChan chan error
@@ -1041,6 +1041,14 @@ func (b *producerTestBalancer) UpdateClientConnState(ccs balancer.ClientConnStat
 	// Wait here until the producer is about to perform the RPC, which should
 	// block until connected.
 	<-p.start.Done()
+
+	// Ensure the error chan doesn't get anything on it before we connect the
+	// subconn.
+	select {
+	case err := <-b.rpcErrChan:
+		b.rpcErrChan <- fmt.Errorf("Got unexpected data on rpcErrChan: %v", err)
+	default:
+	}
 
 	// Now we can connect, which will unblock the RPC above.
 	sc.Connect()
@@ -1100,6 +1108,6 @@ func (s) TestBalancerProducerBlockUntilReady(t *testing.T) {
 
 	// Receive the error from the producer's RPC, which should be nil.
 	if err := <-rpcErrChan; err != nil {
-		t.Fatalf("Received error from producer RPC: %v", err)
+		t.Fatalf("Received unexpected error from producer RPC: %v", err)
 	}
 }
