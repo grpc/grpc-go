@@ -26,8 +26,8 @@ import (
 	"fmt"
 	"strings"
 
-	v1udpatypepb "github.com/cncf/xds/go/udpa/type/v1"
-	v3cncftypepb "github.com/cncf/xds/go/xds/type/v3"
+	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
+	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3ringhashpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/ring_hash/v3"
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
@@ -86,13 +86,13 @@ func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int
 			}
 			return convertWrrLocality(wrrlProto, depth)
 		case "type.googleapis.com/xds.type.v3.TypedStruct":
-			tsProto := &v3cncftypepb.TypedStruct{}
+			tsProto := &v3xdsxdstypepb.TypedStruct{}
 			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), tsProto); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 			}
 			return convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
 		case "type.googleapis.com/udpa.type.v1.TypedStruct":
-			tsProto := &v1udpatypepb.TypedStruct{}
+			tsProto := &v1xdsudpatypepb.TypedStruct{}
 			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), tsProto); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 			}
