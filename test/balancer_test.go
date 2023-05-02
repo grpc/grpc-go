@@ -1093,7 +1093,7 @@ func (s) TestBalancerProducerBlockUntilReady(t *testing.T) {
 	// rpcErrChan is given to the LB policy to report the status of the
 	// producer's one RPC.
 	ctxChan := make(chan context.Context, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	ctxChan <- ctx
 	rpcErrChan := make(chan error)
@@ -1145,8 +1145,8 @@ func (s) TestBalancerProducerHonorsContext(t *testing.T) {
 
 	cancel()
 
-	// Receive the error from the producer's RPC, which should be nil.
+	// Receive the error from the producer's RPC, which should be canceled.
 	if err := <-rpcErrChan; status.Code(err) != codes.Canceled {
-		t.Fatalf("Received unexpected error from producer RPC: %v", err)
+		t.Fatalf("RPC error: %v; want status.Code(err)=%v", err, codes.Canceled)
 	}
 }
