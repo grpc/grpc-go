@@ -605,6 +605,35 @@ func (s) TestNewChainEngine(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "Cannot_parse_missing_typedConfig_name",
+			policies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"anyone": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{AuditLogger: &v3corepb.TypedExtensionConfig{
+								Name:        "TestAuditLoggerCustomConfig",
+								TypedConfig: anyPbHelper(t, map[string]interface{}{"abc": 123, "xyz": "123"}, "")},
+								IsOptional: false,
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1767,7 +1796,7 @@ func (builder *TestAuditLoggerBufferBuilder) Build(config audit.LoggerConfig) au
 }
 
 func (builder *TestAuditLoggerBufferBuilder) Name() string {
-	return "TestAuditLoggerBuffer"
+	return typedURLPrefix + "TestAuditLoggerBuffer"
 }
 
 // An audit logger to test using a custom config
@@ -1802,7 +1831,7 @@ func (builder *TestAuditLoggerCustomConfigBuilder) Build(config audit.LoggerConf
 }
 
 func (builder *TestAuditLoggerCustomConfigBuilder) Name() string {
-	return "TestAuditLoggerCustomConfig"
+	return typedURLPrefix + "TestAuditLoggerCustomConfig"
 }
 
 // This is used when converting a custom config from raw JSON to a TypedStruct
@@ -1813,8 +1842,12 @@ const typedURLPrefix = "grpc.authz.audit_logging/"
 func anyPbHelper(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
+	typedURL := ""
+	if name != "" {
+		typedURL = typedURLPrefix + name
+	}
 	typedStruct := &v1typepb.TypedStruct{
-		TypeUrl: typedURLPrefix + name,
+		TypeUrl: typedURL,
 		Value:   pb,
 	}
 	if err != nil {

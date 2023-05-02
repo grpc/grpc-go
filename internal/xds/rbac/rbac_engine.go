@@ -164,17 +164,22 @@ func parseAuditOptions(opts *v3rbacpb.RBAC_AuditLoggingOptions) ([]audit.Logger,
 		if logger.AuditLogger.TypedConfig == nil {
 			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("AuditLogger TypedConfig cannot be nil")
 		}
-		if logger.AuditLogger.TypedConfig.TypeUrl == "" {
+		customConfig, err := getCustomConfig(logger.AuditLogger.TypedConfig)
+		if err != nil {
+			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, err
+		}
+		if customConfig.GetTypeUrl() == "" {
 			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("AuditLogger TypedConfig.TypeURL cannot be an empty string")
 		}
-		auditLoggerFactory := audit.GetLoggerBuilder(logger.AuditLogger.TypedConfig.TypeUrl)
+
+		auditLoggerFactory := audit.GetLoggerBuilder(customConfig.GetTypeUrl())
 		if auditLoggerFactory == nil {
 			if logger.IsOptional {
 				continue
 			}
 			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("no builder registered for %v", logger.AuditLogger.TypedConfig.TypeUrl)
 		}
-		auditLoggerConfig, err := parseCustomConfig(auditLoggerFactory, logger.AuditLogger.TypedConfig)
+		auditLoggerConfig, err := parseCustomConfig(auditLoggerFactory, customConfig)
 		if err != nil {
 			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("audit logger custom config could not be parsed: %v", err)
 		}
@@ -185,13 +190,17 @@ func parseAuditOptions(opts *v3rbacpb.RBAC_AuditLoggingOptions) ([]audit.Logger,
 
 }
 
-func parseCustomConfig(factory audit.LoggerBuilder, config *anypb.Any) (audit.LoggerConfig, error) {
+func getCustomConfig(config *anypb.Any) (*v1typepb.TypedStruct, error) {
 	typedStruct := &v1typepb.TypedStruct{}
 	err := config.UnmarshalTo(typedStruct)
 	if err != nil {
 		return nil, err
 	}
-	configJSON, err := json.Marshal(typedStruct.GetValue().AsMap())
+	return typedStruct, nil
+}
+
+func parseCustomConfig(factory audit.LoggerBuilder, config *v1typepb.TypedStruct) (audit.LoggerConfig, error) {
+	configJSON, err := json.Marshal(config.GetValue().AsMap())
 	if err != nil {
 		return nil, err
 	}
