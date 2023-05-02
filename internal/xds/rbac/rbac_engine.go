@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 
 	v1typepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
@@ -168,11 +169,13 @@ func parseAuditOptions(opts *v3rbacpb.RBAC_AuditLoggingOptions) ([]audit.Logger,
 		if err != nil {
 			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, err
 		}
-		if customConfig.GetTypeUrl() == "" {
+
+		loggerName := nameFromConfig(customConfig)
+		if loggerName == "" {
 			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, fmt.Errorf("AuditLogger TypedConfig.TypeURL cannot be an empty string")
 		}
 
-		auditLoggerFactory := audit.GetLoggerBuilder(customConfig.GetTypeUrl())
+		auditLoggerFactory := audit.GetLoggerBuilder(loggerName)
 		if auditLoggerFactory == nil {
 			if logger.IsOptional {
 				continue
@@ -188,6 +191,11 @@ func parseAuditOptions(opts *v3rbacpb.RBAC_AuditLoggingOptions) ([]audit.Logger,
 	}
 	return auditLoggers, opts.GetAuditCondition(), nil
 
+}
+
+func nameFromConfig(config *v1typepb.TypedStruct) string {
+	url := config.GetTypeUrl()
+	return strings.TrimPrefix(url, typedURLPrefix)
 }
 
 func getCustomConfig(config *anypb.Any) (*v1typepb.TypedStruct, error) {
@@ -332,3 +340,7 @@ func (e *engine) doAuditLogging(rpcData *rpcData, rule string, authorized bool) 
 		}
 	}
 }
+
+// This is used when converting a custom config from raw JSON to a TypedStruct
+// The TypeURL of the TypeStruct will be "grpc.authz.audit_logging/<name>"
+const typedURLPrefix = "grpc.authz.audit_logging/"

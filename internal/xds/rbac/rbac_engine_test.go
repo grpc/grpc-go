@@ -1796,7 +1796,7 @@ func (builder *TestAuditLoggerBufferBuilder) Build(config audit.LoggerConfig) au
 }
 
 func (builder *TestAuditLoggerBufferBuilder) Name() string {
-	return typedURLPrefix + "TestAuditLoggerBuffer"
+	return "TestAuditLoggerBuffer"
 }
 
 // An audit logger to test using a custom config
@@ -1831,23 +1831,19 @@ func (builder *TestAuditLoggerCustomConfigBuilder) Build(config audit.LoggerConf
 }
 
 func (builder *TestAuditLoggerCustomConfigBuilder) Name() string {
-	return typedURLPrefix + "TestAuditLoggerCustomConfig"
+	return "TestAuditLoggerCustomConfig"
 }
-
-// This is used when converting a custom config from raw JSON to a TypedStruct
-// The TypeURL of the TypeStruct will be "grpc.authz.audit_logging/<name>"
-const typedURLPrefix = "grpc.authz.audit_logging/"
 
 // Builds custom configs for audit logger RBAC protos
 func anyPbHelper(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
-	typedURL := ""
-	if name != "" {
-		typedURL = typedURLPrefix + name
-	}
+	// typedURL := ""
+	// if name != "" {
+	// 	typedURL = typedURLPrefix + name
+	// }
 	typedStruct := &v1typepb.TypedStruct{
-		TypeUrl: typedURL,
+		TypeUrl: typedURLPrefix + name,
 		Value:   pb,
 	}
 	if err != nil {
