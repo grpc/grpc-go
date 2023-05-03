@@ -70,7 +70,7 @@ func getCustomConfig(config *anypb.Any) (json.RawMessage, string, error) {
 		}
 		return convertCustomConfig(typedStruct.TypeUrl, typedStruct.Value)
 	}
-	return nil, "", fmt.Errorf("Custom config not implemented for type %v", config.GetTypeUrl())
+	return nil, "", fmt.Errorf("custom config not implemented for type %v", config.GetTypeUrl())
 }
 
 func convertCustomConfig(typeURL string, s *structpb.Struct) (json.RawMessage, string, error) {
