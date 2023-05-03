@@ -1367,7 +1367,7 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 	// originated before the GoAway reaches the client.
 	// After getting the ack or timer expiration send out another GoAway this
 	// time with an ID of the max stream server intends to process.
-	if err := t.framer.fr.WriteGoAway(math.MaxUint32, http2.ErrCodeNo, []byte(g.debugData)); err != nil {
+	if err := t.framer.fr.WriteGoAway(math.MaxUint32, http2.ErrCodeNo, g.debugData); err != nil {
 		return false, err
 	}
 	if err := t.framer.fr.WritePing(false, goAwayPing.data); err != nil {
