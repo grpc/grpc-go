@@ -1890,12 +1890,12 @@ func (builder *TestAuditLoggerCustomConfigBuilder) Name() string {
 func createUDPATypedStruct(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
-	// typedURL := ""
-	// if name != "" {
-	// 	typedURL = typedURLPrefix + name
-	// }
+	typedURL := ""
+	if name != "" {
+		typedURL = typedURLPrefix + name
+	}
 	typedStruct := &v1xdsudpatypepb.TypedStruct{
-		TypeUrl: typedURLPrefix + name,
+		TypeUrl: typedURL,
 		Value:   pb,
 	}
 	if err != nil {

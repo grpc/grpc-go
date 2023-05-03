@@ -45,7 +45,7 @@ func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConf
 		if loggerConfig.IsOptional {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("no builder registered for %v", loggerConfig.AuditLogger.TypedConfig.TypeUrl)
+		return nil, fmt.Errorf("no builder registered for %v", loggerName)
 	}
 	auditLoggerConfig, err := factory.ParseLoggerConfig(customConfig)
 	if err != nil {
