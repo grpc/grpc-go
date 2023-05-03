@@ -62,6 +62,7 @@ func newScheduler(scWeights []float64, inc func() uint32) scheduler {
 	allEqual := true
 	for i, w := range scWeights {
 		if w == 0 {
+			// Backends with weight = 0 use the mean.
 			weights[i] = mean
 		} else {
 			scaledWeight := uint16(math.Round(scalingFactor * w))

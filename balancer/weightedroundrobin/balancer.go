@@ -66,10 +66,11 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 func (bb) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	lbCfg := &lbConfig{
 		// Default values as documented in A58.
-		OOBReportingPeriod:     10 * time.Second,
-		BlackoutPeriod:         10 * time.Second,
-		WeightExpirationPeriod: 3 * time.Minute,
-		WeightUpdatePeriod:     time.Second,
+		OOBReportingPeriod:      10 * time.Second,
+		BlackoutPeriod:          10 * time.Second,
+		WeightExpirationPeriod:  3 * time.Minute,
+		WeightUpdatePeriod:      time.Second,
+		ErrorUtilizationPenalty: 1,
 	}
 	if err := json.Unmarshal(js, lbCfg); err != nil {
 		return nil, fmt.Errorf("wrr: unable to unmarshal LB policy config: %s, error: %v", string(js), err)
@@ -97,6 +98,7 @@ func (bb) Name() string {
 	return Name
 }
 
+// wrrBalancer implements the weighted round robin LB policy.
 type wrrBalancer struct {
 	cc     balancer.ClientConn
 	logger *grpclog.PrefixLogger
@@ -313,6 +315,9 @@ func (b *wrrBalancer) regeneratePicker() {
 	})
 }
 
+// picker is the WRR policy's picker.  It uses live-updating backend weights to
+// update the scheduler periodically and ensure picks are routed proportional
+// to those weights.
 type picker struct {
 	v         uint32             // incrementing value used by the scheduler; accessed atomically
 	cfg       *lbConfig          // active config when picker created
@@ -500,7 +505,9 @@ func (w *weightedSubConn) updateConnectivityState(cs connectivity.State) connect
 }
 
 // weight returns the current effective weight of the subconn, taking into
-// account the parameters.  Returns 0 for blacked out or expired data.
+// account the parameters.  Returns 0 for blacked out or expired data, which
+// will cause the backend weight to be treated as the mean of the other
+// backends.
 func (w *weightedSubConn) weight(now time.Time, weightExpirationPeriod, blackoutPeriod time.Duration) float64 {
 	w.mu.Lock()
 	defer w.mu.Unlock()

@@ -142,18 +142,20 @@ func durationp(d time.Duration) *time.Duration { return &d }
 
 var (
 	perCallConfig = iwrr.LBConfig{
-		EnableOOBLoadReport:    boolp(false),
-		OOBReportingPeriod:     durationp(5 * time.Millisecond),
-		BlackoutPeriod:         durationp(0),
-		WeightExpirationPeriod: durationp(time.Minute),
-		WeightUpdatePeriod:     durationp(weightUpdatePeriod),
+		EnableOOBLoadReport:     boolp(false),
+		OOBReportingPeriod:      durationp(5 * time.Millisecond),
+		BlackoutPeriod:          durationp(0),
+		WeightExpirationPeriod:  durationp(time.Minute),
+		WeightUpdatePeriod:      durationp(weightUpdatePeriod),
+		ErrorUtilizationPenalty: float64p(0),
 	}
 	oobConfig = iwrr.LBConfig{
-		EnableOOBLoadReport:    boolp(true),
-		OOBReportingPeriod:     durationp(5 * time.Millisecond),
-		BlackoutPeriod:         durationp(0),
-		WeightExpirationPeriod: durationp(time.Minute),
-		WeightUpdatePeriod:     durationp(weightUpdatePeriod),
+		EnableOOBLoadReport:     boolp(true),
+		OOBReportingPeriod:      durationp(5 * time.Millisecond),
+		BlackoutPeriod:          durationp(0),
+		WeightExpirationPeriod:  durationp(time.Minute),
+		WeightUpdatePeriod:      durationp(weightUpdatePeriod),
+		ErrorUtilizationPenalty: float64p(0),
 	}
 )
 
