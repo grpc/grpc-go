@@ -519,12 +519,11 @@ func (s) TestProducerMultipleListeners(t *testing.T) {
 	checkReports(2, 1, 0)
 
 	// Register listener 3 with a more frequent interval; stream is recreated
-	// with this interval after the next report is received.  The first report
-	// will go to all three listeners.
+	// with this interval.  The next report will go to all three listeners.
 	oobLis3.cleanup = orca.RegisterOOBListener(li.sc, oobLis3, lisOpts3)
+	awaitRequest(reportInterval3)
 	fake.respCh <- loadReportWant
 	checkReports(3, 2, 1)
-	awaitRequest(reportInterval3)
 
 	// Another report without a change in listeners should go to all three listeners.
 	fake.respCh <- loadReportWant
@@ -536,13 +535,12 @@ func (s) TestProducerMultipleListeners(t *testing.T) {
 	fake.respCh <- loadReportWant
 	checkReports(5, 3, 3)
 
-	// Stop listener 3.  This makes the interval longer, with stream recreation
-	// delayed until the next report is received.  Reports should only go to
-	// listener 1 now.
+	// Stop listener 3.  This makes the interval longer.  Reports should only
+	// go to listener 1 now.
 	oobLis3.Stop()
+	awaitRequest(reportInterval1)
 	fake.respCh <- loadReportWant
 	checkReports(6, 3, 3)
-	awaitRequest(reportInterval1)
 	// Another report without a change in listeners should go to the first listener.
 	fake.respCh <- loadReportWant
 	checkReports(7, 3, 3)

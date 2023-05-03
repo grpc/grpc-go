@@ -38,19 +38,13 @@ type producerBuilder struct{}
 
 // Build constructs and returns a producer and its cleanup function
 func (*producerBuilder) Build(cci interface{}) (balancer.Producer, func()) {
-	ctx, cancel := context.WithCancel(context.Background())
 	p := &producer{
 		client:    v3orcaservicegrpc.NewOpenRcaServiceClient(cci.(grpc.ClientConnInterface)),
-		closed:    grpcsync.NewEvent(),
 		intervals: make(map[time.Duration]int),
 		listeners: make(map[OOBListener]struct{}),
 		backoff:   internal.DefaultBackoffFunc,
 	}
-	go p.run(ctx)
-	return p, func() {
-		cancel()
-		<-p.closed.Done() // Block until stream stopped.
-	}
+	return p, func() {}
 }
 
 var producerBuilderSingleton = &producerBuilder{}
@@ -77,6 +71,7 @@ type OOBListenerOptions struct {
 func RegisterOOBListener(sc balancer.SubConn, l OOBListener, opts OOBListenerOptions) (stop func()) {
 	pr, close := sc.GetOrBuildProducer(producerBuilderSingleton)
 	p := pr.(*producer)
+
 	p.registerListener(l, opts.ReportInterval)
 
 	// TODO: When we can register for SubConn state updates, automatically call
@@ -93,16 +88,18 @@ func RegisterOOBListener(sc balancer.SubConn, l OOBListener, opts OOBListenerOpt
 type producer struct {
 	client v3orcaservicegrpc.OpenRcaServiceClient
 
-	closed *grpcsync.Event // fired when closure completes
 	// backoff is called between stream attempts to determine how long to delay
 	// to avoid overloading a server experiencing problems.  The attempt count
 	// is incremented when stream errors occur and is reset when the stream
 	// reports a result.
 	backoff func(int) time.Duration
 
-	mu        sync.Mutex
-	intervals map[time.Duration]int    // map from interval time to count of listeners requesting that time
-	listeners map[OOBListener]struct{} // set of registered listeners
+	mu          sync.Mutex
+	intervals   map[time.Duration]int    // map from interval time to count of listeners requesting that time
+	listeners   map[OOBListener]struct{} // set of registered listeners
+	minInterval time.Duration
+	stop        func()        // stops the current run goroutine
+	stopped     chan struct{} // closed when the run goroutine exits
 }
 
 // registerListener adds the listener and its requested report interval to the
@@ -110,8 +107,13 @@ type producer struct {
 func (p *producer) registerListener(l OOBListener, interval time.Duration) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
 	p.listeners[l] = struct{}{}
 	p.intervals[interval]++
+	if len(p.listeners) == 1 || interval < p.minInterval {
+		p.minInterval = interval
+		p.updateRunLocked()
+	}
 }
 
 // registerListener removes the listener and its requested report interval to
@@ -119,31 +121,53 @@ func (p *producer) registerListener(l OOBListener, interval time.Duration) {
 func (p *producer) unregisterListener(l OOBListener, interval time.Duration) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
 	delete(p.listeners, l)
 	p.intervals[interval]--
 	if p.intervals[interval] == 0 {
 		delete(p.intervals, interval)
+
+		if p.minInterval == interval {
+			p.recomputeMinInterval()
+			p.updateRunLocked()
+		}
 	}
 }
 
-// minInterval returns the smallest key in p.intervals.
-func (p *producer) minInterval() time.Duration {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	var min time.Duration
+// recomputeMinInterval sets p.minInterval to the minimum key's value in
+// p.intervals.
+func (p *producer) recomputeMinInterval() {
 	first := true
-	for t := range p.intervals {
-		if t < min || first {
-			min = t
+	for interval := range p.intervals {
+		if first || interval < p.minInterval {
+			p.minInterval = interval
 			first = false
 		}
 	}
-	return min
+}
+
+// updateRunLocked is called whenever the run goroutine needs to be started /
+// stopped / restarted due to: 1. the initial listener being registered, 2. the
+// final listener being unregistered, or 3. the minimum registered interval
+// changing.
+func (p *producer) updateRunLocked() {
+	if p.stop != nil {
+		p.stop()
+		<-p.stopped
+		p.stop = nil
+	}
+	if len(p.listeners) > 0 {
+		var ctx context.Context
+		ctx, p.stop = context.WithCancel(context.Background())
+		p.stopped = make(chan struct{})
+		go p.run(ctx, p.minInterval)
+	}
 }
 
 // run manages the ORCA OOB stream on the subchannel.
-func (p *producer) run(ctx context.Context) {
-	defer p.closed.Fire()
+func (p *producer) run(ctx context.Context, interval time.Duration) {
+	defer close(p.stopped)
+
 	backoffAttempt := 0
 	backoffTimer := time.NewTimer(0)
 	for ctx.Err() == nil {
@@ -153,7 +177,7 @@ func (p *producer) run(ctx context.Context) {
 			return
 		}
 
-		resetBackoff, err := p.runStream(ctx)
+		resetBackoff, err := p.runStream(ctx, interval)
 
 		if resetBackoff {
 			backoffTimer.Reset(0)
@@ -190,8 +214,7 @@ func (p *producer) run(ctx context.Context) {
 // runStream runs a single stream on the subchannel and returns the resulting
 // error, if any, and whether or not the run loop should reset the backoff
 // timer to zero or advance it.
-func (p *producer) runStream(ctx context.Context) (resetBackoff bool, err error) {
-	interval := p.minInterval()
+func (p *producer) runStream(ctx context.Context, interval time.Duration) (resetBackoff bool, err error) {
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	stream, err := p.client.StreamCoreMetrics(streamCtx, &v3orcaservicepb.OrcaLoadReportRequest{
@@ -212,9 +235,5 @@ func (p *producer) runStream(ctx context.Context) (resetBackoff bool, err error)
 			l.OnLoadReport(report)
 		}
 		p.mu.Unlock()
-		if interval != p.minInterval() {
-			// restart stream to use new interval
-			return true, nil
-		}
 	}
 }
