@@ -462,7 +462,7 @@ func (s) TestBalancer_TwoAddresses_BlackoutPeriod(t *testing.T) {
 		defer mu.Unlock()
 		return now
 	}
-	defer func() { iwrr.TimeNow = time.Now }()
+	t.Cleanup(func() { iwrr.TimeNow = time.Now })
 
 	testCases := []struct {
 		blackoutPeriodCfg *time.Duration
@@ -537,7 +537,7 @@ func (s) TestBalancer_TwoAddresses_WeightExpiration(t *testing.T) {
 		defer mu.Unlock()
 		return now
 	}
-	defer func() { iwrr.TimeNow = time.Now }()
+	t.Cleanup(func() { iwrr.TimeNow = time.Now })
 
 	srv1 := startServer(t, reportBoth)
 	srv2 := startServer(t, reportBoth)
