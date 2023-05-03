@@ -86,7 +86,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	}
 
 	// Override the min reporting interval in the internal package.
-	const shortReportingInterval = 100 * time.Millisecond
+	const shortReportingInterval = 10 * time.Millisecond
 	smr := orca.NewServerMetricsRecorder()
 	opts := orca.ServiceOptions{MinReportingInterval: shortReportingInterval, ServerMetricsProvider: smr}
 	internal.AllowAnyMinReportingInterval.(func(*orca.ServiceOptions))(&opts)
@@ -110,20 +110,21 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	}
 	defer cc.Close()
 
-	// Spawn a goroutine which sends 100 unary RPCs to the test server. This
+	// Spawn a goroutine which sends 20 unary RPCs to the test server. This
 	// will trigger the injection of custom backend metrics from the
 	// testServiceImpl.
+	const numRequests = 20
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	testStub := testgrpc.NewTestServiceClient(cc)
 	errCh := make(chan error, 1)
 	go func() {
-		for i := 0; i < 100; i++ {
+		for i := 0; i < numRequests; i++ {
 			if _, err := testStub.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 				errCh <- fmt.Errorf("UnaryCall failed: %v", err)
 				return
 			}
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(time.Millisecond)
 		}
 		errCh <- nil
 	}()
@@ -151,7 +152,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		wantProto := &v3orcapb.OrcaLoadReport{
 			CpuUtilization: 50.0,
 			MemUtilization: 99.0,
-			Utilization:    map[string]float64{requestsMetricKey: 100.0},
+			Utilization:    map[string]float64{requestsMetricKey: numRequests},
 		}
 		gotProto, err := stream.Recv()
 		if err != nil {
