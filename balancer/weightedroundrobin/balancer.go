@@ -60,7 +60,6 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 	}
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
-	b.regeneratePicker()
 	return b
 }
 
@@ -123,7 +122,7 @@ func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	}
 
 	b.cfg = cfg
-	b.updateAddressesLocked(ccs.ResolverState.Addresses)
+	b.updateAddresses(ccs.ResolverState.Addresses)
 
 	if len(ccs.ResolverState.Addresses) == 0 {
 		b.ResolverError(errors.New("resolver produced zero addresses")) // will call regeneratePicker
@@ -136,10 +135,10 @@ func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	return nil
 }
 
-func (b *wrrBalancer) updateAddressesLocked(addrs []resolver.Address) {
+func (b *wrrBalancer) updateAddresses(addrs []resolver.Address) {
 	addrsSet := resolver.NewAddressMap()
 
-	// Loop through new addresses
+	// Loop through new address list and create subconns for any new addresses.
 	for _, addr := range addrs {
 		if _, ok := addrsSet.Get(addr); ok {
 			// Redundant address; skip.
@@ -172,6 +171,8 @@ func (b *wrrBalancer) updateAddressesLocked(addrs []resolver.Address) {
 		// time to new one.  Ensures an OOB listener is running if needed.
 		wsc.updateConfig(b.cfg)
 	}
+
+	// Loop through existing subconns and remove ones that are not in addrs.
 	for _, addr := range b.subConns.Keys() {
 		if _, ok := addrsSet.Get(addr); ok {
 			// Existing address also in new address list; skip.
@@ -200,7 +201,7 @@ func (b *wrrBalancer) ResolverError(err error) {
 func (b *wrrBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	wsc := b.scMap[sc]
 	if wsc == nil {
-		b.logger.Errorf("wrr: got state changes for an unknown SubConn: %p, %v", sc, state)
+		b.logger.Errorf("wrr: UpdateSubConnStateChange called with an unknown SubConn: %p, %v", sc, state)
 		return
 	}
 
@@ -213,6 +214,8 @@ func (b *wrrBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 
 	if cs == connectivity.Shutdown {
 		delete(b.scMap, sc)
+		// The subconn was removed from b.subConns when the address was removed
+		// in updateAddresses.
 	}
 
 	oldCS := wsc.updateConnectivityState(cs)
@@ -228,7 +231,8 @@ func (b *wrrBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 	}
 }
 
-// Close stops timers that would cause our scheduler to be reupdated
+// Close stops the balancer.  It cancels any ongoing scheduler updates and
+// stops any ORCA listeners.
 func (b *wrrBalancer) Close() {
 	if b.stopPicker != nil {
 		b.stopPicker()
@@ -296,7 +300,7 @@ func (b *wrrBalancer) regeneratePicker() {
 	}
 
 	p := &picker{
-		idx:      grpcrand.Uint32(),
+		v:        grpcrand.Uint32(), // start the scheduler at a random point
 		cfg:      b.cfg,
 		subConns: b.readySubConns(),
 	}
@@ -310,12 +314,14 @@ func (b *wrrBalancer) regeneratePicker() {
 }
 
 type picker struct {
-	idx       uint32             // index used indirectly by the scheduler; accessed atomically
+	v         uint32             // incrementing value used by the scheduler; accessed atomically
 	cfg       *lbConfig          // active config when picker created
 	subConns  []*weightedSubConn // all READY subconns
 	scheduler unsafe.Pointer     // *scheduler; accessed atomically
 }
 
+// scWeights returns a slice containing the weights from p.subConns in the same
+// order as p.subConns.
 func (p *picker) scWeights() []float64 {
 	ws := make([]float64, len(p.subConns))
 	now := internal.TimeNow()
@@ -325,13 +331,13 @@ func (p *picker) scWeights() []float64 {
 	return ws
 }
 
-func (p *picker) nextIdx() uint32 {
-	return atomic.AddUint32(&p.idx, 1)
+func (p *picker) inc() uint32 {
+	return atomic.AddUint32(&p.v, 1)
 }
 
 func (p *picker) regenerateScheduler() {
-	newSched := newScheduler(p.scWeights(), p.nextIdx)
-	atomic.StorePointer(&p.scheduler, unsafe.Pointer(&newSched))
+	s := newScheduler(p.scWeights(), p.inc)
+	atomic.StorePointer(&p.scheduler, unsafe.Pointer(&s))
 }
 
 func (p *picker) start(ctx context.Context) {
@@ -354,7 +360,11 @@ func (p *picker) start(ctx context.Context) {
 }
 
 func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	// Read the scheduler atomically.  All scheduler operations are threadsafe,
+	// and if the scheduler is replaced during this usage, we want to use the
+	// scheduler that was live when the pick started.
 	sched := *(*scheduler)(atomic.LoadPointer(&p.scheduler))
+
 	pickedSC := p.subConns[sched.nextIndex()]
 	pr := balancer.PickResult{SubConn: pickedSC.SubConn}
 	if !p.cfg.EnableOOBLoadReport {
@@ -367,6 +377,10 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	return pr, nil
 }
 
+// weightedSubConn is the wrapper of a subconn that holds the subconn and its
+// weight (and other parameters relevant to computing the effective weight).
+// It also tracks connectivity state, listens for metrics updates by
+// implementing the orca.OOBListener interface and manages that listener.
 type weightedSubConn struct {
 	balancer.SubConn
 	logger *grpclog.PrefixLogger
@@ -376,7 +390,7 @@ type weightedSubConn struct {
 	connectivityState connectivity.State
 	stopORCAListener  func()
 
-	// The following field are accessed asynchronously and are protected by mu.
+	// The following fields are accessed asynchronously and are protected by mu.
 	mu            sync.Mutex
 	weightVal     float64
 	nonEmptySince time.Time
@@ -411,11 +425,15 @@ func (w *weightedSubConn) OnLoadReport(load *v3orcapb.OrcaLoadReport) {
 	}
 }
 
+// updateConfig updates the parameters of the WRR policy and
+// stops/starts/restarts the ORCA OOB listener.
 func (w *weightedSubConn) updateConfig(cfg *lbConfig) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	oldCfg := w.cfg
 	if oldCfg == nil {
+		// By default we set load reports to off, because they are not running
+		// upon initial weightedSubConn creation.
 		oldCfg = &lbConfig{EnableOOBLoadReport: false}
 	}
 	w.cfg = cfg
@@ -427,7 +445,8 @@ func (w *weightedSubConn) updateConfig(cfg *lbConfig) {
 		// load reporting disabled, OOBReportingPeriod is always 0.)
 		return
 	}
-	// (Optionally stop and) start the listener.
+	// (Optionally stop and) start the listener to use the new config's
+	// settings for OOB reporting.
 	if w.stopORCAListener != nil {
 		w.stopORCAListener()
 	}
@@ -435,7 +454,9 @@ func (w *weightedSubConn) updateConfig(cfg *lbConfig) {
 		w.stopORCAListener = nil
 		return
 	}
-	w.logger.Infof("Registering listener for %v; %v", w.SubConn, newPeriod)
+	if w.logger.V(2) {
+		w.logger.Infof("Registering listener for %v with interval %v", w.SubConn, newPeriod)
+	}
 	opts := orca.OOBListenerOptions{ReportInterval: newPeriod}
 	w.stopORCAListener = orca.RegisterOOBListener(w.SubConn, w, opts)
 }
@@ -449,8 +470,9 @@ func (w *weightedSubConn) updateConnectivityState(cs connectivity.State) connect
 		// Always reconnect when idle.
 		w.SubConn.Connect()
 	case connectivity.Ready:
-		// If we transition back to READY state, restart the blackout period.
-		// Note that we cannot guarantee that we will never receive lingering
+		// If we transition back to READY state, reset nonEmptySince so that we
+		// apply the backout period after we start receiving load data.  Note
+		// that we cannot guarantee that we will never receive lingering
 		// callbacks for backend metric reports from the previous connection
 		// after the new connection has been established, but they should be
 		// masked by new backend metric reports from the new connection by the
@@ -462,28 +484,30 @@ func (w *weightedSubConn) updateConnectivityState(cs connectivity.State) connect
 		}
 	}
 
-	old := w.connectivityState
+	oldCS := w.connectivityState
 
-	if old == connectivity.TransientFailure &&
+	if oldCS == connectivity.TransientFailure &&
 		(cs == connectivity.Connecting || cs == connectivity.Idle) {
 		// Once a subconn enters TRANSIENT_FAILURE, ignore subsequent IDLE or
 		// CONNECTING transitions to prevent the aggregated state from being
 		// always CONNECTING when many backends exist but are all down.
-		return old
+		return oldCS
 	}
 
 	w.connectivityState = cs
 
-	return old
+	return oldCS
 }
 
+// weight returns the current effective weight of the subconn, taking into
+// account the parameters.  Returns 0 for blacked out or expired data.
 func (w *weightedSubConn) weight(now time.Time, weightExpirationPeriod, blackoutPeriod time.Duration) float64 {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	// If the most recent update was longer ago than the expiration period,
 	// reset nonEmptySince so that we apply the blackout period again if we
 	// start getting data again in the future, and return 0.
-	if now.Sub(w.lastUpdated) > weightExpirationPeriod {
+	if now.Sub(w.lastUpdated) >= weightExpirationPeriod {
 		w.nonEmptySince = time.Time{}
 		return 0
 	}
@@ -491,6 +515,5 @@ func (w *weightedSubConn) weight(now time.Time, weightExpirationPeriod, blackout
 	if blackoutPeriod != 0 && (w.nonEmptySince == (time.Time{}) || now.Sub(w.nonEmptySince) < blackoutPeriod) {
 		return 0
 	}
-	// Otherwise, return the weight.
 	return w.weightVal
 }

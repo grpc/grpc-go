@@ -26,6 +26,11 @@ type scheduler interface {
 	nextIndex() int
 }
 
+// newScheduler uses scWeights to create a new scheduler for selecting subconns
+// in a picker.  It will return a round robin implementation if all weights are
+// zero or there is only a single subconn, otherwise it will return an Earliest
+// Deadline First (EDF) scheduler implementation that selects the subchannels
+// according to their weights.
 func newScheduler(scWeights []float64, inc func() uint32) scheduler {
 	n := len(scWeights)
 	if n == 0 {
@@ -46,7 +51,7 @@ func newScheduler(scWeights []float64, inc func() uint32) scheduler {
 			numZero++
 		}
 	}
-	if numZero == n {
+	if numZero >= n-1 {
 		return &rrScheduler{numSCs: n, inc: inc}
 	}
 	unscaledMean := sum / float64(n-numZero)
@@ -54,12 +59,21 @@ func newScheduler(scWeights []float64, inc func() uint32) scheduler {
 	mean := uint16(math.Round(scalingFactor * unscaledMean))
 
 	weights := make([]uint16, n)
+	allEqual := true
 	for i, w := range scWeights {
 		if w == 0 {
 			weights[i] = mean
 		} else {
-			weights[i] = uint16(math.Round(scalingFactor * w))
+			scaledWeight := uint16(math.Round(scalingFactor * w))
+			weights[i] = scaledWeight
+			if scaledWeight != mean {
+				allEqual = false
+			}
 		}
+	}
+
+	if allEqual {
+		return &rrScheduler{numSCs: n, inc: inc}
 	}
 
 	logger.Infof("using edf scheduler with weights: %v", weights)
@@ -68,12 +82,15 @@ func newScheduler(scWeights []float64, inc func() uint32) scheduler {
 
 const maxWeight = math.MaxUint16
 
+// edfScheduler implements EDF using the same algorithm as grpc-c++ here:
+//
+// https://github.com/grpc/grpc/blob/master/src/core/ext/filters/client_channel/lb_policy/weighted_round_robin/static_stride_scheduler.cc
 type edfScheduler struct {
 	inc     func() uint32
 	weights []uint16
 }
 
-// Returns the index in weights to choose.
+// Returns the index in s.weights for the picker to choose.
 func (s *edfScheduler) nextIndex() int {
 	const offset = maxWeight / 2
 
@@ -106,8 +123,8 @@ func (s *edfScheduler) nextIndex() int {
 	}
 }
 
-// A simple RR scheduler to use for fallback when all weights are zero or only
-// one subconn exists.
+// A simple RR scheduler to use for fallback when all weights are zero or the
+// same or when only one subconn exists.
 type rrScheduler struct {
 	inc    func() uint32
 	numSCs int

@@ -25,9 +25,9 @@ import (
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
-const prefix = "[weighted-round-robin-lb %p] "
+const prefix = "[%p] "
 
-var logger = grpclog.Component("xds")
+var logger = grpclog.Component("weighted-round-robin")
 
 func prefixLogger(p *wrrBalancer) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
