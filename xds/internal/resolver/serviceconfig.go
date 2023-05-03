@@ -121,6 +121,7 @@ type routeCluster struct {
 
 type route struct {
 	m                 *xdsresource.CompositeMatcher // converted from route matchers
+	actionType        xdsresource.RouteActionType   //holds route action type from type_rds.Route
 	clusters          wrr.WRR                       // holds *routeCluster entries
 	maxStreamDuration time.Duration
 	// map from filter name to its config
@@ -142,6 +143,8 @@ type configSelector struct {
 }
 
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
+var errRouteActionUnsupported = status.Errorf(codes.Unavailable, "received route was of type RouteActionUnsupported, require type RouteActionRoute")
+var errRouteActionNonForwardingAction = status.Errorf(codes.Unavailable, "received route was of type RouteActionNonForwardingAction, require type RouteActionRoute")
 
 func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
 	if cs == nil {
@@ -156,7 +159,16 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		}
 	}
 	if rt == nil || rt.clusters == nil {
-		return nil, errNoMatchedRouteFound
+		var err error
+		switch rt.actionType {
+		case xdsresource.RouteActionUnsupported:
+			err = errRouteActionUnsupported
+		case xdsresource.RouteActionNonForwardingAction:
+			err = errRouteActionNonForwardingAction
+		default:
+			err = errNoMatchedRouteFound
+		}
+		return nil, err
 	}
 
 	cluster, ok := rt.clusters.Next().(*routeCluster)
@@ -381,6 +393,7 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 		if err != nil {
 			return nil, err
 		}
+		cs.routes[i].actionType = rt.ActionType
 		if rt.MaxStreamDuration == nil {
 			cs.routes[i].maxStreamDuration = su.ldsConfig.maxStreamDuration
 		} else {
