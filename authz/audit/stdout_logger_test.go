@@ -25,6 +25,7 @@ import (
 	"log"
 	"os"
 	"testing"
+	"time"
 )
 
 var (
@@ -48,8 +49,9 @@ func TestStdOutLogger_Log(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	expected := `[AuthZ Audit StdOutLogger] {"FullMethodName":"","Principal":"test principal","PolicyName":"test policy","MatchedRule":"","Authorized":false}`
-	if buf.String() != (expected + "\n") {
+
+	expected := ` {"FullMethodName":"","Principal":"test principal","PolicyName":"test policy","MatchedRule":"","Authorized":false}`
+	if buf.String() != ("[AuthZ Audit StdOutLogger] " + time.Now().Format(time.RFC3339) + expected + "\n") {
 		t.Fatalf("unexpected error\nwant:%v\n got:%v", expected, buf.String())
 	}
 	os.Stdout = orig

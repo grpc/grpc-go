@@ -21,6 +21,7 @@ package audit
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"google.golang.org/grpc/grpclog"
 )
@@ -35,7 +36,9 @@ func (logger *StdOutLogger) Log(event *Event) {
 	if err != nil {
 		grpcLogger.Errorf("failed to marshal AuditEvent data to JSON: %v", err)
 	}
-	fmt.Println("[AuthZ Audit StdOutLogger] " + string(jsonBytes))
+	message := fmt.Sprintf("[AuthZ Audit StdOutLogger] %s %v",
+		time.Now().Format(time.RFC3339), string(jsonBytes))
+	fmt.Println(message)
 }
 
 const (
