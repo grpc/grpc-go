@@ -31,6 +31,12 @@ import (
 //
 // This type is safe for concurrent access.
 type CallbackSerializer struct {
+	// Done is closed once the serializer is shut down completely, i.e a
+	// scheduled callback, if any, that was running when the context passed to
+	// NewCallbackSerializer is cancelled, has completed and the serializer has
+	// deallocated all its resources.
+	Done chan struct{}
+
 	callbacks *buffer.Unbounded
 }
 
@@ -39,7 +45,10 @@ type CallbackSerializer struct {
 // provided context to shutdown the CallbackSerializer. It is guaranteed that no
 // callbacks will be executed once this context is canceled.
 func NewCallbackSerializer(ctx context.Context) *CallbackSerializer {
-	t := &CallbackSerializer{callbacks: buffer.NewUnbounded()}
+	t := &CallbackSerializer{
+		Done:      make(chan struct{}),
+		callbacks: buffer.NewUnbounded(),
+	}
 	go t.run(ctx)
 	return t
 }
@@ -53,6 +62,7 @@ func (t *CallbackSerializer) Schedule(f func(ctx context.Context)) {
 }
 
 func (t *CallbackSerializer) run(ctx context.Context) {
+	defer close(t.Done)
 	for ctx.Err() == nil {
 		select {
 		case <-ctx.Done():
