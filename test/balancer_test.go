@@ -921,10 +921,10 @@ func (wp *wrappedPicker) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 		return balancer.PickResult{}, err
 	}
 
-	if res.Metatada == nil {
-		res.Metatada = metadata.Pairs(metadataHeaderInjectedByBalancer, metadataValueInjectedByBalancer)
+	if res.Metadata == nil {
+		res.Metadata = metadata.Pairs(metadataHeaderInjectedByBalancer, metadataValueInjectedByBalancer)
 	} else {
-		res.Metatada.Append(metadataHeaderInjectedByBalancer, metadataValueInjectedByBalancer)
+		res.Metadata.Append(metadataHeaderInjectedByBalancer, metadataValueInjectedByBalancer)
 	}
 	return res, nil
 }
