@@ -277,8 +277,7 @@ func (e *engine) doAuditLogging(rpcData *rpcData, rule string, authorized bool) 
 	// In the RBAC world, we need to have a SPIFFE ID as the principal for this
 	// to be meaningful
 	principal := ""
-	if len(rpcData.certs) != 0 && len(rpcData.certs[0].URIs) != 0 &&
-		rpcData.certs[0].URIs[0].Scheme == "spiffe" {
+	if len(rpcData.certs) != 0 && len(rpcData.certs[0].URIs) != 0 && rpcData.certs[0].URIs[0].Scheme == "spiffe" {
 		principal = rpcData.certs[0].URIs[0].String()
 	}
 

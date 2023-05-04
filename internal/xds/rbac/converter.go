@@ -49,7 +49,7 @@ func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConf
 	}
 	auditLoggerConfig, err := factory.ParseLoggerConfig(customConfig)
 	if err != nil {
-		return nil, fmt.Errorf("audit logger custom config could not be parsed: %v", err)
+		return nil, fmt.Errorf("AuditLogger custom config could not be parsed: %v", err)
 	}
 	auditLogger := factory.Build(auditLoggerConfig)
 	return auditLogger, nil
@@ -70,7 +70,7 @@ func getCustomConfig(config *anypb.Any) (json.RawMessage, string, error) {
 		}
 		return convertCustomConfig(typedStruct.TypeUrl, typedStruct.Value)
 	}
-	return nil, "", fmt.Errorf("custom config not implemented for type %v", config.GetTypeUrl())
+	return nil, "", fmt.Errorf("custom config not implemented for type [%v]", config.GetTypeUrl())
 }
 
 func convertCustomConfig(typeURL string, s *structpb.Struct) (json.RawMessage, string, error) {
@@ -82,7 +82,7 @@ func convertCustomConfig(typeURL string, s *structpb.Struct) (json.RawMessage, s
 
 	rawJSON, err := json.Marshal(s)
 	if err != nil {
-		return nil, "", fmt.Errorf("error converting custom lb policy %v: %v for %+v", err, typeURL, s)
+		return nil, "", fmt.Errorf("error converting custom lb policy %v for %v: %v", typeURL, s, err)
 	}
 	return rawJSON, name, nil
 }

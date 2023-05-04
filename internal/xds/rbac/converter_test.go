@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package rbac
 
 import (
@@ -81,7 +82,7 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 					TypedConfig: createUDPATypedStruct(t, map[string]interface{}{"abc": "BADVALUE", "xyz": "123"}, "TestAuditLoggerCustomConfig")},
 				IsOptional: false,
 			},
-			expectedError: "audit logger custom config could not be parsed",
+			expectedError: "AuditLogger custom config could not be parsed",
 		},
 		{
 			name: "No registered logger but optional passes",

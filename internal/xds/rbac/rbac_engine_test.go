@@ -1890,6 +1890,9 @@ func (builder *TestAuditLoggerCustomConfigBuilder) Name() string {
 func createUDPATypedStruct(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
+	if err != nil {
+		t.Fatal(err)
+	}
 	typedURL := ""
 	if name != "" {
 		typedURL = typedURLPrefix + name
@@ -1897,9 +1900,6 @@ func createUDPATypedStruct(t *testing.T, in map[string]interface{}, name string)
 	typedStruct := &v1xdsudpatypepb.TypedStruct{
 		TypeUrl: typedURL,
 		Value:   pb,
-	}
-	if err != nil {
-		t.Fatal(err)
 	}
 	customConfig, err := anypb.New(typedStruct)
 	if err != nil {
@@ -1912,12 +1912,12 @@ func createUDPATypedStruct(t *testing.T, in map[string]interface{}, name string)
 func createXDSTypedStruct(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
+	if err != nil {
+		t.Fatal(err)
+	}
 	typedStruct := &v3xdsxdstypepb.TypedStruct{
 		TypeUrl: typedURLPrefix + name,
 		Value:   pb,
-	}
-	if err != nil {
-		t.Fatal(err)
 	}
 	customConfig, err := anypb.New(typedStruct)
 	if err != nil {
