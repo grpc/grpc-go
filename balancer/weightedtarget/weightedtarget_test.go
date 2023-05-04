@@ -311,6 +311,9 @@ func (s) TestWeightedTarget(t *testing.T) {
 	// targets. This should cause a Transient Failure State update to the Client
 	// Conn.
 	config4, err := wtbParser.ParseConfig([]byte(`{}`))
+	if err != nil {
+		t.Fatalf("failed to parse balancer config: %v", err)
+	}
 	if err := wtb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{},
 		BalancerConfig: config4,
