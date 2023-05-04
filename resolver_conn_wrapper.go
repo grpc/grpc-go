@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
@@ -46,7 +45,6 @@ type ccResolverWrapper struct {
 	closed              *grpcsync.Event
 	channelzID          *channelz.Identifier
 	ignoreServiceConfig bool
-	outgoingCh          *buffer.Unbounded
 
 	// Outgoing (gRPC --> resolver) and incoming (resolver --> gRPC) calls are
 	// guaranteed to execute in a mutually exclusive manner as they are
@@ -76,7 +74,6 @@ func newCCResolverWrapper(cc resolverStateUpdater, opts ccResolverWrapperOpts) (
 		closed:              grpcsync.NewEvent(),
 		channelzID:          opts.channelzID,
 		ignoreServiceConfig: opts.bOpts.DisableServiceConfig,
-		outgoingCh:          buffer.NewUnbounded(),
 		serializer:          grpcsync.NewCallbackSerializer(ctx),
 		serializerCancel:    cancel,
 	}
