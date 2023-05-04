@@ -33,7 +33,7 @@ type StdOutLogger struct {
 func (logger *StdOutLogger) Log(event *Event) {
 	jsonBytes, err := json.Marshal(event)
 	if err != nil {
-		grpcLogger.Errorf("failed to marshal log data to JSON: %v", err)
+		grpcLogger.Errorf("failed to marshal AuditEvent data to JSON: %v", err)
 	}
 	fmt.Println("[AuthZ Audit StdOutLogger] " + string(jsonBytes))
 }
