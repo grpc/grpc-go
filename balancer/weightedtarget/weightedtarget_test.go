@@ -166,7 +166,8 @@ func init() {
 // TestWeightedTarget covers the cases that a sub-balancer is added and a
 // sub-balancer is removed. It verifies that the addresses and balancer configs
 // are forwarded to the right sub-balancer. This test is intended to test the
-// glue code in weighted_target.
+// glue code in weighted_target. It also tests an empty target config update,
+// which should trigger a transient failure state update.
 func (s) TestWeightedTarget(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
@@ -305,6 +306,21 @@ func (s) TestWeightedTarget(t *testing.T) {
 		if !cmp.Equal(gotSCSt.SubConn, sc3, cmp.AllowUnexported(testutils.TestSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc3)
 		}
+	}
+	// Update the Weighted Target Balancer with an empty address list and no
+	// targets. This should cause a Transient Failure State update to the Client
+	// Conn.
+	config4, err := wtbParser.ParseConfig([]byte(`{}`))
+	if err := wtb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  resolver.State{},
+		BalancerConfig: config4,
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	state := <-cc.NewStateCh
+	if state != connectivity.TransientFailure {
+		t.Fatalf("empty target update should have triggered a TF state update, got: %v", state)
 	}
 }
 

@@ -181,6 +181,8 @@ func (wbsa *Aggregator) ResumeStateUpdates() {
 // NeedUpdateStateOnResume sets the UpdateStateOnResume bool to true, letting a
 // picker update be sent once ResumeStateUpdates is called.
 func (wbsa *Aggregator) NeedUpdateStateOnResume() {
+	wbsa.mu.Lock()
+	defer wbsa.mu.Unlock()
 	wbsa.needUpdateStateOnResume = true
 }
 
