@@ -25,26 +25,17 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-var logger = grpclog.Component("authz-audit")
+var grpcLogger = grpclog.Component("authz-audit")
 
-type StdOutLogger struct{}
+type StdOutLogger struct {
+}
 
 func (logger *StdOutLogger) Log(event *Event) {
 	jsonBytes, err := json.Marshal(event)
 	if err != nil {
-		fmt.Errorf("failed to marshal log data to JSON: %v", err)
+		grpcLogger.Errorf("failed to marshal log data to JSON: %v", err)
 	}
-	//TODO checkinternal go log package for redirection of output
-	fmt.Println(string(jsonBytes))
-}
-
-func (logger *StdOutLogger) ToJSON() ([]byte, error) {
-	jsonBytes, err := json.Marshal(logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal logger to JSON: %v", err)
-	}
-
-	return jsonBytes, nil
+	fmt.Println("[AuthZ Audit StdOutLogger] " + string(jsonBytes))
 }
 
 const (
@@ -66,7 +57,7 @@ func (StdOutLoggerBuilder) Build(LoggerConfig) Logger {
 }
 
 func (StdOutLoggerBuilder) ParseLoggerConfig(config json.RawMessage) (LoggerConfig, error) {
-	logger.Infof("Config value %v ignored, "+
-		"StdOutLogger doesn't support custom configs", config)
+	grpcLogger.Warningf("Config value %v ignored, "+
+		"StdOutLogger doesn't support custom configs", string(config))
 	return &StdoutLoggerConfig{}, nil
 }

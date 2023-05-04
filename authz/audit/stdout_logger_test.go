@@ -19,7 +19,11 @@
 package audit
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"log"
+	"os"
 	"testing"
 )
 
@@ -31,23 +35,22 @@ var (
 )
 
 func TestStdOutLogger_Log(t *testing.T) {
+	orig := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
 	event := &Event{PolicyName: "test policy", Principal: "test principal"}
 	auditLogger.Log(event)
-}
 
-//func TestMyLogger_ToJSON(t *testing.T) {
-//	jsonBytes, err := logger.ToJSON()
-//	if err != nil {
-//		t.Fatalf("Failed to marshal logger to JSON: %v", err)
-//	}
-//
-//	var restored StdOutLogger
-//	err = json.Unmarshal(jsonBytes, &restored)
-//	if err != nil {
-//		t.Fatalf("Failed to unmarshal logger back from JSON: %v", err)
-//	}
-//
-//	if !reflect.DeepEqual(logger, &restored) {
-//		t.Errorf("ToJSON() test failed, restored = %v, want %v", restored, logger)
-//	}
-//}
+	w.Close()
+	var buf bytes.Buffer
+	_, err := io.Copy(&buf, r)
+	if err != nil {
+		log.Fatal(err)
+	}
+	expected := `[AuthZ Audit StdOutLogger] {"FullMethodName":"","Principal":"test principal","PolicyName":"test policy","MatchedRule":"","Authorized":false}`
+	if buf.String() != (expected + "\n") {
+		t.Fatalf("unexpected error\nwant:%v\n got:%v", expected, buf.String())
+	}
+	os.Stdout = orig
+}
