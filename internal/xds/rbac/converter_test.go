@@ -1,3 +1,18 @@
+/*
+ * Copyright 2023 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package rbac
 
 import (
@@ -8,6 +23,7 @@ import (
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -79,6 +95,17 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 			},
 			expectedLogger: nil,
 		},
+		{
+			name: "Mismatched typed struct",
+			loggerConfig: &v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+				AuditLogger: &v3corepb.TypedExtensionConfig{
+					Name:        "TestAuditLoggerCustomConfig",
+					TypedConfig: createBadTypedStruct(t, map[string]interface{}{"abc": 123, "xyz": "123"}, "TestAuditLoggerCustomConfig"),
+				},
+				IsOptional: false,
+			},
+			expectedError: "failed to unmarshal resource",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -99,4 +126,23 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 		})
 	}
 
+}
+
+type BadProto struct {
+}
+
+func (*BadProto) ProtoMessage() {}
+
+func (*BadProto) ProtoReflect() protoreflect.Message { return }
+
+// Builds custom configs for audit logger RBAC protos
+func createBadTypedStruct(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
+	t.Helper()
+	badStruct := &BadProto{}
+	customConfig, err := anypb.New(badStruct)
+	customConfig.TypeUrl = "type.googleapis.com/udpa.type.v1.TypedStruct"
+	if err != nil {
+		t.Fatal(err)
+	}
+	return customConfig
 }
