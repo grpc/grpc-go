@@ -27,10 +27,10 @@ type scheduler interface {
 }
 
 // newScheduler uses scWeights to create a new scheduler for selecting subconns
-// in a picker.  It will return a round robin implementation if all weights are
-// zero or there is only a single subconn, otherwise it will return an Earliest
-// Deadline First (EDF) scheduler implementation that selects the subchannels
-// according to their weights.
+// in a picker.  It will return a round robin implementation if at least
+// len(scWeights)-1 are zero or there is only a single subconn, otherwise it
+// will return an Earliest Deadline First (EDF) scheduler implementation that
+// selects the subchannels according to their weights.
 func newScheduler(scWeights []float64, inc func() uint32) scheduler {
 	n := len(scWeights)
 	if n == 0 {
@@ -124,8 +124,9 @@ func (s *edfScheduler) nextIndex() int {
 	}
 }
 
-// A simple RR scheduler to use for fallback when all weights are zero or the
-// same or when only one subconn exists.
+// A simple RR scheduler to use for fallback when fewer than two backends have
+// non-zero weights, or all backends have the the same weight, or when only one
+// subconn exists.
 type rrScheduler struct {
 	inc    func() uint32
 	numSCs int

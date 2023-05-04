@@ -51,7 +51,35 @@ func Test(t *testing.T) {
 }
 
 const defaultTestTimeout = 10 * time.Second
-const rrIterations = 100
+const weightUpdatePeriod = 50 * time.Millisecond
+const oobReportingInterval = 10 * time.Millisecond
+
+func init() {
+	iwrr.AllowAnyWeightUpdatePeriod = true
+}
+
+func boolp(b bool) *bool                       { return &b }
+func float64p(f float64) *float64              { return &f }
+func durationp(d time.Duration) *time.Duration { return &d }
+
+var (
+	perCallConfig = iwrr.LBConfig{
+		EnableOOBLoadReport:     boolp(false),
+		OOBReportingPeriod:      durationp(5 * time.Millisecond),
+		BlackoutPeriod:          durationp(0),
+		WeightExpirationPeriod:  durationp(time.Minute),
+		WeightUpdatePeriod:      durationp(weightUpdatePeriod),
+		ErrorUtilizationPenalty: float64p(0),
+	}
+	oobConfig = iwrr.LBConfig{
+		EnableOOBLoadReport:     boolp(true),
+		OOBReportingPeriod:      durationp(5 * time.Millisecond),
+		BlackoutPeriod:          durationp(0),
+		WeightExpirationPeriod:  durationp(time.Minute),
+		WeightUpdatePeriod:      durationp(weightUpdatePeriod),
+		ErrorUtilizationPenalty: float64p(0),
+	}
+)
 
 type testServer struct {
 	*stubserver.StubServer
@@ -89,7 +117,7 @@ func startServer(t *testing.T, r reportType) *testServer {
 	}
 
 	var sopts []grpc.ServerOption
-	if r == reportBoth || r == reportCall {
+	if r == reportCall || r == reportBoth {
 		sopts = append(sopts, orca.CallMetricsServerOption(nil))
 	}
 
@@ -129,98 +157,44 @@ func svcConfig(t *testing.T, wrrCfg iwrr.LBConfig) string {
 	return sc
 }
 
-const weightUpdatePeriod = 50 * time.Millisecond
-const oobReportingInterval = 10 * time.Millisecond
-
-func init() {
-	iwrr.AllowAnyWeightUpdatePeriod = true
-}
-
-func boolp(b bool) *bool                       { return &b }
-func float64p(f float64) *float64              { return &f }
-func durationp(d time.Duration) *time.Duration { return &d }
-
-var (
-	perCallConfig = iwrr.LBConfig{
-		EnableOOBLoadReport:     boolp(false),
-		OOBReportingPeriod:      durationp(5 * time.Millisecond),
-		BlackoutPeriod:          durationp(0),
-		WeightExpirationPeriod:  durationp(time.Minute),
-		WeightUpdatePeriod:      durationp(weightUpdatePeriod),
-		ErrorUtilizationPenalty: float64p(0),
-	}
-	oobConfig = iwrr.LBConfig{
-		EnableOOBLoadReport:     boolp(true),
-		OOBReportingPeriod:      durationp(5 * time.Millisecond),
-		BlackoutPeriod:          durationp(0),
-		WeightExpirationPeriod:  durationp(time.Minute),
-		WeightUpdatePeriod:      durationp(weightUpdatePeriod),
-		ErrorUtilizationPenalty: float64p(0),
-	}
-)
-
-func (s) TestBalancer_OneAddress_ReportingDisabled(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	srv := startServer(t, reportNone)
-
-	sc := svcConfig(t, perCallConfig)
-	if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
-		t.Fatalf("Error starting client: %v", err)
+// Tests basic functionality with one address.  With only one address, load
+// reporting doesn't affect routing at all.
+func (s) TestBalancer_OneAddress(t *testing.T) {
+	testCases := []struct {
+		rt reportType
+	}{
+		{rt: reportNone},
+		{rt: reportCall},
+		{rt: reportOOB},
 	}
 
-	// Perform many RPCs to ensure the LB policy works with 1 address.
-	for i := 0; i < 100; i++ {
-		if _, err := srv.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-			t.Fatalf("Error from EmptyCall: %v", err)
-		}
-		time.Sleep(time.Millisecond) // Delay; test will run 100ms and should perform ~10 weight updates
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("reportType:%v", tc.rt), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			srv := startServer(t, tc.rt)
+
+			sc := svcConfig(t, perCallConfig)
+			if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+				t.Fatalf("Error starting client: %v", err)
+			}
+
+			// Perform many RPCs to ensure the LB policy works with 1 address.
+			for i := 0; i < 100; i++ {
+				srv.callMetrics.SetQPS(float64(i))
+				srv.oobMetrics.SetQPS(float64(i))
+				if _, err := srv.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+					t.Fatalf("Error from EmptyCall: %v", err)
+				}
+				time.Sleep(time.Millisecond) // Delay; test will run 100ms and should perform ~10 weight updates
+			}
+		})
 	}
 }
 
-func (s) TestBalancer_OneAddress_ReportingEnabledPerCall(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	srv := startServer(t, reportCall)
-
-	sc := svcConfig(t, perCallConfig)
-	if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
-		t.Fatalf("Error starting client: %v", err)
-	}
-
-	// Perform many RPCs to ensure the LB policy works with 1 address.
-	for i := 0; i < 100; i++ {
-		srv.callMetrics.SetQPS(float64(i))
-		if _, err := srv.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-			t.Fatalf("Error from EmptyCall: %v", err)
-		}
-		time.Sleep(time.Millisecond) // Delay; test will run 100ms and should perform ~10 weight updates
-	}
-}
-
-func (s) TestBalancer_OneAddress_ReportingEnabledOOB(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	srv := startServer(t, reportOOB)
-
-	sc := svcConfig(t, oobConfig)
-	if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
-		t.Fatalf("Error starting client: %v", err)
-	}
-
-	// Perform many RPCs to ensure the LB policy works with 1 address.
-	for i := 0; i < 100; i++ {
-		srv.oobMetrics.SetQPS(float64(i))
-		if _, err := srv.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-			t.Fatalf("Error from EmptyCall: %v", err)
-		}
-		time.Sleep(time.Millisecond) // Delay; test will run 100ms and should perform ~10 weight updates
-	}
-}
-
+// Tests two addresses with ORCA reporting disabled (should fall back to pure
+// RR).
 func (s) TestBalancer_TwoAddresses_ReportingDisabled(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -241,6 +215,8 @@ func (s) TestBalancer_TwoAddresses_ReportingDisabled(t *testing.T) {
 	}
 }
 
+// Tests two addresses with per-call ORCA reporting enabled.  Checks the
+// backends are called in the appropriate ratios.
 func (s) TestBalancer_TwoAddresses_ReportingEnabledPerCall(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -271,6 +247,8 @@ func (s) TestBalancer_TwoAddresses_ReportingEnabledPerCall(t *testing.T) {
 	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10})
 }
 
+// Tests two addresses with OOB ORCA reporting enabled.  Checks the backends
+// are called in the appropriate ratios.
 func (s) TestBalancer_TwoAddresses_ReportingEnabledOOB(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -301,6 +279,9 @@ func (s) TestBalancer_TwoAddresses_ReportingEnabledOOB(t *testing.T) {
 	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10})
 }
 
+// Tests two addresses with OOB ORCA reporting enabled, where the reports
+// change over time.  Checks the backends are called in the appropriate ratios
+// before and after modifying the reports.
 func (s) TestBalancer_TwoAddresses_UpdateLoads(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -343,6 +324,9 @@ func (s) TestBalancer_TwoAddresses_UpdateLoads(t *testing.T) {
 	checkWeights(ctx, t, srvWeight{srv1, 10}, srvWeight{srv2, 1})
 }
 
+// Tests two addresses with OOB ORCA reporting enabled, then with switching to
+// per-call reporting.  Checks the backends are called in the appropriate
+// ratios before and after the change.
 func (s) TestBalancer_TwoAddresses_OOBThenPerCall(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -394,6 +378,8 @@ func (s) TestBalancer_TwoAddresses_OOBThenPerCall(t *testing.T) {
 	checkWeights(ctx, t, srvWeight{srv1, 10}, srvWeight{srv2, 1})
 }
 
+// Tests two addresses with OOB ORCA reporting enabled and a non-zero error
+// penalty applied.
 func (s) TestBalancer_TwoAddresses_ErrorPenalty(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -445,6 +431,8 @@ func (s) TestBalancer_TwoAddresses_ErrorPenalty(t *testing.T) {
 	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 1})
 }
 
+// Tests that the blackout period causes backends to use 0 as their weight
+// until the backout period elapses.
 func (s) TestBalancer_TwoAddresses_BlackoutPeriod(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -520,6 +508,8 @@ func (s) TestBalancer_TwoAddresses_BlackoutPeriod(t *testing.T) {
 	}
 }
 
+// Tests that the weight expiration period causes backends to use 0 as their
+// weight once the expiration period elapses.
 func (s) TestBalancer_TwoAddresses_WeightExpiration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -585,6 +575,72 @@ func (s) TestBalancer_TwoAddresses_WeightExpiration(t *testing.T) {
 	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 1})
 }
 
+// Tests logic surrounding subchannel management.
+func (s) TestBalancer_AddressesChanging(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv1 := startServer(t, reportBoth)
+	srv2 := startServer(t, reportBoth)
+	srv3 := startServer(t, reportBoth)
+	srv4 := startServer(t, reportBoth)
+
+	// srv1: weight 10
+	srv1.oobMetrics.SetQPS(10.0)
+	srv1.oobMetrics.SetCPUUtilization(1.0)
+	// srv2: weight 100
+	srv2.oobMetrics.SetQPS(10.0)
+	srv2.oobMetrics.SetCPUUtilization(.1)
+	// srv3: weight 20
+	srv3.oobMetrics.SetQPS(20.0)
+	srv3.oobMetrics.SetCPUUtilization(1.0)
+	// srv4: weight 200
+	srv4.oobMetrics.SetQPS(20.0)
+	srv4.oobMetrics.SetCPUUtilization(.1)
+
+	sc := svcConfig(t, oobConfig)
+	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+	srv2.Client = srv1.Client
+	addrs := []resolver.Address{{Addr: srv1.Address}, {Addr: srv2.Address}, {Addr: srv3.Address}}
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+
+	// Call each backend once to ensure the weights have been received.
+	ensureReached(ctx, t, srv1.Client, 3)
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10}, srvWeight{srv3, 2})
+
+	// Add backend 4
+	addrs = append(addrs, resolver.Address{Addr: srv4.Address})
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10}, srvWeight{srv3, 2}, srvWeight{srv4, 20})
+
+	// Shutdown backend 3.  RPCs will no longer be routed to it.
+	srv3.Stop()
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10}, srvWeight{srv4, 20})
+
+	// Remove addresses 2 and 3.  RPCs will no longer be routed to 2 either.
+	addrs = []resolver.Address{{Addr: srv1.Address}, {Addr: srv4.Address}}
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv4, 20})
+
+	// Re-add 2 and remove the rest.
+	addrs = []resolver.Address{{Addr: srv2.Address}}
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv2, 10})
+
+	// Re-add 4.
+	addrs = append(addrs, resolver.Address{Addr: srv4.Address})
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv2, 10}, srvWeight{srv4, 20})
+}
+
 func ensureReached(ctx context.Context, t *testing.T, c testgrpc.TestServiceClient, n int) {
 	t.Helper()
 	reached := make(map[string]struct{})
@@ -602,6 +658,11 @@ type srvWeight struct {
 	w   int
 }
 
+const rrIterations = 100
+
+// checkWeights does rrIterations RPCs and expects the different backends to be
+// routed in a ratio as deterimined by the srvWeights passed in.  Allows for
+// some variance (+/- 2 RPCs per backend).
 func checkWeights(ctx context.Context, t *testing.T, sws ...srvWeight) {
 	t.Helper()
 
