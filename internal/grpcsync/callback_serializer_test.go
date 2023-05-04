@@ -144,18 +144,12 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	cs := NewCallbackSerializer(ctx)
 
 	// Schedule a callback which blocks until the context passed to it is
-	// canceled. It also closes a couple of channels to signal that it started
-	// and finished respectively.
+	// canceled. It also closes a channel to signal that it has started.
 	firstCallbackStartedCh := make(chan struct{})
-	firstCallbackFinishCh := make(chan struct{})
 	cs.Schedule(func(ctx context.Context) {
 		close(firstCallbackStartedCh)
 		<-ctx.Done()
-		close(firstCallbackFinishCh)
 	})
-
-	// Wait for the first callback to start before scheduling the others.
-	<-firstCallbackStartedCh
 
 	// Schedule a bunch of callbacks. These should not be exeuted since the first
 	// one started earlier is blocked.
@@ -174,11 +168,14 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Wait for the first callback to start before closing the scheduler.
+	<-firstCallbackStartedCh
+
 	// Cancel the context which will unblock the first callback. None of the
 	// other callbacks (which have not started executing at this point) should
 	// be executed after this.
 	cancel()
-	<-firstCallbackFinishCh
+	<-cs.Done
 
 	// Ensure that the newer callbacks are not executed.
 	select {
