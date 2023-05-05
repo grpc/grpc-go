@@ -44,7 +44,9 @@ func (*producerBuilder) Build(cci interface{}) (balancer.Producer, func()) {
 		listeners: make(map[OOBListener]struct{}),
 		backoff:   internal.DefaultBackoffFunc,
 	}
-	return p, func() {}
+	return p, func() {
+		<-p.stopped
+	}
 }
 
 var producerBuilderSingleton = &producerBuilder{}
@@ -153,7 +155,6 @@ func (p *producer) recomputeMinInterval() {
 func (p *producer) updateRunLocked() {
 	if p.stop != nil {
 		p.stop()
-		<-p.stopped
 		p.stop = nil
 	}
 	if len(p.listeners) > 0 {
