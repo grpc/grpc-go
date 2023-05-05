@@ -388,8 +388,10 @@ func (s) TestBalancer_TwoAddresses_ErrorPenalty(t *testing.T) {
 	srv2 := startServer(t, reportOOB)
 
 	// srv1 starts loaded and srv2 starts without load; ensure RPCs are routed
-	// disproportionately to srv2 (10:1).  Errors are set (but ignored
-	// initially) such that RPCs will be routed 50/50.
+	// disproportionately to srv2 (10:1).  EPS values are set (but ignored
+	// initially due to ErrorUtilizationPenalty=0).  Later EUP will be updated
+	// to 0.9 which will cause the weights to be equal and RPCs to be routed
+	// 50/50.
 	srv1.oobMetrics.SetQPS(10.0)
 	srv1.oobMetrics.SetCPUUtilization(1.0)
 	srv1.oobMetrics.SetEPS(0)
@@ -432,7 +434,7 @@ func (s) TestBalancer_TwoAddresses_ErrorPenalty(t *testing.T) {
 }
 
 // Tests that the blackout period causes backends to use 0 as their weight
-// until the backout period elapses.
+// (meaning to use the average weight) until the blackout period elapses.
 func (s) TestBalancer_TwoAddresses_BlackoutPeriod(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -509,7 +511,8 @@ func (s) TestBalancer_TwoAddresses_BlackoutPeriod(t *testing.T) {
 }
 
 // Tests that the weight expiration period causes backends to use 0 as their
-// weight once the expiration period elapses.
+// weight (meaning to use the average weight) once the expiration period
+// elapses.
 func (s) TestBalancer_TwoAddresses_WeightExpiration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()

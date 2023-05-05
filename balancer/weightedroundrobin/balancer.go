@@ -120,7 +120,7 @@ func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	b.resolverErr = nil
 	cfg, ok := ccs.BalancerConfig.(*lbConfig)
 	if !ok {
-		return fmt.Errorf("wrr: received nil or illegal BalancerConfig: %v", ccs.BalancerConfig)
+		return fmt.Errorf("wrr: received nil or illegal BalancerConfig (type %T): %v", ccs.BalancerConfig, ccs.BalancerConfig)
 	}
 
 	b.cfg = cfg
@@ -206,7 +206,7 @@ func (b *wrrBalancer) ResolverError(err error) {
 func (b *wrrBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	wsc := b.scMap[sc]
 	if wsc == nil {
-		b.logger.Errorf("UpdateSubConnStateChange called with an unknown SubConn: %p, %v", sc, state)
+		b.logger.Errorf("UpdateSubConnState called with an unknown SubConn: %p, %v", sc, state)
 		return
 	}
 	if b.logger.V(2) {
