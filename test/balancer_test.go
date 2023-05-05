@@ -1012,10 +1012,11 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 type producerTestBalancerBuilder struct {
 	rpcErrChan chan error
 	ctxChan    chan context.Context
+	connect    bool
 }
 
 func (bb *producerTestBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &producerTestBalancer{cc: cc, rpcErrChan: bb.rpcErrChan, ctxChan: bb.ctxChan}
+	return &producerTestBalancer{cc: cc, rpcErrChan: bb.rpcErrChan, ctxChan: bb.ctxChan, connect: bb.connect}
 }
 
 const producerTestBalancerName = "producer_test_balancer"
@@ -1026,6 +1027,7 @@ type producerTestBalancer struct {
 	cc         balancer.ClientConn
 	rpcErrChan chan error
 	ctxChan    chan context.Context
+	connect    bool
 }
 
 func (b *producerTestBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
@@ -1052,8 +1054,10 @@ func (b *producerTestBalancer) UpdateClientConnState(ccs balancer.ClientConnStat
 	default:
 	}
 
-	// Now we can connect, which will unblock the RPC above.
-	sc.Connect()
+	if b.connect {
+		// Now we can connect, which will unblock the RPC above.
+		sc.Connect()
+	}
 
 	// The stub server requires a READY picker to be reported, to unblock its
 	// Start method.  We won't make RPCs in our test, so a nil picker is okay.
@@ -1096,8 +1100,9 @@ func (s) TestBalancerProducerBlockUntilReady(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	ctxChan <- ctx
+
 	rpcErrChan := make(chan error)
-	balancer.Register(&producerTestBalancerBuilder{rpcErrChan: rpcErrChan, ctxChan: ctxChan})
+	balancer.Register(&producerTestBalancerBuilder{rpcErrChan: rpcErrChan, ctxChan: ctxChan, connect: true})
 
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
@@ -1128,7 +1133,7 @@ func (s) TestBalancerProducerHonorsContext(t *testing.T) {
 	ctxChan <- ctx
 
 	rpcErrChan := make(chan error)
-	balancer.Register(&producerTestBalancerBuilder{rpcErrChan: rpcErrChan, ctxChan: ctxChan})
+	balancer.Register(&producerTestBalancerBuilder{rpcErrChan: rpcErrChan, ctxChan: ctxChan, connect: false})
 
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
