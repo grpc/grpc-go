@@ -114,6 +114,9 @@ func (ccb *ccBalancerWrapper) updateSubConnState(sc balancer.SubConn, s connecti
 	// tearDown() on the old ac, ac.acbw (acWrapper) will be set to nil, and
 	// this function will be called with (nil, Shutdown). We don't need to call
 	// balancer method in this case.
+	//
+	// TODO: Suppress the above mentioned state change to Shutdown, so we don't
+	// have to handle it here.
 	if sc == nil {
 		return
 	}
@@ -124,9 +127,6 @@ func (ccb *ccBalancerWrapper) updateSubConnState(sc balancer.SubConn, s connecti
 
 func (ccb *ccBalancerWrapper) exitIdle() {
 	ccb.serializer.Schedule(func(_ context.Context) {
-		if ccb.cc.GetState() != connectivity.Idle {
-			return
-		}
 		ccb.balancer.ExitIdle()
 	})
 }
