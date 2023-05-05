@@ -149,7 +149,7 @@ func (ccb *ccBalancerWrapper) resolverError(err error) {
 // the graceful balancer switching process if the name does not change.
 func (ccb *ccBalancerWrapper) switchTo(name string) {
 	ccb.serializer.Schedule(func(_ context.Context) {
-		// TODO: Other languages use case-insensitive balancer registries. We should
+		// TODO: Other languages use case-sensitive balancer registries. We should
 		// switch as well. See: https://github.com/grpc/grpc-go/issues/5288.
 		if strings.EqualFold(ccb.curBalancerName, name) {
 			return
