@@ -152,18 +152,18 @@ func (a Address) Equal(o Address) bool {
 // String returns JSON formatted string representation of the address.
 func (a Address) String() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("{Addr: %v, ", a.Addr))
-	sb.WriteString(fmt.Sprintf("ServerName: %v, ", a.ServerName))
+	sb.WriteString(fmt.Sprintf("{Addr: %q, ", a.Addr))
+	sb.WriteString(fmt.Sprintf("ServerName: %q, ", a.ServerName))
 	var atrStr string
 	if a.Attributes != nil {
 		atrStr = a.Attributes.String()
+		sb.WriteString(fmt.Sprintf("Attributes: %v, ", atrStr))
 	}
-	sb.WriteString(fmt.Sprintf("Attributes: %v, ", atrStr))
 	var balAtrStr string
 	if a.BalancerAttributes != nil {
 		balAtrStr = a.BalancerAttributes.String()
+		sb.WriteString(fmt.Sprintf("BalancerAttributes: %v}", balAtrStr))
 	}
-	sb.WriteString(fmt.Sprintf("BalancerAttributes: %v}", balAtrStr))
 	return sb.String()
 }
 

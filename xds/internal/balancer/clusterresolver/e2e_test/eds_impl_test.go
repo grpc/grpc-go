@@ -364,8 +364,6 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, testClient, wantAddrs); err != nil {
 		t.Fatal(err)
 	}
-	// Locality weights are now taken into account for in
-	// wrr_locality_experimental.
 }
 
 // TestEDS_EndpointsHealth tests the cluster_resolver LB policy using an EDS

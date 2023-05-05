@@ -218,7 +218,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
+		t.Fatalf("Unexpected error from UpdateClientConnState: %v", err)
 	}
 
 	// Note that these inline strings declared as the key in Targets built from
@@ -249,7 +249,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 	cfg, err := cfgCh.Receive(ctx)
 	if err != nil {
 		// This means UpdateClientConnState on the child never got called.
-		t.Fatalf("error from cfgOrErrCh: %v", err)
+		t.Fatalf("Error from cfgOrErrCh: %v", err)
 	}
 
 	gotWtCfg, ok := cfg.(*weightedtarget.LBConfig)
@@ -259,6 +259,6 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(gotWtCfg, wantWtCfg); diff != "" {
-		t.Fatalf("child received unexpected wtCfg, diff (-got, +want): %v", diff)
+		t.Fatalf("Child received unexpected wtCfg, diff (-got, +want): %v", diff)
 	}
 }

@@ -405,7 +405,7 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 		// double validation is present because Unmarshalling and Validating are
 		// coupled into one json.Unmarshal operation). We will switch this in
 		// the future to two separate operations.
-		b.logger.Infof("emitted lbPolicy %s from xDS Client is invalid: %v", update.lbPolicy, err)
+		b.logger.Errorf("Emitted lbPolicy %s from xDS Client is invalid: %v", update.lbPolicy, err)
 		return
 	}
 	lbCfg.XDSLBPolicy = bc

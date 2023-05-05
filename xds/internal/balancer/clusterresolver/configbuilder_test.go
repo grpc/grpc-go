@@ -605,7 +605,7 @@ func assertString(f func() (string, error)) string {
 	return s
 }
 
-func testAddrWithAttrs(addrStr string, localityWeight uint32, endpointWeight uint32, priority string, lID *internal.LocalityID) resolver.Address {
+func testAddrWithAttrs(addrStr string, localityWeight, endpointWeight uint32, priority string, lID *internal.LocalityID) resolver.Address {
 	addr := resolver.Address{Addr: addrStr}
 	path := []string{priority}
 	if lID != nil {

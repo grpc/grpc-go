@@ -118,7 +118,7 @@ func (a *Attributes) String() string {
 		if str, ok := v.(interface{ String() string }); ok {
 			val = str.String()
 		}
-		sb.WriteString(fmt.Sprintf("\"%v\": \"%v\",", key, val))
+		sb.WriteString(fmt.Sprintf("%q: %q,", key, val))
 	}
 	sb.WriteString("}")
 	return sb.String()

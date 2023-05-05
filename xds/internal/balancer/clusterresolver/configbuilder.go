@@ -252,9 +252,8 @@ func dedupSortedIntSlice(a []int) []int {
 
 // priorityLocalitiesToClusterImpl takes a list of localities (with the same
 // priority), and generates a cluster impl policy config, and a list of
-// addresses with their sets their path hierarchy set to [priority-name,
-// locality-name], so priority and the xDS LB Policy know which child policy
-// each address is for.
+// addresses with their path hierarchy set to [priority-name, locality-name], so
+// priority and the xDS LB Policy know which child policy each address is for.
 func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priorityName string, mechanism DiscoveryMechanism, drops []clusterimpl.DropConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*clusterimpl.LBConfig, []resolver.Address, error) {
 	var addrs []resolver.Address
 	for _, locality := range localities {

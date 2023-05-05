@@ -310,20 +310,20 @@ func (s) TestWeightedTarget(t *testing.T) {
 	// Update the Weighted Target Balancer with an empty address list and no
 	// targets. This should cause a Transient Failure State update to the Client
 	// Conn.
-	config4, err := wtbParser.ParseConfig([]byte(`{}`))
+	emptyConfig, err := wtbParser.ParseConfig([]byte(`{}`))
 	if err != nil {
-		t.Fatalf("failed to parse balancer config: %v", err)
+		t.Fatalf("Failed to parse balancer config: %v", err)
 	}
 	if err := wtb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{},
-		BalancerConfig: config4,
+		BalancerConfig: emptyConfig,
 	}); err != nil {
-		t.Fatalf("failed to update ClientConn state: %v", err)
+		t.Fatalf("Failed to update ClientConn state: %v", err)
 	}
 
 	state := <-cc.NewStateCh
 	if state != connectivity.TransientFailure {
-		t.Fatalf("empty target update should have triggered a TF state update, got: %v", state)
+		t.Fatalf("Empty target update should have triggered a TF state update, got: %v", state)
 	}
 }
 

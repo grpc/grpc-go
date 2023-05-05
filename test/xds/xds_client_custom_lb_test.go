@@ -230,13 +230,13 @@ func (s) TestWrrLocality(t *testing.T) {
 
 			cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 			if err != nil {
-				t.Fatalf("failed to dial local test server: %v", err)
+				t.Fatalf("Failed to dial local test server: %v", err)
 			}
 			defer cc.Close()
 
 			client := testgrpc.NewTestServiceClient(cc)
 			if err := roundrobin.CheckWeightedRoundRobinRPCs(ctx, client, test.addressDistributionWant); err != nil {
-				t.Fatalf("error in expeected round robin: %v", err)
+				t.Fatalf("Error in expeected round robin: %v", err)
 			}
 		})
 	}
