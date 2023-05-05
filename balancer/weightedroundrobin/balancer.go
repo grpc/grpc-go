@@ -379,7 +379,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	i := sched.nextIndex()
 	if i < 0 || i >= len(p.subConns) {
 		// TODO: XXXXXXXXXXX REMOVE
-		return balancer.PickResult{}, fmt.Errorf("index out of bounds: %v vs %v", i, len(p.subConns))
+		return balancer.PickResult{}, fmt.Errorf("index out of bounds: %v vs %v... %p, %T, %+v", i, len(p.subConns), sched, sched, sched)
 	}
 	pickedSC := p.subConns[i]
 	pr := balancer.PickResult{SubConn: pickedSC.SubConn}
