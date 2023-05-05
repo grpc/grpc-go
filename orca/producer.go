@@ -44,7 +44,9 @@ func (*producerBuilder) Build(cci interface{}) (balancer.Producer, func()) {
 		listeners: make(map[OOBListener]struct{}),
 		backoff:   internal.DefaultBackoffFunc,
 	}
-	return p, func() {}
+	return p, func() {
+		<-p.stopped
+	}
 }
 
 var producerBuilderSingleton = &producerBuilder{}
@@ -153,20 +155,19 @@ func (p *producer) recomputeMinInterval() {
 func (p *producer) updateRunLocked() {
 	if p.stop != nil {
 		p.stop()
-		<-p.stopped
 		p.stop = nil
 	}
 	if len(p.listeners) > 0 {
 		var ctx context.Context
 		ctx, p.stop = context.WithCancel(context.Background())
 		p.stopped = make(chan struct{})
-		go p.run(ctx, p.minInterval)
+		go p.run(ctx, p.stopped, p.minInterval)
 	}
 }
 
 // run manages the ORCA OOB stream on the subchannel.
-func (p *producer) run(ctx context.Context, interval time.Duration) {
-	defer close(p.stopped)
+func (p *producer) run(ctx context.Context, done chan struct{}, interval time.Duration) {
+	defer close(done)
 
 	backoffAttempt := 0
 	backoffTimer := time.NewTimer(0)
