@@ -406,7 +406,11 @@ type weightedSubConn struct {
 	connectivityState connectivity.State
 	stopORCAListener  func()
 
-	// The following fields are accessed asynchronously and are protected by mu.
+	// The following fields are accessed asynchronously and are protected by
+	// mu.  Note that mu may not be held when calling into the stopORCAListener
+	// or when registering a new listener, as those calls require the ORCA
+	// producer mu which is held when calling the listener, and the listener
+	// holds mu.
 	mu            sync.Mutex
 	weightVal     float64
 	nonEmptySince time.Time
@@ -445,9 +449,10 @@ func (w *weightedSubConn) OnLoadReport(load *v3orcapb.OrcaLoadReport) {
 // stops/starts/restarts the ORCA OOB listener.
 func (w *weightedSubConn) updateConfig(cfg *lbConfig) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	oldCfg := w.cfg
 	w.cfg = cfg
+	w.mu.Unlock()
+
 	newPeriod := cfg.OOBReportingPeriod
 	if cfg.EnableOOBLoadReport == oldCfg.EnableOOBLoadReport &&
 		newPeriod == oldCfg.OOBReportingPeriod {
@@ -458,6 +463,7 @@ func (w *weightedSubConn) updateConfig(cfg *lbConfig) {
 	}
 	// (Optionally stop and) start the listener to use the new config's
 	// settings for OOB reporting.
+
 	if w.stopORCAListener != nil {
 		w.stopORCAListener()
 	}
@@ -473,9 +479,6 @@ func (w *weightedSubConn) updateConfig(cfg *lbConfig) {
 }
 
 func (w *weightedSubConn) updateConnectivityState(cs connectivity.State) connectivity.State {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	switch cs {
 	case connectivity.Idle:
 		// Always reconnect when idle.
@@ -488,7 +491,9 @@ func (w *weightedSubConn) updateConnectivityState(cs connectivity.State) connect
 		// after the new connection has been established, but they should be
 		// masked by new backend metric reports from the new connection by the
 		// time the blackout period ends.
+		w.mu.Lock()
 		w.nonEmptySince = time.Time{}
+		w.mu.Unlock()
 	case connectivity.Shutdown:
 		if w.stopORCAListener != nil {
 			w.stopORCAListener()
