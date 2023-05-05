@@ -155,14 +155,23 @@ type ClientStream interface {
 // If none of the above happen, a goroutine and a context will be leaked, and grpc
 // will not call the optionally-configured stats handler with a stats.End message.
 func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (ClientStream, error) {
+	if err := cc.idlenessMgr.onCallBegin(); err != nil {
+		return nil, err
+	}
+
 	// allow interceptor to see all applicable call options, which means those
 	// configured as defaults from dial option as well as per-call options
 	opts = combine(cc.dopts.callOptions, opts)
 
+	var cs ClientStream
+	var err error
 	if cc.dopts.streamInt != nil {
-		return cc.dopts.streamInt(ctx, desc, cc, method, newClientStream, opts...)
+		cs, err = cc.dopts.streamInt(ctx, desc, cc, method, newClientStream, opts...)
+	} else {
+		cs, err = newClientStream(ctx, desc, cc, method, opts...)
 	}
-	return newClientStream(ctx, desc, cc, method, opts...)
+	cc.idlenessMgr.onCallEnd()
+	return cs, err
 }
 
 // NewClientStream is a wrapper for ClientConn.NewStream.

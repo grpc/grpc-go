@@ -27,14 +27,22 @@ import (
 //
 // All errors returned by Invoke are compatible with the status package.
 func (cc *ClientConn) Invoke(ctx context.Context, method string, args, reply interface{}, opts ...CallOption) error {
+	if err := cc.idlenessMgr.onCallBegin(); err != nil {
+		return err
+	}
+
 	// allow interceptor to see all applicable call options, which means those
 	// configured as defaults from dial option as well as per-call options
 	opts = combine(cc.dopts.callOptions, opts)
 
+	var err error
 	if cc.dopts.unaryInt != nil {
-		return cc.dopts.unaryInt(ctx, method, args, reply, cc, invoke, opts...)
+		err = cc.dopts.unaryInt(ctx, method, args, reply, cc, invoke, opts...)
+	} else {
+		err = invoke(ctx, method, args, reply, cc, opts...)
 	}
-	return invoke(ctx, method, args, reply, cc, opts...)
+	cc.idlenessMgr.onCallEnd()
+	return err
 }
 
 func combine(o1 []CallOption, o2 []CallOption) []CallOption {
