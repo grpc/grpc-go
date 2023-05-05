@@ -52,7 +52,7 @@ func newScheduler(scWeights []float64, inc func() uint32) scheduler {
 		}
 	}
 	if numZero >= n-1 {
-		return &rrScheduler{numSCs: n, inc: inc}
+		return &rrScheduler{numSCs: uint32(n), inc: inc}
 	}
 	unscaledMean := sum / float64(n-numZero)
 	scalingFactor := maxWeight / max
@@ -74,7 +74,7 @@ func newScheduler(scWeights []float64, inc func() uint32) scheduler {
 	}
 
 	if allEqual {
-		return &rrScheduler{numSCs: n, inc: inc}
+		return &rrScheduler{numSCs: uint32(n), inc: inc}
 	}
 
 	logger.Infof("using edf scheduler with weights: %v", weights)
@@ -129,10 +129,10 @@ func (s *edfScheduler) nextIndex() int {
 // subconn exists.
 type rrScheduler struct {
 	inc    func() uint32
-	numSCs int
+	numSCs uint32
 }
 
 func (s *rrScheduler) nextIndex() int {
-	idx := int(s.inc())
-	return idx % s.numSCs
+	idx := s.inc()
+	return int(idx % s.numSCs)
 }
