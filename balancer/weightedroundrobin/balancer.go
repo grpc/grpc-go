@@ -155,7 +155,7 @@ func (b *wrrBalancer) updateAddresses(addrs []resolver.Address) {
 			// addr is a new address (not existing in b.subConns).
 			sc, err := b.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{})
 			if err != nil {
-				b.logger.Warningf("wrr: failed to create new SubConn for address %v: %v", addr, err)
+				b.logger.Warningf("Failed to create new SubConn for address %v: %v", addr, err)
 				continue
 			}
 			wsc = &weightedSubConn{
@@ -206,8 +206,11 @@ func (b *wrrBalancer) ResolverError(err error) {
 func (b *wrrBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	wsc := b.scMap[sc]
 	if wsc == nil {
-		b.logger.Errorf("wrr: UpdateSubConnStateChange called with an unknown SubConn: %p, %v", sc, state)
+		b.logger.Errorf("UpdateSubConnStateChange called with an unknown SubConn: %p, %v", sc, state)
 		return
+	}
+	if b.logger.V(2) {
+		logger.Infof("UpdateSubConnState(%+v, %+v)", sc, state)
 	}
 
 	cs := state.ConnectivityState
@@ -373,7 +376,12 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	// scheduler that was live when the pick started.
 	sched := *(*scheduler)(atomic.LoadPointer(&p.scheduler))
 
-	pickedSC := p.subConns[sched.nextIndex()]
+	i := sched.nextIndex()
+	if i < 0 || i >= len(p.subConns) {
+		// TODO: XXXXXXXXXXX REMOVE
+		return balancer.PickResult{}, fmt.Errorf("index out of bounds: %v vs %v", i, len(p.subConns))
+	}
+	pickedSC := p.subConns[i]
 	pr := balancer.PickResult{SubConn: pickedSC.SubConn}
 	if !p.cfg.EnableOOBLoadReport {
 		pr.Done = func(info balancer.DoneInfo) {
@@ -408,12 +416,12 @@ type weightedSubConn struct {
 
 func (w *weightedSubConn) OnLoadReport(load *v3orcapb.OrcaLoadReport) {
 	if w.logger.V(2) {
-		w.logger.Infof("wrr: received load report for subchannel %v: %v", w.SubConn, load)
+		w.logger.Infof("Received load report for subchannel %v: %v", w.SubConn, load)
 	}
 	// Update weights of this subchannel according to the reported load
 	if load.CpuUtilization == 0 || load.RpsFractional == 0 {
 		if w.logger.V(2) {
-			w.logger.Infof("wrr: ignoring empty load report for subchannel %v", w.SubConn)
+			w.logger.Infof("Ignoring empty load report for subchannel %v", w.SubConn)
 		}
 		return
 	}
@@ -424,7 +432,7 @@ func (w *weightedSubConn) OnLoadReport(load *v3orcapb.OrcaLoadReport) {
 	errorRate := load.Eps / load.RpsFractional
 	w.weightVal = load.RpsFractional / (load.CpuUtilization + errorRate*w.cfg.ErrorUtilizationPenalty)
 	if w.logger.V(2) {
-		w.logger.Infof("wrr: new weight for subchannel %v: %v", w.SubConn, w.weightVal)
+		w.logger.Infof("New weight for subchannel %v: %v", w.SubConn, w.weightVal)
 	}
 
 	w.lastUpdated = internal.TimeNow()
