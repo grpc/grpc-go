@@ -325,10 +325,10 @@ func (b *wrrBalancer) regeneratePicker() {
 // update the scheduler periodically and ensure picks are routed proportional
 // to those weights.
 type picker struct {
+	scheduler unsafe.Pointer     // *scheduler; accessed atomically
 	v         uint32             // incrementing value used by the scheduler; accessed atomically
 	cfg       *lbConfig          // active config when picker created
 	subConns  []*weightedSubConn // all READY subconns
-	scheduler unsafe.Pointer     // *scheduler; accessed atomically
 }
 
 // scWeights returns a slice containing the weights from p.subConns in the same
@@ -376,12 +376,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	// scheduler that was live when the pick started.
 	sched := *(*scheduler)(atomic.LoadPointer(&p.scheduler))
 
-	i := sched.nextIndex()
-	if i < 0 || i >= len(p.subConns) {
-		// TODO: XXXXXXXXXXX REMOVE
-		return balancer.PickResult{}, fmt.Errorf("index out of bounds: %v vs %v... %p, %T, %+v", i, len(p.subConns), sched, sched, sched)
-	}
-	pickedSC := p.subConns[i]
+	pickedSC := p.subConns[sched.nextIndex()]
 	pr := balancer.PickResult{SubConn: pickedSC.SubConn}
 	if !p.cfg.EnableOOBLoadReport {
 		pr.Done = func(info balancer.DoneInfo) {
