@@ -355,8 +355,8 @@ func toDenyCondition(condition v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition)
 
 // translatePolicy translates SDK authorization policy in JSON format to two
 // Envoy RBAC polices (deny followed by allow policy) or only one Envoy RBAC
-// allow policy. If the input policy cannot be parsed or is invalid, an error
-// will be returned.
+// allow policy. Also returns the overall policy name. If the input policy
+// cannot be parsed or is invalid, an error will be returned.
 func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, string, error) {
 	policy := &authorizationPolicy{}
 	d := json.NewDecoder(bytes.NewReader([]byte(policyStr)))

@@ -122,7 +122,7 @@ type engine struct {
 	auditCondition v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition
 }
 
-// newEngine creates an RBAC Engine based on the contents of policy. Returns a
+// newEngine creates an RBAC Engine based on the contents of a policy. Returns a
 // non-nil error if the policy is invalid.
 func newEngine(config *v3rbacpb.RBAC, policyName string) (*engine, error) {
 	a := config.GetAction()
@@ -144,11 +144,11 @@ func newEngine(config *v3rbacpb.RBAC, policyName string) (*engine, error) {
 		return nil, err
 	}
 	return &engine{
+		policyName:     policyName,
 		policies:       policies,
 		action:         a,
 		auditLoggers:   auditLoggers,
 		auditCondition: auditCondition,
-		policyName:     policyName,
 	}, nil
 }
 
@@ -163,6 +163,8 @@ func parseAuditOptions(opts *v3rbacpb.RBAC_AuditLoggingOptions) ([]audit.Logger,
 			return nil, v3rbacpb.RBAC_AuditLoggingOptions_NONE, err
 		}
 		if auditLogger == nil {
+			// This occurs when the audit logger is not registered but also
+			// marked optional
 			continue
 		}
 		auditLoggers = append(auditLoggers, auditLogger)
