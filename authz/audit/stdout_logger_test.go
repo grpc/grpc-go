@@ -50,9 +50,31 @@ func TestStdOutLogger_Log(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	expected := ` {"FullMethodName":"","Principal":"test principal","PolicyName":"test policy","MatchedRule":"","Authorized":false}`
-	if buf.String() != ("[AuthZ Audit StdOutLogger] " + time.Now().Format(time.RFC3339) + expected + "\n") {
+	expected := `{"fullMethodName":"","principal":"test principal","policyName":"test policy","matchedRule":"","authorized":false`
+	if buf.String() != (expected + ",\"timestamp\":\"" + time.Now().Format(time.RFC3339) + "\"}\n") {
 		t.Fatalf("unexpected error\nwant:%v\n got:%v", expected, buf.String())
 	}
 	os.Stdout = orig
 }
+
+//func TestStdOutLogger_LogFullMethodName(t *testing.T) {
+//	orig := os.Stdout
+//	r, w, _ := os.Pipe()
+//	os.Stdout = w
+//
+//	event := &Event{PolicyName: "test policy", Principal: "test principal", FullMethodName: "/helloworld.Greeter/SayHello"}
+//	auditLogger.Log(event)
+//
+//	w.Close()
+//	var buf bytes.Buffer
+//	_, err := io.Copy(&buf, r)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//
+//	expected := `{"fullMethodName":"","principal":"test principal","policyName":"test policy","matchedRule":"","authorized":false`
+//	if buf.String() != (expected + ",\"timestamp\":\"" + time.Now().Format(time.RFC3339) + "\"}\n") {
+//		t.Fatalf("unexpected error\nwant:%v\n got:%v", expected, buf.String())
+//	}
+//	os.Stdout = orig
+//}

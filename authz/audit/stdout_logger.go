@@ -28,17 +28,27 @@ import (
 
 var grpcLogger = grpclog.Component("authz-audit")
 
+type StdoutEvent struct {
+	FullMethodName string `json:"fullMethodName"`
+	Principal      string `json:"principal"`
+	PolicyName     string `json:"policyName"`
+	MatchedRule    string `json:"matchedRule"`
+	Authorized     bool   `json:"authorized"`
+	//Timestamp is populated using time.Now() during StdoutLogger.Log call
+	Timestamp string `json:"timestamp"`
+}
+
 type StdOutLogger struct {
 }
 
 func (logger *StdOutLogger) Log(event *Event) {
-	jsonBytes, err := json.Marshal(event)
+	jsonBytes, err := json.Marshal(convertEvent(event)) //internal structure mimicking event with annotations how to marshall to json
 	if err != nil {
 		grpcLogger.Errorf("failed to marshal AuditEvent data to JSON: %v", err)
 	}
-	message := fmt.Sprintf("[AuthZ Audit StdOutLogger] %s %v",
-		time.Now().Format(time.RFC3339), string(jsonBytes))
-	fmt.Println(message)
+	//message := fmt.Sprintf("[AuthZ Audit StdOutLogger] %s %v",
+	//	time.Now().Format(time.RFC3339), string(jsonBytes))
+	fmt.Println(string(jsonBytes)) // built in log.go
 }
 
 const (
@@ -63,4 +73,15 @@ func (StdOutLoggerBuilder) ParseLoggerConfig(config json.RawMessage) (LoggerConf
 	grpcLogger.Warningf("Config value %v ignored, "+
 		"StdOutLogger doesn't support custom configs", string(config))
 	return &StdoutLoggerConfig{}, nil
+}
+
+func convertEvent(event *Event) StdoutEvent {
+	return StdoutEvent{
+		FullMethodName: event.FullMethodName,
+		Principal:      event.Principal,
+		PolicyName:     event.PolicyName,
+		MatchedRule:    event.MatchedRule,
+		Authorized:     event.Authorized,
+		Timestamp:      time.Now().Format(time.RFC3339),
+	}
 }
