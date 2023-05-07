@@ -19,6 +19,7 @@
 package grpcsync
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -46,11 +47,14 @@ func (ts *testSubscriber) OnMessage(msg interface{}) {
 func (ts *testSubscriber) receivedMsgs() []int {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	return ts.msgs
+
+	msgs := make([]int, len(ts.msgs))
+	copy(msgs, ts.msgs)
+
+	return msgs
 }
 
 func (s) TestPubSub_PublishNoMsg(t *testing.T) {
-	// Create a new pubsub.
 	pubsub := NewPubSub()
 	defer pubsub.Stop()
 
@@ -64,52 +68,52 @@ func (s) TestPubSub_PublishNoMsg(t *testing.T) {
 	}
 }
 
-func (s) TestPutSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
-	// This flag becomes true when waiting callback is timed out.
-	isTimeout := false
-	// Create a new pubsub.
+func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 	pubsub := NewPubSub()
 
-	ts := newTestSubscriber()
-
-	pubsub.Subscribe(ts)
+	ts1 := newTestSubscriber()
+	pubsub.Subscribe(ts1)
 	wantMsgs := []int{}
 
 	const numPublished = 10
 	var wg sync.WaitGroup
 	wg.Add(2)
+	// Publish ten messages on the pubsub and ensure that they are received in order by the subscriber.
 	go func() {
 		for i := 0; i < numPublished; i++ {
 			pubsub.Publish(i)
+			wantMsgs = append(wantMsgs, i)
 		}
 		wg.Done()
 	}()
+
+	isTimeout := false
 	go func() {
 		for i := 0; i < numPublished; i++ {
 			select {
-			case <-ts.onMsgCh:
-				wantMsgs = append(wantMsgs, i)
+			case <-ts1.onMsgCh:
 			case <-time.After(defaultTestShortTimeout):
 				isTimeout = true
 			}
 		}
 		wg.Done()
 	}()
+
 	wg.Wait()
 	if isTimeout {
 		t.Fatalf("Timeout when expecting the onMessage() callback to be invoked")
 	}
-	if gotMsgs := ts.receivedMsgs(); !cmp.Equal(gotMsgs, wantMsgs) {
+	if gotMsgs := ts1.receivedMsgs(); !cmp.Equal(gotMsgs, wantMsgs) {
 		t.Fatalf("Received messages is %v, want %v", gotMsgs, wantMsgs)
 	}
 
+	// Register another subscriber and ensure that it receives the last published message.
 	ts2 := newTestSubscriber()
 	pubsub.Subscribe(ts2)
-	wantMsgs2 := []int{}
+	wantMsgs2 := []int{numPublished - 1}
 
 	select {
 	case <-ts2.onMsgCh:
-		wantMsgs2 = append(wantMsgs2, numPublished-1)
 	case <-time.After(defaultTestShortTimeout):
 		t.Fatalf("Timeout when expecting the onMessage() callback to be invoked")
 	}
@@ -117,41 +121,44 @@ func (s) TestPutSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 		t.Fatalf("Received messages is %v, want %v", gotMsgs2, wantMsgs2)
 	}
 
-	var wg2 sync.WaitGroup
-	wg2.Add(3)
+	wg.Add(3)
+	// Publish ten messages on the pubsub and ensure that they are received in order by the subscribers.
 	go func() {
 		for i := 0; i < numPublished; i++ {
 			pubsub.Publish(i)
+			wantMsgs = append(wantMsgs, i)
+			wantMsgs2 = append(wantMsgs2, i)
 		}
-		wg2.Done()
+		wg.Done()
 	}()
+	errCh := make(chan error, 1)
 	go func() {
 		for i := 0; i < numPublished; i++ {
 			select {
-			case <-ts.onMsgCh:
-				wantMsgs = append(wantMsgs, i)
+			case <-ts1.onMsgCh:
 			case <-time.After(defaultTestShortTimeout):
-				isTimeout = true
+				errCh <- fmt.Errorf("")
 			}
 		}
-		wg2.Done()
+		wg.Done()
 	}()
 	go func() {
 		for i := 0; i < numPublished; i++ {
 			select {
 			case <-ts2.onMsgCh:
-				wantMsgs2 = append(wantMsgs2, i)
 			case <-time.After(defaultTestShortTimeout):
-				isTimeout = true
+				errCh <- fmt.Errorf("")
 			}
 		}
-		wg2.Done()
+		wg.Done()
 	}()
-	wg2.Wait()
-	if isTimeout {
+	wg.Wait()
+	select {
+	case <-errCh:
 		t.Fatalf("Timeout when expecting the onMessage() callback to be invoked")
+	default:
 	}
-	if gotMsgs := ts.receivedMsgs(); !cmp.Equal(gotMsgs, wantMsgs) {
+	if gotMsgs := ts1.receivedMsgs(); !cmp.Equal(gotMsgs, wantMsgs) {
 		t.Fatalf("Received messages is %v, want %v", gotMsgs, wantMsgs)
 	}
 	if gotMsgs2 := ts2.receivedMsgs(); !cmp.Equal(gotMsgs2, wantMsgs2) {
@@ -166,7 +173,7 @@ func (s) TestPutSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 	// Ensure that the subscriber callback is not invoked as instantiated
 	// pubsub has already closed.
 	select {
-	case <-ts.onMsgCh:
+	case <-ts1.onMsgCh:
 		t.Fatalf("The callback was invoked after pubsub being stopped")
 	case <-ts2.onMsgCh:
 		t.Fatalf("The callback was invoked after pubsub being stopped")
@@ -175,16 +182,14 @@ func (s) TestPutSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 }
 
 func (s) TestPubSub_PublishMsgs_BeforeRegisterSub(t *testing.T) {
-	// Create a new pubsub.
 	pubsub := NewPubSub()
 	defer pubsub.Stop()
-
-	ts := newTestSubscriber()
 
 	pubsub.Publish(1)
 	pubsub.Publish(2)
 	pubsub.Publish(3)
 
+	ts := newTestSubscriber()
 	pubsub.Subscribe(ts)
 
 	wantMsgs := []int{3}
