@@ -20,7 +20,7 @@ package audit
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 	"time"
 
 	"google.golang.org/grpc/grpclog"
@@ -42,13 +42,11 @@ type StdOutLogger struct {
 }
 
 func (logger *StdOutLogger) Log(event *Event) {
-	jsonBytes, err := json.Marshal(convertEvent(event)) //internal structure mimicking event with annotations how to marshall to json
+	jsonBytes, err := json.Marshal(convertEvent(event))
 	if err != nil {
 		grpcLogger.Errorf("failed to marshal AuditEvent data to JSON: %v", err)
 	}
-	//message := fmt.Sprintf("[AuthZ Audit StdOutLogger] %s %v",
-	//	time.Now().Format(time.RFC3339), string(jsonBytes))
-	fmt.Println(string(jsonBytes)) // built in log.go
+	log.Println(string(jsonBytes)) // built in log.go
 }
 
 const (

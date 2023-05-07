@@ -21,9 +21,7 @@ package audit
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"log"
-	"os"
 	"testing"
 	"time"
 )
@@ -36,45 +34,37 @@ var (
 )
 
 func TestStdOutLogger_Log(t *testing.T) {
-	orig := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	log.SetFlags(0)
 
 	event := &Event{PolicyName: "test policy", Principal: "test principal"}
 	auditLogger.Log(event)
-
-	w.Close()
-	var buf bytes.Buffer
-	_, err := io.Copy(&buf, r)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	expected := `{"fullMethodName":"","principal":"test principal","policyName":"test policy","matchedRule":"","authorized":false`
 	if buf.String() != (expected + ",\"timestamp\":\"" + time.Now().Format(time.RFC3339) + "\"}\n") {
 		t.Fatalf("unexpected error\nwant:%v\n got:%v", expected, buf.String())
 	}
-	os.Stdout = orig
 }
 
-//func TestStdOutLogger_LogFullMethodName(t *testing.T) {
-//	orig := os.Stdout
-//	r, w, _ := os.Pipe()
-//	os.Stdout = w
-//
-//	event := &Event{PolicyName: "test policy", Principal: "test principal", FullMethodName: "/helloworld.Greeter/SayHello"}
-//	auditLogger.Log(event)
-//
-//	w.Close()
-//	var buf bytes.Buffer
-//	_, err := io.Copy(&buf, r)
-//	if err != nil {
-//		log.Fatal(err)
-//	}
-//
-//	expected := `{"fullMethodName":"","principal":"test principal","policyName":"test policy","matchedRule":"","authorized":false`
-//	if buf.String() != (expected + ",\"timestamp\":\"" + time.Now().Format(time.RFC3339) + "\"}\n") {
-//		t.Fatalf("unexpected error\nwant:%v\n got:%v", expected, buf.String())
-//	}
-//	os.Stdout = orig
-//}
+func TestStdOutLogger_LogAllEventFields(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+
+	event := &Event{
+		FullMethodName: "/helloworld.Greeter/SayHello",
+		Principal:      "spiffe://example.org/ns/default/sa/default/backend",
+		PolicyName:     "example-policy",
+		MatchedRule:    "dev-access",
+		Authorized:     true,
+	}
+	auditLogger.Log(event)
+
+	expected := `{"fullMethodName":"/helloworld.Greeter/SayHello",` +
+		`"principal":"spiffe://example.org/ns/default/sa/default/backend","policyName":"example-policy",` +
+		`"matchedRule":"dev-access","authorized":true`
+	if buf.String() != (expected + ",\"timestamp\":\"" + time.Now().Format(time.RFC3339) + "\"}\n") {
+		t.Fatalf("unexpected error\nwant:%v\n got:%v", expected, buf.String())
+	}
+}
