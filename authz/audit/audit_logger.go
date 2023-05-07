@@ -79,7 +79,7 @@ type Event struct {
 // logger configuration. Concrete types representing configuration of specific
 // audit loggers must embed this interface to implement it.
 type LoggerConfig interface {
-	loggerConfig()
+	LoggerConfig()
 }
 
 // Logger is the interface to be implemented by audit loggers.

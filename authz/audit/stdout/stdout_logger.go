@@ -16,13 +16,14 @@
  *
  */
 
-package audit
+package stdout
 
 import (
 	"encoding/json"
 	"log"
 	"time"
 
+	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -38,15 +39,15 @@ type StdoutEvent struct {
 	Timestamp string `json:"timestamp"`
 }
 
-type StdOutLogger struct {
+type StdoutLogger struct {
 }
 
-func (logger *StdOutLogger) Log(event *Event) {
+func (logger *StdoutLogger) Log(event *audit.Event) {
 	jsonBytes, err := json.Marshal(convertEvent(event))
 	if err != nil {
 		grpcLogger.Errorf("failed to marshal AuditEvent data to JSON: %v", err)
 	}
-	log.Println(string(jsonBytes)) // built in log.go
+	log.Println(string(jsonBytes))
 }
 
 const (
@@ -55,25 +56,25 @@ const (
 
 type StdoutLoggerConfig struct{}
 
-func (StdoutLoggerConfig) loggerConfig() {}
+func (StdoutLoggerConfig) LoggerConfig() {}
 
-type StdOutLoggerBuilder struct{}
+type StdoutLoggerBuilder struct{}
 
-func (StdOutLoggerBuilder) Name() string {
+func (StdoutLoggerBuilder) Name() string {
 	return stdName
 }
 
-func (StdOutLoggerBuilder) Build(LoggerConfig) Logger {
-	return &StdOutLogger{}
+func (StdoutLoggerBuilder) Build(audit.LoggerConfig) audit.Logger {
+	return &StdoutLogger{}
 }
 
-func (StdOutLoggerBuilder) ParseLoggerConfig(config json.RawMessage) (LoggerConfig, error) {
+func (StdoutLoggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
 	grpcLogger.Warningf("Config value %v ignored, "+
-		"StdOutLogger doesn't support custom configs", string(config))
+		"StdoutLogger doesn't support custom configs", string(config))
 	return &StdoutLoggerConfig{}, nil
 }
 
-func convertEvent(event *Event) StdoutEvent {
+func convertEvent(event *audit.Event) StdoutEvent {
 	return StdoutEvent{
 		FullMethodName: event.FullMethodName,
 		Principal:      event.Principal,

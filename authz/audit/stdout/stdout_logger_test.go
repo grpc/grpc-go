@@ -16,7 +16,7 @@
  *
  */
 
-package audit
+package stdout
 
 import (
 	"bytes"
@@ -24,21 +24,23 @@ import (
 	"log"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/authz/audit"
 )
 
 var (
 	content     = json.RawMessage(`{"name": "conf", "val": "to be ignored"}`)
-	builder     = &StdOutLoggerBuilder{}
+	builder     = &StdoutLoggerBuilder{}
 	config, _   = builder.ParseLoggerConfig(content)
 	auditLogger = builder.Build(config)
 )
 
-func TestStdOutLogger_Log(t *testing.T) {
+func TestStdoutLogger_Log(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 	log.SetFlags(0)
 
-	event := &Event{PolicyName: "test policy", Principal: "test principal"}
+	event := &audit.Event{PolicyName: "test policy", Principal: "test principal"}
 	auditLogger.Log(event)
 
 	expected := `{"fullMethodName":"","principal":"test principal","policyName":"test policy","matchedRule":"","authorized":false`
@@ -47,12 +49,12 @@ func TestStdOutLogger_Log(t *testing.T) {
 	}
 }
 
-func TestStdOutLogger_LogAllEventFields(t *testing.T) {
+func TestStdoutLogger_LogAllEventFields(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 	log.SetFlags(0)
 
-	event := &Event{
+	event := &audit.Event{
 		FullMethodName: "/helloworld.Greeter/SayHello",
 		Principal:      "spiffe://example.org/ns/default/sa/default/backend",
 		PolicyName:     "example-policy",
