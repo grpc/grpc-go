@@ -5,12 +5,15 @@ import (
 	"fmt"
 
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
+	"google.golang.org/grpc/grpclog"
 )
 
 //TODO we should have somewhere logic related to
 //1. checking if logger type is known
 //2. if yes, check if it's config is valid (LoggerBuilder.ParseLoggerConfig)
 //IMHO it belongs to json parsing layer but not here
+
+var grpcLogger = grpclog.Component("authz-audit")
 
 func ConvertXdsAuditLoggerConfig(loggerCfg *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig) (json.RawMessage, error) {
 	if loggerCfg == nil {
@@ -28,11 +31,11 @@ func ConvertXdsAuditLoggerConfig(loggerCfg *v3rbacpb.RBAC_AuditLoggingOptions_Au
 
 func ExtractXdsAuditLoggersConfig(optionsCfg *v3rbacpb.RBAC_AuditLoggingOptions) (string, error) {
 	if optionsCfg == nil {
-		fmt.Println("rbac audit logging: nil AuditLoggingOptions message provided, audit is disabled")
+		grpcLogger.Warningln("nil AuditLoggingOptions message provided, audit is disabled")
 		return "", nil
 	}
 	if optionsCfg.LoggerConfigs == nil || len(optionsCfg.LoggerConfigs) == 0 {
-		fmt.Println("rbac audit logging: no AuditLoggerConfigs found, audit is disabled")
+		grpcLogger.Warningln("no AuditLoggerConfigs found, audit is disabled")
 		return "", nil
 	}
 	validConfigs := make([]json.RawMessage, 0)
@@ -45,7 +48,6 @@ func ExtractXdsAuditLoggersConfig(optionsCfg *v3rbacpb.RBAC_AuditLoggingOptions)
 	}
 	result, err := json.Marshal(validConfigs)
 	if err != nil {
-		fmt.Println("rbac audit logging: nil AuditLoggingOptions message provided, audit is disabled")
 		return "", fmt.Errorf("rbac audit logging: json marshalling error, %v", err)
 	}
 

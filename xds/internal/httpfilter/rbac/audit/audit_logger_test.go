@@ -44,8 +44,8 @@ func TestExtractXdsAuditLoggersConfig(t *testing.T) {
 					},
 				},
 			},
-			wantJsonCfg: `[{"audit_logger":{"name":"stdout_logger","typed_config":{"type_url":"type.googleapis.com/google.protobuf.Struct"}},"is_optional":true},
-										 {"audit_logger":{"name":"clients_magic_logger","typed_config":{"type_url":"type.googleapis.com/google.protobuf.Struct"}}}]`,
+			wantJsonCfg: `[{"audit_logger":{"name":"stdout_logger","typed_config":{"type_url":"type.googleapis.com/google.protobuf.Struct"}},"is_optional":true},` +
+				`{"audit_logger":{"name":"clients_magic_logger","typed_config":{"type_url":"type.googleapis.com/google.protobuf.Struct"}}}]`,
 		},
 		"valid empty cfg": {
 			auditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{},
