@@ -199,12 +199,13 @@ func (p *producer) run(ctx context.Context, done chan struct{}, interval time.Du
 			// Unimplemented; do not retry.
 			logger.Error("Server doesn't support ORCA OOB load reporting protocol; not listening for load reports.")
 			return
-		case status.Code(err) == codes.Unavailable:
-			// TODO: this code should ideally log an error, too, but for now we
-			// receive this code when shutting down the ClientConn.  Once we
-			// can determine the state or ensure the producer is stopped before
-			// the stream ends, we can log an error when it's not a natural
-			// shutdown.
+		case status.Code(err) == codes.Unavailable, status.Code(err) == codes.Canceled:
+			// TODO: these codes should ideally log an error, too, but for now
+			// we receive them when shutting down the ClientConn (Unavailable
+			// if the stream hasn't started yet, and Canceled if it happens
+			// mid-stream).  Once we can determine the state or ensure the
+			// producer is stopped before the stream ends, we can log an error
+			// when it's not a natural shutdown.
 		default:
 			// Log all other errors.
 			logger.Error("Received unexpected stream error:", err)

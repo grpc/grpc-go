@@ -72,3 +72,10 @@ func Uint64() uint64 {
 	defer mu.Unlock()
 	return r.Uint64()
 }
+
+// Uint32 implements rand.Uint32 on the grpcrand global source.
+func Uint32() uint32 {
+	mu.Lock()
+	defer mu.Unlock()
+	return r.Uint32()
+}
