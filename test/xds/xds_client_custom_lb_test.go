@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"testing"
 
-	v3 "github.com/cncf/xds/go/xds/type/v3"
+	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
@@ -54,7 +54,6 @@ func wrrLocality(m proto.Message) *v3wrrlocalitypb.WrrLocality {
 			Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 				{
 					TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-						Name:        "what is this used for?",
 						TypedConfig: testutils.MarshalAny(m),
 					},
 				},
@@ -72,7 +71,6 @@ func clusterWithLBConfiguration(clusterName, edsServiceName string, secLevel e2e
 		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 			{
 				TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-					Name:        "noop name",
 					TypedConfig: testutils.MarshalAny(m),
 				},
 			},
@@ -86,7 +84,7 @@ func clusterWithLBConfiguration(clusterName, edsServiceName string, secLevel e2e
 // be passed 5 ports, and the first two ports will be put in the first locality,
 // and the last three will be put in the second locality. It also configures the
 // proto message passed in as the Locality + Endpoint picking policy in CDS.
-func clientResourcesNewFieldSpecifiedAndPortsInMultipleLocalities2(params e2e.ResourceParams, ports []uint32, m proto.Message) e2e.UpdateOptions {
+func clientResourcesNewFieldSpecifiedAndPortsInMultipleLocalities(params e2e.ResourceParams, ports []uint32, m proto.Message) e2e.UpdateOptions {
 	routeConfigName := "route-" + params.DialTarget
 	clusterName := "cluster-" + params.DialTarget
 	endpointsName := "endpoints-" + params.DialTarget
@@ -95,16 +93,18 @@ func clientResourcesNewFieldSpecifiedAndPortsInMultipleLocalities2(params e2e.Re
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(params.DialTarget, routeConfigName)},
 		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, params.DialTarget, clusterName)},
 		Clusters:  []*v3clusterpb.Cluster{clusterWithLBConfiguration(clusterName, endpointsName, params.SecLevel, m)},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.EndpointResourceWithOptionsMultipleLocalities(e2e.EndpointOptions{
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 			ClusterName: endpointsName,
 			Host:        params.Host,
-			PortsInLocalities: [][]uint32{
-				{ports[0], ports[1]},
-				{ports[2], ports[3], ports[4]},
-			},
-			LocalityWeights: []uint32{
-				1,
-				2,
+			Localities: []e2e.LocalityOptions{
+				{
+					Ports:  []uint32{ports[0], ports[1]},
+					Weight: 1,
+				},
+				{
+					Ports:  []uint32{ports[2], ports[3], ports[4]},
+					Weight: 2,
+				},
 			},
 		})},
 	}
@@ -123,8 +123,6 @@ func (s) TestWrrLocality(t *testing.T) {
 		envconfig.XDSCustomLBPolicy = oldCustomLBSupport
 	}()
 
-	managementServer, nodeID, _, r, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
 	backend1 := stubserver.StartTestService(t, nil)
 	port1 := testutils.ParsePort(t, backend1.Address)
 	defer backend1.Stop()
@@ -202,7 +200,7 @@ func (s) TestWrrLocality(t *testing.T) {
 		// (e.g. Address 1 for locality 1, and Address 3 for locality 2).
 		{
 			name: "custom_lb_child_pick_first",
-			wrrLocalityConfiguration: wrrLocality(&v3.TypedStruct{
+			wrrLocalityConfiguration: wrrLocality(&v3xdsxdstypepb.TypedStruct{
 				TypeUrl: "type.googleapis.com/pick_first",
 				Value:   &structpb.Struct{},
 			}),
@@ -215,7 +213,9 @@ func (s) TestWrrLocality(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			resources := clientResourcesNewFieldSpecifiedAndPortsInMultipleLocalities2(e2e.ResourceParams{
+			managementServer, nodeID, _, r, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+			defer cleanup()
+			resources := clientResourcesNewFieldSpecifiedAndPortsInMultipleLocalities(e2e.ResourceParams{
 				DialTarget: serviceName,
 				NodeID:     nodeID,
 				Host:       "localhost",
@@ -236,7 +236,7 @@ func (s) TestWrrLocality(t *testing.T) {
 
 			client := testgrpc.NewTestServiceClient(cc)
 			if err := roundrobin.CheckWeightedRoundRobinRPCs(ctx, client, test.addressDistributionWant); err != nil {
-				t.Fatalf("Error in expeected round robin: %v", err)
+				t.Fatalf("Error in expected round robin: %v", err)
 			}
 		})
 	}

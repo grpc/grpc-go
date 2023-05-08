@@ -112,9 +112,14 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 	// drops all RPCs, but with no change in the load reporting server config.
 	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{
 		e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
-			ClusterName:  "endpoints-" + serviceName,
-			Host:         "localhost",
-			Ports:        []uint32{testutils.ParsePort(t, server.Address)},
+			ClusterName: "endpoints-" + serviceName,
+			Host:        "localhost",
+			Localities: []e2e.LocalityOptions{
+				{
+					Ports:  []uint32{testutils.ParsePort(t, server.Address)},
+					Weight: 1,
+				},
+			},
 			DropPercents: map[string]int{"test-drop-everything": 100},
 		}),
 	}

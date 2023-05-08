@@ -178,24 +178,21 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 	addr1 := resolver.Address{
 		Addr: "locality-1",
 	}
-
-	lID := internal.LocalityID{
+	addr1 = internal.SetLocalityID(addr1, internal.LocalityID{
 		Region:  "region-1",
 		Zone:    "zone-1",
 		SubZone: "subzone-1",
-	}
-	addr1 = internal.SetLocalityID(addr1, lID)
+	})
 	addr1 = SetAddrInfo(addr1, AddrInfo{LocalityWeight: 2})
 
 	addr2 := resolver.Address{
 		Addr: "locality-2",
 	}
-	lID2 := internal.LocalityID{
+	addr2 = internal.SetLocalityID(addr2, internal.LocalityID{
 		Region:  "region-2",
 		Zone:    "zone-2",
 		SubZone: "subzone-2",
-	}
-	addr2 = internal.SetLocalityID(addr2, lID2)
+	})
 	addr2 = SetAddrInfo(addr2, AddrInfo{LocalityWeight: 1})
 	addrs := []resolver.Address{addr1, addr2}
 

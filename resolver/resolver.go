@@ -154,15 +154,11 @@ func (a Address) String() string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("{Addr: %q, ", a.Addr))
 	sb.WriteString(fmt.Sprintf("ServerName: %q, ", a.ServerName))
-	var atrStr string
 	if a.Attributes != nil {
-		atrStr = a.Attributes.String()
-		sb.WriteString(fmt.Sprintf("Attributes: %v, ", atrStr))
+		sb.WriteString(fmt.Sprintf("Attributes: %v, ", a.Attributes.String()))
 	}
-	var balAtrStr string
 	if a.BalancerAttributes != nil {
-		balAtrStr = a.BalancerAttributes.String()
-		sb.WriteString(fmt.Sprintf("BalancerAttributes: %v", balAtrStr))
+		sb.WriteString(fmt.Sprintf("BalancerAttributes: %v", a.BalancerAttributes.String()))
 	}
 	sb.WriteString("}")
 	return sb.String()
