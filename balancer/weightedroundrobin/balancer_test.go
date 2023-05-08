@@ -161,11 +161,12 @@ func svcConfig(t *testing.T, wrrCfg iwrr.LBConfig) string {
 // reporting doesn't affect routing at all.
 func (s) TestBalancer_OneAddress(t *testing.T) {
 	testCases := []struct {
-		rt reportType
+		rt  reportType
+		cfg iwrr.LBConfig
 	}{
-		{rt: reportNone},
-		{rt: reportCall},
-		{rt: reportOOB},
+		{rt: reportNone, cfg: perCallConfig},
+		{rt: reportCall, cfg: perCallConfig},
+		{rt: reportOOB, cfg: oobConfig},
 	}
 
 	for _, tc := range testCases {
@@ -175,7 +176,7 @@ func (s) TestBalancer_OneAddress(t *testing.T) {
 
 			srv := startServer(t, tc.rt)
 
-			sc := svcConfig(t, perCallConfig)
+			sc := svcConfig(t, tc.cfg)
 			if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
 				t.Fatalf("Error starting client: %v", err)
 			}
