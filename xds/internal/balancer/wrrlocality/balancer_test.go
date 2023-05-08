@@ -131,33 +131,21 @@ func (s) TestParseConfig(t *testing.T) {
 	}
 }
 
-func setup(t *testing.T) (*wrrLocalityBalancer, func()) {
-	t.Helper()
-	builder := balancer.Get(Name)
-	if builder == nil {
-		t.Fatalf("balancer.Get(%q) returned nil", Name)
-	}
-	tcc := testutils.NewTestClientConn(t)
-	wrrL := builder.Build(tcc, balancer.BuildOptions{})
-	return wrrL.(*wrrLocalityBalancer), wrrL.Close
-}
-
 // TestUpdateClientConnState tests the UpdateClientConnState method of the
 // wrr_locality_experimental balancer. This UpdateClientConn operation should
 // take the localities and their weights in the addresses passed in, alongside
-// the endpoint picking policy defined in the Balancer Config specified and
-// construct a weighted target configuration corresponding to these inputs.
+// the endpoint picking policy defined in the Balancer Config and construct a
+// weighted target configuration corresponding to these inputs.
 func (s) TestUpdateClientConnState(t *testing.T) {
+	// Configure the stub balancer defined below as the child policy of
+	// wrrLocalityBalancer.
 	cfgCh := testutils.NewChannel()
 	oldWeightedTargetName := weightedTargetName
 	defer func() {
 		weightedTargetName = oldWeightedTargetName
 	}()
-	// Overwrite the weighted target name to have wrrLocalityBalancer to pull
-	// the mock balancer defined below from the balancer registry to be it's
-	// child.
-	weightedTargetName = "mock_weighted_target"
-	stub.Register("mock_weighted_target", stub.BalancerFuncs{
+	weightedTargetName = "fake_weighted_target"
+	stub.Register("fake_weighted_target", stub.BalancerFuncs{
 		ParseConfig: func(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			var cfg weightedtarget.LBConfig
 			if err := json.Unmarshal(c, &cfg); err != nil {
@@ -175,14 +163,19 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 		},
 	})
 
-	wrrL, close := setup(t)
-	defer close()
+	builder := balancer.Get(Name)
+	if builder == nil {
+		t.Fatalf("balancer.Get(%q) returned nil", Name)
+	}
+	tcc := testutils.NewTestClientConn(t)
+	bal := builder.Build(tcc, balancer.BuildOptions{})
+	defer bal.Close()
+	wrrL := bal.(*wrrLocalityBalancer)
 
 	// Create the addresses with two localities with certain locality weights.
-	// This represents what the addresses the wrr_locality balancer will receive
-	// in UpdateClientConnState.
-	var addrs []resolver.Address
-	addr := resolver.Address{
+	// This represents what addresses the wrr_locality balancer will receive in
+	// UpdateClientConnState.
+	addr1 := resolver.Address{
 		Addr: "locality-1",
 	}
 
@@ -191,9 +184,8 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 		Zone:    "zone-1",
 		SubZone: "subzone-1",
 	}
-	addr = internal.SetLocalityID(addr, lID)
-	addr = SetAddrInfo(addr, AddrInfo{LocalityWeight: 2})
-	addrs = append(addrs, addr)
+	addr1 = internal.SetLocalityID(addr1, lID)
+	addr1 = SetAddrInfo(addr1, AddrInfo{LocalityWeight: 2})
 
 	addr2 := resolver.Address{
 		Addr: "locality-2",
@@ -205,7 +197,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 	}
 	addr2 = internal.SetLocalityID(addr2, lID2)
 	addr2 = SetAddrInfo(addr2, AddrInfo{LocalityWeight: 1})
-	addrs = append(addrs, addr2)
+	addrs := []resolver.Address{addr1, addr2}
 
 	err := wrrL.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
@@ -248,17 +240,16 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 	defer cancel()
 	cfg, err := cfgCh.Receive(ctx)
 	if err != nil {
-		// This means UpdateClientConnState on the child never got called.
-		t.Fatalf("Error from cfgOrErrCh: %v", err)
+		t.Fatalf("No signal received from UpdateClientConnState() on the child: %v", err)
 	}
 
 	gotWtCfg, ok := cfg.(*weightedtarget.LBConfig)
 	if !ok {
 		// Shouldn't happen - only sends a config on this channel.
-		t.Fatalf("Unexpected config type received from channel %T", gotWtCfg)
+		t.Fatalf("Unexpected config type: %T", gotWtCfg)
 	}
 
 	if diff := cmp.Diff(gotWtCfg, wantWtCfg); diff != "" {
-		t.Fatalf("Child received unexpected wtCfg, diff (-got, +want): %v", diff)
+		t.Fatalf("Child received unexpected config, diff (-got, +want): %v", diff)
 	}
 }

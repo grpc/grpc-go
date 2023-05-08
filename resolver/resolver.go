@@ -162,8 +162,9 @@ func (a Address) String() string {
 	var balAtrStr string
 	if a.BalancerAttributes != nil {
 		balAtrStr = a.BalancerAttributes.String()
-		sb.WriteString(fmt.Sprintf("BalancerAttributes: %v}", balAtrStr))
+		sb.WriteString(fmt.Sprintf("BalancerAttributes: %v", balAtrStr))
 	}
+	sb.WriteString("}")
 	return sb.String()
 }
 

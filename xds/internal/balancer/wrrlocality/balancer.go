@@ -80,8 +80,8 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		return nil
 	}
 	wrrL := &wrrLocalityBalancer{
-		child:        wtb,
-		configParser: wtbCfgParser,
+		child:       wtb,
+		childParser: wtbCfgParser,
 	}
 
 	wrrL.logger = prefixLogger(wrrL)
@@ -137,13 +137,12 @@ func getAddrInfo(addr resolver.Address) (AddrInfo, bool) {
 // specifying the weighted target child balancer and locality weight
 // information.
 type wrrLocalityBalancer struct {
-	// child will be a weighted target balancer, and this balancer will build
-	// configuration for this child. Thus, build it at wrrLocalityBalancer build
-	// time, and configure it once wrrLocalityBalancer received configurations.
-	// Other balancer operations you pass through.
+	// child will be a weighted target balancer, and will be built it at
+	// wrrLocalityBalancer build time. Other than preparing configuration, other
+	// balancer operations are simply pass through.
 	child balancer.Balancer
 
-	configParser balancer.ConfigParser
+	childParser balancer.ConfigParser
 
 	logger *grpclog.PrefixLogger
 }
@@ -151,7 +150,7 @@ type wrrLocalityBalancer struct {
 func (b *wrrLocalityBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	lbCfg, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
-		b.logger.Errorf("received config with unexpected type %T: %v", s.BalancerConfig, s.BalancerConfig)
+		b.logger.Errorf("Received config with unexpected type %T: %v", s.BalancerConfig, s.BalancerConfig)
 		return balancer.ErrBadResolverState
 	}
 
@@ -161,17 +160,16 @@ func (b *wrrLocalityBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 		// shouldn't happen though (this attribute that is set actually gets
 		// used to build localities in the first place), and thus don't error
 		// out, and just build a weighted target with undefined behavior.
-		locality := internal.GetLocalityID(addr)
-		localityString, err := locality.ToString()
+		locality, err := internal.GetLocalityID(addr).ToString()
 		if err != nil {
 			// Should never happen.
-			logger.Infof("failed to marshal LocalityID: %v, skipping this locality in weighted target")
+			logger.Errorf("Failed to marshal LocalityID: %v, skipping this locality in weighted target")
 		}
 		ai, ok := getAddrInfo(addr)
 		if !ok {
 			return fmt.Errorf("addr: %v is misisng locality weight information", addr)
 		}
-		weightedTargets[localityString] = weightedtarget.Target{Weight: ai.LocalityWeight, ChildPolicy: lbCfg.ChildPolicy}
+		weightedTargets[locality] = weightedtarget.Target{Weight: ai.LocalityWeight, ChildPolicy: lbCfg.ChildPolicy}
 	}
 	wtCfg := &weightedtarget.LBConfig{Targets: weightedTargets}
 	wtCfgJSON, err := json.Marshal(wtCfg)
@@ -179,14 +177,14 @@ func (b *wrrLocalityBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 		// Shouldn't happen.
 		return fmt.Errorf("error marshalling prepared wtCfg: %v", wtCfg)
 	}
-	var scLBCfg serviceconfig.LoadBalancingConfig
-	if scLBCfg, err = b.configParser.ParseConfig(wtCfgJSON); err != nil {
+	var sc serviceconfig.LoadBalancingConfig
+	if sc, err = b.childParser.ParseConfig(wtCfgJSON); err != nil {
 		return fmt.Errorf("config generated %v by wrr_locality_experimental is invalid: %v", wtCfgJSON, err)
 	}
 
 	return b.child.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  s.ResolverState,
-		BalancerConfig: scLBCfg,
+		BalancerConfig: sc,
 	})
 }
 

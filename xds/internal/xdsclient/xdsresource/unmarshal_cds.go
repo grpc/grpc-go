@@ -81,7 +81,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	var err error
 	switch cluster.GetLbPolicy() {
 	case v3clusterpb.Cluster_ROUND_ROBIN:
-		lbPolicy = []byte(fmt.Sprintf(`[{%q: {"childPolicy": [{"round_robin": {}}]}}]`, "xds_wrr_locality_experimental"))
+		lbPolicy = []byte(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`)
 	case v3clusterpb.Cluster_RING_HASH:
 		if !envconfig.XDSRingHash {
 			return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
@@ -101,7 +101,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		}
 
 		rhLBCfg := []byte(fmt.Sprintf("{\"minRingSize\": %d, \"maxRingSize\": %d}", minSize, maxSize))
-		lbPolicy = []byte(fmt.Sprintf(`[{%q: %s}]`, "ring_hash_experimental", rhLBCfg))
+		lbPolicy = []byte(fmt.Sprintf(`[{"ring_hash_experimental": %s}]`, rhLBCfg))
 	default:
 		return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
