@@ -16,6 +16,8 @@
  *
  */
 
+// Package stdout contains a Stdout implementation of audit logging interface
+// The Stdoutlogger prints the audit.Event using log.go in json format
 package stdout
 
 import (
@@ -29,7 +31,7 @@ import (
 
 var grpcLogger = grpclog.Component("authz-audit")
 
-type StdoutEvent struct {
+type stdoutEvent struct {
 	FullMethodName string `json:"fullMethodName"`
 	Principal      string `json:"principal"`
 	PolicyName     string `json:"policyName"`
@@ -39,9 +41,11 @@ type StdoutEvent struct {
 	Timestamp string `json:"timestamp"`
 }
 
+// Stdout implementation of audit.Logger
 type StdoutLogger struct {
 }
 
+// Stdout implementation of audit.Logger.Log
 func (logger *StdoutLogger) Log(event *audit.Event) {
 	jsonBytes, err := json.Marshal(convertEvent(event))
 	if err != nil {
@@ -54,28 +58,39 @@ const (
 	stdName = "stdout"
 )
 
+// Stdout implementation of audit.LoggerConfig
+// Since the logger doesn't support custom configs, it's a no-op one
 type StdoutLoggerConfig struct{}
 
+// No-op implementation of audit.LoggerConfig
 func (StdoutLoggerConfig) LoggerConfig() {}
 
+// Stdout implementation of audit.LoggerBuilder
 type StdoutLoggerBuilder struct{}
 
+// Stdout implementation of audit.LoggerBuilder.Name
 func (StdoutLoggerBuilder) Name() string {
 	return stdName
 }
 
+// Stdout implementation of audit.LoggerBuilder.Build
+// LoggerConfig is ignored so it always returns default StdoutLogger
 func (StdoutLoggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 	return &StdoutLogger{}
 }
 
+// Stdout implementation of audit.LoggerBuilder.ParseLoggerConfig
+// Passed value is ignored but warning is printed
 func (StdoutLoggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
-	grpcLogger.Warningf("Config value %v ignored, "+
-		"StdoutLogger doesn't support custom configs", string(config))
+	if config != nil {
+		grpcLogger.Warningf("Config value %v ignored, "+
+			"StdoutLogger doesn't support custom configs", string(config))
+	}
 	return &StdoutLoggerConfig{}, nil
 }
 
-func convertEvent(event *audit.Event) StdoutEvent {
-	return StdoutEvent{
+func convertEvent(event *audit.Event) stdoutEvent {
+	return stdoutEvent{
 		FullMethodName: event.FullMethodName,
 		Principal:      event.Principal,
 		PolicyName:     event.PolicyName,

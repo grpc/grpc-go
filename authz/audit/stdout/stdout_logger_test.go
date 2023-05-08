@@ -35,6 +35,15 @@ var (
 	auditLogger = builder.Build(config)
 )
 
+func TestStdoutLoggerBuilder_NilConfig(t *testing.T) {
+	builder = &StdoutLoggerBuilder{}
+	config, err := builder.ParseLoggerConfig(nil)
+	if err != nil {
+		t.Fatalf("unexpected error\n%v", err)
+	}
+	auditLogger = builder.Build(config)
+}
+
 func TestStdoutLogger_Log(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
