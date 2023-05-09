@@ -1888,7 +1888,7 @@ func createUDPATypedStruct(t *testing.T, in map[string]interface{}, name string)
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("createUDPATypedStructFailed during structpb.NewStruct: %v", err)
 	}
 	typedURL := ""
 	if name != "" {
@@ -1900,7 +1900,7 @@ func createUDPATypedStruct(t *testing.T, in map[string]interface{}, name string)
 	}
 	customConfig, err := anypb.New(typedStruct)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("createUDPATypedStructFailed during anypb.New: %v", err)
 	}
 	return customConfig
 }
@@ -1910,7 +1910,7 @@ func createXDSTypedStruct(t *testing.T, in map[string]interface{}, name string) 
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("createXDSTypedStructFailed during structpb.NewStruct: %v", err)
 	}
 	typedStruct := &v3xdsxdstypepb.TypedStruct{
 		TypeUrl: typeURLPrefix + name,
@@ -1918,7 +1918,7 @@ func createXDSTypedStruct(t *testing.T, in map[string]interface{}, name string) 
 	}
 	customConfig, err := anypb.New(typedStruct)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("createXDSTypedStructFailed during anypb.New: %v", err)
 	}
 	return customConfig
 }
