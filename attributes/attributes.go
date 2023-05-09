@@ -110,19 +110,8 @@ func (a *Attributes) Equal(o *Attributes) bool {
 func (a *Attributes) String() string {
 	var sb strings.Builder
 	sb.WriteString("{")
-	var firstKey, firstVal string
-	var firstDone bool
+	first := true
 	for k, v := range a.m {
-		if !firstDone {
-			firstDone = true
-			if str, ok := k.(interface{ String() string }); ok {
-				firstKey = str.String()
-			}
-			if str, ok := v.(interface{ String() string }); ok {
-				firstVal = str.String()
-			}
-			continue
-		}
 		var key, val string
 		if str, ok := k.(interface{ String() string }); ok {
 			key = str.String()
@@ -130,9 +119,12 @@ func (a *Attributes) String() string {
 		if str, ok := v.(interface{ String() string }); ok {
 			val = str.String()
 		}
+		if !first {
+			sb.WriteString(", ")
+		}
 		sb.WriteString(fmt.Sprintf("%q: %q, ", key, val))
+		first = false
 	}
-	sb.WriteString(fmt.Sprintf("%q: %q", firstKey, firstVal))
 	sb.WriteString("}")
 	return sb.String()
 }
