@@ -23,7 +23,6 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	"google.golang.org/grpc/authz/audit"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -79,7 +78,7 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 			loggerConfig: &v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 				AuditLogger: &v3corepb.TypedExtensionConfig{
 					Name:        "TestAuditLoggerCustomConfig",
-					TypedConfig: createUDPATypedStruct(t, map[string]interface{}{"abc": "BADVALUE", "xyz": "123"}, "TestAuditLoggerCustomConfig")},
+					TypedConfig: createUDPATypedStruct(t, map[string]interface{}{"abc": "BADVALUE", "xyz": "123"}, "fail to parse custom config_TestAuditLoggerCustomConfig")},
 				IsOptional: false,
 			},
 			expectedError: "AuditLogger custom config could not be parsed",
@@ -89,7 +88,7 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 			loggerConfig: &v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 				AuditLogger: &v3corepb.TypedExtensionConfig{
 					Name:        "UnregisteredLogger",
-					TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "UnregisteredLogger"),
+					TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "No registered logger but optional passes_UnregisteredLogger"),
 				},
 				IsOptional: true,
 			},
@@ -98,9 +97,9 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			b := TestAuditLoggerCustomConfigBuilder{}
+			b := TestAuditLoggerCustomConfigBuilder{testName: test.name}
 			audit.RegisterLoggerBuilder(&b)
-			defer internal.UnregisterAuditLoggerBuilderForTesting(b.Name())
+			// defer internal.UnregisterAuditLoggerBuilderForTesting(b.Name())
 			logger, err := buildLogger(test.loggerConfig)
 			if err != nil && !strings.HasPrefix(err.Error(), test.expectedError) {
 				t.Fatalf("expected error: %v. got error: %v", test.expectedError, err)

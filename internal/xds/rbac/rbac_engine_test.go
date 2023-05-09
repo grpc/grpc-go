@@ -40,7 +40,6 @@ import (
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -454,7 +453,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "SimpleAuditLogger_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -482,7 +481,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerCustomConfig",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{"abc": 123, "xyz": "123"}, "TestAuditLoggerCustomConfig")},
+								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{"abc": 123, "xyz": "123"}, "AuditLoggerCustomConfig_TestAuditLoggerCustomConfig")},
 								IsOptional: false,
 							},
 						},
@@ -511,7 +510,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerCustomConfig",
-								TypedConfig: createXDSTypedStruct(t, map[string]interface{}{"abc": 123, "xyz": "123"}, "TestAuditLoggerCustomConfig")},
+								TypedConfig: createXDSTypedStruct(t, map[string]interface{}{"abc": 123, "xyz": "123"}, "AuditLoggerCustomConfigXdsTypedStruct_TestAuditLoggerCustomConfig")},
 								IsOptional: false,
 							},
 						},
@@ -540,7 +539,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "UnsupportedLogger",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "UnsupportedLogger")},
+								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "Missing Optional AuditLogger doesn't fail_UnsupportedLogger")},
 								IsOptional: true,
 							},
 						},
@@ -568,7 +567,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "UnsupportedLogger",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "UnsupportedLogger")},
+								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "Missing Non-Optional AuditLogger fails_UnsupportedLogger")},
 								IsOptional: false,
 							},
 						},
@@ -626,7 +625,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerCustomConfig",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{"abc": "BADVALUE", "xyz": "123"}, "TestAuditLoggerCustomConfig")},
+								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{"abc": "BADVALUE", "xyz": "123"}, "Cannot_parse_bad_CustomConfig_TestAuditLoggerCustomConfig")},
 								IsOptional: false,
 							},
 						},
@@ -667,12 +666,12 @@ func (s) TestNewChainEngine(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			b := TestAuditLoggerBufferBuilder{}
+			b := TestAuditLoggerBufferBuilder{testName: test.name}
 			audit.RegisterLoggerBuilder(&b)
-			b2 := TestAuditLoggerCustomConfigBuilder{}
+			b2 := TestAuditLoggerCustomConfigBuilder{testName: test.name}
 			audit.RegisterLoggerBuilder(&b2)
-			defer internal.UnregisterAuditLoggerBuilderForTesting(b.Name())
-			defer internal.UnregisterAuditLoggerBuilderForTesting(b2.Name())
+			// defer internal.UnregisterAuditLoggerBuilderForTesting(b.Name())
+			// defer internal.UnregisterAuditLoggerBuilderForTesting(b2.Name())
 			if _, err := NewChainEngine(test.policies, test.policyName); (err != nil) != test.wantErr {
 				t.Fatalf("NewChainEngine(%+v) returned err: %v, wantErr: %v", test.policies, err, test.wantErr)
 			}
@@ -1251,7 +1250,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_ON_ALLOW_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1274,7 +1273,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_ON_ALLOW_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1372,7 +1371,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_ON_DENY_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1395,7 +1394,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_ON_DENY_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1511,7 +1510,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_NONE_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1534,7 +1533,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_NONE_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1612,7 +1611,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_ON_DENY_AND_ALLOW_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1635,7 +1634,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_ON_DENY_AND_ALLOW_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1727,12 +1726,17 @@ func (s) TestChainEngine(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			b := TestAuditLoggerBufferBuilder{}
+			b := TestAuditLoggerBufferBuilder{testName: test.name}
 			audit.RegisterLoggerBuilder(&b)
-			b2 := TestAuditLoggerCustomConfigBuilder{}
+			b2 := TestAuditLoggerCustomConfigBuilder{testName: test.name}
 			audit.RegisterLoggerBuilder(&b2)
-			defer internal.UnregisterAuditLoggerBuilderForTesting(b.Name())
-			defer internal.UnregisterAuditLoggerBuilderForTesting(b2.Name())
+			// defer internal.UnregisterAuditLoggerBuilderForTesting(b.Name())
+			// defer internal.UnregisterAuditLoggerBuilderForTesting(b2.Name())
+			// for _, rbacConfig := range test.rbacConfigs {
+			// 	for _, loggerConfig := range rbacConfig.GetAuditLoggingOptions().GetLoggerConfigs() {
+			// 		loggerConfig.GetAuditLogger().GetTypedConfig().GetValue().  = test.name + "_" + loggerConfig.GetAuditLogger().GetTypedConfig().GetTypeUrl()
+			// 	}
+			// }
 
 			// Instantiate the chainedRBACEngine with different configurations that are
 			// interesting to test and to query.
@@ -1832,6 +1836,7 @@ func (logger *TestAuditLoggerBuffer) Log(e *audit.Event) {
 // Builds TestAuditLoggerBuffer
 type TestAuditLoggerBufferBuilder struct {
 	auditEvents []*audit.Event
+	testName    string
 }
 
 // The required config for TestAuditLoggerBuffer
@@ -1839,16 +1844,16 @@ type TestAuditLoggerBufferConfig struct {
 	audit.LoggerConfig
 }
 
-func (builder *TestAuditLoggerBufferBuilder) ParseLoggerConfig(configJSON json.RawMessage) (config audit.LoggerConfig, err error) {
+func (b *TestAuditLoggerBufferBuilder) ParseLoggerConfig(configJSON json.RawMessage) (config audit.LoggerConfig, err error) {
 	return TestAuditLoggerBufferConfig{}, nil
 }
 
-func (builder *TestAuditLoggerBufferBuilder) Build(config audit.LoggerConfig) audit.Logger {
-	return &TestAuditLoggerBuffer{auditEvents: &builder.auditEvents}
+func (b *TestAuditLoggerBufferBuilder) Build(config audit.LoggerConfig) audit.Logger {
+	return &TestAuditLoggerBuffer{auditEvents: &b.auditEvents}
 }
 
-func (builder *TestAuditLoggerBufferBuilder) Name() string {
-	return "TestAuditLoggerBuffer"
+func (b *TestAuditLoggerBufferBuilder) Name() string {
+	return b.testName + "_TestAuditLoggerBuffer"
 }
 
 // An audit logger to test using a custom config
@@ -1858,6 +1863,7 @@ func (logger *TestAuditLoggerCustomConfig) Log(*audit.Event) {}
 
 // Build TestAuditLoggerCustomConfig
 type TestAuditLoggerCustomConfigBuilder struct {
+	testName string
 }
 
 // The custom config for the TestAuditLoggerCustomConfig logger
@@ -1869,7 +1875,7 @@ type TestAuditLoggerCustomConfigConfig struct {
 
 // Parses TestAuditLoggerCustomConfigConfig
 // Hard-coded to match with it's test case above
-func (builder TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJSON json.RawMessage) (audit.LoggerConfig, error) {
+func (b TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJSON json.RawMessage) (audit.LoggerConfig, error) {
 	c := TestAuditLoggerCustomConfigConfig{}
 	err := json.Unmarshal(configJSON, &c)
 	if err != nil {
@@ -1878,12 +1884,12 @@ func (builder TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJSON j
 	return c, nil
 }
 
-func (builder *TestAuditLoggerCustomConfigBuilder) Build(config audit.LoggerConfig) audit.Logger {
+func (b *TestAuditLoggerCustomConfigBuilder) Build(config audit.LoggerConfig) audit.Logger {
 	return &TestAuditLoggerCustomConfig{}
 }
 
-func (builder *TestAuditLoggerCustomConfigBuilder) Name() string {
-	return "TestAuditLoggerCustomConfig"
+func (b *TestAuditLoggerCustomConfigBuilder) Name() string {
+	return b.testName + "_TestAuditLoggerCustomConfig"
 }
 
 // Builds custom configs for audit logger RBAC protos
