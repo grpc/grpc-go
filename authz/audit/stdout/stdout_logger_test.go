@@ -25,7 +25,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/authz/audit"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 var (
@@ -35,6 +37,47 @@ var (
 	auditLogger = builder.Build(config)
 )
 
+func Test(t *testing.T) {
+	tests := map[string]struct {
+		event       *audit.Event
+		wantMessage string
+		wantErr     string
+	}{
+		"few fields": {
+			event:       &audit.Event{PolicyName: "test policy", Principal: "test principal"},
+			wantMessage: `{"fullMethodName":"","principal":"test principal","policyName":"test policy","matchedRule":"","authorized":false`,
+		},
+		"all fields": {
+			event: &audit.Event{
+				FullMethodName: "/helloworld.Greeter/SayHello",
+				Principal:      "spiffe://example.org/ns/default/sa/default/backend",
+				PolicyName:     "example-policy",
+				MatchedRule:    "dev-access",
+				Authorized:     true,
+			},
+			wantMessage: `{"fullMethodName":"/helloworld.Greeter/SayHello",` +
+				`"principal":"spiffe://example.org/ns/default/sa/default/backend","policyName":"example-policy",` +
+				`"matchedRule":"dev-access","authorized":true`,
+		},
+	}
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			auditLogger.Log(test.event)
+			wantMessage := test.wantMessage + ",\"timestamp\":\"" + time.Now().Format(time.RFC3339) + "\"}\n"
+			if diff := cmp.Diff(buf.String(), wantMessage, protocmp.Transform()); diff != "" {
+				t.Fatalf("unexpected message\ndiff (-want +got):\n%s", diff)
+			}
+			buf.Reset()
+		})
+	}
+
+}
+
 func TestStdoutLoggerBuilder_NilConfig(t *testing.T) {
 	builder = &StdoutLoggerBuilder{}
 	config, err := builder.ParseLoggerConfig(nil)
@@ -42,6 +85,9 @@ func TestStdoutLoggerBuilder_NilConfig(t *testing.T) {
 		t.Fatalf("unexpected error\n%v", err)
 	}
 	auditLogger = builder.Build(config)
+	if auditLogger == nil {
+		t.Fatalf("unexpected error\nAuditLogger is nil")
+	}
 }
 
 func TestStdoutLogger_Log(t *testing.T) {

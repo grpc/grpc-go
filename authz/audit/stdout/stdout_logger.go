@@ -60,10 +60,9 @@ const (
 
 // Stdout implementation of audit.LoggerConfig
 // Since the logger doesn't support custom configs, it's a no-op one
-type StdoutLoggerConfig struct{}
-
-// No-op implementation of audit.LoggerConfig
-func (StdoutLoggerConfig) LoggerConfig() {}
+type StdoutLoggerConfig struct {
+	audit.LoggerConfig
+}
 
 // Stdout implementation of audit.LoggerBuilder
 type StdoutLoggerBuilder struct{}
@@ -75,13 +74,13 @@ func (StdoutLoggerBuilder) Name() string {
 
 // Stdout implementation of audit.LoggerBuilder.Build
 // LoggerConfig is ignored so it always returns default StdoutLogger
-func (StdoutLoggerBuilder) Build(audit.LoggerConfig) audit.Logger {
+func (*StdoutLoggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 	return &StdoutLogger{}
 }
 
 // Stdout implementation of audit.LoggerBuilder.ParseLoggerConfig
 // Passed value is ignored but warning is printed
-func (StdoutLoggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
+func (*StdoutLoggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
 	if config != nil {
 		grpcLogger.Warningf("Config value %v ignored, "+
 			"StdoutLogger doesn't support custom configs", string(config))
@@ -89,8 +88,8 @@ func (StdoutLoggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.Logg
 	return &StdoutLoggerConfig{}, nil
 }
 
-func convertEvent(event *audit.Event) stdoutEvent {
-	return stdoutEvent{
+func convertEvent(event *audit.Event) *stdoutEvent {
+	return &stdoutEvent{
 		FullMethodName: event.FullMethodName,
 		Principal:      event.Principal,
 		PolicyName:     event.PolicyName,
