@@ -16,8 +16,8 @@
  *
  */
 
-// Package test contains test cases for unmarshalling of CDS resources.
-package test
+// Package tests_test contains test cases for unmarshalling of CDS resources.
+package tests_test
 
 import (
 	"encoding/json"
@@ -37,7 +37,7 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	v3cncftypepb "github.com/cncf/xds/go/xds/type/v3"
+	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
@@ -357,7 +357,6 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf,
-				LBPolicy: &xdsresource.ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
 			},
 			wantLBConfig: &internalserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
@@ -457,7 +456,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: wrrLocalityAny(&v3cncftypepb.TypedStruct{
+								TypedConfig: wrrLocalityAny(&v3xdsxdstypepb.TypedStruct{
 									TypeUrl: "type.googleapis.com/myorg.MyCustomLeastRequestPolicy",
 									Value:   &structpb.Struct{},
 								}),
@@ -589,11 +588,11 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			// compare JSON bytes in a test. Thus, marshal into a Balancer
 			// Config struct and compare on that. Only need to test this JSON
 			// emission here, as this covers the possible output space.
-			if diff := cmp.Diff(update, test.wantUpdate, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "LBPolicy", "LBPolicyJSON")); diff != "" {
+			if diff := cmp.Diff(update, test.wantUpdate, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "LBPolicy")); diff != "" {
 				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) got diff: %v (-got, +want)", test.cluster, diff)
 			}
 			bc := &internalserviceconfig.BalancerConfig{}
-			if err := json.Unmarshal(update.LBPolicyJSON, bc); err != nil {
+			if err := json.Unmarshal(update.LBPolicy, bc); err != nil {
 				t.Fatalf("failed to unmarshal JSON: %v", err)
 			}
 			if diff := cmp.Diff(bc, test.wantLBConfig); diff != "" {

@@ -16,16 +16,16 @@
  *
  */
 
-// Package test contains test cases for the xDS LB Policy Registry.
-package test
+// Package tests_test contains test cases for the xDS LB Policy Registry.
+package tests_test
 
 import (
 	"encoding/json"
 	"strings"
 	"testing"
 
-	v1udpatypepb "github.com/cncf/xds/go/udpa/type/v1"
-	v3cncftypepb "github.com/cncf/xds/go/xds/type/v3"
+	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
+	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
@@ -172,7 +172,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(&v3cncftypepb.TypedStruct{
+							TypedConfig: testutils.MarshalAny(&v3xdsxdstypepb.TypedStruct{
 								TypeUrl: "type.googleapis.com/myorg.MyCustomLeastRequestPolicy",
 								Value:   &structpb.Struct{},
 							}),
@@ -191,7 +191,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(&v1udpatypepb.TypedStruct{
+							TypedConfig: testutils.MarshalAny(&v1xdsudpatypepb.TypedStruct{
 								TypeUrl: "type.googleapis.com/myorg.MyCustomLeastRequestPolicy",
 								Value:   &structpb.Struct{},
 							}),
@@ -230,7 +230,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: wrrLocalityAny(&v3cncftypepb.TypedStruct{
+							TypedConfig: wrrLocalityAny(&v3xdsxdstypepb.TypedStruct{
 								TypeUrl: "type.googleapis.com/myorg.MyCustomLeastRequestPolicy",
 								Value:   &structpb.Struct{},
 							}),

@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/balancerload"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
 	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/stubserver"
@@ -1002,5 +1003,155 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 	gotMDVal = gotMD.Get(metadataHeaderInjectedByBalancer)
 	if !cmp.Equal(gotMDVal, wantMDVal) {
 		t.Fatalf("Mismatch in custom metadata received at test backend, got: %v, want %v", gotMDVal, wantMDVal)
+	}
+}
+
+// producerTestBalancerBuilder and producerTestBalancer start a producer which
+// makes an RPC before the subconn is READY, then connects the subconn, and
+// pushes the resulting error (expected to be nil) to rpcErrChan.
+type producerTestBalancerBuilder struct {
+	rpcErrChan chan error
+	ctxChan    chan context.Context
+	connect    bool
+}
+
+func (bb *producerTestBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return &producerTestBalancer{cc: cc, rpcErrChan: bb.rpcErrChan, ctxChan: bb.ctxChan, connect: bb.connect}
+}
+
+const producerTestBalancerName = "producer_test_balancer"
+
+func (bb *producerTestBalancerBuilder) Name() string { return producerTestBalancerName }
+
+type producerTestBalancer struct {
+	cc         balancer.ClientConn
+	rpcErrChan chan error
+	ctxChan    chan context.Context
+	connect    bool
+}
+
+func (b *producerTestBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
+	// Create the subconn, but don't connect it.
+	sc, err := b.cc.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{})
+	if err != nil {
+		return fmt.Errorf("error creating subconn: %v", err)
+	}
+
+	// Create the producer.  This will call the producer builder's Build
+	// method, which will try to start an RPC in a goroutine.
+	p := &testProducerBuilder{start: grpcsync.NewEvent(), rpcErrChan: b.rpcErrChan, ctxChan: b.ctxChan}
+	sc.GetOrBuildProducer(p)
+
+	// Wait here until the producer is about to perform the RPC, which should
+	// block until connected.
+	<-p.start.Done()
+
+	// Ensure the error chan doesn't get anything on it before we connect the
+	// subconn.
+	select {
+	case err := <-b.rpcErrChan:
+		go func() { b.rpcErrChan <- fmt.Errorf("Got unexpected data on rpcErrChan: %v", err) }()
+	default:
+	}
+
+	if b.connect {
+		// Now we can connect, which will unblock the RPC above.
+		sc.Connect()
+	}
+
+	// The stub server requires a READY picker to be reported, to unblock its
+	// Start method.  We won't make RPCs in our test, so a nil picker is okay.
+	b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: nil})
+	return nil
+}
+
+func (b *producerTestBalancer) ResolverError(err error) {
+	panic(fmt.Sprintf("Unexpected resolver error: %v", err))
+}
+
+func (b *producerTestBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {}
+func (b *producerTestBalancer) Close()                                                     {}
+
+type testProducerBuilder struct {
+	start      *grpcsync.Event
+	rpcErrChan chan error
+	ctxChan    chan context.Context
+}
+
+func (b *testProducerBuilder) Build(cci interface{}) (balancer.Producer, func()) {
+	c := testgrpc.NewTestServiceClient(cci.(grpc.ClientConnInterface))
+	// Perform the RPC in a goroutine instead of during build because the
+	// subchannel's mutex is held here.
+	go func() {
+		ctx := <-b.ctxChan
+		b.start.Fire()
+		_, err := c.EmptyCall(ctx, &testpb.Empty{})
+		b.rpcErrChan <- err
+	}()
+	return nil, func() {}
+}
+
+// TestBalancerProducerBlockUntilReady tests that we get no RPC errors from
+// producers when subchannels aren't ready.
+func (s) TestBalancerProducerBlockUntilReady(t *testing.T) {
+	// rpcErrChan is given to the LB policy to report the status of the
+	// producer's one RPC.
+	ctxChan := make(chan context.Context, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctxChan <- ctx
+
+	rpcErrChan := make(chan error)
+	balancer.Register(&producerTestBalancerBuilder{rpcErrChan: rpcErrChan, ctxChan: ctxChan, connect: true})
+
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
+
+	// Start the server & client with the test producer LB policy.
+	svcCfg := fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, producerTestBalancerName)
+	if err := ss.Start(nil, grpc.WithDefaultServiceConfig(svcCfg)); err != nil {
+		t.Fatalf("Error starting testing server: %v", err)
+	}
+	defer ss.Stop()
+
+	// Receive the error from the producer's RPC, which should be nil.
+	if err := <-rpcErrChan; err != nil {
+		t.Fatalf("Received unexpected error from producer RPC: %v", err)
+	}
+}
+
+// TestBalancerProducerHonorsContext tests that producers that perform RPC get
+// context errors correctly.
+func (s) TestBalancerProducerHonorsContext(t *testing.T) {
+	// rpcErrChan is given to the LB policy to report the status of the
+	// producer's one RPC.
+	ctxChan := make(chan context.Context, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	ctxChan <- ctx
+
+	rpcErrChan := make(chan error)
+	balancer.Register(&producerTestBalancerBuilder{rpcErrChan: rpcErrChan, ctxChan: ctxChan, connect: false})
+
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
+
+	// Start the server & client with the test producer LB policy.
+	svcCfg := fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, producerTestBalancerName)
+	if err := ss.Start(nil, grpc.WithDefaultServiceConfig(svcCfg)); err != nil {
+		t.Fatalf("Error starting testing server: %v", err)
+	}
+	defer ss.Stop()
+
+	cancel()
+
+	// Receive the error from the producer's RPC, which should be canceled.
+	if err := <-rpcErrChan; status.Code(err) != codes.Canceled {
+		t.Fatalf("RPC error: %v; want status.Code(err)=%v", err, codes.Canceled)
 	}
 }

@@ -25,12 +25,18 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/orca/internal"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 )
 
 func TestToLoadReport(t *testing.T) {
+	goodReport := &v3orcapb.OrcaLoadReport{
+		CpuUtilization: 1.0,
+		MemUtilization: 50.0,
+		RequestCost:    map[string]float64{"queryCost": 25.0},
+		Utilization:    map[string]float64{"queueSize": 75.0},
+	}
 	tests := []struct {
 		name    string
 		md      metadata.MD
@@ -40,7 +46,7 @@ func TestToLoadReport(t *testing.T) {
 		{
 			name:    "no load report in metadata",
 			md:      metadata.MD{},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name: "badly marshaled load report",
@@ -50,28 +56,26 @@ func TestToLoadReport(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "multiple load reports",
+			md: func() metadata.MD {
+				b, _ := proto.Marshal(goodReport)
+				return metadata.Pairs("endpoint-load-metrics-bin", string(b), "endpoint-load-metrics-bin", string(b))
+			}(),
+			wantErr: true,
+		},
+		{
 			name: "good load report",
 			md: func() metadata.MD {
-				b, _ := proto.Marshal(&v3orcapb.OrcaLoadReport{
-					CpuUtilization: 1.0,
-					MemUtilization: 50.0,
-					RequestCost:    map[string]float64{"queryCost": 25.0},
-					Utilization:    map[string]float64{"queueSize": 75.0},
-				})
+				b, _ := proto.Marshal(goodReport)
 				return metadata.Pairs("endpoint-load-metrics-bin", string(b))
 			}(),
-			want: &v3orcapb.OrcaLoadReport{
-				CpuUtilization: 1.0,
-				MemUtilization: 50.0,
-				RequestCost:    map[string]float64{"queryCost": 25.0},
-				Utilization:    map[string]float64{"queueSize": 75.0},
-			},
+			want: goodReport,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, err := orca.ToLoadReport(test.md)
+			got, err := internal.ToLoadReport(test.md)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("orca.ToLoadReport(%v) = %v, wantErr: %v", test.md, err, test.wantErr)
 			}

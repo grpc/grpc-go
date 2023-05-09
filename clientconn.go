@@ -742,6 +742,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSub
 		dopts:        cc.dopts,
 		czData:       new(channelzData),
 		resetBackoff: make(chan struct{}),
+		stateChan:    make(chan struct{}),
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 	// Track ac in cc. This needs to be done before any getTransport(...) is called.
@@ -1122,7 +1123,8 @@ type addrConn struct {
 	addrs   []resolver.Address // All addresses that the resolver resolved to.
 
 	// Use updateConnectivityState for updating addrConn's connectivity state.
-	state connectivity.State
+	state     connectivity.State
+	stateChan chan struct{} // closed and recreated on every state change.
 
 	backoffIdx   int // Needs to be stateful for resetConnectBackoff.
 	resetBackoff chan struct{}
@@ -1136,6 +1138,9 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	if ac.state == s {
 		return
 	}
+	// When changing states, reset the state change channel.
+	close(ac.stateChan)
+	ac.stateChan = make(chan struct{})
 	ac.state = s
 	if lastErr == nil {
 		channelz.Infof(logger, ac.channelzID, "Subchannel Connectivity change to %v", s)
@@ -1436,6 +1441,29 @@ func (ac *addrConn) getReadyTransport() transport.ClientTransport {
 		return ac.transport
 	}
 	return nil
+}
+
+// getTransport waits until the addrconn is ready and returns the transport.
+// If the context expires first, returns an appropriate status.  If the
+// addrConn is stopped first, returns an Unavailable status error.
+func (ac *addrConn) getTransport(ctx context.Context) (transport.ClientTransport, error) {
+	for ctx.Err() == nil {
+		ac.mu.Lock()
+		t, state, sc := ac.transport, ac.state, ac.stateChan
+		ac.mu.Unlock()
+		if state == connectivity.Ready {
+			return t, nil
+		}
+		if state == connectivity.Shutdown {
+			return nil, status.Errorf(codes.Unavailable, "SubConn shutting down")
+		}
+
+		select {
+		case <-ctx.Done():
+		case <-sc:
+		}
+	}
+	return nil, status.FromContextError(ctx.Err()).Err()
 }
 
 // tearDown starts to tear down the addrConn.

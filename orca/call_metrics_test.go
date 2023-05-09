@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/orca/internal"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -58,7 +59,6 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 		desc          string
 		injectMetrics bool
 		wantProto     *v3orcapb.OrcaLoadReport
-		wantErr       error
 	}{
 		{
 			desc:          "with custom backend metrics",
@@ -73,29 +73,29 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 		{
 			desc:          "with no custom backend metrics",
 			injectMetrics: false,
-			wantErr:       orca.ErrLoadReportMissing,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			// A server option to enables reporting of per-call backend metrics.
-			callMetricsServerOption := orca.CallMetricsServerOption()
+			// A server option to enable reporting of per-call backend metrics.
+			smr := orca.NewServerMetricsRecorder()
+			callMetricsServerOption := orca.CallMetricsServerOption(smr)
+			smr.SetCPUUtilization(1.0)
 
 			// An interceptor to injects custom backend metrics, added only when
 			// the injectMetrics field in the test is set.
 			injectingInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-				recorder := orca.CallMetricRecorderFromContext(ctx)
+				recorder := orca.CallMetricsRecorderFromContext(ctx)
 				if recorder == nil {
 					err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 					t.Error(err)
 					return nil, err
 				}
-				recorder.SetCPUUtilization(1.0)
 				recorder.SetMemoryUtilization(50.0)
 				// This value will be overwritten by a write to the same metric
 				// from the server handler.
-				recorder.SetUtilization("queueSize", 1.0)
+				recorder.SetNamedUtilization("queueSize", 1.0)
 				return handler(ctx, req)
 			}
 
@@ -107,14 +107,14 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 					if !test.injectMetrics {
 						return &testpb.Empty{}, nil
 					}
-					recorder := orca.CallMetricRecorderFromContext(ctx)
+					recorder := orca.CallMetricsRecorderFromContext(ctx)
 					if recorder == nil {
 						err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 						t.Error(err)
 						return nil, err
 					}
 					recorder.SetRequestCost("queryCost", 25.0)
-					recorder.SetUtilization("queueSize", 75.0)
+					recorder.SetNamedUtilization("queueSize", 75.0)
 					return &testpb.Empty{}, nil
 				},
 			}
@@ -146,9 +146,9 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 				t.Fatalf("EmptyCall failed: %v", err)
 			}
 
-			gotProto, err := orca.ToLoadReport(trailer)
-			if test.wantErr != nil && !errors.Is(err, test.wantErr) {
-				t.Fatalf("When retrieving load report, got error: %v, want: %v", err, orca.ErrLoadReportMissing)
+			gotProto, err := internal.ToLoadReport(trailer)
+			if err != nil {
+				t.Fatalf("When retrieving load report, got error: %v, want: <nil>", err)
 			}
 			if test.wantProto != nil && !cmp.Equal(gotProto, test.wantProto, cmp.Comparer(proto.Equal)) {
 				t.Fatalf("Received load report in trailer: %s, want: %s", pretty.ToJSON(gotProto), pretty.ToJSON(test.wantProto))
@@ -165,7 +165,6 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 		desc          string
 		injectMetrics bool
 		wantProto     *v3orcapb.OrcaLoadReport
-		wantErr       error
 	}{
 		{
 			desc:          "with custom backend metrics",
@@ -180,29 +179,29 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 		{
 			desc:          "with no custom backend metrics",
 			injectMetrics: false,
-			wantErr:       orca.ErrLoadReportMissing,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			// A server option to enables reporting of per-call backend metrics.
-			callMetricsServerOption := orca.CallMetricsServerOption()
+			// A server option to enable reporting of per-call backend metrics.
+			smr := orca.NewServerMetricsRecorder()
+			callMetricsServerOption := orca.CallMetricsServerOption(smr)
+			smr.SetCPUUtilization(1.0)
 
 			// An interceptor which injects custom backend metrics, added only
 			// when the injectMetrics field in the test is set.
 			injectingInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-				recorder := orca.CallMetricRecorderFromContext(ss.Context())
+				recorder := orca.CallMetricsRecorderFromContext(ss.Context())
 				if recorder == nil {
 					err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 					t.Error(err)
 					return err
 				}
-				recorder.SetCPUUtilization(1.0)
 				recorder.SetMemoryUtilization(50.0)
 				// This value will be overwritten by a write to the same metric
 				// from the server handler.
-				recorder.SetUtilization("queueSize", 1.0)
+				recorder.SetNamedUtilization("queueSize", 1.0)
 				return handler(srv, ss)
 			}
 
@@ -212,14 +211,14 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 			srv := stubserver.StubServer{
 				FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 					if test.injectMetrics {
-						recorder := orca.CallMetricRecorderFromContext(stream.Context())
+						recorder := orca.CallMetricsRecorderFromContext(stream.Context())
 						if recorder == nil {
 							err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 							t.Error(err)
 							return err
 						}
 						recorder.SetRequestCost("queryCost", 25.0)
-						recorder.SetUtilization("queueSize", 75.0)
+						recorder.SetNamedUtilization("queueSize", 75.0)
 					}
 
 					// Streaming implementation replies with a dummy response until the
@@ -288,9 +287,9 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 				}
 			}
 
-			gotProto, err := orca.ToLoadReport(stream.Trailer())
-			if test.wantErr != nil && !errors.Is(err, test.wantErr) {
-				t.Fatalf("When retrieving load report, got error: %v, want: %v", err, orca.ErrLoadReportMissing)
+			gotProto, err := internal.ToLoadReport(stream.Trailer())
+			if err != nil {
+				t.Fatalf("When retrieving load report, got error: %v, want: <nil>", err)
 			}
 			if test.wantProto != nil && !cmp.Equal(gotProto, test.wantProto, cmp.Comparer(proto.Equal)) {
 				t.Fatalf("Received load report in trailer: %s, want: %s", pretty.ToJSON(gotProto), pretty.ToJSON(test.wantProto))

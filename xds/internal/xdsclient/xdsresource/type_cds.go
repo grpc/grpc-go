@@ -52,13 +52,6 @@ const (
 	ClusterLRSServerSelf
 )
 
-// ClusterLBPolicyRingHash represents ring_hash lb policy, and also contains its
-// config.
-type ClusterLBPolicyRingHash struct {
-	MinimumRingSize uint64
-	MaximumRingSize uint64
-}
-
 // OutlierDetection is the outlier detection configuration for a cluster.
 type OutlierDetection struct {
 	// Interval is the time interval between ejection analysis sweeps. This can
@@ -148,21 +141,9 @@ type ClusterUpdate struct {
 	// a prioritized list of cluster names.
 	PrioritizedClusterNames []string
 
-	// LBPolicy is the lb policy for this cluster.
-	//
-	// This only support round_robin and ring_hash.
-	// - if it's nil, the lb policy is round_robin
-	// - if it's not nil, the lb policy is ring_hash, the this field has the config.
-	//
-	// When we add more support policies, this can be made an interface, and
-	// will be set to different types based on the policy type.
-	LBPolicy *ClusterLBPolicyRingHash
-	// LBPolicyJSON represents the locality and endpoint picking policy in JSON,
-	// which will be the child policy of xds_cluster_impl. Once full support for
-	// this field across the system, the LBPolicy field will switch to this
-	// field. Right now we keep both to keep the system working even though
-	// downstream has not added support for this JSON field.
-	LBPolicyJSON json.RawMessage
+	// LBPolicy represents the locality and endpoint picking policy in JSON,
+	// which will be the child policy of xds_cluster_impl.
+	LBPolicy json.RawMessage
 
 	// OutlierDetection is the outlier detection configuration for this cluster.
 	// If nil, it means this cluster does not use the outlier detection feature.

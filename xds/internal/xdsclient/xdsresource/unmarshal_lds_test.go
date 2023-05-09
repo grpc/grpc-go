@@ -34,8 +34,8 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/durationpb"
 
-	v1udpatypepb "github.com/cncf/udpa/go/udpa/type/v1"
-	v3cncftypepb "github.com/cncf/xds/go/xds/type/v3"
+	v1udpaudpatypepb "github.com/cncf/udpa/go/udpa/type/v1"
+	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	rpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
@@ -1830,7 +1830,7 @@ var clientOnlyCustomFilterConfig = &anypb.Any{
 }
 
 // This custom filter uses the old TypedStruct message from the cncf/udpa repo.
-var customFilterOldTypedStructConfig = &v1udpatypepb.TypedStruct{
+var customFilterOldTypedStructConfig = &v1udpaudpatypepb.TypedStruct{
 	TypeUrl: "custom.filter",
 	Value: &spb.Struct{
 		Fields: map[string]*spb.Value{
@@ -1841,7 +1841,7 @@ var customFilterOldTypedStructConfig = &v1udpatypepb.TypedStruct{
 var wrappedCustomFilterOldTypedStructConfig *anypb.Any
 
 // This custom filter uses the new TypedStruct message from the cncf/xds repo.
-var customFilterNewTypedStructConfig = &v3cncftypepb.TypedStruct{
+var customFilterNewTypedStructConfig = &v3xdsxdstypepb.TypedStruct{
 	TypeUrl: "custom.filter",
 	Value: &spb.Struct{
 		Fields: map[string]*spb.Value{
