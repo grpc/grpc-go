@@ -16,6 +16,8 @@
  *
  */
 
+// Package xds contains a custom load balancing policy implementation for
+// interop tests.
 package xds
 
 import (
