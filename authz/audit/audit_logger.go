@@ -57,12 +57,6 @@ func GetLoggerBuilder(name string) LoggerBuilder {
 	return registry.builders[name]
 }
 
-func unregisterLoggerBuilder(name string) {
-	registry.mu.Lock()
-	defer registry.mu.Unlock()
-	delete(registry.builders, name)
-}
-
 // Event contains information passed to the audit logger as part of an
 // audit logging event.
 type Event struct {
