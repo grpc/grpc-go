@@ -1402,7 +1402,7 @@ func (s) TestChainEngine(t *testing.T) {
 			rbacQueries: []rbacQuery{
 				// This RPC should match with the allow policy, and shouldn't
 				// match with the deny and thus should be allowed to proceed.
-				// Audit logging matches with nothing
+				// Audit logging matches with nothing.
 				{
 					rpcData: &rpcData{
 						fullMethod: "",
@@ -1414,7 +1414,7 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				// This RPC should match with both the allow policy and deny policy
 				// and thus shouldn't be allowed to proceed as matched with deny.
-				// Audit logging matches with deny and short circuits
+				// Audit logging matches with deny and short circuits.
 				{
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
@@ -1448,7 +1448,7 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				// This RPC shouldn't match with either policy, and thus
 				// shouldn't be allowed to proceed as didn't match with allow.
-				// Audit logging matches with the allow policy
+				// Audit logging matches with the allow policy.
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
@@ -1467,7 +1467,7 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				// This RPC shouldn't match with allow, match with deny, and
 				// thus shouldn't be allowed to proceed.
-				// Audit logging will have the deny logged
+				// Audit logging will have the deny logged.
 				{
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
@@ -1541,7 +1541,7 @@ func (s) TestChainEngine(t *testing.T) {
 			rbacQueries: []rbacQuery{
 				// This RPC should match with the allow policy, and shouldn't
 				// match with the deny and thus should be allowed to proceed.
-				// Audit logging is NONE
+				// Audit logging is NONE.
 				{
 					rpcData: &rpcData{
 						fullMethod: "",
@@ -1553,7 +1553,7 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				// This RPC should match with both the allow policy and deny policy
 				// and thus shouldn't be allowed to proceed as matched with deny.
-				// Audit logging is NONE
+				// Audit logging is NONE.
 				{
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
@@ -1565,7 +1565,7 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				// This RPC shouldn't match with either policy, and thus
 				// shouldn't be allowed to proceed as didn't match with allow.
-				// Audit logging is NONE
+				// Audit logging is NONE.
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
@@ -1576,7 +1576,7 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				// This RPC shouldn't match with allow, match with deny, and
 				// thus shouldn't be allowed to proceed.
-				// Audit logging is NONE
+				// Audit logging is NONE.
 				{
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
@@ -1642,7 +1642,7 @@ func (s) TestChainEngine(t *testing.T) {
 			rbacQueries: []rbacQuery{
 				// This RPC should match with the allow policy, and shouldn't
 				// match with the deny and thus should be allowed to proceed.
-				// Audit logging matches with nothing
+				// Audit logging matches with nothing.
 				{
 					rpcData: &rpcData{
 						fullMethod: "",
@@ -1662,7 +1662,7 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				// This RPC should match with both the allow policy and deny policy
 				// and thus shouldn't be allowed to proceed as matched with deny.
-				// Audit logging matches with deny and short circuits
+				// Audit logging matches with deny and short circuits.
 				{
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
@@ -1682,7 +1682,7 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				// This RPC shouldn't match with either policy, and thus
 				// shouldn't be allowed to proceed as didn't match with allow.
-				// Audit logging matches with the allow policy
+				// Audit logging matches with the allow policy.
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
@@ -1787,7 +1787,7 @@ func (s) TestChainEngine(t *testing.T) {
 						t.Fatalf("Unexpected audit event for query:%v", data)
 					}
 
-					// this builder's auditEvents can be shared for several queries, make sure it's empty
+					// This builder's auditEvents can be shared for several queries, make sure it's empty.
 					b.auditEvents = nil
 				}()
 			}
@@ -1815,7 +1815,7 @@ func (sts *ServerTransportStreamWithMethod) SetTrailer(md metadata.MD) error {
 	return nil
 }
 
-// An audit logger that will log to the auditEvents slice
+// An audit logger that will log to the auditEvents slice.
 type TestAuditLoggerBuffer struct {
 	auditEvents *[]*audit.Event
 }
@@ -1824,13 +1824,13 @@ func (logger *TestAuditLoggerBuffer) Log(e *audit.Event) {
 	*(logger.auditEvents) = append(*(logger.auditEvents), e)
 }
 
-// Builds TestAuditLoggerBuffer
+// Builds TestAuditLoggerBuffer. 
 type TestAuditLoggerBufferBuilder struct {
 	auditEvents []*audit.Event
 	testName    string
 }
 
-// The required config for TestAuditLoggerBuffer
+// The required config for TestAuditLoggerBuffer.
 type TestAuditLoggerBufferConfig struct {
 	audit.LoggerConfig
 }
@@ -1847,7 +1847,7 @@ func (b *TestAuditLoggerBufferBuilder) Name() string {
 	return b.testName + "_TestAuditLoggerBuffer"
 }
 
-// An audit logger to test using a custom config
+// An audit logger to test using a custom config.
 type TestAuditLoggerCustomConfig struct{}
 
 func (logger *TestAuditLoggerCustomConfig) Log(*audit.Event) {}
@@ -1857,15 +1857,15 @@ type TestAuditLoggerCustomConfigBuilder struct {
 	testName string
 }
 
-// The custom config for the TestAuditLoggerCustomConfig logger
+// The custom config for the TestAuditLoggerCustomConfig logger.
 type TestAuditLoggerCustomConfigConfig struct {
 	audit.LoggerConfig
 	Abc int
 	Xyz string
 }
 
-// Parses TestAuditLoggerCustomConfigConfig
-// Hard-coded to match with it's test case above
+// Parses TestAuditLoggerCustomConfigConfig. Hard-coded to match with it's test
+// case above.
 func (b TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJSON json.RawMessage) (audit.LoggerConfig, error) {
 	c := TestAuditLoggerCustomConfigConfig{}
 	err := json.Unmarshal(configJSON, &c)
@@ -1883,7 +1883,7 @@ func (b *TestAuditLoggerCustomConfigBuilder) Name() string {
 	return b.testName + "_TestAuditLoggerCustomConfig"
 }
 
-// Builds custom configs for audit logger RBAC protos
+// Builds custom configs for audit logger RBAC protos.
 func createUDPATypedStruct(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
@@ -1905,7 +1905,7 @@ func createUDPATypedStruct(t *testing.T, in map[string]interface{}, name string)
 	return customConfig
 }
 
-// Builds custom configs for audit logger RBAC protos
+// Builds custom configs for audit logger RBAC protos.
 func createXDSTypedStruct(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
