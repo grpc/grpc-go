@@ -99,7 +99,6 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			b := TestAuditLoggerCustomConfigBuilder{testName: test.name}
 			audit.RegisterLoggerBuilder(&b)
-			// defer internal.UnregisterAuditLoggerBuilderForTesting(b.Name())
 			logger, err := buildLogger(test.loggerConfig)
 			if err != nil && !strings.HasPrefix(err.Error(), test.expectedError) {
 				t.Fatalf("expected error: %v. got error: %v", test.expectedError, err)
