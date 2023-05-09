@@ -308,4 +308,4 @@ func (e *engine) doAuditLogging(rpcData *rpcData, rule string, authorized bool) 
 
 // This is used when converting a custom config from raw JSON to a TypedStruct.
 // The TypeURL of the TypeStruct will be "grpc.authz.audit_logging/<name>".
-const typedURLPrefix = "grpc.authz.audit_logging/"
+const typeURLPrefix = "grpc.authz.audit_logging/"

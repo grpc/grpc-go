@@ -39,7 +39,7 @@ import (
 
 // This is used when converting a custom config from raw JSON to a TypedStruct
 // The TypeURL of the TypeStruct will be "grpc.authz.audit_logging/<name>"
-const typedURLPrefix = "grpc.authz.audit_logging/"
+const typeURLPrefix = "grpc.authz.audit_logging/"
 
 type header struct {
 	Key    string
@@ -308,7 +308,7 @@ func (options *auditLoggingOptions) toProtos() (allow *v3rbacpb.RBAC_AuditLoggin
 			return nil, nil, fmt.Errorf("AuditLogger Config field cannot be nil")
 		}
 		typedStruct := &v1xdsudpatypepb.TypedStruct{
-			TypeUrl: typedURLPrefix + config.Name,
+			TypeUrl: typeURLPrefix + config.Name,
 			Value:   config.Config,
 		}
 		customConfig, err := anypb.New(typedStruct)

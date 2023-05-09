@@ -1824,7 +1824,7 @@ func (logger *TestAuditLoggerBuffer) Log(e *audit.Event) {
 	*(logger.auditEvents) = append(*(logger.auditEvents), e)
 }
 
-// Builds TestAuditLoggerBuffer. 
+// Builds TestAuditLoggerBuffer.
 type TestAuditLoggerBufferBuilder struct {
 	auditEvents []*audit.Event
 	testName    string
@@ -1892,7 +1892,7 @@ func createUDPATypedStruct(t *testing.T, in map[string]interface{}, name string)
 	}
 	typedURL := ""
 	if name != "" {
-		typedURL = typedURLPrefix + name
+		typedURL = typeURLPrefix + name
 	}
 	typedStruct := &v1xdsudpatypepb.TypedStruct{
 		TypeUrl: typedURL,
@@ -1913,7 +1913,7 @@ func createXDSTypedStruct(t *testing.T, in map[string]interface{}, name string) 
 		t.Fatal(err)
 	}
 	typedStruct := &v3xdsxdstypepb.TypedStruct{
-		TypeUrl: typedURLPrefix + name,
+		TypeUrl: typeURLPrefix + name,
 		Value:   pb,
 	}
 	customConfig, err := anypb.New(typedStruct)
