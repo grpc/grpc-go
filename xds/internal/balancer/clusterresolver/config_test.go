@@ -286,10 +286,6 @@ func TestParseConfig(t *testing.T) {
 	}
 }
 
-func newString(s string) *string {
-	return &s
-}
-
 func newUint32(i uint32) *uint32 {
 	return &i
 }

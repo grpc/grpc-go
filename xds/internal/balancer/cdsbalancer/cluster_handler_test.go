@@ -52,7 +52,6 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 		name          string
 		clusterName   string
 		clusterUpdate xdsresource.ClusterUpdate
-		lbPolicy      *xdsresource.ClusterLBPolicyRingHash
 	}{
 		{
 			name:        "test-update-root-cluster-EDS-success",
@@ -61,16 +60,6 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 				ClusterType: xdsresource.ClusterTypeEDS,
 				ClusterName: edsService,
 			},
-		},
-		{
-			name:        "test-update-root-cluster-EDS-with-ring-hash",
-			clusterName: logicalDNSService,
-			clusterUpdate: xdsresource.ClusterUpdate{
-				ClusterType: xdsresource.ClusterTypeLogicalDNS,
-				ClusterName: logicalDNSService,
-				LBPolicy:    &xdsresource.ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
-			},
-			lbPolicy: &xdsresource.ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
 		},
 		{
 			name:        "test-update-root-cluster-Logical-DNS-success",
@@ -110,9 +99,6 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 			case chu := <-ch.updateChannel:
 				if diff := cmp.Diff(chu.updates, []xdsresource.ClusterUpdate{test.clusterUpdate}); diff != "" {
 					t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
-				}
-				if diff := cmp.Diff(chu.lbPolicy, test.lbPolicy); diff != "" {
-					t.Fatalf("got unexpected lb policy in cluster update, diff (-got, +want): %v", diff)
 				}
 			case <-ctx.Done():
 				t.Fatal("Timed out waiting for update from update channel.")

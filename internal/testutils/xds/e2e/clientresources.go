@@ -524,6 +524,14 @@ func ClusterResourceWithOptions(opts ClusterOptions) *v3clusterpb.Cluster {
 	return cluster
 }
 
+// LocalityOptions contains options to configure a Locality.
+type LocalityOptions struct {
+	// Ports is a set of ports on "localhost" belonging to this locality.
+	Ports []uint32
+	// Weight is the weight of the locality, used for load balancing.
+	Weight uint32
+}
+
 // EndpointOptions contains options to configure an Endpoint (or
 // ClusterLoadAssignment) resource.
 type EndpointOptions struct {
@@ -533,9 +541,8 @@ type EndpointOptions struct {
 	// Host is the hostname of the endpoints. In our e2e tests, hostname must
 	// always be "localhost".
 	Host string
-	// Ports is a set of ports on "localhost" where the endpoints corresponding
-	// to this resource reside.
-	Ports []uint32
+	// Localities is a set of localities belonging to this resource.
+	Localities []LocalityOptions
 	// DropPercents is a map from drop category to a drop percentage. If unset,
 	// no drops are configured.
 	DropPercents map[string]int
@@ -546,34 +553,50 @@ func DefaultEndpoint(clusterName string, host string, ports []uint32) *v3endpoin
 	return EndpointResourceWithOptions(EndpointOptions{
 		ClusterName: clusterName,
 		Host:        host,
-		Ports:       ports,
+		Localities: []LocalityOptions{
+			{
+				Ports:  ports,
+				Weight: 1,
+			},
+		},
 	})
 }
 
 // EndpointResourceWithOptions returns an xds Endpoint resource configured with
 // the provided options.
 func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoadAssignment {
-	var lbEndpoints []*v3endpointpb.LbEndpoint
-	for _, port := range opts.Ports {
-		lbEndpoints = append(lbEndpoints, &v3endpointpb.LbEndpoint{
-			HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{Endpoint: &v3endpointpb.Endpoint{
-				Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
-					SocketAddress: &v3corepb.SocketAddress{
-						Protocol:      v3corepb.SocketAddress_TCP,
-						Address:       opts.Host,
-						PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: port}},
+	var endpoints []*v3endpointpb.LocalityLbEndpoints
+	for i, locality := range opts.Localities {
+		var lbEndpoints []*v3endpointpb.LbEndpoint
+		for _, port := range locality.Ports {
+			lbEndpoints = append(lbEndpoints, &v3endpointpb.LbEndpoint{
+				HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{Endpoint: &v3endpointpb.Endpoint{
+					Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
+						SocketAddress: &v3corepb.SocketAddress{
+							Protocol:      v3corepb.SocketAddress_TCP,
+							Address:       opts.Host,
+							PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: port}},
+					}},
 				}},
-			}},
+				LoadBalancingWeight: &wrapperspb.UInt32Value{Value: 1},
+			})
+		}
+
+		endpoints = append(endpoints, &v3endpointpb.LocalityLbEndpoints{
+			Locality: &v3corepb.Locality{
+				Region:  fmt.Sprintf("region-%d", i+1),
+				Zone:    fmt.Sprintf("zone-%d", i+1),
+				SubZone: fmt.Sprintf("subzone-%d", i+1),
+			},
+			LbEndpoints:         lbEndpoints,
+			LoadBalancingWeight: &wrapperspb.UInt32Value{Value: locality.Weight},
+			Priority:            0,
 		})
 	}
+
 	cla := &v3endpointpb.ClusterLoadAssignment{
 		ClusterName: opts.ClusterName,
-		Endpoints: []*v3endpointpb.LocalityLbEndpoints{{
-			Locality:            &v3corepb.Locality{SubZone: "subzone"},
-			LbEndpoints:         lbEndpoints,
-			LoadBalancingWeight: &wrapperspb.UInt32Value{Value: 1},
-			Priority:            0,
-		}},
+		Endpoints:   endpoints,
 	}
 
 	var drops []*v3endpointpb.ClusterLoadAssignment_Policy_DropOverload

@@ -802,7 +802,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			}
 			cmpOpts := []cmp.Option{
 				cmpopts.EquateEmpty(),
-				cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicyJSON"),
+				cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy"),
 			}
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
