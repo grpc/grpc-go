@@ -1224,9 +1224,8 @@ func (s) TestChainEngine(t *testing.T) {
 		// AllowAndDenyPolicy tests a policy with an allow (on path) and
 		// deny (on port) policy chained together. This represents how a user
 		// configured interceptor would use this, and also is a potential
-		// configuration for a dynamic xds interceptor.
-		// Further, it tests that the audit logger works properly in each
-		// scenario
+		// configuration for a dynamic xds interceptor.  Further, it tests that
+		// the audit logger works properly in each scenario
 		{
 			name:       "AuditLoggingAllowAndDenyPolicy_ON_ALLOW",
 			policyName: "test_policy",
@@ -1852,7 +1851,8 @@ type TestAuditLoggerCustomConfig struct{}
 
 func (logger *TestAuditLoggerCustomConfig) Log(*audit.Event) {}
 
-// Build TestAuditLoggerCustomConfig
+// Build TestAuditLoggerCustomConfig. This builds a TestAuditLoggerCustomConfig
+// logger that uses a custom config.
 type TestAuditLoggerCustomConfigBuilder struct {
 	testName string
 }
