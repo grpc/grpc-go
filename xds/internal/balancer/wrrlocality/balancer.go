@@ -92,10 +92,10 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	var lbCfg *LBConfig
 	if err := json.Unmarshal(s, &lbCfg); err != nil {
-		return nil, fmt.Errorf("xds: invalid LBConfig for wrrlocality: %s, error: %v", string(s), err)
+		return nil, fmt.Errorf("xds_wrr_locality: invalid LBConfig: %s, error: %v", string(s), err)
 	}
 	if lbCfg == nil || lbCfg.ChildPolicy == nil {
-		return nil, errors.New("xds: invalid LBConfig for wrrlocality: child policy field must be set")
+		return nil, errors.New("xds_wrr_locality: invalid LBConfig: child policy field must be set")
 	}
 	return lbCfg, nil
 }
@@ -167,7 +167,7 @@ func (b *wrrLocalityBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 		}
 		ai, ok := getAddrInfo(addr)
 		if !ok {
-			return fmt.Errorf("xds_wrr_locality: addr: %v is misisng locality weight information", addr)
+			return fmt.Errorf("xds_wrr_locality: missing locality weight information in address %q", addr)
 		}
 		weightedTargets[locality] = weightedtarget.Target{Weight: ai.LocalityWeight, ChildPolicy: lbCfg.ChildPolicy}
 	}
@@ -175,11 +175,11 @@ func (b *wrrLocalityBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	wtCfgJSON, err := json.Marshal(wtCfg)
 	if err != nil {
 		// Shouldn't happen.
-		return fmt.Errorf("xds_wrr_locality: error marshalling prepared wtCfg: %v", wtCfg)
+		return fmt.Errorf("xds_wrr_locality: error marshalling prepared config: %v", wtCfg)
 	}
 	var sc serviceconfig.LoadBalancingConfig
 	if sc, err = b.childParser.ParseConfig(wtCfgJSON); err != nil {
-		return fmt.Errorf("xds_wrr_locality: config generated %v by wrr_locality_experimental is invalid: %v", wtCfgJSON, err)
+		return fmt.Errorf("xds_wrr_locality: config generated %v is invalid: %v", wtCfgJSON, err)
 	}
 
 	return b.child.UpdateClientConnState(balancer.ClientConnState{

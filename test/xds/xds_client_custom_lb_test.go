@@ -79,37 +79,6 @@ func clusterWithLBConfiguration(clusterName, edsServiceName string, secLevel e2e
 	return cluster
 }
 
-// clientResourcesNewFieldSpecifiedAndPortsInMultipleLocalities returns default
-// xDS resources with two localities, of weights 1 and 2 respectively. It must
-// be passed 5 ports, and the first two ports will be put in the first locality,
-// and the last three will be put in the second locality. It also configures the
-// proto message passed in as the Locality + Endpoint picking policy in CDS.
-func clientResourcesNewFieldSpecifiedAndPortsInMultipleLocalities(params e2e.ResourceParams, ports []uint32, m proto.Message) e2e.UpdateOptions {
-	routeConfigName := "route-" + params.DialTarget
-	clusterName := "cluster-" + params.DialTarget
-	endpointsName := "endpoints-" + params.DialTarget
-	return e2e.UpdateOptions{
-		NodeID:    params.NodeID,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(params.DialTarget, routeConfigName)},
-		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, params.DialTarget, clusterName)},
-		Clusters:  []*v3clusterpb.Cluster{clusterWithLBConfiguration(clusterName, endpointsName, params.SecLevel, m)},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
-			ClusterName: endpointsName,
-			Host:        params.Host,
-			Localities: []e2e.LocalityOptions{
-				{
-					Ports:  []uint32{ports[0], ports[1]},
-					Weight: 1,
-				},
-				{
-					Ports:  []uint32{ports[2], ports[3], ports[4]},
-					Weight: 2,
-				},
-			},
-		})},
-	}
-}
-
 // TestWRRLocality tests RPC distribution across a scenario with 5 backends,
 // with 2 backends in a locality with weight 1, and 3 backends in a second
 // locality with weight 2. Through xDS, the test configures a
@@ -139,6 +108,7 @@ func (s) TestWrrLocality(t *testing.T) {
 	port5 := testutils.ParsePort(t, backend5.Address)
 	defer backend5.Stop()
 	const serviceName = "my-service-client-side-xds"
+
 	tests := []struct {
 		name string
 		// Configuration will be specified through load_balancing_policy field.
@@ -215,12 +185,30 @@ func (s) TestWrrLocality(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			managementServer, nodeID, _, r, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 			defer cleanup()
-			resources := clientResourcesNewFieldSpecifiedAndPortsInMultipleLocalities(e2e.ResourceParams{
-				DialTarget: serviceName,
-				NodeID:     nodeID,
-				Host:       "localhost",
-				SecLevel:   e2e.SecurityLevelNone,
-			}, []uint32{port1, port2, port3, port4, port5}, test.wrrLocalityConfiguration)
+
+			routeConfigName := "route-" + serviceName
+			clusterName := "cluster-" + serviceName
+			endpointsName := "endpoints-" + serviceName
+			resources := e2e.UpdateOptions{
+				NodeID:    nodeID,
+				Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)},
+				Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName)},
+				Clusters:  []*v3clusterpb.Cluster{clusterWithLBConfiguration(clusterName, endpointsName, e2e.SecurityLevelNone, test.wrrLocalityConfiguration)},
+				Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
+					ClusterName: endpointsName,
+					Host:        "localhost",
+					Localities: []e2e.LocalityOptions{
+						{
+							Ports:  []uint32{port1, port2},
+							Weight: 1,
+						},
+						{
+							Ports:  []uint32{port3, port4, port5},
+							Weight: 2,
+						},
+					},
+				})},
+			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()

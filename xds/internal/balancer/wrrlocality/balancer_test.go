@@ -39,7 +39,7 @@ import (
 	"google.golang.org/grpc/xds/internal"
 )
 
-var (
+const (
 	defaultTestTimeout = 5 * time.Second
 )
 
