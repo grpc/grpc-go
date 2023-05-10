@@ -55,23 +55,24 @@ type orcab struct {
 }
 
 func (o *orcab) UpdateClientConnState(s balancer.ClientConnState) error {
-	if o.sc == nil {
-		if len(s.ResolverState.Addresses) == 0 {
-			o.ResolverError(fmt.Errorf("produced no addresses"))
-			return fmt.Errorf("resolver produced no addresses")
-		}
-		var err error
-		o.sc, err = o.cc.NewSubConn(s.ResolverState.Addresses, balancer.NewSubConnOptions{})
-		if err != nil {
-			o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(fmt.Errorf("error creating subconn: %v", err))})
-			return nil
-		}
-		o.cancelWatch = orca.RegisterOOBListener(o.sc, o, orca.OOBListenerOptions{ReportInterval: time.Second})
-		o.sc.Connect()
-		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: base.NewErrPicker(balancer.ErrNoSubConnAvailable)})
-	} else {
+	if o.sc != nil {
 		o.sc.UpdateAddresses(s.ResolverState.Addresses)
+		return nil
 	}
+
+	if len(s.ResolverState.Addresses) == 0 {
+		o.ResolverError(fmt.Errorf("produced no addresses"))
+		return fmt.Errorf("resolver produced no addresses")
+	}
+	var err error
+	o.sc, err = o.cc.NewSubConn(s.ResolverState.Addresses, balancer.NewSubConnOptions{})
+	if err != nil {
+		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(fmt.Errorf("error creating subconn: %v", err))})
+		return nil
+	}
+	o.cancelWatch = orca.RegisterOOBListener(o.sc, o, orca.OOBListenerOptions{ReportInterval: time.Second})
+	o.sc.Connect()
+	o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: base.NewErrPicker(balancer.ErrNoSubConnAvailable)})
 	return nil
 }
 
@@ -88,11 +89,11 @@ func (o *orcab) UpdateSubConnState(sc balancer.SubConn, scState balancer.SubConn
 	}
 	switch scState.ConnectivityState {
 	case connectivity.Ready:
-		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: &scPicker{sc: sc, o: o}})
+		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &scPicker{sc: sc, o: o}})
 	case connectivity.TransientFailure:
 		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(fmt.Errorf("all subchannels in transient failure: %v", scState.ConnectionError))})
 	case connectivity.Connecting:
-		// Ignore; picker already set to "connecting"
+		// Ignore; picker already set to "connecting".
 	case connectivity.Idle:
 		sc.Connect()
 		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: base.NewErrPicker(balancer.ErrNoSubConnAvailable)})
@@ -121,6 +122,9 @@ func (p *scPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	doneCB := func(di balancer.DoneInfo) {
 		if lr, _ := di.ServerLoad.(*v3orcapb.OrcaLoadReport); lr != nil &&
 			(lr.CpuUtilization != 0 || lr.MemUtilization != 0 || len(lr.Utilization) > 0 || len(lr.RequestCost) > 0) {
+			// Since all RPCs will respond with a load report due to the
+			// presence of the DialOption, we need to inspect every field and
+			// use the out-of-band report instead if all are unset/zero.
 			setContextCMR(info.Ctx, lr)
 		} else {
 			p.o.reportMu.Lock()
