@@ -16,8 +16,7 @@
  *
  */
 
-// Package stdout contains a Stdout implementation of audit logging interface
-// The Stdoutlogger prints the audit.Event using log.go in json format
+// Package stdout defines an stdout audit logger.
 package stdout
 
 import (
@@ -31,24 +30,26 @@ import (
 
 var grpcLogger = grpclog.Component("authz-audit")
 
-type stdoutEvent struct {
+func init() {
+	audit.RegisterLoggerBuilder(&loggerBuilder{})
+}
+
+type event struct {
 	FullMethodName string `json:"fullMethodName"`
 	Principal      string `json:"principal"`
 	PolicyName     string `json:"policyName"`
 	MatchedRule    string `json:"matchedRule"`
 	Authorized     bool   `json:"authorized"`
-	//Timestamp is populated using time.Now() during StdoutLogger.Log call
+	// Timestamp represents time when Log method prints the audit.Event
 	Timestamp string `json:"timestamp"`
 }
 
-// StdoutLogger is an impl of audit.Logger which
-// prints the audit.Event using log.go in json format
-type StdoutLogger struct {
+// StdoutLogger contains Log method to be invoked to log audit.Event.
+type logger struct {
 }
 
-// Log implements audit.Logger.Log
-// and prints the audit.Event using log.go in json format
-func (logger *StdoutLogger) Log(event *audit.Event) {
+// Log marshals the audit.Event to json and prints it using log.go
+func (logger *logger) Log(event *audit.Event) {
 	jsonBytes, err := json.Marshal(convertEvent(event))
 	if err != nil {
 		grpcLogger.Errorf("failed to marshal AuditEvent data to JSON: %v", err)
@@ -60,45 +61,39 @@ const (
 	stdName = "stdout"
 )
 
-// StdoutLoggerConfig implements audit.LoggerConfig
-// Since the logger doesn't support custom configs, it's a no-op one
-type StdoutLoggerConfig struct {
+// LoggerConfig embeds audit.LoggerConfig
+type LoggerConfig struct {
 	audit.LoggerConfig
 }
 
-// StdoutLoggerBuilder provides stdout implementation of
-// audit.LoggerBuilder
-type StdoutLoggerBuilder struct{}
+// StdoutLoggerBuilder contains information to build StdoutLogger
+type loggerBuilder struct{}
 
-// Name implements audit.LoggerBuilder.Name and returns
-// a hardcoded name of the StdoutLogger
-func (StdoutLoggerBuilder) Name() string {
+// Name returns a hardcoded name of the StdoutLogger
+func (loggerBuilder) Name() string {
 	return stdName
 }
 
-// Build implements audit.LoggerBuilder.Build
-// LoggerConfig is ignored so it always returns default StdoutLogger
-func (*StdoutLoggerBuilder) Build(audit.LoggerConfig) audit.Logger {
-	return &StdoutLogger{}
+// Build returns default StdoutLogger (audit.LoggerConfig is ignored)
+func (*loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
+	return &logger{}
 }
 
-// ParseLoggerConfig implements audit.LoggerBuilder.ParseLoggerConfig
-// Passed value is ignored but warning is printed
-func (*StdoutLoggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
+// ParseLoggerConfig returns LoggerConfig (json.RawMessage is ignored)
+func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
 	if config != nil {
-		grpcLogger.Warningf("Config value %v ignored, "+
-			"StdoutLogger doesn't support custom configs", string(config))
+		grpcLogger.Warningf("Config value %v ignored, StdoutLogger doesn't support custom configs", string(config))
 	}
-	return &StdoutLoggerConfig{}, nil
+	return &LoggerConfig{}, nil
 }
 
-func convertEvent(event *audit.Event) *stdoutEvent {
-	return &stdoutEvent{
-		FullMethodName: event.FullMethodName,
-		Principal:      event.Principal,
-		PolicyName:     event.PolicyName,
-		MatchedRule:    event.MatchedRule,
-		Authorized:     event.Authorized,
+func convertEvent(auditEvent *audit.Event) *event {
+	return &event{
+		FullMethodName: auditEvent.FullMethodName,
+		Principal:      auditEvent.Principal,
+		PolicyName:     auditEvent.PolicyName,
+		MatchedRule:    auditEvent.MatchedRule,
+		Authorized:     auditEvent.Authorized,
 		Timestamp:      time.Now().Format(time.RFC3339),
 	}
 }
