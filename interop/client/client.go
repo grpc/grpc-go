@@ -17,6 +17,10 @@
  */
 
 // Binary client is an interop client.
+//
+// See interop test case descriptions [here].
+//
+// [here]: https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md
 package main
 
 import (
@@ -94,7 +98,9 @@ var (
         custom_metadata: server will echo custom metadata;
         unimplemented_method: client attempts to call unimplemented method;
         unimplemented_service: client attempts to call unimplemented service;
-        pick_first_unary: all requests are sent to one server despite multiple servers are resolved.`)
+        pick_first_unary: all requests are sent to one server despite multiple servers are resolved;
+        orca_per_rpc: the client verifies ORCA per-RPC metrics are provided;
+        orca_oob: the client verifies ORCA out-of-band metrics are provided.`)
 
 	logger = grpclog.Component("interop")
 )
@@ -308,6 +314,12 @@ func main() {
 	case "channel_soak":
 		interop.DoSoakTest(tc, serverAddr, opts, true /* resetChannel */, *soakIterations, *soakMaxFailures, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, time.Now().Add(time.Duration(*soakOverallTimeoutSeconds)*time.Second))
 		logger.Infoln("ChannelSoak done")
+	case "orca_per_rpc":
+		interop.DoORCAPerRPCTest(tc)
+		logger.Infoln("ORCAPerRPC done")
+	case "orca_oob":
+		interop.DoORCAOOBTest(tc)
+		logger.Infoln("ORCAOOB done")
 	default:
 		logger.Fatal("Unsupported test case: ", *testCase)
 	}
