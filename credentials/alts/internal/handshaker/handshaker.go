@@ -92,10 +92,6 @@ func release() {
 	// If we need n to be configurable, we can pass it as an argument.
 	n := uint64(1)
 	concurrentHandshakes -= n
-	if concurrentHandshakes < 0 {
-		mu.Unlock()
-		panic("bad release")
-	}
 	mu.Unlock()
 }
 
