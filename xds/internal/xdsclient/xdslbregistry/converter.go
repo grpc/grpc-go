@@ -34,6 +34,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/envconfig"
 )
 
@@ -90,13 +91,24 @@ func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int
 			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), tsProto); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 			}
-			return convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
+			json, cont, err := convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
+			if cont {
+				continue
+			}
+			return json, err
 		case "type.googleapis.com/udpa.type.v1.TypedStruct":
 			tsProto := &v1xdsudpatypepb.TypedStruct{}
 			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), tsProto); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 			}
-			return convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
+			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), tsProto); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
+			}
+			json, cont, err := convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
+			if cont {
+				continue
+			}
+			return json, err
 		}
 		// Any entry not in the above list is unsupported and will be skipped.
 		// This includes Least Request as well, since grpc-go does not support
@@ -133,20 +145,31 @@ func convertWrrLocality(cfg *v3wrrlocalitypb.WrrLocality, depth int) (json.RawMe
 	return makeBalancerConfigJSON("xds_wrr_locality_experimental", lbCfgJSON), nil
 }
 
-func convertCustomPolicy(typeURL string, s *structpb.Struct) (json.RawMessage, error) {
+// convertCustomPolicy attempts to prepare json configuration for a custom lb
+// proto, which specifies the gRPC balancer type and configuration. Returns the
+// converted json, a bool representing whether the caller should continue to the
+// next policy, which is true if the gRPC Balancer registry does not contain
+// that balancer type, and an error which should cause caller to error if error
+// converting.
+func convertCustomPolicy(typeURL string, s *structpb.Struct) (json.RawMessage, bool, error) {
 	// The gRPC policy name will be the "type name" part of the value of the
 	// type_url field in the TypedStruct. We get this by using the part after
 	// the last / character. Can assume a valid type_url from the control plane.
 	urls := strings.Split(typeURL, "/")
 	name := urls[len(urls)-1]
 
+	if balancer.Get(name) == nil {
+		return nil, true, nil
+	}
+
 	rawJSON, err := json.Marshal(s)
 	if err != nil {
-		return nil, fmt.Errorf("error converting custom lb policy %v: %v for %+v", err, typeURL, s)
+		return nil, false, fmt.Errorf("error converting custom lb policy %v: %v for %+v", err, typeURL, s)
 	}
+
 	// The Struct contained in the TypedStruct will be returned as-is as the
 	// configuration JSON object.
-	return makeBalancerConfigJSON(name, rawJSON), nil
+	return makeBalancerConfigJSON(name, rawJSON), false, nil
 }
 
 func makeBalancerConfigJSON(name string, value json.RawMessage) []byte {
