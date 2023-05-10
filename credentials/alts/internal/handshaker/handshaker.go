@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"strconv"
 	"sync"
 
 	grpc "google.golang.org/grpc"
@@ -41,9 +43,10 @@ const (
 	// The maximum byte size of receive frames.
 	frameLimit              = 64 * 1024 // 64 KB
 	rekeyRecordProtocolName = "ALTSRP_GCM_AES128_REKEY"
-	// maxPendingHandshakes represents the maximum number of concurrent
+	// defaultMaxPendingHandshakes represents the default maximum number of concurrent
 	// handshakes.
-	maxPendingHandshakes = 100
+	defaultMaxPendingHandshakes        = 100
+	maxConcurrentHandshakesEnvVariable = "GRPC_ALTS_MAX_CONCURRENT_HANDSHAKES"
 )
 
 var (
@@ -59,6 +62,7 @@ var (
 			return conn.NewAES128GCMRekey(s, keyData)
 		},
 	}
+	maxPendingHandshakes int64
 	// control number of concurrent created (but not closed) handshakers.
 	mu                   sync.Mutex
 	concurrentHandshakes = int64(0)
@@ -70,6 +74,7 @@ var (
 )
 
 func init() {
+	maxPendingHandshakes = getMaxConcurrentHandshakes()
 	for protocol, f := range altsRecordFuncs {
 		if err := conn.RegisterProtocol(protocol, f); err != nil {
 			panic(err)
@@ -390,4 +395,19 @@ func (h *altsHandshaker) Close() {
 	if h.stream != nil {
 		h.stream.CloseSend()
 	}
+}
+
+func getMaxConcurrentHandshakes() int64 {
+	maxConcurrentHandshakesString, ok := os.LookupEnv(maxConcurrentHandshakesEnvVariable)
+	if !ok {
+		return defaultMaxPendingHandshakes
+	}
+	maxConcurrentHandshakes, err := strconv.ParseInt(maxConcurrentHandshakesString, 10, 64)
+	if err != nil {
+		return defaultMaxPendingHandshakes
+	}
+	if maxConcurrentHandshakes < 0 {
+		return defaultMaxPendingHandshakes
+	}
+	return maxConcurrentHandshakes
 }
