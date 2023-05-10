@@ -76,9 +76,8 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			auditLogger.Log(test.event)
-			//wantMessage := test.wantMessage + ",\"timestamp\":\"" + time.Now().Format(time.RFC3339) + "\"}\n"
 			var e event
-			err := json.Unmarshal([]byte(buf.String()), &e)
+			err := json.Unmarshal(buf.Bytes(), &e)
 			if err != nil {
 				t.Fatalf("Unexpected error\n%v", err)
 			}
