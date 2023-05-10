@@ -25,8 +25,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
-	"strconv"
 	"sync"
 
 	grpc "google.golang.org/grpc"
@@ -37,16 +35,13 @@ import (
 	"google.golang.org/grpc/credentials/alts/internal/conn"
 	altsgrpc "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
+	"google.golang.org/grpc/internal/envconfig"
 )
 
 const (
 	// The maximum byte size of receive frames.
 	frameLimit              = 64 * 1024 // 64 KB
 	rekeyRecordProtocolName = "ALTSRP_GCM_AES128_REKEY"
-	// defaultMaxPendingHandshakes represents the default maximum number of concurrent
-	// handshakes.
-	defaultMaxPendingHandshakes        = 100
-	maxConcurrentHandshakesEnvVariable = "GRPC_ALTS_MAX_CONCURRENT_HANDSHAKES"
 )
 
 var (
@@ -62,10 +57,9 @@ var (
 			return conn.NewAES128GCMRekey(s, keyData)
 		},
 	}
-	maxPendingHandshakes int64
 	// control number of concurrent created (but not closed) handshakers.
 	mu                   sync.Mutex
-	concurrentHandshakes = int64(0)
+	concurrentHandshakes = uint64(0)
 	// errDropped occurs when maxPendingHandshakes is reached.
 	errDropped = errors.New("maximum number of concurrent ALTS handshakes is reached")
 	// errOutOfBound occurs when the handshake service returns a consumed
@@ -74,7 +68,6 @@ var (
 )
 
 func init() {
-	maxPendingHandshakes = getMaxConcurrentHandshakes()
 	for protocol, f := range altsRecordFuncs {
 		if err := conn.RegisterProtocol(protocol, f); err != nil {
 			panic(err)
@@ -85,8 +78,8 @@ func init() {
 func acquire() bool {
 	mu.Lock()
 	// If we need n to be configurable, we can pass it as an argument.
-	n := int64(1)
-	success := maxPendingHandshakes-concurrentHandshakes >= n
+	n := uint64(1)
+	success := envconfig.ALTSMaxConcurrentHandshakes-concurrentHandshakes >= n
 	if success {
 		concurrentHandshakes += n
 	}
@@ -97,7 +90,7 @@ func acquire() bool {
 func release() {
 	mu.Lock()
 	// If we need n to be configurable, we can pass it as an argument.
-	n := int64(1)
+	n := uint64(1)
 	concurrentHandshakes -= n
 	if concurrentHandshakes < 0 {
 		mu.Unlock()
@@ -138,10 +131,6 @@ func DefaultClientHandshakerOptions() *ClientHandshakerOptions {
 func DefaultServerHandshakerOptions() *ServerHandshakerOptions {
 	return &ServerHandshakerOptions{}
 }
-
-// TODO: add support for future local and remote endpoint in both client options
-//       and server options (server options struct does not exist now. When
-//       caller can provide endpoints, it should be created.
 
 // altsHandshaker is used to complete an ALTS handshake between client and
 // server. This handshaker talks to the ALTS handshaker service in the metadata
@@ -269,8 +258,6 @@ func (h *altsHandshaker) ServerHandshake(ctx context.Context) (net.Conn, credent
 	}
 
 	// Prepare server parameters.
-	// TODO: currently only ALTS parameters are provided. Might need to use
-	//       more options in the future.
 	params := make(map[int32]*altspb.ServerHandshakeParameters)
 	params[int32(altspb.HandshakeProtocol_ALTS)] = &altspb.ServerHandshakeParameters{
 		RecordProtocols: recordProtocols,
@@ -395,19 +382,4 @@ func (h *altsHandshaker) Close() {
 	if h.stream != nil {
 		h.stream.CloseSend()
 	}
-}
-
-func getMaxConcurrentHandshakes() int64 {
-	maxConcurrentHandshakesString, ok := os.LookupEnv(maxConcurrentHandshakesEnvVariable)
-	if !ok {
-		return defaultMaxPendingHandshakes
-	}
-	maxConcurrentHandshakes, err := strconv.ParseInt(maxConcurrentHandshakesString, 10, 64)
-	if err != nil {
-		return defaultMaxPendingHandshakes
-	}
-	if maxConcurrentHandshakes < 0 {
-		return defaultMaxPendingHandshakes
-	}
-	return maxConcurrentHandshakes
 }
