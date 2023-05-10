@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -448,12 +449,13 @@ func (s) TestBalancer_TwoAddresses_BlackoutPeriod(t *testing.T) {
 		defer mu.Unlock()
 		now = t
 	}
-	iwrr.TimeNow = func() time.Time {
+
+	setTimeNow(func() time.Time {
 		mu.Lock()
 		defer mu.Unlock()
 		return now
-	}
-	t.Cleanup(func() { iwrr.TimeNow = time.Now })
+	})
+	t.Cleanup(func() { setTimeNow(time.Now) })
 
 	testCases := []struct {
 		blackoutPeriodCfg *time.Duration
@@ -526,12 +528,12 @@ func (s) TestBalancer_TwoAddresses_WeightExpiration(t *testing.T) {
 		defer mu.Unlock()
 		now = t
 	}
-	iwrr.TimeNow = func() time.Time {
+	setTimeNow(func() time.Time {
 		mu.Lock()
 		defer mu.Unlock()
 		return now
-	}
-	t.Cleanup(func() { iwrr.TimeNow = time.Now })
+	})
+	t.Cleanup(func() { setTimeNow(time.Now) })
 
 	srv1 := startServer(t, reportBoth)
 	srv2 := startServer(t, reportBoth)
@@ -710,4 +712,19 @@ func checkWeights(ctx context.Context, t *testing.T, sws ...srvWeight) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatalf("Failed to route RPCs with proper ratio")
+}
+
+func init() {
+	setTimeNow(time.Now)
+	iwrr.TimeNow = timeNow
+}
+
+var timeNowFunc atomic.Value // func() time.Time
+
+func timeNow() time.Time {
+	return timeNowFunc.Load().(func() time.Time)()
+}
+
+func setTimeNow(f func() time.Time) {
+	timeNowFunc.Store(f)
 }
