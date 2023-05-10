@@ -172,6 +172,16 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							// The type not registered in gRPC Policy registry.
+							// Should fallback to next policy in list.
+							TypedConfig: testutils.MarshalAny(&v3xdsxdstypepb.TypedStruct{
+								TypeUrl: "type.googleapis.com/myorg.ThisTypeDoesNotExist",
+								Value:   &structpb.Struct{},
+							}),
+						},
+					},
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
 							TypedConfig: testutils.MarshalAny(&v3xdsxdstypepb.TypedStruct{
 								TypeUrl: "type.googleapis.com/myorg.MyCustomLeastRequestPolicy",
 								Value:   &structpb.Struct{},
@@ -318,6 +328,15 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 			name: "no-supported-policy",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							// The type not registered in gRPC Policy registry.
+							TypedConfig: testutils.MarshalAny(&v3xdsxdstypepb.TypedStruct{
+								TypeUrl: "type.googleapis.com/myorg.ThisTypeDoesNotExist",
+								Value:   &structpb.Struct{},
+							}),
+						},
+					},
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
 							// Not supported by gRPC-Go.
