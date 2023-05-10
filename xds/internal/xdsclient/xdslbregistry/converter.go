@@ -88,14 +88,11 @@ func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int
 			return convertWrrLocality(wrrlProto, depth)
 		case "type.googleapis.com/xds.type.v3.TypedStruct":
 			tsProto := &v3xdsxdstypepb.TypedStruct{}
-
 			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), tsProto); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 			}
-			var json json.RawMessage
-			var cont bool
-			var err error
-			if json, cont, err = convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue()); cont {
+			json, cont, err := convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
+			if cont {
 				continue
 			}
 			return json, err
@@ -104,10 +101,11 @@ func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int
 			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), tsProto); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 			}
-			var json json.RawMessage
-			var cont bool
-			var err error
-			if json, cont, err = convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue()); cont {
+			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), tsProto); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
+			}
+			json, cont, err := convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
+			if cont {
 				continue
 			}
 			return json, err
