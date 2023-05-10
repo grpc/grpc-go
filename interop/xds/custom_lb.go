@@ -16,8 +16,7 @@
  *
  */
 
-// Package xds contains a custom load balancing policy implementation for
-// interop tests.
+// Package xds contains various xds interop helpers for usage in interop tests.
 package xds
 
 import (
@@ -33,18 +32,17 @@ import (
 )
 
 func init() {
-	balancer.Register(bb{})
+	balancer.Register(rpcBehaviorBB{})
 }
 
 const name = "test.RpcBehaviorLoadBalancer"
 
-type bb struct{}
+type rpcBehaviorBB struct{}
 
-func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
+func (rpcBehaviorBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &rpcBehaviorLB{
 		ClientConn: cc,
 	}
-
 	// round_robin child to complete balancer tree with a usable leaf policy and
 	// have RPCs actually work.
 	builder := balancer.Get(roundrobin.Name)
@@ -58,11 +56,11 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		// Shouldn't happen, defensive programming.
 		return nil
 	}
-	b.child = rr
+	b.Balancer = rr
 	return b
 }
 
-func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+func (rpcBehaviorBB) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	lbCfg := &lbConfig{}
 	if err := json.Unmarshal(s, lbCfg); err != nil {
 		return nil, fmt.Errorf("rpc-behavior-lb: unable to marshal lbConfig: %s, error: %v", string(s), err)
@@ -71,7 +69,7 @@ func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 
 }
 
-func (bb) Name() string {
+func (rpcBehaviorBB) Name() string {
 	return name
 }
 
@@ -86,11 +84,11 @@ type lbConfig struct {
 type rpcBehaviorLB struct {
 	// embed a ClientConn to wrap only UpdateState() operation
 	balancer.ClientConn
+	// embed a Balancer to wrap only UpdateClientConnState() operation
+	balancer.Balancer
 
 	mu  sync.Mutex
 	cfg *lbConfig
-
-	child balancer.Balancer
 }
 
 func (b *rpcBehaviorLB) UpdateClientConnState(s balancer.ClientConnState) error {
@@ -101,22 +99,20 @@ func (b *rpcBehaviorLB) UpdateClientConnState(s balancer.ClientConnState) error 
 	b.mu.Lock()
 	b.cfg = lbCfg
 	b.mu.Unlock()
-	return b.child.UpdateClientConnState(balancer.ClientConnState{
+	return b.Balancer.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: s.ResolverState,
 	})
 }
 
-// Forward other balancer.Balancer operations.
-func (b *rpcBehaviorLB) ResolverError(err error) {
-	b.child.ResolverError(err)
-}
+func (b *rpcBehaviorLB) UpdateState(state balancer.State) {
+	b.mu.Lock()
+	rpcBehavior := b.cfg.RPCBehavior
+	b.mu.Unlock()
 
-func (b *rpcBehaviorLB) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	b.child.UpdateSubConnState(sc, state)
-}
-
-func (b *rpcBehaviorLB) Close() {
-	b.child.Close()
+	b.ClientConn.UpdateState(balancer.State{
+		ConnectivityState: state.ConnectivityState,
+		Picker:            newRPCBehaviorPicker(state.Picker, rpcBehavior),
+	})
 }
 
 // rpcBehaviorPicker wraps a picker and adds the rpc-behavior metadata field
@@ -132,13 +128,7 @@ func (p *rpcBehaviorPicker) Pick(info balancer.PickInfo) (balancer.PickResult, e
 	if err != nil {
 		return balancer.PickResult{}, err
 	}
-
-	if pr.Metadata == nil {
-		pr.Metadata = metadata.Pairs("rpc-behavior", p.rpcBehavior)
-	} else {
-		pr.Metadata.Append("rpc-behavior", p.rpcBehavior)
-	}
-
+	pr.Metadata = metadata.Join(pr.Metadata, metadata.Pairs("rpc-behavior", p.rpcBehavior))
 	return pr, nil
 }
 
@@ -147,15 +137,4 @@ func newRPCBehaviorPicker(childPicker balancer.Picker, rpcBehavior string) *rpcB
 		childPicker: childPicker,
 		rpcBehavior: rpcBehavior,
 	}
-}
-
-func (b *rpcBehaviorLB) UpdateState(state balancer.State) {
-	b.mu.Lock()
-	rpcBehavior := b.cfg.RPCBehavior
-	b.mu.Unlock()
-
-	b.ClientConn.UpdateState(balancer.State{
-		ConnectivityState: state.ConnectivityState,
-		Picker:            newRPCBehaviorPicker(state.Picker, rpcBehavior),
-	})
 }
