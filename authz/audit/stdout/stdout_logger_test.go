@@ -66,13 +66,12 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 	builder := &loggerBuilder{}
 	config, _ := builder.ParseLoggerConfig(content)
 	auditLogger := builder.Build(config)
-
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
 	log.SetFlags(0)
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			var buf bytes.Buffer
+			log.SetOutput(&buf)
 			auditLogger.Log(test.event)
 			var e event
 			if err := json.Unmarshal(buf.Bytes(), &e); err != nil {
@@ -85,7 +84,6 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 			if diff := cmp.Diff(trimEvent(e), test.event); diff != "" {
 				t.Fatalf("Unexpected message\ndiff (-got +want):\n%s", diff)
 			}
-			buf.Reset()
 		})
 	}
 }
