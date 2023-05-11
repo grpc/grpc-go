@@ -44,7 +44,7 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 	ns = ns % int64(time.Second)
 
 	var sign string
-	if sec < 0 {
+	if sec < 0 || ns < 0 {
 		sign, sec, ns = "-", -1*sec, -1*ns
 	}
 
@@ -66,6 +66,11 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	if !strings.HasSuffix(s, "s") {
 		return fmt.Errorf("malformed duration %q", s)
 	}
+	neg := false
+	if s[0] == '-' {
+		neg = true
+		s = s[1:]
+	}
 	ss := strings.SplitN(s[:len(s)-1], ".", 3)
 	if len(ss) > 2 {
 		return fmt.Errorf("malformed duration %q", s)
@@ -80,6 +85,9 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 		}
 		const maxSeconds = math.MaxInt64 / int64(time.Second)
 		const minSeconds = math.MinInt64 / int64(time.Second)
+		if neg {
+			sec *= -1
+		}
 		if sec > maxSeconds || sec < minSeconds {
 			return fmt.Errorf("out of range: %q", s)
 		}
@@ -96,9 +104,7 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 		if err != nil {
 			return fmt.Errorf("malformed duration %q: %v", s, err)
 		}
-		neg := false
-		if *d < 0 {
-			neg = true
+		if neg {
 			f *= -1
 		}
 		for i := 9; i > len(ss[1]); i-- {
