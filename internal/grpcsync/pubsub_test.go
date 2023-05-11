@@ -33,15 +33,18 @@ type testSubscriber struct {
 	onMsgCh chan struct{}
 }
 
-func newTestSubscriber() *testSubscriber {
-	return &testSubscriber{onMsgCh: make(chan struct{})}
+func newTestSubscriber(chSize int) *testSubscriber {
+	return &testSubscriber{onMsgCh: make(chan struct{}, chSize)}
 }
 
 func (ts *testSubscriber) OnMessage(msg interface{}) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	ts.msgs = append(ts.msgs, msg.(int))
-	ts.onMsgCh <- struct{}{}
+	select {
+	case ts.onMsgCh <- struct{}{}:
+	default:
+	}
 }
 
 func (ts *testSubscriber) receivedMsgs() []int {
@@ -58,7 +61,7 @@ func (s) TestPubSub_PublishNoMsg(t *testing.T) {
 	pubsub := NewPubSub()
 	defer pubsub.Stop()
 
-	ts := newTestSubscriber()
+	ts := newTestSubscriber(1)
 	pubsub.Subscribe(ts)
 
 	select {
@@ -71,18 +74,19 @@ func (s) TestPubSub_PublishNoMsg(t *testing.T) {
 func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 	pubsub := NewPubSub()
 
-	ts1 := newTestSubscriber()
-	pubsub.Subscribe(ts1)
-	wantMsgs := []int{}
-
 	const numPublished = 10
+
+	ts1 := newTestSubscriber(numPublished)
+	pubsub.Subscribe(ts1)
+	wantMsgs1 := []int{}
+
 	var wg sync.WaitGroup
 	wg.Add(2)
 	// Publish ten messages on the pubsub and ensure that they are received in order by the subscriber.
 	go func() {
 		for i := 0; i < numPublished; i++ {
 			pubsub.Publish(i)
-			wantMsgs = append(wantMsgs, i)
+			wantMsgs1 = append(wantMsgs1, i)
 		}
 		wg.Done()
 	}()
@@ -103,12 +107,12 @@ func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 	if isTimeout {
 		t.Fatalf("Timeout when expecting the onMessage() callback to be invoked")
 	}
-	if gotMsgs := ts1.receivedMsgs(); !cmp.Equal(gotMsgs, wantMsgs) {
-		t.Fatalf("Received messages is %v, want %v", gotMsgs, wantMsgs)
+	if gotMsgs1 := ts1.receivedMsgs(); !cmp.Equal(gotMsgs1, wantMsgs1) {
+		t.Fatalf("Received messages is %v, want %v", gotMsgs1, wantMsgs1)
 	}
 
 	// Register another subscriber and ensure that it receives the last published message.
-	ts2 := newTestSubscriber()
+	ts2 := newTestSubscriber(numPublished)
 	pubsub.Subscribe(ts2)
 	wantMsgs2 := []int{numPublished - 1}
 
@@ -126,7 +130,7 @@ func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 	go func() {
 		for i := 0; i < numPublished; i++ {
 			pubsub.Publish(i)
-			wantMsgs = append(wantMsgs, i)
+			wantMsgs1 = append(wantMsgs1, i)
 			wantMsgs2 = append(wantMsgs2, i)
 		}
 		wg.Done()
@@ -158,8 +162,8 @@ func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 		t.Fatalf("Timeout when expecting the onMessage() callback to be invoked")
 	default:
 	}
-	if gotMsgs := ts1.receivedMsgs(); !cmp.Equal(gotMsgs, wantMsgs) {
-		t.Fatalf("Received messages is %v, want %v", gotMsgs, wantMsgs)
+	if gotMsgs1 := ts1.receivedMsgs(); !cmp.Equal(gotMsgs1, wantMsgs1) {
+		t.Fatalf("Received messages is %v, want %v", gotMsgs1, wantMsgs1)
 	}
 	if gotMsgs2 := ts2.receivedMsgs(); !cmp.Equal(gotMsgs2, wantMsgs2) {
 		t.Fatalf("Received messages is %v, want %v", gotMsgs2, wantMsgs2)
@@ -185,14 +189,15 @@ func (s) TestPubSub_PublishMsgs_BeforeRegisterSub(t *testing.T) {
 	pubsub := NewPubSub()
 	defer pubsub.Stop()
 
-	pubsub.Publish(1)
-	pubsub.Publish(2)
-	pubsub.Publish(3)
+	const numPublished = 3
+	for i := 0; i < numPublished; i++ {
+		pubsub.Publish(i)
+	}
 
-	ts := newTestSubscriber()
+	ts := newTestSubscriber(numPublished)
 	pubsub.Subscribe(ts)
 
-	wantMsgs := []int{3}
+	wantMsgs := []int{numPublished - 1}
 	// Ensure that the subscriber callback is invoked with a previously
 	// published message.
 	select {
