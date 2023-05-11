@@ -30,13 +30,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 )
 
-var (
-	content     = json.RawMessage(`{"name": "conf", "val": "to be ignored"}`)
-	builder     = &loggerBuilder{}
-	config, _   = builder.ParseLoggerConfig(content)
-	auditLogger = builder.Build(config)
-)
-
 type s struct {
 	grpctest.Tester
 }
@@ -69,6 +62,11 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 		},
 	}
 
+	content := json.RawMessage(`{"name": "conf", "val": "to be ignored"}`)
+	builder := &loggerBuilder{}
+	config, _ := builder.ParseLoggerConfig(content)
+	auditLogger := builder.Build(config)
+
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 	log.SetFlags(0)
@@ -77,35 +75,34 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			auditLogger.Log(test.event)
 			var e event
-			err := json.Unmarshal(buf.Bytes(), &e)
-			if err != nil {
-				t.Fatalf("Unexpected error\n%v", err)
+			if err := json.Unmarshal(buf.Bytes(), &e); err != nil {
+				t.Fatalf("Failed to unmarshal audit log event: %v", err)
 			}
-			if len(strings.TrimSpace(e.Timestamp)) == 0 {
-				t.Fatalf("Resulted event has no timestamp\n%v", e)
+			if strings.TrimSpace(e.Timestamp) == "" {
+				t.Fatalf("Resulted event has no timestamp: %v", e)
 			}
 
 			if diff := cmp.Diff(trimEvent(e), test.event); diff != "" {
-				t.Fatalf("Unexpected message\ndiff (-want +got):\n%s", diff)
+				t.Fatalf("Unexpected message\ndiff (-got +want):\n%s", diff)
 			}
 			buf.Reset()
 		})
 	}
-
 }
 
 func (s) TestStdoutLoggerBuilder_NilConfig(t *testing.T) {
-	builder = &loggerBuilder{}
+	builder := &loggerBuilder{}
 	config, err := builder.ParseLoggerConfig(nil)
 	if err != nil {
-		t.Fatalf("Unexpected error\n%v", err)
+		t.Fatalf("Failed to parse stdout logger configuration: %v", err)
 	}
-	auditLogger = builder.Build(config)
-	if auditLogger == nil {
-		t.Fatalf("Unexpected error\nAuditLogger is nil")
+	if l := builder.Build(config); l == nil {
+		t.Fatal("Failed to build stdout audit logger")
 	}
 }
 
+// trimEvent converts a logged stdout.event into an audit.Event
+// by removing Timestamp field. It is used for comparing events during testing.
 func trimEvent(testEvent event) *audit.Event {
 	return &audit.Event{
 		FullMethodName: testEvent.FullMethodName,

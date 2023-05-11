@@ -40,11 +40,10 @@ type event struct {
 	PolicyName     string `json:"policyName"`
 	MatchedRule    string `json:"matchedRule"`
 	Authorized     bool   `json:"authorized"`
-	// Timestamp represents time when Log method prints the audit.Event
-	Timestamp string `json:"timestamp"`
+	Timestamp      string `json:"timestamp"` // Time when the audit event is logged via Log method
 }
 
-// StdoutLogger contains Log method to be invoked to log audit.Event.
+// logger implements the audit.Logger interface by logging to standard output.
 type logger struct {
 }
 
@@ -53,6 +52,7 @@ func (logger *logger) Log(event *audit.Event) {
 	jsonBytes, err := json.Marshal(convertEvent(event))
 	if err != nil {
 		grpcLogger.Errorf("failed to marshal AuditEvent data to JSON: %v", err)
+		return
 	}
 	log.Println(string(jsonBytes))
 }
@@ -61,30 +61,31 @@ const (
 	stdName = "stdout"
 )
 
-// LoggerConfig embeds audit.LoggerConfig
-type LoggerConfig struct {
+// loggerConfig represents the configuration for the stdout logger.
+// It is currently empty and implements the audit.Logger interface by embedding it.
+type loggerConfig struct {
 	audit.LoggerConfig
 }
 
-// StdoutLoggerBuilder contains information to build StdoutLogger
 type loggerBuilder struct{}
 
-// Name returns a hardcoded name of the StdoutLogger
 func (loggerBuilder) Name() string {
 	return stdName
 }
 
-// Build returns default StdoutLogger (audit.LoggerConfig is ignored)
+// Build returns a new instance of the stdout logger.
+// Passed in configuration is ignored as the stdout logger does not
+// expect any configuration to be provided.
 func (*loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 	return &logger{}
 }
 
-// ParseLoggerConfig returns LoggerConfig (json.RawMessage is ignored)
+// ParseLoggerConfig is a no-op since the stdout logger does not accept any configuration.
 func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
 	if config != nil {
-		grpcLogger.Warningf("Config value %v ignored, StdoutLogger doesn't support custom configs", string(config))
+		grpcLogger.Warningf("Stdout logger doesn't support custom configs. Ignoring:\n%s", string(config))
 	}
-	return &LoggerConfig{}, nil
+	return &loggerConfig{}, nil
 }
 
 func convertEvent(auditEvent *audit.Event) *event {
