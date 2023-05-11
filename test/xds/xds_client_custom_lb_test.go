@@ -29,13 +29,17 @@ import (
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3clientsideweightedroundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/client_side_weighted_round_robin/v3"
 	v3roundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/round_robin/v3"
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
 	"github.com/golang/protobuf/proto"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"google.golang.org/grpc"
+	_ "google.golang.org/grpc/balancer/weightedroundrobin" // To register weighted_round_robin_experimental.
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
@@ -178,6 +182,66 @@ func (s) TestWrrLocality(t *testing.T) {
 				{Addr: backend1.Address},
 				{Addr: backend3.Address},
 				{Addr: backend3.Address},
+			},
+		},
+		// Sanity check for weighted round robin. Don't need to test super
+		// specific behaviors, as that is covered in unit tests. Set up weighted
+		// round robin as the endpoint picking policy with per RPC load reports
+		// enabled. Due the server not sending trailers with load reports, the
+		// weighted round robin policy should essentially function as round
+		// robin, and thus should have the same distribution as round robin
+		// above.
+		{
+			name: "custom_lb_child_wrr/",
+			wrrLocalityConfiguration: wrrLocality(&v3clientsideweightedroundrobinpb.ClientSideWeightedRoundRobin{
+				EnableOobLoadReport: &wrapperspb.BoolValue{
+					Value: false,
+				},
+				// BlackoutPeriod long enough to cause load report weights to
+				// trigger in the scope of test case, but no load reports
+				// configured anyway.
+				BlackoutPeriod:          &durationpb.Duration{Seconds: 10},
+				WeightExpirationPeriod:  &durationpb.Duration{Seconds: 10},
+				WeightUpdatePeriod:      &durationpb.Duration{Seconds: 1},
+				ErrorUtilizationPenalty: &wrapperspb.FloatValue{Value: 1},
+			}),
+			addressDistributionWant: []resolver.Address{
+				{Addr: backend1.Address},
+				{Addr: backend1.Address},
+				{Addr: backend1.Address},
+				{Addr: backend1.Address},
+				{Addr: backend1.Address},
+				{Addr: backend1.Address},
+				{Addr: backend2.Address},
+				{Addr: backend2.Address},
+				{Addr: backend2.Address},
+				{Addr: backend2.Address},
+				{Addr: backend2.Address},
+				{Addr: backend2.Address},
+				{Addr: backend3.Address},
+				{Addr: backend3.Address},
+				{Addr: backend3.Address},
+				{Addr: backend3.Address},
+				{Addr: backend3.Address},
+				{Addr: backend3.Address},
+				{Addr: backend3.Address},
+				{Addr: backend3.Address},
+				{Addr: backend4.Address},
+				{Addr: backend4.Address},
+				{Addr: backend4.Address},
+				{Addr: backend4.Address},
+				{Addr: backend4.Address},
+				{Addr: backend4.Address},
+				{Addr: backend4.Address},
+				{Addr: backend4.Address},
+				{Addr: backend5.Address},
+				{Addr: backend5.Address},
+				{Addr: backend5.Address},
+				{Addr: backend5.Address},
+				{Addr: backend5.Address},
+				{Addr: backend5.Address},
+				{Addr: backend5.Address},
+				{Addr: backend5.Address},
 			},
 		},
 	}

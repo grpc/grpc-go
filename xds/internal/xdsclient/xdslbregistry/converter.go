@@ -25,10 +25,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3clientsideweightedroundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/client_side_weighted_round_robin/v3"
 	v3ringhashpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/ring_hash/v3"
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
 	"github.com/golang/protobuf/proto"
@@ -36,6 +38,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/envconfig"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 )
 
 const (
@@ -86,6 +89,12 @@ func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int
 				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 			}
 			return convertWrrLocality(wrrlProto, depth)
+		case "type.googleapis.com/envoy.extensions.load_balancing_policies.client_side_weighted_round_robin.v3.ClientSideWeightedRoundRobin":
+			cswrrProto := &v3clientsideweightedroundrobinpb.ClientSideWeightedRoundRobin{}
+			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), cswrrProto); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
+			}
+			return convertClientSideWRR(cswrrProto)
 		case "type.googleapis.com/xds.type.v3.TypedStruct":
 			tsProto := &v3xdsxdstypepb.TypedStruct{}
 			if err := proto.Unmarshal(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), tsProto); err != nil {
@@ -117,6 +126,11 @@ func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int
 	return nil, fmt.Errorf("no supported policy found in policy list +%v", lbPolicy)
 }
 
+type ringHashLBConfig struct {
+	MinRingSize uint64 `json:"minRingSize,omitempty"`
+	MaxRingSize uint64 `json:"maxRingSize,omitempty"`
+}
+
 // convertRingHash converts a proto representation of the ring_hash LB policy's
 // configuration to gRPC JSON format.
 func convertRingHash(cfg *v3ringhashpb.RingHash) (json.RawMessage, error) {
@@ -132,8 +146,20 @@ func convertRingHash(cfg *v3ringhashpb.RingHash) (json.RawMessage, error) {
 		maxSize = max.GetValue()
 	}
 
-	lbCfgJSON := []byte(fmt.Sprintf("{\"minRingSize\": %d, \"maxRingSize\": %d}", minSize, maxSize))
-	return makeBalancerConfigJSON("ring_hash_experimental", lbCfgJSON), nil
+	rhCfg := &ringHashLBConfig{
+		MinRingSize: minSize,
+		MaxRingSize: maxSize,
+	}
+
+	rhCfgJSON, err := json.Marshal(rhCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", rhCfg, err)
+	}
+	return makeBalancerConfigJSON("ring_hash_experimental", rhCfgJSON), nil
+}
+
+type wrrLocalityLBConfig struct {
+	ChildPolicy json.RawMessage `json:"childPolicy,omitempty"`
 }
 
 func convertWrrLocality(cfg *v3wrrlocalitypb.WrrLocality, depth int) (json.RawMessage, error) {
@@ -141,7 +167,13 @@ func convertWrrLocality(cfg *v3wrrlocalitypb.WrrLocality, depth int) (json.RawMe
 	if err != nil {
 		return nil, fmt.Errorf("error converting endpoint picking policy: %v for %+v", err, cfg)
 	}
-	lbCfgJSON := []byte(fmt.Sprintf(`{"childPolicy": %s}`, epJSON))
+	wrrLCfg := wrrLocalityLBConfig{
+		ChildPolicy: epJSON,
+	}
+	lbCfgJSON, err := json.Marshal(wrrLCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", wrrLCfg, err)
+	}
 	return makeBalancerConfigJSON("xds_wrr_locality_experimental", lbCfgJSON), nil
 }
 
@@ -170,6 +202,65 @@ func convertCustomPolicy(typeURL string, s *structpb.Struct) (json.RawMessage, b
 	// The Struct contained in the TypedStruct will be returned as-is as the
 	// configuration JSON object.
 	return makeBalancerConfigJSON(name, rawJSON), false, nil
+}
+
+type wrrLBConfig struct {
+	EnableOOBLoadReport     bool                           `json:"enableOobLoadReport,omitempty"`
+	OOBReportingPeriod      internalserviceconfig.Duration `json:"oobReportingPeriod,omitempty"`
+	BlackoutPeriod          internalserviceconfig.Duration `json:"blackoutPeriod,omitempty"`
+	WeightExpirationPeriod  internalserviceconfig.Duration `json:"weightExpirationPeriod,omitempty"`
+	WeightUpdatePeriod      internalserviceconfig.Duration `json:"weightUpdatePeriod,omitempty"`
+	ErrorUtilizationPenalty float64                        `json:"errorUtilizationPenalty,omitempty"`
+}
+
+func convertClientSideWRR(cfg *v3clientsideweightedroundrobinpb.ClientSideWeightedRoundRobin) (json.RawMessage, error) {
+	const (
+		defaultEnableOOBLoadReport     = false
+		defaultOOBReportingPeriod      = 10 * time.Second
+		defaultBlackoutPeriod          = 10 * time.Second
+		defaultWeightExpirationPeriod  = 3 * time.Minute
+		defaultWeightUpdatePeriod      = time.Second
+		defaultErrorUtilizationPenalty = float32(1.0)
+	)
+	enableOOBLoadReport := defaultEnableOOBLoadReport
+	if enableOOBLoadReportCfg := cfg.GetEnableOobLoadReport(); enableOOBLoadReportCfg != nil {
+		enableOOBLoadReport = enableOOBLoadReportCfg.GetValue()
+	}
+	oobReportingPeriod := defaultOOBReportingPeriod
+	if oobReportingPeriodCfg := cfg.GetOobReportingPeriod(); oobReportingPeriodCfg != nil {
+		oobReportingPeriod = oobReportingPeriodCfg.AsDuration()
+	}
+	blackoutPeriod := defaultBlackoutPeriod
+	if blackoutPeriodCfg := cfg.GetBlackoutPeriod(); blackoutPeriodCfg != nil {
+		blackoutPeriod = blackoutPeriodCfg.AsDuration()
+	}
+	weightExpirationPeriod := defaultWeightExpirationPeriod
+	if weightExpirationPeriodCfg := cfg.GetBlackoutPeriod(); weightExpirationPeriodCfg != nil {
+		weightExpirationPeriod = weightExpirationPeriodCfg.AsDuration()
+	}
+	weightUpdatePeriod := defaultWeightUpdatePeriod
+	if weightUpdatePeriodCfg := cfg.GetWeightUpdatePeriod(); weightUpdatePeriodCfg != nil {
+		weightUpdatePeriod = weightUpdatePeriodCfg.AsDuration()
+	}
+	errorUtilizationPenalty := defaultErrorUtilizationPenalty
+	if errorUtilizationPenaltyCfg := cfg.GetErrorUtilizationPenalty(); errorUtilizationPenaltyCfg != nil {
+		errorUtilizationPenalty = errorUtilizationPenaltyCfg.GetValue()
+	}
+
+	wrrLBConfig := &wrrLBConfig{
+		EnableOOBLoadReport:     enableOOBLoadReport,
+		OOBReportingPeriod:      internalserviceconfig.Duration(oobReportingPeriod),
+		BlackoutPeriod:          internalserviceconfig.Duration(blackoutPeriod),
+		WeightExpirationPeriod:  internalserviceconfig.Duration(weightExpirationPeriod),
+		WeightUpdatePeriod:      internalserviceconfig.Duration(weightUpdatePeriod),
+		ErrorUtilizationPenalty: float64(errorUtilizationPenalty),
+	}
+
+	lbCfgJSON, err := json.Marshal(wrrLBConfig)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", wrrLBConfig, err)
+	}
+	return makeBalancerConfigJSON("weighted_round_robin_experimental", lbCfgJSON), nil
 }
 
 func makeBalancerConfigJSON(name string, value json.RawMessage) []byte {
