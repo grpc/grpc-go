@@ -64,7 +64,7 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	if !strings.HasSuffix(s, "s") {
-		return fmt.Errorf("malformed duration %q", s)
+		return fmt.Errorf("malformed duration %q: missing seconds unit", s)
 	}
 	neg := false
 	if s[0] == '-' {
@@ -73,7 +73,7 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	}
 	ss := strings.SplitN(s[:len(s)-1], ".", 3)
 	if len(ss) > 2 {
-		return fmt.Errorf("malformed duration %q", s)
+		return fmt.Errorf("malformed duration %q: too many decimals", s)
 	}
 	// hasDigits is set if either the whole or fractional part of the number is
 	// present, since both are optional but one is required.
@@ -98,7 +98,7 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	}
 	if len(ss) == 2 && len(ss[1]) > 0 {
 		if len(ss[1]) > 9 {
-			return fmt.Errorf("malformed duration %q", s)
+			return fmt.Errorf("malformed duration %q: too many digits after decimal", s)
 		}
 		f, err := strconv.ParseInt(ss[1], 10, 64)
 		if err != nil {
@@ -117,7 +117,7 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 		hasDigits = true
 	}
 	if !hasDigits {
-		return fmt.Errorf("malformed duration %q", s)
+		return fmt.Errorf("malformed duration %q: contains no numbers", s)
 	}
 	return nil
 }
