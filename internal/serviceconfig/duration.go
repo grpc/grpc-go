@@ -78,46 +78,53 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	// hasDigits is set if either the whole or fractional part of the number is
 	// present, since both are optional but one is required.
 	hasDigits := false
+	var sec, ns int64
 	if len(ss[0]) > 0 {
-		sec, err := strconv.ParseInt(ss[0], 10, 64)
-		if err != nil {
+		var err error
+		if sec, err = strconv.ParseInt(ss[0], 10, 64); err != nil {
 			return fmt.Errorf("malformed duration %q: %v", s, err)
 		}
-		const maxSeconds = math.MaxInt64 / int64(time.Second)
-		const minSeconds = math.MinInt64 / int64(time.Second)
-		if neg {
-			sec *= -1
-		}
-		if sec > maxSeconds || sec < minSeconds {
+		// Maximum seconds value per the durationpb spec.
+		const maxProtoSeconds = 315_576_000_000
+		if sec > maxProtoSeconds {
 			return fmt.Errorf("out of range: %q", s)
 		}
-		*d = Duration(sec) * Duration(time.Second)
 		hasDigits = true
-	} else {
-		*d = 0
 	}
 	if len(ss) == 2 && len(ss[1]) > 0 {
 		if len(ss[1]) > 9 {
 			return fmt.Errorf("malformed duration %q: too many digits after decimal", s)
 		}
-		f, err := strconv.ParseInt(ss[1], 10, 64)
-		if err != nil {
+		var err error
+		if ns, err = strconv.ParseInt(ss[1], 10, 64); err != nil {
 			return fmt.Errorf("malformed duration %q: %v", s, err)
 		}
-		if neg {
-			f *= -1
-		}
 		for i := 9; i > len(ss[1]); i-- {
-			f *= 10
-		}
-		*d += Duration(f)
-		if neg != (*d < 0) {
-			return fmt.Errorf("out of range: %q", s)
+			ns *= 10
 		}
 		hasDigits = true
 	}
 	if !hasDigits {
 		return fmt.Errorf("malformed duration %q: contains no numbers", s)
+	}
+
+	if neg {
+		sec *= -1
+		ns *= -1
+	}
+
+	// Maximum/minimum seconds/nanoseconds representable by Go's time.Duration.
+	const maxSeconds = math.MaxInt64 / int64(time.Second)
+	const maxNanosAtMaxSeconds = math.MaxInt64 % int64(time.Second)
+	const minSeconds = math.MinInt64 / int64(time.Second)
+	const minNanosAtMinSeconds = math.MinInt64 % int64(time.Second)
+
+	if sec > maxSeconds || (sec == maxSeconds && ns >= maxNanosAtMaxSeconds) {
+		*d = Duration(math.MaxInt64)
+	} else if sec < minSeconds || (sec == minSeconds && ns <= minNanosAtMinSeconds) {
+		*d = Duration(math.MinInt64)
+	} else {
+		*d = Duration(sec*int64(time.Second) + ns)
 	}
 	return nil
 }

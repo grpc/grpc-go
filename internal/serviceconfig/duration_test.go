@@ -36,19 +36,27 @@ func TestDuration_MarshalUnmarshal(t *testing.T) {
 		unmarshalErr error
 		noMarshal    bool
 	}{
+		// Basic values.
 		{json: `"1s"`, td: time.Second},
 		{json: `"-100.700s"`, td: -100*time.Second - 700*time.Millisecond},
 		{json: `".050s"`, td: 50 * time.Millisecond, noMarshal: true},
 		{json: `"-.001s"`, td: -1 * time.Millisecond, noMarshal: true},
 		{json: `"-0.200s"`, td: -200 * time.Millisecond},
-		{json: `"9223372036.854775807s"`, td: math.MaxInt64},
-		{json: `"9223372036.854775808s"`, unmarshalErr: fmt.Errorf("out of range")},
-		{json: `"-9223372036.854775808s"`, td: math.MinInt64},
-		{json: `"-9223372036.854775809s"`, unmarshalErr: fmt.Errorf("out of range")},
+		// Positive near / out of bounds.
 		{json: `"9223372036s"`, td: 9223372036 * time.Second},
+		{json: `"9223372037s"`, td: math.MaxInt64, noMarshal: true},
+		{json: `"9223372036.854775807s"`, td: math.MaxInt64},
+		{json: `"9223372036.854775808s"`, td: math.MaxInt64, noMarshal: true},
+		{json: `"315576000000s"`, td: math.MaxInt64, noMarshal: true},
+		{json: `"315576000001s"`, unmarshalErr: fmt.Errorf("out of range")},
+		// Negative near / out of bounds.
 		{json: `"-9223372036s"`, td: -9223372036 * time.Second},
-		{json: `"9223372037s"`, unmarshalErr: fmt.Errorf("out of range")},
-		{json: `"-9223372037s"`, unmarshalErr: fmt.Errorf("out of range")},
+		{json: `"-9223372037s"`, td: math.MinInt64, noMarshal: true},
+		{json: `"-9223372036.854775808s"`, td: math.MinInt64},
+		{json: `"-9223372036.854775809s"`, td: math.MinInt64, noMarshal: true},
+		{json: `"-315576000000s"`, td: math.MinInt64, noMarshal: true},
+		{json: `"-315576000001s"`, unmarshalErr: fmt.Errorf("out of range")},
+		// Parse errors.
 		{json: `123s`, unmarshalErr: fmt.Errorf("invalid character")},
 		{json: `"5m"`, unmarshalErr: fmt.Errorf("malformed duration")},
 		{json: `"5.3.2s"`, unmarshalErr: fmt.Errorf("malformed duration")},
