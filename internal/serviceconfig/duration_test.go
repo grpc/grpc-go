@@ -39,6 +39,7 @@ func TestDuration_MarshalUnmarshal(t *testing.T) {
 		{json: `"1s"`, td: time.Second},
 		{json: `"-100.700s"`, td: -100*time.Second - 700*time.Millisecond},
 		{json: `".050s"`, td: 50 * time.Millisecond, noMarshal: true},
+		{json: `"-.001s"`, td: -1 * time.Millisecond, noMarshal: true},
 		{json: `"-0.200s"`, td: -200 * time.Millisecond},
 		{json: `"9223372036.854775807s"`, td: math.MaxInt64},
 		{json: `"9223372036.854775808s"`, unmarshalErr: fmt.Errorf("out of range")},
