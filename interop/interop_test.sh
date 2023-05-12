@@ -55,8 +55,14 @@ withTimeout () {
     wpid=$!
     # Kill after 20 seconds.
     sleep $timer && kill $wpid &
+    kpid=$!
     # Wait for the background thread.
     wait $wpid
+    res=$?
+    # Kill the killer pid in case it's still running.
+    kill $kpid || true
+    wait $kpid || true
+    return $res
 }
 
 # Don't run some tests that need a special environment:
