@@ -70,15 +70,6 @@ const (
 	defaultRingHashMaxSize = 8 * 1024 * 1024 // 8M
 )
 
-// getConverter returns the converter registered with the given proto type. If
-// no converter is registered with the name, nil is returned.
-func getConverter(name string) converter {
-	if c, ok := m[strings.ToLower(name)]; ok {
-		return c
-	}
-	return nil
-}
-
 // ConvertToServiceConfig converts a proto Load Balancing Policy configuration
 // into a json string. Returns an error if:
 //   - no supported policy found
