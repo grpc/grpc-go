@@ -19,6 +19,10 @@
 package grpc
 
 import (
+	"context"
+	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -58,8 +62,8 @@ func overrideNewTimer(t *testing.T) <-chan struct{} {
 	t.Helper()
 
 	ch := make(chan struct{}, 1)
-	origNewTimer := newTimer
-	newTimer = func(d time.Duration, callback func()) *time.Timer {
+	origTimeAfterFunc := timeAfterFunc
+	timeAfterFunc = func(d time.Duration, callback func()) *time.Timer {
 		return time.AfterFunc(d, func() {
 			select {
 			case ch <- struct{}{}:
@@ -68,7 +72,7 @@ func overrideNewTimer(t *testing.T) <-chan struct{} {
 			callback()
 		})
 	}
-	t.Cleanup(func() { newTimer = origNewTimer })
+	t.Cleanup(func() { timeAfterFunc = origTimeAfterFunc })
 	return ch
 }
 
@@ -84,7 +88,7 @@ func (s) TestIdlenessManager_Disabled(t *testing.T) {
 	// Create an idleness manager that is disabled because of idleTimeout being
 	// set to `0`.
 	enforcer := newTestIdlenessEnforcer()
-	mgr := newIdlenessManager(enforcer, time.Duration(0))
+	mgr := newDisabledIdlenessManager()
 
 	// Ensure that the timer callback does not fire within a short deadline.
 	select {
@@ -118,24 +122,34 @@ func (s) TestIdlenessManager_Disabled(t *testing.T) {
 // is enabled. Ensures that when there are no RPCs, the timer callback is
 // invoked and the enterIdleMode() method is invoked on the enforcer.
 func (s) TestIdlenessManager_Enabled_TimerFires(t *testing.T) {
-	callbackCh := overrideNewTimer(t)
+	for _, name := range []string{"mutex", "atomic"} {
+		t.Run(name, func(t *testing.T) {
+			callbackCh := overrideNewTimer(t)
 
-	enforcer := newTestIdlenessEnforcer()
-	mgr := newIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
-	defer mgr.close()
+			enforcer := newTestIdlenessEnforcer()
+			var mgr idlenessManager
+			if name == "mutex" {
+				mgr = newMutexIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
+			} else if name == "atomic" {
+				mgr = newAtomicIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
+			}
+			defer mgr.close()
 
-	// Ensure that the timer callback fires within a appropriate amount of time.
-	select {
-	case <-callbackCh:
-	case <-time.After(2 * defaultTestIdleTimeout):
-		t.Fatal("Timeout waiting for idle timer callback to fire")
-	}
+			// Ensure that the timer callback fires within a appropriate amount of time.
+			select {
+			case <-callbackCh:
+			case <-time.After(2 * defaultTestIdleTimeout):
+				t.Fatal("Timeout waiting for idle timer callback to fire")
+			}
 
-	// Ensure that the channel moves to idle mode eventually.
-	select {
-	case <-enforcer.enterIdleCh:
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("Timeout waiting for channel to move to idle")
+			// Ensure that the channel moves to idle mode eventually.
+			select {
+			case <-enforcer.enterIdleCh:
+			case <-time.After(defaultTestTimeout):
+				t.Fatal("Timeout waiting for channel to move to idle")
+			}
+
+		})
 	}
 }
 
@@ -143,43 +157,52 @@ func (s) TestIdlenessManager_Enabled_TimerFires(t *testing.T) {
 // is enabled. Ensures that when there is an ongoing RPC, the channel does not
 // enter idle mode.
 func (s) TestIdlenessManager_Enabled_OngoingCall(t *testing.T) {
-	callbackCh := overrideNewTimer(t)
+	for _, name := range []string{"mutex", "atomic"} {
+		t.Run(name, func(t *testing.T) {
+			callbackCh := overrideNewTimer(t)
 
-	enforcer := newTestIdlenessEnforcer()
-	mgr := newIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
-	defer mgr.close()
+			enforcer := newTestIdlenessEnforcer()
+			var mgr idlenessManager
+			if name == "mutex" {
+				mgr = newMutexIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
+			} else if name == "atomic" {
+				mgr = newAtomicIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
+			}
+			defer mgr.close()
 
-	// Fire up a goroutine that simulates an ongoing RPC that is terminated
-	// after the timer callback fires for the first time.
-	timerFired := make(chan struct{})
-	go func() {
-		mgr.onCallBegin()
-		<-timerFired
-		mgr.onCallEnd()
-	}()
+			// Fire up a goroutine that simulates an ongoing RPC that is terminated
+			// after the timer callback fires for the first time.
+			timerFired := make(chan struct{})
+			go func() {
+				mgr.onCallBegin()
+				<-timerFired
+				mgr.onCallEnd()
+			}()
 
-	// Ensure that the timer callback fires and unblock the above goroutine.
-	select {
-	case <-callbackCh:
-		close(timerFired)
-	case <-time.After(2 * defaultTestIdleTimeout):
-		t.Fatal("Timeout waiting for idle timer callback to fire")
-	}
+			// Ensure that the timer callback fires and unblock the above goroutine.
+			select {
+			case <-callbackCh:
+				close(timerFired)
+			case <-time.After(2 * defaultTestIdleTimeout):
+				t.Fatal("Timeout waiting for idle timer callback to fire")
+			}
 
-	// The invocation of the timer callback should not put the channel in idle
-	// mode since we had an ongoing RPC.
-	select {
-	case <-enforcer.enterIdleCh:
-		t.Fatalf("enterIdleMode() called on enforcer when active RPC exists")
-	case <-time.After(defaultTestShortTimeout):
-	}
+			// The invocation of the timer callback should not put the channel in idle
+			// mode since we had an ongoing RPC.
+			select {
+			case <-enforcer.enterIdleCh:
+				t.Fatalf("enterIdleMode() called on enforcer when active RPC exists")
+			case <-time.After(defaultTestShortTimeout):
+			}
 
-	// Since we terminated the ongoing RPC and we have no other active RPCs, the
-	// channel must move to idle eventually.
-	select {
-	case <-enforcer.enterIdleCh:
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("Timeout waiting for channel to move to idle")
+			// Since we terminated the ongoing RPC and we have no other active RPCs, the
+			// channel must move to idle eventually.
+			select {
+			case <-enforcer.enterIdleCh:
+			case <-time.After(defaultTestTimeout):
+				t.Fatal("Timeout waiting for channel to move to idle")
+			}
+		})
 	}
 }
 
@@ -188,49 +211,58 @@ func (s) TestIdlenessManager_Enabled_OngoingCall(t *testing.T) {
 // period (even though there is no active call when the timer fires), the
 // channel does not enter idle mode.
 func (s) TestIdlenessManager_Enabled_ActiveSinceLastCheck(t *testing.T) {
-	callbackCh := overrideNewTimer(t)
+	for _, name := range []string{"mutex", "atomic"} {
+		t.Run(name, func(t *testing.T) {
+			callbackCh := overrideNewTimer(t)
 
-	enforcer := newTestIdlenessEnforcer()
-	mgr := newIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
-	defer mgr.close()
-
-	// Fire up a goroutine that simulates unary RPCs until the timer callback
-	// fires.
-	timerFired := make(chan struct{})
-	go func() {
-		for ; ; <-time.After(defaultTestShortTimeout) {
-			mgr.onCallBegin()
-			mgr.onCallEnd()
-
-			select {
-			case <-timerFired:
-				return
-			default:
+			enforcer := newTestIdlenessEnforcer()
+			var mgr idlenessManager
+			if name == "mutex" {
+				mgr = newMutexIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
+			} else if name == "atomic" {
+				mgr = newAtomicIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
 			}
-		}
-	}()
+			defer mgr.close()
 
-	// Ensure that the timer callback fires, and that we don't enter idle as
-	// part of this invocation of the timer callback, since we had some RPCs in
-	// this period.
-	select {
-	case <-callbackCh:
-		close(timerFired)
-	case <-time.After(2 * defaultTestIdleTimeout):
-		t.Fatal("Timeout waiting for idle timer callback to fire")
-	}
-	select {
-	case <-enforcer.enterIdleCh:
-		t.Fatalf("enterIdleMode() called on enforcer when one RPC completed in the last period")
-	case <-time.After(defaultTestShortTimeout):
-	}
+			// Fire up a goroutine that simulates unary RPCs until the timer callback
+			// fires.
+			timerFired := make(chan struct{})
+			go func() {
+				for ; ; <-time.After(defaultTestShortTimeout) {
+					mgr.onCallBegin()
+					mgr.onCallEnd()
 
-	// Since the unrary RPC terminated and we have no other active RPCs, the
-	// channel must move to idle eventually.
-	select {
-	case <-enforcer.enterIdleCh:
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("Timeout waiting for channel to move to idle")
+					select {
+					case <-timerFired:
+						return
+					default:
+					}
+				}
+			}()
+
+			// Ensure that the timer callback fires, and that we don't enter idle as
+			// part of this invocation of the timer callback, since we had some RPCs in
+			// this period.
+			select {
+			case <-callbackCh:
+				close(timerFired)
+			case <-time.After(2 * defaultTestIdleTimeout):
+				t.Fatal("Timeout waiting for idle timer callback to fire")
+			}
+			select {
+			case <-enforcer.enterIdleCh:
+				t.Fatalf("enterIdleMode() called on enforcer when one RPC completed in the last period")
+			case <-time.After(defaultTestShortTimeout):
+			}
+
+			// Since the unrary RPC terminated and we have no other active RPCs, the
+			// channel must move to idle eventually.
+			select {
+			case <-enforcer.enterIdleCh:
+			case <-time.After(defaultTestTimeout):
+				t.Fatal("Timeout waiting for channel to move to idle")
+			}
+		})
 	}
 }
 
@@ -238,26 +270,130 @@ func (s) TestIdlenessManager_Enabled_ActiveSinceLastCheck(t *testing.T) {
 // manager is enabled. Ensures that the channel moves out of idle when an RPC is
 // initiated.
 func (s) TestIdlenessManager_Enabled_ExitIdleOnRPC(t *testing.T) {
+	for _, name := range []string{"mutex", "atomic"} {
+		t.Run(name, func(t *testing.T) {
+			overrideNewTimer(t)
+
+			enforcer := newTestIdlenessEnforcer()
+			var mgr idlenessManager
+			if name == "mutex" {
+				mgr = newMutexIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
+			} else if name == "atomic" {
+				mgr = newAtomicIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
+			}
+			defer mgr.close()
+
+			// Ensure that the channel moves to idle since there are no RPCs.
+			select {
+			case <-enforcer.enterIdleCh:
+			case <-time.After(2 * defaultTestIdleTimeout):
+				t.Fatal("Timeout waiting for channel to move to idle mode")
+			}
+
+			for i := 0; i < 100; i++ {
+				// A call to onCallBegin and onCallEnd simulates an RPC.
+				go func() {
+					if err := mgr.onCallBegin(); err != nil {
+						t.Errorf("onCallBegin() failed: %v", err)
+					}
+					mgr.onCallEnd()
+				}()
+			}
+
+			// Ensure that the channel moves out of idle as a result of the above RPC.
+			select {
+			case <-enforcer.exitIdleCh:
+			case <-time.After(2 * defaultTestIdleTimeout):
+				t.Fatal("Timeout waiting for channel to move out of idle mode")
+			}
+
+			// Ensure that only one call to exit idle mode is made to the CC.
+			sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+			defer sCancel()
+			select {
+			case <-enforcer.exitIdleCh:
+				t.Fatal("More than one call to exit idle mode on the ClientConn; only one expected")
+			case <-sCtx.Done():
+			}
+		})
+	}
+}
+
+type racyIdlenessState int32
+
+const (
+	stateInital racyIdlenessState = iota
+	stateEnteredIdle
+	stateExitedIdle
+	stateActiveRPCs
+)
+
+// racyIdlnessEnforcer is a test idleness enforcer used specifically to test the
+// race between idle timeout and incoming RPCs.
+type racyIdlenessEnforcer struct {
+	state *racyIdlenessState // Accessed atomically.
+}
+
+// exitIdleMode sets the internal state to stateExitedIdle. We should only ever
+// exit idle when we are currently in idle.
+func (ri *racyIdlenessEnforcer) exitIdleMode() error {
+	if !atomic.CompareAndSwapInt32((*int32)(ri.state), int32(stateEnteredIdle), int32(stateExitedIdle)) {
+		return fmt.Errorf("idleness enforcer asked to exit idle when it did not enter idle earlier")
+	}
+	return nil
+}
+
+// enterIdleMode attempts to set the internal state to stateEnteredIdle. We should only ever enter idle before RPCs start.
+func (ri *racyIdlenessEnforcer) enterIdleMode() error {
+	if !atomic.CompareAndSwapInt32((*int32)(ri.state), int32(stateInital), int32(stateEnteredIdle)) {
+		return fmt.Errorf("idleness enforcer asked to enter idle after rpcs started")
+	}
+	return nil
+}
+
+// TestIdlenessManager_IdleTimeoutRacesWithOnCallBeing tests the case where
+// firing of the idle timeout races with an incoming RPC. The test verifies that
+// if the timer callback win the race and puts the channel in idle, the RPCs can
+// kick it out of idle. And if the RPCs win the race and keep the channel
+// active, then the timer callback should not attempt to put the channel in idle
+// mode.
+func (s) TestIdlenessManager_IdleTimeoutRacesWithOnCallBeing(t *testing.T) {
 	overrideNewTimer(t)
 
-	enforcer := newTestIdlenessEnforcer()
-	mgr := newIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
-	defer mgr.close()
+	// Run multiple iterations to simulate different possibilities.
+	for i := 0; i < 10; i++ {
+		t.Run(fmt.Sprintf("iteration=%d", i), func(t *testing.T) {
+			var idlenessState racyIdlenessState
+			enforcer := &racyIdlenessEnforcer{state: &idlenessState}
 
-	// Ensure that the channel moves to idle since there are no RPCs.
-	select {
-	case <-enforcer.enterIdleCh:
-	case <-time.After(2 * defaultTestIdleTimeout):
-		t.Fatal("Timeout waiting for channel to move to idle mode")
-	}
+			// Configure a large idle timeout so that we can control the
+			// race between the timer callback and RPCs.
+			mgr := newAtomicIdlenessManager(enforcer, time.Duration(10*time.Minute))
+			defer mgr.close()
 
-	mgr.onCallBegin()
-	mgr.onCallEnd()
-
-	// Ensure that the channel moves out of idle as a result of the above RPC.
-	select {
-	case <-enforcer.exitIdleCh:
-	case <-time.After(2 * defaultTestIdleTimeout):
-		t.Fatal("Timeout waiting for channel to move out of idle mode")
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				m := mgr.(interface{ handleIdleTimeout() })
+				<-time.After(defaultTestIdleTimeout)
+				m.handleIdleTimeout()
+			}()
+			for j := 0; j < 100; j++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					// Wait for the configured idle timeout and simulate an RPC to
+					// race with the idle timeout timer callback.
+					<-time.After(defaultTestIdleTimeout)
+					if err := mgr.onCallBegin(); err != nil {
+						t.Errorf("onCallBegin() failed: %v", err)
+					}
+					atomic.StoreInt32((*int32)(&idlenessState), int32(stateActiveRPCs))
+					mgr.onCallEnd()
+				}()
+			}
+			wg.Wait()
+		})
 	}
 }

@@ -158,16 +158,11 @@ func (ccr *ccResolverWrapper) handleCloseAndEnterIdle() {
 	r := ccr.resolver
 	ccr.mu.Unlock()
 
-	// Give enqueued callbacks a chance to finish before closing the balancer.
+	// Give enqueued callbacks a chance to finish.
 	<-done
 
-	// Resolver close needs to be called outside the lock because these methods
-	// are generally blocking and don't return until they stop any pending
-	// goroutines and cleanup allocated resources. And since the main goroutine
-	// of the resolver might be reporting an error or state update at the same
-	// time as close, and the former needs to grab the lock to schedule a
-	// callback on the serializer, it will lead to a deadlock if we hold the
-	// lock here.
+	// Spawn a goroutine to close the resolver (since it may block trying to
+	// cleanup all allocated resources) and return early.
 	r.Close()
 }
 

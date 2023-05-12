@@ -144,12 +144,12 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		blockingpicker:    newPickerWrapper(),
 		czData:            new(channelzData),
 		firstResolveEvent: grpcsync.NewEvent(),
+		idlenessState:     ccIdlenessStateActive,
 	}
 	cc.retryThrottler.Store((*retryThrottler)(nil))
 	cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{nil})
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 	cc.exitIdleCond = sync.NewCond(&cc.mu)
-	cc.isExitingIdle = false // Channels don't start in idle mode.
 
 	disableGlobalOpts := false
 	for _, opt := range opts {
@@ -288,7 +288,12 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	cc.mu.Unlock()
 
 	// Configure idleness support with configured idle_timeout or default.
-	cc.idlenessMgr = newIdlenessManager(cc, cc.dopts.idleTimeout)
+	if cc.dopts.idleTimeout == 0 {
+		cc.idlenessMgr = newDisabledIdlenessManager()
+	} else {
+		// cc.idlenessMgr = newMutexIdlenessManager(cc, cc.dopts.idleTimeout)
+		cc.idlenessMgr = newAtomicIdlenessManager(cc, cc.dopts.idleTimeout)
+	}
 
 	// Return early for non-blocking dials.
 	if !cc.dopts.block {
@@ -347,8 +352,12 @@ func (cc *ClientConn) exitIdleMode() error {
 		cc.mu.Unlock()
 		return errConnClosing
 	}
-	cc.isExitingIdle = true
+	if cc.idlenessState != ccIdlenessStateIdle {
+		// TODO: Switch this to warning once idleness implementation is stable.
+		logger.Error("ClientConn asked to exit idle mode when not in idle mode")
+	}
 
+	cc.idlenessState = ccIdlenessStateExitingIdle
 	cc.blockingpicker.exitIdleMode()
 	cc.balancerWrapper.exitIdleMode()
 	cc.firstResolveEvent = grpcsync.NewEvent()
@@ -371,7 +380,7 @@ func (cc *ClientConn) exitIdleMode() error {
 	//
 	// We achieve this synchronization using the below condition variable.
 	cc.mu.Lock()
-	cc.isExitingIdle = false
+	cc.idlenessState = ccIdlenessStateActive
 	cc.exitIdleCond.Signal()
 	cc.mu.Unlock()
 	cc.addTraceEvent("exiting idle mode")
@@ -386,23 +395,31 @@ func (cc *ClientConn) enterIdleMode() error {
 		cc.mu.Unlock()
 		return ErrClientConnClosing
 	}
+	if cc.idlenessState != ccIdlenessStateActive {
+		// TODO: Switch this to warning once idleness implementation is stable.
+		logger.Error("ClientConn asked to enter idle mode when not active")
+
+	}
 
 	// cc.conns == nil is a proxy for the ClientConn being closed. So, instead
 	// of setting it to nil here, we recreate the map. This also means that we
 	// don't have to do this when exiting idle mode.
 	conns := cc.conns
 	cc.conns = make(map[*addrConn]struct{})
-	cc.csMgr.updateState(connectivity.Idle)
 
 	cc.resolverWrapper.enterIdleMode()
 	cc.blockingpicker.enterIdleMode()
 	cc.balancerWrapper.enterIdleMode()
+	cc.csMgr.updateState(connectivity.Idle)
+	cc.idlenessState = ccIdlenessStateIdle
 	cc.mu.Unlock()
 
-	cc.addTraceEvent("entering idle mode")
-	for ac := range conns {
-		ac.tearDown(errConnIdling)
-	}
+	go func() {
+		cc.addTraceEvent("entering idle mode")
+		for ac := range conns {
+			ac.tearDown(errConnIdling)
+		}
+	}()
 	return nil
 }
 
@@ -599,7 +616,7 @@ type ClientConn struct {
 	channelzID      *channelz.Identifier // Channelz identifier for the channel.
 	resolverBuilder resolver.Builder     // See parseTargetAndFindResolver().
 	balancerWrapper *ccBalancerWrapper   // Uses gracefulswitch.balancer underneath.
-	idlenessMgr     *idlenessManager
+	idlenessMgr     idlenessManager
 
 	// The following provide their own synchronization, and therefore don't
 	// require cc.mu to be held to access them.
@@ -620,12 +637,30 @@ type ClientConn struct {
 	sc              *ServiceConfig             // Latest service config received from the resolver.
 	conns           map[*addrConn]struct{}     // Set to nil on close.
 	mkp             keepalive.ClientParameters // May be updated upon receipt of a GoAway.
-	isExitingIdle   bool                       // True when channel is exiting idle.
+	idlenessState   ccIdlenessState            // Tracks idleness state of the channel.
 	exitIdleCond    *sync.Cond                 // Signalled when channel exits idle.
 
 	lceMu               sync.Mutex // protects lastConnectionError
 	lastConnectionError error
 }
+
+// ccIdlenessState tracks the idleness state of the channel.
+//
+// Channels start off in `active` and move to `idle` after a period of
+// inactivity. When moving back to `active` upon an incoming RPC, they
+// transition through `exiting_idle`. This state is useful for synchronization
+// with Close().
+//
+// This state tracking is mostly for self-protection. The idlenessManager is
+// expected to keep track of the state as well, and is expected not to call into
+// the ClientConn unnecessarily.
+type ccIdlenessState int8
+
+const (
+	ccIdlenessStateActive ccIdlenessState = iota
+	ccIdlenessStateIdle
+	ccIdlenessStateExitingIdle
+)
 
 // WaitForStateChange waits until the connectivity.State of ClientConn changes from sourceState or
 // ctx expires. A true value is returned in former case and false in latter.
@@ -1155,7 +1190,7 @@ func (cc *ClientConn) Close() error {
 		return ErrClientConnClosing
 	}
 
-	for cc.isExitingIdle {
+	for cc.idlenessState == ccIdlenessStateExitingIdle {
 		cc.exitIdleCond.Wait()
 	}
 

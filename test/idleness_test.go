@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -405,4 +407,75 @@ func (s) TestChannelIdleness_Enabled_ExitIdleOnRPC(t *testing.T) {
 	if err := channelzTraceEventFound(ctx, "exiting idle mode"); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// Tests the case where channel idleness is enabled by passing a small value for
+// idle_timeout. Simulates a race between the idle timer firing and RPCs being
+// initiated, after a period of inactivity on the channel.
+//
+// After a period of inactivity (for the configured idle timeout duration), when
+// RPCs are started, there are two possibilities:
+//   - the idle timer wins the race and puts the channel in idle. The RPCs then
+//     kick it out of idle.
+//   - the RPCs win the race, and therefore the channel never moves to idle.
+//
+// In either of these cases, all RPCs must succeed.
+func (s) TestChannelIdleness_Enabled_IdleTimeoutRacesWithRPCs(t *testing.T) {
+	// Setup channelz for testing.
+	czCleanup := channelz.NewChannelzStorageForTesting()
+	t.Cleanup(func() { czCleanupWrapper(czCleanup, t) })
+
+	// Start a test backend and set the bootstrap state of the resolver to
+	// include this address. This will ensure that when the resolver is
+	// restarted when exiting idle, it will push the same address to grpc again.
+	r := manual.NewBuilderWithScheme("whatever")
+	backend := stubserver.StartTestService(t, nil)
+	t.Cleanup(func() { backend.Stop() })
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
+
+	// Create a ClientConn with a short idle_timeout.
+	dopts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(r),
+		grpc.WithIdleTimeout(defaultTestShortIdleTimeout),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	if err != nil {
+		t.Fatalf("grpc.Dial() failed: %v", err)
+	}
+	t.Cleanup(func() { cc.Close() })
+
+	// Veirfy that the ClientConn moves to READY.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	for state := cc.GetState(); state != connectivity.Ready; state = cc.GetState() {
+		if !cc.WaitForStateChange(ctx, state) {
+			t.Fatal("Timeout when waiting for channel to switch to READY")
+		}
+	}
+
+	client := testgrpc.NewTestServiceClient(cc)
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// Wait for the configured idle timeout before making an
+			// RPC. This will help with getting the incoming RPC to race
+			// with the timer callback.
+			<-time.After(getJitter(defaultTestShortIdleTimeout))
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+				t.Errorf("EmptyCall RPC failed: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+// Generate a jitter between +/- 10% of the value.
+func getJitter(v time.Duration) time.Duration {
+	r := int64(v / 10)
+	j := grpcrand.Int63n(2*r) - r
+	return time.Duration(j)
 }
