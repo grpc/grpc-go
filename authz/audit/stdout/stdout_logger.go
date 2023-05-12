@@ -47,7 +47,7 @@ type event struct {
 type logger struct {
 }
 
-// Log marshals the audit.Event to json and prints it using log.go
+// Log marshals the audit.Event to json and prints it to standard output.
 func (logger *logger) Log(event *audit.Event) {
 	jsonBytes, err := json.Marshal(convertEvent(event))
 	if err != nil {
@@ -56,10 +56,6 @@ func (logger *logger) Log(event *audit.Event) {
 	}
 	log.Println(string(jsonBytes))
 }
-
-const (
-	stdName = "stdout"
-)
 
 // loggerConfig represents the configuration for the stdout logger.
 // It is currently empty and implements the audit.Logger interface by embedding it.
@@ -70,7 +66,7 @@ type loggerConfig struct {
 type loggerBuilder struct{}
 
 func (loggerBuilder) Name() string {
-	return stdName
+	return "stdout"
 }
 
 // Build returns a new instance of the stdout logger.

@@ -66,12 +66,12 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 	builder := &loggerBuilder{}
 	config, _ := builder.ParseLoggerConfig(content)
 	auditLogger := builder.Build(config)
-	log.SetFlags(0)
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			var buf bytes.Buffer
 			log.SetOutput(&buf)
+			log.SetFlags(0)
 			auditLogger.Log(test.event)
 			var e event
 			if err := json.Unmarshal(buf.Bytes(), &e); err != nil {
