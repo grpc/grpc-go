@@ -33,6 +33,12 @@ var (
 	m = make(map[string]Converter)
 )
 
+// Register registers the converter to the map keyed on a proto type. Must be
+// called at init time. Not thread safe.
+func Register(protoType string, c Converter) {
+	m[protoType] = c
+}
+
 // SetRegistry sets the xDS LB registry. Must be called at init time. Not thread
 // safe.
 func SetRegistry(registry map[string]Converter) {

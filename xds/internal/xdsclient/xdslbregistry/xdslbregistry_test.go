@@ -24,6 +24,21 @@ import (
 	"strings"
 	"testing"
 
+	_ "google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/pretty"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/serviceconfig"
+	_ "google.golang.org/grpc/xds" // Register the xDS LB Registry Converters.
+	"google.golang.org/grpc/xds/internal/balancer/ringhash"
+	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdslbregistry"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
+
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -35,21 +50,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
-
-	_ "google.golang.org/grpc/balancer/roundrobin"
-	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/pretty"
-	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
-	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdslbregistry"
-	_ "google.golang.org/grpc/xds/internal/xdsclient/xdslbregistry/converter" // To register converters.
-	"google.golang.org/protobuf/types/known/anypb"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 type s struct {

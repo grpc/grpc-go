@@ -45,15 +45,12 @@ import (
 )
 
 func init() {
-	// Construct map here to avoid an initialization cycle.
-	xdslbregistry.SetRegistry(map[string]xdslbregistry.Converter{
-		"type.googleapis.com/envoy.extensions.load_balancing_policies.ring_hash.v3.RingHash":                                            convertRingHashProtoToServiceConfig,
-		"type.googleapis.com/envoy.extensions.load_balancing_policies.round_robin.v3.RoundRobin":                                        convertRoundRobinProtoToServiceConfig,
-		"type.googleapis.com/envoy.extensions.load_balancing_policies.wrr_locality.v3.WrrLocality":                                      convertWRRLocalityProtoToServiceConfig,
-		"type.googleapis.com/envoy.extensions.load_balancing_policies.client_side_weighted_round_robin.v3.ClientSideWeightedRoundRobin": convertWeightedRoundRobinProtoToServiceConfig,
-		"type.googleapis.com/xds.type.v3.TypedStruct":                                                                                   convertV3TypedStructToServiceConfig,
-		"type.googleapis.com/udpa.type.v1.TypedStruct":                                                                                  convertV1TypedStructToServiceConfig,
-	})
+	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.ring_hash.v3.RingHash", convertRingHashProtoToServiceConfig)
+	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.round_robin.v3.RoundRobin", convertRoundRobinProtoToServiceConfig)
+	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.wrr_locality.v3.WrrLocality", convertWRRLocalityProtoToServiceConfig)
+	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.client_side_weighted_round_robin.v3.ClientSideWeightedRoundRobin", convertWeightedRoundRobinProtoToServiceConfig)
+	xdslbregistry.Register("type.googleapis.com/xds.type.v3.TypedStruct", convertV3TypedStructToServiceConfig)
+	xdslbregistry.Register("type.googleapis.com/udpa.type.v1.TypedStruct", convertV1TypedStructToServiceConfig)
 }
 
 const (
