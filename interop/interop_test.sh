@@ -102,7 +102,7 @@ for case in ${CASES[@]}; do
          --use_tls \
          --server_host_override=foo.test.google.fr \
          --use_test_ca --test_case="${case}" \
-         --service_config_json='{loadBalancingConfig:["test_backend_metrics_load_balancer":{}]}' \
+         --service_config_json='{"loadBalancingConfig":[{"test_backend_metrics_load_balancer":{}}]}' \
        &> $CLIENT_LOG; then
         fail "FAIL: test case ${case}
         got server log:
