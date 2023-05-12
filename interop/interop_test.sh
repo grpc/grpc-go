@@ -98,7 +98,12 @@ for case in ${CASES[@]}; do
     echo "$(tput setaf 4) $(date): testing: ${case} $(tput sgr 0)"
 
     CLIENT_LOG="$(mktemp)"
-    if ! GRPC_GO_LOG_SEVERITY_LEVEL=info timeout 20 go run ./interop/client --use_tls --server_host_override=foo.test.google.fr --use_test_ca --test_case="${case}" &> $CLIENT_LOG; then
+    if ! GRPC_GO_LOG_SEVERITY_LEVEL=info timeout 20 go run ./interop/client \
+         --use_tls \
+         --server_host_override=foo.test.google.fr \
+         --use_test_ca --test_case="${case}" \
+         --service_config_json='{loadBalancingConfig:["test_backend_metrics_load_balancer":{}]}' \
+       &> $CLIENT_LOG; then
         fail "FAIL: test case ${case}
         got server log:
         $(cat $SERVER_LOG)
