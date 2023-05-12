@@ -250,11 +250,7 @@ func (s) TestPickFirst_NewAddressWhileBlocking(t *testing.T) {
 	// Send a resolver update with no addresses. This should push the channel into
 	// TransientFailure.
 	r.UpdateState(resolver.State{})
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("timeout waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
-		}
-	}
+	awaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	doneCh := make(chan struct{})
 	client := testgrpc.NewTestServiceClient(cc)

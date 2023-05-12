@@ -1531,21 +1531,11 @@ func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Wait for ready
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	for src := te.cc.GetState(); src != connectivity.Ready; src = te.cc.GetState() {
-		if !te.cc.WaitForStateChange(ctx, src) {
-			t.Fatalf("timed out waiting for state change.  got %v; want %v", src, connectivity.Ready)
-		}
-	}
+	awaitState(ctx, t, te.cc, connectivity.Ready)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}})
-	// Wait for not-ready.
-	for src := te.cc.GetState(); src == connectivity.Ready; src = te.cc.GetState() {
-		if !te.cc.WaitForStateChange(ctx, src) {
-			t.Fatalf("timed out waiting for state change.  got %v; want !%v", src, connectivity.Ready)
-		}
-	}
+	awaitNotState(ctx, t, te.cc, connectivity.Ready)
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0, 0)
@@ -2016,21 +2006,11 @@ func (s) TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Wait for ready
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	for src := te.cc.GetState(); src != connectivity.Ready; src = te.cc.GetState() {
-		if !te.cc.WaitForStateChange(ctx, src) {
-			t.Fatalf("timed out waiting for state change.  got %v; want %v", src, connectivity.Ready)
-		}
-	}
+	awaitState(ctx, t, te.cc, connectivity.Ready)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}})
-	// Wait for not-ready.
-	for src := te.cc.GetState(); src == connectivity.Ready; src = te.cc.GetState() {
-		if !te.cc.WaitForStateChange(ctx, src) {
-			t.Fatalf("timed out waiting for state change.  got %v; want !%v", src, connectivity.Ready)
-		}
-	}
+	awaitNotState(ctx, t, te.cc, connectivity.Ready)
 
 	// verify that the subchannel no longer exist due to trace referencing it got overwritten.
 	if err := verifyResultWithDelay(func() (bool, error) {

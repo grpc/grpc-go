@@ -965,38 +965,25 @@ func (s) TestTimeoutOnDeadServer(t *testing.T) {
 func testTimeoutOnDeadServer(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
-	te.declareLogNoise(
-		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
-		"grpc: addrConn.resetTransport failed to create client transport: connection error",
-	)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
 	cc := te.clientConn()
 	tc := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
+	// Wait for the client to report READY, stop the server, then wait for the
+	// client to notice the connection is gone.
+	awaitState(ctx, t, cc, connectivity.Ready)
 	te.srv.Stop()
-	cancel()
-
-	// Wait for the client to notice the connection is gone.
-	ctx, cancel = context.WithTimeout(context.Background(), 500*time.Millisecond)
-	state := cc.GetState()
-	for ; state == connectivity.Ready && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
-	}
-	cancel()
-	if state == connectivity.Ready {
-		t.Fatalf("Timed out waiting for non-ready state")
-	}
-	ctx, cancel = context.WithTimeout(context.Background(), time.Millisecond)
+	awaitNotState(ctx, t, cc, connectivity.Ready)
+	ctx, cancel = context.WithTimeout(ctx, 5*time.Millisecond)
 	_, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
 	cancel()
-	if e.balancer != "" && status.Code(err) != codes.DeadlineExceeded {
-		// If e.balancer == nil, the ac will stop reconnecting because the dialer returns non-temp error,
-		// the error will be an internal error.
+	if status.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(%v, _) = _, %v, want _, error code: %s", ctx, err, codes.DeadlineExceeded)
 	}
 	awaitNewConnLogOutput()
@@ -1070,11 +1057,6 @@ func (s) TestFailFast(t *testing.T) {
 func testFailFast(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
-	te.declareLogNoise(
-		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
-		"grpc: addrConn.resetTransport failed to create client transport: connection error",
-	)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
@@ -1114,9 +1096,6 @@ func testServiceConfigSetup(t *testing.T, e env) *test {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
 	te.declareLogNoise(
-		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
-		"grpc: addrConn.resetTransport failed to create client transport: connection error",
 		"Failed to dial : context canceled; please retry.",
 	)
 	return te
@@ -1746,9 +1725,6 @@ func testPreloaderClientSend(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
 	te.declareLogNoise(
-		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
-		"grpc: addrConn.resetTransport failed to create client transport: connection error",
 		"Failed to dial : context canceled; please retry.",
 	)
 	te.startServer(&testServer{security: e.security})
@@ -1875,9 +1851,6 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
 	te.declareLogNoise(
-		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
-		"grpc: addrConn.resetTransport failed to create client transport: connection error",
 		"Failed to dial : context canceled; please retry.",
 	)
 	te.startServer(&testServer{security: e.security})
@@ -1942,9 +1915,6 @@ func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 	te.maxClientReceiveMsgSize = newInt(1024)
 	te.maxClientSendMsgSize = newInt(1024)
 	te.declareLogNoise(
-		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
-		"grpc: addrConn.resetTransport failed to create client transport: connection error",
 		"Failed to dial : context canceled; please retry.",
 	)
 	te.startServer(&testServer{security: e.security})
@@ -2030,9 +2000,6 @@ func testMaxMsgSizeServerAPI(t *testing.T, e env) {
 	te.maxServerReceiveMsgSize = newInt(1024)
 	te.maxServerSendMsgSize = newInt(1024)
 	te.declareLogNoise(
-		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
-		"grpc: addrConn.resetTransport failed to create client transport: connection error",
 		"Failed to dial : context canceled; please retry.",
 	)
 	te.startServer(&testServer{security: e.security})
@@ -2141,11 +2108,6 @@ func testTap(t *testing.T, e env) {
 	te.userAgent = testAppUA
 	ttap := &myTap{}
 	te.tapHandle = ttap.handle
-	te.declareLogNoise(
-		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
-		"grpc: addrConn.resetTransport failed to create client transport: connection error",
-	)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
@@ -4878,17 +4840,9 @@ func testWaitForReadyConnection(t *testing.T, e env) {
 
 	cc := te.clientConn() // Non-blocking dial.
 	tc := testgrpc.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	state := cc.GetState()
-	// Wait for connection to be Ready.
-	for ; state != connectivity.Ready && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
-	}
-	if state != connectivity.Ready {
-		t.Fatalf("Want connection state to be Ready, got %v", state)
-	}
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
+	awaitState(ctx, t, cc, connectivity.Ready)
 	// Make a fail-fast RPC.
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_,_) = _, %v, want _, nil", err)
