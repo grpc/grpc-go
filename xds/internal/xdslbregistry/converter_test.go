@@ -345,7 +345,7 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 		},
 		// TODO: test validity right on the boundary of recursion 16 layers
 		// total.
-		{ // every test case should work except
+		{
 			name: "too much recursion",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{

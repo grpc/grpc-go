@@ -136,26 +136,11 @@ func (s) TestWrrLocality(t *testing.T) {
 				addr  string
 				count int
 			}{
-				{
-					addr:  backend1.Address,
-					count: 6,
-				},
-				{
-					addr:  backend2.Address,
-					count: 6,
-				},
-				{
-					addr:  backend3.Address,
-					count: 8,
-				},
-				{
-					addr:  backend4.Address,
-					count: 8,
-				},
-				{
-					addr:  backend5.Address,
-					count: 8,
-				},
+				{addr: backend1.Address, count: 6},
+				{addr: backend2.Address, count: 6},
+				{addr: backend3.Address, count: 8},
+				{addr: backend4.Address, count: 8},
+				{addr: backend5.Address, count: 8},
 			},
 		},
 		// This configures custom lb as the child of wrr_locality, which points
@@ -173,14 +158,8 @@ func (s) TestWrrLocality(t *testing.T) {
 				addr  string
 				count int
 			}{
-				{
-					addr:  backend1.Address,
-					count: 1,
-				},
-				{
-					addr:  backend3.Address,
-					count: 2,
-				},
+				{addr: backend1.Address, count: 1},
+				{addr: backend3.Address, count: 2},
 			},
 		},
 		// Sanity check for weighted round robin. Don't need to test super
@@ -208,26 +187,11 @@ func (s) TestWrrLocality(t *testing.T) {
 				addr  string
 				count int
 			}{
-				{
-					addr:  backend1.Address,
-					count: 6,
-				},
-				{
-					addr:  backend2.Address,
-					count: 6,
-				},
-				{
-					addr:  backend3.Address,
-					count: 8,
-				},
-				{
-					addr:  backend4.Address,
-					count: 8,
-				},
-				{
-					addr:  backend5.Address,
-					count: 8,
-				},
+				{addr: backend1.Address, count: 6},
+				{addr: backend2.Address, count: 6},
+				{addr: backend3.Address, count: 8},
+				{addr: backend4.Address, count: 8},
+				{addr: backend5.Address, count: 8},
 			},
 		},
 	}

@@ -27,6 +27,13 @@ import (
 	"fmt"
 	"strings"
 
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/weightedroundrobin"
+	"google.golang.org/grpc/internal/envconfig"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/xds/internal/balancer/ringhash"
+	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
+
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -35,46 +42,41 @@ import (
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
 	"github.com/golang/protobuf/proto"
 	structpb "github.com/golang/protobuf/ptypes/struct"
-
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/weightedroundrobin"
-	"google.golang.org/grpc/internal/envconfig"
-	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
-	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
 )
 
 var (
 	// m is a map from proto type to converter.
-	m = make(map[string]converter)
+	m = make(map[string]converter) /*map[string]converter{
+		"type.googleapis.com/envoy.extensions.load_balancing_policies.ring_hash.v3.RingHash":                                            convertRingHashProtoToServiceConfig,
+		"type.googleapis.com/envoy.extensions.load_balancing_policies.round_robin.v3.RoundRobin":                                        convertRoundRobinProtoToServiceConfig,
+		"type.googleapis.com/envoy.extensions.load_balancing_policies.wrr_locality.v3.WrrLocality":                                      convertWRRLocalityProtoToServiceConfig,
+		"type.googleapis.com/envoy.extensions.load_balancing_policies.client_side_weighted_round_robin.v3.ClientSideWeightedRoundRobin": convertWeightedRoundRobinProtoToServiceConfig,
+		"type.googleapis.com/xds.type.v3.TypedStruct":                                                                                   convertV3TypedStructToServiceConfig,
+		"type.googleapis.com/udpa.type.v1.TypedStruct":                                                                                  convertV1TypedStructToServiceConfig,
+	}*/
 )
+
+func init() {
+	m = map[string]converter{
+		"type.googleapis.com/envoy.extensions.load_balancing_policies.ring_hash.v3.RingHash":                                            convertRingHashProtoToServiceConfig,
+		"type.googleapis.com/envoy.extensions.load_balancing_policies.round_robin.v3.RoundRobin":                                        convertRoundRobinProtoToServiceConfig,
+		"type.googleapis.com/envoy.extensions.load_balancing_policies.wrr_locality.v3.WrrLocality":                                      convertWRRLocalityProtoToServiceConfig,
+		"type.googleapis.com/envoy.extensions.load_balancing_policies.client_side_weighted_round_robin.v3.ClientSideWeightedRoundRobin": convertWeightedRoundRobinProtoToServiceConfig,
+		"type.googleapis.com/xds.type.v3.TypedStruct":                                                                                   convertV3TypedStructToServiceConfig,
+		"type.googleapis.com/udpa.type.v1.TypedStruct":                                                                                  convertV1TypedStructToServiceConfig,
+	}
+}
 
 // converter converts raw proto bytes into the internal Go JSON representation
 // of the proto passed. Returns the json message, an error, and a bool
 // determining if the caller should continue to the next proto in the policy
 // list.
-type converter interface {
-	convertToServiceConfig([]byte, int) (json.RawMessage, bool, error)
-}
+type converter func([]byte, int) (json.RawMessage, bool, error)
 
 const (
 	defaultRingHashMinSize = 1024
 	defaultRingHashMaxSize = 8 * 1024 * 1024 // 8M
 )
-
-func init() {
-	register("type.googleapis.com/envoy.extensions.load_balancing_policies.ring_hash.v3.RingHash", &ringHashConverter{})
-	register("type.googleapis.com/envoy.extensions.load_balancing_policies.round_robin.v3.RoundRobin", &roundRobinConverter{})
-	register("type.googleapis.com/envoy.extensions.load_balancing_policies.wrr_locality.v3.WrrLocality", &wrrLocalityConverter{})
-	register("type.googleapis.com/envoy.extensions.load_balancing_policies.client_side_weighted_round_robin.v3.ClientSideWeightedRoundRobin", &weightedRoundRobinConverter{})
-	register("type.googleapis.com/xds.type.v3.TypedStruct", &v3TypedStructConverter{})
-	register("type.googleapis.com/udpa.type.v1.TypedStruct", &v1TypedStructConverter{})
-}
-
-// register registers the converter to the map keyed on a proto type.
-func register(protoType string, c converter) {
-	m[strings.ToLower(protoType)] = c
-}
 
 // getConverter returns the converter registered with the given proto type. If
 // no converter is registered with the name, nil is returned.
@@ -106,7 +108,7 @@ func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int
 	// stopping at the first supported policy." - A52
 	for _, policy := range lbPolicy.GetPolicies() {
 		policy.GetTypedExtensionConfig().GetTypedConfig().GetTypeUrl()
-		converter := getConverter(policy.GetTypedExtensionConfig().GetTypedConfig().GetTypeUrl())
+		converter := m[policy.GetTypedExtensionConfig().GetTypedConfig().GetTypeUrl()]
 		// "Any entry not in the above list is unsupported and will be skipped."
 		// - A52
 		// This includes Least Request as well, since grpc-go does not support
@@ -114,7 +116,7 @@ func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int
 		if converter == nil {
 			continue
 		}
-		json, cont, err := converter.convertToServiceConfig(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), depth)
+		json, cont, err := converter(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), depth)
 		if cont {
 			continue
 		}
@@ -123,9 +125,7 @@ func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int
 	return nil, fmt.Errorf("no supported policy found in policy list +%v", lbPolicy)
 }
 
-type ringHashConverter struct{}
-
-func (rhc *ringHashConverter) convertToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
+func convertRingHashProtoToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
 	if !envconfig.XDSRingHash { // either have this as part of converter or top level - not a switch so top level
 		return nil, true, nil
 	}
@@ -157,21 +157,15 @@ func (rhc *ringHashConverter) convertToServiceConfig(rawProto []byte, depth int)
 	return makeBalancerConfigJSON(ringhash.Name, rhCfgJSON), false, nil
 }
 
-type roundRobinConverter struct{}
-
-func (rrc *roundRobinConverter) convertToServiceConfig([]byte, int) (json.RawMessage, bool, error) {
+func convertRoundRobinProtoToServiceConfig([]byte, int) (json.RawMessage, bool, error) {
 	return makeBalancerConfigJSON("round_robin", json.RawMessage("{}")), false, nil
-}
-
-type wrrLocalityConverter struct {
-	depth int
 }
 
 type wrrLocalityLBConfig struct {
 	ChildPolicy json.RawMessage `json:"childPolicy,omitempty"`
 }
 
-func (wlc *wrrLocalityConverter) convertToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
+func convertWRRLocalityProtoToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
 	wrrlProto := &v3wrrlocalitypb.WrrLocality{}
 	if err := proto.Unmarshal(rawProto, wrrlProto); err != nil {
 		return nil, false, fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -191,45 +185,41 @@ func (wlc *wrrLocalityConverter) convertToServiceConfig(rawProto []byte, depth i
 	return makeBalancerConfigJSON(wrrlocality.Name, lbCfgJSON), false, nil
 }
 
-type weightedRoundRobinConverter struct{}
-
-func (wrrc *weightedRoundRobinConverter) convertToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
+func convertWeightedRoundRobinProtoToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
 	cswrrProto := &v3clientsideweightedroundrobinpb.ClientSideWeightedRoundRobin{}
 	if err := proto.Unmarshal(rawProto, cswrrProto); err != nil {
 		return nil, false, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
-	wrrLBConfig := &wrrLBConfig{}
+	wrrLBCfg := &wrrLBConfig{}
 	// Only set fields if specified in proto. If not set, ParseConfig of the WRR
 	// will populate the config with defaults.
 	if enableOOBLoadReportCfg := cswrrProto.GetEnableOobLoadReport(); enableOOBLoadReportCfg != nil {
-		wrrLBConfig.EnableOOBLoadReport = enableOOBLoadReportCfg.GetValue()
+		wrrLBCfg.EnableOOBLoadReport = enableOOBLoadReportCfg.GetValue()
 	}
 	if oobReportingPeriodCfg := cswrrProto.GetOobReportingPeriod(); oobReportingPeriodCfg != nil {
-		wrrLBConfig.OOBReportingPeriod = internalserviceconfig.Duration(oobReportingPeriodCfg.AsDuration())
+		wrrLBCfg.OOBReportingPeriod = internalserviceconfig.Duration(oobReportingPeriodCfg.AsDuration())
 	}
 	if blackoutPeriodCfg := cswrrProto.GetBlackoutPeriod(); blackoutPeriodCfg != nil {
-		wrrLBConfig.BlackoutPeriod = internalserviceconfig.Duration(blackoutPeriodCfg.AsDuration())
+		wrrLBCfg.BlackoutPeriod = internalserviceconfig.Duration(blackoutPeriodCfg.AsDuration())
 	}
 	if weightExpirationPeriodCfg := cswrrProto.GetBlackoutPeriod(); weightExpirationPeriodCfg != nil {
-		wrrLBConfig.WeightExpirationPeriod = internalserviceconfig.Duration(weightExpirationPeriodCfg.AsDuration())
+		wrrLBCfg.WeightExpirationPeriod = internalserviceconfig.Duration(weightExpirationPeriodCfg.AsDuration())
 	}
 	if weightUpdatePeriodCfg := cswrrProto.GetWeightUpdatePeriod(); weightUpdatePeriodCfg != nil {
-		wrrLBConfig.WeightUpdatePeriod = internalserviceconfig.Duration(weightUpdatePeriodCfg.AsDuration())
+		wrrLBCfg.WeightUpdatePeriod = internalserviceconfig.Duration(weightUpdatePeriodCfg.AsDuration())
 	}
 	if errorUtilizationPenaltyCfg := cswrrProto.GetErrorUtilizationPenalty(); errorUtilizationPenaltyCfg != nil {
-		wrrLBConfig.ErrorUtilizationPenalty = float64(errorUtilizationPenaltyCfg.GetValue())
+		wrrLBCfg.ErrorUtilizationPenalty = float64(errorUtilizationPenaltyCfg.GetValue())
 	}
 
-	lbCfgJSON, err := json.Marshal(wrrLBConfig)
+	lbCfgJSON, err := json.Marshal(wrrLBCfg)
 	if err != nil {
-		return nil, false, fmt.Errorf("error marshaling JSON for type %T: %v", wrrLBConfig, err)
+		return nil, false, fmt.Errorf("error marshaling JSON for type %T: %v", wrrLBCfg, err)
 	}
 	return makeBalancerConfigJSON(weightedroundrobin.Name, lbCfgJSON), false, nil
 }
 
-type v1TypedStructConverter struct{}
-
-func (v1tsc *v1TypedStructConverter) convertToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
+func convertV1TypedStructToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
 	tsProto := &v1xdsudpatypepb.TypedStruct{}
 	if err := proto.Unmarshal(rawProto, tsProto); err != nil {
 		return nil, false, fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -237,9 +227,7 @@ func (v1tsc *v1TypedStructConverter) convertToServiceConfig(rawProto []byte, dep
 	return convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
 }
 
-type v3TypedStructConverter struct{}
-
-func (v3tsc *v3TypedStructConverter) convertToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
+func convertV3TypedStructToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
 	tsProto := &v3xdsxdstypepb.TypedStruct{}
 	if err := proto.Unmarshal(rawProto, tsProto); err != nil {
 		return nil, false, fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -257,8 +245,8 @@ func convertCustomPolicy(typeURL string, s *structpb.Struct) (json.RawMessage, b
 	// The gRPC policy name will be the "type name" part of the value of the
 	// type_url field in the TypedStruct. We get this by using the part after
 	// the last / character. Can assume a valid type_url from the control plane.
-	urls := strings.Split(typeURL, "/")
-	name := urls[len(urls)-1]
+	pos := strings.LastIndex(typeURL, "/")
+	name := typeURL[pos+1:]
 
 	if balancer.Get(name) == nil {
 		return nil, true, nil
