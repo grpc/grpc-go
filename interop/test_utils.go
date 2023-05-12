@@ -30,6 +30,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -779,6 +780,7 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 type testServer struct {
 	testgrpc.UnimplementedTestServiceServer
 
+	orcaMu          sync.Mutex
 	metricsRecorder orca.ServerMetricsRecorder
 }
 
@@ -840,11 +842,6 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	if r, orcaData := orca.CallMetricsRecorderFromContext(ctx), in.GetOrcaPerQueryReport(); r != nil && orcaData != nil {
 		// Transfer the request's per-Call ORCA data to the call metrics
 		// recorder in the context, if present.
-		setORCAMetrics(r, orcaData)
-	}
-	if r, orcaData := s.metricsRecorder, in.GetOrcaOobReport(); r != nil && orcaData != nil {
-		// Transfer the request's OOB ORCA data to the server metrics recorder
-		// in the server, if present.
 		setORCAMetrics(r, orcaData)
 	}
 	return &testpb.SimpleResponse{
@@ -912,6 +909,7 @@ func (s *testServer) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallSe
 			stream.SetTrailer(trailer)
 		}
 	}
+	hasORCALock := false
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
@@ -929,6 +927,11 @@ func (s *testServer) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallSe
 		if r, orcaData := s.metricsRecorder, in.GetOrcaOobReport(); r != nil && orcaData != nil {
 			// Transfer the request's OOB ORCA data to the server metrics recorder
 			// in the server, if present.
+			if !hasORCALock {
+				s.orcaMu.Lock()
+				defer s.orcaMu.Unlock()
+				hasORCALock = true
+			}
 			setORCAMetrics(r, orcaData)
 		}
 
@@ -1036,14 +1039,12 @@ func DoORCAOOBTest(tc testgrpc.TestServiceClient) {
 		logger.Fatalf("/TestService/FullDuplexCall received error receiving: %v", err)
 	}
 
-	ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 	want := &v3orcapb.OrcaLoadReport{
 		CpuUtilization: 0.8210,
 		MemUtilization: 0.5847,
 		Utilization:    map[string]float64{"util": 0.30499},
 	}
-	checkORCAMetrics(ctx2, tc, want)
+	checkORCAMetrics(ctx, tc, want)
 
 	err = stream.Send(&testpb.StreamingOutputCallRequest{
 		OrcaOobReport: &testpb.TestOrcaReport{
@@ -1061,14 +1062,12 @@ func DoORCAOOBTest(tc testgrpc.TestServiceClient) {
 		logger.Fatalf("/TestService/FullDuplexCall received error receiving: %v", err)
 	}
 
-	ctx3, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 	want = &v3orcapb.OrcaLoadReport{
 		CpuUtilization: 0.29309,
 		MemUtilization: 0.2,
 		Utilization:    map[string]float64{"util": 0.2039},
 	}
-	checkORCAMetrics(ctx3, tc, want)
+	checkORCAMetrics(ctx, tc, want)
 }
 
 func checkORCAMetrics(ctx context.Context, tc testgrpc.TestServiceClient, want *v3orcapb.OrcaLoadReport) {
