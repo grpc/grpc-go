@@ -297,8 +297,10 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	// A blocking dial blocks until the clientConn is ready.
 	for {
-		cc.Connect()
 		s := cc.GetState()
+		if s == connectivity.Idle {
+			cc.Connect()
+		}
 		if s == connectivity.Ready {
 			return cc, nil
 		} else if cc.dopts.copts.FailOnNonTempDialError && s == connectivity.TransientFailure {
