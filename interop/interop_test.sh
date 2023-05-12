@@ -70,6 +70,8 @@ CASES=(
   "custom_metadata"
   "unimplemented_method"
   "unimplemented_service"
+  "orca_per_rpc"
+  "orca_oob"
 )
 
 # Build server
