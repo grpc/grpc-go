@@ -16,11 +16,11 @@
  *
  */
 
-// Package xdslbregistry provides utilities to convert proto load balancing
+// Package converter provides converters to convert proto load balancing
 // configuration, defined by the xDS API spec, to JSON load balancing
 // configuration. These converters are registered by proto type in a registry,
 // which gets pulled from based off proto type passed in.
-package xdslbregistry
+package converter
 
 import (
 	"encoding/json"
@@ -34,80 +34,32 @@ import (
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdslbregistry"
 
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
-	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3clientsideweightedroundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/client_side_weighted_round_robin/v3"
 	v3ringhashpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/ring_hash/v3"
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 )
 
-var (
-	// m is a map from proto type to converter.
-	m = make(map[string]converter)
-)
-
 func init() {
 	// Construct map here to avoid an initialization cycle.
-	m = map[string]converter{
+	xdslbregistry.SetRegistry(map[string]xdslbregistry.Converter{
 		"type.googleapis.com/envoy.extensions.load_balancing_policies.ring_hash.v3.RingHash":                                            convertRingHashProtoToServiceConfig,
 		"type.googleapis.com/envoy.extensions.load_balancing_policies.round_robin.v3.RoundRobin":                                        convertRoundRobinProtoToServiceConfig,
 		"type.googleapis.com/envoy.extensions.load_balancing_policies.wrr_locality.v3.WrrLocality":                                      convertWRRLocalityProtoToServiceConfig,
 		"type.googleapis.com/envoy.extensions.load_balancing_policies.client_side_weighted_round_robin.v3.ClientSideWeightedRoundRobin": convertWeightedRoundRobinProtoToServiceConfig,
 		"type.googleapis.com/xds.type.v3.TypedStruct":                                                                                   convertV3TypedStructToServiceConfig,
 		"type.googleapis.com/udpa.type.v1.TypedStruct":                                                                                  convertV1TypedStructToServiceConfig,
-	}
+	})
 }
-
-// converter converts raw proto bytes into the internal Go JSON representation
-// of the proto passed. Returns the json message,  and an error. If both
-// returned are nil, it represents continuing to the next proto.
-type converter func([]byte, int) (json.RawMessage, error)
 
 const (
 	defaultRingHashMinSize = 1024
 	defaultRingHashMaxSize = 8 * 1024 * 1024 // 8M
 )
-
-// ConvertToServiceConfig converts a proto Load Balancing Policy configuration
-// into a json string. Returns an error if:
-//   - no supported policy found
-//   - there is more than 16 layers of recursion in the configuration
-//   - a failure occurs when converting the policy
-func ConvertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy) (json.RawMessage, error) {
-	return convertToServiceConfig(lbPolicy, 0)
-}
-
-func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int) (json.RawMessage, error) {
-	// "Configurations that require more than 16 levels of recursion are
-	// considered invalid and should result in a NACK response." - A51
-	if depth > 15 {
-		return nil, fmt.Errorf("lb policy %v exceeds max depth supported: 16 layers", lbPolicy)
-	}
-
-	// "This function iterate over the list of policy messages in
-	// LoadBalancingPolicy, attempting to convert each one to gRPC form,
-	// stopping at the first supported policy." - A52
-	for _, policy := range lbPolicy.GetPolicies() {
-		policy.GetTypedExtensionConfig().GetTypedConfig().GetTypeUrl()
-		converter := m[policy.GetTypedExtensionConfig().GetTypedConfig().GetTypeUrl()]
-		// "Any entry not in the above list is unsupported and will be skipped."
-		// - A52
-		// This includes Least Request as well, since grpc-go does not support
-		// the Least Request Load Balancing Policy.
-		if converter == nil {
-			continue
-		}
-		json, err := converter(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), depth)
-		if json == nil && err == nil {
-			continue
-		}
-		return json, err
-	}
-	return nil, fmt.Errorf("no supported policy found in policy list +%v", lbPolicy)
-}
 
 func convertRingHashProtoToServiceConfig(rawProto []byte, depth int) (json.RawMessage, error) {
 	if !envconfig.XDSRingHash {
@@ -154,7 +106,7 @@ func convertWRRLocalityProtoToServiceConfig(rawProto []byte, depth int) (json.Ra
 	if err := proto.Unmarshal(rawProto, wrrlProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
-	epJSON, err := convertToServiceConfig(wrrlProto.GetEndpointPickingPolicy(), depth+1)
+	epJSON, err := xdslbregistry.ConvertToServiceConfig(wrrlProto.GetEndpointPickingPolicy(), depth+1)
 	if err != nil {
 		return nil, fmt.Errorf("error converting endpoint picking policy: %v for %+v", err, wrrlProto)
 	}

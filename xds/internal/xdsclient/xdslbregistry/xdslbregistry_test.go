@@ -46,7 +46,8 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
-	"google.golang.org/grpc/xds/internal/xdslbregistry"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdslbregistry"
+	_ "google.golang.org/grpc/xds/internal/xdsclient/xdslbregistry/converter" // To register converters.
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -281,7 +282,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 					envconfig.XDSRingHash = oldRingHashSupport
 				}()
 			}
-			rawJSON, err := xdslbregistry.ConvertToServiceConfig(test.policy)
+			rawJSON, err := xdslbregistry.ConvertToServiceConfig(test.policy, 0)
 			if err != nil {
 				t.Fatalf("ConvertToServiceConfig(%s) failed: %v", pretty.ToJSON(test.policy), err)
 			}
@@ -376,7 +377,7 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, gotErr := xdslbregistry.ConvertToServiceConfig(test.policy)
+			_, gotErr := xdslbregistry.ConvertToServiceConfig(test.policy, 0)
 			// Test the error substring to test the different root causes of
 			// errors. This is more brittle over time, but it's important to
 			// test the root cause of the errors emitted from the
