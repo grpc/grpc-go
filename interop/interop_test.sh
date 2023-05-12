@@ -53,7 +53,7 @@ withTimeout () {
     cmd=$(printf '%q ' "$@")
     eval "$cmd" &
     wpid=$!
-    # Kill after 20 seconds.
+    # Kill after $timer seconds.
     sleep $timer && kill $wpid &
     kpid=$!
     # Wait for the background thread.
