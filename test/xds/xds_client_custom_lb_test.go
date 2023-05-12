@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -117,7 +118,10 @@ func (s) TestWrrLocality(t *testing.T) {
 		name string
 		// Configuration will be specified through load_balancing_policy field.
 		wrrLocalityConfiguration *v3wrrlocalitypb.WrrLocality
-		addressDistributionWant  []resolver.Address
+		addressDistributionWant  []struct {
+			addr  string
+			count int
+		}
 	}{
 		{
 			name:                     "rr_child",
@@ -128,43 +132,30 @@ func (s) TestWrrLocality(t *testing.T) {
 			// in a locality). Thus, address 1 and address 2 have 1/3 * 1/2
 			// probability, and addresses 3 4 5 have 2/3 * 1/3 probability of
 			// being routed to.
-			addressDistributionWant: []resolver.Address{
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
+			addressDistributionWant: []struct {
+				addr  string
+				count int
+			}{
+				{
+					addr:  backend1.Address,
+					count: 6,
+				},
+				{
+					addr:  backend2.Address,
+					count: 6,
+				},
+				{
+					addr:  backend3.Address,
+					count: 8,
+				},
+				{
+					addr:  backend4.Address,
+					count: 8,
+				},
+				{
+					addr:  backend5.Address,
+					count: 8,
+				},
 			},
 		},
 		// This configures custom lb as the child of wrr_locality, which points
@@ -178,10 +169,18 @@ func (s) TestWrrLocality(t *testing.T) {
 				TypeUrl: "type.googleapis.com/pick_first",
 				Value:   &structpb.Struct{},
 			}),
-			addressDistributionWant: []resolver.Address{
-				{Addr: backend1.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
+			addressDistributionWant: []struct {
+				addr  string
+				count int
+			}{
+				{
+					addr:  backend1.Address,
+					count: 1,
+				},
+				{
+					addr:  backend3.Address,
+					count: 2,
+				},
 			},
 		},
 		// Sanity check for weighted round robin. Don't need to test super
@@ -200,48 +199,35 @@ func (s) TestWrrLocality(t *testing.T) {
 				// BlackoutPeriod long enough to cause load report weights to
 				// trigger in the scope of test case, but no load reports
 				// configured anyway.
-				BlackoutPeriod:          &durationpb.Duration{Seconds: 10},
-				WeightExpirationPeriod:  &durationpb.Duration{Seconds: 10},
-				WeightUpdatePeriod:      &durationpb.Duration{Seconds: 1},
+				BlackoutPeriod:          durationpb.New(10 * time.Second),
+				WeightExpirationPeriod:  durationpb.New(10 * time.Second),
+				WeightUpdatePeriod:      durationpb.New(time.Second),
 				ErrorUtilizationPenalty: &wrapperspb.FloatValue{Value: 1},
 			}),
-			addressDistributionWant: []resolver.Address{
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
+			addressDistributionWant: []struct {
+				addr  string
+				count int
+			}{
+				{
+					addr:  backend1.Address,
+					count: 6,
+				},
+				{
+					addr:  backend2.Address,
+					count: 6,
+				},
+				{
+					addr:  backend3.Address,
+					count: 8,
+				},
+				{
+					addr:  backend4.Address,
+					count: 8,
+				},
+				{
+					addr:  backend5.Address,
+					count: 8,
+				},
 			},
 		},
 	}
@@ -287,7 +273,13 @@ func (s) TestWrrLocality(t *testing.T) {
 			defer cc.Close()
 
 			client := testgrpc.NewTestServiceClient(cc)
-			if err := roundrobin.CheckWeightedRoundRobinRPCs(ctx, client, test.addressDistributionWant); err != nil {
+			var addrDistWant []resolver.Address
+			for _, addrAndCount := range test.addressDistributionWant {
+				for i := 0; i < addrAndCount.count; i++ {
+					addrDistWant = append(addrDistWant, resolver.Address{Addr: addrAndCount.addr})
+				}
+			}
+			if err := roundrobin.CheckWeightedRoundRobinRPCs(ctx, client, addrDistWant); err != nil {
 				t.Fatalf("Error in expected round robin: %v", err)
 			}
 		})

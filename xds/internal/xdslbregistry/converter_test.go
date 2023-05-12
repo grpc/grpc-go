@@ -16,8 +16,7 @@
  *
  */
 
-// Package tests_test contains test cases for the xDS LB Policy Registry.
-package tests_test
+package xdslbregistry
 
 import (
 	"encoding/json"
@@ -46,7 +45,6 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdslbregistry"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -63,8 +61,6 @@ type customLBConfig struct {
 	serviceconfig.LoadBalancingConfig
 }
 
-// We have these tests in a separate test package in order to not take a
-// dependency on the internal xDS balancer packages within the xDS Client.
 func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 	const customLBPolicyName = "myorg.MyCustomLeastRequestPolicy"
 	stub.Register(customLBPolicyName, stub.BalancerFuncs{
@@ -269,7 +265,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 					envconfig.XDSRingHash = oldRingHashSupport
 				}()
 			}
-			rawJSON, err := xdslbregistry.ConvertToServiceConfig(test.policy)
+			rawJSON, err := ConvertToServiceConfig(test.policy)
 			if err != nil {
 				t.Fatalf("ConvertToServiceConfig(%s) failed: %v", pretty.ToJSON(test.policy), err)
 			}
@@ -349,7 +345,7 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 		},
 		// TODO: test validity right on the boundary of recursion 16 layers
 		// total.
-		{
+		{ // every test case should work except
 			name: "too much recursion",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
@@ -366,7 +362,7 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, gotErr := xdslbregistry.ConvertToServiceConfig(test.policy)
+			_, gotErr := ConvertToServiceConfig(test.policy)
 			// Test the error substring to test the different root causes of
 			// errors. This is more brittle over time, but it's important to
 			// test the root cause of the errors emitted from the
