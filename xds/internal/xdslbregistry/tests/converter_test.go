@@ -16,7 +16,8 @@
  *
  */
 
-package xdslbregistry
+// Package tests contains test cases for the xDS LB Policy Registry.
+package tests
 
 import (
 	"encoding/json"
@@ -45,6 +46,7 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
+	"google.golang.org/grpc/xds/internal/xdslbregistry"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -59,6 +61,15 @@ func Test(t *testing.T) {
 
 type customLBConfig struct {
 	serviceconfig.LoadBalancingConfig
+}
+
+func wrrLocalityBalancerConfig(childPolicy *internalserviceconfig.BalancerConfig) *internalserviceconfig.BalancerConfig {
+	return &internalserviceconfig.BalancerConfig{
+		Name: wrrlocality.Name,
+		Config: &wrrlocality.LBConfig{
+			ChildPolicy: childPolicy,
+		},
+	}
 }
 
 func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
@@ -221,14 +232,9 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 					},
 				},
 			},
-			wantConfig: &internalserviceconfig.BalancerConfig{
-				Name: wrrlocality.Name,
-				Config: &wrrlocality.LBConfig{
-					ChildPolicy: &internalserviceconfig.BalancerConfig{
-						Name: "round_robin",
-					},
-				},
-			},
+			wantConfig: wrrLocalityBalancerConfig(&internalserviceconfig.BalancerConfig{
+				Name: "round_robin",
+			}),
 		},
 		{
 			name: "wrr_locality_child_custom_lb_type_v3_struct",
@@ -244,15 +250,25 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 					},
 				},
 			},
-			wantConfig: &internalserviceconfig.BalancerConfig{
-				Name: wrrlocality.Name,
-				Config: &wrrlocality.LBConfig{
-					ChildPolicy: &internalserviceconfig.BalancerConfig{
-						Name:   "myorg.MyCustomLeastRequestPolicy",
-						Config: customLBConfig{},
+			wantConfig: wrrLocalityBalancerConfig(&internalserviceconfig.BalancerConfig{
+				Name:   "myorg.MyCustomLeastRequestPolicy",
+				Config: customLBConfig{},
+			}),
+		},
+		{
+			name: "on-the-boundary-of-recursive-limit",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: wrrLocalityAny(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(&v3roundrobinpb.RoundRobin{}))))))))))))))),
+						},
 					},
 				},
 			},
+			wantConfig: wrrLocalityBalancerConfig(wrrLocalityBalancerConfig(wrrLocalityBalancerConfig(wrrLocalityBalancerConfig(wrrLocalityBalancerConfig(wrrLocalityBalancerConfig(wrrLocalityBalancerConfig(wrrLocalityBalancerConfig(wrrLocalityBalancerConfig(wrrLocalityBalancerConfig(wrrLocalityBalancerConfig(wrrLocalityBalancerConfig(wrrLocalityBalancerConfig(wrrLocalityBalancerConfig(wrrLocalityBalancerConfig(&internalserviceconfig.BalancerConfig{
+				Name: "round_robin",
+			}))))))))))))))),
 		},
 	}
 
@@ -265,7 +281,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 					envconfig.XDSRingHash = oldRingHashSupport
 				}()
 			}
-			rawJSON, err := ConvertToServiceConfig(test.policy)
+			rawJSON, err := xdslbregistry.ConvertToServiceConfig(test.policy)
 			if err != nil {
 				t.Fatalf("ConvertToServiceConfig(%s) failed: %v", pretty.ToJSON(test.policy), err)
 			}
@@ -343,15 +359,13 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 			},
 			wantErr: "no supported policy found in policy list",
 		},
-		// TODO: test validity right on the boundary of recursion 16 layers
-		// total.
 		{
-			name: "too much recursion",
+			name: "exceeds-boundary-of-recursive-limit-by-1",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: wrrLocalityAny(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(&v3roundrobinpb.RoundRobin{}))))))))))))))))))))))),
+							TypedConfig: wrrLocalityAny(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(wrrLocality(&v3roundrobinpb.RoundRobin{})))))))))))))))),
 						},
 					},
 				},
@@ -362,7 +376,7 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, gotErr := ConvertToServiceConfig(test.policy)
+			_, gotErr := xdslbregistry.ConvertToServiceConfig(test.policy)
 			// Test the error substring to test the different root causes of
 			// errors. This is more brittle over time, but it's important to
 			// test the root cause of the errors emitted from the

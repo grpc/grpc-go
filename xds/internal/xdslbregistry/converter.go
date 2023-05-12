@@ -46,14 +46,7 @@ import (
 
 var (
 	// m is a map from proto type to converter.
-	m = make(map[string]converter) /*map[string]converter{
-		"type.googleapis.com/envoy.extensions.load_balancing_policies.ring_hash.v3.RingHash":                                            convertRingHashProtoToServiceConfig,
-		"type.googleapis.com/envoy.extensions.load_balancing_policies.round_robin.v3.RoundRobin":                                        convertRoundRobinProtoToServiceConfig,
-		"type.googleapis.com/envoy.extensions.load_balancing_policies.wrr_locality.v3.WrrLocality":                                      convertWRRLocalityProtoToServiceConfig,
-		"type.googleapis.com/envoy.extensions.load_balancing_policies.client_side_weighted_round_robin.v3.ClientSideWeightedRoundRobin": convertWeightedRoundRobinProtoToServiceConfig,
-		"type.googleapis.com/xds.type.v3.TypedStruct":                                                                                   convertV3TypedStructToServiceConfig,
-		"type.googleapis.com/udpa.type.v1.TypedStruct":                                                                                  convertV1TypedStructToServiceConfig,
-	}*/
+	m = make(map[string]converter)
 )
 
 func init() {
@@ -68,10 +61,9 @@ func init() {
 }
 
 // converter converts raw proto bytes into the internal Go JSON representation
-// of the proto passed. Returns the json message, an error, and a bool
-// determining if the caller should continue to the next proto in the policy
-// list.
-type converter func([]byte, int) (json.RawMessage, bool, error)
+// of the proto passed. Returns the json message,  and an error. If both
+// returned are nil, it represents continuing to the next proto.
+type converter func([]byte, int) (json.RawMessage, error)
 
 const (
 	defaultRingHashMinSize = 1024
@@ -116,8 +108,8 @@ func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int
 		if converter == nil {
 			continue
 		}
-		json, cont, err := converter(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), depth)
-		if cont {
+		json, err := converter(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), depth)
+		if json == nil && err == nil {
 			continue
 		}
 		return json, err
@@ -125,16 +117,16 @@ func convertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int
 	return nil, fmt.Errorf("no supported policy found in policy list +%v", lbPolicy)
 }
 
-func convertRingHashProtoToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
-	if !envconfig.XDSRingHash { // either have this as part of converter or top level - not a switch so top level
-		return nil, true, nil
+func convertRingHashProtoToServiceConfig(rawProto []byte, depth int) (json.RawMessage, error) {
+	if !envconfig.XDSRingHash {
+		return nil, nil
 	}
 	rhProto := &v3ringhashpb.RingHash{}
 	if err := proto.Unmarshal(rawProto, rhProto); err != nil {
-		return nil, false, fmt.Errorf("failed to unmarshal resource: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 	if rhProto.GetHashFunction() != v3ringhashpb.RingHash_XX_HASH {
-		return nil, false, fmt.Errorf("unsupported ring_hash hash function %v", rhProto.GetHashFunction())
+		return nil, fmt.Errorf("unsupported ring_hash hash function %v", rhProto.GetHashFunction())
 	}
 
 	var minSize, maxSize uint64 = defaultRingHashMinSize, defaultRingHashMaxSize
@@ -152,27 +144,27 @@ func convertRingHashProtoToServiceConfig(rawProto []byte, depth int) (json.RawMe
 
 	rhCfgJSON, err := json.Marshal(rhCfg)
 	if err != nil {
-		return nil, false, fmt.Errorf("error marshaling JSON for type %T: %v", rhCfg, err)
+		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", rhCfg, err)
 	}
-	return makeBalancerConfigJSON(ringhash.Name, rhCfgJSON), false, nil
+	return makeBalancerConfigJSON(ringhash.Name, rhCfgJSON), nil
 }
 
-func convertRoundRobinProtoToServiceConfig([]byte, int) (json.RawMessage, bool, error) {
-	return makeBalancerConfigJSON("round_robin", json.RawMessage("{}")), false, nil
+func convertRoundRobinProtoToServiceConfig([]byte, int) (json.RawMessage, error) {
+	return makeBalancerConfigJSON("round_robin", json.RawMessage("{}")), nil
 }
 
 type wrrLocalityLBConfig struct {
 	ChildPolicy json.RawMessage `json:"childPolicy,omitempty"`
 }
 
-func convertWRRLocalityProtoToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
+func convertWRRLocalityProtoToServiceConfig(rawProto []byte, depth int) (json.RawMessage, error) {
 	wrrlProto := &v3wrrlocalitypb.WrrLocality{}
 	if err := proto.Unmarshal(rawProto, wrrlProto); err != nil {
-		return nil, false, fmt.Errorf("failed to unmarshal resource: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 	epJSON, err := convertToServiceConfig(wrrlProto.GetEndpointPickingPolicy(), depth+1)
 	if err != nil {
-		return nil, false, fmt.Errorf("error converting endpoint picking policy: %v for %+v", err, wrrlProto)
+		return nil, fmt.Errorf("error converting endpoint picking policy: %v for %+v", err, wrrlProto)
 	}
 	wrrLCfg := wrrLocalityLBConfig{
 		ChildPolicy: epJSON,
@@ -180,15 +172,15 @@ func convertWRRLocalityProtoToServiceConfig(rawProto []byte, depth int) (json.Ra
 
 	lbCfgJSON, err := json.Marshal(wrrLCfg)
 	if err != nil {
-		return nil, false, fmt.Errorf("error marshaling JSON for type %T: %v", wrrLCfg, err)
+		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", wrrLCfg, err)
 	}
-	return makeBalancerConfigJSON(wrrlocality.Name, lbCfgJSON), false, nil
+	return makeBalancerConfigJSON(wrrlocality.Name, lbCfgJSON), nil
 }
 
-func convertWeightedRoundRobinProtoToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
+func convertWeightedRoundRobinProtoToServiceConfig(rawProto []byte, depth int) (json.RawMessage, error) {
 	cswrrProto := &v3clientsideweightedroundrobinpb.ClientSideWeightedRoundRobin{}
 	if err := proto.Unmarshal(rawProto, cswrrProto); err != nil {
-		return nil, false, fmt.Errorf("failed to unmarshal resource: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 	wrrLBCfg := &wrrLBConfig{}
 	// Only set fields if specified in proto. If not set, ParseConfig of the WRR
@@ -214,34 +206,34 @@ func convertWeightedRoundRobinProtoToServiceConfig(rawProto []byte, depth int) (
 
 	lbCfgJSON, err := json.Marshal(wrrLBCfg)
 	if err != nil {
-		return nil, false, fmt.Errorf("error marshaling JSON for type %T: %v", wrrLBCfg, err)
+		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", wrrLBCfg, err)
 	}
-	return makeBalancerConfigJSON(weightedroundrobin.Name, lbCfgJSON), false, nil
+	return makeBalancerConfigJSON(weightedroundrobin.Name, lbCfgJSON), nil
 }
 
-func convertV1TypedStructToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
+func convertV1TypedStructToServiceConfig(rawProto []byte, depth int) (json.RawMessage, error) {
 	tsProto := &v1xdsudpatypepb.TypedStruct{}
 	if err := proto.Unmarshal(rawProto, tsProto); err != nil {
-		return nil, false, fmt.Errorf("failed to unmarshal resource: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 	return convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
 }
 
-func convertV3TypedStructToServiceConfig(rawProto []byte, depth int) (json.RawMessage, bool, error) {
+func convertV3TypedStructToServiceConfig(rawProto []byte, depth int) (json.RawMessage, error) {
 	tsProto := &v3xdsxdstypepb.TypedStruct{}
 	if err := proto.Unmarshal(rawProto, tsProto); err != nil {
-		return nil, false, fmt.Errorf("failed to unmarshal resource: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 	return convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
 }
 
 // convertCustomPolicy attempts to prepare json configuration for a custom lb
 // proto, which specifies the gRPC balancer type and configuration. Returns the
-// converted json, a bool representing whether the caller should continue to the
-// next policy, which is true if the gRPC Balancer registry does not contain
-// that balancer type, and an error which should cause caller to error if error
-// converting.
-func convertCustomPolicy(typeURL string, s *structpb.Struct) (json.RawMessage, bool, error) {
+// converted json and an error which should cause caller to error if error
+// converting. If both json and error returned are nil, it means the gRPC
+// Balancer registry does not contain that balancer type, and the caller should
+// continue to the next policy.
+func convertCustomPolicy(typeURL string, s *structpb.Struct) (json.RawMessage, error) {
 	// The gRPC policy name will be the "type name" part of the value of the
 	// type_url field in the TypedStruct. We get this by using the part after
 	// the last / character. Can assume a valid type_url from the control plane.
@@ -249,17 +241,17 @@ func convertCustomPolicy(typeURL string, s *structpb.Struct) (json.RawMessage, b
 	name := typeURL[pos+1:]
 
 	if balancer.Get(name) == nil {
-		return nil, true, nil
+		return nil, nil
 	}
 
 	rawJSON, err := json.Marshal(s)
 	if err != nil {
-		return nil, false, fmt.Errorf("error converting custom lb policy %v: %v for %+v", err, typeURL, s)
+		return nil, fmt.Errorf("error converting custom lb policy %v: %v for %+v", err, typeURL, s)
 	}
 
 	// The Struct contained in the TypedStruct will be returned as-is as the
 	// configuration JSON object.
-	return makeBalancerConfigJSON(name, rawJSON), false, nil
+	return makeBalancerConfigJSON(name, rawJSON), nil
 }
 
 type wrrLBConfig struct {
