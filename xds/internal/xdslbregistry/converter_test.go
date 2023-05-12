@@ -16,8 +16,8 @@
  *
  */
 
-// Package tests contains test cases for the xDS LB Policy Registry.
-package tests
+// Package xdslbregistry_test contains test cases for the xDS LB Policy Registry.
+package xdslbregistry_test
 
 import (
 	"encoding/json"
