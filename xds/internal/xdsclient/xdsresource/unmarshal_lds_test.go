@@ -1115,7 +1115,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantErr:  "is a terminal filter but it is not last in the filter chain",
 		},
 		{
-			name: "last not terminal filter",
+			name: "last not router filter",
 			resource: testutils.MarshalAny(&v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
@@ -1139,7 +1139,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			}),
 			wantName: v3LDSTarget,
-			wantErr:  "is not a terminal filter",
+			wantErr:  "is not a router filter",
 		},
 		{
 			name: "unsupported oneof in typed config of http filter",

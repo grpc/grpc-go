@@ -30,6 +30,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/xds/internal/httpfilter"
+	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -235,14 +236,13 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 	if len(ret) == 0 {
 		return nil, fmt.Errorf("http filters list is empty")
 	}
-	var i int
-	for ; i < len(ret)-1; i++ {
+	for i := 0; i < len(ret)-1; i++ {
 		if ret[i].Filter.IsTerminal() {
 			return nil, fmt.Errorf("http filter %q is a terminal filter but it is not last in the filter chain", ret[i].Name)
 		}
 	}
-	if !ret[i].Filter.IsTerminal() {
-		return nil, fmt.Errorf("http filter %q is not a terminal filter", ret[len(ret)-1].Name)
+	if !router.IsRouterFilter(ret[len(ret)-1].Filter) {
+		return nil, fmt.Errorf("http filter %q is not a router filter", ret[len(ret)-1].Name)
 	}
 	return ret, nil
 }
