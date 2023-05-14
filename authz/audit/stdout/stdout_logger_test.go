@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"log"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -73,15 +72,16 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 			log.SetOutput(&buf)
 			log.SetFlags(0)
 			auditLogger.Log(test.event)
-			var e event
-			if err := json.Unmarshal(buf.Bytes(), &e); err != nil {
+			var container map[string]interface{}
+			if err := json.Unmarshal(buf.Bytes(), &container); err != nil {
 				t.Fatalf("Failed to unmarshal audit log event: %v", err)
 			}
-			if strings.TrimSpace(e.Timestamp) == "" {
-				t.Fatalf("Resulted event has no timestamp: %v", e)
+			innerEvent := extractEvent(container["grpc_audit_log"].(map[string]interface{}))
+			if innerEvent.Timestamp == 0 {
+				t.Fatalf("Resulted event has no timestamp: %v", innerEvent)
 			}
 
-			if diff := cmp.Diff(trimEvent(e), test.event); diff != "" {
+			if diff := cmp.Diff(trimEvent(innerEvent), test.event); diff != "" {
 				t.Fatalf("Unexpected message\ndiff (-got +want):\n%s", diff)
 			}
 		})
@@ -96,6 +96,19 @@ func (s) TestStdoutLoggerBuilder_NilConfig(t *testing.T) {
 	}
 	if l := builder.Build(config); l == nil {
 		t.Fatal("Failed to build stdout audit logger")
+	}
+}
+
+// trimEvent converts a logged stdout.event into an audit.Event
+// by removing Timestamp field. It is used for comparing events during testing.
+func extractEvent(container map[string]interface{}) event {
+	return event{
+		FullMethodName: container["rpc_method"].(string),
+		Principal:      container["principal"].(string),
+		PolicyName:     container["policy_name"].(string),
+		MatchedRule:    container["matched_rule"].(string),
+		Authorized:     container["authorized"].(bool),
+		Timestamp:      int64(container["timestamp"].(float64)),
 	}
 }
 
