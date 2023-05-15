@@ -29,8 +29,11 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+const udpaTypedStuctType = "type.googleapis.com/udpa.type.v1.TypedStruct"
+const xdsTypedStuctType = "type.googleapis.com/xds.type.v3.TypedStruct"
+
 func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig) (audit.Logger, error) {
-	if loggerConfig.AuditLogger.TypedConfig == nil {
+	if loggerConfig.GetAuditLogger().GetTypedConfig() == nil {
 		return nil, fmt.Errorf("AuditLogger TypedConfig cannot be nil")
 	}
 	customConfig, loggerName, err := getCustomConfig(loggerConfig.AuditLogger.TypedConfig)
@@ -57,13 +60,13 @@ func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConf
 
 func getCustomConfig(config *anypb.Any) (json.RawMessage, string, error) {
 	switch config.GetTypeUrl() {
-	case "type.googleapis.com/udpa.type.v1.TypedStruct":
+	case udpaTypedStuctType:
 		typedStruct := &v1xdsudpatypepb.TypedStruct{}
 		if err := config.UnmarshalTo(typedStruct); err != nil {
 			return nil, "", fmt.Errorf("failed to unmarshal resource: %v", err)
 		}
 		return convertCustomConfig(typedStruct.TypeUrl, typedStruct.Value)
-	case "type.googleapis.com/xds.type.v3.TypedStruct":
+	case xdsTypedStuctType:
 		typedStruct := &v3xdsxdstypepb.TypedStruct{}
 		if err := config.UnmarshalTo(typedStruct); err != nil {
 			return nil, "", fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -78,6 +81,9 @@ func convertCustomConfig(typeURL string, s *structpb.Struct) (json.RawMessage, s
 	// type_url field in the TypedStruct. We get this by using the part after
 	// the last / character. Can assume a valid type_url from the control plane.
 	urls := strings.Split(typeURL, "/")
+	if len(urls) == 0 {
+		return nil, "", fmt.Errorf("error converting custom lb policy %v for %v: typeURL must have a url-like format with the typeName being the value after the last /", typeURL, s)
+	}
 	name := urls[len(urls)-1]
 
 	rawJSON, err := json.Marshal(s)

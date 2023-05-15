@@ -114,6 +114,7 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 
 // engine is used for matching incoming RPCs to policies.
 type engine struct {
+	// TODO(gtcooke94) - differentiate between `policyName`, `policies`, and `rules`
 	policyName string
 	policies   map[string]*policyMatcher
 	// action must be ALLOW or DENY.
