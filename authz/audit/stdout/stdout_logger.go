@@ -41,7 +41,7 @@ type event struct {
 	PolicyName     string `json:"policy_name"`
 	MatchedRule    string `json:"matched_rule"`
 	Authorized     bool   `json:"authorized"`
-	Timestamp      int64  `json:"timestamp"` // Time when the audit event is logged via Log method
+	Timestamp      string `json:"timestamp"` // Time when the audit event is logged via Log method
 }
 
 // logger implements the audit.Logger interface by logging to standard output.
@@ -50,7 +50,7 @@ type logger struct {
 }
 
 // Log marshals the audit.Event to json and prints it to standard output.
-func (logger *logger) Log(event *audit.Event) {
+func (l *logger) Log(event *audit.Event) {
 	jsonContainer := map[string]interface{}{
 		"grpc_audit_log": convertEvent(event),
 	}
@@ -59,7 +59,7 @@ func (logger *logger) Log(event *audit.Event) {
 		grpcLogger.Errorf("failed to marshal AuditEvent data to JSON: %v", err)
 		return
 	}
-	logger.goLogger.Println(string(jsonBytes))
+	l.goLogger.Println(string(jsonBytes))
 }
 
 // loggerConfig represents the configuration for the stdout logger.
@@ -99,6 +99,6 @@ func convertEvent(auditEvent *audit.Event) *event {
 		PolicyName:     auditEvent.PolicyName,
 		MatchedRule:    auditEvent.MatchedRule,
 		Authorized:     auditEvent.Authorized,
-		Timestamp:      time.Now().Unix(),
+		Timestamp:      time.Now().Format(time.RFC3339),
 	}
 }

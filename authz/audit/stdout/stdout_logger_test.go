@@ -76,13 +76,16 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 				t.Fatalf("Failed to unmarshal audit log event: %v", err)
 			}
 			innerEvent := extractEvent(container["grpc_audit_log"].(map[string]interface{}))
-			if innerEvent.Timestamp == 0 {
+			if innerEvent.Timestamp == "" {
 				t.Fatalf("Resulted event has no timestamp: %v", innerEvent)
 			}
 			after := time.Now().Unix()
-			if before > innerEvent.Timestamp || after < innerEvent.Timestamp {
-				t.Fatalf("The audit event timestamp is outside of the test interval: test start %v, event timestamp %v, test end %v",
-					before, innerEvent.Timestamp, after)
+			innerEventUnixTime, err := time.Parse(time.RFC3339, innerEvent.Timestamp)
+			if err != nil {
+				t.Fatalf("Failed to convert event timestamp into Unix time format: %v", err)
+			}
+			if before > innerEventUnixTime.Unix() || after < innerEventUnixTime.Unix() {
+				t.Fatalf("The audit event timestamp is outside of the test interval: test start %v, event timestamp %v, test end %v", before, innerEventUnixTime.Unix(), after)
 			}
 			if diff := cmp.Diff(trimEvent(innerEvent), test.event); diff != "" {
 				t.Fatalf("Unexpected message\ndiff (-got +want):\n%s", diff)
@@ -117,7 +120,7 @@ func extractEvent(container map[string]interface{}) event {
 		PolicyName:     container["policy_name"].(string),
 		MatchedRule:    container["matched_rule"].(string),
 		Authorized:     container["authorized"].(bool),
-		Timestamp:      int64(container["timestamp"].(float64)),
+		Timestamp:      container["timestamp"].(string),
 	}
 }
 
