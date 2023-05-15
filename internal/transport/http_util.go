@@ -405,7 +405,7 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderList
 	mutex.Lock()
 	if pool == nil {
 		pool = &sync.Pool{
-			New: func() any {
+			New: func() interface{} {
 				return make([]byte, writeBufferSize*2)
 			},
 		}
