@@ -318,7 +318,6 @@ type bufWriter struct {
 
 func newBufWriter(conn net.Conn, batchSize int) *bufWriter {
 	return &bufWriter{
-		buf:       make([]byte, batchSize*2),
 		batchSize: batchSize,
 		conn:      conn,
 	}
@@ -331,6 +330,9 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 	if w.batchSize == 0 { // Buffer has been disabled.
 		n, err = w.conn.Write(b)
 		return n, toIOError(err)
+	}
+	if w.buf == nil {
+		w.buf = make([]byte, w.batchSize*2)
 	}
 	for len(b) > 0 {
 		nn := copy(w.buf[w.offset:], b)
@@ -345,6 +347,12 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 }
 
 func (w *bufWriter) Flush() error {
+	err := w.flush()
+	w.buf = nil
+	return err
+}
+
+func (w *bufWriter) flush() error {
 	if w.err != nil {
 		return w.err
 	}
