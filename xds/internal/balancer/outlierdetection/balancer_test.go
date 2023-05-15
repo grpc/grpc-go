@@ -37,7 +37,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
-	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -78,7 +78,6 @@ func (s) TestParseConfig(t *testing.T) {
 		{
 			name: "noop-lb-config",
 			input: `{
-				"interval": 9223372036854775807,
 				"childPolicy": [
 				{
 					"xds_cluster_impl_experimental": {
@@ -88,8 +87,7 @@ func (s) TestParseConfig(t *testing.T) {
 				]
 			}`,
 			wantCfg: &LBConfig{
-				Interval: math.MaxInt64,
-				ChildPolicy: &internalserviceconfig.BalancerConfig{
+				ChildPolicy: &iserviceconfig.BalancerConfig{
 					Name: "xds_cluster_impl_experimental",
 					Config: &clusterimpl.LBConfig{
 						Cluster: "test_cluster",
@@ -100,9 +98,9 @@ func (s) TestParseConfig(t *testing.T) {
 		{
 			name: "good-lb-config",
 			input: `{
-				"interval": 10000000000,
-				"baseEjectionTime": 30000000000,
-				"maxEjectionTime": 300000000000,
+				"interval": "10s",
+				"baseEjectionTime": "30s",
+				"maxEjectionTime": "300s",
 				"maxEjectionPercent": 10,
 				"successRateEjection": {
 					"stdevFactor": 1900,
@@ -125,9 +123,9 @@ func (s) TestParseConfig(t *testing.T) {
 				]
 			}`,
 			wantCfg: &LBConfig{
-				Interval:           10 * time.Second,
-				BaseEjectionTime:   30 * time.Second,
-				MaxEjectionTime:    300 * time.Second,
+				Interval:           iserviceconfig.Duration(10 * time.Second),
+				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
 				MaxEjectionPercent: 10,
 				SuccessRateEjection: &SuccessRateEjection{
 					StdevFactor:           1900,
@@ -141,7 +139,7 @@ func (s) TestParseConfig(t *testing.T) {
 					MinimumHosts:          5,
 					RequestVolume:         50,
 				},
-				ChildPolicy: &internalserviceconfig.BalancerConfig{
+				ChildPolicy: &iserviceconfig.BalancerConfig{
 					Name: "xds_cluster_impl_experimental",
 					Config: &clusterimpl.LBConfig{
 						Cluster: "test_cluster",
@@ -151,18 +149,18 @@ func (s) TestParseConfig(t *testing.T) {
 		},
 		{
 			name:    "interval-is-negative",
-			input:   `{"interval": -10}`,
-			wantErr: "OutlierDetectionLoadBalancingConfig.interval = -10ns; must be >= 0",
+			input:   `{"interval": "-10s"}`,
+			wantErr: "OutlierDetectionLoadBalancingConfig.interval = -10s; must be >= 0",
 		},
 		{
 			name:    "base-ejection-time-is-negative",
-			input:   `{"baseEjectionTime": -10}`,
-			wantErr: "OutlierDetectionLoadBalancingConfig.base_ejection_time = -10ns; must be >= 0",
+			input:   `{"baseEjectionTime": "-10s"}`,
+			wantErr: "OutlierDetectionLoadBalancingConfig.base_ejection_time = -10s; must be >= 0",
 		},
 		{
 			name:    "max-ejection-time-is-negative",
-			input:   `{"maxEjectionTime": -10}`,
-			wantErr: "OutlierDetectionLoadBalancingConfig.max_ejection_time = -10ns; must be >= 0",
+			input:   `{"maxEjectionTime": "-10s"}`,
+			wantErr: "OutlierDetectionLoadBalancingConfig.max_ejection_time = -10s; must be >= 0",
 		},
 		{
 			name:    "max-ejection-percent-is-greater-than-100",
@@ -199,9 +197,9 @@ func (s) TestParseConfig(t *testing.T) {
 		{
 			name: "child-policy-not-present",
 			input: `{
-				"interval": 10000000000,
-				"baseEjectionTime": 30000000000,
-				"maxEjectionTime": 300000000000,
+				"interval": "10s",
+				"baseEjectionTime": "30s",
+				"maxEjectionTime": "300s",
 				"maxEjectionPercent": 10,
 				"successRateEjection": {
 					"stdevFactor": 1900,
@@ -221,7 +219,6 @@ func (s) TestParseConfig(t *testing.T) {
 		{
 			name: "child-policy-present-but-parse-error",
 			input: `{
-				"interval": 9223372036854775807,
 				"childPolicy": [
 				{
 					"errParseConfigBalancer": {
@@ -235,7 +232,6 @@ func (s) TestParseConfig(t *testing.T) {
 		{
 			name: "no-supported-child-policy",
 			input: `{
-				"interval": 9223372036854775807,
 				"childPolicy": [
 				{
 					"doesNotExistBalancer": {
@@ -258,7 +254,7 @@ func (s) TestParseConfig(t *testing.T) {
 			]
 			}`,
 			wantCfg: &LBConfig{
-				ChildPolicy: &internalserviceconfig.BalancerConfig{
+				ChildPolicy: &iserviceconfig.BalancerConfig{
 					Name: "xds_cluster_impl_experimental",
 					Config: &clusterimpl.LBConfig{
 						Cluster: "test_cluster",
@@ -362,8 +358,8 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	// it's first update.
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			Interval: math.MaxInt64,
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			Interval: math.MaxInt64, // what's the equivalent of this?
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name() + "child1",
 				Config: bc,
 			},
@@ -386,7 +382,7 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
 			Interval: math.MaxInt64,
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name() + "child2",
 				Config: emptyChildConfig{},
 			},
@@ -475,9 +471,9 @@ func (s) TestUpdateAddresses(t *testing.T) {
 			},
 		},
 		BalancerConfig: &LBConfig{
-			Interval:           10 * time.Second,
-			BaseEjectionTime:   30 * time.Second,
-			MaxEjectionTime:    300 * time.Second,
+			Interval:           iserviceconfig.Duration(10 * time.Second),
+			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
 			MaxEjectionPercent: 10,
 			FailurePercentageEjection: &FailurePercentageEjection{
 				Threshold:             50,
@@ -485,7 +481,7 @@ func (s) TestUpdateAddresses(t *testing.T) {
 				MinimumHosts:          2,
 				RequestVolume:         3,
 			},
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -651,14 +647,14 @@ func (s) TestDurationOfInterval(t *testing.T) {
 
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			Interval: 8 * time.Second,
+			Interval: iserviceconfig.Duration(8 * time.Second),
 			SuccessRateEjection: &SuccessRateEjection{
 				StdevFactor:           1900,
 				EnforcementPercentage: 100,
 				MinimumHosts:          5,
 				RequestVolume:         100,
 			},
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -691,14 +687,14 @@ func (s) TestDurationOfInterval(t *testing.T) {
 	// interval timer of ~4 seconds.
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			Interval: 9 * time.Second,
+			Interval: iserviceconfig.Duration(9 * time.Second),
 			SuccessRateEjection: &SuccessRateEjection{
 				StdevFactor:           1900,
 				EnforcementPercentage: 100,
 				MinimumHosts:          5,
 				RequestVolume:         100,
 			},
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -718,8 +714,8 @@ func (s) TestDurationOfInterval(t *testing.T) {
 	// interval timer at all due to it being a no-op.
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			Interval: 10 * time.Second,
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			Interval: iserviceconfig.Duration(10 * time.Second),
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -793,8 +789,8 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 		},
 		BalancerConfig: &LBConfig{
 			Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
-			BaseEjectionTime:   30 * time.Second,
-			MaxEjectionTime:    300 * time.Second,
+			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
 			MaxEjectionPercent: 10,
 			FailurePercentageEjection: &FailurePercentageEjection{
 				Threshold:             50,
@@ -802,7 +798,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				MinimumHosts:          3,
 				RequestVolume:         3,
 			},
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -997,8 +993,8 @@ func (s) TestEjectFailureRate(t *testing.T) {
 		},
 		BalancerConfig: &LBConfig{
 			Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
-			BaseEjectionTime:   30 * time.Second,
-			MaxEjectionTime:    300 * time.Second,
+			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
 			MaxEjectionPercent: 10,
 			SuccessRateEjection: &SuccessRateEjection{
 				StdevFactor:           500,
@@ -1006,7 +1002,7 @@ func (s) TestEjectFailureRate(t *testing.T) {
 				MinimumHosts:          3,
 				RequestVolume:         3,
 			},
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -1103,10 +1099,10 @@ func (s) TestEjectFailureRate(t *testing.T) {
 			},
 			BalancerConfig: &LBConfig{
 				Interval:           math.MaxInt64,
-				BaseEjectionTime:   30 * time.Second,
-				MaxEjectionTime:    300 * time.Second,
+				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
 				MaxEjectionPercent: 10,
-				ChildPolicy: &internalserviceconfig.BalancerConfig{
+				ChildPolicy: &iserviceconfig.BalancerConfig{
 					Name:   t.Name(),
 					Config: emptyChildConfig{},
 				},
@@ -1173,8 +1169,8 @@ func (s) TestConcurrentOperations(t *testing.T) {
 		},
 		BalancerConfig: &LBConfig{
 			Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
-			BaseEjectionTime:   30 * time.Second,
-			MaxEjectionTime:    300 * time.Second,
+			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
 			MaxEjectionPercent: 10,
 			SuccessRateEjection: &SuccessRateEjection{ // Have both Success Rate and Failure Percentage to step through all the interval timer code
 				StdevFactor:           500,
@@ -1188,7 +1184,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 				MinimumHosts:          3,
 				RequestVolume:         3,
 			},
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -1311,7 +1307,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 		},
 		BalancerConfig: &LBConfig{
 			Interval: math.MaxInt64,
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
