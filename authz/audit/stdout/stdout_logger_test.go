@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"log"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/authz/audit"
@@ -61,16 +62,14 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 		},
 	}
 
-	content := json.RawMessage(`{"name": "conf", "val": "to be ignored"}`)
-	builder := &loggerBuilder{}
-	config, _ := builder.ParseLoggerConfig(content)
-	auditLogger := builder.Build(config)
-
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			before := time.Now().Unix()
 			var buf bytes.Buffer
-			log.SetOutput(&buf)
-			log.SetFlags(0)
+			l := log.New(&buf, "", 0)
+			auditLogger := &logger{
+				goLogger: l,
+			}
 			auditLogger.Log(test.event)
 			var container map[string]interface{}
 			if err := json.Unmarshal(buf.Bytes(), &container); err != nil {
@@ -80,7 +79,11 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 			if innerEvent.Timestamp == 0 {
 				t.Fatalf("Resulted event has no timestamp: %v", innerEvent)
 			}
-
+			after := time.Now().Unix()
+			if before > innerEvent.Timestamp || after < innerEvent.Timestamp {
+				t.Fatalf("The audit event timestamp is outside of the test interval: test start %v, event timestamp %v, test end %v",
+					before, innerEvent.Timestamp, after)
+			}
 			if diff := cmp.Diff(trimEvent(innerEvent), test.event); diff != "" {
 				t.Fatalf("Unexpected message\ndiff (-got +want):\n%s", diff)
 			}
@@ -99,8 +102,14 @@ func (s) TestStdoutLoggerBuilder_NilConfig(t *testing.T) {
 	}
 }
 
-// trimEvent converts a logged stdout.event into an audit.Event
-// by removing Timestamp field. It is used for comparing events during testing.
+func (s) TestStdoutLoggerBuilder_Registration(t *testing.T) {
+	if audit.GetLoggerBuilder("stdout_logger") == nil {
+		t.Fatal("stdout logger is not registered")
+	}
+}
+
+// extractEvent extracts an stdout.event from a map
+// unmarshalled from a logged json message.
 func extractEvent(container map[string]interface{}) event {
 	return event{
 		FullMethodName: container["rpc_method"].(string),

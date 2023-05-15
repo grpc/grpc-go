@@ -22,6 +22,7 @@ package stdout
 import (
 	"encoding/json"
 	"log"
+	"os"
 	"time"
 
 	"google.golang.org/grpc/authz/audit"
@@ -45,6 +46,7 @@ type event struct {
 
 // logger implements the audit.Logger interface by logging to standard output.
 type logger struct {
+	goLogger *log.Logger
 }
 
 // Log marshals the audit.Event to json and prints it to standard output.
@@ -57,7 +59,7 @@ func (logger *logger) Log(event *audit.Event) {
 		grpcLogger.Errorf("failed to marshal AuditEvent data to JSON: %v", err)
 		return
 	}
-	log.Println(string(jsonBytes))
+	logger.goLogger.Println(string(jsonBytes))
 }
 
 // loggerConfig represents the configuration for the stdout logger.
@@ -76,7 +78,10 @@ func (loggerBuilder) Name() string {
 // Passed in configuration is ignored as the stdout logger does not
 // expect any configuration to be provided.
 func (*loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
-	return &logger{}
+	l := log.New(os.Stdout, "", log.LstdFlags)
+	return &logger{
+		goLogger: l,
+	}
 }
 
 // ParseLoggerConfig is a no-op since the stdout logger does not accept any configuration.
