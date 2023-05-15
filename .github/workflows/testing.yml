@@ -24,11 +24,11 @@ jobs:
     steps:
       # Setup the environment.
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: '1.20'
       - name: Checkout repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       # Run the vet checks.
       - name: vet
@@ -89,12 +89,12 @@ jobs:
         run: echo "${{ matrix.grpcenv }}" >> $GITHUB_ENV
 
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.goversion }}
 
       - name: Checkout repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       # Only run vet for 'vet' runs.
       - name: Run vet.sh
