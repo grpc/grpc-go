@@ -30,6 +30,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -332,7 +333,7 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 		return n, toIOError(err)
 	}
 	if w.buf == nil {
-		w.buf = make([]byte, w.batchSize*2)
+		w.buf = pool.Get().([]byte)
 	}
 	for len(b) > 0 {
 		nn := copy(w.buf[w.offset:], b)
@@ -348,6 +349,7 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 
 func (w *bufWriter) Flush() error {
 	err := w.flush()
+	pool.Put(w.buf)
 	w.buf = nil
 	return err
 }
@@ -389,6 +391,9 @@ type framer struct {
 	fr     *http2.Framer
 }
 
+var pool *sync.Pool
+var mutex sync.Mutex
+
 func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderListSize uint32) *framer {
 	if writeBufferSize < 0 {
 		writeBufferSize = 0
@@ -397,6 +402,15 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderList
 	if readBufferSize > 0 {
 		r = bufio.NewReaderSize(r, readBufferSize)
 	}
+	mutex.Lock()
+	if pool == nil {
+		pool = &sync.Pool{
+			New: func() any {
+				return make([]byte, writeBufferSize*2)
+			},
+		}
+	}
+	mutex.Unlock()
 	w := newBufWriter(conn, writeBufferSize)
 	f := &framer{
 		writer: w,
