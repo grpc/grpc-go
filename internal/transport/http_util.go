@@ -343,7 +343,7 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 		w.offset += nn
 		n += nn
 		if w.offset >= w.batchSize {
-			err = w.Flush()
+			err = w.flush()
 		}
 	}
 	return n, err
@@ -351,8 +351,10 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 
 func (w *bufWriter) Flush() error {
 	err := w.flush()
-	w.pool.Put(w.buf)
-	w.buf = nil
+	if w.buf != nil {
+		w.pool.Put(w.buf)
+		w.buf = nil
+	}
 	return err
 }
 
@@ -412,8 +414,8 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderList
 				return make([]byte, writeBufferSize*2)
 			},
 		}
+		poolMap[writeBufferSize*2] = pool
 	}
-	poolMap[writeBufferSize*2] = pool
 	mutex.Unlock()
 	w := newBufWriter(conn, writeBufferSize, pool)
 	f := &framer{
