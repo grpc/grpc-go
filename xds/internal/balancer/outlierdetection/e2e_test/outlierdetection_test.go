@@ -159,8 +159,8 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
   "loadBalancingConfig": [
     {
       "outlier_detection_experimental": {
-        "interval": ".05s",
-		"baseEjectionTime": ".1s",
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
 		"maxEjectionTime": "300s",
 		"maxEjectionPercent": 33,
 		"successRateEjection": {
@@ -182,8 +182,8 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
   "loadBalancingConfig": [
     {
       "outlier_detection_experimental": {
-        "interval": ".05s",
-		"baseEjectionTime": ".1s",
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
 		"maxEjectionTime": "300s",
 		"maxEjectionPercent": 33,
 		"failurePercentageEjection": {
@@ -277,8 +277,8 @@ func (s) TestNoopConfiguration(t *testing.T) {
   "loadBalancingConfig": [
     {
       "outlier_detection_experimental": {
-        "interval": ".05s",
-		"baseEjectionTime": ".1s",
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
 		"maxEjectionTime": "300s",
 		"maxEjectionPercent": 33,
         "childPolicy": [{"round_robin": {}}]
@@ -325,8 +325,8 @@ func (s) TestNoopConfiguration(t *testing.T) {
   "loadBalancingConfig": [
     {
       "outlier_detection_experimental": {
-        "interval": ".05s",
-		"baseEjectionTime": ".1s",
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
 		"maxEjectionTime": "300s",
 		"maxEjectionPercent": 33,
 		"failurePercentageEjection": {

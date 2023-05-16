@@ -358,7 +358,6 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	// it's first update.
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			Interval: math.MaxInt64, // what's the equivalent of this?
 			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name() + "child1",
 				Config: bc,
