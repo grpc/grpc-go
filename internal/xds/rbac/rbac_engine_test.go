@@ -1225,7 +1225,7 @@ func (s) TestChainEngine(t *testing.T) {
 		// deny (on port) policy chained together. This represents how a user
 		// configured interceptor would use this, and also is a potential
 		// configuration for a dynamic xds interceptor.  Further, it tests that
-		// the audit logger works properly in each scenario
+		// the audit logger works properly in each scenario.
 		{
 			name:       "AuditLoggingAllowAndDenyPolicy_ON_ALLOW",
 			policyName: "test_policy",
@@ -1705,7 +1705,7 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				// This RPC shouldn't match with allow, match with deny, and
 				// thus shouldn't be allowed to proceed.
-				// Audit logging will have the deny logged
+				// Audit logging will have the deny logged.
 				{
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
@@ -1752,8 +1752,8 @@ func (s) TestChainEngine(t *testing.T) {
 					// Make a TCP connection with a certain destination port. The
 					// address/port of this connection will be used to populate the
 					// destination ip/port in RPCData struct. This represents what
-					// the user of ChainEngine will have to place into
-					// context, as this is only way to get destination ip and port.
+					// the user of ChainEngine will have to place into context,
+					// as this is only way to get destination ip and port.
 					lis, err := net.Listen("tcp", "localhost:0")
 					if err != nil {
 						t.Fatalf("Error listening: %v", err)
