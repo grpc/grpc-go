@@ -587,14 +587,14 @@ func (b *outlierDetectionBalancer) Target() string {
 	return b.cc.Target()
 }
 
-func max(x, y int64) int64 {
+func max(x, y time.Duration) time.Duration {
 	if x < y {
 		return y
 	}
 	return x
 }
 
-func min(x, y int64) int64 {
+func min(x, y time.Duration) time.Duration {
 	if x < y {
 		return x
 	}
@@ -752,9 +752,9 @@ func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 			// to uneject the address below.
 			continue
 		}
-		et := time.Duration(b.cfg.BaseEjectionTime).Nanoseconds() * addrInfo.ejectionTimeMultiplier
-		met := max(time.Duration(b.cfg.BaseEjectionTime).Nanoseconds(), time.Duration(b.cfg.MaxEjectionTime).Nanoseconds())
-		curTimeAfterEt := now().After(addrInfo.latestEjectionTimestamp.Add(time.Duration(min(et, met))))
+		et := time.Duration(b.cfg.BaseEjectionTime) * time.Duration(addrInfo.ejectionTimeMultiplier)
+		met := max(time.Duration(b.cfg.BaseEjectionTime), time.Duration(b.cfg.MaxEjectionTime))
+		curTimeAfterEt := now().After(addrInfo.latestEjectionTimestamp.Add(min(et, met)))
 		if curTimeAfterEt {
 			b.unejectAddress(addrInfo)
 		}
