@@ -164,15 +164,17 @@ func (i *mutexIdlenessManager) close() {
 // operations to synchronize access to shared state and a mutex to guarantee
 // mutual exclusion in a critical section.
 type atomicIdlenessManager struct {
-	enforcer idlenessEnforcer // Functionality provided by grpc.ClientConn.
-	timeout  int64            // Idle timeout duration nanos stored as an int64.
-
 	// State accessed atomically.
+	lastCallEndTime           int64        // Unix timestamp in nanos; time when the most recent RPC completed.
 	activeCallsCount          int32        // Count of active RPCs; math.MinInt32 indicates channel is idle.
 	activeSinceLastTimerCheck int32        // Boolean; True if there was an RPC since the last timer callback.
 	closed                    int32        // Boolean; True when the manager is closed.
-	lastCallEndTime           int64        // Unix timestamp in nanos; time when the most recent RPC completed.
 	timer                     atomic.Value // Of type `*time.Timer`
+
+	// Can be accessed without atomics or mutex since these are set at creation
+	// time and read-only after that.
+	enforcer idlenessEnforcer // Functionality provided by grpc.ClientConn.
+	timeout  int64            // Idle timeout duration nanos stored as an int64.
 
 	// idleMu is used to guarantee mutual exclusion in two scenarios:
 	// - Opposing intentions. One is trying to put the channel in idle mode
