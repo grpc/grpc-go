@@ -302,8 +302,7 @@ func (options *auditLoggingOptions) toProtos() (allow *v3rbacpb.RBAC_AuditLoggin
 		deny.AuditCondition = toDenyCondition(v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition(rbacCondition))
 	}
 
-	for i := range options.AuditLoggers {
-		config := &options.AuditLoggers[i]
+	for _, config := range options.AuditLoggers {
 		typedStruct := &v1xdsudpatypepb.TypedStruct{
 			TypeUrl: typeURLPrefix + config.Name,
 			Value:   &config.Config,
