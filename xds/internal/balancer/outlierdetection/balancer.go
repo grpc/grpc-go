@@ -754,8 +754,8 @@ func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 		}
 		et := time.Duration(b.cfg.BaseEjectionTime) * time.Duration(addrInfo.ejectionTimeMultiplier)
 		met := max(time.Duration(b.cfg.BaseEjectionTime), time.Duration(b.cfg.MaxEjectionTime))
-		curTimeAfterEt := now().After(addrInfo.latestEjectionTimestamp.Add(min(et, met)))
-		if curTimeAfterEt {
+		uet := addrInfo.latestEjectionTimestamp.Add(min(et, met))
+		if now().After(uet) {
 			b.unejectAddress(addrInfo)
 		}
 	}
