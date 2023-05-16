@@ -310,6 +310,7 @@ func decodeGrpcMessageUnchecked(msg string) string {
 }
 
 type bufWriter struct {
+	pool      *sync.Pool
 	buf       []byte
 	offset    int
 	batchSize int
@@ -317,10 +318,11 @@ type bufWriter struct {
 	err       error
 }
 
-func newBufWriter(conn net.Conn, batchSize int) *bufWriter {
+func newBufWriter(conn net.Conn, batchSize int, pool *sync.Pool) *bufWriter {
 	return &bufWriter{
 		batchSize: batchSize,
 		conn:      conn,
+		pool:      pool,
 	}
 }
 
@@ -333,7 +335,7 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 		return n, toIOError(err)
 	}
 	if w.buf == nil {
-		w.buf = pool.Get().([]byte)
+		w.buf = w.pool.Get().([]byte)
 	}
 	for len(b) > 0 {
 		nn := copy(w.buf[w.offset:], b)
@@ -349,7 +351,7 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 
 func (w *bufWriter) Flush() error {
 	err := w.flush()
-	pool.Put(w.buf)
+	w.pool.Put(w.buf)
 	w.buf = nil
 	return err
 }
@@ -391,7 +393,7 @@ type framer struct {
 	fr     *http2.Framer
 }
 
-var pool *sync.Pool
+var poolMap map[int]*sync.Pool = make(map[int]*sync.Pool)
 var mutex sync.Mutex
 
 func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderListSize uint32) *framer {
@@ -403,15 +405,17 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderList
 		r = bufio.NewReaderSize(r, readBufferSize)
 	}
 	mutex.Lock()
-	if pool == nil {
+	pool, ok := poolMap[writeBufferSize*2]
+	if !ok {
 		pool = &sync.Pool{
 			New: func() interface{} {
 				return make([]byte, writeBufferSize*2)
 			},
 		}
 	}
+	poolMap[writeBufferSize*2] = pool
 	mutex.Unlock()
-	w := newBufWriter(conn, writeBufferSize)
+	w := newBufWriter(conn, writeBufferSize, pool)
 	f := &framer{
 		writer: w,
 		fr:     http2.NewFramer(w, r),
