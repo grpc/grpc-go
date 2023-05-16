@@ -90,7 +90,7 @@ func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 
 // ParseLoggerConfig is a no-op since the stdout logger does not accept any configuration.
 func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
-	if config != nil {
+	if len(config) != 0 && string(config) != "{}" {
 		grpcLogger.Warningf("Stdout logger doesn't support custom configs. Ignoring:\n%s", string(config))
 	}
 	return &loggerConfig{}, nil

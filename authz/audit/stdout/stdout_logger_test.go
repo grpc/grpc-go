@@ -95,8 +95,9 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 }
 
 func (s) TestStdoutLoggerBuilder_NilConfig(t *testing.T) {
-	l := log.New(os.Stdout, "", log.LstdFlags)
-	builder := &loggerBuilder{goLogger: l}
+	builder := &loggerBuilder{
+		goLogger: log.New(os.Stdout, "", log.LstdFlags),
+	}
 	config, err := builder.ParseLoggerConfig(nil)
 	if err != nil {
 		t.Fatalf("Failed to parse stdout logger configuration: %v", err)
