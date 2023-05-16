@@ -86,9 +86,13 @@ func convertCustomConfig(typeURL string, s *structpb.Struct) (json.RawMessage, s
 	}
 	name := urls[len(urls)-1]
 
-	rawJSON, err := json.Marshal(s)
-	if err != nil {
-		return nil, "", fmt.Errorf("error converting custom audit logger %v for %v: %v", typeURL, s, err)
+	rawJSON := []byte("{}")
+	var err error
+	if s != nil {
+		rawJSON, err = json.Marshal(s)
+		if err != nil {
+			return nil, "", fmt.Errorf("error converting custom audit logger %v for %v: %v", typeURL, s, err)
+		}
 	}
 	return rawJSON, name, nil
 }
