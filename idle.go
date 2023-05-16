@@ -218,7 +218,7 @@ func (i *atomicIdlenessManager) enterIdleMode() bool {
 	if !atomic.CompareAndSwapInt32(&i.activeCallsCount, 0, math.MinInt32) {
 		return false
 	}
-	// It is possibile that one or more RPCs started and finished since the last
+	// It is possible that one or more RPCs started and finished since the last
 	// time we checked the calls count and activity in the timer callback. In
 	// this case, the calls count would be zero and the above compare-and-swap
 	// operation would have succeeded. The `activeSinceLastTimerCheck` field is
@@ -329,7 +329,7 @@ func (i *atomicIdlenessManager) onCallBegin() error {
 	// idle. So, if the channel is still in idle mode, we expect this value to
 	// be negative at this point. If there are more than 2 billion RPCs that
 	// start at the same time (when the channel is in idle mode), this count
-	// could become positive, but it is highly unlikey to ever hit that case.
+	// could become positive, but it is highly unlikely to ever hit that case.
 	//
 	// Ask the ClientConn to exit idle mode now.
 	return i.exitIdleMode()
