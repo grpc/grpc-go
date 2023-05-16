@@ -32,9 +32,8 @@ import (
 var grpcLogger = grpclog.Component("authz-audit")
 
 func init() {
-	l := log.New(os.Stdout, "", 0)
 	audit.RegisterLoggerBuilder(&loggerBuilder{
-		goLogger: l,
+		goLogger: log.New(os.Stdout, "", 0),
 	})
 }
 
