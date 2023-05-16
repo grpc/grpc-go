@@ -304,7 +304,7 @@ func (options *auditLoggingOptions) toProtos() (allow *v3rbacpb.RBAC_AuditLoggin
 
 	for i, config := range options.AuditLoggers {
 		if config.Name == "" {
-			return nil, nil, fmt.Errorf("missing required field: name in AuditLoggerConfig.AuditLoggers[%v]", i)
+			return nil, nil, fmt.Errorf("missing required field: name in audit_logging_options.audit_loggers[%v]", i)
 		}
 		typedStruct := &v1xdsudpatypepb.TypedStruct{
 			TypeUrl: typeURLPrefix + config.Name,
