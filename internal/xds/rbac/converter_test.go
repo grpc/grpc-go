@@ -40,7 +40,7 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 					TypedConfig: nil,
 				},
 			},
-			expectedError: "AuditLogger TypedConfig cannot be nil",
+			expectedError: "missing required field: TypedConfig",
 		},
 		{
 			name: "Unsupported Type",
@@ -60,7 +60,7 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 					TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, ""),
 				},
 			},
-			expectedError: "AuditLogger TypedConfig.TypeURL cannot be an empty string",
+			expectedError: "field TypedConfig.TypeURL cannot be an empty string",
 		},
 		{
 			name: "No registered logger",
@@ -81,7 +81,7 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 					TypedConfig: createUDPATypedStruct(t, map[string]interface{}{"abc": "BADVALUE", "xyz": "123"}, "fail to parse custom config_TestAuditLoggerCustomConfig")},
 				IsOptional: false,
 			},
-			expectedError: "AuditLogger custom config could not be parsed",
+			expectedError: "custom config could not be parsed",
 		},
 		{
 			name: "no registered logger but optional passes",
