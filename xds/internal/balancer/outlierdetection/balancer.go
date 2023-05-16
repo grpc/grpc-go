@@ -412,13 +412,15 @@ func (wp *wrappedPicker) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 		// programming.
 		logger.Errorf("Picked SubConn from child picker is not a SubConnWrapper")
 		return balancer.PickResult{
-			SubConn: pr.SubConn,
-			Done:    done,
+			SubConn:  pr.SubConn,
+			Done:     done,
+			Metadata: pr.Metadata,
 		}, nil
 	}
 	return balancer.PickResult{
-		SubConn: scw.SubConn,
-		Done:    done,
+		SubConn:  scw.SubConn,
+		Done:     done,
+		Metadata: pr.Metadata,
 	}, nil
 }
 
