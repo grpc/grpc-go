@@ -41,7 +41,7 @@ func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConf
 		return nil, err
 	}
 	if loggerName == "" {
-		return nil, fmt.Errorf("AuditLogger TypedConfig.TypeURL cannot be an empty string")
+		return nil, fmt.Errorf("field TypedConfig.TypeURL cannot be an empty string")
 	}
 	factory := audit.GetLoggerBuilder(loggerName)
 	if factory == nil {
@@ -52,7 +52,7 @@ func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConf
 	}
 	auditLoggerConfig, err := factory.ParseLoggerConfig(customConfig)
 	if err != nil {
-		return nil, fmt.Errorf("AuditLogger custom config could not be parsed: %v", err)
+		return nil, fmt.Errorf("custom config could not be parsed by registered factory. error: %v", err)
 	}
 	auditLogger := factory.Build(auditLoggerConfig)
 	return auditLogger, nil
@@ -82,13 +82,13 @@ func convertCustomConfig(typeURL string, s *structpb.Struct) (json.RawMessage, s
 	// the last / character. Can assume a valid type_url from the control plane.
 	urls := strings.Split(typeURL, "/")
 	if len(urls) == 0 {
-		return nil, "", fmt.Errorf("error converting custom lb policy %v for %v: typeURL must have a url-like format with the typeName being the value after the last /", typeURL, s)
+		return nil, "", fmt.Errorf("error converting custom audit logger %v for %v: typeURL must have a url-like format with the typeName being the value after the last /", typeURL, s)
 	}
 	name := urls[len(urls)-1]
 
 	rawJSON, err := json.Marshal(s)
 	if err != nil {
-		return nil, "", fmt.Errorf("error converting custom lb policy %v for %v: %v", typeURL, s, err)
+		return nil, "", fmt.Errorf("error converting custom audit logger %v for %v: %v", typeURL, s, err)
 	}
 	return rawJSON, name, nil
 }
