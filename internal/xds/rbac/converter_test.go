@@ -84,11 +84,11 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 			expectedError: "AuditLogger custom config could not be parsed",
 		},
 		{
-			name: "No registered logger but optional passes",
+			name: "no registered logger but optional passes",
 			loggerConfig: &v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 				AuditLogger: &v3corepb.TypedExtensionConfig{
 					Name:        "UnregisteredLogger",
-					TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "No registered logger but optional passes_UnregisteredLogger"),
+					TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "no registered logger but optional passes_UnregisteredLogger"),
 				},
 				IsOptional: true,
 			},
