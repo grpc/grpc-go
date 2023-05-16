@@ -994,6 +994,29 @@ func TestTranslatePolicy(t *testing.T) {
 			}`,
 			wantErr: `failed to unmarshal policy`,
 		},
+		"missing audit logger name": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_condition": "NONE",
+					"audit_loggers": [
+						{
+							"name": "",
+							"config": {},
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantErr: `missing required field: name`,
+		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
