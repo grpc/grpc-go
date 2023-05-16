@@ -305,7 +305,7 @@ func (options *auditLoggingOptions) toProtos() (allow *v3rbacpb.RBAC_AuditLoggin
 	for i := range options.AuditLoggers {
 		config := &options.AuditLoggers[i]
 		if config.Config == nil {
-			return nil, nil, fmt.Errorf("AuditLogger Config field cannot be nil")
+			config.Config = &structpb.Struct{}
 		}
 		typedStruct := &v1xdsudpatypepb.TypedStruct{
 			TypeUrl: typeURLPrefix + config.Name,
