@@ -283,7 +283,7 @@ func (e *engine) doAuditLogging(rpcData *rpcData, rule string, authorized bool) 
 	if rpcData.peerInfo != nil && rpcData.peerInfo.AuthInfo != nil && rpcData.peerInfo.AuthInfo.AuthType() == "tls" {
 		// If AuthType = tls, then we can cast AuthInfo to TLSInfo.
 		tlsInfo := rpcData.peerInfo.AuthInfo.(credentials.TLSInfo)
-		if tlsInfo.SPIFFEID != nil && tlsInfo.SPIFFEID.Scheme == "spiffe" {
+		if tlsInfo.SPIFFEID != nil {
 			principal = tlsInfo.SPIFFEID.String()
 		}
 	}
