@@ -1299,6 +1299,11 @@ func (s) TestChainEngine(t *testing.T) {
 										},
 									},
 								},
+								SPIFFEID: &url.URL{
+									Scheme: "spiffe",
+									Host:   "cluster.local",
+									Path:   "/ns/default/sa/admin",
+								},
 							},
 						},
 					},
