@@ -34,7 +34,7 @@ const xdsTypedStuctType = "type.googleapis.com/xds.type.v3.TypedStruct"
 
 func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig) (audit.Logger, error) {
 	if loggerConfig.GetAuditLogger().GetTypedConfig() == nil {
-		return nil, fmt.Errorf("AuditLogger TypedConfig cannot be nil")
+		return nil, fmt.Errorf("missing required field: TypedConfig")
 	}
 	customConfig, loggerName, err := getCustomConfig(loggerConfig.AuditLogger.TypedConfig)
 	if err != nil {
