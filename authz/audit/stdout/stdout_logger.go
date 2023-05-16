@@ -32,7 +32,10 @@ import (
 var grpcLogger = grpclog.Component("authz-audit")
 
 func init() {
-	audit.RegisterLoggerBuilder(&loggerBuilder{})
+	l := log.New(os.Stdout, "", 0)
+	audit.RegisterLoggerBuilder(&loggerBuilder{
+		goLogger: l,
+	})
 }
 
 type event struct {
@@ -68,7 +71,9 @@ type loggerConfig struct {
 	audit.LoggerConfig
 }
 
-type loggerBuilder struct{}
+type loggerBuilder struct {
+	goLogger *log.Logger
+}
 
 func (loggerBuilder) Name() string {
 	return "stdout_logger"
@@ -77,10 +82,9 @@ func (loggerBuilder) Name() string {
 // Build returns a new instance of the stdout logger.
 // Passed in configuration is ignored as the stdout logger does not
 // expect any configuration to be provided.
-func (*loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
-	l := log.New(os.Stdout, "", log.LstdFlags)
+func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 	return &logger{
-		goLogger: l,
+		goLogger: lb.goLogger,
 	}
 }
 
@@ -99,6 +103,6 @@ func convertEvent(auditEvent *audit.Event) *event {
 		PolicyName:     auditEvent.PolicyName,
 		MatchedRule:    auditEvent.MatchedRule,
 		Authorized:     auditEvent.Authorized,
-		Timestamp:      time.Now().Format(time.RFC3339),
+		Timestamp:      time.Now().Format(time.RFC3339Nano),
 	}
 }

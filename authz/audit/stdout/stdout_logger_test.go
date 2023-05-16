@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"log"
+	"os"
 	"testing"
 	"time"
 
@@ -67,9 +68,8 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 			before := time.Now().Unix()
 			var buf bytes.Buffer
 			l := log.New(&buf, "", 0)
-			auditLogger := &logger{
-				goLogger: l,
-			}
+			builder := &loggerBuilder{goLogger: l}
+			auditLogger := builder.Build(nil)
 			auditLogger.Log(test.event)
 			var container map[string]interface{}
 			if err := json.Unmarshal(buf.Bytes(), &container); err != nil {
@@ -80,12 +80,12 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 				t.Fatalf("Resulted event has no timestamp: %v", innerEvent)
 			}
 			after := time.Now().Unix()
-			innerEventUnixTime, err := time.Parse(time.RFC3339, innerEvent.Timestamp)
+			innerEventUnixTime, err := time.Parse(time.RFC3339Nano, innerEvent.Timestamp)
 			if err != nil {
 				t.Fatalf("Failed to convert event timestamp into Unix time format: %v", err)
 			}
 			if before > innerEventUnixTime.Unix() || after < innerEventUnixTime.Unix() {
-				t.Fatalf("The audit event timestamp is outside of the test interval: test start %v, event timestamp %v, test end %v", before, innerEventUnixTime.Unix(), after)
+				t.Errorf("The audit event timestamp is outside of the test interval: test start %v, event timestamp %v, test end %v", before, innerEventUnixTime.Unix(), after)
 			}
 			if diff := cmp.Diff(trimEvent(innerEvent), test.event); diff != "" {
 				t.Fatalf("Unexpected message\ndiff (-got +want):\n%s", diff)
@@ -95,7 +95,8 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 }
 
 func (s) TestStdoutLoggerBuilder_NilConfig(t *testing.T) {
-	builder := &loggerBuilder{}
+	l := log.New(os.Stdout, "", log.LstdFlags)
+	builder := &loggerBuilder{goLogger: l}
 	config, err := builder.ParseLoggerConfig(nil)
 	if err != nil {
 		t.Fatalf("Failed to parse stdout logger configuration: %v", err)
