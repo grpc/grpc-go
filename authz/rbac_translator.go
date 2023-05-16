@@ -68,8 +68,8 @@ type auditLogger struct {
 }
 
 type auditLoggingOptions struct {
-	AuditCondition string        `json:"audit_condition"`
-	AuditLoggers   []auditLogger `json:"audit_loggers"`
+	AuditCondition string         `json:"audit_condition"`
+	AuditLoggers   []*auditLogger `json:"audit_loggers"`
 }
 
 // Represents the SDK authorization policy provided by user.
