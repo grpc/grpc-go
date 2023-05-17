@@ -358,3 +358,7 @@ func (h *altsHandshaker) Close() {
 		h.stream.CloseSend()
 	}
 }
+
+func ResetConcurrentHandshakeSemaphoreForTesting(numberOfAllowedHandshakes int64) {
+	handshakes = semaphore.NewWeighted(numberOfAllowedHandshakes)
+}
