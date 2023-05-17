@@ -166,11 +166,10 @@ func (i *mutexIdlenessManager) close() {
 // mutual exclusion in a critical section.
 type atomicIdlenessManager struct {
 	// State accessed atomically.
-	lastCallEndTime           int64        // Unix timestamp in nanos; time when the most recent RPC completed.
-	activeCallsCount          int32        // Count of active RPCs; -math.MaxInt32 means channel is idle or is trying to get there.
-	activeSinceLastTimerCheck int32        // Boolean; True if there was an RPC since the last timer callback.
-	closed                    int32        // Boolean; True when the manager is closed.
-	timer                     atomic.Value // Of type `*time.Timer`
+	lastCallEndTime           int64 // Unix timestamp in nanos; time when the most recent RPC completed.
+	activeCallsCount          int32 // Count of active RPCs; -math.MaxInt32 means channel is idle or is trying to get there.
+	activeSinceLastTimerCheck int32 // Boolean; True if there was an RPC since the last timer callback.
+	closed                    int32 // Boolean; True when the manager is closed.
 
 	// Can be accessed without atomics or mutex since these are set at creation
 	// time and read-only after that.
@@ -190,6 +189,7 @@ type atomicIdlenessManager struct {
 	//     piggyback on the first one and be successfully handled.
 	idleMu       sync.RWMutex
 	actuallyIdle bool
+	timer        *time.Timer
 }
 
 // newAtomicIdlenessManager creates a new atomicIdlenessManager. A non-zero
@@ -199,18 +199,25 @@ func newAtomicIdlenessManager(enforcer idlenessEnforcer, idleTimeout time.Durati
 		enforcer: enforcer,
 		timeout:  int64(idleTimeout),
 	}
-	i.timer.Store(timeAfterFunc(idleTimeout, i.handleIdleTimeout))
+	i.timer = timeAfterFunc(idleTimeout, i.handleIdleTimeout)
 	return i
 }
 
 // resetIdleTimer resets the idle timer to the given duration. This method
 // should only be called from the timer callback.
 func (i *atomicIdlenessManager) resetIdleTimer(d time.Duration) {
+	i.idleMu.Lock()
+	defer i.idleMu.Unlock()
+
+	if i.timer == nil {
+		// Only close sets timer to nil. We are done.
+		return
+	}
+
 	// It is safe to ignore the return value from Reset() because this method is
 	// only ever called from the timer callback, which means the timer has
 	// already fired.
-	timer := i.timer.Load().(*time.Timer)
-	timer.Reset(d)
+	i.timer.Reset(d)
 }
 
 // handleIdleTimeout is the timer callback that is invoked upon expiry of the
@@ -218,6 +225,11 @@ func (i *atomicIdlenessManager) resetIdleTimer(d time.Duration) {
 // ongoing calls and no RPC activity since the last time the timer fired.
 func (i *atomicIdlenessManager) handleIdleTimeout() {
 	if i.isClosed() {
+		return
+	}
+
+	if atomic.LoadInt32(&i.activeCallsCount) > 0 {
+		i.resetIdleTimer(time.Duration(i.timeout))
 		return
 	}
 
@@ -341,7 +353,7 @@ func (i *atomicIdlenessManager) exitIdleMode() error {
 	i.actuallyIdle = false
 
 	// Start a new timer to fire after the configured idle timeout.
-	i.timer.Store(timeAfterFunc(time.Duration(i.timeout), i.handleIdleTimeout))
+	i.timer = timeAfterFunc(time.Duration(i.timeout), i.handleIdleTimeout)
 	return nil
 }
 
@@ -370,6 +382,9 @@ func (i *atomicIdlenessManager) isClosed() bool {
 
 func (i *atomicIdlenessManager) close() {
 	atomic.StoreInt32(&i.closed, 1)
-	timer := i.timer.Load().(*time.Timer)
-	timer.Stop()
+
+	i.idleMu.Lock()
+	i.timer.Stop()
+	i.timer = nil
+	i.idleMu.Unlock()
 }
