@@ -128,7 +128,7 @@ func parseAdditionalMetadataFlag() (metadata.MD, error) {
 		return nil, nil
 	}
 	r := *additionalMetadata
-	addMd := metadata.New()
+	addMd := metadata.New(map[string]string{})
 	for len(r) > 0 {
 		i := strings.Index(r, ":")
 		if i < 0 {
