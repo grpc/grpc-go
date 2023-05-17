@@ -355,6 +355,7 @@ func (cc *ClientConn) exitIdleMode() error {
 	if cc.idlenessState != ccIdlenessStateIdle {
 		// TODO: Switch this to warning once idleness implementation is stable.
 		logger.Error("ClientConn asked to exit idle mode when not in idle mode")
+		return nil
 	}
 
 	cc.idlenessState = ccIdlenessStateExitingIdle
@@ -398,7 +399,7 @@ func (cc *ClientConn) enterIdleMode() error {
 	if cc.idlenessState != ccIdlenessStateActive {
 		// TODO: Switch this to warning once idleness implementation is stable.
 		logger.Error("ClientConn asked to enter idle mode when not active")
-
+		return nil
 	}
 
 	// cc.conns == nil is a proxy for the ClientConn being closed. So, instead
