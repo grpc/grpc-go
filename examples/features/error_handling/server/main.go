@@ -40,7 +40,7 @@ type server struct {
 	pb.UnimplementedGreeterServer
 }
 
-// SayHello implements helloworld.GreeterServer
+// SayHello implements helloworld.GreeterServer.
 func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	if in.Name == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "request missing required field: Name")
