@@ -335,10 +335,11 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 		return n, toIOError(err)
 	}
 	if w.buf == nil {
-		w.buf = w.pool.Get().([]byte)
+		b := w.pool.Get().(*[]byte)
+		w.buf = *b
 	}
 	for len(b) > 0 {
-		nn := copy(w.buf[w.offset:], b)
+		nn := copy((w.buf)[w.offset:], b)
 		b = b[nn:]
 		w.offset += nn
 		n += nn
@@ -352,7 +353,8 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 func (w *bufWriter) Flush() error {
 	err := w.flush()
 	if w.buf != nil {
-		w.pool.Put(w.buf)
+		b := w.buf
+		w.pool.Put(&b)
 		w.buf = nil
 	}
 	return err
@@ -411,7 +413,8 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderList
 	if !ok {
 		pool = &sync.Pool{
 			New: func() interface{} {
-				return make([]byte, writeBufferSize*2)
+				b := make([]byte, writeBufferSize*2)
+				return &b
 			},
 		}
 		poolMap[writeBufferSize*2] = pool
