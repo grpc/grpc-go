@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +31,7 @@ import (
 	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	rrutil "google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/resolver"
@@ -45,8 +44,8 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 
 	_ "google.golang.org/grpc/xds/internal/balancer/clusterresolver" // Register the "cluster_resolver_experimental" LB policy.
 )
@@ -78,29 +77,15 @@ func backendAddressesAndPorts(t *testing.T, servers []*stubserver.StubServer) ([
 	ports := make([]uint32, len(servers))
 	for i := 0; i < len(servers); i++ {
 		addrs[i] = resolver.Address{Addr: servers[i].Address}
-		ports[i] = extractPortFromAddress(t, servers[i].Address)
+		ports[i] = testutils.ParsePort(t, servers[i].Address)
 	}
 	return addrs, ports
 }
 
-func extractPortFromAddress(t *testing.T, address string) uint32 {
-	_, p, err := net.SplitHostPort(address)
-	if err != nil {
-		t.Fatalf("invalid server address %q: %v", address, err)
-	}
-	port, err := strconv.ParseUint(p, 10, 32)
-	if err != nil {
-		t.Fatalf("invalid server address %q: %v", address, err)
-	}
-	return uint32(port)
-}
-
 func startTestServiceBackends(t *testing.T, numBackends int) ([]*stubserver.StubServer, func()) {
-	servers := make([]*stubserver.StubServer, numBackends)
+	var servers []*stubserver.StubServer
 	for i := 0; i < numBackends; i++ {
-		servers[i] = &stubserver.StubServer{
-			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
-		}
+		servers = append(servers, stubserver.StartTestService(t, nil))
 		servers[i].StartServer()
 	}
 
@@ -225,7 +210,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	defer cc.Close()
 
 	// Ensure RPCs are being roundrobined across the single backend.
-	testClient := testpb.NewTestServiceClient(cc)
+	testClient := testgrpc.NewTestServiceClient(cc)
 	if err := rrutil.CheckRoundRobinRPCs(ctx, testClient, addrs[:1]); err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +318,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	defer cc.Close()
 
 	// Ensure RPCs are being weighted roundrobined across the two backends.
-	testClient := testpb.NewTestServiceClient(cc)
+	testClient := testgrpc.NewTestServiceClient(cc)
 	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, testClient, addrs[0:2]); err != nil {
 		t.Fatal(err)
 	}
@@ -376,23 +361,6 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantAddrs := []resolver.Address{addrs[1], addrs[1], addrs[2], addrs[3]}
-	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, testClient, wantAddrs); err != nil {
-		t.Fatal(err)
-	}
-
-	// Change the weight of locality2 and ensure weighted roundrobin.  Since
-	// locality2 has twice the weight of locality3, it will be picked twice as
-	// frequently as locality3 for RPCs. And since locality2 has a single
-	// backend and locality3 has two backends, the backend in locality2 will
-	// receive four times the traffic of each of locality3's backends.
-	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
-		{name: localityName2, weight: 2, ports: ports[1:2]},
-		{name: localityName3, weight: 1, ports: ports[2:4]},
-	})
-	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-	wantAddrs = []resolver.Address{addrs[1], addrs[1], addrs[1], addrs[1], addrs[2], addrs[3]}
 	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, testClient, wantAddrs); err != nil {
 		t.Fatal(err)
 	}
@@ -472,7 +440,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 
 	// Ensure RPCs are being weighted roundrobined across healthy backends from
 	// both localities.
-	testClient := testpb.NewTestServiceClient(cc)
+	testClient := testgrpc.NewTestServiceClient(cc)
 	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, testClient, append(addrs[0:2], addrs[6:8]...)); err != nil {
 		t.Fatal(err)
 	}
@@ -537,7 +505,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
-	testClient := testpb.NewTestServiceClient(cc)
+	testClient := testgrpc.NewTestServiceClient(cc)
 	if err := waitForAllPrioritiesRemovedError(ctx, t, testClient); err != nil {
 		t.Fatal(err)
 	}

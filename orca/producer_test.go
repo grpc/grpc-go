@@ -128,11 +128,11 @@ func (s) TestProducer(t *testing.T) {
 
 	// Register the OpenRCAService with a very short metrics reporting interval.
 	const shortReportingInterval = 50 * time.Millisecond
-	opts := orca.ServiceOptions{MinReportingInterval: shortReportingInterval}
+	smr := orca.NewServerMetricsRecorder()
+	opts := orca.ServiceOptions{MinReportingInterval: shortReportingInterval, ServerMetricsProvider: smr}
 	internal.AllowAnyMinReportingInterval.(func(*orca.ServiceOptions))(&opts)
 	s := grpc.NewServer()
-	orcaSrv, err := orca.Register(s, opts)
-	if err != nil {
+	if err := orca.Register(s, opts); err != nil {
 		t.Fatalf("orca.Register failed: %v", err)
 	}
 	go s.Serve(lis)
@@ -157,9 +157,9 @@ func (s) TestProducer(t *testing.T) {
 	defer oobLis.Stop()
 
 	// Set a few metrics and wait for them on the client side.
-	orcaSrv.SetCPUUtilization(10)
-	orcaSrv.SetMemoryUtilization(100)
-	orcaSrv.SetUtilization("bob", 555)
+	smr.SetCPUUtilization(10)
+	smr.SetMemoryUtilization(100)
+	smr.SetNamedUtilization("bob", 555)
 	loadReportWant := &v3orcapb.OrcaLoadReport{
 		CpuUtilization: 10,
 		MemUtilization: 100,
@@ -181,9 +181,9 @@ testReport:
 	}
 
 	// Change and add metrics and wait for them on the client side.
-	orcaSrv.SetCPUUtilization(50)
-	orcaSrv.SetMemoryUtilization(200)
-	orcaSrv.SetUtilization("mary", 321)
+	smr.SetCPUUtilization(50)
+	smr.SetMemoryUtilization(200)
+	smr.SetNamedUtilization("mary", 321)
 	loadReportWant = &v3orcapb.OrcaLoadReport{
 		CpuUtilization: 50,
 		MemUtilization: 200,
@@ -519,12 +519,11 @@ func (s) TestProducerMultipleListeners(t *testing.T) {
 	checkReports(2, 1, 0)
 
 	// Register listener 3 with a more frequent interval; stream is recreated
-	// with this interval after the next report is received.  The first report
-	// will go to all three listeners.
+	// with this interval.  The next report will go to all three listeners.
 	oobLis3.cleanup = orca.RegisterOOBListener(li.sc, oobLis3, lisOpts3)
+	awaitRequest(reportInterval3)
 	fake.respCh <- loadReportWant
 	checkReports(3, 2, 1)
-	awaitRequest(reportInterval3)
 
 	// Another report without a change in listeners should go to all three listeners.
 	fake.respCh <- loadReportWant
@@ -536,13 +535,12 @@ func (s) TestProducerMultipleListeners(t *testing.T) {
 	fake.respCh <- loadReportWant
 	checkReports(5, 3, 3)
 
-	// Stop listener 3.  This makes the interval longer, with stream recreation
-	// delayed until the next report is received.  Reports should only go to
-	// listener 1 now.
+	// Stop listener 3.  This makes the interval longer.  Reports should only
+	// go to listener 1 now.
 	oobLis3.Stop()
+	awaitRequest(reportInterval1)
 	fake.respCh <- loadReportWant
 	checkReports(6, 3, 3)
-	awaitRequest(reportInterval1)
 	// Another report without a change in listeners should go to the first listener.
 	fake.respCh <- loadReportWant
 	checkReports(7, 3, 3)

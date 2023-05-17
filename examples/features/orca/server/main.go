@@ -44,9 +44,9 @@ type server struct {
 
 func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	// Report a sample cost for this query.
-	cmr := orca.CallMetricRecorderFromContext(ctx)
+	cmr := orca.CallMetricsRecorderFromContext(ctx)
 	if cmr == nil {
-		return nil, status.Errorf(codes.Internal, "unable to retrieve call metric recorder (missing ORCA ServerOption?)")
+		return nil, status.Errorf(codes.Internal, "unable to retrieve call metrics recorder (missing ORCA ServerOption?)")
 	}
 	cmr.SetRequestCost("db_queries", 10)
 
@@ -63,27 +63,31 @@ func main() {
 	fmt.Printf("Server listening at %v\n", lis.Addr())
 
 	// Create the gRPC server with the orca.CallMetricsServerOption() option,
-	// which will enable per-call metric recording.
-	s := grpc.NewServer(orca.CallMetricsServerOption())
+	// which will enable per-call metric recording.  No ServerMetricsProvider
+	// is given here because the out-of-band reporting is enabled separately.
+	s := grpc.NewServer(orca.CallMetricsServerOption(nil))
 	pb.RegisterEchoServer(s, &server{})
 
 	// Register the orca service for out-of-band metric reporting, and set the
 	// minimum reporting interval to 3 seconds.  Note that, by default, the
 	// minimum interval must be at least 30 seconds, but 3 seconds is set via
 	// an internal-only option for illustration purposes only.
-	opts := orca.ServiceOptions{MinReportingInterval: 3 * time.Second}
+	smr := orca.NewServerMetricsRecorder()
+	opts := orca.ServiceOptions{
+		MinReportingInterval:  3 * time.Second,
+		ServerMetricsProvider: smr,
+	}
 	internal.ORCAAllowAnyMinReportingInterval.(func(so *orca.ServiceOptions))(&opts)
-	orcaSvc, err := orca.Register(s, opts)
-	if err != nil {
+	if err := orca.Register(s, opts); err != nil {
 		log.Fatalf("Failed to register ORCA service: %v", err)
 	}
 
 	// Simulate CPU utilization reporting.
 	go func() {
 		for {
-			orcaSvc.SetCPUUtilization(.5)
+			smr.SetCPUUtilization(.5)
 			time.Sleep(2 * time.Second)
-			orcaSvc.SetCPUUtilization(.9)
+			smr.SetCPUUtilization(.9)
 			time.Sleep(2 * time.Second)
 		}
 	}()

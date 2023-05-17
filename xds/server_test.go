@@ -508,6 +508,7 @@ func (s) TestServeWithStop(t *testing.T) {
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
+		server.Stop()
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 
@@ -525,6 +526,7 @@ func (s) TestServeWithStop(t *testing.T) {
 	defer cancel()
 	c, err := clientCh.Receive(ctx)
 	if err != nil {
+		server.Stop()
 		t.Fatalf("error when waiting for new xdsClient to be created: %v", err)
 	}
 	client := c.(*fakeclient.Client)

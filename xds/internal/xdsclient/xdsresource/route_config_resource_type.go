@@ -24,6 +24,12 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
+const (
+	// RouteConfigTypeName represents the transport agnostic name for the
+	// route config resource.
+	RouteConfigTypeName = "RouteConfigResource"
+)
+
 var (
 	// Compile time interface checks.
 	_ Type         = routeConfigResourceType{}
@@ -33,7 +39,7 @@ var (
 	routeConfigType = routeConfigResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3RouteConfigURL,
-			typeEnum:                   RouteConfigResource,
+			typeName:                   "RouteConfigResource",
 			allResourcesRequiredInSotW: false,
 		},
 	}

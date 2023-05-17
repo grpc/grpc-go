@@ -36,7 +36,9 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 func (s) TestCompressServerHasNoSupport(t *testing.T) {
@@ -52,7 +54,7 @@ func testCompressServerHasNoSupport(t *testing.T, e env) {
 	te.clientNopCompression = true
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
-	tc := testpb.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
 	const argSize = 271828
 	const respSize = 314159
@@ -93,7 +95,7 @@ func testCompressOK(t *testing.T, e env) {
 	te.clientCompression = true
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
-	tc := testpb.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
 	// Unary call
 	const argSize = 271828
@@ -154,7 +156,7 @@ func testIdentityEncoding(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
-	tc := testpb.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
 	// Unary call
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 5)
@@ -355,7 +357,7 @@ func testUnarySetSendCompressorSuccess(t *testing.T, resCompressor string, wantC
 func testStreamSetSendCompressorSuccess(t *testing.T, resCompressor string, wantCompressInvokes int32, dialOpts []grpc.DialOption) {
 	wc := setupGzipWrapCompressor(t)
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			if _, err := stream.Recv(); err != nil {
 				return err
 			}
@@ -448,7 +450,7 @@ func testUnarySetSendCompressorFailure(t *testing.T, resCompressor string, wantE
 
 func testStreamSetSendCompressorFailure(t *testing.T, resCompressor string, wantErr error) {
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			if _, err := stream.Recv(); err != nil {
 				return err
 			}
@@ -511,7 +513,7 @@ func (s) TestUnarySetSendCompressorAfterHeaderSendFailure(t *testing.T) {
 
 func (s) TestStreamSetSendCompressorAfterHeaderSendFailure(t *testing.T) {
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			// Send headers early and then set send compressor.
 			grpc.SendHeader(stream.Context(), metadata.MD{})
 			err := grpc.SetSendCompressor(stream.Context(), "gzip")
@@ -612,7 +614,7 @@ func testCompressorRegister(t *testing.T, e env) {
 
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
-	tc := testpb.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
 	// Unary call
 	const argSize = 271828

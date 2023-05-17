@@ -123,6 +123,9 @@ type ClientStream interface {
 	// calling RecvMsg on the same stream at the same time, but it is not safe
 	// to call SendMsg on the same stream in different goroutines. It is also
 	// not safe to call CloseSend concurrently with SendMsg.
+	//
+	// It is not safe to modify the message after calling SendMsg. Tracing
+	// libraries and stats handlers may use the message lazily.
 	SendMsg(m interface{}) error
 	// RecvMsg blocks until it receives a message into m or the stream is
 	// done. It returns io.EOF when the stream completes successfully. On
@@ -469,7 +472,7 @@ func (a *csAttempt) newStream() error {
 	// It is safe to overwrite the csAttempt's context here, since all state
 	// maintained in it are local to the attempt. When the attempt has to be
 	// retried, a new instance of csAttempt will be created.
-	if a.pickResult.Metatada != nil {
+	if a.pickResult.Metadata != nil {
 		// We currently do not have a function it the metadata package which
 		// merges given metadata with existing metadata in a context. Existing
 		// function `AppendToOutgoingContext()` takes a variadic argument of key
@@ -479,7 +482,7 @@ func (a *csAttempt) newStream() error {
 		// in a form passable to AppendToOutgoingContext(), or create a version
 		// of AppendToOutgoingContext() that accepts a metadata.MD.
 		md, _ := metadata.FromOutgoingContext(a.ctx)
-		md = metadata.Join(md, a.pickResult.Metatada)
+		md = metadata.Join(md, a.pickResult.Metadata)
 		a.ctx = metadata.NewOutgoingContext(a.ctx, md)
 	}
 

@@ -22,11 +22,15 @@ package testutil
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
 	"sync"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/alts/internal/conn"
+	altsgrpc "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
+	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 )
 
 // Stats is used to collect statistics about concurrent handshake calls.
@@ -122,4 +126,155 @@ func MakeFrame(pl string) []byte {
 	binary.LittleEndian.PutUint32(f, uint32(len(pl)))
 	copy(f[conn.MsgLenFieldSize:], []byte(pl))
 	return f
+}
+
+// FakeHandshaker is a fake implementation of the ALTS handshaker service.
+type FakeHandshaker struct {
+	altsgrpc.HandshakerServiceServer
+}
+
+// DoHandshake performs a fake ALTS handshake.
+func (h *FakeHandshaker) DoHandshake(stream altsgrpc.HandshakerService_DoHandshakeServer) error {
+	var isAssistingClient bool
+	for {
+		req, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return fmt.Errorf("stream recv failure: %v", err)
+		}
+		var resp *altspb.HandshakerResp
+		switch req := req.ReqOneof.(type) {
+		case *altspb.HandshakerReq_ClientStart:
+			isAssistingClient = true
+			resp, err = h.processStartClient(req.ClientStart)
+			if err != nil {
+				return fmt.Errorf("processStartClient failure: %v", err)
+			}
+		case *altspb.HandshakerReq_ServerStart:
+			isAssistingClient = false
+			resp, err = h.processServerStart(req.ServerStart)
+			if err != nil {
+				return fmt.Errorf("processServerClient failure: %v", err)
+			}
+		case *altspb.HandshakerReq_Next:
+			resp, err = h.processNext(req.Next, isAssistingClient)
+			if err != nil {
+				return fmt.Errorf("processNext failure: %v", err)
+			}
+		default:
+			return fmt.Errorf("handshake request has unexpected type: %v", req)
+		}
+
+		if err = stream.Send(resp); err != nil {
+			return fmt.Errorf("stream send failure: %v", err)
+		}
+	}
+}
+
+func (h *FakeHandshaker) processStartClient(req *altspb.StartClientHandshakeReq) (*altspb.HandshakerResp, error) {
+	if req.HandshakeSecurityProtocol != altspb.HandshakeProtocol_ALTS {
+		return nil, fmt.Errorf("unexpected handshake security protocol: %v", req.HandshakeSecurityProtocol)
+	}
+	if len(req.ApplicationProtocols) != 1 || req.ApplicationProtocols[0] != "grpc" {
+		return nil, fmt.Errorf("unexpected application protocols: %v", req.ApplicationProtocols)
+	}
+	if len(req.RecordProtocols) != 1 || req.RecordProtocols[0] != "ALTSRP_GCM_AES128_REKEY" {
+		return nil, fmt.Errorf("unexpected record protocols: %v", req.RecordProtocols)
+	}
+	return &altspb.HandshakerResp{
+		OutFrames:     []byte("ClientInit"),
+		BytesConsumed: 0,
+		Status: &altspb.HandshakerStatus{
+			Code: uint32(codes.OK),
+		},
+	}, nil
+}
+
+func (h *FakeHandshaker) processServerStart(req *altspb.StartServerHandshakeReq) (*altspb.HandshakerResp, error) {
+	if len(req.ApplicationProtocols) != 1 || req.ApplicationProtocols[0] != "grpc" {
+		return nil, fmt.Errorf("unexpected application protocols: %v", req.ApplicationProtocols)
+	}
+	parameters, ok := req.GetHandshakeParameters()[int32(altspb.HandshakeProtocol_ALTS)]
+	if !ok {
+		return nil, fmt.Errorf("missing ALTS handshake parameters")
+	}
+	if len(parameters.RecordProtocols) != 1 || parameters.RecordProtocols[0] != "ALTSRP_GCM_AES128_REKEY" {
+		return nil, fmt.Errorf("unexpected record protocols: %v", parameters.RecordProtocols)
+	}
+	if string(req.InBytes) != "ClientInit" {
+		return nil, fmt.Errorf("unexpected in bytes: %v", req.InBytes)
+	}
+	return &altspb.HandshakerResp{
+		OutFrames:     []byte("ServerInitServerFinished"),
+		BytesConsumed: 10,
+		Status: &altspb.HandshakerStatus{
+			Code: uint32(codes.OK),
+		},
+	}, nil
+}
+
+func (h *FakeHandshaker) processNext(req *altspb.NextHandshakeMessageReq, isAssistingClient bool) (*altspb.HandshakerResp, error) {
+	if isAssistingClient {
+		if !bytes.Equal(req.InBytes, []byte("ServerInitServerFinished")) {
+			return nil, fmt.Errorf("unexpected in bytes: got: %v, want: %v", req.InBytes, []byte("ServerInitServerFinished"))
+		}
+		return &altspb.HandshakerResp{
+			OutFrames:     []byte("ClientFinished"),
+			BytesConsumed: 24,
+			Result: &altspb.HandshakerResult{
+				ApplicationProtocol: "grpc",
+				RecordProtocol:      "ALTSRP_GCM_AES128_REKEY",
+				KeyData:             []byte("negotiated-key-data-for-altsrp-gcm-aes128-rekey"),
+				PeerIdentity: &altspb.Identity{
+					IdentityOneof: &altspb.Identity_ServiceAccount{
+						ServiceAccount: "server@bar.com",
+					},
+				},
+				PeerRpcVersions: &altspb.RpcProtocolVersions{
+					MaxRpcVersion: &altspb.RpcProtocolVersions_Version{
+						Minor: 1,
+						Major: 2,
+					},
+					MinRpcVersion: &altspb.RpcProtocolVersions_Version{
+						Minor: 1,
+						Major: 2,
+					},
+				},
+			},
+			Status: &altspb.HandshakerStatus{
+				Code: uint32(codes.OK),
+			},
+		}, nil
+	}
+	if !bytes.Equal(req.InBytes, []byte("ClientFinished")) {
+		return nil, fmt.Errorf("unexpected in bytes: got: %v, want: %v", req.InBytes, []byte("ClientFinished"))
+	}
+	return &altspb.HandshakerResp{
+		BytesConsumed: 14,
+		Result: &altspb.HandshakerResult{
+			ApplicationProtocol: "grpc",
+			RecordProtocol:      "ALTSRP_GCM_AES128_REKEY",
+			KeyData:             []byte("negotiated-key-data-for-altsrp-gcm-aes128-rekey"),
+			PeerIdentity: &altspb.Identity{
+				IdentityOneof: &altspb.Identity_ServiceAccount{
+					ServiceAccount: "client@baz.com",
+				},
+			},
+			PeerRpcVersions: &altspb.RpcProtocolVersions{
+				MaxRpcVersion: &altspb.RpcProtocolVersions_Version{
+					Minor: 1,
+					Major: 2,
+				},
+				MinRpcVersion: &altspb.RpcProtocolVersions_Version{
+					Minor: 1,
+					Major: 2,
+				},
+			},
+		},
+		Status: &altspb.HandshakerStatus{
+			Code: uint32(codes.OK),
+		},
+	}, nil
 }

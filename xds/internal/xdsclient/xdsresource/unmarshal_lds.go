@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"strconv"
 
-	v1udpatypepb "github.com/cncf/udpa/go/udpa/type/v1"
-	v3cncftypepb "github.com/cncf/xds/go/xds/type/v3"
+	v1udpaudpatypepb "github.com/cncf/udpa/go/udpa/type/v1"
+	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
@@ -34,7 +34,7 @@ import (
 )
 
 func unmarshalListenerResource(r *anypb.Any) (string, ListenerUpdate, error) {
-	r, err := unwrapResource(r)
+	r, err := UnwrapResource(r)
 	if err != nil {
 		return "", ListenerUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
 	}
@@ -121,16 +121,16 @@ func processClientSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 
 func unwrapHTTPFilterConfig(config *anypb.Any) (proto.Message, string, error) {
 	switch {
-	case ptypes.Is(config, &v3cncftypepb.TypedStruct{}):
+	case ptypes.Is(config, &v3xdsxdstypepb.TypedStruct{}):
 		// The real type name is inside the new TypedStruct message.
-		s := new(v3cncftypepb.TypedStruct)
+		s := new(v3xdsxdstypepb.TypedStruct)
 		if err := ptypes.UnmarshalAny(config, s); err != nil {
 			return nil, "", fmt.Errorf("error unmarshalling TypedStruct filter config: %v", err)
 		}
 		return s, s.GetTypeUrl(), nil
-	case ptypes.Is(config, &v1udpatypepb.TypedStruct{}):
+	case ptypes.Is(config, &v1udpaudpatypepb.TypedStruct{}):
 		// The real type name is inside the old TypedStruct message.
-		s := new(v1udpatypepb.TypedStruct)
+		s := new(v1udpaudpatypepb.TypedStruct)
 		if err := ptypes.UnmarshalAny(config, s); err != nil {
 			return nil, "", fmt.Errorf("error unmarshalling TypedStruct filter config: %v", err)
 		}

@@ -32,15 +32,17 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
-	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var testHealthCheckFunc = internal.HealthCheckFunc
@@ -143,7 +145,7 @@ func setupServer(t *testing.T, watchFunc healthWatchFunc) (*grpc.Server, net.Lis
 	}
 	s := grpc.NewServer()
 	healthgrpc.RegisterHealthServer(s, ts)
-	testpb.RegisterTestServiceServer(s, &testServer{})
+	testgrpc.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	t.Cleanup(func() { s.Stop() })
 	return s, lis, ts
@@ -210,44 +212,33 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if ok := cc.WaitForStateChange(ctx, connectivity.Idle); !ok {
-		t.Fatal("ClientConn is still in IDLE state when the context times out.")
-	}
-	if ok := cc.WaitForStateChange(ctx, connectivity.Connecting); !ok {
-		t.Fatal("ClientConn is still in CONNECTING state when the context times out.")
-	}
+	awaitNotState(ctx, t, cc, connectivity.Idle)
+	awaitNotState(ctx, t, cc, connectivity.Connecting)
+	awaitState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
-	if ok := cc.WaitForStateChange(ctx, connectivity.TransientFailure); !ok {
-		t.Fatal("ClientConn is still in TRANSIENT FAILURE state when the context times out.")
-	}
+	awaitNotState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
-	if ok := cc.WaitForStateChange(ctx, connectivity.Ready); !ok {
-		t.Fatal("ClientConn is still in READY state when the context times out.")
-	}
+	awaitNotState(ctx, t, cc, connectivity.Ready)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
-	if ok := cc.WaitForStateChange(ctx, connectivity.TransientFailure); !ok {
-		t.Fatal("ClientConn is still in TRANSIENT FAILURE state when the context times out.")
-	}
+	awaitNotState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_UNKNOWN)
-	if ok := cc.WaitForStateChange(ctx, connectivity.Ready); !ok {
-		t.Fatal("ClientConn is still in READY state when the context times out.")
-	}
+	awaitNotState(ctx, t, cc, connectivity.Ready)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
@@ -276,12 +267,8 @@ func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if ok := cc.WaitForStateChange(ctx, connectivity.Idle); !ok {
-		t.Fatal("ClientConn is still in IDLE state when the context times out.")
-	}
-	if ok := cc.WaitForStateChange(ctx, connectivity.Connecting); !ok {
-		t.Fatal("ClientConn is still in CONNECTING state when the context times out.")
-	}
+	awaitNotState(ctx, t, cc, connectivity.Idle)
+	awaitNotState(ctx, t, cc, connectivity.Connecting)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
@@ -295,7 +282,7 @@ func (s) TestHealthCheckWithGoAway(t *testing.T) {
 
 	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
 	cc, r := setupClient(t, &clientConfig{testHealthCheckFuncWrapper: testHealthCheckFuncWrapper})
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
@@ -373,7 +360,7 @@ func (s) TestHealthCheckWithConnClose(t *testing.T) {
 
 	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
 	cc, r := setupClient(t, &clientConfig{testHealthCheckFuncWrapper: testHealthCheckFuncWrapper})
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
@@ -423,7 +410,7 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 
 	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
 	cc, r := setupClient(t, &clientConfig{testHealthCheckFuncWrapper: testHealthCheckFuncWrapper})
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	sc := parseServiceConfig(t, r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
@@ -503,7 +490,7 @@ func (s) TestHealthCheckWithClientConnClose(t *testing.T) {
 
 	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
 	cc, r := setupClient(t, &clientConfig{testHealthCheckFuncWrapper: testHealthCheckFuncWrapper})
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
@@ -676,7 +663,7 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
 		extraDialOption:            []grpc.DialOption{grpc.WithDisableHealthCheck()},
 	})
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
 		ServiceConfig: parseServiceConfig(t, r, `{
@@ -710,7 +697,7 @@ func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 	cc, r := setupClient(t, &clientConfig{
 		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
 	})
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
 		ServiceConfig: parseServiceConfig(t, r, `{
@@ -742,7 +729,7 @@ func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 func testHealthCheckDisableWithServiceConfig(t *testing.T, addr string) {
 	hcEnterChan, _, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
 	cc, r := setupClient(t, &clientConfig{testHealthCheckFuncWrapper: testHealthCheckFuncWrapper})
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: addr}}})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

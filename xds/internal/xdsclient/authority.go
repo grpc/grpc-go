@@ -45,9 +45,10 @@ const (
 )
 
 type resourceState struct {
-	watchers map[xdsresource.ResourceWatcher]bool // Set of watchers for this resource
-	cache    xdsresource.ResourceData             // Most recent ACKed update for this resource
-	md       xdsresource.UpdateMetadata           // Metadata for the most recent update
+	watchers        map[xdsresource.ResourceWatcher]bool // Set of watchers for this resource
+	cache           xdsresource.ResourceData             // Most recent ACKed update for this resource
+	md              xdsresource.UpdateMetadata           // Metadata for the most recent update
+	deletionIgnored bool                                 // True if resource deletion was ignored for a prior update
 
 	// Common watch state for all watchers of this resource.
 	wTimer *time.Timer // Expiry timer
@@ -213,8 +214,12 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 				}
 				continue
 			}
-			// If we get here, it means that the update is a valid one. Notify
-			// watchers only if this is a first time update or it is different
+
+			if state.deletionIgnored {
+				state.deletionIgnored = false
+				a.logger.Infof("A valid update was received for resource %q of type %q after previously ignoring a deletion", name, rType.TypeName())
+			}
+			// Notify watchers only if this is a first time update or it is different
 			// from the one currently cached.
 			if state.cache == nil || !state.cache.Equal(uErr.resource) {
 				for watcher := range state.watchers {
@@ -224,7 +229,7 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 				}
 			}
 			// Sync cache.
-			a.logger.Debugf("Resource type %q with name %q added to cache", rType.TypeEnum().String(), name)
+			a.logger.Debugf("Resource type %q with name %q added to cache", rType.TypeName(), name)
 			state.cache = uErr.resource
 			// Set status to ACK, and clear error state. The metadata might be a
 			// NACK metadata because some other resources in the same response
@@ -241,7 +246,8 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 	// If this resource type requires that all resources be present in every
 	// SotW response from the server, a response that does not include a
 	// previously seen resource will be interpreted as a deletion of that
-	// resource.
+	// resource unless ignore_resource_deletion option was set in the server
+	// config.
 	if !rType.AllResourcesRequiredInSotW() {
 		return
 	}
@@ -272,7 +278,18 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 			if state.md.Status == xdsresource.ServiceStatusNotExist {
 				continue
 			}
-
+			// Per A53, resource deletions are ignored if the `ignore_resource_deletion`
+			// server feature is enabled through the bootstrap configuration. If the
+			// resource deletion is to be ignored, the resource is not removed from
+			// the cache and the corresponding OnResourceDoesNotExist() callback is
+			// not invoked on the watchers.
+			if a.serverCfg.IgnoreResourceDeletion {
+				if !state.deletionIgnored {
+					state.deletionIgnored = true
+					a.logger.Warningf("Ignoring resource deletion for resource %q of type %q", name, rType.TypeName())
+				}
+				continue
+			}
 			// If resource exists in cache, but not in the new update, delete
 			// the resource from cache, and also send a resource not found error
 			// to indicate resource removed. Metadata for the resource is still
@@ -330,9 +347,8 @@ func decodeAllResources(opts *xdsresource.DecodeOptions, rType xdsresource.Type,
 		return ret, md, nil
 	}
 
-	typeStr := rType.TypeEnum().String()
 	md.Status = xdsresource.ServiceStatusNACKed
-	errRet := combineErrors(typeStr, topLevelErrors, perResourceErrors)
+	errRet := combineErrors(rType.TypeName(), topLevelErrors, perResourceErrors)
 	md.ErrState = &xdsresource.UpdateErrorMetadata{
 		Version:   update.Version,
 		Err:       errRet,
@@ -432,7 +448,7 @@ func (a *authority) close() {
 }
 
 func (a *authority) watchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) func() {
-	a.logger.Debugf("New watch for type %q, resource name %q", rType.TypeEnum(), resourceName)
+	a.logger.Debugf("New watch for type %q, resource name %q", rType.TypeName(), resourceName)
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 
@@ -449,7 +465,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 	// instruct the transport layer to send a DiscoveryRequest for the same.
 	state := resources[resourceName]
 	if state == nil {
-		a.logger.Debugf("First watch for type %q, resource name %q", rType.TypeEnum(), resourceName)
+		a.logger.Debugf("First watch for type %q, resource name %q", rType.TypeName(), resourceName)
 		state = &resourceState{
 			watchers: make(map[xdsresource.ResourceWatcher]bool),
 			md:       xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested},
@@ -463,7 +479,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 
 	// If we have a cached copy of the resource, notify the new watcher.
 	if state.cache != nil {
-		a.logger.Debugf("Resource type %q with resource name %q found in cache: %s", rType.TypeEnum(), resourceName, state.cache.ToJSON())
+		a.logger.Debugf("Resource type %q with resource name %q found in cache: %s", rType.TypeName(), resourceName, state.cache.ToJSON())
 		resource := state.cache
 		a.serializer.Schedule(func(context.Context) { watcher.OnUpdate(resource) })
 	}
@@ -486,14 +502,14 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 		// There are no more watchers for this resource, delete the state
 		// associated with it, and instruct the transport to send a request
 		// which does not include this resource name.
-		a.logger.Debugf("Removing last watch for type %q, resource name %q", rType.TypeEnum(), resourceName)
+		a.logger.Debugf("Removing last watch for type %q, resource name %q", rType.TypeName(), resourceName)
 		delete(resources, resourceName)
 		a.sendDiscoveryRequestLocked(rType, resources)
 	}
 }
 
 func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName string, state *resourceState) {
-	a.logger.Warningf("Watch for resource %q of type %s timed out", resourceName, rType.TypeEnum().String())
+	a.logger.Warningf("Watch for resource %q of type %s timed out", resourceName, rType.TypeName())
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 

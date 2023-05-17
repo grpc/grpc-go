@@ -305,7 +305,11 @@ func (s) TestFederation_EndpointsResourceContextParamOrder(t *testing.T) {
 				{
 					Endpoints: []xdsresource.Endpoint{{Address: "localhost:666", Weight: 1}},
 					Weight:    1,
-					ID:        internal.LocalityID{SubZone: "subzone"},
+					ID: internal.LocalityID{
+						Region:  "region-1",
+						Zone:    "zone-1",
+						SubZone: "subzone-1",
+					},
 				},
 			},
 		},

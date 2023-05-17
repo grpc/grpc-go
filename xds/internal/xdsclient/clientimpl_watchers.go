@@ -156,12 +156,12 @@ func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, 
 	// ref-counted client sets its pointer to `nil`. And if any watch APIs are
 	// made on such a closed client, we will get here with a `nil` receiver.
 	if c == nil || c.done.HasFired() {
-		c.logger.Warningf("Watch registered for name %q of type %q, but client is closed", rType.TypeEnum().String(), resourceName)
+		c.logger.Warningf("Watch registered for name %q of type %q, but client is closed", rType.TypeName(), resourceName)
 		return func() {}
 	}
 
 	if err := c.resourceTypes.maybeRegister(rType); err != nil {
-		c.logger.Warningf("Watch registered for name %q of type %q which is already registered", rType.TypeEnum().String(), resourceName)
+		c.logger.Warningf("Watch registered for name %q of type %q which is already registered", rType.TypeName(), resourceName)
 		c.serializer.Schedule(func(context.Context) { watcher.OnError(err) })
 		return func() {}
 	}
@@ -180,7 +180,7 @@ func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, 
 	n := xdsresource.ParseName(resourceName)
 	a, unref, err := c.findAuthority(n)
 	if err != nil {
-		c.logger.Warningf("Watch registered for name %q of type %q, authority %q is not found", rType.TypeEnum().String(), resourceName, n.Authority)
+		c.logger.Warningf("Watch registered for name %q of type %q, authority %q is not found", rType.TypeName(), resourceName, n.Authority)
 		c.serializer.Schedule(func(context.Context) { watcher.OnError(err) })
 		return func() {}
 	}
@@ -216,7 +216,7 @@ func (r *resourceTypeRegistry) maybeRegister(rType xdsresource.Type) error {
 	url := rType.TypeURL()
 	typ, ok := r.types[url]
 	if ok && typ != rType {
-		return fmt.Errorf("attempt to re-register a resource type implementation for %v", rType.TypeEnum())
+		return fmt.Errorf("attempt to re-register a resource type implementation for %v", rType.TypeName())
 	}
 	r.types[url] = rType
 	return nil

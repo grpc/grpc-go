@@ -78,9 +78,9 @@ func IsEndpointsResource(url string) bool {
 	return url == version.V3EndpointsURL
 }
 
-// unwrapResource unwraps and returns the inner resource if it's in a resource
+// UnwrapResource unwraps and returns the inner resource if it's in a resource
 // wrapper. The original resource is returned if it's not wrapped.
-func unwrapResource(r *anypb.Any) (*anypb.Any, error) {
+func UnwrapResource(r *anypb.Any) (*anypb.Any, error) {
 	url := r.GetTypeUrl()
 	if url != version.V3ResourceWrapperURL {
 		// Not wrapped.
@@ -132,36 +132,4 @@ type UpdateErrorMetadata struct {
 type UpdateWithMD struct {
 	MD  UpdateMetadata
 	Raw *anypb.Any
-}
-
-// ResourceType identifies resources in a transport protocol agnostic way. These
-// will be used in transport version agnostic code, while the versioned API
-// clients will map these to appropriate version URLs.
-type ResourceType int
-
-// Version agnostic resource type constants.
-const (
-	UnknownResource ResourceType = iota
-	ListenerResource
-	HTTPConnManagerResource
-	RouteConfigResource
-	ClusterResource
-	EndpointsResource
-)
-
-func (r ResourceType) String() string {
-	switch r {
-	case ListenerResource:
-		return "ListenerResource"
-	case HTTPConnManagerResource:
-		return "HTTPConnManagerResource"
-	case RouteConfigResource:
-		return "RouteConfigResource"
-	case ClusterResource:
-		return "ClusterResource"
-	case EndpointsResource:
-		return "EndpointsResource"
-	default:
-		return "UnknownResource"
-	}
 }

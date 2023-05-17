@@ -33,7 +33,7 @@ import (
 )
 
 func unmarshalEndpointsResource(r *anypb.Any) (string, EndpointsUpdate, error) {
-	r, err := unwrapResource(r)
+	r, err := UnwrapResource(r)
 	if err != nil {
 		return "", EndpointsUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
 	}
@@ -141,6 +141,17 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 			SubZone: l.SubZone,
 		}
 		lidStr, _ := lid.ToString()
+
+		// "Since an xDS configuration can place a given locality under multiple
+		// priorities, it is possible to see locality weight attributes with
+		// different values for the same locality." - A52
+		//
+		// This is handled in the client by emitting the locality weight
+		// specified for the priority it is specified in. If the same locality
+		// has a different weight in two priorities, each priority will specify
+		// a locality with the locality weight specified for that priority, and
+		// thus the subsequent tree of balancers linked to that priority will
+		// use that locality weight as well.
 		if localitiesWithPriority[lidStr] {
 			return EndpointsUpdate{}, fmt.Errorf("duplicate locality %s with the same priority %v", lidStr, priority)
 		}
