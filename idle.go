@@ -258,7 +258,7 @@ func (i *atomicIdlenessManager) handleIdleTimeout() {
 	// Now that we've set the active calls count to -math.MaxInt32, it's time to
 	// actually move to idle mode.
 	if i.tryEnterIdleMode() {
-		// Successfully entered idle mode. No timer needed untl we exit idle.
+		// Successfully entered idle mode. No timer needed until we exit idle.
 		return
 	}
 
@@ -282,6 +282,12 @@ func (i *atomicIdlenessManager) tryEnterIdleMode() bool {
 
 	if atomic.LoadInt32(&i.activeCallsCount) != -math.MaxInt32 {
 		// We raced and lost to a new RPC. Very rare, but stop entering idle.
+		return false
+	}
+	if atomic.LoadInt32(&i.activeSinceLastTimerCheck) == 1 {
+		// An very short RPC could have come in (and also finished) after we
+		// checked for calls count and activity in handleIdleTimeout(), but
+		// before the CAS operation. So, we need to check for activity again.
 		return false
 	}
 
@@ -345,7 +351,6 @@ func (i *atomicIdlenessManager) exitIdleMode() error {
 
 	if err := i.enforcer.exitIdleMode(); err != nil {
 		return fmt.Errorf("channel failed to exit idle mode: %v", err)
-
 	}
 
 	// Undo the idle entry process. This also respects any new RPC attempts.

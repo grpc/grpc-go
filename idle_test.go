@@ -351,15 +351,13 @@ func (ri *racyIdlenessEnforcer) enterIdleMode() error {
 	return nil
 }
 
-// TestIdlenessManager_IdleTimeoutRacesWithOnCallBeing tests the case where
+// TestIdlenessManager_IdleTimeoutRacesWithOnCallBegin tests the case where
 // firing of the idle timeout races with an incoming RPC. The test verifies that
 // if the timer callback win the race and puts the channel in idle, the RPCs can
 // kick it out of idle. And if the RPCs win the race and keep the channel
 // active, then the timer callback should not attempt to put the channel in idle
 // mode.
-func (s) TestIdlenessManager_IdleTimeoutRacesWithOnCallBeing(t *testing.T) {
-	overrideNewTimer(t)
-
+func (s) TestIdlenessManager_IdleTimeoutRacesWithOnCallBegin(t *testing.T) {
 	// Run multiple iterations to simulate different possibilities.
 	for i := 0; i < 10; i++ {
 		t.Run(fmt.Sprintf("iteration=%d", i), func(t *testing.T) {
