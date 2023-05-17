@@ -132,11 +132,11 @@ func parseAdditionalMetadataFlag() (metadata.MD, error) {
 	for len(r) > 0 {
 		i := strings.Index(r, ":")
 		if i < 0 {
-			return nil, errors.New("could not parse --additional_metadata flag: could not find next semi-colon")
+			return nil, errors.New("could not parse --additional_metadata flag: could not find next colon")
 		}
 		key := r[:i]
 		r = r[i+1:]
-		i = strings.Index(r, ",")
+		i = strings.Index(r, ";")
 		if i < 0 {
 			addMd.Set(key, r)
 			break
