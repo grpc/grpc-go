@@ -25,8 +25,8 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"sync"
 
+	"golang.org/x/sync/semaphore"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -57,9 +57,8 @@ var (
 			return conn.NewAES128GCMRekey(s, keyData)
 		},
 	}
-	// control number of concurrent created (but not closed) handshakers.
-	mu                   sync.Mutex
-	concurrentHandshakes = uint64(0)
+	// control number of concurrent created (but not closed) handshakes.
+	handshakes = semaphore.NewWeighted(int64(envconfig.ALTSMaxConcurrentHandshakes))
 	// errDropped occurs when maxPendingHandshakes is reached.
 	errDropped = errors.New("maximum number of concurrent ALTS handshakes is reached")
 	// errOutOfBound occurs when the handshake service returns a consumed
@@ -73,26 +72,6 @@ func init() {
 			panic(err)
 		}
 	}
-}
-
-func acquire() bool {
-	mu.Lock()
-	// If we need n to be configurable, we can pass it as an argument.
-	n := uint64(1)
-	success := envconfig.ALTSMaxConcurrentHandshakes-concurrentHandshakes >= n
-	if success {
-		concurrentHandshakes += n
-	}
-	mu.Unlock()
-	return success
-}
-
-func release() {
-	mu.Lock()
-	// If we need n to be configurable, we can pass it as an argument.
-	n := uint64(1)
-	concurrentHandshakes -= n
-	mu.Unlock()
 }
 
 // ClientHandshakerOptions contains the client handshaker options that can
@@ -175,10 +154,10 @@ func NewServerHandshaker(ctx context.Context, conn *grpc.ClientConn, c net.Conn,
 // ClientHandshake starts and completes a client ALTS handshake for GCP. Once
 // done, ClientHandshake returns a secure connection.
 func (h *altsHandshaker) ClientHandshake(ctx context.Context) (net.Conn, credentials.AuthInfo, error) {
-	if !acquire() {
+	if handshakes.Acquire(ctx, 1) != nil {
 		return nil, nil, errDropped
 	}
-	defer release()
+	defer handshakes.Release(1)
 
 	if h.side != core.ClientSide {
 		return nil, nil, errors.New("only handshakers created using NewClientHandshaker can perform a client handshaker")
@@ -228,10 +207,10 @@ func (h *altsHandshaker) ClientHandshake(ctx context.Context) (net.Conn, credent
 // ServerHandshake starts and completes a server ALTS handshake for GCP. Once
 // done, ServerHandshake returns a secure connection.
 func (h *altsHandshaker) ServerHandshake(ctx context.Context) (net.Conn, credentials.AuthInfo, error) {
-	if !acquire() {
+	if handshakes.Acquire(ctx, 1) != nil {
 		return nil, nil, errDropped
 	}
-	defer release()
+	defer handshakes.Release(1)
 
 	if h.side != core.ServerSide {
 		return nil, nil, errors.New("only handshakers created using NewServerHandshaker can perform a server handshaker")
