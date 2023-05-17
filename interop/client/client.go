@@ -125,7 +125,7 @@ const (
 // Return an error if the value is non-empty but fails to parse.
 func parseAdditionalMetadataFlag() (metadata.MD, error) {
 	if len(*additionalMetadata) == 0 {
-		return map[string]string{}, nil
+		return metadata.New(), nil
 	}
 	r := *additionalMetadata
 	addMd := metadata.New()
