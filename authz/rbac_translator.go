@@ -39,7 +39,7 @@ import (
 
 // This is used when converting a custom config from raw JSON to a TypedStruct
 // The TypeURL of the TypeStruct will be "grpc.authz.audit_logging/<name>"
-const typedURLPrefix = "grpc.authz.audit_logging/"
+const typeURLPrefix = "grpc.authz.audit_logging/"
 
 type header struct {
 	Key    string
@@ -62,14 +62,14 @@ type rule struct {
 }
 
 type auditLogger struct {
-	Name       string           `json:"name"`
-	Config     *structpb.Struct `json:"config"`
-	IsOptional bool             `json:"is_optional"`
+	Name       string          `json:"name"`
+	Config     structpb.Struct `json:"config"`
+	IsOptional bool            `json:"is_optional"`
 }
 
 type auditLoggingOptions struct {
-	AuditCondition string        `json:"audit_condition"`
-	AuditLoggers   []auditLogger `json:"audit_loggers"`
+	AuditCondition string         `json:"audit_condition"`
+	AuditLoggers   []*auditLogger `json:"audit_loggers"`
 }
 
 // Represents the SDK authorization policy provided by user.
@@ -302,14 +302,13 @@ func (options *auditLoggingOptions) toProtos() (allow *v3rbacpb.RBAC_AuditLoggin
 		deny.AuditCondition = toDenyCondition(v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition(rbacCondition))
 	}
 
-	for i := range options.AuditLoggers {
-		config := &options.AuditLoggers[i]
-		if config.Config == nil {
-			return nil, nil, fmt.Errorf("AuditLogger Config field cannot be nil")
+	for i, config := range options.AuditLoggers {
+		if config.Name == "" {
+			return nil, nil, fmt.Errorf("missing required field: name in audit_logging_options.audit_loggers[%v]", i)
 		}
 		typedStruct := &v1xdsudpatypepb.TypedStruct{
-			TypeUrl: typedURLPrefix + config.Name,
-			Value:   config.Config,
+			TypeUrl: typeURLPrefix + config.Name,
+			Value:   &config.Config,
 		}
 		customConfig, err := anypb.New(typedStruct)
 		if err != nil {
@@ -355,30 +354,30 @@ func toDenyCondition(condition v3rbacpb.RBAC_AuditLoggingOptions_AuditCondition)
 
 // translatePolicy translates SDK authorization policy in JSON format to two
 // Envoy RBAC polices (deny followed by allow policy) or only one Envoy RBAC
-// allow policy. If the input policy cannot be parsed or is invalid, an error
-// will be returned.
-func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
+// allow policy. Also returns the overall policy name. If the input policy
+// cannot be parsed or is invalid, an error will be returned.
+func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, string, error) {
 	policy := &authorizationPolicy{}
 	d := json.NewDecoder(bytes.NewReader([]byte(policyStr)))
 	d.DisallowUnknownFields()
 	if err := d.Decode(policy); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal policy: %v", err)
+		return nil, "", fmt.Errorf("failed to unmarshal policy: %v", err)
 	}
 	if policy.Name == "" {
-		return nil, fmt.Errorf(`"name" is not present`)
+		return nil, "", fmt.Errorf(`"name" is not present`)
 	}
 	if len(policy.AllowRules) == 0 {
-		return nil, fmt.Errorf(`"allow_rules" is not present`)
+		return nil, "", fmt.Errorf(`"allow_rules" is not present`)
 	}
 	allowLogger, denyLogger, err := policy.AuditLoggingOptions.toProtos()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	rbacs := make([]*v3rbacpb.RBAC, 0, 2)
 	if len(policy.DenyRules) > 0 {
 		denyPolicies, err := parseRules(policy.DenyRules, policy.Name)
 		if err != nil {
-			return nil, fmt.Errorf(`"deny_rules" %v`, err)
+			return nil, "", fmt.Errorf(`"deny_rules" %v`, err)
 		}
 		denyRBAC := &v3rbacpb.RBAC{
 			Action:              v3rbacpb.RBAC_DENY,
@@ -389,8 +388,8 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 	}
 	allowPolicies, err := parseRules(policy.AllowRules, policy.Name)
 	if err != nil {
-		return nil, fmt.Errorf(`"allow_rules" %v`, err)
+		return nil, "", fmt.Errorf(`"allow_rules" %v`, err)
 	}
 	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies, AuditLoggingOptions: allowLogger}
-	return append(rbacs, allowRBAC), nil
+	return append(rbacs, allowRBAC), policy.Name, nil
 }

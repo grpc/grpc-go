@@ -519,3 +519,21 @@ func stayConnected(ctx context.Context, cc *grpc.ClientConn) {
 		}
 	}
 }
+
+func awaitState(ctx context.Context, t *testing.T, cc *grpc.ClientConn, stateWant connectivity.State) {
+	t.Helper()
+	for state := cc.GetState(); state != stateWant; state = cc.GetState() {
+		if !cc.WaitForStateChange(ctx, state) {
+			t.Fatalf("timed out waiting for state change.  got %v; want %v", state, stateWant)
+		}
+	}
+}
+
+func awaitNotState(ctx context.Context, t *testing.T, cc *grpc.ClientConn, stateDoNotWant connectivity.State) {
+	t.Helper()
+	for state := cc.GetState(); state == stateDoNotWant; state = cc.GetState() {
+		if !cc.WaitForStateChange(ctx, state) {
+			t.Fatalf("timed out waiting for state change.  got %v; want NOT %v", state, stateDoNotWant)
+		}
+	}
+}

@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
+	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -66,10 +67,10 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 func (bb) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	lbCfg := &lbConfig{
 		// Default values as documented in A58.
-		OOBReportingPeriod:      10 * time.Second,
-		BlackoutPeriod:          10 * time.Second,
-		WeightExpirationPeriod:  3 * time.Minute,
-		WeightUpdatePeriod:      time.Second,
+		OOBReportingPeriod:      iserviceconfig.Duration(10 * time.Second),
+		BlackoutPeriod:          iserviceconfig.Duration(10 * time.Second),
+		WeightExpirationPeriod:  iserviceconfig.Duration(3 * time.Minute),
+		WeightUpdatePeriod:      iserviceconfig.Duration(time.Second),
 		ErrorUtilizationPenalty: 1,
 	}
 	if err := json.Unmarshal(js, lbCfg); err != nil {
@@ -87,8 +88,8 @@ func (bb) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, er
 	}
 
 	// Impose lower bound of 100ms on weightUpdatePeriod.
-	if !internal.AllowAnyWeightUpdatePeriod && lbCfg.WeightUpdatePeriod < 100*time.Millisecond {
-		lbCfg.WeightUpdatePeriod = 100 * time.Millisecond
+	if !internal.AllowAnyWeightUpdatePeriod && lbCfg.WeightUpdatePeriod < iserviceconfig.Duration(100*time.Millisecond) {
+		lbCfg.WeightUpdatePeriod = iserviceconfig.Duration(100 * time.Millisecond)
 	}
 
 	return lbCfg, nil
@@ -337,7 +338,7 @@ func (p *picker) scWeights() []float64 {
 	ws := make([]float64, len(p.subConns))
 	now := internal.TimeNow()
 	for i, wsc := range p.subConns {
-		ws[i] = wsc.weight(now, p.cfg.WeightExpirationPeriod, p.cfg.BlackoutPeriod)
+		ws[i] = wsc.weight(now, time.Duration(p.cfg.WeightExpirationPeriod), time.Duration(p.cfg.BlackoutPeriod))
 	}
 	return ws
 }
@@ -358,7 +359,7 @@ func (p *picker) start(ctx context.Context) {
 		return
 	}
 	go func() {
-		ticker := time.NewTicker(p.cfg.WeightUpdatePeriod)
+		ticker := time.NewTicker(time.Duration(p.cfg.WeightUpdatePeriod))
 		for {
 			select {
 			case <-ctx.Done():
@@ -469,7 +470,7 @@ func (w *weightedSubConn) updateConfig(cfg *lbConfig) {
 	if w.logger.V(2) {
 		w.logger.Infof("Registering ORCA listener for %v with interval %v", w.SubConn, newPeriod)
 	}
-	opts := orca.OOBListenerOptions{ReportInterval: newPeriod}
+	opts := orca.OOBListenerOptions{ReportInterval: time.Duration(newPeriod)}
 	w.stopORCAListener = orca.RegisterOOBListener(w.SubConn, w, opts)
 }
 

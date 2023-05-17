@@ -119,11 +119,7 @@ func (s) TestRoundRobin_AddressesRemoved(t *testing.T) {
 	// Send a resolver update with no addresses. This should push the channel into
 	// TransientFailure.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("timeout waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
-		}
-	}
+	awaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	const msgWant = "produced zero addresses"
 	client := testgrpc.NewTestServiceClient(cc)
@@ -145,11 +141,7 @@ func (s) TestRoundRobin_NewAddressWhileBlocking(t *testing.T) {
 	// Send a resolver update with no addresses. This should push the channel into
 	// TransientFailure.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("timeout waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
-		}
-	}
+	awaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	client := testgrpc.NewTestServiceClient(cc)
 	doneCh := make(chan struct{})
@@ -229,12 +221,7 @@ func (s) TestRoundRobin_AllServersDown(t *testing.T) {
 		b.Stop()
 	}
 
-	// Wait for TransientFailure.
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("timeout waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
-		}
-	}
+	awaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Failfast RPCs should fail with Unavailable.
 	client := testgrpc.NewTestServiceClient(cc)

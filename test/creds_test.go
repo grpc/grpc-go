@@ -200,7 +200,7 @@ func (s) TestGRPCMethodAccessibleToCredsViaContextRequestInfo(t *testing.T) {
 	cc := te.clientConn(grpc.WithPerRPCCredentials(&methodTestCreds{}))
 	tc := testgrpc.NewTestServiceClient(cc)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Convert(err).Message() != wantMethod {
 		t.Fatalf("ss.client.EmptyCall(_, _) = _, %v; want _, _.Message()=%q", err, wantMethod)
@@ -233,7 +233,7 @@ func (s) TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 	defer te.tearDown()
 
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(clientAlwaysFailCred{})}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, te.srvAddr, opts...)
 	if err != nil {
@@ -261,17 +261,15 @@ func (s) TestWaitForReadyRPCErrorOnBadCertificates(t *testing.T) {
 	defer te.tearDown()
 
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(clientAlwaysFailCred{})}
-	dctx, dcancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer dcancel()
-	cc, err := grpc.DialContext(dctx, te.srvAddr, opts...)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, te.srvAddr, opts...)
 	if err != nil {
 		t.Fatalf("Dial(_) = %v, want %v", err, nil)
 	}
 	defer cc.Close()
 
 	tc := testgrpc.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
 	if _, err = tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
 		return
 	}
@@ -444,17 +442,9 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 	defer cc.Close()
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	for {
-		s := cc.GetState()
-		if s == connectivity.Ready {
-			break
-		}
-		if !cc.WaitForStateChange(ctx, s) {
-			t.Fatalf("ClientConn is not ready after 100 ms")
-		}
-	}
+	awaitState(ctx, t, cc, connectivity.Ready)
 
 	if cred.got != testAuthority {
 		t.Fatalf("client creds got authority: %q, want: %q", cred.got, testAuthority)
@@ -484,17 +474,9 @@ func (s) TestCredsHandshakeServerNameAuthority(t *testing.T) {
 	defer cc.Close()
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String(), ServerName: testServerName}}})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	for {
-		s := cc.GetState()
-		if s == connectivity.Ready {
-			break
-		}
-		if !cc.WaitForStateChange(ctx, s) {
-			t.Fatalf("ClientConn is not ready after 100 ms")
-		}
-	}
+	awaitState(ctx, t, cc, connectivity.Ready)
 
 	if cred.got != testServerName {
 		t.Fatalf("client creds got authority: %q, want: %q", cred.got, testAuthority)
