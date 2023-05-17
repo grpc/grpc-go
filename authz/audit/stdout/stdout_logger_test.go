@@ -67,10 +67,11 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			before := time.Now().Unix()
 			var buf bytes.Buffer
-			l := log.New(&buf, "", 0)
-			builder := &loggerBuilder{goLogger: l}
+			builder := &loggerBuilder{goLogger: log.New(&buf, "", 0)}
 			auditLogger := builder.Build(nil)
+
 			auditLogger.Log(test.event)
+
 			var container map[string]interface{}
 			if err := json.Unmarshal(buf.Bytes(), &container); err != nil {
 				t.Fatalf("Failed to unmarshal audit log event: %v", err)
