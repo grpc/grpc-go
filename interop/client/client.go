@@ -121,11 +121,11 @@ const (
 )
 
 // Parses the --additional_metadata flag and returns metadata to send on each RPC.
-// If the flag is empty, return an empty map with a nil error.
-// Return an error if the value is non-empty but fails to parse.
+// If the flag is empty, return a nil map with a nil error.
+// Return an error iff the value is non-empty but fails to parse.
 func parseAdditionalMetadataFlag() (metadata.MD, error) {
 	if len(*additionalMetadata) == 0 {
-		return metadata.New(), nil
+		return nil, nil
 	}
 	r := *additionalMetadata
 	addMd := metadata.New()
@@ -253,7 +253,7 @@ func main() {
 	if err != nil {
 		logger.Fatalf("Error parsing --additional_metadata flag: %v", err)
 	}
-	if addMd.Len() > 0 {
+	if addMd != nil {
 		unaryAddMd := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 			ctx = metadata.NewOutgoingContext(ctx, addMd)
 			return invoker(ctx, method, req, reply, cc, opts...)
