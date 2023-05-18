@@ -289,7 +289,9 @@ func (ccb *ccBalancerWrapper) exitIdleMode() {
 		// Gracefulswitch balancer does not support a switchTo operation after
 		// being closed. Hence we need to create a new one here.
 		ccb.balancer = gracefulswitch.NewBalancer(ccb, ccb.opts)
-		ccb.buildLoadBalancingPolicy(ccb.curBalancerName)
+		// Reset the current balancer name so that we act on the next call to
+		// switchTo by creating a new balancer specified by the new resolver.
+		ccb.curBalancerName = ""
 		ccb.mode = ccbModeActive
 		channelz.Info(logger, ccb.cc.channelzID, "ccBalancerWrapper: exiting idle mode")
 
