@@ -27,6 +27,7 @@ import (
 	v3auditloggersstreampb "github.com/envoyproxy/go-control-plane/envoy/extensions/rbac/audit_loggers/stream/v3"
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/authz/audit/stdout"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -86,7 +87,7 @@ func getCustomConfig(config *anypb.Any) (json.RawMessage, string, error) {
 }
 
 func convertStdoutConfig(config *v3auditloggersstreampb.StdoutAuditLog) (json.RawMessage, string, error) {
-	json, err := json.Marshal(config)
+	json, err := protojson.Marshal(config)
 	if err != nil {
 		return nil, "", err
 	}
