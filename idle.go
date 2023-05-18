@@ -371,13 +371,11 @@ func (i *atomicIdlenessManager) onCallEnd() {
 	// Record the time at which the most recent call finished.
 	atomic.StoreInt64(&i.lastCallEndTime, time.Now().UnixNano())
 
-	// Decrement the active calls count. We expect this count to never go
-	// negative. This count should be negative only when the channel is in idle
-	// mode, and we cannot be in idle mode at this moment because we are
-	// handling the completion of an RPC.
-	if n := atomic.AddInt32(&i.activeCallsCount, -1); n < 0 {
-		logger.Errorf("Number of active calls tracked by idleness manager is negative: %d", n)
-	}
+	// Decrement the active calls count. This count can temporarily go negative
+	// when the timer callback is in the process of moving the channel to idle
+	// mode, but one or more RPCs come in and complete before the timer callback
+	// can get done with the process of moving to idle mode.
+	atomic.AddInt32(&i.activeCallsCount, -1)
 }
 
 func (i *atomicIdlenessManager) isClosed() bool {
