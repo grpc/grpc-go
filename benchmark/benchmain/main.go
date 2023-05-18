@@ -47,6 +47,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	math_rand "math/rand"
 	"net"
 	"os"
 	"reflect"
@@ -109,7 +110,7 @@ var (
 	clientWriteBufferSize = flags.IntSlice("clientWriteBufferSize", []int{-1}, "Configures the client write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
 	serverReadBufferSize  = flags.IntSlice("serverReadBufferSize", []int{-1}, "Configures the server read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
 	serverWriteBufferSize = flags.IntSlice("serverWriteBufferSize", []int{-1}, "Configures the server write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
-	sleepBetweenRPCs      = flags.DurationSlice("sleepBetweenRPCs", []time.Duration{0}, "Configures the amount of time the client should sleep between consecutive RPCs - may be a a comma-separated list")
+	sleepBetweenRPCs      = flags.DurationSlice("sleepBetweenRPCs", []time.Duration{0}, "Configures the maximum amount of time the client should sleep between consecutive RPCs - may be a a comma-separated list")
 
 	logger = grpclog.Component("benchmark")
 )
@@ -235,6 +236,7 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 	bmEnd := time.Now().Add(bf.BenchTime + warmuptime)
 	var wg sync.WaitGroup
 	wg.Add(2 * bf.MaxConcurrentCalls)
+	maxSleep := int(bf.SleepBetweenRPCs)
 	for i := 0; i < bf.MaxConcurrentCalls; i++ {
 		go func(pos int) {
 			defer wg.Done()
@@ -245,8 +247,8 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 				}
 				sender(pos)
 				atomic.AddUint64(&req, 1)
-				if bf.SleepBetweenRPCs > 0 {
-					time.Sleep(bf.SleepBetweenRPCs)
+				if maxSleep > 0 {
+					time.Sleep(time.Duration(math_rand.Intn(maxSleep)))
 				}
 			}
 		}(i)
@@ -259,8 +261,8 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 				}
 				recver(pos)
 				atomic.AddUint64(&resp, 1)
-				if bf.SleepBetweenRPCs > 0 {
-					time.Sleep(bf.SleepBetweenRPCs)
+				if maxSleep > 0 {
+					time.Sleep(time.Duration(math_rand.Intn(maxSleep)))
 				}
 			}
 		}(i)
@@ -478,6 +480,7 @@ func runBenchmark(caller rpcCallFunc, start startFunc, stop stopFunc, bf stats.F
 	var wg sync.WaitGroup
 	wg.Add(bf.MaxConcurrentCalls)
 	bmEnd := time.Now().Add(bf.BenchTime)
+	maxSleep := int(bf.SleepBetweenRPCs)
 	var count uint64
 	for i := 0; i < bf.MaxConcurrentCalls; i++ {
 		go func(pos int) {
@@ -492,8 +495,8 @@ func runBenchmark(caller rpcCallFunc, start startFunc, stop stopFunc, bf stats.F
 				elapse := time.Since(start)
 				atomic.AddUint64(&count, 1)
 				s.AddDuration(elapse)
-				if bf.SleepBetweenRPCs > 0 {
-					time.Sleep(bf.SleepBetweenRPCs)
+				if maxSleep > 0 {
+					time.Sleep(time.Duration(math_rand.Intn(maxSleep)))
 				}
 			}
 		}(i)
