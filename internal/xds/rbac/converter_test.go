@@ -114,7 +114,6 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 	}
 }
 
-// TODO bring out test for built ins, check the type cast
 func (s) TestBuildLoggerKnownTypes(t *testing.T) {
 	tests := []struct {
 		name         string

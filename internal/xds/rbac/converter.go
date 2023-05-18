@@ -24,23 +24,16 @@ import (
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
-
-	// v3auditloggerssteampb "github.com/envoyproxy/go-control-plane/envoy/extensions/rbac/audit_loggers/stream/v3"
 	v3auditloggerssteampb "github.com/envoyproxy/go-control-plane/envoy/extensions/rbac/audit_loggers/stream/v3"
-
-	// v3auditloggerssteampb "github.com/envoyproxy/go-control-plane/envoy/extensions/rbac/audit_loggers/stream/v3"
-
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/authz/audit/stdout"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// api/envoy/extensions/rbac/audit_loggers/stream/v3/stream.proto
-
-const stdoutType = "type.googleapis.com/envoy.extensions.rbac.audit_loggers.stream.v3.StdoutAuditLog"
 const udpaTypedStuctType = "type.googleapis.com/udpa.type.v1.TypedStruct"
 const xdsTypedStuctType = "type.googleapis.com/xds.type.v3.TypedStruct"
+const stdoutType = "type.googleapis.com/envoy.extensions.rbac.audit_loggers.stream.v3.StdoutAuditLog"
 
 func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig) (audit.Logger, error) {
 	if loggerConfig.GetAuditLogger().GetTypedConfig() == nil {
