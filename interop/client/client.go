@@ -121,8 +121,9 @@ const (
 )
 
 // Parses the --additional_metadata flag and returns metadata to send on each RPC.
+// Allow any character but semicolons in values.
 // If the flag is empty, return a nil map with a nil error.
-// Return an error iff the value is non-empty but fails to parse.
+// Return an error if the value is non-empty but fails to parse.
 func parseAdditionalMetadataFlag() (metadata.MD, error) {
 	if len(*additionalMetadata) == 0 {
 		return nil, nil
