@@ -109,6 +109,7 @@ var (
 	clientWriteBufferSize = flags.IntSlice("clientWriteBufferSize", []int{-1}, "Configures the client write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
 	serverReadBufferSize  = flags.IntSlice("serverReadBufferSize", []int{-1}, "Configures the server read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
 	serverWriteBufferSize = flags.IntSlice("serverWriteBufferSize", []int{-1}, "Configures the server write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	sleepBetweenRPCs      = flags.DurationSlice("sleepBetweenRPCs", []time.Duration{0}, "Configures the amount of time the client should sleep between consecutive RPCs - may be a a comma-separated list")
 
 	logger = grpclog.Component("benchmark")
 )
@@ -244,6 +245,9 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 				}
 				sender(pos)
 				atomic.AddUint64(&req, 1)
+				if bf.SleepBetweenRPCs > 0 {
+					time.Sleep(bf.SleepBetweenRPCs)
+				}
 			}
 		}(i)
 		go func(pos int) {
@@ -255,6 +259,9 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 				}
 				recver(pos)
 				atomic.AddUint64(&resp, 1)
+				if bf.SleepBetweenRPCs > 0 {
+					time.Sleep(bf.SleepBetweenRPCs)
+				}
 			}
 		}(i)
 	}
@@ -485,6 +492,9 @@ func runBenchmark(caller rpcCallFunc, start startFunc, stop stopFunc, bf stats.F
 				elapse := time.Since(start)
 				atomic.AddUint64(&count, 1)
 				s.AddDuration(elapse)
+				if bf.SleepBetweenRPCs > 0 {
+					time.Sleep(bf.SleepBetweenRPCs)
+				}
 			}
 		}(i)
 	}
@@ -528,6 +538,7 @@ type featureOpts struct {
 	clientWriteBufferSize []int
 	serverReadBufferSize  []int
 	serverWriteBufferSize []int
+	sleepBetweenRPCs      []time.Duration
 }
 
 // makeFeaturesNum returns a slice of ints of size 'maxFeatureIndex' where each
@@ -572,6 +583,8 @@ func makeFeaturesNum(b *benchOpts) []int {
 			featuresNum[i] = len(b.features.serverReadBufferSize)
 		case stats.ServerWriteBufferSize:
 			featuresNum[i] = len(b.features.serverWriteBufferSize)
+		case stats.SleepBetweenRPCs:
+			featuresNum[i] = len(b.features.sleepBetweenRPCs)
 		default:
 			log.Fatalf("Unknown feature index %v in generateFeatures. maxFeatureIndex is %v", i, stats.MaxFeatureIndex)
 		}
@@ -638,6 +651,7 @@ func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 			ClientWriteBufferSize: b.features.clientWriteBufferSize[curPos[stats.ClientWriteBufferSize]],
 			ServerReadBufferSize:  b.features.serverReadBufferSize[curPos[stats.ServerReadBufferSize]],
 			ServerWriteBufferSize: b.features.serverWriteBufferSize[curPos[stats.ServerWriteBufferSize]],
+			SleepBetweenRPCs:      b.features.sleepBetweenRPCs[curPos[stats.SleepBetweenRPCs]],
 		}
 		if len(b.features.reqPayloadCurves) == 0 {
 			f.ReqSizeBytes = b.features.reqSizeBytes[curPos[stats.ReqSizeBytesIndex]]
@@ -708,6 +722,7 @@ func processFlags() *benchOpts {
 			clientWriteBufferSize: append([]int(nil), *clientWriteBufferSize...),
 			serverReadBufferSize:  append([]int(nil), *serverReadBufferSize...),
 			serverWriteBufferSize: append([]int(nil), *serverWriteBufferSize...),
+			sleepBetweenRPCs:      append([]time.Duration(nil), *sleepBetweenRPCs...),
 		},
 	}
 
