@@ -255,10 +255,10 @@ func (h *FakeHandshaker) processNext(req *altspb.NextHandshakeMessageReq, isAssi
 	}
 	// Only check that the one of req.InBytes and "ClientFinished" is a
 	// prefix-match for the other. Either case can occur, e.g. because the
-	// response from the server gets split into multiple packets on the wire
+	// response from the client gets split into multiple packets on the wire
 	// or the response also contains encrypted application data.
 	if !bytes.HasPrefix([]byte("ClientFinished"), req.InBytes) && !bytes.HasPrefix(req.InBytes, []byte("ClientFinished")) {
-		return nil, fmt.Errorf("unexpected in bytes: got: %v, want: %v", req.InBytes, []byte("ClientFinished"))
+		return nil, fmt.Errorf("unexpected in bytes from client: got: %v, want: %v", req.InBytes, []byte("ClientFinished"))
 	}
 	return &altspb.HandshakerResp{
 		BytesConsumed: 14,
