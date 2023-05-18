@@ -24,11 +24,21 @@ import (
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
+
+	// v3auditloggerssteampb "github.com/envoyproxy/go-control-plane/envoy/extensions/rbac/audit_loggers/stream/v3"
+	v3auditloggerssteampb "github.com/envoyproxy/go-control-plane/envoy/extensions/rbac/audit_loggers/stream/v3"
+
+	// v3auditloggerssteampb "github.com/envoyproxy/go-control-plane/envoy/extensions/rbac/audit_loggers/stream/v3"
+
 	"google.golang.org/grpc/authz/audit"
+	"google.golang.org/grpc/authz/audit/stdout"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+// api/envoy/extensions/rbac/audit_loggers/stream/v3/stream.proto
+
+const stdoutType = "type.googleapis.com/envoy.extensions.rbac.audit_loggers.stream.v3.StdoutAuditLog"
 const udpaTypedStuctType = "type.googleapis.com/udpa.type.v1.TypedStruct"
 const xdsTypedStuctType = "type.googleapis.com/xds.type.v3.TypedStruct"
 
@@ -72,8 +82,22 @@ func getCustomConfig(config *anypb.Any) (json.RawMessage, string, error) {
 			return nil, "", fmt.Errorf("failed to unmarshal resource: %v", err)
 		}
 		return convertCustomConfig(typedStruct.TypeUrl, typedStruct.Value)
+	case stdoutType:
+		stdoutLoggerConfig := &v3auditloggerssteampb.StdoutAuditLog{}
+		if err := config.UnmarshalTo(stdoutLoggerConfig); err != nil {
+			return nil, "", fmt.Errorf("failed to unmarshal resource: %v", err)
+		}
+		return convertStdoutConfig(stdoutLoggerConfig)
 	}
 	return nil, "", fmt.Errorf("custom config not implemented for type [%v]", config.GetTypeUrl())
+}
+
+func convertStdoutConfig(config *v3auditloggerssteampb.StdoutAuditLog) (json.RawMessage, string, error) {
+	json, err := json.Marshal(config)
+	if err != nil {
+		return nil, "", err
+	}
+	return json, stdout.Name, nil
 }
 
 func convertCustomConfig(typeURL string, s *structpb.Struct) (json.RawMessage, string, error) {

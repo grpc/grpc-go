@@ -31,6 +31,8 @@ import (
 
 var grpcLogger = grpclog.Component("authz-audit")
 
+const Name = "stdout_logger"
+
 func init() {
 	audit.RegisterLoggerBuilder(&loggerBuilder{
 		goLogger: log.New(os.Stdout, "", 0),
@@ -46,13 +48,13 @@ type event struct {
 	Timestamp      string `json:"timestamp"` // Time when the audit event is logged via Log method
 }
 
-// logger implements the audit.Logger interface by logging to standard output.
-type logger struct {
+// Logger implements the audit.Logger interface by logging to standard output.
+type Logger struct {
 	goLogger *log.Logger
 }
 
 // Log marshals the audit.Event to json and prints it to standard output.
-func (l *logger) Log(event *audit.Event) {
+func (l *Logger) Log(event *audit.Event) {
 	jsonContainer := map[string]interface{}{
 		"grpc_audit_log": convertEvent(event),
 	}
@@ -75,14 +77,14 @@ type loggerBuilder struct {
 }
 
 func (loggerBuilder) Name() string {
-	return "stdout_logger"
+	return Name
 }
 
 // Build returns a new instance of the stdout logger.
 // Passed in configuration is ignored as the stdout logger does not
 // expect any configuration to be provided.
 func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
-	return &logger{
+	return &Logger{
 		goLogger: lb.goLogger,
 	}
 }
