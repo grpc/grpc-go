@@ -129,11 +129,19 @@ func (s) TestBuildLoggerKnownTypes(t *testing.T) {
 				IsOptional: false,
 			},
 		},
+		{
+			name: "stdout logger with generic TypedConfig",
+			loggerConfig: &v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+				AuditLogger: &v3corepb.TypedExtensionConfig{
+					Name:        stdout.Name,
+					TypedConfig: createXDSTypedStruct(t, map[string]interface{}{}, stdout.Name),
+				},
+				IsOptional: false,
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			b := TestAuditLoggerCustomConfigBuilder{testName: test.name}
-			audit.RegisterLoggerBuilder(&b)
 			logger, err := buildLogger(test.loggerConfig)
 			if err != nil {
 				t.Fatalf("expected success. got error: %v", err)
