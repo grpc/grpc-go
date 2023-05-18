@@ -210,23 +210,23 @@ func (ccb *ccBalancerWrapper) buildLoadBalancingPolicy(name string) {
 
 func (ccb *ccBalancerWrapper) close() {
 	channelz.Info(logger, ccb.cc.channelzID, "ccBalancerWrapper: closing")
-	ccb.handleCloseAndEnterIdle(ccbModeClosed)
+	ccb.closeBalancer(ccbModeClosed)
 }
 
 // enterIdleMode is invoked by grpc when the channel enters idle mode upon
 // expiry of idle_timeout. This call blocks until the balancer is closed.
 func (ccb *ccBalancerWrapper) enterIdleMode() {
 	channelz.Info(logger, ccb.cc.channelzID, "ccBalancerWrapper: entering idle mode")
-	ccb.handleCloseAndEnterIdle(ccbModeIdle)
+	ccb.closeBalancer(ccbModeIdle)
 }
 
-// handleCloseAndEnterIdle is invoked when the channel is being closed or when
-// it enters idle mode upon expiry of idle_timeout.
+// closeBalancer is invoked when the channel is being closed or when it enters
+// idle mode upon expiry of idle_timeout.
 //
 // This call is not scheduled on the serializer because we need to ensure that
 // the current serializer is completely shutdown before the next one is created
 // (when exiting idle).
-func (ccb *ccBalancerWrapper) handleCloseAndEnterIdle(m ccbMode) {
+func (ccb *ccBalancerWrapper) closeBalancer(m ccbMode) {
 	ccb.mu.Lock()
 	if ccb.mode == ccbModeClosed || ccb.mode == ccbModeIdle {
 		ccb.mu.Unlock()

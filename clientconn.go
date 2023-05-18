@@ -330,7 +330,6 @@ func (cc *ClientConn) exitIdleMode() error {
 		return errConnClosing
 	}
 	if cc.idlenessState != ccIdlenessStateIdle {
-		// TODO: Switch this to warning once idleness implementation is stable.
 		logger.Error("ClientConn asked to exit idle mode when not in idle mode")
 		return nil
 	}
@@ -402,7 +401,6 @@ func (cc *ClientConn) enterIdleMode() error {
 		return ErrClientConnClosing
 	}
 	if cc.idlenessState != ccIdlenessStateActive {
-		// TODO: Switch this to warning once idleness implementation is stable.
 		logger.Error("ClientConn asked to enter idle mode when not active")
 		return nil
 	}
