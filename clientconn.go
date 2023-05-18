@@ -411,6 +411,12 @@ func (cc *ClientConn) enterIdleMode() error {
 	conns := cc.conns
 	cc.conns = make(map[*addrConn]struct{})
 
+	// TODO: Currently, we close the resolver wrapper upon entering idle mode
+	// and create a new one upon exiting idle mode. This means that the
+	// `cc.resolverWrapper` field would be overwritten everytime we exit idle
+	// mode. While this means that we need to hold `cc.mu` when accessing
+	// `cc.resolverWrapper`, it makes the code simpler in the wrapper. We should
+	// try to do the same for the balancer and picker wrappers too.
 	cc.resolverWrapper.close()
 	cc.blockingpicker.enterIdleMode()
 	cc.balancerWrapper.enterIdleMode()
