@@ -217,12 +217,13 @@ func (h *FakeHandshaker) processServerStart(req *altspb.StartServerHandshakeReq)
 
 func (h *FakeHandshaker) processNext(req *altspb.NextHandshakeMessageReq, isAssistingClient bool) (*altspb.HandshakerResp, error) {
 	if isAssistingClient {
-		// Only check that the req.InBytes is a prefix-match for
-		// "ServerInitServerFinished", because it is possible that
-		// the response from the server gets split into 2 packets on
-		// the wire.
-		if !bytes.HasPrefix([]byte("ServerInitServerFinished"), req.InBytes) {
-			return nil, fmt.Errorf("unexpected in bytes: got: %v, want: %v", req.InBytes, []byte("ServerInitServerFinished"))
+		// Only check that the one of req.InBytes and
+		// "ServerInitServerFinished" is a prefix-match for the other.
+		// Either case can occur, e.g. because the response from the
+		// server gets split into multiple packets on the wire or the
+		// response also contains encrypted application data.
+		if !bytes.HasPrefix([]byte("ServerInitServerFinished"), req.InBytes) && !bytes.HasPrefix(req.InBytes, []byte("ServerInitServerFinished")) {
+			return nil, fmt.Errorf("unexpected in bytes from server: got: %v, want: %v", req.InBytes, []byte("ServerInitServerFinished"))
 		}
 		return &altspb.HandshakerResp{
 			OutFrames:     []byte("ClientFinished"),
@@ -252,10 +253,11 @@ func (h *FakeHandshaker) processNext(req *altspb.NextHandshakeMessageReq, isAssi
 			},
 		}, nil
 	}
-	// Only check that the req.InBytes is a prefix-match for
-	// "ClientFinished", because it is possible that the response from the
-	// client gets split into 2 packets on the wire.
-	if !bytes.HasPrefix([]byte("ClientFinished"), req.InBytes) {
+	// Only check that the one of req.InBytes and "ClientFinished" is a
+	// prefix-match for the other. Either case can occur, e.g. because the
+	// response from the server gets split into multiple packets on the wire
+	// or the response also contains encrypted application data.
+	if !bytes.HasPrefix([]byte("ClientFinished"), req.InBytes) && !bytes.HasPrefix(req.InBytes, []byte("ClientFinished")) {
 		return nil, fmt.Errorf("unexpected in bytes: got: %v, want: %v", req.InBytes, []byte("ClientFinished"))
 	}
 	return &altspb.HandshakerResp{
