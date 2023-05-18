@@ -20,7 +20,6 @@ package grpc
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -55,6 +54,8 @@ type ccResolverWrapper struct {
 	channelzID          *channelz.Identifier
 	ignoreServiceConfig bool
 	opts                ccResolverWrapperOpts
+	serializer          *grpcsync.CallbackSerializer // To serialize all incoming calls.
+	serializerCancel    context.CancelFunc           // To close the serializer, accessed only from close().
 
 	// All incoming (resolver --> gRPC) calls are guaranteed to execute in a
 	// mutually exclusive manner as they are scheduled on the serializer.
@@ -62,15 +63,10 @@ type ccResolverWrapper struct {
 	// accessed without a mutex.
 	curState resolver.State
 
-	// mu guards access to the below fields. Access to the serializer and its
-	// cancel function needs to be mutex protected because they are overwritten
-	// when the wrapper exits idle mode.
-	mu               sync.Mutex
-	serializer       *grpcsync.CallbackSerializer // To serialize all incoming calls.
-	serializerCancel context.CancelFunc           // To close the serializer at close/enterIdle time.
-	mode             ccrMode                      // Tracks the current mode of the wrapper.
-	resolver         resolver.Resolver            // Accessed only from outgoing calls.
-	pendingResolve   *resolver.ResolveNowOptions  // Set when there is a pending call to ResolveNow().
+	// mu guards access to the below fields.
+	mu       sync.Mutex
+	closed   bool
+	resolver resolver.Resolver // Accessed only from outgoing calls.
 }
 
 // ccResolverWrapperOpts wraps the arguments to be passed when creating a new
@@ -119,82 +115,37 @@ func (ccr *ccResolverWrapper) resolveNow(o resolver.ResolveNowOptions) {
 	ccr.mu.Lock()
 	defer ccr.mu.Unlock()
 
-	switch ccr.mode {
-	case ccrModeActive:
-		ccr.resolver.ResolveNow(o)
-	case ccrModeIdleOrClosed:
-		// Do nothing.
-	case ccrModeExitingIdle:
-		// Set the `pendingResolve` field here so that the re-resolution request
-		// is handled properly after we exit idle mode.
-		ccr.pendingResolve = &o
+	// ccr.resolver field is set only after the call to Build() returns. But in
+	// the process of building, the resolver may send an error update which when
+	// propagated to the balancer may result in a re-resolution request.
+	if ccr.closed || ccr.resolver == nil {
+		return
 	}
+	ccr.resolver.ResolveNow(o)
 }
 
 func (ccr *ccResolverWrapper) close() {
-	channelz.Info(logger, ccr.channelzID, "ccResolverWrapper: closing")
-	ccr.handleCloseAndEnterIdle()
-}
-
-func (ccr *ccResolverWrapper) enterIdleMode() {
-	channelz.Info(logger, ccr.channelzID, "ccResolverWrapper: entering idle mode")
-	ccr.handleCloseAndEnterIdle()
-}
-
-// handleCloseAndEnterIdle is invoked with the channel is being closed or when
-// it enters idle mode upon expiry of idle_timeout.
-func (ccr *ccResolverWrapper) handleCloseAndEnterIdle() {
 	ccr.mu.Lock()
-	if ccr.mode != ccrModeActive {
+	if ccr.closed {
 		ccr.mu.Unlock()
 		return
 	}
 
+	channelz.Info(logger, ccr.channelzID, "Closing the name resolver")
+
 	// Close the serializer to ensure that no more calls from the resolver are
 	// handled, before actually closing the resolver.
 	ccr.serializerCancel()
-	ccr.mode = ccrModeIdleOrClosed
-	done := ccr.serializer.Done
+	ccr.closed = true
 	r := ccr.resolver
 	ccr.mu.Unlock()
 
 	// Give enqueued callbacks a chance to finish.
-	<-done
+	<-ccr.serializer.Done
 
 	// Spawn a goroutine to close the resolver (since it may block trying to
 	// cleanup all allocated resources) and return early.
-	r.Close()
-}
-
-// exitIdleMode is invoked by grpc when the channel exits idle mode either
-// because of an RPC or because of an invocation of the Connect() API. This
-// recreates the resolver that was closed previously when entering idle mode.
-func (ccr *ccResolverWrapper) exitIdleMode() error {
-	channelz.Info(logger, ccr.channelzID, "ccResolverWrapper: exiting idle mode")
-
-	ccr.mu.Lock()
-	ccr.mode = ccrModeExitingIdle
-	ctx, cancel := context.WithCancel(context.Background())
-	ccr.serializer = grpcsync.NewCallbackSerializer(ctx)
-	ccr.serializerCancel = cancel
-	ccr.mu.Unlock()
-
-	// See newCCResolverWrapper() to see why we cannot hold the lock here.
-	r, err := ccr.opts.builder.Build(ccr.opts.target, ccr, ccr.opts.bOpts)
-	if err != nil {
-		cancel()
-		return fmt.Errorf("failed to build resolver when exiting idle mode: %v", err)
-	}
-
-	ccr.mu.Lock()
-	ccr.mode = ccrModeActive
-	ccr.resolver = r
-	if ccr.pendingResolve != nil {
-		ccr.resolver.ResolveNow(*ccr.pendingResolve)
-		ccr.pendingResolve = nil
-	}
-	ccr.mu.Unlock()
-	return nil
+	go r.Close()
 }
 
 // serializerScheduleLocked is a convenience method to schedule a function to be
@@ -208,28 +159,8 @@ func (ccr *ccResolverWrapper) serializerScheduleLocked(f func(context.Context)) 
 // UpdateState is called by resolver implementations to report new state to gRPC
 // which includes addresses and service config.
 func (ccr *ccResolverWrapper) UpdateState(s resolver.State) error {
-	// We cannot use serializerScheduleLocked() here because we need to ensure
-	// that these two operations execute atomically:
-	// - checking that the wrapper is not closed or idle, and
-	// - scheduling the function in the serializer
-	//
-	// If we do those steps in a non atomic way, i.e grab the lock, check the
-	// mode, release the lock, then use the serializerScheduleLocked() method,
-	// we could run into a race where the wrapper is active when we check the
-	// mode, but enters idle or is closed before we schedule the function on the
-	// serializer. This would lead to the scheduled function never executing,
-	// and since we block on the error value returned by that function, we would
-	// end up blocking forever. This requirement does not exist for other
-	// incoming calls because we don't have to return a value to the caller, and
-	// therefore it is fine if the scheduled function never executes (because
-	// the wrapper is closed or enters idle before it gets to run).
-	ccr.mu.Lock()
-	if ccr.mode == ccrModeIdleOrClosed {
-		ccr.mu.Unlock()
-		return nil
-	}
 	errCh := make(chan error, 1)
-	ccr.serializer.Schedule(func(context.Context) {
+	ok := ccr.serializer.Schedule(func(context.Context) {
 		ccr.addChannelzTraceEvent(s)
 		ccr.curState = s
 		if err := ccr.cc.updateResolverState(ccr.curState, nil); err == balancer.ErrBadResolverState {
@@ -238,7 +169,12 @@ func (ccr *ccResolverWrapper) UpdateState(s resolver.State) error {
 		}
 		errCh <- nil
 	})
-	ccr.mu.Unlock()
+	if !ok {
+		// The only time when Schedule() fail to add the callback to the
+		// serializer is when the serializer is closed, and this happens only
+		// when the resolver wrapper is closed.
+		return nil
+	}
 	return <-errCh
 }
 

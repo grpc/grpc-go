@@ -263,35 +263,17 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		Target:           cc.parsedTarget,
 	})
 
-	// Initialize the resolver wrapper.
-	rw, err := newCCResolverWrapper(cc, ccResolverWrapperOpts{
-		target:  cc.parsedTarget,
-		builder: cc.resolverBuilder,
-		bOpts: resolver.BuildOptions{
-			DisableServiceConfig: cc.dopts.disableServiceConfig,
-			DialCreds:            credsClone,
-			CredsBundle:          cc.dopts.copts.CredsBundle,
-			Dialer:               cc.dopts.copts.Dialer,
-		},
-		channelzID: cc.channelzID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to build resolver: %v", err)
+	// Initialize the resolver wrapper. This sets the cc.resolverWrapper field.
+	if err := cc.initResolverWrapper(credsClone); err != nil {
+		return nil, err
 	}
-	// Resolver implementations may report state update or error inline when
-	// built (or right after), and this is handled in cc.updateResolverState.
-	// Also, an error from the resolver might lead to a re-resolution request
-	// from the balancer, which is handled in resolveNow() where
-	// `cc.resolverWrapper` is accessed. Hence, we need to hold the lock here.
-	cc.mu.Lock()
-	cc.resolverWrapper = rw
-	cc.mu.Unlock()
 
-	// Configure idleness support with configured idle_timeout or default.
+	// Configure idleness support with configured idle timeout or default idle
+	// timeout duration. Idleness can be explicitly disabled by the user, by
+	// setting the dial option to 0.
 	if cc.dopts.idleTimeout == 0 {
 		cc.idlenessMgr = newDisabledIdlenessManager()
 	} else {
-		// cc.idlenessMgr = newMutexIdlenessManager(cc, cc.dopts.idleTimeout)
 		cc.idlenessMgr = newAtomicIdlenessManager(cc, cc.dopts.idleTimeout)
 	}
 
@@ -367,7 +349,11 @@ func (cc *ClientConn) exitIdleMode() error {
 	// This needs to be called without cc.mu because this builds a new resolver
 	// which might update state or report error inline which needs to be handled
 	// by cc.updateResolverState() which also grabs cc.mu.
-	if err := cc.resolverWrapper.exitIdleMode(); err != nil {
+	var credsClone credentials.TransportCredentials
+	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
+		credsClone = creds.Clone()
+	}
+	if err := cc.initResolverWrapper(credsClone); err != nil {
 		return err
 	}
 
@@ -408,7 +394,7 @@ func (cc *ClientConn) enterIdleMode() error {
 	conns := cc.conns
 	cc.conns = make(map[*addrConn]struct{})
 
-	cc.resolverWrapper.enterIdleMode()
+	cc.resolverWrapper.close()
 	cc.blockingpicker.enterIdleMode()
 	cc.balancerWrapper.enterIdleMode()
 	cc.csMgr.updateState(connectivity.Idle)
@@ -1861,5 +1847,34 @@ func (cc *ClientConn) determineAuthority() error {
 		cc.authority = endpoint
 	}
 	channelz.Infof(logger, cc.channelzID, "Channel authority set to %q", cc.authority)
+	return nil
+}
+
+// initResolverWrapper creates a ccResolverWrapper, which builds the name
+// resolver. This method grabs the lock to assign the newly built resolver
+// wrapper to the cc.resolverWrapper field.
+func (cc *ClientConn) initResolverWrapper(creds credentials.TransportCredentials) error {
+	rw, err := newCCResolverWrapper(cc, ccResolverWrapperOpts{
+		target:  cc.parsedTarget,
+		builder: cc.resolverBuilder,
+		bOpts: resolver.BuildOptions{
+			DisableServiceConfig: cc.dopts.disableServiceConfig,
+			DialCreds:            creds,
+			CredsBundle:          cc.dopts.copts.CredsBundle,
+			Dialer:               cc.dopts.copts.Dialer,
+		},
+		channelzID: cc.channelzID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to build resolver: %v", err)
+	}
+	// Resolver implementations may report state update or error inline when
+	// built (or right after), and this is handled in cc.updateResolverState.
+	// Also, an error from the resolver might lead to a re-resolution request
+	// from the balancer, which is handled in resolveNow() where
+	// `cc.resolverWrapper` is accessed. Hence, we need to hold the lock here.
+	cc.mu.Lock()
+	cc.resolverWrapper = rw
+	cc.mu.Unlock()
 	return nil
 }
