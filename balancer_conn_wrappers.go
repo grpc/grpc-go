@@ -222,10 +222,6 @@ func (ccb *ccBalancerWrapper) enterIdleMode() {
 
 // closeBalancer is invoked when the channel is being closed or when it enters
 // idle mode upon expiry of idle_timeout.
-//
-// This call is not scheduled on the serializer because we need to ensure that
-// the current serializer is completely shutdown before the next one is created
-// (when exiting idle).
 func (ccb *ccBalancerWrapper) closeBalancer(m ccbMode) {
 	ccb.mu.Lock()
 	if ccb.mode == ccbModeClosed || ccb.mode == ccbModeIdle {
@@ -233,12 +229,22 @@ func (ccb *ccBalancerWrapper) closeBalancer(m ccbMode) {
 		return
 	}
 
-	// Close the serializer to ensure that no more calls from gRPC are sent
-	// to the balancer.
-	ccb.serializerCancel()
 	ccb.mode = m
 	done := ccb.serializer.Done
 	b := ccb.balancer
+	ok := ccb.serializer.Schedule(func(_ context.Context) {
+		// Close the serializer to ensure that no more calls from gRPC are sent
+		// to the balancer.
+		ccb.serializerCancel()
+		// Empty the current balancer name because we don't have a balancer
+		// anymore and also so that we act on the next call to switchTo by
+		// creating a new balancer specified by the new resolver.
+		ccb.curBalancerName = ""
+	})
+	if !ok {
+		ccb.mu.Unlock()
+		return
+	}
 	ccb.mu.Unlock()
 
 	// Give enqueued callbacks a chance to finish.
@@ -289,9 +295,6 @@ func (ccb *ccBalancerWrapper) exitIdleMode() {
 		// Gracefulswitch balancer does not support a switchTo operation after
 		// being closed. Hence we need to create a new one here.
 		ccb.balancer = gracefulswitch.NewBalancer(ccb, ccb.opts)
-		// Reset the current balancer name so that we act on the next call to
-		// switchTo by creating a new balancer specified by the new resolver.
-		ccb.curBalancerName = ""
 		ccb.mode = ccbModeActive
 		channelz.Info(logger, ccb.cc.channelzID, "ccBalancerWrapper: exiting idle mode")
 
