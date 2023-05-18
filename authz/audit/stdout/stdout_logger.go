@@ -31,6 +31,7 @@ import (
 
 var grpcLogger = grpclog.Component("authz-audit")
 
+// Name is the string to identify this logger type in the registry
 const Name = "stdout_logger"
 
 func init() {
