@@ -22,7 +22,7 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
-	v3auditloggerssteampb "github.com/envoyproxy/go-control-plane/envoy/extensions/rbac/audit_loggers/stream/v3"
+	v3auditloggersstreampb "github.com/envoyproxy/go-control-plane/envoy/extensions/rbac/audit_loggers/stream/v3"
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/authz/audit/stdout"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -154,7 +154,7 @@ func (s) TestBuildLoggerKnownTypes(t *testing.T) {
 // Builds stdout config for audit logger proto.
 func createStdoutPb(t *testing.T) *anypb.Any {
 	t.Helper()
-	pb := &v3auditloggerssteampb.StdoutAuditLog{}
+	pb := &v3auditloggersstreampb.StdoutAuditLog{}
 	customConfig, err := anypb.New(pb)
 	if err != nil {
 		t.Fatalf("createStdoutPb failed during anypb.New: %v", err)
