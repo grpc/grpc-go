@@ -37,14 +37,6 @@ type resolverStateUpdater interface {
 	updateResolverState(s resolver.State, err error) error
 }
 
-type ccrMode int
-
-const (
-	ccrModeActive = iota
-	ccrModeIdleOrClosed
-	ccrModeExitingIdle
-)
-
 // ccResolverWrapper is a wrapper on top of cc for resolvers.
 // It implements resolver.ClientConn interface.
 type ccResolverWrapper struct {
