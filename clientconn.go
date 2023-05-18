@@ -137,15 +137,25 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 // e.g. to use dns resolver, a "dns:///" prefix should be applied to the target.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
-		target:            target,
-		csMgr:             &connectivityStateManager{},
-		conns:             make(map[*addrConn]struct{}),
-		dopts:             defaultDialOptions(),
-		blockingpicker:    newPickerWrapper(),
-		czData:            new(channelzData),
-		firstResolveEvent: grpcsync.NewEvent(),
-		idlenessState:     ccIdlenessStateActive,
+		target: target,
+		csMgr:  &connectivityStateManager{},
+		conns:  make(map[*addrConn]struct{}),
+		dopts:  defaultDialOptions(),
+		czData: new(channelzData),
 	}
+
+	// We start the channel off in idle mode, but kick it out of idle at the end
+	// of this method, instead of waiting for the first RPC. Other gRPC
+	// implementations do wait for the first RPC to kick the channel out of
+	// idle. But doing so would be a major behavior change for our users who are
+	// used to seeing the channel active after Dial.
+	//
+	// Taking this approach of kicking it out of idle at the end of this method
+	// allows us to share the code between channel creation and exiting idle
+	// mode. This will also make it easy for us to switch to starting the
+	// channel off in idle, if at all we ever get to do that.
+	cc.idlenessState = ccIdlenessStateIdle
+
 	cc.retryThrottler.Store((*retryThrottler)(nil))
 	cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{nil})
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
@@ -248,23 +258,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		go cc.scWatcher()
 	}
 
-	// Initialize the balancer wrapper.
-	var credsClone credentials.TransportCredentials
-	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
-		credsClone = creds.Clone()
-	}
-	cc.balancerWrapper = newCCBalancerWrapper(cc, balancer.BuildOptions{
-		DialCreds:        credsClone,
-		CredsBundle:      cc.dopts.copts.CredsBundle,
-		Dialer:           cc.dopts.copts.Dialer,
-		Authority:        cc.authority,
-		CustomUserAgent:  cc.dopts.copts.UserAgent,
-		ChannelzParentID: cc.channelzID,
-		Target:           cc.parsedTarget,
-	})
-
-	// Initialize the resolver wrapper. This sets the cc.resolverWrapper field.
-	if err := cc.initResolverWrapper(credsClone); err != nil {
+	// This creates the name resolver, load balancer, blocking picker etc.
+	if err := cc.exitIdleMode(); err != nil {
 		return nil, err
 	}
 
@@ -340,37 +335,61 @@ func (cc *ClientConn) exitIdleMode() error {
 		return nil
 	}
 
+	defer func() {
+		// When Close() and exitIdleMode() race against each other, one of the
+		// following two can happen:
+		// - Close() wins the race and runs first. exitIdleMode() runs after, and
+		//   sees that the ClientConn is already closed and hence returns early.
+		// - exitIdleMode() wins the race and runs first and recreates the balancer
+		//   and releases the lock before recreating the resolver. If Close() runs
+		//   in this window, it will wait for exitIdleMode to complete.
+		//
+		// We achieve this synchronization using the below condition variable.
+		cc.mu.Lock()
+		cc.idlenessState = ccIdlenessStateActive
+		cc.exitIdleCond.Signal()
+		cc.mu.Unlock()
+	}()
+
 	cc.idlenessState = ccIdlenessStateExitingIdle
-	cc.blockingpicker.exitIdleMode()
-	cc.balancerWrapper.exitIdleMode()
+	exitedIdle := false
+	if cc.blockingpicker == nil {
+		cc.blockingpicker = newPickerWrapper()
+	} else {
+		cc.blockingpicker.exitIdleMode()
+		exitedIdle = true
+	}
+
+	var credsClone credentials.TransportCredentials
+	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
+		credsClone = creds.Clone()
+	}
+	if cc.balancerWrapper == nil {
+		cc.balancerWrapper = newCCBalancerWrapper(cc, balancer.BuildOptions{
+			DialCreds:        credsClone,
+			CredsBundle:      cc.dopts.copts.CredsBundle,
+			Dialer:           cc.dopts.copts.Dialer,
+			Authority:        cc.authority,
+			CustomUserAgent:  cc.dopts.copts.UserAgent,
+			ChannelzParentID: cc.channelzID,
+			Target:           cc.parsedTarget,
+		})
+	} else {
+		cc.balancerWrapper.exitIdleMode()
+	}
 	cc.firstResolveEvent = grpcsync.NewEvent()
 	cc.mu.Unlock()
 
 	// This needs to be called without cc.mu because this builds a new resolver
 	// which might update state or report error inline which needs to be handled
 	// by cc.updateResolverState() which also grabs cc.mu.
-	var credsClone credentials.TransportCredentials
-	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
-		credsClone = creds.Clone()
-	}
 	if err := cc.initResolverWrapper(credsClone); err != nil {
 		return err
 	}
 
-	// When Close() and exitIdleMode() race against each other, one of the
-	// following two can happen:
-	// - Close() wins the race and runs first. exitIdleMode() runs after, and
-	//   sees that the ClientConn is already closed and hence returns early.
-	// - exitIdleMode() wins the race and runs first and recreates the balancer
-	//   and releases the lock before recreating the resolver. If Close() runs
-	//   in this window, it will wait for exitIdleMode to complete.
-	//
-	// We achieve this synchronization using the below condition variable.
-	cc.mu.Lock()
-	cc.idlenessState = ccIdlenessStateActive
-	cc.exitIdleCond.Signal()
-	cc.mu.Unlock()
-	cc.addTraceEvent("exiting idle mode")
+	if exitedIdle {
+		cc.addTraceEvent("exiting idle mode")
+	}
 	return nil
 }
 
@@ -1185,15 +1204,17 @@ func (cc *ClientConn) Close() error {
 	cc.conns = nil
 	cc.csMgr.updateState(connectivity.Shutdown)
 
+	pWrapper := cc.blockingpicker
 	rWrapper := cc.resolverWrapper
-	cc.resolverWrapper = nil
 	bWrapper := cc.balancerWrapper
 	idlenessMgr := cc.idlenessMgr
 	cc.mu.Unlock()
 
 	// The order of closing matters here since the balancer wrapper assumes the
 	// picker is closed before it is closed.
-	cc.blockingpicker.close()
+	if pWrapper != nil {
+		pWrapper.close()
+	}
 	if bWrapper != nil {
 		bWrapper.close()
 	}
