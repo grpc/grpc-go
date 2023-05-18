@@ -1338,6 +1338,53 @@ func (fe *fakeExporter) ExportSpan(sd *trace.SpanData) {
 	fe.seenSpans = append(fe.seenSpans, gotSI)
 }
 
+// waitForServerSpanAndSort waits until a server span appears somewhere in the
+// span list in an exporter, and then sorts the span list by putting the server
+// span first, the attempt span second, and overall call span third. Returns an
+// error if no server span found within 5 seconds, or if span list isn't length
+// 3 when server span is found.
+func waitForServerSpanAndSort(fe *fakeExporter) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	serverSpanIndex := -1
+	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
+		fe.mu.Lock()
+		for i, seenSpan := range fe.seenSpans {
+			if seenSpan.spanKind == trace.SpanKindServer {
+				serverSpanIndex = i
+			}
+		}
+		if serverSpanIndex == -1 {
+			fe.mu.Unlock()
+			continue
+		}
+		if len := len(fe.seenSpans); len != 3 {
+			fe.mu.Unlock()
+			return fmt.Errorf("seenSpans length is not 3, length %v", len)
+		}
+
+		// attempt span has a happens before relationship with call span - no
+		// deterministic way to sort based on spanInformation, so do it
+		// manually.
+		if serverSpanIndex == 0 { // Spans are already in server attempt call order, nothing to sort.
+			fe.mu.Unlock()
+			return nil
+		}
+		// Spans start as attempt server call order, so swap server and attempt.
+		if serverSpanIndex == 1 {
+			fe.seenSpans[0], fe.seenSpans[1] = fe.seenSpans[1], fe.seenSpans[0]
+		}
+		// Spans start as attempt call server order, so swap all 3 into server
+		// attempt call order.
+		if serverSpanIndex == 2 {
+			fe.seenSpans[0], fe.seenSpans[1], fe.seenSpans[2] = fe.seenSpans[2], fe.seenSpans[0], fe.seenSpans[1]
+		}
+		fe.mu.Unlock()
+		return nil
+	}
+	return fmt.Errorf("timeout when waiting for server span to be present in exporter")
+}
+
 // TestSpan tests emitted spans from gRPC. It configures a system with a gRPC
 // Client and gRPC server with the OpenCensus Dial and Server Option configured,
 // and makes a Unary RPC and a Streaming RPC. This should cause spans with
@@ -1375,17 +1422,10 @@ func (s) TestSpan(t *testing.T) {
 
 	// Make a Unary RPC. This should cause a span with message events
 	// corresponding to the request message and response message to be emitted
-	// both from the client and the server. Note that RPCs trigger exports of
-	// corresponding span data synchronously, thus the Span Data is guaranteed
-	// to have been read by exporter and is ready to make assertions on.
+	// both from the client and the server.
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
-
-	// The spans received are server first, then client. This is due to the RPC
-	// finishing on the server first. The ordering of message events for a Unary
-	// Call is as follows: (client send, server recv), (server send (server span
-	// end), client recv (client span end)).
 	wantSI := []spanInformation{
 		{
 			// Sampling rate of 100 percent, so this should populate every span
@@ -1453,10 +1493,14 @@ func (s) TestSpan(t *testing.T) {
 			childSpanCount:  1,
 		},
 	}
-	if diff := cmp.Diff(fe.seenSpans, wantSI); diff != "" {
-		t.Fatalf("got unexpected spans, diff (-got, +want): %v", diff)
+	if err := waitForServerSpanAndSort(fe); err != nil {
+		t.Fatal(err)
 	}
 	fe.mu.Lock()
+	if diff := cmp.Diff(fe.seenSpans, wantSI); diff != "" {
+		fe.mu.Unlock()
+		t.Fatalf("got unexpected spans, diff (-got, +want): %v", diff)
+	}
 	if err := validateTraceAndSpanIDs(fe.seenSpans); err != nil {
 		fe.mu.Unlock()
 		t.Fatalf("Error in runtime data assertions: %v", err)
@@ -1539,6 +1583,9 @@ func (s) TestSpan(t *testing.T) {
 			},
 			hasRemoteParent: false,
 		},
+	}
+	if err := waitForServerSpanAndSort(fe); err != nil {
+		t.Fatal(err)
 	}
 	fe.mu.Lock()
 	defer fe.mu.Unlock()
