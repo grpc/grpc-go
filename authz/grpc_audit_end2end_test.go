@@ -2,11 +2,14 @@ package authz
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/testdata"
 
@@ -22,8 +25,43 @@ func (s *testServer) UnaryCall(ctx context.Context, req *testpb.SimpleRequest) (
 	return &testpb.SimpleResponse{}, nil
 }
 
-func TestStdoutLogger(t *testing.T) {
-	authzPolicy := `{
+type statAuditLogger struct {
+	Stat map[bool]int
+}
+
+func (s *statAuditLogger) Log(event *audit.Event) {
+	if event.Authorized {
+		s.Stat[true]++
+	} else {
+		s.Stat[false]++
+	}
+}
+
+type loggerBuilder struct {
+	Stat map[bool]int
+}
+
+func (loggerBuilder) Name() string {
+	return "stat_logger"
+}
+func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
+	return &statAuditLogger{
+		Stat: lb.Stat,
+	}
+}
+
+func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
+	return nil, nil
+}
+
+func TestAuditLoggers(t *testing.T) {
+	tests := map[string]struct {
+		authzPolicy string
+		wantAllows  int
+		wantDenies  int
+	}{
+		"No audit": {
+			authzPolicy: `{
 				"name": "authz",
 				"allow_rules":
 				[
@@ -38,64 +76,162 @@ func TestStdoutLogger(t *testing.T) {
 						}
 					}
 				],
-				"deny_rules": [
-					{
-						"name": "deny_policy_1",
-						"source": {
-							"principals":[
-							"spiffe://foo.abc"
-							]
-						}
-					}
-				],
 				"audit_logging_options": {
-					"audit_condition": "ON_ALLOW",
+					"audit_condition": "NONE",
 					"audit_loggers": [
 						{
-							"name": "stdout_logger",
+							"name": "stat_logger",
 							"config": {},
 							"is_optional": false
 						}
 					]
 				}
-			}`
-
-	// Start a gRPC server with gRPC authz unary server interceptor.
-	i, _ := NewStatic(authzPolicy)
-	creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
-	if err != nil {
-		t.Fatalf("failed to generate credentials: %v", err)
+			}`,
+			wantAllows: 0,
+			wantDenies: 0,
+		},
+		"Allow Unary Deny Streaming": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules":
+				[
+					{
+						"name": "allow_all",
+						"request": {
+							"paths":
+							[
+								"*"
+							]
+						}
+					}
+				],
+				"deny_rules":
+				[
+					{
+						"name": "deny_all",
+						"request": {
+							"paths":
+							[
+								"/grpc.testing.TestService/StreamingInputCall"
+							]
+						}
+					}
+				],
+				"audit_logging_options": {
+					"audit_condition": "ON_DENY_AND_ALLOW",
+					"audit_loggers": [
+						{
+							"name": "stat_logger",
+							"config": {},
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantAllows: 2,
+			wantDenies: 1,
+		},
 	}
-	s := grpc.NewServer(
-		grpc.Creds(creds),
-		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
-	defer s.Stop()
-	testgrpc.RegisterTestServiceServer(s, &testServer{})
+	//authzPolicy := `{
+	//			"name": "authz",
+	//			"allow_rules":
+	//			[
+	//				{
+	//					"name": "allow_UnaryCall",
+	//					"request":
+	//					{
+	//						"paths":
+	//						[
+	//							"/grpc.testing.TestService/UnaryCall"
+	//						]
+	//					}
+	//				}
+	//			],
+	//			"deny_rules": [
+	//				{
+	//					"name": "deny_policy_1",
+	//					"source": {
+	//						"principals":[
+	//						"spiffe://foo.abc"
+	//						]
+	//					}
+	//				}
+	//			],
+	//			"audit_logging_options": {
+	//				"audit_condition": "ON_ALLOW",
+	//				"audit_loggers": [
+	//					{
+	//						"name": "stat_logger",
+	//						"config": {},
+	//						"is_optional": false
+	//					}
+	//				]
+	//			}
+	//		}`
 
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("error listening: %v", err)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			lb := &loggerBuilder{
+				Stat: make(map[bool]int),
+			}
+			audit.RegisterLoggerBuilder(lb)
+			// Start a gRPC server with gRPC authz unary server interceptor.
+			i, _ := NewStatic(test.authzPolicy)
+			creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
+			if err != nil {
+				t.Fatalf("failed to generate credentials: %v", err)
+			}
+			s := grpc.NewServer(
+				grpc.Creds(creds),
+				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
+				grpc.ChainStreamInterceptor(i.StreamInterceptor))
+			defer s.Stop()
+			testgrpc.RegisterTestServiceServer(s, &testServer{})
+
+			lis, err := net.Listen("tcp", "localhost:0")
+			if err != nil {
+				t.Fatalf("error listening: %v", err)
+			}
+			go s.Serve(lis)
+
+			// Establish a connection to the server.
+			creds, err = credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
+			if err != nil {
+				t.Fatalf("failed to load credentials: %v", err)
+			}
+			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(creds))
+			if err != nil {
+				t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
+			}
+			defer clientConn.Close()
+			client := testgrpc.NewTestServiceClient(clientConn)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			client.UnaryCall(ctx, &testpb.SimpleRequest{})
+			client.UnaryCall(ctx, &testpb.SimpleRequest{})
+
+			stream, err := client.StreamingInputCall(ctx)
+			if err != nil {
+				t.Fatalf("failed StreamingInputCall err: %v", err)
+			}
+			req := &testpb.StreamingInputCallRequest{
+				Payload: &testpb.Payload{
+					Body: []byte("hi"),
+				},
+			}
+			if err := stream.Send(req); err != nil && err != io.EOF {
+				t.Fatalf("failed stream.Send err: %v", err)
+			}
+			stream.CloseAndRecv()
+
+			if lb.Stat[true] != test.wantAllows {
+				t.Errorf("Allow case failed, want %v got %v", test.wantAllows, lb.Stat[true])
+			}
+			if lb.Stat[false] != test.wantDenies {
+				t.Errorf("Deny case failed, want %v got %v", test.wantDenies, lb.Stat[false])
+			}
+		})
 	}
-	go s.Serve(lis)
-
-	// Establish a connection to the server.
-	creds, err = credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
-	if err != nil {
-		t.Fatalf("failed to load credentials: %v", err)
-	}
-	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(creds))
-	if err != nil {
-		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
-	}
-	defer clientConn.Close()
-	client := testgrpc.NewTestServiceClient(clientConn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Verifying authorization decision.
-	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
-		t.Fatalf("client.UnaryCall(_, _) = %v; want nil", err)
-	}
-
 }
