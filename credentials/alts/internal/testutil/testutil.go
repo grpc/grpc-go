@@ -217,7 +217,11 @@ func (h *FakeHandshaker) processServerStart(req *altspb.StartServerHandshakeReq)
 
 func (h *FakeHandshaker) processNext(req *altspb.NextHandshakeMessageReq, isAssistingClient bool) (*altspb.HandshakerResp, error) {
 	if isAssistingClient {
-		if !bytes.Equal(req.InBytes, []byte("ServerInitServerFinished")) {
+		// Only check that the req.InBytes is a prefix-match for
+		// "ServerInitServerFinished", because it is possible that
+		// the response from the server gets split into 2 packets on
+		// the wire.
+		if !bytes.HasPrefix([]byte("ServerInitServerFinished"), req.InBytes) {
 			return nil, fmt.Errorf("unexpected in bytes: got: %v, want: %v", req.InBytes, []byte("ServerInitServerFinished"))
 		}
 		return &altspb.HandshakerResp{
@@ -248,7 +252,10 @@ func (h *FakeHandshaker) processNext(req *altspb.NextHandshakeMessageReq, isAssi
 			},
 		}, nil
 	}
-	if !bytes.Equal(req.InBytes, []byte("ClientFinished")) {
+	// Only check that the req.InBytes is a prefix-match for
+	// "ClientFinished", because it is possible that the response from the
+	// client gets split into 2 packets on the wire.
+	if !bytes.HasPrefix([]byte("ClientFinished"), req.InBytes) {
 		return nil, fmt.Errorf("unexpected in bytes: got: %v, want: %v", req.InBytes, []byte("ClientFinished"))
 	}
 	return &altspb.HandshakerResp{
