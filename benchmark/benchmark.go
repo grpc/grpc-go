@@ -27,6 +27,9 @@ import (
 	"io"
 	"log"
 	"net"
+	"time"
+
+	"math/rand"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -77,6 +80,10 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 // of ping-pong.
 const UnconstrainedStreamingHeader = "unconstrained-streaming"
 
+// UnconstrainedStreamingDelayHeader is used to pass the maximum amount of time
+// the server should sleep between consecutive RPC responses.
+const UnconstrainedStreamingDelayHeader = "unconstrained-streaming-delay"
+
 func (s *testServer) StreamingCall(stream testgrpc.BenchmarkService_StreamingCallServer) error {
 	if md, ok := metadata.FromIncomingContext(stream.Context()); ok && len(md[UnconstrainedStreamingHeader]) != 0 {
 		return s.UnconstrainedStreamingCall(stream)
@@ -103,6 +110,16 @@ func (s *testServer) StreamingCall(stream testgrpc.BenchmarkService_StreamingCal
 }
 
 func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService_StreamingCallServer) error {
+	maxSleep := 0
+	if md, ok := metadata.FromIncomingContext(stream.Context()); ok && len(md[UnconstrainedStreamingDelayHeader]) != 0 {
+		val := md[UnconstrainedStreamingDelayHeader][0]
+		if d, err := time.ParseDuration(val); err != nil {
+			return fmt.Errorf("can't parse %q header: ", UnconstrainedStreamingDelayHeader, err)
+		} else {
+			maxSleep = int(d)
+		}
+	}
+
 	in := new(testpb.SimpleRequest)
 	// Receive a message to learn response type and size.
 	err := stream.RecvMsg(in)
@@ -142,6 +159,9 @@ func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService
 			case codes.OK:
 			default:
 				log.Fatalf("server send error: %v", err)
+			}
+			if maxSleep > 0 {
+				time.Sleep(time.Duration(rand.Intn(maxSleep)))
 			}
 		}
 	}()

@@ -261,9 +261,6 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 				}
 				recver(pos)
 				atomic.AddUint64(&resp, 1)
-				if maxSleep > 0 {
-					time.Sleep(time.Duration(math_rand.Intn(maxSleep)))
-				}
 			}
 		}(i)
 	}
@@ -435,7 +432,8 @@ func setupUnconstrainedStream(bf stats.Features) ([]testgrpc.BenchmarkService_St
 	tc, cleanup := makeClient(bf)
 
 	streams := make([]testgrpc.BenchmarkService_StreamingCallClient, bf.MaxConcurrentCalls)
-	md := metadata.Pairs(benchmark.UnconstrainedStreamingHeader, "1")
+	md := metadata.Pairs(benchmark.UnconstrainedStreamingHeader, "1",
+		benchmark.UnconstrainedStreamingDelayHeader, bf.SleepBetweenRPCs.String())
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	for i := 0; i < bf.MaxConcurrentCalls; i++ {
 		stream, err := tc.StreamingCall(ctx)
