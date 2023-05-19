@@ -970,9 +970,6 @@ func (ac *addrConn) connect() error {
 		ac.mu.Unlock()
 		return nil
 	}
-	// Update connectivity state within the lock to prevent subsequent or
-	// concurrent calls from resetting the transport more than once.
-	ac.updateConnectivityState(connectivity.Connecting, nil)
 	ac.mu.Unlock()
 
 	ac.resetTransport()
@@ -991,58 +988,53 @@ func equalAddresses(a, b []resolver.Address) bool {
 	return true
 }
 
-// tryUpdateAddrs tries to update ac.addrs with the new addresses list.
-//
-// If ac is TransientFailure, it updates ac.addrs and returns true. The updated
-// addresses will be picked up by retry in the next iteration after backoff.
-//
-// If ac is Shutdown or Idle, it updates ac.addrs and returns true.
-//
-// If the addresses is the same as the old list, it does nothing and returns
-// true.
-//
-// If ac is Connecting, it returns false. The caller should tear down the ac and
-// create a new one. Note that the backoff will be reset when this happens.
-//
-// If ac is Ready, it checks whether current connected address of ac is in the
-// new addrs list.
-//   - If true, it updates ac.addrs and returns true. The ac will keep using
-//     the existing connection.
-//   - If false, it does nothing and returns false.
-func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
+// updateAddrs updates ac.addrs with the new addresses list and handles active
+// connections or connection attempts.
+func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 	ac.mu.Lock()
-	defer ac.mu.Unlock()
-	channelz.Infof(logger, ac.channelzID, "addrConn: tryUpdateAddrs curAddr: %v, addrs: %v", ac.curAddr, addrs)
+	channelz.Infof(logger, ac.channelzID, "addrConn: updateAddrs curAddr: %v, addrs: %v", ac.curAddr, addrs)
+
+	if equalAddresses(ac.addrs, addrs) {
+		ac.mu.Unlock()
+		return
+	}
+
+	ac.addrs = addrs
+
 	if ac.state == connectivity.Shutdown ||
 		ac.state == connectivity.TransientFailure ||
 		ac.state == connectivity.Idle {
-		ac.addrs = addrs
-		return true
+		// We were not connecting, so do nothing but update the addresses.
+		ac.mu.Unlock()
+		return
 	}
 
-	if equalAddresses(ac.addrs, addrs) {
-		return true
-	}
-
-	if ac.state == connectivity.Connecting {
-		return false
-	}
-
-	// ac.state is Ready, try to find the connected address.
-	var curAddrFound bool
-	for _, a := range addrs {
-		a.ServerName = ac.cc.getServerName(a)
-		if reflect.DeepEqual(ac.curAddr, a) {
-			curAddrFound = true
-			break
+	if ac.state == connectivity.Ready {
+		// try to find the connected address.
+		for _, a := range addrs {
+			a.ServerName = ac.cc.getServerName(a)
+			if reflect.DeepEqual(ac.curAddr, a) {
+				// We are connected to a valid address, so do nothing bu update
+				// the addresses.
+				ac.mu.Unlock()
+				return
+			}
 		}
 	}
-	channelz.Infof(logger, ac.channelzID, "addrConn: tryUpdateAddrs curAddrFound: %v", curAddrFound)
-	if curAddrFound {
-		ac.addrs = addrs
-	}
 
-	return curAddrFound
+	// We are either connected to the wrong address or currently connecting.
+	// Stop the current iteration and restart.
+
+	ac.cancel()
+	ac.ctx, ac.cancel = context.WithCancel(ac.cc.ctx)
+
+	curTr := ac.transport
+	ac.transport = nil
+	ac.mu.Unlock()
+	curTr.GracefulClose()
+	// Since we were connecting/connected, we should start a new connection
+	// attempt.
+	go ac.resetTransport()
 }
 
 // getServerName determines the serverName to be used in the connection
@@ -1301,7 +1293,8 @@ func (ac *addrConn) adjustParams(r transport.GoAwayReason) {
 
 func (ac *addrConn) resetTransport() {
 	ac.mu.Lock()
-	if ac.state == connectivity.Shutdown {
+	acCtx := ac.ctx
+	if acCtx.Err() != nil {
 		ac.mu.Unlock()
 		return
 	}
@@ -1329,15 +1322,14 @@ func (ac *addrConn) resetTransport() {
 	ac.updateConnectivityState(connectivity.Connecting, nil)
 	ac.mu.Unlock()
 
-	if err := ac.tryAllAddrs(addrs, connectDeadline); err != nil {
+	if err := ac.tryAllAddrs(acCtx, addrs, connectDeadline); err != nil {
 		ac.cc.resolveNow(resolver.ResolveNowOptions{})
 		// After exhausting all addresses, the addrConn enters
 		// TRANSIENT_FAILURE.
-		ac.mu.Lock()
-		if ac.state == connectivity.Shutdown {
-			ac.mu.Unlock()
+		if acCtx.Err() != nil {
 			return
 		}
+		ac.mu.Lock()
 		ac.updateConnectivityState(connectivity.TransientFailure, err)
 
 		// Backoff.
@@ -1352,13 +1344,13 @@ func (ac *addrConn) resetTransport() {
 			ac.mu.Unlock()
 		case <-b:
 			timer.Stop()
-		case <-ac.ctx.Done():
+		case <-acCtx.Done():
 			timer.Stop()
 			return
 		}
 
 		ac.mu.Lock()
-		if ac.state != connectivity.Shutdown {
+		if acCtx.Err() == nil {
 			ac.updateConnectivityState(connectivity.Idle, err)
 		}
 		ac.mu.Unlock()
@@ -1373,14 +1365,13 @@ func (ac *addrConn) resetTransport() {
 // tryAllAddrs tries to creates a connection to the addresses, and stop when at
 // the first successful one. It returns an error if no address was successfully
 // connected, or updates ac appropriately with the new transport.
-func (ac *addrConn) tryAllAddrs(addrs []resolver.Address, connectDeadline time.Time) error {
+func (ac *addrConn) tryAllAddrs(ctx context.Context, addrs []resolver.Address, connectDeadline time.Time) error {
 	var firstConnErr error
 	for _, addr := range addrs {
-		ac.mu.Lock()
-		if ac.state == connectivity.Shutdown {
-			ac.mu.Unlock()
+		if ctx.Err() != nil {
 			return errConnClosing
 		}
+		ac.mu.Lock()
 
 		ac.cc.mu.RLock()
 		ac.dopts.copts.KeepaliveParams = ac.cc.mkp
@@ -1394,7 +1385,7 @@ func (ac *addrConn) tryAllAddrs(addrs []resolver.Address, connectDeadline time.T
 
 		channelz.Infof(logger, ac.channelzID, "Subchannel picks a new address %q to connect", addr.Addr)
 
-		err := ac.createTransport(addr, copts, connectDeadline)
+		err := ac.createTransport(ctx, addr, copts, connectDeadline)
 		if err == nil {
 			return nil
 		}
@@ -1411,19 +1402,20 @@ func (ac *addrConn) tryAllAddrs(addrs []resolver.Address, connectDeadline time.T
 // createTransport creates a connection to addr. It returns an error if the
 // address was not successfully connected, or updates ac appropriately with the
 // new transport.
-func (ac *addrConn) createTransport(addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) error {
+func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) error {
 	addr.ServerName = ac.cc.getServerName(addr)
-	hctx, hcancel := context.WithCancel(ac.ctx)
+	hctx, hcancel := context.WithCancel(ctx)
 
 	onClose := func(r transport.GoAwayReason) {
 		ac.mu.Lock()
 		defer ac.mu.Unlock()
 		// adjust params based on GoAwayReason
 		ac.adjustParams(r)
-		if ac.state == connectivity.Shutdown {
-			// Already shut down.  tearDown() already cleared the transport and
-			// canceled hctx via ac.ctx, and we expected this connection to be
-			// closed, so do nothing here.
+		if ctx.Err() != nil {
+			// Already shut down or connection attempt canceled.  tearDown() or
+			// updateAddrs() already cleared the transport and canceled hctx
+			// via ac.ctx, and we expected this connection to be closed, so do
+			// nothing here.
 			return
 		}
 		hcancel()
@@ -1442,7 +1434,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		ac.updateConnectivityState(connectivity.Idle, nil)
 	}
 
-	connectCtx, cancel := context.WithDeadline(ac.ctx, connectDeadline)
+	connectCtx, cancel := context.WithDeadline(ctx, connectDeadline)
 	defer cancel()
 	copts.ChannelzParentID = ac.channelzID
 
@@ -1459,7 +1451,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
-	if ac.state == connectivity.Shutdown {
+	if ctx.Err() != nil {
 		// This can happen if the subConn was removed while in `Connecting`
 		// state. tearDown() would have set the state to `Shutdown`, but
 		// would not have closed the transport since ac.transport would not
@@ -1471,6 +1463,9 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		// The error we pass to Close() is immaterial since there are no open
 		// streams at this point, so no trailers with error details will be sent
 		// out. We just need to pass a non-nil error.
+		//
+		// This can also happen when updateAddrs is called during a connection
+		// attempt.
 		go newTr.Close(transport.ErrConnClosing)
 		return nil
 	}
