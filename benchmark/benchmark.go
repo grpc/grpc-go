@@ -114,7 +114,7 @@ func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService
 	if md, ok := metadata.FromIncomingContext(stream.Context()); ok && len(md[UnconstrainedStreamingDelayHeader]) != 0 {
 		val := md[UnconstrainedStreamingDelayHeader][0]
 		if d, err := time.ParseDuration(val); err != nil {
-			return fmt.Errorf("can't parse %q header: ", UnconstrainedStreamingDelayHeader, err)
+			return fmt.Errorf("can't parse %q header: %s", UnconstrainedStreamingDelayHeader, err)
 		} else {
 			maxSleep = int(d)
 		}
