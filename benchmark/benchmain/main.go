@@ -106,12 +106,12 @@ var (
 	useBufconn          = flag.Bool("bufconn", false, "Use in-memory connection instead of system network I/O")
 	enableKeepalive     = flag.Bool("enable_keepalive", false, "Enable client keepalive. \n"+
 		"Keepalive.Time is set to 10s, Keepalive.Timeout is set to 1s, Keepalive.PermitWithoutStream is set to true.")
-	clientReadBufferSize       = flags.IntSlice("clientReadBufferSize", []int{-1}, "Configures the client read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
-	clientWriteBufferSize      = flags.IntSlice("clientWriteBufferSize", []int{-1}, "Configures the client write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
-	serverReadBufferSize       = flags.IntSlice("serverReadBufferSize", []int{-1}, "Configures the server read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
-	serverWriteBufferSize      = flags.IntSlice("serverWriteBufferSize", []int{-1}, "Configures the server write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
-	sleepBetweenRPCs           = flags.DurationSlice("sleepBetweenRPCs", []time.Duration{0}, "Configures the maximum amount of time the client should sleep between consecutive RPCs - may be a a comma-separated list")
-	connectionPerConcurrentRPC = flag.Bool("connectionPerConcurrentRPC", false, "Controls whether a single connection or connection per `maxConcurrentCalls` should be used.")
+	clientReadBufferSize  = flags.IntSlice("clientReadBufferSize", []int{-1}, "Configures the client read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	clientWriteBufferSize = flags.IntSlice("clientWriteBufferSize", []int{-1}, "Configures the client write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	serverReadBufferSize  = flags.IntSlice("serverReadBufferSize", []int{-1}, "Configures the server read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	serverWriteBufferSize = flags.IntSlice("serverWriteBufferSize", []int{-1}, "Configures the server write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	sleepBetweenRPCs      = flags.DurationSlice("sleepBetweenRPCs", []time.Duration{0}, "Configures the maximum amount of time the client should sleep between consecutive RPCs - may be a a comma-separated list")
+	shareConnection       = flag.Bool("shareConnection", true, "Controls whether a single connection or connection per `maxConcurrentCalls` should be used.")
 
 	logger = grpclog.Component("benchmark")
 )
@@ -738,7 +738,7 @@ func processFlags() *benchOpts {
 		benchmarkResultFile: *benchmarkResultFile,
 		useBufconn:          *useBufconn,
 		enableKeepalive:     *enableKeepalive,
-		shareConnection:     !(*connectionPerConcurrentRPC),
+		shareConnection:     *shareConnection,
 		features: &featureOpts{
 			enableTrace:           setToggleMode(*traceMode),
 			readLatencies:         append([]time.Duration(nil), *readLatency...),
