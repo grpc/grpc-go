@@ -106,11 +106,12 @@ var (
 	useBufconn          = flag.Bool("bufconn", false, "Use in-memory connection instead of system network I/O")
 	enableKeepalive     = flag.Bool("enable_keepalive", false, "Enable client keepalive. \n"+
 		"Keepalive.Time is set to 10s, Keepalive.Timeout is set to 1s, Keepalive.PermitWithoutStream is set to true.")
-	clientReadBufferSize  = flags.IntSlice("clientReadBufferSize", []int{-1}, "Configures the client read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
-	clientWriteBufferSize = flags.IntSlice("clientWriteBufferSize", []int{-1}, "Configures the client write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
-	serverReadBufferSize  = flags.IntSlice("serverReadBufferSize", []int{-1}, "Configures the server read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
-	serverWriteBufferSize = flags.IntSlice("serverWriteBufferSize", []int{-1}, "Configures the server write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
-	sleepBetweenRPCs      = flags.DurationSlice("sleepBetweenRPCs", []time.Duration{0}, "Configures the maximum amount of time the client should sleep between consecutive RPCs - may be a a comma-separated list")
+	clientReadBufferSize       = flags.IntSlice("clientReadBufferSize", []int{-1}, "Configures the client read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	clientWriteBufferSize      = flags.IntSlice("clientWriteBufferSize", []int{-1}, "Configures the client write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	serverReadBufferSize       = flags.IntSlice("serverReadBufferSize", []int{-1}, "Configures the server read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	serverWriteBufferSize      = flags.IntSlice("serverWriteBufferSize", []int{-1}, "Configures the server write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	sleepBetweenRPCs           = flags.DurationSlice("sleepBetweenRPCs", []time.Duration{0}, "Configures the maximum amount of time the client should sleep between consecutive RPCs - may be a a comma-separated list")
+	connectionPerConcurrentRPC = flag.Bool("connectionPerConcurrentRPC", false, "Controls whether a single connection or connection per `maxConcurrentCalls` should be used.")
 
 	logger = grpclog.Component("benchmark")
 )
@@ -268,11 +269,11 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 	stop(req, resp)
 }
 
-// makeClient returns a gRPC client for the grpc.testing.BenchmarkService
+// makeClients returns a gRPC client (or multiple clients) for the grpc.testing.BenchmarkService
 // service. The client is configured using the different options in the passed
 // 'bf'. Also returns a cleanup function to close the client and release
 // resources.
-func makeClient(bf stats.Features) (testgrpc.BenchmarkServiceClient, func()) {
+func makeClients(bf stats.Features) ([]testpb.BenchmarkServiceClient, func()) {
 	nw := &latency.Network{Kbps: bf.Kbps, Latency: bf.Latency, MTU: bf.MTU}
 	opts := []grpc.DialOption{}
 	sopts := []grpc.ServerOption{}
@@ -352,16 +353,41 @@ func makeClient(bf stats.Features) (testgrpc.BenchmarkServiceClient, func()) {
 	}
 	lis = nw.Listener(lis)
 	stopper := bm.StartServer(bm.ServerInfo{Type: "protobuf", Listener: lis}, sopts...)
-	conn := bm.NewClientConn("" /* target not used */, opts...)
-	return testgrpc.NewBenchmarkServiceClient(conn), func() {
-		conn.Close()
+	var conns []*grpc.ClientConn
+	var clients []testpb.BenchmarkServiceClient
+	if bf.ShareConnection {
+		conns = []*grpc.ClientConn{bm.NewClientConn("" /* target not used */, opts...)}
+		clients = []testpb.BenchmarkServiceClient{testgrpc.NewBenchmarkServiceClient(conns[0])}
+	} else {
+		conns = make([]*grpc.ClientConn, bf.MaxConcurrentCalls)
+		clients = make([]testpb.BenchmarkServiceClient, bf.MaxConcurrentCalls)
+		for i := 0; i < bf.MaxConcurrentCalls; i++ {
+			conns[i] = bm.NewClientConn("" /* target not used */, opts...)
+			clients[i] = testgrpc.NewBenchmarkServiceClient(conns[i])
+		}
+	}
+
+	return clients, func() {
+		for _, conn := range conns {
+			conn.Close()
+		}
 		stopper()
 	}
 }
 
+func selectClient(clients []testpb.BenchmarkServiceClient, index int) testpb.BenchmarkServiceClient {
+	var tc testpb.BenchmarkServiceClient
+	if len(clients) > 1 {
+		tc = clients[index]
+	} else {
+		tc = clients[0]
+	}
+	return tc
+}
+
 func makeFuncUnary(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
-	tc, cleanup := makeClient(bf)
-	return func(int) {
+	clients, cleanup := makeClients(bf)
+	return func(index int) {
 		reqSizeBytes := bf.ReqSizeBytes
 		respSizeBytes := bf.RespSizeBytes
 		if bf.ReqPayloadCurve != nil {
@@ -370,15 +396,16 @@ func makeFuncUnary(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 		if bf.RespPayloadCurve != nil {
 			respSizeBytes = bf.RespPayloadCurve.ChooseRandom()
 		}
-		unaryCaller(tc, reqSizeBytes, respSizeBytes)
+		unaryCaller(selectClient(clients, index), reqSizeBytes, respSizeBytes)
 	}, cleanup
 }
 
 func makeFuncStream(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
-	tc, cleanup := makeClient(bf)
+	clients, cleanup := makeClients(bf)
 
 	streams := make([]testgrpc.BenchmarkService_StreamingCallClient, bf.MaxConcurrentCalls)
 	for i := 0; i < bf.MaxConcurrentCalls; i++ {
+		tc := selectClient(clients, i)
 		stream, err := tc.StreamingCall(context.Background())
 		if err != nil {
 			logger.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
@@ -429,13 +456,14 @@ func makeFuncUnconstrainedStream(bf stats.Features) (rpcSendFunc, rpcRecvFunc, r
 }
 
 func setupUnconstrainedStream(bf stats.Features) ([]testgrpc.BenchmarkService_StreamingCallClient, *testpb.SimpleRequest, rpcCleanupFunc) {
-	tc, cleanup := makeClient(bf)
+	clients, cleanup := makeClients(bf)
 
 	streams := make([]testgrpc.BenchmarkService_StreamingCallClient, bf.MaxConcurrentCalls)
 	md := metadata.Pairs(benchmark.UnconstrainedStreamingHeader, "1",
 		benchmark.UnconstrainedStreamingDelayHeader, bf.SleepBetweenRPCs.String())
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	for i := 0; i < bf.MaxConcurrentCalls; i++ {
+		tc := selectClient(clients, i)
 		stream, err := tc.StreamingCall(ctx)
 		if err != nil {
 			logger.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
@@ -515,6 +543,7 @@ type benchOpts struct {
 	benchmarkResultFile string
 	useBufconn          bool
 	enableKeepalive     bool
+	shareConnection     bool
 	features            *featureOpts
 }
 
@@ -639,6 +668,7 @@ func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 			UseBufConn:      b.useBufconn,
 			EnableKeepalive: b.enableKeepalive,
 			BenchTime:       b.benchTime,
+			ShareConnection: b.shareConnection,
 			// These features can potentially change for each iteration.
 			EnableTrace:           b.features.enableTrace[curPos[stats.EnableTraceIndex]],
 			Latency:               b.features.readLatencies[curPos[stats.ReadLatenciesIndex]],
@@ -708,6 +738,7 @@ func processFlags() *benchOpts {
 		benchmarkResultFile: *benchmarkResultFile,
 		useBufconn:          *useBufconn,
 		enableKeepalive:     *enableKeepalive,
+		shareConnection:     !(*connectionPerConcurrentRPC),
 		features: &featureOpts{
 			enableTrace:           setToggleMode(*traceMode),
 			readLatencies:         append([]time.Duration(nil), *readLatency...),

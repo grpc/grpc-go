@@ -79,6 +79,8 @@ type Features struct {
 	EnableKeepalive bool
 	// BenchTime indicates the duration of the benchmark run.
 	BenchTime time.Duration
+	// ShareConnection indicates whether a single connection should be used.
+	ShareConnection bool
 
 	// Features defined above are usually the same for all benchmark runs in a
 	// particular invocation, while the features defined below could vary from
@@ -143,12 +145,12 @@ func (f Features) String() string {
 		"trace_%v-latency_%v-kbps_%v-MTU_%v-maxConcurrentCalls_%v-%s-%s-"+
 		"compressor_%v-channelz_%v-preloader_%v-clientReadBufferSize_%v-"+
 		"clientWriteBufferSize_%v-serverReadBufferSize_%v-serverWriteBufferSize_%v-"+
-		"sleepBetweenRPCs %v-",
+		"sleepBetweenRPCs_%v-shareConnection_%v-",
 		f.NetworkMode, f.UseBufConn, f.EnableKeepalive, f.BenchTime, f.EnableTrace,
 		f.Latency, f.Kbps, f.MTU, f.MaxConcurrentCalls, reqPayloadString,
 		respPayloadString, f.ModeCompressor, f.EnableChannelz, f.EnablePreloader,
 		f.ClientReadBufferSize, f.ClientWriteBufferSize, f.ServerReadBufferSize,
-		f.ServerWriteBufferSize, f.SleepBetweenRPCs)
+		f.ServerWriteBufferSize, f.SleepBetweenRPCs, f.ShareConnection)
 }
 
 // SharedFeatures returns the shared features as a pretty printable string.
