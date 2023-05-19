@@ -88,7 +88,7 @@ func (s) TestIdlenessManager_Disabled(t *testing.T) {
 	// Create an idleness manager that is disabled because of idleTimeout being
 	// set to `0`.
 	enforcer := newTestIdlenessEnforcer()
-	mgr := newDisabledIdlenessManager()
+	mgr := newIdlenessManager(enforcer, time.Duration(0))
 
 	// Ensure that the timer callback does not fire within a short deadline.
 	select {
@@ -125,7 +125,7 @@ func (s) TestIdlenessManager_Enabled_TimerFires(t *testing.T) {
 	callbackCh := overrideNewTimer(t)
 
 	enforcer := newTestIdlenessEnforcer()
-	mgr := newAtomicIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
+	mgr := newIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
 	defer mgr.close()
 
 	// Ensure that the timer callback fires within a appropriate amount of time.
@@ -150,7 +150,7 @@ func (s) TestIdlenessManager_Enabled_OngoingCall(t *testing.T) {
 	callbackCh := overrideNewTimer(t)
 
 	enforcer := newTestIdlenessEnforcer()
-	mgr := newAtomicIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
+	mgr := newIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
 	defer mgr.close()
 
 	// Fire up a goroutine that simulates an ongoing RPC that is terminated
@@ -195,7 +195,7 @@ func (s) TestIdlenessManager_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	callbackCh := overrideNewTimer(t)
 
 	enforcer := newTestIdlenessEnforcer()
-	mgr := newAtomicIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
+	mgr := newIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
 	defer mgr.close()
 
 	// Fire up a goroutine that simulates unary RPCs until the timer callback
@@ -245,7 +245,7 @@ func (s) TestIdlenessManager_Enabled_ExitIdleOnRPC(t *testing.T) {
 	overrideNewTimer(t)
 
 	enforcer := newTestIdlenessEnforcer()
-	mgr := newAtomicIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
+	mgr := newIdlenessManager(enforcer, time.Duration(defaultTestIdleTimeout))
 	defer mgr.close()
 
 	// Ensure that the channel moves to idle since there are no RPCs.
@@ -329,7 +329,7 @@ func (s) TestIdlenessManager_IdleTimeoutRacesWithOnCallBegin(t *testing.T) {
 
 			// Configure a large idle timeout so that we can control the
 			// race between the timer callback and RPCs.
-			mgr := newAtomicIdlenessManager(enforcer, time.Duration(10*time.Minute))
+			mgr := newIdlenessManager(enforcer, time.Duration(10*time.Minute))
 			defer mgr.close()
 
 			var wg sync.WaitGroup

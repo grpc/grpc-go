@@ -266,11 +266,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	// Configure idleness support with configured idle timeout or default idle
 	// timeout duration. Idleness can be explicitly disabled by the user, by
 	// setting the dial option to 0.
-	if cc.dopts.idleTimeout == 0 {
-		cc.idlenessMgr = newDisabledIdlenessManager()
-	} else {
-		cc.idlenessMgr = newAtomicIdlenessManager(cc, cc.dopts.idleTimeout)
-	}
+	cc.idlenessMgr = newIdlenessManager(cc, cc.dopts.idleTimeout)
 
 	// Return early for non-blocking dials.
 	if !cc.dopts.block {

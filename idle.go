@@ -46,18 +46,16 @@ type idlenessManager interface {
 	close()
 }
 
-type disabledIdlenessManager struct{}
+type noopIdlenessManager struct{}
 
-func (disabledIdlenessManager) onCallBegin() error { return nil }
-func (disabledIdlenessManager) onCallEnd()         {}
-func (disabledIdlenessManager) close()             {}
+func (noopIdlenessManager) onCallBegin() error { return nil }
+func (noopIdlenessManager) onCallEnd()         {}
+func (noopIdlenessManager) close()             {}
 
-func newDisabledIdlenessManager() idlenessManager { return disabledIdlenessManager{} }
-
-// atomicIdlenessManger implements the idlenessManager interface. It uses atomic
+// idlenessManagerImpl implements the idlenessManager interface. It uses atomic
 // operations to synchronize access to shared state and a mutex to guarantee
 // mutual exclusion in a critical section.
-type atomicIdlenessManager struct {
+type idlenessManagerImpl struct {
 	// State accessed atomically.
 	lastCallEndTime           int64 // Unix timestamp in nanos; time when the most recent RPC completed.
 	activeCallsCount          int32 // Count of active RPCs; -math.MaxInt32 means channel is idle or is trying to get there.
@@ -85,10 +83,14 @@ type atomicIdlenessManager struct {
 	timer        *time.Timer
 }
 
-// newAtomicIdlenessManager creates a new atomicIdlenessManager. A non-zero
-// value must be passed for idle timeout.
-func newAtomicIdlenessManager(enforcer idlenessEnforcer, idleTimeout time.Duration) idlenessManager {
-	i := &atomicIdlenessManager{
+// newIdlenessManager creates a new idleness manager implementation for the
+// given idle timeout.
+func newIdlenessManager(enforcer idlenessEnforcer, idleTimeout time.Duration) idlenessManager {
+	if idleTimeout == 0 {
+		return noopIdlenessManager{}
+	}
+
+	i := &idlenessManagerImpl{
 		enforcer: enforcer,
 		timeout:  int64(idleTimeout),
 	}
@@ -98,7 +100,7 @@ func newAtomicIdlenessManager(enforcer idlenessEnforcer, idleTimeout time.Durati
 
 // resetIdleTimer resets the idle timer to the given duration. This method
 // should only be called from the timer callback.
-func (i *atomicIdlenessManager) resetIdleTimer(d time.Duration) {
+func (i *idlenessManagerImpl) resetIdleTimer(d time.Duration) {
 	i.idleMu.Lock()
 	defer i.idleMu.Unlock()
 
@@ -116,7 +118,7 @@ func (i *atomicIdlenessManager) resetIdleTimer(d time.Duration) {
 // handleIdleTimeout is the timer callback that is invoked upon expiry of the
 // configured idle timeout. The channel is considered inactive if there are no
 // ongoing calls and no RPC activity since the last time the timer fired.
-func (i *atomicIdlenessManager) handleIdleTimeout() {
+func (i *idlenessManagerImpl) handleIdleTimeout() {
 	if i.isClosed() {
 		return
 	}
@@ -169,7 +171,7 @@ func (i *atomicIdlenessManager) handleIdleTimeout() {
 // Return value indicates whether or not the channel moved to idle mode.
 //
 // Holds idleMu which ensures mutual exclusion with exitIdleMode.
-func (i *atomicIdlenessManager) tryEnterIdleMode() bool {
+func (i *idlenessManagerImpl) tryEnterIdleMode() bool {
 	i.idleMu.Lock()
 	defer i.idleMu.Unlock()
 
@@ -198,7 +200,7 @@ func (i *atomicIdlenessManager) tryEnterIdleMode() bool {
 }
 
 // onCallBegin is invoked at the start of every RPC.
-func (i *atomicIdlenessManager) onCallBegin() error {
+func (i *idlenessManagerImpl) onCallBegin() error {
 	if i.isClosed() {
 		return nil
 	}
@@ -225,7 +227,7 @@ func (i *atomicIdlenessManager) onCallBegin() error {
 // exitIdleMode instructs the channel to exit idle mode.
 //
 // Holds idleMu which ensures mutual exclusion with tryEnterIdleMode.
-func (i *atomicIdlenessManager) exitIdleMode() error {
+func (i *idlenessManagerImpl) exitIdleMode() error {
 	i.idleMu.Lock()
 	defer i.idleMu.Unlock()
 
@@ -256,7 +258,7 @@ func (i *atomicIdlenessManager) exitIdleMode() error {
 }
 
 // onCallEnd is invoked at the end of every RPC.
-func (i *atomicIdlenessManager) onCallEnd() {
+func (i *idlenessManagerImpl) onCallEnd() {
 	if i.isClosed() {
 		return
 	}
@@ -271,11 +273,11 @@ func (i *atomicIdlenessManager) onCallEnd() {
 	atomic.AddInt32(&i.activeCallsCount, -1)
 }
 
-func (i *atomicIdlenessManager) isClosed() bool {
+func (i *idlenessManagerImpl) isClosed() bool {
 	return atomic.LoadInt32(&i.closed) == 1
 }
 
-func (i *atomicIdlenessManager) close() {
+func (i *idlenessManagerImpl) close() {
 	atomic.StoreInt32(&i.closed, 1)
 
 	i.idleMu.Lock()
