@@ -30,19 +30,16 @@ func (cc *ClientConn) Invoke(ctx context.Context, method string, args, reply int
 	if err := cc.idlenessMgr.onCallBegin(); err != nil {
 		return err
 	}
+	defer cc.idlenessMgr.onCallEnd()
 
 	// allow interceptor to see all applicable call options, which means those
 	// configured as defaults from dial option as well as per-call options
 	opts = combine(cc.dopts.callOptions, opts)
 
-	var err error
 	if cc.dopts.unaryInt != nil {
-		err = cc.dopts.unaryInt(ctx, method, args, reply, cc, invoke, opts...)
-	} else {
-		err = invoke(ctx, method, args, reply, cc, opts...)
+		return cc.dopts.unaryInt(ctx, method, args, reply, cc, invoke, opts...)
 	}
-	cc.idlenessMgr.onCallEnd()
-	return err
+	return invoke(ctx, method, args, reply, cc, opts...)
 }
 
 func combine(o1 []CallOption, o2 []CallOption) []CallOption {
