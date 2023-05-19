@@ -55,7 +55,7 @@ func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerCon
 	return nil, nil
 }
 
-func TestAuditLoggers(t *testing.T) {
+func TestAuditLogger(t *testing.T) {
 	tests := map[string]struct {
 		authzPolicy string
 		wantAllows  int
