@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"math"
 	"net/url"
-	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1010,12 +1009,12 @@ func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 	}
 
 	if ac.state == connectivity.Ready {
-		// try to find the connected address.
+		// Try to find the connected address.
 		for _, a := range addrs {
 			a.ServerName = ac.cc.getServerName(a)
-			if reflect.DeepEqual(ac.curAddr, a) {
-				// We are connected to a valid address, so do nothing bu update
-				// the addresses.
+			if a.Equal(ac.curAddr) {
+				// We are connected to a valid address, so do nothing but
+				// update the addresses.
 				ac.mu.Unlock()
 				return
 			}
@@ -1028,10 +1027,17 @@ func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 	ac.cancel()
 	ac.ctx, ac.cancel = context.WithCancel(ac.cc.ctx)
 
-	curTr := ac.transport
+	// We have to defer here because GracefulClose => Close => onClose, which
+	// requires locking ac.mu.
+	defer ac.transport.GracefulClose()
 	ac.transport = nil
+
+	if len(addrs) == 0 {
+		ac.updateConnectivityState(connectivity.Idle, nil)
+	}
+
 	ac.mu.Unlock()
-	curTr.GracefulClose()
+
 	// Since we were connecting/connected, we should start a new connection
 	// attempt.
 	go ac.resetTransport()

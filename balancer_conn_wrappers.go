@@ -300,7 +300,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 		return nil, fmt.Errorf("grpc: cannot create SubConn when balancer is closed or idle")
 	}
 
-	if len(addrs) <= 0 {
+	if len(addrs) == 0 {
 		return nil, fmt.Errorf("grpc: cannot create SubConn with empty address list")
 	}
 	ac, err := ccb.cc.newAddrConn(addrs, opts)
