@@ -50,8 +50,8 @@ func (s) TestRecvBufferPool(t *testing.T) {
 		},
 	}
 	if err := ss.Start(
-		[]grpc.ServerOption{grpc.RecvBufferPool(grpc.NewsimpleSharedBufferPool())},
-		grpc.WithRecvBufferPool(grpc.NewsimpleSharedBufferPool()),
+		[]grpc.ServerOption{grpc.RecvBufferPool(grpc.NewSharedBufferPool())},
+		grpc.WithRecvBufferPool(grpc.NewSharedBufferPool()),
 	); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}

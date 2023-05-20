@@ -331,8 +331,8 @@ func makeClient(bf stats.Features) (testgrpc.BenchmarkServiceClient, func()) {
 	case recvBufferPoolNil:
 		// Do nothing.
 	case recvBufferPoolSimple:
-		opts = append(opts, grpc.WithRecvBufferPool(grpc.NewsimpleSharedBufferPool()))
-		sopts = append(sopts, grpc.RecvBufferPool(grpc.NewsimpleSharedBufferPool()))
+		opts = append(opts, grpc.WithRecvBufferPool(grpc.NewSharedBufferPool()))
+		sopts = append(sopts, grpc.RecvBufferPool(grpc.NewSharedBufferPool()))
 	default:
 		logger.Fatalf("Unknown shared recv buffer pool type: %v", bf.RecvBufferPool)
 	}

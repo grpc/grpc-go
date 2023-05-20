@@ -38,7 +38,7 @@ type SharedBufferPool interface {
 	Put(*[]byte)
 }
 
-// NewsimpleSharedBufferPool creates a new simpleSharedBufferPool with buckets
+// NewSharedBufferPool creates a simple SharedBufferPool with buckets
 // of different sizes to optimize memory usage. This prevents the pool from
 // wasting large amounts of memory, even when handling messages of varying sizes.
 //
@@ -46,7 +46,7 @@ type SharedBufferPool interface {
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func NewsimpleSharedBufferPool() SharedBufferPool {
+func NewSharedBufferPool() SharedBufferPool {
 	return &simpleSharedBufferPool{
 		pools: [poolArraySize]simpleSharedBufferChildPool{
 			newBytesPool(level0PoolMaxSize),
@@ -139,8 +139,8 @@ type fallbackBufferPool struct {
 
 func (p *fallbackBufferPool) Get(size int) []byte {
 	bs := p.Pool.Get().(*[]byte)
-	if cap(*bs) < size {
-		*bs = make([]byte, size)
+		if cap(*bs) < size {
+			*bs = make([]byte, size)
 		return *bs
 	}
 
