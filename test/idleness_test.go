@@ -288,7 +288,7 @@ func (s) TestChannelIdleness_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	sCtx, sCancel := context.WithTimeout(ctx, 3*defaultTestShortIdleTimeout)
 	defer sCancel()
 	go func() {
-		for ; sCtx.Err() == nil; <-time.After(defaultTestShortIdleTimeout / 2) {
+		for ; sCtx.Err() == nil; <-time.After(defaultTestShortIdleTimeout / 4) {
 			client := testgrpc.NewTestServiceClient(cc)
 			if _, err := client.EmptyCall(sCtx, &testpb.Empty{}); err != nil {
 				// While iterating through this for loop, at some point in time,
