@@ -54,7 +54,7 @@ func NewSharedBufferPool() SharedBufferPool {
 			newBytesPool(level2PoolMaxSize),
 			newBytesPool(level3PoolMaxSize),
 			newBytesPool(level4PoolMaxSize),
-			newFallbackBytesPool(),
+			newBytesPool(0),
 		},
 	}
 }
@@ -114,46 +114,33 @@ type simpleSharedBufferChildPool interface {
 
 type bufferPool struct {
 	sync.Pool
+
+	defaultSize int
 }
 
 func (p *bufferPool) Get(size int) []byte {
 	bs := p.Pool.Get().(*[]byte)
+
+	// If default size is 0. It means this pool is fallback pool.
+	// Therefore, we need to make a new one if the requested size is larger than the buffer.
+	if p.defaultSize == 0 {
+		if cap(*bs) < size {
+			*bs = make([]byte, size)
+		}
+	}
 
 	return (*bs)[:size]
 }
 
 func newBytesPool(size int) simpleSharedBufferChildPool {
 	return &bufferPool{
-		sync.Pool{
+		Pool: sync.Pool{
 			New: func() interface{} {
 				bs := make([]byte, size)
 				return &bs
 			},
 		},
-	}
-}
-
-type fallbackBufferPool struct {
-	sync.Pool
-}
-
-func (p *fallbackBufferPool) Get(size int) []byte {
-	bs := p.Pool.Get().(*[]byte)
-		if cap(*bs) < size {
-			*bs = make([]byte, size)
-		return *bs
-	}
-
-	return (*bs)[:size]
-}
-
-func newFallbackBytesPool() simpleSharedBufferChildPool {
-	return &fallbackBufferPool{
-		sync.Pool{
-			New: func() interface{} {
-				return new([]byte)
-			},
-		},
+		defaultSize: size,
 	}
 }
 
