@@ -537,3 +537,10 @@ func awaitNotState(ctx context.Context, t *testing.T, cc *grpc.ClientConn, state
 		}
 	}
 }
+
+func awaitNoStateChange(ctx context.Context, t *testing.T, cc *grpc.ClientConn, currState connectivity.State) {
+	t.Helper()
+	if cc.WaitForStateChange(ctx, currState) {
+		t.Fatalf("State changed from %q to %q when no state change was expected", currState, cc.GetState())
+	}
+}
