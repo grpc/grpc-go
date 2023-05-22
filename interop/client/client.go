@@ -120,7 +120,8 @@ const (
 	credsComputeEngineCreds
 )
 
-// Parses the --additional_metadata flag and returns metadata to send on each RPC.
+// Parses the --additional_metadata flag and returns metadata to send on each RPC,
+// formatted as per https://pkg.go.dev/google.golang.org/grpc/metadata#Pairs.
 // Allow any character but semicolons in values.
 // If the flag is empty, return a nil map with a nil error.
 // Return an error if the value is non-empty but fails to parse.
