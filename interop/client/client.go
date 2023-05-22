@@ -124,28 +124,26 @@ const (
 // Allow any character but semicolons in values.
 // If the flag is empty, return a nil map with a nil error.
 // Return an error if the value is non-empty but fails to parse.
-func parseAdditionalMetadataFlag() (metadata.MD, error) {
+func parseAdditionalMetadataFlag() ([]string, error) {
 	if len(*additionalMetadata) == 0 {
 		return nil, nil
 	}
 	r := *additionalMetadata
-	addMd := metadata.New(map[string]string{})
+	addMd := make([]string, 0)
 	for len(r) > 0 {
 		i := strings.Index(r, ":")
 		if i < 0 {
 			return nil, errors.New("could not parse --additional_metadata flag: could not find next colon")
 		}
-		key := r[:i]
+		addMd = append(addMd, r[:i]) // append key
 		r = r[i+1:]
 		i = strings.Index(r, ";")
+		// append value
 		if i < 0 {
-			addMd.Set(key, r)
+			addMd = append(addMd, r)
 			break
 		}
-		addMd.Set(key, r[:i])
-		if i == len(r)-1 {
-			break
-		}
+		addMd = append(addMd, r[:i])
 		r = r[i+1:]
 	}
 	return addMd, nil
@@ -256,11 +254,11 @@ func main() {
 	}
 	if addMd != nil {
 		unaryAddMd := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-			ctx = metadata.NewOutgoingContext(ctx, addMd)
+			ctx = metadata.AppendToOutgoingContext(ctx, addMd...)
 			return invoker(ctx, method, req, reply, cc, opts...)
 		}
 		streamingAddMd := func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-			ctx = metadata.NewOutgoingContext(ctx, addMd)
+			ctx = metadata.AppendToOutgoingContext(ctx, addMd...)
 			return streamer(ctx, desc, cc, method, opts...)
 		}
 		opts = append(opts, grpc.WithUnaryInterceptor(unaryAddMd))
