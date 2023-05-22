@@ -370,7 +370,7 @@ func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 	}()
 	bc := backoff.Config{
 		BaseDelay:  200 * time.Millisecond,
-		Multiplier: 1.1,
+		Multiplier: 2.0,
 		Jitter:     0,
 		MaxDelay:   120 * time.Second,
 	}
