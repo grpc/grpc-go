@@ -32,6 +32,7 @@ func (s *testServer) UnaryCall(ctx context.Context, req *testpb.SimpleRequest) (
 type statAuditLogger struct {
 	Stat         map[bool]int
 	stdoutLogger audit.Logger
+	SpiffeIds    []string
 }
 
 func (s *statAuditLogger) Log(event *audit.Event) {
@@ -41,10 +42,12 @@ func (s *statAuditLogger) Log(event *audit.Event) {
 	} else {
 		s.Stat[false]++
 	}
+	s.SpiffeIds = append(s.SpiffeIds, event.Principal)
 }
 
 type loggerBuilder struct {
-	Stat map[bool]int
+	Stat      map[bool]int
+	SpiffeIds []string
 }
 
 func (loggerBuilder) Name() string {
@@ -60,6 +63,8 @@ func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
 	return nil, nil
 }
+
+const spiffeId = "spiffe://foo.bar.com/client/workload/1"
 
 func TestAuditLogger(t *testing.T) {
 	tests := map[string]struct {
@@ -208,7 +213,6 @@ func TestAuditLogger(t *testing.T) {
 			}
 			audit.RegisterLoggerBuilder(lb)
 			i, _ := NewStatic(test.authzPolicy)
-
 			cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 			if err != nil {
 				t.Fatalf("tls.LoadX509KeyPair(x509/server1_cert.pem, x509/server1_key.pem) failed: %v", err)
@@ -226,7 +230,6 @@ func TestAuditLogger(t *testing.T) {
 				Certificates: []tls.Certificate{cert},
 				ClientCAs:    certPool,
 			})
-
 			s := grpc.NewServer(
 				grpc.Creds(creds),
 				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
@@ -239,6 +242,7 @@ func TestAuditLogger(t *testing.T) {
 			}
 			go s.Serve(lis)
 
+			// Setup gRPC test client with certificates containing a SPIFFE Id
 			cert, err = tls.LoadX509KeyPair(testdata.Path("x509/client_with_spiffe_cert.pem"), testdata.Path("x509/client_with_spiffe_key.pem"))
 			if err != nil {
 				t.Fatalf("tls.LoadX509KeyPair(x509/client1_cert.pem, x509/client1_key.pem) failed: %v", err)
@@ -256,7 +260,6 @@ func TestAuditLogger(t *testing.T) {
 				RootCAs:      roots,
 				ServerName:   "x.test.example.com",
 			})
-
 			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(creds))
 			if err != nil {
 				t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
@@ -289,6 +292,12 @@ func TestAuditLogger(t *testing.T) {
 			}
 			if lb.Stat[false] != test.wantDenies {
 				t.Errorf("Deny case failed, want %v got %v", test.wantDenies, lb.Stat[false])
+			}
+			//Compare recorded SPIFFE Ids with the value from cert
+			for _, id := range lb.SpiffeIds {
+				if id != spiffeId {
+					t.Errorf("Unexpected SPIFFE Id, want %v got %v", spiffeId, id)
+				}
 			}
 		})
 	}
