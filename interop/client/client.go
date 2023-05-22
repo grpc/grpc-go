@@ -27,7 +27,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"flag"
 	"net"
 	"os"
@@ -132,7 +131,7 @@ func parseAdditionalMetadataFlag() []string {
 	for len(r) > 0 {
 		i := strings.Index(r, ":")
 		if i < 0 {
-			logger.Fatalf("Error parsing --additional_metadata flag: %v", err)
+			logger.Fatalf("Error parsing --additional_metadata flag: missing colon separator")
 		}
 		addMd = append(addMd, r[:i]) // append key
 		r = r[i+1:]
