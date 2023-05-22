@@ -122,19 +122,17 @@ const (
 
 // Parses the --additional_metadata flag and returns metadata to send on each RPC,
 // formatted as per https://pkg.go.dev/google.golang.org/grpc/metadata#Pairs.
-// Allow any character but semicolons in values.
-// If the flag is empty, return a nil map with a nil error.
-// Return an error if the value is non-empty but fails to parse.
-func parseAdditionalMetadataFlag() ([]string, error) {
+// Allow any character but semicolons in values. If the flag is empty, return a nil map.
+func parseAdditionalMetadataFlag() []string {
 	if len(*additionalMetadata) == 0 {
-		return nil, nil
+		return nil
 	}
 	r := *additionalMetadata
 	addMd := make([]string, 0)
 	for len(r) > 0 {
 		i := strings.Index(r, ":")
 		if i < 0 {
-			return nil, errors.New("could not parse --additional_metadata flag: could not find next colon")
+			logger.Fatalf("Error parsing --additional_metadata flag: %v", err)
 		}
 		addMd = append(addMd, r[:i]) // append key
 		r = r[i+1:]
@@ -147,7 +145,7 @@ func parseAdditionalMetadataFlag() ([]string, error) {
 		addMd = append(addMd, r[:i])
 		r = r[i+1:]
 	}
-	return addMd, nil
+	return addMd
 }
 
 func main() {
@@ -249,11 +247,7 @@ func main() {
 	if len(*serviceConfigJSON) > 0 {
 		opts = append(opts, grpc.WithDisableServiceConfig(), grpc.WithDefaultServiceConfig(*serviceConfigJSON))
 	}
-	addMd, err := parseAdditionalMetadataFlag()
-	if err != nil {
-		logger.Fatalf("Error parsing --additional_metadata flag: %v", err)
-	}
-	if addMd != nil {
+	if addMd := parseAdditionalMetadataFlag(); addMd != nil {
 		unaryAddMd := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 			ctx = metadata.AppendToOutgoingContext(ctx, addMd...)
 			return invoker(ctx, method, req, reply, cc, opts...)
@@ -262,8 +256,7 @@ func main() {
 			ctx = metadata.AppendToOutgoingContext(ctx, addMd...)
 			return streamer(ctx, desc, cc, method, opts...)
 		}
-		opts = append(opts, grpc.WithUnaryInterceptor(unaryAddMd))
-		opts = append(opts, grpc.WithStreamInterceptor(streamingAddMd))
+		opts = append(opts, grpc.WithUnaryInterceptor(unaryAddMd), grpc.WithStreamInterceptor(streamingAddMd))
 	}
 	conn, err := grpc.Dial(serverAddr, opts...)
 	if err != nil {
