@@ -32,8 +32,7 @@ const (
 
 var (
 	// Compile time interface checks.
-	_ Type         = clusterResourceType{}
-	_ ResourceData = &ClusterResourceData{}
+	_ Type = clusterResourceType{}
 
 	// Singleton instantiation of the resource type implementation.
 	clusterType = clusterResourceType{
