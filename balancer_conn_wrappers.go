@@ -133,9 +133,11 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 // updateSubConnState is invoked by grpc to push a subConn state update to the
 // underlying balancer.
 func (ccb *ccBalancerWrapper) updateSubConnState(sc balancer.SubConn, s connectivity.State, err error) {
+	ccb.mu.Lock()
 	ccb.serializer.Schedule(func(_ context.Context) {
 		ccb.balancer.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: s, ConnectionError: err})
 	})
+	ccb.mu.Unlock()
 }
 
 func (ccb *ccBalancerWrapper) resolverError(err error) {
