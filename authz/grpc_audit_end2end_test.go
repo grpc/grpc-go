@@ -2,17 +2,23 @@ package authz
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"io"
 	"net"
+	"os"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz/audit"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/testdata"
+
+	_ "google.golang.org/grpc/authz/audit/stdout"
 )
 
 type testServer struct {
@@ -202,7 +208,27 @@ func TestAuditLogger(t *testing.T) {
 			}
 			audit.RegisterLoggerBuilder(lb)
 			i, _ := NewStatic(test.authzPolicy)
+
+			cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
+			if err != nil {
+				t.Fatalf("tls.LoadX509KeyPair(x509/server1_cert.pem, x509/server1_key.pem) failed: %v", err)
+			}
+			ca, err := os.ReadFile(testdata.Path("x509/client_ca_cert.pem"))
+			if err != nil {
+				t.Fatalf("os.ReadFile(x509/client_ca_cert.pem) failed: %v", err)
+			}
+			certPool := x509.NewCertPool()
+			if !certPool.AppendCertsFromPEM(ca) {
+				t.Fatal("failed to append certificates")
+			}
+			creds := credentials.NewTLS(&tls.Config{
+				ClientAuth:   tls.RequireAndVerifyClientCert,
+				Certificates: []tls.Certificate{cert},
+				ClientCAs:    certPool,
+			})
+
 			s := grpc.NewServer(
+				grpc.Creds(creds),
 				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
 				grpc.ChainStreamInterceptor(i.StreamInterceptor))
 			defer s.Stop()
@@ -212,7 +238,26 @@ func TestAuditLogger(t *testing.T) {
 				t.Fatalf("error listening: %v", err)
 			}
 			go s.Serve(lis)
-			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+			cert, err = tls.LoadX509KeyPair(testdata.Path("x509/client_with_spiffe_cert.pem"), testdata.Path("x509/client_with_spiffe_key.pem"))
+			if err != nil {
+				t.Fatalf("tls.LoadX509KeyPair(x509/client1_cert.pem, x509/client1_key.pem) failed: %v", err)
+			}
+			ca, err = os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
+			if err != nil {
+				t.Fatalf("os.ReadFile(x509/server_ca_cert.pem) failed: %v", err)
+			}
+			roots := x509.NewCertPool()
+			if !roots.AppendCertsFromPEM(ca) {
+				t.Fatal("failed to append certificates")
+			}
+			creds = credentials.NewTLS(&tls.Config{
+				Certificates: []tls.Certificate{cert},
+				RootCAs:      roots,
+				ServerName:   "x.test.example.com",
+			})
+
+			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(creds))
 			if err != nil {
 				t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
 			}
