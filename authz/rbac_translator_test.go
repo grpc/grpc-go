@@ -1024,8 +1024,13 @@ func TestTranslatePolicy(t *testing.T) {
 			if gotErr != nil && !strings.HasPrefix(gotErr.Error(), test.wantErr) {
 				t.Fatalf("unexpected error\nwant:%v\ngot:%v", test.wantErr, gotErr)
 			}
+			for _, k := range gotPolicies {
+				t.Logf("%+v", k.AuditLoggingOptions.LoggerConfigs)
+			}
+
+			t.Logf("%+v", gotPolicies)
 			if diff := cmp.Diff(gotPolicies, test.wantPolicies, protocmp.Transform()); diff != "" {
-				t.Fatalf("unexpected policy\ndiff (-want +got):\n%s", diff)
+				t.Fatalf("unexpected policy: name:%q \ndiff (-want +got):\n%s", name, diff)
 			}
 			if test.wantPolicyName != "" && gotPolicyName != test.wantPolicyName {
 				t.Fatalf("unexpected policy name\nwant:%v\ngot:%v", test.wantPolicyName, gotPolicyName)
