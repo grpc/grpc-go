@@ -146,15 +146,11 @@ func (s) TestBuildLoggerKnownTypes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("expected success. got error: %v", err)
 			} else {
-				switch test.name {
-				case "stdout logger":
-					_, ok := logger.(*stdout.Logger)
-					if !ok {
-						t.Fatalf("expected logger to be type stdout.Logger but was not")
-					}
+				_, ok := logger.(*stdout.Logger)
+				if !ok {
+					t.Fatalf("expected logger to be type stdout.Logger but was not")
 				}
 			}
-
 		})
 	}
 }
