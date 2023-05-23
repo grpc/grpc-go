@@ -119,7 +119,6 @@ func (b *pickfirstBalancer) UpdateSubConnState(subConn balancer.SubConn, state b
 		}
 		return
 	}
-	b.state = state.ConnectivityState
 	if state.ConnectivityState == connectivity.Shutdown {
 		b.subConn = nil
 		return
@@ -132,11 +131,21 @@ func (b *pickfirstBalancer) UpdateSubConnState(subConn balancer.SubConn, state b
 			Picker:            &picker{result: balancer.PickResult{SubConn: subConn}},
 		})
 	case connectivity.Connecting:
+		if b.state == connectivity.TransientFailure {
+			// We stay in TransientFailure until we are Ready. See A62.
+			return
+		}
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: state.ConnectivityState,
 			Picker:            &picker{err: balancer.ErrNoSubConnAvailable},
 		})
 	case connectivity.Idle:
+		if b.state == connectivity.TransientFailure {
+			// We stay in TransientFailure until we are Ready. Also kick the
+			// subConn out of Idle into Connecting. See A62.
+			b.subConn.Connect()
+			return
+		}
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: state.ConnectivityState,
 			Picker:            &idlePicker{subConn: subConn},
@@ -147,6 +156,7 @@ func (b *pickfirstBalancer) UpdateSubConnState(subConn balancer.SubConn, state b
 			Picker:            &picker{err: state.ConnectionError},
 		})
 	}
+	b.state = state.ConnectivityState
 }
 
 func (b *pickfirstBalancer) Close() {
