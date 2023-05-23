@@ -1,4 +1,4 @@
-package authz
+package authz_test
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/authz"
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpctest"
@@ -24,20 +25,8 @@ import (
 	_ "google.golang.org/grpc/authz/audit/stdout"
 )
 
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
+func TestAudit(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
-}
-
-type testServer struct {
-	testgrpc.UnimplementedTestServiceServer
-}
-
-func (s *testServer) UnaryCall(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	return &testpb.SimpleResponse{}, nil
 }
 
 type statAuditLogger struct {
@@ -237,7 +226,7 @@ func (s) TestAuditLogger(t *testing.T) {
 				EventContent:     make(map[string]string),
 			}
 			audit.RegisterLoggerBuilder(lb)
-			i, _ := NewStatic(test.authzPolicy)
+			i, _ := authz.NewStatic(test.authzPolicy)
 			cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 			if err != nil {
 				t.Fatalf("tls.LoadX509KeyPair(x509/server1_cert.pem, x509/server1_key.pem) failed: %v", err)
