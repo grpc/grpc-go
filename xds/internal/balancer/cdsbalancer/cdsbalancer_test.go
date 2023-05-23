@@ -444,9 +444,9 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 				LBPolicy: wrrLocalityLBConfigJSON,
 			},
 			wantCCS: edsCCS(serviceName, nil, false, wrrLocalityLBConfig, outlierdetection.LBConfig{
-				Interval:           10 * time.Second,
-				BaseEjectionTime:   30 * time.Second,
-				MaxEjectionTime:    300 * time.Second,
+				Interval:           internalserviceconfig.Duration(10 * time.Second),
+				BaseEjectionTime:   internalserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    internalserviceconfig.Duration(300 * time.Second),
 				MaxEjectionPercent: 10,
 				SuccessRateEjection: &outlierdetection.SuccessRateEjection{
 					StdevFactor:           1900,
@@ -918,9 +918,9 @@ func (s) TestOutlierDetectionToConfig(t *testing.T) {
 				FailurePercentageRequestVolume: 50,
 			},
 			odLBCfgWant: outlierdetection.LBConfig{
-				Interval:            10 * time.Second,
-				BaseEjectionTime:    30 * time.Second,
-				MaxEjectionTime:     300 * time.Second,
+				Interval:            internalserviceconfig.Duration(10 * time.Second),
+				BaseEjectionTime:    internalserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:     internalserviceconfig.Duration(300 * time.Second),
 				MaxEjectionPercent:  10,
 				SuccessRateEjection: nil,
 				FailurePercentageEjection: &outlierdetection.FailurePercentageEjection{
@@ -951,9 +951,9 @@ func (s) TestOutlierDetectionToConfig(t *testing.T) {
 				FailurePercentageRequestVolume: 50,
 			},
 			odLBCfgWant: outlierdetection.LBConfig{
-				Interval:           10 * time.Second,
-				BaseEjectionTime:   30 * time.Second,
-				MaxEjectionTime:    300 * time.Second,
+				Interval:           internalserviceconfig.Duration(10 * time.Second),
+				BaseEjectionTime:   internalserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    internalserviceconfig.Duration(300 * time.Second),
 				MaxEjectionPercent: 10,
 				SuccessRateEjection: &outlierdetection.SuccessRateEjection{
 					StdevFactor:           1900,
@@ -981,9 +981,9 @@ func (s) TestOutlierDetectionToConfig(t *testing.T) {
 				FailurePercentageRequestVolume: 50,
 			},
 			odLBCfgWant: outlierdetection.LBConfig{
-				Interval:           10 * time.Second,
-				BaseEjectionTime:   30 * time.Second,
-				MaxEjectionTime:    300 * time.Second,
+				Interval:           internalserviceconfig.Duration(10 * time.Second),
+				BaseEjectionTime:   internalserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    internalserviceconfig.Duration(300 * time.Second),
 				MaxEjectionPercent: 10,
 				SuccessRateEjection: &outlierdetection.SuccessRateEjection{
 					StdevFactor:           1900,

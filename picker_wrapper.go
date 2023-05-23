@@ -36,6 +36,7 @@ import (
 type pickerWrapper struct {
 	mu         sync.Mutex
 	done       bool
+	idle       bool
 	blockingCh chan struct{}
 	picker     balancer.Picker
 }
@@ -47,7 +48,11 @@ func newPickerWrapper() *pickerWrapper {
 // updatePicker is called by UpdateBalancerState. It unblocks all blocked pick.
 func (pw *pickerWrapper) updatePicker(p balancer.Picker) {
 	pw.mu.Lock()
-	if pw.done {
+	if pw.done || pw.idle {
+		// There is a small window where a picker update from the LB policy can
+		// race with the channel going to idle mode. If the picker is idle here,
+		// it is because the channel asked it to do so, and therefore it is sage
+		// to ignore the update from the LB policy.
 		pw.mu.Unlock()
 		return
 	}
@@ -185,6 +190,25 @@ func (pw *pickerWrapper) close() {
 	}
 	pw.done = true
 	close(pw.blockingCh)
+}
+
+func (pw *pickerWrapper) enterIdleMode() {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	if pw.done {
+		return
+	}
+	pw.idle = true
+}
+
+func (pw *pickerWrapper) exitIdleMode() {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	if pw.done {
+		return
+	}
+	pw.blockingCh = make(chan struct{})
+	pw.idle = false
 }
 
 // dropError is a wrapper error that indicates the LB policy wishes to drop the
