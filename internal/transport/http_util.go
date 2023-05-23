@@ -397,8 +397,8 @@ type framer struct {
 	fr     *http2.Framer
 }
 
-var poolMap map[int]*sync.Pool = make(map[int]*sync.Pool)
-var mutex sync.Mutex
+var writeBufferPoolMap map[int]*sync.Pool = make(map[int]*sync.Pool)
+var writeBufferMutex sync.Mutex
 
 func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderListSize uint32) *framer {
 	if writeBufferSize < 0 {
@@ -408,18 +408,19 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderList
 	if readBufferSize > 0 {
 		r = bufio.NewReaderSize(r, readBufferSize)
 	}
-	mutex.Lock()
-	pool, ok := poolMap[writeBufferSize*2]
+	writeBufferMutex.Lock()
+	size := writeBufferSize * 2
+	pool, ok := writeBufferPoolMap[size]
 	if !ok {
 		pool = &sync.Pool{
 			New: func() interface{} {
-				b := make([]byte, writeBufferSize*2)
+				b := make([]byte, size)
 				return &b
 			},
 		}
-		poolMap[writeBufferSize*2] = pool
+		writeBufferPoolMap[size] = pool
 	}
-	mutex.Unlock()
+	writeBufferMutex.Unlock()
 	w := newBufWriter(conn, writeBufferSize, pool)
 	f := &framer{
 		writer: w,
