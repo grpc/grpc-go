@@ -8,9 +8,11 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/credentials"
@@ -30,24 +32,29 @@ func (s *testServer) UnaryCall(ctx context.Context, req *testpb.SimpleRequest) (
 }
 
 type statAuditLogger struct {
-	Stat         map[bool]int
-	stdoutLogger audit.Logger
-	SpiffeIds    []string
+	AuthzDescisionStat map[bool]int      //Map to hold the counts of authorization decisions
+	EventContent       map[string]string //Map to hold event fields in key:value fashion
+	SpiffeIds          []string          //Slice to hold collected SPIFFE IDs
 }
 
 func (s *statAuditLogger) Log(event *audit.Event) {
-	s.stdoutLogger.Log(event)
 	if event.Authorized {
-		s.Stat[true]++
+		s.AuthzDescisionStat[true]++
 	} else {
-		s.Stat[false]++
+		s.AuthzDescisionStat[false]++
 	}
 	s.SpiffeIds = append(s.SpiffeIds, event.Principal)
+	s.EventContent["rpc_method"] = event.FullMethodName
+	s.EventContent["principal"] = event.Principal
+	s.EventContent["policy_name"] = event.PolicyName
+	s.EventContent["matched_rule"] = event.MatchedRule
+	s.EventContent["authorized"] = strconv.FormatBool(event.Authorized)
 }
 
 type loggerBuilder struct {
-	Stat      map[bool]int
-	SpiffeIds []string
+	AuthzDescisionStat map[bool]int
+	EventContent       map[string]string
+	SpiffeIds          []string
 }
 
 func (loggerBuilder) Name() string {
@@ -55,8 +62,8 @@ func (loggerBuilder) Name() string {
 }
 func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 	return &statAuditLogger{
-		Stat:         lb.Stat,
-		stdoutLogger: audit.GetLoggerBuilder("stdout_logger").Build(nil),
+		AuthzDescisionStat: lb.AuthzDescisionStat,
+		EventContent:       lb.EventContent,
 	}
 }
 
@@ -136,6 +143,10 @@ func TestAuditLogger(t *testing.T) {
 							"name": "stat_logger",
 							"config": {},
 							"is_optional": false
+						},
+						{
+							"name": "stdout_logger",
+							"is_optional": false
 						}
 					]
 				}
@@ -209,7 +220,8 @@ func TestAuditLogger(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Setup test statAuditLogger, gRPC test server with authzPolicy, unary and stream interceptors
 			lb := &loggerBuilder{
-				Stat: make(map[bool]int),
+				AuthzDescisionStat: make(map[bool]int),
+				EventContent:       make(map[string]string),
 			}
 			audit.RegisterLoggerBuilder(lb)
 			i, _ := NewStatic(test.authzPolicy)
@@ -287,11 +299,11 @@ func TestAuditLogger(t *testing.T) {
 			stream.CloseAndRecv()
 
 			//Compare expected number of allows/denies with content of internal map of statAuditLogger
-			if lb.Stat[true] != test.wantAllows {
-				t.Errorf("Allow case failed, want %v got %v", test.wantAllows, lb.Stat[true])
+			if lb.AuthzDescisionStat[true] != test.wantAllows {
+				t.Errorf("Allow case failed, want %v got %v", test.wantAllows, lb.AuthzDescisionStat[true])
 			}
-			if lb.Stat[false] != test.wantDenies {
-				t.Errorf("Deny case failed, want %v got %v", test.wantDenies, lb.Stat[false])
+			if lb.AuthzDescisionStat[false] != test.wantDenies {
+				t.Errorf("Deny case failed, want %v got %v", test.wantDenies, lb.AuthzDescisionStat[false])
 			}
 			//Compare recorded SPIFFE Ids with the value from cert
 			for _, id := range lb.SpiffeIds {
@@ -299,6 +311,25 @@ func TestAuditLogger(t *testing.T) {
 					t.Errorf("Unexpected SPIFFE Id, want %v got %v", spiffeId, id)
 				}
 			}
+			//Special case - compare event fields with expected values from authz policy
+			if name == `Allow All Deny Streaming - Audit All` {
+				if diff := cmp.Diff(lb.EventContent, generateEventAsMap()); diff != "" {
+					t.Fatalf("Unexpected message\ndiff (-got +want):\n%s", diff)
+				}
+			}
 		})
+	}
+}
+
+// generateEvent produces an map contaning audit.Event fields.
+// It's used to compare captured audit.Event with the matched rule during
+// `Allow All Deny Streaming - Audit All` scenario (authz_deny_all rule)
+func generateEventAsMap() map[string]string {
+	return map[string]string{
+		"rpc_method":   "/grpc.testing.TestService/StreamingInputCall",
+		"principal":    "spiffe://foo.bar.com/client/workload/1",
+		"policy_name":  "authz",
+		"matched_rule": "authz_deny_all",
+		"authorized":   "false",
 	}
 }
