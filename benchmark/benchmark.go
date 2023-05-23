@@ -152,6 +152,9 @@ func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService
 
 	go func() {
 		for {
+			if maxSleep > 0 {
+				time.Sleep(time.Duration(rand.Intn(maxSleep)))
+			}
 			err := stream.Send(response)
 			switch status.Code(err) {
 			case codes.Unavailable:
@@ -159,9 +162,6 @@ func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService
 			case codes.OK:
 			default:
 				log.Fatalf("server send error: %v", err)
-			}
-			if maxSleep > 0 {
-				time.Sleep(time.Duration(rand.Intn(maxSleep)))
 			}
 		}
 	}()

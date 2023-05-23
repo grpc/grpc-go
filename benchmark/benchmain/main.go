@@ -242,15 +242,15 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 		go func(pos int) {
 			defer wg.Done()
 			for {
+				if maxSleep > 0 {
+					time.Sleep(time.Duration(math_rand.Intn(maxSleep)))
+				}
 				t := time.Now()
 				if t.After(bmEnd) {
 					return
 				}
 				sender(pos)
 				atomic.AddUint64(&req, 1)
-				if maxSleep > 0 {
-					time.Sleep(time.Duration(math_rand.Intn(maxSleep)))
-				}
 			}
 		}(i)
 		go func(pos int) {
@@ -512,6 +512,9 @@ func runBenchmark(caller rpcCallFunc, start startFunc, stop stopFunc, bf stats.F
 		go func(pos int) {
 			defer wg.Done()
 			for {
+				if maxSleep > 0 {
+					time.Sleep(time.Duration(math_rand.Intn(maxSleep)))
+				}
 				t := time.Now()
 				if t.After(bmEnd) {
 					return
@@ -521,9 +524,6 @@ func runBenchmark(caller rpcCallFunc, start startFunc, stop stopFunc, bf stats.F
 				elapse := time.Since(start)
 				atomic.AddUint64(&count, 1)
 				s.AddDuration(elapse)
-				if maxSleep > 0 {
-					time.Sleep(time.Duration(math_rand.Intn(maxSleep)))
-				}
 			}
 		}(i)
 	}
