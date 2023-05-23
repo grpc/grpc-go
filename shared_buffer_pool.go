@@ -122,7 +122,9 @@ func (p *bufferPool) Get(size int) []byte {
 	bs := p.Pool.Get().(*[]byte)
 
 	if cap(*bs) < size {
-		*bs = make([]byte, size)
+		p.Pool.Put(bs)
+
+		return make([]byte, size)
 	}
 
 	return (*bs)[:size]
