@@ -88,10 +88,7 @@ func getCustomConfig(config *anypb.Any) (json.RawMessage, string, error) {
 
 func convertStdoutConfig(config *v3auditloggersstreampb.StdoutAuditLog) (json.RawMessage, string, error) {
 	json, err := protojson.Marshal(config)
-	if err != nil {
-		return nil, "", err
-	}
-	return json, stdout.Name, nil
+	return json, stdout.Name, err
 }
 
 func convertCustomConfig(typeURL string, s *structpb.Struct) (json.RawMessage, string, error) {
