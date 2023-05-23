@@ -68,10 +68,8 @@ func (pw *pickerWrapper) updatePicker(p balancer.Picker) {
 //   - wraps the done function in the passed in result to increment the calls
 //     failed or calls succeeded channelz counter before invoking the actual
 //     done function.
-func doneChannelzWrapper(acw *acBalancerWrapper, result *balancer.PickResult) {
-	acw.mu.Lock()
-	ac := acw.ac
-	acw.mu.Unlock()
+func doneChannelzWrapper(acbw *acBalancerWrapper, result *balancer.PickResult) {
+	ac := acbw.ac
 	ac.incrCallsStarted()
 	done := result.Done
 	result.Done = func(b balancer.DoneInfo) {
@@ -157,14 +155,14 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 			return nil, balancer.PickResult{}, status.Error(codes.Unavailable, err.Error())
 		}
 
-		acw, ok := pickResult.SubConn.(*acBalancerWrapper)
+		acbw, ok := pickResult.SubConn.(*acBalancerWrapper)
 		if !ok {
 			logger.Errorf("subconn returned from pick is type %T, not *acBalancerWrapper", pickResult.SubConn)
 			continue
 		}
-		if t := acw.getAddrConn().getReadyTransport(); t != nil {
+		if t := acbw.ac.getReadyTransport(); t != nil {
 			if channelz.IsOn() {
-				doneChannelzWrapper(acw, &pickResult)
+				doneChannelzWrapper(acbw, &pickResult)
 				return t, pickResult, nil
 			}
 			return t, pickResult, nil
