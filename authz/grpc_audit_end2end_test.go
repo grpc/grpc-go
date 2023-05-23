@@ -41,17 +41,13 @@ func (s *testServer) UnaryCall(ctx context.Context, req *testpb.SimpleRequest) (
 }
 
 type statAuditLogger struct {
-	AuthzDescisionStat map[bool]int      //Map to hold the counts of authorization decisions
-	EventContent       map[string]string //Map to hold event fields in key:value fashion
-	SpiffeIds          []string          //Slice to hold collected SPIFFE IDs
+	AuthzDescisionStat map[bool]int      // Map to hold the counts of authorization decisions
+	EventContent       map[string]string // Map to hold event fields in key:value fashion
+	SpiffeIds          []string          // Slice to hold collected SPIFFE IDs
 }
 
 func (s *statAuditLogger) Log(event *audit.Event) {
-	if event.Authorized {
-		s.AuthzDescisionStat[true]++
-	} else {
-		s.AuthzDescisionStat[false]++
-	}
+	s.AuthzDescisionStat[event.Authorized]++
 	s.SpiffeIds = append(s.SpiffeIds, event.Principal)
 	s.EventContent["rpc_method"] = event.FullMethodName
 	s.EventContent["principal"] = event.Principal
@@ -61,9 +57,9 @@ func (s *statAuditLogger) Log(event *audit.Event) {
 }
 
 type loggerBuilder struct {
-	AuthzDescisionStat map[bool]int
-	EventContent       map[string]string
-	SpiffeIds          []string
+	AuthDecisionStat map[bool]int
+	EventContent     map[string]string
+	SpiffeIds        []string
 }
 
 func (loggerBuilder) Name() string {
@@ -71,7 +67,7 @@ func (loggerBuilder) Name() string {
 }
 func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 	return &statAuditLogger{
-		AuthzDescisionStat: lb.AuthzDescisionStat,
+		AuthzDescisionStat: lb.AuthDecisionStat,
 		EventContent:       lb.EventContent,
 	}
 }
@@ -84,9 +80,10 @@ const spiffeId = "spiffe://foo.bar.com/client/workload/1"
 
 func (s) TestAuditLogger(t *testing.T) {
 	tests := map[string]struct {
-		authzPolicy string
-		wantAllows  int
-		wantDenies  int
+		authzPolicy  string
+		wantAllows   int
+		wantDenies   int
+		eventContent map[string]string
 	}{
 		"No audit": {
 			authzPolicy: `{
@@ -162,6 +159,13 @@ func (s) TestAuditLogger(t *testing.T) {
 			}`,
 			wantAllows: 2,
 			wantDenies: 1,
+			eventContent: map[string]string{
+				"rpc_method":   "/grpc.testing.TestService/StreamingInputCall",
+				"principal":    "spiffe://foo.bar.com/client/workload/1",
+				"policy_name":  "authz",
+				"matched_rule": "authz_deny_all",
+				"authorized":   "false",
+			},
 		},
 		"Allow Unary - Audit Allow": {
 			authzPolicy: `{
@@ -227,10 +231,10 @@ func (s) TestAuditLogger(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			// Setup test statAuditLogger, gRPC test server with authzPolicy, unary and stream interceptors
+			// Setup test statAuditLogger, gRPC test server with authzPolicy, unary and stream interceptors.
 			lb := &loggerBuilder{
-				AuthzDescisionStat: make(map[bool]int),
-				EventContent:       make(map[string]string),
+				AuthDecisionStat: make(map[bool]int),
+				EventContent:     make(map[string]string),
 			}
 			audit.RegisterLoggerBuilder(lb)
 			i, _ := NewStatic(test.authzPolicy)
@@ -263,7 +267,7 @@ func (s) TestAuditLogger(t *testing.T) {
 			}
 			go s.Serve(lis)
 
-			// Setup gRPC test client with certificates containing a SPIFFE Id
+			// Setup gRPC test client with certificates containing a SPIFFE Id.
 			cert, err = tls.LoadX509KeyPair(testdata.Path("x509/client_with_spiffe_cert.pem"), testdata.Path("x509/client_with_spiffe_key.pem"))
 			if err != nil {
 				t.Fatalf("tls.LoadX509KeyPair(x509/client1_cert.pem, x509/client1_key.pem) failed: %v", err)
@@ -290,7 +294,7 @@ func (s) TestAuditLogger(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			//Make 2 unary calls and 1 streaming call
+			// Make 2 unary calls and 1 streaming call.
 			client.UnaryCall(ctx, &testpb.SimpleRequest{})
 			client.UnaryCall(ctx, &testpb.SimpleRequest{})
 			stream, err := client.StreamingInputCall(ctx)
@@ -307,38 +311,25 @@ func (s) TestAuditLogger(t *testing.T) {
 			}
 			stream.CloseAndRecv()
 
-			//Compare expected number of allows/denies with content of internal map of statAuditLogger
-			if lb.AuthzDescisionStat[true] != test.wantAllows {
-				t.Errorf("Allow case failed, want %v got %v", test.wantAllows, lb.AuthzDescisionStat[true])
+			// Compare expected number of allows/denies with content of internal map of statAuditLogger.
+			if lb.AuthDecisionStat[true] != test.wantAllows {
+				t.Errorf("Allow case failed, want %v got %v", test.wantAllows, lb.AuthDecisionStat[true])
 			}
-			if lb.AuthzDescisionStat[false] != test.wantDenies {
-				t.Errorf("Deny case failed, want %v got %v", test.wantDenies, lb.AuthzDescisionStat[false])
+			if lb.AuthDecisionStat[false] != test.wantDenies {
+				t.Errorf("Deny case failed, want %v got %v", test.wantDenies, lb.AuthDecisionStat[false])
 			}
-			//Compare recorded SPIFFE Ids with the value from cert
+			// Compare recorded SPIFFE Ids with the value from cert.
 			for _, id := range lb.SpiffeIds {
 				if id != spiffeId {
 					t.Errorf("Unexpected SPIFFE Id, want %v got %v", spiffeId, id)
 				}
 			}
-			//Special case - compare event fields with expected values from authz policy
-			if name == `Allow All Deny Streaming - Audit All` {
-				if diff := cmp.Diff(lb.EventContent, generateEventAsMap()); diff != "" {
+			// Compare event fields with expected values from authz policy.
+			if test.eventContent != nil {
+				if diff := cmp.Diff(lb.EventContent, test.eventContent); diff != "" {
 					t.Fatalf("Unexpected message\ndiff (-got +want):\n%s", diff)
 				}
 			}
 		})
-	}
-}
-
-// generateEvent produces an map contaning audit.Event fields.
-// It's used to compare captured audit.Event with the matched rule during
-// `Allow All Deny Streaming - Audit All` scenario (authz_deny_all rule)
-func generateEventAsMap() map[string]string {
-	return map[string]string{
-		"rpc_method":   "/grpc.testing.TestService/StreamingInputCall",
-		"principal":    "spiffe://foo.bar.com/client/workload/1",
-		"policy_name":  "authz",
-		"matched_rule": "authz_deny_all",
-		"authorized":   "false",
 	}
 }
