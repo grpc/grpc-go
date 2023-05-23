@@ -225,9 +225,9 @@ func (b *outlierDetectionBalancer) onIntervalConfig() {
 		for _, addrInfo := range b.addrs {
 			addrInfo.callCounter.clear()
 		}
-		interval = b.cfg.Interval
+		interval = time.Duration(b.cfg.Interval)
 	} else {
-		interval = b.cfg.Interval - now().Sub(b.timerStartTime)
+		interval = time.Duration(b.cfg.Interval) - now().Sub(b.timerStartTime)
 		if interval < 0 {
 			interval = 0
 		}
@@ -589,14 +589,14 @@ func (b *outlierDetectionBalancer) Target() string {
 	return b.cc.Target()
 }
 
-func max(x, y int64) int64 {
+func max(x, y time.Duration) time.Duration {
 	if x < y {
 		return y
 	}
 	return x
 }
 
-func min(x, y int64) int64 {
+func min(x, y time.Duration) time.Duration {
 	if x < y {
 		return x
 	}
@@ -754,10 +754,10 @@ func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 			// to uneject the address below.
 			continue
 		}
-		et := b.cfg.BaseEjectionTime.Nanoseconds() * addrInfo.ejectionTimeMultiplier
-		met := max(b.cfg.BaseEjectionTime.Nanoseconds(), b.cfg.MaxEjectionTime.Nanoseconds())
-		curTimeAfterEt := now().After(addrInfo.latestEjectionTimestamp.Add(time.Duration(min(et, met))))
-		if curTimeAfterEt {
+		et := time.Duration(b.cfg.BaseEjectionTime) * time.Duration(addrInfo.ejectionTimeMultiplier)
+		met := max(time.Duration(b.cfg.BaseEjectionTime), time.Duration(b.cfg.MaxEjectionTime))
+		uet := addrInfo.latestEjectionTimestamp.Add(min(et, met))
+		if now().After(uet) {
 			b.unejectAddress(addrInfo)
 		}
 	}
@@ -767,7 +767,7 @@ func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 	if b.intervalTimer != nil {
 		b.intervalTimer.Stop()
 	}
-	b.intervalTimer = afterFunc(b.cfg.Interval, b.intervalTimerAlgorithm)
+	b.intervalTimer = afterFunc(time.Duration(b.cfg.Interval), b.intervalTimerAlgorithm)
 }
 
 // addrsWithAtLeastRequestVolume returns a slice of address information of all

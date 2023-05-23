@@ -62,9 +62,9 @@ type rule struct {
 }
 
 type auditLogger struct {
-	Name       string          `json:"name"`
-	Config     structpb.Struct `json:"config"`
-	IsOptional bool            `json:"is_optional"`
+	Name       string           `json:"name"`
+	Config     *structpb.Struct `json:"config"`
+	IsOptional bool             `json:"is_optional"`
 }
 
 type auditLoggingOptions struct {
@@ -306,9 +306,12 @@ func (options *auditLoggingOptions) toProtos() (allow *v3rbacpb.RBAC_AuditLoggin
 		if config.Name == "" {
 			return nil, nil, fmt.Errorf("missing required field: name in audit_logging_options.audit_loggers[%v]", i)
 		}
+		if config.Config == nil {
+			config.Config = &structpb.Struct{}
+		}
 		typedStruct := &v1xdsudpatypepb.TypedStruct{
 			TypeUrl: typeURLPrefix + config.Name,
-			Value:   &config.Config,
+			Value:   config.Config,
 		}
 		customConfig, err := anypb.New(typedStruct)
 		if err != nil {

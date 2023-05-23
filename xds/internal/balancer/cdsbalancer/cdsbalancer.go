@@ -308,9 +308,9 @@ func outlierDetectionToConfig(od *xdsresource.OutlierDetection) outlierdetection
 	}
 
 	return outlierdetection.LBConfig{
-		Interval:                  od.Interval,
-		BaseEjectionTime:          od.BaseEjectionTime,
-		MaxEjectionTime:           od.MaxEjectionTime,
+		Interval:                  internalserviceconfig.Duration(od.Interval),
+		BaseEjectionTime:          internalserviceconfig.Duration(od.BaseEjectionTime),
+		MaxEjectionTime:           internalserviceconfig.Duration(od.MaxEjectionTime),
 		MaxEjectionPercent:        od.MaxEjectionPercent,
 		SuccessRateEjection:       sre,
 		FailurePercentageEjection: fpe,
