@@ -16,12 +16,21 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal/grpctest"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/testdata"
 
 	_ "google.golang.org/grpc/authz/audit/stdout"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 type testServer struct {
 	testgrpc.UnimplementedTestServiceServer
@@ -73,7 +82,7 @@ func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerCon
 
 const spiffeId = "spiffe://foo.bar.com/client/workload/1"
 
-func TestAuditLogger(t *testing.T) {
+func (s) TestAuditLogger(t *testing.T) {
 	tests := map[string]struct {
 		authzPolicy string
 		wantAllows  int
