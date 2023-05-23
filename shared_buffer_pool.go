@@ -121,12 +121,8 @@ type bufferPool struct {
 func (p *bufferPool) Get(size int) []byte {
 	bs := p.Pool.Get().(*[]byte)
 
-	// If default size is 0. It means this pool is fallback pool.
-	// Therefore, we need to make a new one if the requested size is larger than the buffer.
-	if p.defaultSize == 0 {
-		if cap(*bs) < size {
-			*bs = make([]byte, size)
-		}
+	if cap(*bs) < size {
+		*bs = make([]byte, size)
 	}
 
 	return (*bs)[:size]
