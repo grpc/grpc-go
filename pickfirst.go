@@ -112,7 +112,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		b.cfg = cfg
 	}
 
-	if b.cfg.ShuffleAddressList {
+	if b.cfg != nil && b.cfg.ShuffleAddressList {
 		grpcrand.Shuffle(len(addrs), func(i, j int) { addrs[i], addrs[j] = addrs[j], addrs[i] })
 	}
 	if b.subConn != nil {
