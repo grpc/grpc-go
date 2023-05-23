@@ -32,9 +32,11 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-const udpaTypedStuctType = "type.googleapis.com/udpa.type.v1.TypedStruct"
-const xdsTypedStuctType = "type.googleapis.com/xds.type.v3.TypedStruct"
-const stdoutType = "type.googleapis.com/envoy.extensions.rbac.audit_loggers.stream.v3.StdoutAuditLog"
+const (
+	udpaTypedStuctType = "type.googleapis.com/udpa.type.v1.TypedStruct"
+	xdsTypedStuctType  = "type.googleapis.com/xds.type.v3.TypedStruct"
+	stdoutType         = "type.googleapis.com/envoy.extensions.rbac.audit_loggers.stream.v3.StdoutAuditLog"
+)
 
 func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig) (audit.Logger, error) {
 	if loggerConfig.GetAuditLogger().GetTypedConfig() == nil {
