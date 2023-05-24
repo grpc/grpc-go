@@ -1339,9 +1339,9 @@ func (fe *fakeExporter) ExportSpan(sd *trace.SpanData) {
 }
 
 // waitForServerSpan waits until a server span appears somewhere in the span
-// list in an exporter. Returns an error if no server span found within 5
-// seconds.
-func waitForServerSpan(fe *fakeExporter) error {
+// list in an exporter. Returns an error if no server span found within the
+// passed context's timeout.
+func waitForServerSpan(fe *fakeExporter, ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
@@ -1400,6 +1400,25 @@ func (s) TestSpan(t *testing.T) {
 	}
 	wantSI := []spanInformation{
 		{
+			sc: trace.SpanContext{
+				TraceOptions: 1,
+			},
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			messageEvents: []trace.MessageEvent{
+				{
+					EventType:            trace.MessageEventTypeSent,
+					MessageID:            1, // First msg send so 1 (see comment above)
+					UncompressedByteSize: 2,
+					CompressedByteSize:   2,
+				},
+				{
+					EventType: trace.MessageEventTypeRecv,
+					MessageID: 1, // First msg recv so 1 (see comment above)
+				},
+			},
+			hasRemoteParent: false,
+		},
+		{
 			// Sampling rate of 100 percent, so this should populate every span
 			// with the information that this span is being sampled. Here and
 			// every other span emitted in this test.
@@ -1440,42 +1459,20 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
-			spanKind: trace.SpanKindClient,
-			name:     "Attempt.grpc.testing.TestService.UnaryCall",
-			messageEvents: []trace.MessageEvent{
-				{
-					EventType:            trace.MessageEventTypeSent,
-					MessageID:            1, // First msg send so 1 (see comment above)
-					UncompressedByteSize: 2,
-					CompressedByteSize:   2,
-				},
-				{
-					EventType: trace.MessageEventTypeRecv,
-					MessageID: 1, // First msg recv so 1 (see comment above)
-				},
-			},
-			hasRemoteParent: false,
-		},
-		{
-			sc: trace.SpanContext{
-				TraceOptions: 1,
-			},
 			spanKind:        trace.SpanKindClient,
 			name:            "grpc.testing.TestService.UnaryCall",
 			hasRemoteParent: false,
 			childSpanCount:  1,
 		},
 	}
-	if err := waitForServerSpan(fe); err != nil {
+	if err := waitForServerSpan(fe, ctx); err != nil {
 		t.Fatal(err)
 	}
 	var spanInfoSort = func(i, j int) bool {
-		// Make the server spans come first.
-		if fe.seenSpans[i].spanKind != fe.seenSpans[j].spanKind {
-			return fe.seenSpans[i].spanKind < fe.seenSpans[j].spanKind
-		}
-		// Within client Spans, make attempt spans come first.
-		return fe.seenSpans[i].name < fe.seenSpans[j].name
+		// This will order into attempt span (which has an unset span kind to
+		// not prepend Sent. to span names in backends), then call span, then
+		// server span.
+		return fe.seenSpans[i].spanKind < fe.seenSpans[j].spanKind
 	}
 	fe.mu.Lock()
 	// Sort the underlying seen Spans for cmp.Diff assertions and ID
@@ -1489,11 +1486,11 @@ func (s) TestSpan(t *testing.T) {
 		fe.mu.Unlock()
 		t.Fatalf("Error in runtime data assertions: %v", err)
 	}
-	if !cmp.Equal(fe.seenSpans[0].parentSpanID, fe.seenSpans[1].sc.SpanID) {
-		t.Fatalf("server span should point to the client attempt span as its parent. parentSpanID: %v, clientAttemptSpanID: %v", fe.seenSpans[0].parentSpanID, fe.seenSpans[1].sc.SpanID)
+	if !cmp.Equal(fe.seenSpans[1].parentSpanID, fe.seenSpans[0].sc.SpanID) {
+		t.Fatalf("server span should point to the client attempt span as its parent. parentSpanID: %v, clientAttemptSpanID: %v", fe.seenSpans[1].parentSpanID, fe.seenSpans[0].sc.SpanID)
 	}
-	if !cmp.Equal(fe.seenSpans[1].parentSpanID, fe.seenSpans[2].sc.SpanID) {
-		t.Fatalf("client attempt span should point to the client call span as its parent. parentSpanID: %v, clientCallSpanID: %v", fe.seenSpans[1].parentSpanID, fe.seenSpans[2].sc.SpanID)
+	if !cmp.Equal(fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID) {
+		t.Fatalf("client attempt span should point to the client call span as its parent. parentSpanID: %v, clientCallSpanID: %v", fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID)
 	}
 
 	fe.seenSpans = nil
@@ -1522,6 +1519,23 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
+			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
+			messageEvents: []trace.MessageEvent{
+				{
+					EventType: trace.MessageEventTypeSent,
+					MessageID: 1, // First msg send so 1
+				},
+				{
+					EventType: trace.MessageEventTypeSent,
+					MessageID: 2, // Second msg send so 2
+				},
+			},
+			hasRemoteParent: false,
+		},
+		{
+			sc: trace.SpanContext{
+				TraceOptions: 1,
+			},
 			spanKind: trace.SpanKindServer,
 			name:     "grpc.testing.TestService.FullDuplexCall",
 			links: []trace.Link{
@@ -1545,31 +1559,13 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
-			spanKind: trace.SpanKindClient,
-			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
-			messageEvents: []trace.MessageEvent{
-				{
-					EventType: trace.MessageEventTypeSent,
-					MessageID: 1, // First msg send so 1
-				},
-				{
-					EventType: trace.MessageEventTypeSent,
-					MessageID: 2, // Second msg send so 2
-				},
-			},
-			hasRemoteParent: false,
-		},
-		{
-			sc: trace.SpanContext{
-				TraceOptions: 1,
-			},
 			spanKind:        trace.SpanKindClient,
 			name:            "grpc.testing.TestService.FullDuplexCall",
 			hasRemoteParent: false,
 			childSpanCount:  1,
 		},
 	}
-	if err := waitForServerSpan(fe); err != nil {
+	if err := waitForServerSpan(fe, ctx); err != nil {
 		t.Fatal(err)
 	}
 	fe.mu.Lock()
@@ -1583,10 +1579,10 @@ func (s) TestSpan(t *testing.T) {
 	if err := validateTraceAndSpanIDs(fe.seenSpans); err != nil {
 		t.Fatalf("Error in runtime data assertions: %v", err)
 	}
-	if !cmp.Equal(fe.seenSpans[0].parentSpanID, fe.seenSpans[1].sc.SpanID) {
-		t.Fatalf("server span should point to the client attempt span as its parent. parentSpanID: %v, clientAttemptSpanID: %v", fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID)
+	if !cmp.Equal(fe.seenSpans[1].parentSpanID, fe.seenSpans[0].sc.SpanID) {
+		t.Fatalf("server span should point to the client attempt span as its parent. parentSpanID: %v, clientAttemptSpanID: %v", fe.seenSpans[1].parentSpanID, fe.seenSpans[0].sc.SpanID)
 	}
-	if !cmp.Equal(fe.seenSpans[1].parentSpanID, fe.seenSpans[2].sc.SpanID) {
-		t.Fatalf("client attempt span should point to the client call span as its parent. parentSpanID: %v, clientCallSpanID: %v", fe.seenSpans[2].parentSpanID, fe.seenSpans[1].sc.SpanID)
+	if !cmp.Equal(fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID) {
+		t.Fatalf("client attempt span should point to the client call span as its parent. parentSpanID: %v, clientCallSpanID: %v", fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID)
 	}
 }
