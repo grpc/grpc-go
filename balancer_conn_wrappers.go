@@ -127,7 +127,11 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 	// We get here only if the above call to Schedule succeeds, in which case it
 	// is guaranteed that the scheduled function will run. Therefore it is safe
 	// to block on this channel.
-	return <-errCh
+	err := <-errCh
+	if logger.V(2) && err != nil {
+		logger.Infof("error from balancer.UpdateClientConnState: %v", err)
+	}
+	return err
 }
 
 // updateSubConnState is invoked by grpc to push a subConn state update to the
