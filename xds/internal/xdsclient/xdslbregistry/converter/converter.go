@@ -97,6 +97,9 @@ type pfConfig struct {
 }
 
 func convertPickFirstProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
+	if !envconfig.PickFirstLBConfig {
+		return nil, nil
+	}
 	pfProto := &v3pickfirstpb.PickFirst{}
 	if err := proto.Unmarshal(rawProto, pfProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)

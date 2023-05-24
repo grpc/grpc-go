@@ -86,6 +86,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 		policy     *v3clusterpb.LoadBalancingPolicy
 		wantConfig string // JSON config
 		rhDisabled bool
+		pfDisabled bool
 	}{
 		{
 			name: "ring_hash",
@@ -178,6 +179,27 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 			rhDisabled: true,
 		},
 		{
+			name: "pick_first_disabled_pf_rr_use_first_supported",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3pickfirstpb.PickFirst{
+								ShuffleAddressList: true,
+							}),
+						},
+					},
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3roundrobinpb.RoundRobin{}),
+						},
+					},
+				},
+			},
+			wantConfig: `[{"round_robin": {}}]`,
+			pfDisabled: true,
+		},
+		{
 			name: "custom_lb_type_v3_struct",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
@@ -268,11 +290,12 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if test.rhDisabled {
-				oldRingHashSupport := envconfig.XDSRingHash
+				defer func(old bool) { envconfig.XDSRingHash = old }(envconfig.XDSRingHash)
 				envconfig.XDSRingHash = false
-				defer func() {
-					envconfig.XDSRingHash = oldRingHashSupport
-				}()
+			}
+			if !test.pfDisabled {
+				defer func(old bool) { envconfig.PickFirstLBConfig = old }(envconfig.PickFirstLBConfig)
+				envconfig.PickFirstLBConfig = true
 			}
 			rawJSON, err := xdslbregistry.ConvertToServiceConfig(test.policy, 0)
 			if err != nil {
