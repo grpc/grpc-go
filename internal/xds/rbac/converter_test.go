@@ -105,10 +105,9 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 			logger, err := buildLogger(test.loggerConfig)
 			if err != nil && !strings.HasPrefix(err.Error(), test.expectedError) {
 				t.Fatalf("expected error: %v. got error: %v", test.expectedError, err)
-			} else {
-				if logger != test.expectedLogger {
-					t.Fatalf("expected logger: %v. got logger: %v", test.expectedLogger, logger)
-				}
+			}
+			if logger != test.expectedLogger {
+				t.Fatalf("expected logger: %v. got logger: %v", test.expectedLogger, logger)
 			}
 
 		})
