@@ -157,7 +157,7 @@ func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService
 			}
 			err := stream.Send(response)
 			switch status.Code(err) {
-			case codes.Unavailable:
+			case codes.Unavailable, codes.Canceled:
 				return
 			case codes.OK:
 			default:
