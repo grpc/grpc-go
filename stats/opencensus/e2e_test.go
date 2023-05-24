@@ -1403,7 +1403,7 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
-			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			name: "Attempt.grpc.testing.TestService.UnaryCall",
 			messageEvents: []trace.MessageEvent{
 				{
 					EventType:            trace.MessageEventTypeSent,
@@ -1519,7 +1519,7 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
-			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
+			name: "Attempt.grpc.testing.TestService.FullDuplexCall",
 			messageEvents: []trace.MessageEvent{
 				{
 					EventType: trace.MessageEventTypeSent,
