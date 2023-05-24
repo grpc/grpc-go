@@ -49,13 +49,13 @@ type event struct {
 	Timestamp      string `json:"timestamp"` // Time when the audit event is logged via Log method
 }
 
-// Logger implements the audit.Logger interface by logging to standard output.
-type Logger struct {
+// logger implements the audit.logger interface by logging to standard output.
+type logger struct {
 	goLogger *log.Logger
 }
 
 // Log marshals the audit.Event to json and prints it to standard output.
-func (l *Logger) Log(event *audit.Event) {
+func (l *logger) Log(event *audit.Event) {
 	jsonContainer := map[string]interface{}{
 		"grpc_audit_log": convertEvent(event),
 	}
@@ -85,7 +85,7 @@ func (loggerBuilder) Name() string {
 // Passed in configuration is ignored as the stdout logger does not
 // expect any configuration to be provided.
 func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
-	return &Logger{
+	return &logger{
 		goLogger: lb.goLogger,
 	}
 }
