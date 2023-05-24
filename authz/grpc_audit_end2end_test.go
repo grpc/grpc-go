@@ -1,3 +1,21 @@
+/*
+ *
+ * Copyright 2021 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package authz_test
 
 import (
@@ -37,7 +55,6 @@ type statAuditLogger struct {
 
 func (s *statAuditLogger) Log(event *audit.Event) {
 	s.AuthzDescisionStat[event.Authorized]++
-	s.SpiffeIds = append(s.SpiffeIds, event.Principal)
 	s.EventContent["rpc_method"] = event.FullMethodName
 	s.EventContent["principal"] = event.Principal
 	s.EventContent["policy_name"] = event.PolicyName
@@ -48,7 +65,6 @@ func (s *statAuditLogger) Log(event *audit.Event) {
 type loggerBuilder struct {
 	AuthDecisionStat map[bool]int
 	EventContent     map[string]string
-	SpiffeIds        []string
 }
 
 func (loggerBuilder) Name() string {
@@ -64,8 +80,6 @@ func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
 	return nil, nil
 }
-
-const spiffeId = "spiffe://foo.bar.com/client/workload/1"
 
 func (s) TestAuditLogger(t *testing.T) {
 	tests := map[string]struct {
@@ -306,12 +320,6 @@ func (s) TestAuditLogger(t *testing.T) {
 			}
 			if lb.AuthDecisionStat[false] != test.wantDenies {
 				t.Errorf("Deny case failed, want %v got %v", test.wantDenies, lb.AuthDecisionStat[false])
-			}
-			// Compare recorded SPIFFE Ids with the value from cert.
-			for _, id := range lb.SpiffeIds {
-				if id != spiffeId {
-					t.Errorf("Unexpected SPIFFE Id, want %v got %v", spiffeId, id)
-				}
 			}
 			// Compare event fields with expected values from authz policy.
 			if test.eventContent != nil {
