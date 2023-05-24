@@ -1273,14 +1273,19 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 	as.p = &parser{r: s}
 	ac.incrCallsStarted()
 	if desc != unaryStreamDesc {
-		// Listen on cc and stream contexts to cleanup when the user closes the
-		// ClientConn or cancels the stream context.  In all other cases, an error
-		// should already be injected into the recv buffer by the transport, which
-		// the client will eventually receive, and then we will cancel the stream's
-		// context in clientStream.finish.
+		// Listen on stream context to cleanup when the stream context is
+		// canceled.  Also listen for the addrConn's context in case the
+		// addrConn is closed or reconnects to a different address.  In all
+		// other cases, an error should already be injected into the recv
+		// buffer by the transport, which the client will eventually receive,
+		// and then we will cancel the stream's context in
+		// addrConnStream.finish.
 		go func() {
+			ac.mu.Lock()
+			acCtx := ac.ctx
+			ac.mu.Unlock()
 			select {
-			case <-ac.ctx.Done():
+			case <-acCtx.Done():
 				as.finish(status.Error(codes.Canceled, "grpc: the SubConn is closing"))
 			case <-ctx.Done():
 				as.finish(toRPCErr(ctx.Err()))

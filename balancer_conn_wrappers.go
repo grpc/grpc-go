@@ -133,19 +133,6 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 // updateSubConnState is invoked by grpc to push a subConn state update to the
 // underlying balancer.
 func (ccb *ccBalancerWrapper) updateSubConnState(sc balancer.SubConn, s connectivity.State, err error) {
-	// When updating addresses for a SubConn, if the address in use is not in
-	// the new addresses, the old ac will be tearDown() and a new ac will be
-	// created. tearDown() generates a state change with Shutdown state, we
-	// don't want the balancer to receive this state change. So before
-	// tearDown() on the old ac, ac.acbw (acWrapper) will be set to nil, and
-	// this function will be called with (nil, Shutdown). We don't need to call
-	// balancer method in this case.
-	//
-	// TODO: Suppress the above mentioned state change to Shutdown, so we don't
-	// have to handle it here.
-	if sc == nil {
-		return
-	}
 	ccb.mu.Lock()
 	ccb.serializer.Schedule(func(_ context.Context) {
 		ccb.balancer.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: s, ConnectionError: err})
@@ -315,7 +302,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 		return nil, fmt.Errorf("grpc: cannot create SubConn when balancer is closed or idle")
 	}
 
-	if len(addrs) <= 0 {
+	if len(addrs) == 0 {
 		return nil, fmt.Errorf("grpc: cannot create SubConn with empty address list")
 	}
 	ac, err := ccb.cc.newAddrConn(addrs, opts)
@@ -324,9 +311,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 		return nil, err
 	}
 	acbw := &acBalancerWrapper{ac: ac, producers: make(map[balancer.ProducerBuilder]*refCountedProducer)}
-	acbw.ac.mu.Lock()
 	ac.acbw = acbw
-	acbw.ac.mu.Unlock()
 	return acbw, nil
 }
 
@@ -347,7 +332,7 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 	if !ok {
 		return
 	}
-	ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
+	ccb.cc.removeAddrConn(acbw.ac, errConnDrain)
 }
 
 func (ccb *ccBalancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
@@ -391,61 +376,22 @@ func (ccb *ccBalancerWrapper) Target() string {
 // acBalancerWrapper is a wrapper on top of ac for balancers.
 // It implements balancer.SubConn interface.
 type acBalancerWrapper struct {
+	ac *addrConn // read-only
+
 	mu        sync.Mutex
-	ac        *addrConn
 	producers map[balancer.ProducerBuilder]*refCountedProducer
 }
 
+func (acbw *acBalancerWrapper) String() string {
+	return fmt.Sprintf("SubConn(id:%d)", acbw.ac.channelzID.Int())
+}
+
 func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
-	acbw.mu.Lock()
-	defer acbw.mu.Unlock()
-	if len(addrs) <= 0 {
-		acbw.ac.cc.removeAddrConn(acbw.ac, errConnDrain)
-		return
-	}
-	if !acbw.ac.tryUpdateAddrs(addrs) {
-		cc := acbw.ac.cc
-		opts := acbw.ac.scopts
-		acbw.ac.mu.Lock()
-		// Set old ac.acbw to nil so the Shutdown state update will be ignored
-		// by balancer.
-		//
-		// TODO(bar) the state transition could be wrong when tearDown() old ac
-		// and creating new ac, fix the transition.
-		acbw.ac.acbw = nil
-		acbw.ac.mu.Unlock()
-		acState := acbw.ac.getState()
-		acbw.ac.cc.removeAddrConn(acbw.ac, errConnDrain)
-
-		if acState == connectivity.Shutdown {
-			return
-		}
-
-		newAC, err := cc.newAddrConn(addrs, opts)
-		if err != nil {
-			channelz.Warningf(logger, acbw.ac.channelzID, "acBalancerWrapper: UpdateAddresses: failed to newAddrConn: %v", err)
-			return
-		}
-		acbw.ac = newAC
-		newAC.mu.Lock()
-		newAC.acbw = acbw
-		newAC.mu.Unlock()
-		if acState != connectivity.Idle {
-			go newAC.connect()
-		}
-	}
+	acbw.ac.updateAddrs(addrs)
 }
 
 func (acbw *acBalancerWrapper) Connect() {
-	acbw.mu.Lock()
-	defer acbw.mu.Unlock()
 	go acbw.ac.connect()
-}
-
-func (acbw *acBalancerWrapper) getAddrConn() *addrConn {
-	acbw.mu.Lock()
-	defer acbw.mu.Unlock()
-	return acbw.ac
 }
 
 // NewStream begins a streaming RPC on the addrConn.  If the addrConn is not
