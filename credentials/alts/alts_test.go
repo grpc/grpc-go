@@ -313,9 +313,7 @@ func (s) TestFullHandshake(t *testing.T) {
 	// handshake begins. If vmOnGCP is not reset and this test is run
 	// anywhere except for a GCP VM, then the ALTS handshake will
 	// immediately fail.
-	once.Do(func() {
-		vmOnGCP = true
-	})
+	once.Do(func() {})
 	vmOnGCP = true
 
 	// Start the fake handshaker service and the server.
