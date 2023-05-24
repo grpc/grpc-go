@@ -1338,49 +1338,21 @@ func (fe *fakeExporter) ExportSpan(sd *trace.SpanData) {
 	fe.seenSpans = append(fe.seenSpans, gotSI)
 }
 
-// waitForServerSpanAndSort waits until a server span appears somewhere in the
-// span list in an exporter, and then sorts the span list by putting the server
-// span first, the attempt span second, and overall call span third. Returns an
-// error if no server span found within 5 seconds, or if span list isn't length
-// 3 when server span is found.
-func waitForServerSpanAndSort(fe *fakeExporter) error {
+// waitForServerSpan waits until a server span appears somewhere in the span
+// list in an exporter. Returns an error if no server span found within 5
+// seconds.
+func waitForServerSpan(fe *fakeExporter) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	serverSpanIndex := -1
 	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
 		fe.mu.Lock()
-		for i, seenSpan := range fe.seenSpans {
+		for _, seenSpan := range fe.seenSpans {
 			if seenSpan.spanKind == trace.SpanKindServer {
-				serverSpanIndex = i
+				fe.mu.Unlock()
+				return nil
 			}
 		}
-		if serverSpanIndex == -1 {
-			fe.mu.Unlock()
-			continue
-		}
-		if len := len(fe.seenSpans); len != 3 {
-			fe.mu.Unlock()
-			return fmt.Errorf("seenSpans length is not 3, length %v", len)
-		}
-
-		// attempt span has a happens before relationship with call span - no
-		// deterministic way to sort based on spanInformation, so do it
-		// manually.
-		if serverSpanIndex == 0 { // Spans are already in server attempt call order, nothing to sort.
-			fe.mu.Unlock()
-			return nil
-		}
-		// Spans start as attempt server call order, so swap server and attempt.
-		if serverSpanIndex == 1 {
-			fe.seenSpans[0], fe.seenSpans[1] = fe.seenSpans[1], fe.seenSpans[0]
-		}
-		// Spans start as attempt call server order, so swap all 3 into server
-		// attempt call order.
-		if serverSpanIndex == 2 {
-			fe.seenSpans[0], fe.seenSpans[1], fe.seenSpans[2] = fe.seenSpans[2], fe.seenSpans[0], fe.seenSpans[1]
-		}
 		fe.mu.Unlock()
-		return nil
 	}
 	return fmt.Errorf("timeout when waiting for server span to be present in exporter")
 }
@@ -1468,7 +1440,8 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
-			name: "Attempt.grpc.testing.TestService.UnaryCall",
+			spanKind: trace.SpanKindClient,
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
 			messageEvents: []trace.MessageEvent{
 				{
 					EventType:            trace.MessageEventTypeSent,
@@ -1493,10 +1466,21 @@ func (s) TestSpan(t *testing.T) {
 			childSpanCount:  1,
 		},
 	}
-	if err := waitForServerSpanAndSort(fe); err != nil {
+	if err := waitForServerSpan(fe); err != nil {
 		t.Fatal(err)
 	}
+	var spanInfoSort = func(i, j int) bool {
+		// Make the server spans come first.
+		if fe.seenSpans[i].spanKind != fe.seenSpans[j].spanKind {
+			return fe.seenSpans[i].spanKind < fe.seenSpans[j].spanKind
+		}
+		// Within client Spans, make attempt spans come first.
+		return fe.seenSpans[i].name < fe.seenSpans[j].name
+	}
 	fe.mu.Lock()
+	// Sort the underlying seen Spans for cmp.Diff assertions and ID
+	// relationship assertions.
+	sort.Slice(fe.seenSpans, spanInfoSort)
 	if diff := cmp.Diff(fe.seenSpans, wantSI); diff != "" {
 		fe.mu.Unlock()
 		t.Fatalf("got unexpected spans, diff (-got, +want): %v", diff)
@@ -1561,16 +1545,8 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
-			spanKind:        trace.SpanKindClient,
-			name:            "grpc.testing.TestService.FullDuplexCall",
-			hasRemoteParent: false,
-			childSpanCount:  1,
-		},
-		{
-			sc: trace.SpanContext{
-				TraceOptions: 1,
-			},
-			name: "Attempt.grpc.testing.TestService.FullDuplexCall",
+			spanKind: trace.SpanKindClient,
+			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
 			messageEvents: []trace.MessageEvent{
 				{
 					EventType: trace.MessageEventTypeSent,
@@ -1583,22 +1559,34 @@ func (s) TestSpan(t *testing.T) {
 			},
 			hasRemoteParent: false,
 		},
+		{
+			sc: trace.SpanContext{
+				TraceOptions: 1,
+			},
+			spanKind:        trace.SpanKindClient,
+			name:            "grpc.testing.TestService.FullDuplexCall",
+			hasRemoteParent: false,
+			childSpanCount:  1,
+		},
 	}
-	if err := waitForServerSpanAndSort(fe); err != nil {
+	if err := waitForServerSpan(fe); err != nil {
 		t.Fatal(err)
 	}
 	fe.mu.Lock()
 	defer fe.mu.Unlock()
+	// Sort the underlying seen Spans for cmp.Diff assertions and ID
+	// relationship assertions.
+	sort.Slice(fe.seenSpans, spanInfoSort)
 	if diff := cmp.Diff(fe.seenSpans, wantSI); diff != "" {
 		t.Fatalf("got unexpected spans, diff (-got, +want): %v", diff)
 	}
 	if err := validateTraceAndSpanIDs(fe.seenSpans); err != nil {
 		t.Fatalf("Error in runtime data assertions: %v", err)
 	}
-	if !cmp.Equal(fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID) {
+	if !cmp.Equal(fe.seenSpans[0].parentSpanID, fe.seenSpans[1].sc.SpanID) {
 		t.Fatalf("server span should point to the client attempt span as its parent. parentSpanID: %v, clientAttemptSpanID: %v", fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID)
 	}
-	if !cmp.Equal(fe.seenSpans[2].parentSpanID, fe.seenSpans[1].sc.SpanID) {
+	if !cmp.Equal(fe.seenSpans[1].parentSpanID, fe.seenSpans[2].sc.SpanID) {
 		t.Fatalf("client attempt span should point to the client call span as its parent. parentSpanID: %v, clientCallSpanID: %v", fe.seenSpans[2].parentSpanID, fe.seenSpans[1].sc.SpanID)
 	}
 }
