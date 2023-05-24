@@ -171,7 +171,7 @@ func createStdoutPb(t *testing.T) *anypb.Any {
 // Builds a config with a nonsensical type in the anypb.Any.
 func createUnsupportedPb(t *testing.T) *anypb.Any {
 	t.Helper()
-	// This type doesn't make sense to have here, it could realisitcally be any
+	// This type doesn't make sense to have here, it could realistically be any
 	// proto that is not accepted in our custom config parsing. This was chosen
 	// because it is already imported.
 	pb := &v3rbacpb.RBAC_AuditLoggingOptions{}
