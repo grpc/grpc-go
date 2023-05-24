@@ -33,9 +33,9 @@ import (
 )
 
 const (
-	udpaTypedStuctType = "type.googleapis.com/udpa.type.v1.TypedStruct"
-	xdsTypedStuctType  = "type.googleapis.com/xds.type.v3.TypedStruct"
-	stdoutType         = "type.googleapis.com/envoy.extensions.rbac.audit_loggers.stream.v3.StdoutAuditLog"
+	udpaTypedStructType = "type.googleapis.com/udpa.type.v1.TypedStruct"
+	xdsTypedStructType  = "type.googleapis.com/xds.type.v3.TypedStruct"
+	stdoutType          = "type.googleapis.com/envoy.extensions.rbac.audit_loggers.stream.v3.StdoutAuditLog"
 )
 
 func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig) (audit.Logger, error) {
@@ -66,13 +66,13 @@ func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConf
 
 func getCustomConfig(config *anypb.Any) (json.RawMessage, string, error) {
 	switch config.GetTypeUrl() {
-	case udpaTypedStuctType:
+	case udpaTypedStructType:
 		typedStruct := &v1xdsudpatypepb.TypedStruct{}
 		if err := config.UnmarshalTo(typedStruct); err != nil {
 			return nil, "", fmt.Errorf("failed to unmarshal resource: %v", err)
 		}
 		return convertCustomConfig(typedStruct.TypeUrl, typedStruct.Value)
-	case xdsTypedStuctType:
+	case xdsTypedStructType:
 		typedStruct := &v3xdsxdstypepb.TypedStruct{}
 		if err := config.UnmarshalTo(typedStruct); err != nil {
 			return nil, "", fmt.Errorf("failed to unmarshal resource: %v", err)
