@@ -51,7 +51,7 @@ func (bb) Name() string {
 
 // LBConfig is the config for the wrr locality balancer.
 type LBConfig struct {
-	serviceconfig.LoadBalancingConfig
+	serviceconfig.LoadBalancingConfig `json:"-"`
 	// ChildPolicy is the config for the child policy.
 	ChildPolicy *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }

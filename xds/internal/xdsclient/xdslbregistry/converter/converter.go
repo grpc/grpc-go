@@ -39,18 +39,20 @@ import (
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clientsideweightedroundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/client_side_weighted_round_robin/v3"
+	v3pickfirstpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/pick_first/v3"
 	v3ringhashpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/ring_hash/v3"
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 )
 
 func init() {
+	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.client_side_weighted_round_robin.v3.ClientSideWeightedRoundRobin", convertWeightedRoundRobinProtoToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.ring_hash.v3.RingHash", convertRingHashProtoToServiceConfig)
+	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.pick_first.v3.PickFirst", convertPickFirstProtoToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.round_robin.v3.RoundRobin", convertRoundRobinProtoToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.wrr_locality.v3.WrrLocality", convertWRRLocalityProtoToServiceConfig)
-	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.client_side_weighted_round_robin.v3.ClientSideWeightedRoundRobin", convertWeightedRoundRobinProtoToServiceConfig)
-	xdslbregistry.Register("type.googleapis.com/xds.type.v3.TypedStruct", convertV3TypedStructToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/udpa.type.v1.TypedStruct", convertV1TypedStructToServiceConfig)
+	xdslbregistry.Register("type.googleapis.com/xds.type.v3.TypedStruct", convertV3TypedStructToServiceConfig)
 }
 
 const (
@@ -58,7 +60,7 @@ const (
 	defaultRingHashMaxSize = 8 * 1024 * 1024 // 8M
 )
 
-func convertRingHashProtoToServiceConfig(rawProto []byte, depth int) (json.RawMessage, error) {
+func convertRingHashProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
 	if !envconfig.XDSRingHash {
 		return nil, nil
 	}
@@ -90,6 +92,24 @@ func convertRingHashProtoToServiceConfig(rawProto []byte, depth int) (json.RawMe
 	return makeBalancerConfigJSON(ringhash.Name, rhCfgJSON), nil
 }
 
+type pfConfig struct {
+	ShuffleAddressList bool `json:"shuffleAddressList"`
+}
+
+func convertPickFirstProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
+	pfProto := &v3pickfirstpb.PickFirst{}
+	if err := proto.Unmarshal(rawProto, pfProto); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
+	}
+
+	pfCfg := &pfConfig{ShuffleAddressList: pfProto.GetShuffleAddressList()}
+	js, err := json.Marshal(pfCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", pfCfg, err)
+	}
+	return makeBalancerConfigJSON("pick_first", js), nil
+}
+
 func convertRoundRobinProtoToServiceConfig([]byte, int) (json.RawMessage, error) {
 	return makeBalancerConfigJSON("round_robin", json.RawMessage("{}")), nil
 }
@@ -118,7 +138,7 @@ func convertWRRLocalityProtoToServiceConfig(rawProto []byte, depth int) (json.Ra
 	return makeBalancerConfigJSON(wrrlocality.Name, lbCfgJSON), nil
 }
 
-func convertWeightedRoundRobinProtoToServiceConfig(rawProto []byte, depth int) (json.RawMessage, error) {
+func convertWeightedRoundRobinProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
 	cswrrProto := &v3clientsideweightedroundrobinpb.ClientSideWeightedRoundRobin{}
 	if err := proto.Unmarshal(rawProto, cswrrProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -152,7 +172,7 @@ func convertWeightedRoundRobinProtoToServiceConfig(rawProto []byte, depth int) (
 	return makeBalancerConfigJSON(weightedroundrobin.Name, lbCfgJSON), nil
 }
 
-func convertV1TypedStructToServiceConfig(rawProto []byte, depth int) (json.RawMessage, error) {
+func convertV1TypedStructToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
 	tsProto := &v1xdsudpatypepb.TypedStruct{}
 	if err := proto.Unmarshal(rawProto, tsProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -160,7 +180,7 @@ func convertV1TypedStructToServiceConfig(rawProto []byte, depth int) (json.RawMe
 	return convertCustomPolicy(tsProto.GetTypeUrl(), tsProto.GetValue())
 }
 
-func convertV3TypedStructToServiceConfig(rawProto []byte, depth int) (json.RawMessage, error) {
+func convertV3TypedStructToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
 	tsProto := &v3xdsxdstypepb.TypedStruct{}
 	if err := proto.Unmarshal(rawProto, tsProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
