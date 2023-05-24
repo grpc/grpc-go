@@ -467,3 +467,53 @@ func TestHeaderSuffixMatcherMatch(t *testing.T) {
 		})
 	}
 }
+
+func TestHeaderStringMatch(t *testing.T) {
+	tests := []struct {
+		name   string
+		key    string
+		sm     StringMatcher
+		md     metadata.MD
+		invert bool
+		want   bool
+	}{
+		{
+			name: "should-match",
+			key:  "th",
+			sm: StringMatcher{
+				exactMatch: newStringP("tv"),
+			},
+			md:     metadata.Pairs("th", "tv"),
+			invert: false,
+			want:   true,
+		},
+		{
+			name: "not match",
+			key:  "th",
+			sm: StringMatcher{
+				containsMatch: newStringP("tv"),
+			},
+			md:     metadata.Pairs("th", "not-match"),
+			invert: false,
+			want:   false,
+		},
+		{
+			name: "invert string match",
+			key:  "th",
+			sm: StringMatcher{
+				containsMatch: newStringP("tv"),
+			},
+			md:     metadata.Pairs("th", "not-match"),
+			invert: true,
+			want:   true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			hsm := NewHeaderStringMatcher(test.key, test.sm, test.invert)
+			if got := hsm.Match(test.md); got != test.want {
+				t.Errorf("match() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
