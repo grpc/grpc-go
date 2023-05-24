@@ -1341,7 +1341,7 @@ func (fe *fakeExporter) ExportSpan(sd *trace.SpanData) {
 // waitForServerSpan waits until a server span appears somewhere in the span
 // list in an exporter. Returns an error if no server span found within the
 // passed context's timeout.
-func waitForServerSpan(fe *fakeExporter, ctx context.Context) error {
+func waitForServerSpan(ctx context.Context, fe *fakeExporter) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
@@ -1465,7 +1465,7 @@ func (s) TestSpan(t *testing.T) {
 			childSpanCount:  1,
 		},
 	}
-	if err := waitForServerSpan(fe, ctx); err != nil {
+	if err := waitForServerSpan(ctx, fe); err != nil {
 		t.Fatal(err)
 	}
 	var spanInfoSort = func(i, j int) bool {
@@ -1565,7 +1565,7 @@ func (s) TestSpan(t *testing.T) {
 			childSpanCount:  1,
 		},
 	}
-	if err := waitForServerSpan(fe, ctx); err != nil {
+	if err := waitForServerSpan(ctx, fe); err != nil {
 		t.Fatal(err)
 	}
 	fe.mu.Lock()
