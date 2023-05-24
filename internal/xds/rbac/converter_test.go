@@ -17,6 +17,7 @@
 package rbac
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -49,7 +50,7 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 			loggerConfig: &v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 				AuditLogger: &v3corepb.TypedExtensionConfig{
 					Name:        "TestAuditLoggerBuffer",
-					TypedConfig: &anypb.Any{},
+					TypedConfig: createUnsupportedPb(t),
 				},
 			},
 			expectedError: "custom config not implemented for type ",
@@ -118,6 +119,7 @@ func (s) TestBuildLoggerKnownTypes(t *testing.T) {
 	tests := []struct {
 		name         string
 		loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig
+		expectedType reflect.Type
 	}{
 		{
 			name: "stdout logger",
@@ -128,6 +130,7 @@ func (s) TestBuildLoggerKnownTypes(t *testing.T) {
 				},
 				IsOptional: false,
 			},
+			expectedType: reflect.TypeOf(audit.GetLoggerBuilder(stdout.Name).Build(nil)),
 		},
 		{
 			name: "stdout logger with generic TypedConfig",
@@ -138,6 +141,7 @@ func (s) TestBuildLoggerKnownTypes(t *testing.T) {
 				},
 				IsOptional: false,
 			},
+			expectedType: reflect.TypeOf(audit.GetLoggerBuilder(stdout.Name).Build(nil)),
 		},
 	}
 	for _, test := range tests {
@@ -145,11 +149,10 @@ func (s) TestBuildLoggerKnownTypes(t *testing.T) {
 			logger, err := buildLogger(test.loggerConfig)
 			if err != nil {
 				t.Fatalf("expected success. got error: %v", err)
-			} else {
-				_, ok := logger.(*stdout.Logger)
-				if !ok {
-					t.Fatalf("expected logger to be type stdout.Logger but was not")
-				}
+			}
+			loggerType := reflect.TypeOf(logger)
+			if test.expectedType != loggerType {
+				t.Fatalf("logger not of expected type. want: %v got: %v", test.expectedType, loggerType)
 			}
 		})
 	}
@@ -164,4 +167,19 @@ func createStdoutPb(t *testing.T) *anypb.Any {
 		t.Fatalf("createStdoutPb failed during anypb.New: %v", err)
 	}
 	return customConfig
+}
+
+// Builds a config with a nonsensical type in the anypb.Any.
+func createUnsupportedPb(t *testing.T) *anypb.Any {
+	t.Helper()
+	// This type doesn't make sense to have here, it could realisitcally be any
+	// proto that is not accepted in our custom config parsing. This was chosen
+	// because it is already imported.
+	pb := &v3rbacpb.RBAC_AuditLoggingOptions{}
+	customConfig, err := anypb.New(pb)
+	if err != nil {
+		t.Fatalf("createStdoutPb failed during anypb.New: %v", err)
+	}
+	return customConfig
+
 }

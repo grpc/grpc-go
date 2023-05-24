@@ -32,12 +32,6 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-const (
-	udpaTypedStructType = "type.googleapis.com/udpa.type.v1.TypedStruct"
-	xdsTypedStructType  = "type.googleapis.com/xds.type.v3.TypedStruct"
-	stdoutType          = "type.googleapis.com/envoy.extensions.rbac.audit_loggers.stream.v3.StdoutAuditLog"
-)
-
 func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig) (audit.Logger, error) {
 	if loggerConfig.GetAuditLogger().GetTypedConfig() == nil {
 		return nil, fmt.Errorf("missing required field: TypedConfig")
@@ -65,25 +59,17 @@ func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConf
 }
 
 func getCustomConfig(config *anypb.Any) (json.RawMessage, string, error) {
-	switch config.GetTypeUrl() {
-	case udpaTypedStructType:
-		typedStruct := &v1xdsudpatypepb.TypedStruct{}
-		if err := config.UnmarshalTo(typedStruct); err != nil {
-			return nil, "", fmt.Errorf("failed to unmarshal resource: %v", err)
-		}
-		return convertCustomConfig(typedStruct.TypeUrl, typedStruct.Value)
-	case xdsTypedStructType:
-		typedStruct := &v3xdsxdstypepb.TypedStruct{}
-		if err := config.UnmarshalTo(typedStruct); err != nil {
-			return nil, "", fmt.Errorf("failed to unmarshal resource: %v", err)
-		}
-		return convertCustomConfig(typedStruct.TypeUrl, typedStruct.Value)
-	case stdoutType:
-		stdoutLoggerConfig := &v3auditloggersstreampb.StdoutAuditLog{}
-		if err := config.UnmarshalTo(stdoutLoggerConfig); err != nil {
-			return nil, "", fmt.Errorf("failed to unmarshal resource: %v", err)
-		}
-		return convertStdoutConfig(stdoutLoggerConfig)
+	any, err := config.UnmarshalNew()
+	if err != nil {
+		return nil, "", err
+	}
+	switch m := any.(type) {
+	case *v1xdsudpatypepb.TypedStruct:
+		return convertCustomConfig(m.TypeUrl, m.Value)
+	case *v3xdsxdstypepb.TypedStruct:
+		return convertCustomConfig(m.TypeUrl, m.Value)
+	case *v3auditloggersstreampb.StdoutAuditLog:
+		return convertStdoutConfig(m)
 	}
 	return nil, "", fmt.Errorf("custom config not implemented for type [%v]", config.GetTypeUrl())
 }
