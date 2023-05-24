@@ -30,6 +30,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/xds/internal/httpfilter"
+	"google.golang.org/grpc/xds/internal/httpfilter/rbac"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -140,7 +141,7 @@ func unwrapHTTPFilterConfig(config *anypb.Any) (proto.Message, string, error) {
 	}
 }
 
-func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool) (httpfilter.Filter, httpfilter.FilterConfig, error) {
+func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool, name string) (httpfilter.Filter, httpfilter.FilterConfig, error) {
 	config, typeURL, err := unwrapHTTPFilterConfig(cfg)
 	if err != nil {
 		return nil, nil, err
@@ -151,6 +152,9 @@ func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool) (httpfilter.Fi
 			return nil, nil, nil
 		}
 		return nil, nil, fmt.Errorf("no filter implementation found for %q", typeURL)
+	}
+	if rbac, ok := filterBuilder.(rbac.Builder); ok {
+		rbac.Name = name
 	}
 	parseFunc := filterBuilder.ParseFilterConfig
 	if !lds {
@@ -179,7 +183,7 @@ func processHTTPFilterOverrides(cfgs map[string]*anypb.Any) (map[string]httpfilt
 			optional = s.GetIsOptional()
 		}
 
-		httpFilter, config, err := validateHTTPFilterConfig(cfg, false, optional)
+		httpFilter, config, err := validateHTTPFilterConfig(cfg, false, optional, name)
 		if err != nil {
 			return nil, fmt.Errorf("filter override %q: %v", name, err)
 		}
@@ -205,7 +209,7 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 		}
 		seenNames[name] = true
 
-		httpFilter, config, err := validateHTTPFilterConfig(filter.GetTypedConfig(), true, filter.GetIsOptional())
+		httpFilter, config, err := validateHTTPFilterConfig(filter.GetTypedConfig(), true, filter.GetIsOptional(), name)
 		if err != nil {
 			return nil, err
 		}
