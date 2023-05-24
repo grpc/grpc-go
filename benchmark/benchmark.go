@@ -233,7 +233,7 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) func() {
 	}
 	go s.Serve(info.Listener)
 	return func() {
-		s.Stop()
+		s.GracefulStop()
 	}
 }
 
