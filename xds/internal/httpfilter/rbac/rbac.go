@@ -40,21 +40,22 @@ import (
 
 func init() {
 	if envconfig.XDSRBAC {
-		httpfilter.Register(builder{})
+		httpfilter.Register(Builder{})
 	}
 
 	// TODO: Remove these once the RBAC env var is removed.
 	internal.RegisterRBACHTTPFilterForTesting = func() {
-		httpfilter.Register(builder{})
+		httpfilter.Register(Builder{})
 	}
 	internal.UnregisterRBACHTTPFilterForTesting = func() {
-		for _, typeURL := range builder.TypeURLs(builder{}) {
+		for _, typeURL := range Builder.TypeURLs(Builder{}) {
 			httpfilter.UnregisterForTesting(typeURL)
 		}
 	}
 }
 
-type builder struct {
+type Builder struct {
+	Name string
 }
 
 type config struct {
@@ -62,7 +63,7 @@ type config struct {
 	chainEngine *rbac.ChainEngine
 }
 
-func (builder) TypeURLs() []string {
+func (Builder) TypeURLs() []string {
 	return []string{
 		"type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC",
 		"type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBACPerRoute",
@@ -70,7 +71,7 @@ func (builder) TypeURLs() []string {
 }
 
 // Parsing is the same for the base config and the override config.
-func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
+func parseConfig(rbacCfg *rpb.RBAC, filterName string) (httpfilter.FilterConfig, error) {
 	// All the validation logic described in A41.
 	for _, policy := range rbacCfg.GetRules().GetPolicies() {
 		// "Policy.condition and Policy.checked_condition must cause a
@@ -126,10 +127,7 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 		return config{}, nil
 	}
 
-	// TODO(gregorycooke) - change the call chain to here so we have the filter
-	// name to input here instead of an empty string. It will come from here:
-	// https://github.com/grpc/grpc-go/blob/eff0942e95d93112921414aee758e619ec86f26f/xds/internal/xdsclient/xdsresource/unmarshal_lds.go#L199
-	ce, err := rbac.NewChainEngine([]*v3rbacpb.RBAC{rbacCfg.GetRules()}, "")
+	ce, err := rbac.NewChainEngine([]*v3rbacpb.RBAC{rbacCfg.GetRules()}, filterName)
 	if err != nil {
 		// "At this time, if the RBAC.action is Action.LOG then the policy will be
 		// completely ignored, as if RBAC was not configurated." - A41
@@ -141,7 +139,7 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 	return config{chainEngine: ce}, nil
 }
 
-func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (b Builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("rbac: nil configuration message provided")
 	}
@@ -153,10 +151,10 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	if err := ptypes.UnmarshalAny(any, msg); err != nil {
 		return nil, fmt.Errorf("rbac: error parsing config %v: %v", cfg, err)
 	}
-	return parseConfig(msg)
+	return parseConfig(msg, b.Name)
 }
 
-func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (b Builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
 	if override == nil {
 		return nil, fmt.Errorf("rbac: nil configuration message provided")
 	}
@@ -168,18 +166,18 @@ func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.Fil
 	if err := ptypes.UnmarshalAny(any, msg); err != nil {
 		return nil, fmt.Errorf("rbac: error parsing override config %v: %v", override, err)
 	}
-	return parseConfig(msg.Rbac)
+	return parseConfig(msg.Rbac, b.Name)
 }
 
-func (builder) IsTerminal() bool {
+func (Builder) IsTerminal() bool {
 	return false
 }
 
-var _ httpfilter.ServerInterceptorBuilder = builder{}
+var _ httpfilter.ServerInterceptorBuilder = Builder{}
 
 // BuildServerInterceptor is an optional interface builder implements in order
 // to signify it works server side.
-func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
+func (Builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("rbac: nil config provided")
 	}
