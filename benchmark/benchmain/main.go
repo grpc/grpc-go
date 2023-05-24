@@ -494,7 +494,7 @@ func runBenchmark(caller rpcCallFunc, start startFunc, stop stopFunc, bf stats.F
 	// if SleepBetweenRPCs > 0 we skip the warmup because otherwise
 	// we are going to send a set of simultaneous requests on every connection,
 	// which is something we are trying to avoid when using SleepBetweenRPCs param.
-	if bf.SleepBetweenRPCs > 0 {
+	if bf.SleepBetweenRPCs == 0 {
 		// Warm up connections.
 		for i := 0; i < warmupCallCount; i++ {
 			for cn := 0; cn < bf.Connections; cn++ {
