@@ -28,7 +28,9 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/internal/envconfig"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -110,11 +112,11 @@ func convertPickFirstProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessa
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", pfCfg, err)
 	}
-	return makeBalancerConfigJSON("pick_first", js), nil
+	return makeBalancerConfigJSON(grpc.PickFirstBalancerName, js), nil
 }
 
 func convertRoundRobinProtoToServiceConfig([]byte, int) (json.RawMessage, error) {
-	return makeBalancerConfigJSON("round_robin", json.RawMessage("{}")), nil
+	return makeBalancerConfigJSON(roundrobin.Name, json.RawMessage("{}")), nil
 }
 
 type wrrLocalityLBConfig struct {

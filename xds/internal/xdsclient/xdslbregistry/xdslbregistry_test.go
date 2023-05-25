@@ -106,7 +106,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 			wantConfig: `[{"ring_hash_experimental": { "minRingSize": 10, "maxRingSize": 100 }}]`,
 		},
 		{
-			name: "pick_first",
+			name: "pick_first_shuffle",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -119,6 +119,19 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				},
 			},
 			wantConfig: `[{"pick_first": { "shuffleAddressList": true }}]`,
+		},
+		{
+			name: "pick_first",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3pickfirstpb.PickFirst{}),
+						},
+					},
+				},
+			},
+			wantConfig: `[{"pick_first": { "shuffleAddressList": false }}]`,
 		},
 		{
 			name: "round_robin",
@@ -301,6 +314,8 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ConvertToServiceConfig(%s) failed: %v", pretty.ToJSON(test.policy), err)
 			}
+			// got and want must be unmarshalled since JSON strings shouldn't
+			// generally be directly compared.
 			var got []map[string]interface{}
 			if err := json.Unmarshal(rawJSON, &got); err != nil {
 				t.Fatalf("Error unmarshalling rawJSON (%q): %v", rawJSON, err)
