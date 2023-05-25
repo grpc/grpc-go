@@ -24,7 +24,6 @@ package alts
 import (
 	"context"
 	"reflect"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -309,21 +308,12 @@ func (s) TestCheckRPCVersions(t *testing.T) {
 // server, where both client and server offload to a local, fake handshaker
 // service.
 func (s) TestFullHandshake(t *testing.T) {
-	// If GOMAXPROCS is set to less than 2, do not run this test. This test
-	// requires at least 2 goroutines to succeed (one goroutine where a
-	// server listens, another goroutine where a client runs).
-	if runtime.GOMAXPROCS(0) < 2 {
-		return
-	}
-
 	// The vmOnGCP global variable MUST be reset to true after the client
 	// or server credentials have been created, but before the ALTS
 	// handshake begins. If vmOnGCP is not reset and this test is run
 	// anywhere except for a GCP VM, then the ALTS handshake will
 	// immediately fail.
-	once.Do(func() {
-		vmOnGCP = true
-	})
+	once.Do(func() {})
 	vmOnGCP = true
 
 	// Start the fake handshaker service and the server.
