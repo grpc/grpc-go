@@ -91,12 +91,6 @@ func clusterWithLBConfiguration(clusterName, edsServiceName string, secLevel e2e
 // first) child load balancing policy, and asserts the correct distribution
 // based on the locality weights and the endpoint picking policy specified.
 func (s) TestWrrLocality(t *testing.T) {
-	oldCustomLBSupport := envconfig.XDSCustomLBPolicy
-	envconfig.XDSCustomLBPolicy = true
-	defer func() {
-		envconfig.XDSCustomLBPolicy = oldCustomLBSupport
-	}()
-
 	backend1 := stubserver.StartTestService(t, nil)
 	port1 := testutils.ParsePort(t, backend1.Address)
 	defer backend1.Stop()

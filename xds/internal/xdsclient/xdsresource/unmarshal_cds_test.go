@@ -53,11 +53,6 @@ const (
 var emptyUpdate = ClusterUpdate{ClusterName: clusterName, LRSServerConfig: ClusterLRSOff}
 
 func (s) TestValidateCluster_Failure(t *testing.T) {
-	oldCustomLBSupport := envconfig.XDSCustomLBPolicy
-	envconfig.XDSCustomLBPolicy = true
-	defer func() {
-		envconfig.XDSCustomLBPolicy = oldCustomLBSupport
-	}()
 	tests := []struct {
 		name       string
 		cluster    *v3clusterpb.Cluster
