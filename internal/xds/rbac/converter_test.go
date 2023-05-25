@@ -51,7 +51,7 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 			loggerConfig: &v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 				AuditLogger: &v3corepb.TypedExtensionConfig{
 					Name:        "TestAuditLoggerBuffer",
-					TypedConfig: createUnsupportedPb(t),
+					TypedConfig: testutils.MarshalAny(&v3rbacpb.RBAC_AuditLoggingOptions{}),
 				},
 			},
 			expectedError: "custom config not implemented for type ",
@@ -167,14 +167,4 @@ func createStdoutPb(t *testing.T) *anypb.Any {
 		t.Fatalf("createStdoutPb failed during anypb.New: %v", err)
 	}
 	return customConfig
-}
-
-// Builds a config with a nonsensical type in the anypb.Any.
-func createUnsupportedPb(t *testing.T) *anypb.Any {
-	t.Helper()
-	// This type doesn't make sense to have here, it could realistically be any
-	// proto that is not accepted in our custom config parsing. This was chosen
-	// because it is already imported.
-	pb := &v3rbacpb.RBAC_AuditLoggingOptions{}
-	return testutils.MarshalAny(pb)
 }
