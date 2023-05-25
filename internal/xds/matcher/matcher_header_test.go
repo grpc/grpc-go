@@ -473,8 +473,8 @@ func TestHeaderStringMatch(t *testing.T) {
 		name   string
 		key    string
 		sm     StringMatcher
-		md     metadata.MD
 		invert bool
+		md     metadata.MD
 		want   bool
 	}{
 		{
@@ -483,8 +483,8 @@ func TestHeaderStringMatch(t *testing.T) {
 			sm: StringMatcher{
 				exactMatch: newStringP("tv"),
 			},
-			md:     metadata.Pairs("th", "tv"),
 			invert: false,
+			md:     metadata.Pairs("th", "tv"),
 			want:   true,
 		},
 		{
@@ -493,8 +493,8 @@ func TestHeaderStringMatch(t *testing.T) {
 			sm: StringMatcher{
 				containsMatch: newStringP("tv"),
 			},
-			md:     metadata.Pairs("th", "not-match"),
 			invert: false,
+			md:     metadata.Pairs("th", "not-match"),
 			want:   false,
 		},
 		{
@@ -503,8 +503,38 @@ func TestHeaderStringMatch(t *testing.T) {
 			sm: StringMatcher{
 				containsMatch: newStringP("tv"),
 			},
-			md:     metadata.Pairs("th", "not-match"),
 			invert: true,
+			md:     metadata.Pairs("th", "not-match"),
+			want:   true,
+		},
+		{
+			name: "header missing",
+			key:  "th",
+			sm: StringMatcher{
+				containsMatch: newStringP("tv"),
+			},
+			invert: false,
+			md:     metadata.Pairs("not-specified-key", "not-match"),
+			want:   false,
+		},
+		{
+			name: "header missing invert true",
+			key:  "th",
+			sm: StringMatcher{
+				containsMatch: newStringP("tv"),
+			},
+			invert: true,
+			md:     metadata.Pairs("not-specified-key", "not-match"),
+			want:   false,
+		},
+		{
+			name: "header empty string invert",
+			key:  "th",
+			sm: StringMatcher{
+				containsMatch: newStringP("tv"),
+			},
+			invert: true,
+			md:     metadata.Pairs("th", ""),
 			want:   true,
 		},
 	}
