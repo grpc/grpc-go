@@ -26,6 +26,7 @@ import (
 	v3auditloggersstreampb "github.com/envoyproxy/go-control-plane/envoy/extensions/rbac/audit_loggers/stream/v3"
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/authz/audit/stdout"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -175,10 +176,5 @@ func createUnsupportedPb(t *testing.T) *anypb.Any {
 	// proto that is not accepted in our custom config parsing. This was chosen
 	// because it is already imported.
 	pb := &v3rbacpb.RBAC_AuditLoggingOptions{}
-	customConfig, err := anypb.New(pb)
-	if err != nil {
-		t.Fatalf("createStdoutPb failed during anypb.New: %v", err)
-	}
-	return customConfig
-
+	return testutils.MarshalAny(pb)
 }
