@@ -31,6 +31,9 @@ import (
 
 var grpcLogger = grpclog.Component("authz-audit")
 
+// Name is the string to identify this logger type in the registry
+const Name = "stdout_logger"
+
 func init() {
 	audit.RegisterLoggerBuilder(&loggerBuilder{
 		goLogger: log.New(os.Stdout, "", 0),
@@ -46,7 +49,7 @@ type event struct {
 	Timestamp      string `json:"timestamp"` // Time when the audit event is logged via Log method
 }
 
-// logger implements the audit.Logger interface by logging to standard output.
+// logger implements the audit.logger interface by logging to standard output.
 type logger struct {
 	goLogger *log.Logger
 }
@@ -75,7 +78,7 @@ type loggerBuilder struct {
 }
 
 func (loggerBuilder) Name() string {
-	return "stdout_logger"
+	return Name
 }
 
 // Build returns a new instance of the stdout logger.

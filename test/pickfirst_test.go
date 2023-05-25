@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
@@ -378,4 +379,55 @@ func (s) TestPickFirst_StickyTransientFailure(t *testing.T) {
 		}
 	}()
 	wg.Wait()
+}
+
+func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
+	const serviceConfig = `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": true }}]}`
+
+	// Install a shuffler that always reverses two entries.
+	origShuf := grpcrand.Shuffle
+	defer func() { grpcrand.Shuffle = origShuf }()
+	grpcrand.Shuffle = func(n int, f func(int, int)) {
+		if n != 2 {
+			t.Errorf("Shuffle called with n=%v; want 2", n)
+		}
+		f(0, 1) // reverse the two addresses
+	}
+
+	// Set up our backends.
+	cc, r, backends := setupPickFirst(t, 2)
+	addrs := stubBackendsToResolverAddrs(backends)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Push an update with both addresses and shuffling disabled.  We should
+	// connect to backend 0.
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0], addrs[1]}})
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
+		t.Fatal(err)
+	}
+
+	// Send a config with shuffling enabled.  This will reverse the addresses,
+	// but the channel should still be connected to backend 0.
+	shufState := resolver.State{
+		ServiceConfig: parseServiceConfig(t, r, serviceConfig),
+		Addresses:     []resolver.Address{addrs[0], addrs[1]},
+	}
+	r.UpdateState(shufState)
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
+		t.Fatal(err)
+	}
+
+	// Send a resolver update with no addresses. This should push the channel
+	// into TransientFailure.
+	r.UpdateState(resolver.State{})
+	awaitState(ctx, t, cc, connectivity.TransientFailure)
+
+	// Send the same config as last time with shuffling enabled.  Since we are
+	// not connected to backend 0, we should connect to backend 1.
+	r.UpdateState(shufState)
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
+		t.Fatal(err)
+	}
 }
