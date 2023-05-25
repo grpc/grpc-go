@@ -98,6 +98,11 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		},
 	})
 
+	origCustomLBSupport := envconfig.XDSCustomLBPolicy
+	envconfig.XDSCustomLBPolicy = true
+	defer func() {
+		envconfig.XDSCustomLBPolicy = origCustomLBSupport
+	}()
 	tests := []struct {
 		name             string
 		cluster          *v3clusterpb.Cluster
