@@ -431,7 +431,7 @@ func makeFuncUnconstrainedStreamPreloaded(bf stats.Features) (rpcSendFunc, rpcRe
 	}
 
 	return func(conn, pos int) {
-			streams[conn][pos].SendMsg(preparedMsg[pos])
+			streams[conn][pos].SendMsg(preparedMsg[conn][pos])
 		}, func(conn, pos int) {
 			streams[conn][pos].Recv()
 		}, cleanup
