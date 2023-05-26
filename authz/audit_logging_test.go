@@ -48,32 +48,32 @@ func TestAudit(t *testing.T) {
 }
 
 type statAuditLogger struct {
-	AuthzDescisionStat map[bool]int      // Map to hold the counts of authorization decisions
-	EventContent       map[string]string // Map to hold event fields in key:value fashion
-	SpiffeIds          []string          // Slice to hold collected SPIFFE IDs
+	authDecisionStat map[bool]int      // Map to hold the counts of authorization decisions
+	lastEventContent map[string]string // Map to hold event fields in key:value fashion
 }
 
 func (s *statAuditLogger) Log(event *audit.Event) {
-	s.AuthzDescisionStat[event.Authorized]++
-	s.EventContent["rpc_method"] = event.FullMethodName
-	s.EventContent["principal"] = event.Principal
-	s.EventContent["policy_name"] = event.PolicyName
-	s.EventContent["matched_rule"] = event.MatchedRule
-	s.EventContent["authorized"] = strconv.FormatBool(event.Authorized)
+	s.authDecisionStat[event.Authorized]++
+	s.lastEventContent["rpc_method"] = event.FullMethodName
+	s.lastEventContent["principal"] = event.Principal
+	s.lastEventContent["policy_name"] = event.PolicyName
+	s.lastEventContent["matched_rule"] = event.MatchedRule
+	s.lastEventContent["authorized"] = strconv.FormatBool(event.Authorized)
 }
 
 type loggerBuilder struct {
-	AuthDecisionStat map[bool]int
-	EventContent     map[string]string
+	authDecisionStat map[bool]int
+	lastEventContent map[string]string
 }
 
 func (loggerBuilder) Name() string {
 	return "stat_logger"
 }
+
 func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 	return &statAuditLogger{
-		AuthzDescisionStat: lb.AuthDecisionStat,
-		EventContent:       lb.EventContent,
+		authDecisionStat: lb.authDecisionStat,
+		lastEventContent: lb.lastEventContent,
 	}
 }
 
@@ -81,7 +81,14 @@ func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerCon
 	return nil, nil
 }
 
+// TestAuditLogger examines audit logging invocations using four different authorization policies.
+// It covers scenarios including a disabled audit, auditing both 'allow' and 'deny' outcomes,
+// and separately auditing 'allow' and 'deny' outcomes.
+// Additionally, it checks if SPIFFE ID from a certificate is propagated correctly.
 func (s) TestAuditLogger(t *testing.T) {
+	// Each test data entry contains an authz policy for a grpc server,
+	// how many 'allow' and 'deny' outcomes we expect (each test case makes 2 unary calls and one client-streaming call),
+	// and a structure to check if the audit.Event fields are properly populated.
 	tests := map[string]struct {
 		authzPolicy  string
 		wantAllows   int
@@ -91,14 +98,12 @@ func (s) TestAuditLogger(t *testing.T) {
 		"No audit": {
 			authzPolicy: `{
 				"name": "authz",
-				"allow_rules":
-				[
+				"allow_rules": [
 					{
 						"name": "allow_UnaryCall",
 						"request":
 						{
-							"paths":
-							[
+							"paths": [
 								"/grpc.testing.TestService/UnaryCall"
 							]
 						}
@@ -121,20 +126,17 @@ func (s) TestAuditLogger(t *testing.T) {
 		"Allow All Deny Streaming - Audit All": {
 			authzPolicy: `{
 				"name": "authz",
-				"allow_rules":
-				[
+				"allow_rules": [
 					{
 						"name": "allow_all",
 						"request": {
-							"paths":
-							[
+							"paths": [
 								"*"
 							]
 						}
 					}
 				],
-				"deny_rules":
-				[
+				"deny_rules": [
 					{
 						"name": "deny_all",
 						"request": {
@@ -173,14 +175,12 @@ func (s) TestAuditLogger(t *testing.T) {
 		"Allow Unary - Audit Allow": {
 			authzPolicy: `{
 				"name": "authz",
-				"allow_rules":
-				[
+				"allow_rules": [
 					{
 						"name": "allow_UnaryCall",
 						"request":
 						{
-							"paths":
-							[
+							"paths": [
 								"/grpc.testing.TestService/UnaryCall"
 							]
 						}
@@ -203,14 +203,12 @@ func (s) TestAuditLogger(t *testing.T) {
 		"Allow Typo - Audit Deny": {
 			authzPolicy: `{
 				"name": "authz",
-				"allow_rules":
-				[
+				"allow_rules": [
 					{
 						"name": "allow_UnaryCall",
 						"request":
 						{
-							"paths":
-							[
+							"paths": [
 								"/grpc.testing.TestService/UnaryCall_Z"
 							]
 						}
@@ -236,8 +234,8 @@ func (s) TestAuditLogger(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Setup test statAuditLogger, gRPC test server with authzPolicy, unary and stream interceptors.
 			lb := &loggerBuilder{
-				AuthDecisionStat: make(map[bool]int),
-				EventContent:     make(map[string]string),
+				authDecisionStat: make(map[bool]int),
+				lastEventContent: make(map[string]string),
 			}
 			audit.RegisterLoggerBuilder(lb)
 			i, _ := authz.NewStatic(test.authzPolicy)
@@ -315,15 +313,15 @@ func (s) TestAuditLogger(t *testing.T) {
 			stream.CloseAndRecv()
 
 			// Compare expected number of allows/denies with content of internal map of statAuditLogger.
-			if lb.AuthDecisionStat[true] != test.wantAllows {
-				t.Errorf("Allow case failed, want %v got %v", test.wantAllows, lb.AuthDecisionStat[true])
+			if lb.authDecisionStat[true] != test.wantAllows {
+				t.Errorf("Allow case failed, want %v got %v", test.wantAllows, lb.authDecisionStat[true])
 			}
-			if lb.AuthDecisionStat[false] != test.wantDenies {
-				t.Errorf("Deny case failed, want %v got %v", test.wantDenies, lb.AuthDecisionStat[false])
+			if lb.authDecisionStat[false] != test.wantDenies {
+				t.Errorf("Deny case failed, want %v got %v", test.wantDenies, lb.authDecisionStat[false])
 			}
 			// Compare event fields with expected values from authz policy.
 			if test.eventContent != nil {
-				if diff := cmp.Diff(lb.EventContent, test.eventContent); diff != "" {
+				if diff := cmp.Diff(lb.lastEventContent, test.eventContent); diff != "" {
 					t.Fatalf("Unexpected message\ndiff (-got +want):\n%s", diff)
 				}
 			}
