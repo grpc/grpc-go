@@ -6,7 +6,7 @@ require (
 	github.com/envoyproxy/go-control-plane v0.11.0
 	github.com/google/cel-go v0.14.0
 	github.com/google/go-cmp v0.5.9
-	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1
+	google.golang.org/genproto/googleapis/api v0.0.0-20230525234035-dd9d682886f9
 	google.golang.org/grpc v1.54.0
 	google.golang.org/protobuf v1.30.0
 )
@@ -19,4 +19,5 @@ require (
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	golang.org/x/exp v0.0.0-20230418202329-0354be287a23 // indirect
 	golang.org/x/text v0.9.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230525234030-28d5490b6b19 // indirect
 )
