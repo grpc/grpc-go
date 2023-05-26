@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/serviceconfig"
 	_ "google.golang.org/grpc/xds" // Register the xDS LB Registry Converters.
 	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdslbregistry"
@@ -60,10 +59,6 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-type customLBConfig struct {
-	serviceconfig.LoadBalancingConfig
-}
-
 func wrrLocalityBalancerConfig(childPolicy *internalserviceconfig.BalancerConfig) *internalserviceconfig.BalancerConfig {
 	return &internalserviceconfig.BalancerConfig{
 		Name: wrrlocality.Name,
@@ -75,11 +70,7 @@ func wrrLocalityBalancerConfig(childPolicy *internalserviceconfig.BalancerConfig
 
 func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 	const customLBPolicyName = "myorg.MyCustomLeastRequestPolicy"
-	stub.Register(customLBPolicyName, stub.BalancerFuncs{
-		ParseConfig: func(json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-			return customLBConfig{}, nil
-		},
-	})
+	stub.Register(customLBPolicyName, stub.BalancerFuncs{})
 
 	tests := []struct {
 		name       string
