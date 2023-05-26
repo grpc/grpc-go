@@ -16,7 +16,7 @@
  *
  */
 
-package authz_test
+package audit_test
 
 import (
 	"context"
@@ -26,7 +26,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
@@ -36,6 +35,7 @@ import (
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/stubserver"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/testdata"
@@ -43,27 +43,27 @@ import (
 	_ "google.golang.org/grpc/authz/audit/stdout"
 )
 
-func TestAudit(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
 type statAuditLogger struct {
-	authzDecisionStat map[bool]int      // Map to hold the counts of authorization decisions
-	lastEventContent  map[string]string // Map to hold event fields in key:value fashion
+	authzDecisionStat map[bool]int // Map to hold the counts of authorization decisions
+	lastEvent         *audit.Event // Map to hold event fields in key:value fashion
 }
 
 func (s *statAuditLogger) Log(event *audit.Event) {
 	s.authzDecisionStat[event.Authorized]++
-	s.lastEventContent["rpc_method"] = event.FullMethodName
-	s.lastEventContent["principal"] = event.Principal
-	s.lastEventContent["policy_name"] = event.PolicyName
-	s.lastEventContent["matched_rule"] = event.MatchedRule
-	s.lastEventContent["authorized"] = strconv.FormatBool(event.Authorized)
+	*s.lastEvent = *event
 }
 
 type loggerBuilder struct {
 	authzDecisionStat map[bool]int
-	lastEventContent  map[string]string
+	lastEvent         *audit.Event
 }
 
 func (loggerBuilder) Name() string {
@@ -73,7 +73,7 @@ func (loggerBuilder) Name() string {
 func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 	return &statAuditLogger{
 		authzDecisionStat: lb.authzDecisionStat,
-		lastEventContent:  lb.lastEventContent,
+		lastEvent:         lb.lastEvent,
 	}
 }
 
@@ -93,7 +93,7 @@ func (s) TestAuditLogger(t *testing.T) {
 		name              string
 		authzPolicy       string
 		wantAuthzOutcomes map[bool]int
-		eventContent      map[string]string
+		eventContent      *audit.Event
 	}{
 		{
 			name: "No audit",
@@ -102,8 +102,7 @@ func (s) TestAuditLogger(t *testing.T) {
 				"allow_rules": [
 					{
 						"name": "allow_UnaryCall",
-						"request":
-						{
+						"request": {
 							"paths": [
 								"/grpc.testing.TestService/UnaryCall"
 							]
@@ -141,8 +140,7 @@ func (s) TestAuditLogger(t *testing.T) {
 					{
 						"name": "deny_all",
 						"request": {
-							"paths":
-							[
+							"paths": [
 								"/grpc.testing.TestService/StreamingInputCall"
 							]
 						}
@@ -164,12 +162,12 @@ func (s) TestAuditLogger(t *testing.T) {
 				}
 			}`,
 			wantAuthzOutcomes: map[bool]int{true: 2, false: 1},
-			eventContent: map[string]string{
-				"rpc_method":   "/grpc.testing.TestService/StreamingInputCall",
-				"principal":    "spiffe://foo.bar.com/client/workload/1",
-				"policy_name":  "authz",
-				"matched_rule": "authz_deny_all",
-				"authorized":   "false",
+			eventContent: &audit.Event{
+				FullMethodName: "/grpc.testing.TestService/StreamingInputCall",
+				Principal:      "spiffe://foo.bar.com/client/workload/1",
+				PolicyName:     "authz",
+				MatchedRule:    "authz_deny_all",
+				Authorized:     false,
 			},
 		},
 		{
@@ -179,8 +177,7 @@ func (s) TestAuditLogger(t *testing.T) {
 				"allow_rules": [
 					{
 						"name": "allow_UnaryCall",
-						"request":
-						{
+						"request": {
 							"paths": [
 								"/grpc.testing.TestService/UnaryCall"
 							]
@@ -230,22 +227,38 @@ func (s) TestAuditLogger(t *testing.T) {
 		},
 	}
 
+	serverCreds := loadServerCreds(t)
+	clientCreds := loadClientCreds(t)
+
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			_, err := stream.Recv()
+			if err != io.EOF {
+				return err
+			}
+			return nil
+		},
+	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Setup test statAuditLogger, gRPC test server with authzPolicy, unary and stream interceptors.
 			lb := &loggerBuilder{
 				authzDecisionStat: map[bool]int{true: 0, false: 0},
-				lastEventContent:  make(map[string]string),
+				lastEvent:         &audit.Event{},
 			}
 			audit.RegisterLoggerBuilder(lb)
 			i, _ := authz.NewStatic(test.authzPolicy)
 
 			s := grpc.NewServer(
-				grpc.Creds(loadServerCreds(t)),
+				grpc.Creds(serverCreds),
 				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
 				grpc.ChainStreamInterceptor(i.StreamInterceptor))
 			defer s.Stop()
-			testgrpc.RegisterTestServiceServer(s, &testServer{})
+			testgrpc.RegisterTestServiceServer(s, ss)
 			lis, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
 				t.Fatalf("error listening: %v", err)
@@ -253,7 +266,7 @@ func (s) TestAuditLogger(t *testing.T) {
 			go s.Serve(lis)
 
 			// Setup gRPC test client with certificates containing a SPIFFE Id.
-			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(loadClientCreds(t)))
+			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(clientCreds))
 			if err != nil {
 				t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
 			}
@@ -262,21 +275,15 @@ func (s) TestAuditLogger(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			// Make 2 unary calls and 1 streaming call.
 			client.UnaryCall(ctx, &testpb.SimpleRequest{})
 			client.UnaryCall(ctx, &testpb.SimpleRequest{})
 			stream, err := client.StreamingInputCall(ctx)
-			if err != nil {
-				t.Fatalf("failed StreamingInputCall err: %v", err)
-			}
 			req := &testpb.StreamingInputCallRequest{
 				Payload: &testpb.Payload{
 					Body: []byte("hi"),
 				},
 			}
-			if err := stream.Send(req); err != nil && err != io.EOF {
-				t.Fatalf("failed stream.Send err: %v", err)
-			}
+			stream.Send(req)
 			stream.CloseAndRecv()
 
 			// Compare expected number of allows/denies with content of internal map of statAuditLogger.
@@ -285,7 +292,7 @@ func (s) TestAuditLogger(t *testing.T) {
 			}
 			// Compare event fields with expected values from authz policy.
 			if test.eventContent != nil {
-				if diff := cmp.Diff(lb.lastEventContent, test.eventContent); diff != "" {
+				if diff := cmp.Diff(lb.lastEvent, test.eventContent); diff != "" {
 					t.Fatalf("Unexpected message\ndiff (-got +want):\n%s", diff)
 				}
 			}
@@ -293,19 +300,11 @@ func (s) TestAuditLogger(t *testing.T) {
 	}
 }
 
+// loadServerCreds constructs TLS containing server certs and CA
 func loadServerCreds(t *testing.T) credentials.TransportCredentials {
-	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
-	if err != nil {
-		t.Fatalf("tls.LoadX509KeyPair(x509/server1_cert.pem, x509/server1_key.pem) failed: %v", err)
-	}
-	ca, err := os.ReadFile(testdata.Path("x509/client_ca_cert.pem"))
-	if err != nil {
-		t.Fatalf("os.ReadFile(x509/client_ca_cert.pem) failed: %v", err)
-	}
-	certPool := x509.NewCertPool()
-	if !certPool.AppendCertsFromPEM(ca) {
-		t.Fatal("failed to append certificates")
-	}
+	t.Helper()
+	cert := loadKeys(t, "x509/server1_cert.pem", "x509/server1_key.pem")
+	certPool := loadCaCerts(t, "x509/client_ca_cert.pem")
 	return credentials.NewTLS(&tls.Config{
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 		Certificates: []tls.Certificate{cert},
@@ -313,23 +312,41 @@ func loadServerCreds(t *testing.T) credentials.TransportCredentials {
 	})
 }
 
+// loadClientCreds constructs TLS containing client certs and CA
 func loadClientCreds(t *testing.T) credentials.TransportCredentials {
-	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/client_with_spiffe_cert.pem"), testdata.Path("x509/client_with_spiffe_key.pem"))
-	if err != nil {
-		t.Fatalf("tls.LoadX509KeyPair(x509/client1_cert.pem, x509/client1_key.pem) failed: %v", err)
-	}
-	ca, err := os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
-	if err != nil {
-		t.Fatalf("os.ReadFile(x509/server_ca_cert.pem) failed: %v", err)
-	}
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(ca) {
-		t.Fatal("failed to append certificates")
-	}
+	t.Helper()
+	cert := loadKeys(t, "x509/client_with_spiffe_cert.pem", "x509/client_with_spiffe_key.pem")
+	roots := loadCaCerts(t, "x509/server_ca_cert.pem")
 	return credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      roots,
 		ServerName:   "x.test.example.com",
 	})
 
+}
+
+// loadCaCerts loads X509 key pair from the provided file paths.
+// It is used for loading both client and server certificates for the test
+func loadKeys(t *testing.T, certPath, key string) tls.Certificate {
+	t.Helper()
+	cert, err := tls.LoadX509KeyPair(testdata.Path(certPath), testdata.Path(key))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(%q, %q) failed: %v", certPath, key, err)
+	}
+	return cert
+}
+
+// loadCaCerts loads CA certificates and constructs x509.CertPool
+// It is used for loading both client and server CAs for the test
+func loadCaCerts(t *testing.T, certPath string) *x509.CertPool {
+	t.Helper()
+	ca, err := os.ReadFile(testdata.Path(certPath))
+	if err != nil {
+		t.Fatalf("os.ReadFile(%q) failed: %v", certPath, err)
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(ca) {
+		t.Fatal("failed to append certificates")
+	}
+	return roots
 }

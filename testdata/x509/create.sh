@@ -130,20 +130,20 @@ openssl req -x509                                                         \
 
 # Generate a cert with SPIFFE ID using client_with_spiffe_openssl.cnf
 openssl req -new                                    \
-  -key client_with_spiffe_key.pem                              \
-  -out client_with_spiffe_csr.pem                              \
+  -key client_with_spiffe_key.pem                   \
+  -out client_with_spiffe_csr.pem                   \
   -subj /C=US/ST=CA/L=SVL/O=gRPC/CN=test-client1/   \
-  -config ./client_with_spiffe_openssl.cnf                             \
+  -config ./client_with_spiffe_openssl.cnf          \
   -reqexts test_client
-openssl x509 -req           \
-  -in client_with_spiffe_csr.pem       \
-  -CAkey client_ca_key.pem  \
-  -CA client_ca_cert.pem    \
-  -days 3650                \
-  -set_serial 1000          \
-  -out client_with_spiffe_cert.pem     \
+openssl x509 -req                              \
+  -in client_with_spiffe_csr.pem               \
+  -CAkey client_ca_key.pem                     \
+  -CA client_ca_cert.pem                       \
+  -days 3650                                   \
+  -set_serial 1000                             \
+  -out client_with_spiffe_cert.pem             \
   -extfile ./client_with_spiffe_openssl.cnf    \
-  -extensions test_client   \
+  -extensions test_client                      \
   -sha256
 openssl verify -verbose -CAfile client_with_spiffe_cert.pem
 
