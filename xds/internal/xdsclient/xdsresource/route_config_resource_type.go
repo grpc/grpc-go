@@ -32,8 +32,7 @@ const (
 
 var (
 	// Compile time interface checks.
-	_ Type         = routeConfigResourceType{}
-	_ ResourceData = &RouteConfigResourceData{}
+	_ Type = routeConfigResourceType{}
 
 	// Singleton instantiation of the resource type implementation.
 	routeConfigType = routeConfigResourceType{

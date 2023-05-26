@@ -155,6 +155,11 @@ type ClientStream interface {
 // If none of the above happen, a goroutine and a context will be leaked, and grpc
 // will not call the optionally-configured stats handler with a stats.End message.
 func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (ClientStream, error) {
+	if err := cc.idlenessMgr.onCallBegin(); err != nil {
+		return nil, err
+	}
+	defer cc.idlenessMgr.onCallEnd()
+
 	// allow interceptor to see all applicable call options, which means those
 	// configured as defaults from dial option as well as per-call options
 	opts = combine(cc.dopts.callOptions, opts)
@@ -1268,14 +1273,19 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 	as.p = &parser{r: s}
 	ac.incrCallsStarted()
 	if desc != unaryStreamDesc {
-		// Listen on cc and stream contexts to cleanup when the user closes the
-		// ClientConn or cancels the stream context.  In all other cases, an error
-		// should already be injected into the recv buffer by the transport, which
-		// the client will eventually receive, and then we will cancel the stream's
-		// context in clientStream.finish.
+		// Listen on stream context to cleanup when the stream context is
+		// canceled.  Also listen for the addrConn's context in case the
+		// addrConn is closed or reconnects to a different address.  In all
+		// other cases, an error should already be injected into the recv
+		// buffer by the transport, which the client will eventually receive,
+		// and then we will cancel the stream's context in
+		// addrConnStream.finish.
 		go func() {
+			ac.mu.Lock()
+			acCtx := ac.ctx
+			ac.mu.Unlock()
 			select {
-			case <-ac.ctx.Done():
+			case <-acCtx.Done():
 				as.finish(status.Error(codes.Canceled, "grpc: the SubConn is closing"))
 			case <-ctx.Done():
 				as.finish(toRPCErr(ctx.Err()))

@@ -18,9 +18,7 @@
 package outlierdetection
 
 import (
-	"time"
-
-	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -128,15 +126,15 @@ type LBConfig struct {
 	// Interval is the time interval between ejection analysis sweeps. This can
 	// result in both new ejections as well as addresses being returned to
 	// service. Defaults to 10s.
-	Interval time.Duration `json:"interval,omitempty"`
+	Interval iserviceconfig.Duration `json:"interval,omitempty"`
 	// BaseEjectionTime is the base time that a host is ejected for. The real
 	// time is equal to the base time multiplied by the number of times the host
 	// has been ejected and is capped by MaxEjectionTime. Defaults to 30s.
-	BaseEjectionTime time.Duration `json:"baseEjectionTime,omitempty"`
+	BaseEjectionTime iserviceconfig.Duration `json:"baseEjectionTime,omitempty"`
 	// MaxEjectionTime is the maximum time that an address is ejected for. If
 	// not specified, the default value (300s) or the BaseEjectionTime value is
 	// applied, whichever is larger.
-	MaxEjectionTime time.Duration `json:"maxEjectionTime,omitempty"`
+	MaxEjectionTime iserviceconfig.Duration `json:"maxEjectionTime,omitempty"`
 	// MaxEjectionPercent is the maximum % of an upstream cluster that can be
 	// ejected due to outlier detection. Defaults to 10% but will eject at least
 	// one host regardless of the value.
@@ -148,7 +146,7 @@ type LBConfig struct {
 	// algorithm. If set, failure rate ejections will be performed.
 	FailurePercentageEjection *FailurePercentageEjection `json:"failurePercentageEjection,omitempty"`
 	// ChildPolicy is the config for the child policy.
-	ChildPolicy *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
+	ChildPolicy *iserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
 
 // EqualIgnoringChildPolicy returns whether the LBConfig is same with the

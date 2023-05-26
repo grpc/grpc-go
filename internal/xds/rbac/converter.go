@@ -24,13 +24,13 @@ import (
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
+	v3auditloggersstreampb "github.com/envoyproxy/go-control-plane/envoy/extensions/rbac/audit_loggers/stream/v3"
 	"google.golang.org/grpc/authz/audit"
+	"google.golang.org/grpc/authz/audit/stdout"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
-
-const udpaTypedStuctType = "type.googleapis.com/udpa.type.v1.TypedStruct"
-const xdsTypedStuctType = "type.googleapis.com/xds.type.v3.TypedStruct"
 
 func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig) (audit.Logger, error) {
 	if loggerConfig.GetAuditLogger().GetTypedConfig() == nil {
@@ -59,21 +59,24 @@ func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConf
 }
 
 func getCustomConfig(config *anypb.Any) (json.RawMessage, string, error) {
-	switch config.GetTypeUrl() {
-	case udpaTypedStuctType:
-		typedStruct := &v1xdsudpatypepb.TypedStruct{}
-		if err := config.UnmarshalTo(typedStruct); err != nil {
-			return nil, "", fmt.Errorf("failed to unmarshal resource: %v", err)
-		}
-		return convertCustomConfig(typedStruct.TypeUrl, typedStruct.Value)
-	case xdsTypedStuctType:
-		typedStruct := &v3xdsxdstypepb.TypedStruct{}
-		if err := config.UnmarshalTo(typedStruct); err != nil {
-			return nil, "", fmt.Errorf("failed to unmarshal resource: %v", err)
-		}
-		return convertCustomConfig(typedStruct.TypeUrl, typedStruct.Value)
+	any, err := config.UnmarshalNew()
+	if err != nil {
+		return nil, "", err
+	}
+	switch m := any.(type) {
+	case *v1xdsudpatypepb.TypedStruct:
+		return convertCustomConfig(m.TypeUrl, m.Value)
+	case *v3xdsxdstypepb.TypedStruct:
+		return convertCustomConfig(m.TypeUrl, m.Value)
+	case *v3auditloggersstreampb.StdoutAuditLog:
+		return convertStdoutConfig(m)
 	}
 	return nil, "", fmt.Errorf("custom config not implemented for type [%v]", config.GetTypeUrl())
+}
+
+func convertStdoutConfig(config *v3auditloggersstreampb.StdoutAuditLog) (json.RawMessage, string, error) {
+	json, err := protojson.Marshal(config)
+	return json, stdout.Name, err
 }
 
 func convertCustomConfig(typeURL string, s *structpb.Struct) (json.RawMessage, string, error) {
