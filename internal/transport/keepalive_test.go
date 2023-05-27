@@ -699,16 +699,19 @@ func (s) TestTCPUserTimeout(t *testing.T) {
 		}
 		client.CloseStream(stream, io.EOF)
 
-		cltOpt, err := syscall.GetTCPUserTimeout(client.conn)
-		if err != nil {
-			t.Fatalf("syscall.GetTCPUserTimeout() failed: %v", err)
-		}
-		if cltOpt < 0 {
-			t.Skipf("skipping test on unsupported environment")
-		}
-
-		if gotTimeout := time.Duration(cltOpt) * time.Millisecond; gotTimeout != tt.clientWantTimeout {
-			t.Fatalf("syscall.GetTCPUserTimeout() = %d, want %d", gotTimeout, tt.clientWantTimeout)
+		// check client TCP user timeout only when non TLS
+		// TODO : find a way to get the underlying conn for client when TLS
+		if !tt.tls {
+			cltOpt, err := syscall.GetTCPUserTimeout(client.conn)
+			if err != nil {
+				t.Fatalf("syscall.GetTCPUserTimeout() failed: %v", err)
+			}
+			if cltOpt < 0 {
+				t.Skipf("skipping test on unsupported environment")
+			}
+			if gotTimeout := time.Duration(cltOpt) * time.Millisecond; gotTimeout != tt.clientWantTimeout {
+				t.Fatalf("syscall.GetTCPUserTimeout() = %d, want %d", gotTimeout, tt.clientWantTimeout)
+			}
 		}
 		scConn := sc.conn
 		if tt.tls {
