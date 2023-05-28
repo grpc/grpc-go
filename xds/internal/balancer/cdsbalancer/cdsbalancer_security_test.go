@@ -63,6 +63,7 @@ var (
 			IdentityInstanceName:   "default2",
 			SubjectAltNameMatchers: testSANMatchers,
 		},
+		LBPolicy: wrrLocalityLBConfigJSON,
 	}
 	cdsUpdateWithMissingSecurityCfg = xdsresource.ClusterUpdate{
 		ClusterName: serviceName,
@@ -248,8 +249,11 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	cdsUpdate := xdsresource.ClusterUpdate{
+		ClusterName: serviceName,
+		LBPolicy:    wrrLocalityLBConfigJSON,
+	}
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfig, noopODLBCfg)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -304,8 +308,11 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup. No security config is
 	// passed to the CDS balancer as part of this update.
-	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	cdsUpdate := xdsresource.ClusterUpdate{
+		ClusterName: serviceName,
+		LBPolicy:    wrrLocalityLBConfigJSON,
+	}
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfig, noopODLBCfg)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -461,7 +468,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfig, noopODLBCfg)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -495,7 +502,7 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfig, noopODLBCfg)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
@@ -548,7 +555,7 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfig, noopODLBCfg)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
@@ -564,7 +571,10 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	// an update which contains bad security config. So, we expect the CDS
 	// balancer to forward this error to the EDS balancer and eventually the
 	// channel needs to be put in a bad state.
-	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
+	cdsUpdate := xdsresource.ClusterUpdate{
+		ClusterName: serviceName,
+		LBPolicy:    wrrLocalityLBConfigJSON,
+	}
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -598,7 +608,7 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfig, noopODLBCfg)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
@@ -675,8 +685,9 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 			RootInstanceName:       "default1",
 			SubjectAltNameMatchers: testSANMatchers,
 		},
+		LBPolicy: wrrLocalityLBConfigJSON,
 	}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfig, noopODLBCfg)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -700,6 +711,7 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 			RootInstanceName:       "default2",
 			SubjectAltNameMatchers: testSANMatchers,
 		},
+		LBPolicy: wrrLocalityLBConfigJSON,
 	}
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)

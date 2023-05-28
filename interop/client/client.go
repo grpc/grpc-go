@@ -17,15 +17,21 @@
  */
 
 // Binary client is an interop client.
+//
+// See interop test case descriptions [here].
+//
+// [here]: https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -37,6 +43,7 @@ import (
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
 
@@ -71,6 +78,7 @@ var (
 	soakOverallTimeoutSeconds              = flag.Int("soak_overall_timeout_seconds", 10, "The overall number of seconds after which a soak test should stop and fail, if the desired number of iterations have not yet completed.")
 	soakMinTimeMsBetweenRPCs               = flag.Int("soak_min_time_ms_between_rpcs", 0, "The minimum time in milliseconds between consecutive RPCs in a soak test (rpc_soak or channel_soak), useful for limiting QPS")
 	tlsServerName                          = flag.String("server_host_override", "", "The server name used to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
+	additionalMetadata                     = flag.String("additional_metadata", "", "Additional metadata to send in each request, as a semicolon-separated list of key:value pairs.")
 	testCase                               = flag.String("test_case", "large_unary",
 		`Configure different test cases. Valid options are:
         empty_unary : empty (zero bytes) request and response;
@@ -94,7 +102,9 @@ var (
         custom_metadata: server will echo custom metadata;
         unimplemented_method: client attempts to call unimplemented method;
         unimplemented_service: client attempts to call unimplemented service;
-        pick_first_unary: all requests are sent to one server despite multiple servers are resolved.`)
+        pick_first_unary: all requests are sent to one server despite multiple servers are resolved;
+        orca_per_rpc: the client verifies ORCA per-RPC metrics are provided;
+        orca_oob: the client verifies ORCA out-of-band metrics are provided.`)
 
 	logger = grpclog.Component("interop")
 )
@@ -108,6 +118,34 @@ const (
 	credsGoogleDefaultCreds
 	credsComputeEngineCreds
 )
+
+// Parses the --additional_metadata flag and returns metadata to send on each RPC,
+// formatted as per https://pkg.go.dev/google.golang.org/grpc/metadata#Pairs.
+// Allow any character but semicolons in values. If the flag is empty, return a nil map.
+func parseAdditionalMetadataFlag() []string {
+	if len(*additionalMetadata) == 0 {
+		return nil
+	}
+	r := *additionalMetadata
+	addMd := make([]string, 0)
+	for len(r) > 0 {
+		i := strings.Index(r, ":")
+		if i < 0 {
+			logger.Fatalf("Error parsing --additional_metadata flag: missing colon separator")
+		}
+		addMd = append(addMd, r[:i]) // append key
+		r = r[i+1:]
+		i = strings.Index(r, ";")
+		// append value
+		if i < 0 {
+			addMd = append(addMd, r)
+			break
+		}
+		addMd = append(addMd, r[:i])
+		r = r[i+1:]
+	}
+	return addMd
+}
 
 func main() {
 	flag.Parse()
@@ -207,6 +245,17 @@ func main() {
 	}
 	if len(*serviceConfigJSON) > 0 {
 		opts = append(opts, grpc.WithDisableServiceConfig(), grpc.WithDefaultServiceConfig(*serviceConfigJSON))
+	}
+	if addMd := parseAdditionalMetadataFlag(); addMd != nil {
+		unaryAddMd := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+			ctx = metadata.AppendToOutgoingContext(ctx, addMd...)
+			return invoker(ctx, method, req, reply, cc, opts...)
+		}
+		streamingAddMd := func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+			ctx = metadata.AppendToOutgoingContext(ctx, addMd...)
+			return streamer(ctx, desc, cc, method, opts...)
+		}
+		opts = append(opts, grpc.WithUnaryInterceptor(unaryAddMd), grpc.WithStreamInterceptor(streamingAddMd))
 	}
 	conn, err := grpc.Dial(serverAddr, opts...)
 	if err != nil {
@@ -308,6 +357,12 @@ func main() {
 	case "channel_soak":
 		interop.DoSoakTest(tc, serverAddr, opts, true /* resetChannel */, *soakIterations, *soakMaxFailures, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, time.Now().Add(time.Duration(*soakOverallTimeoutSeconds)*time.Second))
 		logger.Infoln("ChannelSoak done")
+	case "orca_per_rpc":
+		interop.DoORCAPerRPCTest(tc)
+		logger.Infoln("ORCAPerRPC done")
+	case "orca_oob":
+		interop.DoORCAOOBTest(tc)
+		logger.Infoln("ORCAOOB done")
 	default:
 		logger.Fatal("Unsupported test case: ", *testCase)
 	}

@@ -212,44 +212,33 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if ok := cc.WaitForStateChange(ctx, connectivity.Idle); !ok {
-		t.Fatal("ClientConn is still in IDLE state when the context times out.")
-	}
-	if ok := cc.WaitForStateChange(ctx, connectivity.Connecting); !ok {
-		t.Fatal("ClientConn is still in CONNECTING state when the context times out.")
-	}
+	awaitNotState(ctx, t, cc, connectivity.Idle)
+	awaitNotState(ctx, t, cc, connectivity.Connecting)
+	awaitState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
-	if ok := cc.WaitForStateChange(ctx, connectivity.TransientFailure); !ok {
-		t.Fatal("ClientConn is still in TRANSIENT FAILURE state when the context times out.")
-	}
+	awaitNotState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
-	if ok := cc.WaitForStateChange(ctx, connectivity.Ready); !ok {
-		t.Fatal("ClientConn is still in READY state when the context times out.")
-	}
+	awaitNotState(ctx, t, cc, connectivity.Ready)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
-	if ok := cc.WaitForStateChange(ctx, connectivity.TransientFailure); !ok {
-		t.Fatal("ClientConn is still in TRANSIENT FAILURE state when the context times out.")
-	}
+	awaitNotState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_UNKNOWN)
-	if ok := cc.WaitForStateChange(ctx, connectivity.Ready); !ok {
-		t.Fatal("ClientConn is still in READY state when the context times out.")
-	}
+	awaitNotState(ctx, t, cc, connectivity.Ready)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
@@ -278,12 +267,8 @@ func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if ok := cc.WaitForStateChange(ctx, connectivity.Idle); !ok {
-		t.Fatal("ClientConn is still in IDLE state when the context times out.")
-	}
-	if ok := cc.WaitForStateChange(ctx, connectivity.Connecting); !ok {
-		t.Fatal("ClientConn is still in CONNECTING state when the context times out.")
-	}
+	awaitNotState(ctx, t, cc, connectivity.Idle)
+	awaitNotState(ctx, t, cc, connectivity.Connecting)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}

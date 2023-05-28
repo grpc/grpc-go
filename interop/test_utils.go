@@ -17,6 +17,10 @@
  */
 
 // Package interop contains functions used by interop client/server.
+//
+// See interop test case descriptions [here].
+//
+// [here]: https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md
 package interop
 
 import (
@@ -26,6 +30,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -36,9 +41,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
+	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -772,10 +779,24 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 
 type testServer struct {
 	testgrpc.UnimplementedTestServiceServer
+
+	orcaMu          sync.Mutex
+	metricsRecorder orca.ServerMetricsRecorder
 }
 
-// NewTestServer creates a test server for test service.
-func NewTestServer() testgrpc.TestServiceServer {
+// NewTestServerOptions contains options that control the behavior of the test
+// server returned by NewTestServer.
+type NewTestServerOptions struct {
+	MetricsRecorder orca.ServerMetricsRecorder
+}
+
+// NewTestServer creates a test server for test service.  opts carries optional
+// settings and does not need to be provided.  If multiple opts are provided,
+// only the first one is used.
+func NewTestServer(opts ...NewTestServerOptions) testgrpc.TestServiceServer {
+	if len(opts) > 0 {
+		return &testServer{metricsRecorder: opts[0].MetricsRecorder}
+	}
 	return &testServer{}
 }
 
@@ -818,9 +839,27 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	if err != nil {
 		return nil, err
 	}
+	if r, orcaData := orca.CallMetricsRecorderFromContext(ctx), in.GetOrcaPerQueryReport(); r != nil && orcaData != nil {
+		// Transfer the request's per-Call ORCA data to the call metrics
+		// recorder in the context, if present.
+		setORCAMetrics(r, orcaData)
+	}
 	return &testpb.SimpleResponse{
 		Payload: pl,
 	}, nil
+}
+
+func setORCAMetrics(r orca.ServerMetricsRecorder, orcaData *testpb.TestOrcaReport) {
+	r.SetCPUUtilization(orcaData.CpuUtilization)
+	r.SetMemoryUtilization(orcaData.MemoryUtilization)
+	if rq, ok := r.(orca.CallMetricsRecorder); ok {
+		for k, v := range orcaData.RequestCost {
+			rq.SetRequestCost(k, v)
+		}
+	}
+	for k, v := range orcaData.Utilization {
+		r.SetNamedUtilization(k, v)
+	}
 }
 
 func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
@@ -870,6 +909,7 @@ func (s *testServer) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallSe
 			stream.SetTrailer(trailer)
 		}
 	}
+	hasORCALock := false
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
@@ -883,6 +923,18 @@ func (s *testServer) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallSe
 		if st != nil && st.Code != 0 {
 			return status.Error(codes.Code(st.Code), st.Message)
 		}
+
+		if r, orcaData := s.metricsRecorder, in.GetOrcaOobReport(); r != nil && orcaData != nil {
+			// Transfer the request's OOB ORCA data to the server metrics recorder
+			// in the server, if present.
+			if !hasORCALock {
+				s.orcaMu.Lock()
+				defer s.orcaMu.Unlock()
+				hasORCALock = true
+			}
+			setORCAMetrics(r, orcaData)
+		}
+
 		cs := in.GetResponseParameters()
 		for _, c := range cs {
 			if us := c.GetIntervalUs(); us > 0 {
@@ -932,4 +984,103 @@ func (s *testServer) HalfDuplexCall(stream testgrpc.TestService_HalfDuplexCallSe
 		}
 	}
 	return nil
+}
+
+// DoORCAPerRPCTest performs a unary RPC that enables ORCA per-call reporting
+// and verifies the load report sent back to the LB policy's Done callback.
+func DoORCAPerRPCTest(tc testgrpc.TestServiceClient) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	orcaRes := &v3orcapb.OrcaLoadReport{}
+	_, err := tc.UnaryCall(contextWithORCAResult(ctx, &orcaRes), &testpb.SimpleRequest{
+		OrcaPerQueryReport: &testpb.TestOrcaReport{
+			CpuUtilization:    0.8210,
+			MemoryUtilization: 0.5847,
+			RequestCost:       map[string]float64{"cost": 3456.32},
+			Utilization:       map[string]float64{"util": 0.30499},
+		},
+	})
+	if err != nil {
+		logger.Fatalf("/TestService/UnaryCall RPC failed: ", err)
+	}
+	want := &v3orcapb.OrcaLoadReport{
+		CpuUtilization: 0.8210,
+		MemUtilization: 0.5847,
+		RequestCost:    map[string]float64{"cost": 3456.32},
+		Utilization:    map[string]float64{"util": 0.30499},
+	}
+	if !proto.Equal(orcaRes, want) {
+		logger.Fatalf("/TestService/UnaryCall RPC received ORCA load report %+v; want %+v", orcaRes, want)
+	}
+}
+
+// DoORCAOOBTest performs a streaming RPC that enables ORCA OOB reporting and
+// verifies the load report sent to the LB policy's OOB listener.
+func DoORCAOOBTest(tc testgrpc.TestServiceClient) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	stream, err := tc.FullDuplexCall(ctx)
+	if err != nil {
+		logger.Fatalf("/TestService/FullDuplexCall received error starting stream: %v", err)
+	}
+	err = stream.Send(&testpb.StreamingOutputCallRequest{
+		OrcaOobReport: &testpb.TestOrcaReport{
+			CpuUtilization:    0.8210,
+			MemoryUtilization: 0.5847,
+			Utilization:       map[string]float64{"util": 0.30499},
+		},
+		ResponseParameters: []*testpb.ResponseParameters{{Size: 1}},
+	})
+	if err != nil {
+		logger.Fatalf("/TestService/FullDuplexCall received error sending: %v", err)
+	}
+	_, err = stream.Recv()
+	if err != nil {
+		logger.Fatalf("/TestService/FullDuplexCall received error receiving: %v", err)
+	}
+
+	want := &v3orcapb.OrcaLoadReport{
+		CpuUtilization: 0.8210,
+		MemUtilization: 0.5847,
+		Utilization:    map[string]float64{"util": 0.30499},
+	}
+	checkORCAMetrics(ctx, tc, want)
+
+	err = stream.Send(&testpb.StreamingOutputCallRequest{
+		OrcaOobReport: &testpb.TestOrcaReport{
+			CpuUtilization:    0.29309,
+			MemoryUtilization: 0.2,
+			Utilization:       map[string]float64{"util": 0.2039},
+		},
+		ResponseParameters: []*testpb.ResponseParameters{{Size: 1}},
+	})
+	if err != nil {
+		logger.Fatalf("/TestService/FullDuplexCall received error sending: %v", err)
+	}
+	_, err = stream.Recv()
+	if err != nil {
+		logger.Fatalf("/TestService/FullDuplexCall received error receiving: %v", err)
+	}
+
+	want = &v3orcapb.OrcaLoadReport{
+		CpuUtilization: 0.29309,
+		MemUtilization: 0.2,
+		Utilization:    map[string]float64{"util": 0.2039},
+	}
+	checkORCAMetrics(ctx, tc, want)
+}
+
+func checkORCAMetrics(ctx context.Context, tc testgrpc.TestServiceClient, want *v3orcapb.OrcaLoadReport) {
+	for ctx.Err() == nil {
+		orcaRes := &v3orcapb.OrcaLoadReport{}
+		if _, err := tc.UnaryCall(contextWithORCAResult(ctx, &orcaRes), &testpb.SimpleRequest{}); err != nil {
+			logger.Fatalf("/TestService/UnaryCall RPC failed: ", err)
+		}
+		if proto.Equal(orcaRes, want) {
+			return
+		}
+		logger.Infof("/TestService/UnaryCall RPC received ORCA load report %+v; want %+v", orcaRes, want)
+		time.Sleep(time.Second)
+	}
+	logger.Fatalf("timed out waiting for expected ORCA load report")
 }

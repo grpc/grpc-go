@@ -146,15 +146,18 @@ func testServiceConfigWaitForReadyTD(t *testing.T, e env) {
 	ch <- sc
 
 	// Wait for the new service config to take effect.
-	mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
-	for {
-		if !*mc.WaitForReady {
-			time.Sleep(100 * time.Millisecond)
-			mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
-			continue
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
+		if *mc.WaitForReady {
+			break
 		}
-		break
 	}
+	if ctx.Err() != nil {
+		t.Fatalf("Timeout when waiting for service config to take effect")
+	}
+
 	// The following RPCs are expected to become non-fail-fast ones with 1ms deadline.
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
@@ -212,14 +215,16 @@ func testServiceConfigTimeoutTD(t *testing.T, e env) {
 	ch <- sc
 
 	// Wait for the new service config to take effect.
-	mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
-	for {
-		if *mc.Timeout != time.Nanosecond {
-			time.Sleep(100 * time.Millisecond)
-			mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
-			continue
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
+		if *mc.Timeout == time.Nanosecond {
+			break
 		}
-		break
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("Timeout when waiting for service config to take effect")
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Hour)

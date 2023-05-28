@@ -174,6 +174,7 @@ func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
 			}
 			bal := bd.Data.(balancer.Balancer)
 			ccUpdateCh.Send(ccs)
+			ccs.BalancerConfig = nil
 			return bal.UpdateClientConnState(ccs)
 		},
 		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {

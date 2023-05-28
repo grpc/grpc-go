@@ -20,7 +20,6 @@ package grpcsync
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -141,49 +140,67 @@ func (s) TestCallbackSerializer_Schedule_Concurrent(t *testing.T) {
 // are not executed once Close() returns.
 func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	cs := NewCallbackSerializer(ctx)
+	defer cancel()
+
+	serializerCtx, serializerCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	cs := NewCallbackSerializer(serializerCtx)
 
 	// Schedule a callback which blocks until the context passed to it is
-	// canceled. It also closes a couple of channels to signal that it started
-	// and finished respectively.
+	// canceled. It also closes a channel to signal that it has started.
 	firstCallbackStartedCh := make(chan struct{})
-	firstCallbackFinishCh := make(chan struct{})
 	cs.Schedule(func(ctx context.Context) {
 		close(firstCallbackStartedCh)
 		<-ctx.Done()
-		close(firstCallbackFinishCh)
 	})
 
-	// Wait for the first callback to start before scheduling the others.
-	<-firstCallbackStartedCh
-
-	// Schedule a bunch of callbacks. These should not be exeuted since the first
-	// one started earlier is blocked.
+	// Schedule a bunch of callbacks. These should be exeuted since the are
+	// scheduled before the serializer is closed.
 	const numCallbacks = 10
-	errCh := make(chan error, numCallbacks)
+	callbackCh := make(chan int, numCallbacks)
 	for i := 0; i < numCallbacks; i++ {
-		cs.Schedule(func(_ context.Context) {
-			errCh <- fmt.Errorf("callback %d executed when not expected to", i)
-		})
+		num := i
+		if !cs.Schedule(func(context.Context) { callbackCh <- num }) {
+			t.Fatal("Schedule failed to accept a callback when the serializer is yet to be closed")
+		}
 	}
 
 	// Ensure that none of the newer callbacks are executed at this point.
 	select {
 	case <-time.After(defaultTestShortTimeout):
-	case err := <-errCh:
-		t.Fatal(err)
+	case <-callbackCh:
+		t.Fatal("Newer callback executed when older one is still executing")
 	}
 
-	// Cancel the context which will unblock the first callback. None of the
+	// Wait for the first callback to start before closing the scheduler.
+	<-firstCallbackStartedCh
+
+	// Cancel the context which will unblock the first callback. All of the
 	// other callbacks (which have not started executing at this point) should
 	// be executed after this.
-	cancel()
-	<-firstCallbackFinishCh
+	serializerCancel()
 
-	// Ensure that the newer callbacks are not executed.
+	// Ensure that the newer callbacks are executed.
+	for i := 0; i < numCallbacks; i++ {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Timeout when waiting for callback scheduled before close to be executed")
+		case num := <-callbackCh:
+			if num != i {
+				t.Fatalf("Executing callback %d, want %d", num, i)
+			}
+		}
+	}
+	<-cs.Done
+
+	done := make(chan struct{})
+	if cs.Schedule(func(context.Context) { close(done) }) {
+		t.Fatal("Scheduled a callback after closing the serializer")
+	}
+
+	// Ensure that the lates callback is executed at this point.
 	select {
 	case <-time.After(defaultTestShortTimeout):
-	case err := <-errCh:
-		t.Fatal(err)
+	case <-done:
+		t.Fatal("Newer callback executed when scheduled after closing serializer")
 	}
 }

@@ -18,6 +18,7 @@
 package xdsresource
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -29,11 +30,19 @@ import (
 	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/golang/protobuf/proto"
+
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/pretty"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/matcher"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdslbregistry"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
 )
+
+// ValidateClusterAndConstructClusterUpdateForTesting exports the
+// validateClusterAndConstructClusterUpdate function for testing purposes.
+var ValidateClusterAndConstructClusterUpdateForTesting = validateClusterAndConstructClusterUpdate
 
 // TransportSocket proto message has a `name` field which is expected to be set
 // to this value by the management server.
@@ -69,10 +78,11 @@ const (
 )
 
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
-	var lbPolicy *ClusterLBPolicyRingHash
+	var lbPolicy json.RawMessage
+	var err error
 	switch cluster.GetLbPolicy() {
 	case v3clusterpb.Cluster_ROUND_ROBIN:
-		lbPolicy = nil // The default is round_robin, and there's no config to set.
+		lbPolicy = []byte(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`)
 	case v3clusterpb.Cluster_RING_HASH:
 		if !envconfig.XDSRingHash {
 			return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
@@ -85,25 +95,17 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		// defaults to 8M entries, and limited to 8M entries
 		var minSize, maxSize uint64 = defaultRingHashMinSize, defaultRingHashMaxSize
 		if min := rhc.GetMinimumRingSize(); min != nil {
-			if min.GetValue() > ringHashSizeUpperBound {
-				return ClusterUpdate{}, fmt.Errorf("unexpected ring_hash mininum ring size %v in response: %+v", min.GetValue(), cluster)
-			}
 			minSize = min.GetValue()
 		}
 		if max := rhc.GetMaximumRingSize(); max != nil {
-			if max.GetValue() > ringHashSizeUpperBound {
-				return ClusterUpdate{}, fmt.Errorf("unexpected ring_hash maxinum ring size %v in response: %+v", max.GetValue(), cluster)
-			}
 			maxSize = max.GetValue()
 		}
-		if minSize > maxSize {
-			return ClusterUpdate{}, fmt.Errorf("ring_hash config min size %v is greater than max %v", minSize, maxSize)
-		}
-		lbPolicy = &ClusterLBPolicyRingHash{MinimumRingSize: minSize, MaximumRingSize: maxSize}
+
+		rhLBCfg := []byte(fmt.Sprintf("{\"minRingSize\": %d, \"maxRingSize\": %d}", minSize, maxSize))
+		lbPolicy = []byte(fmt.Sprintf(`[{"ring_hash_experimental": %s}]`, rhLBCfg))
 	default:
 		return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
-
 	// Process security configuration received from the control plane iff the
 	// corresponding environment variable is set.
 	var sc *SecurityConfig
@@ -121,6 +123,20 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		var err error
 		if od, err = outlierConfigFromCluster(cluster); err != nil {
 			return ClusterUpdate{}, err
+		}
+	}
+
+	if cluster.GetLoadBalancingPolicy() != nil && envconfig.XDSCustomLBPolicy {
+		lbPolicy, err = xdslbregistry.ConvertToServiceConfig(cluster.GetLoadBalancingPolicy(), 0)
+		if err != nil {
+			return ClusterUpdate{}, fmt.Errorf("error converting LoadBalancingPolicy %v in response: %+v: %v", cluster.GetLoadBalancingPolicy(), cluster, err)
+		}
+		// "It will be the responsibility of the XdsClient to validate the
+		// converted configuration. It will do this by having the gRPC LB policy
+		// registry parse the configuration." - A52
+		bc := &internalserviceconfig.BalancerConfig{}
+		if err := json.Unmarshal(lbPolicy, bc); err != nil {
+			return ClusterUpdate{}, fmt.Errorf("JSON generated from xDS LB policy registry: %s is invalid: %v", pretty.FormatJSON(lbPolicy), err)
 		}
 	}
 
