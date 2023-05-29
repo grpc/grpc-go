@@ -206,8 +206,7 @@ func (s) TestAuditLogger(t *testing.T) {
 				"allow_rules": [
 					{
 						"name": "allow_UnaryCall",
-						"request":
-						{
+						"request": {
 							"paths": [
 								"/grpc.testing.TestService/UnaryCall_Z"
 							]
