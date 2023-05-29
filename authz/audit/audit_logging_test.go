@@ -81,14 +81,16 @@ func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerCon
 	return nil, nil
 }
 
-// TestAuditLogger examines audit logging invocations using four different authorization policies.
-// It covers scenarios including a disabled audit, auditing both 'allow' and 'deny' outcomes,
-// and separately auditing 'allow' and 'deny' outcomes.
-// Additionally, it checks if SPIFFE ID from a certificate is propagated correctly.
+// TestAuditLogger examines audit logging invocations using four different
+// authorization policies. It covers scenarios including a disabled audit,
+// auditing both 'allow' and 'deny' outcomes, and separately auditing 'allow'
+// and 'deny' outcomes. Additionally, it checks if SPIFFE ID from a certificate
+// is propagated correctly.
 func (s) TestAuditLogger(t *testing.T) {
 	// Each test data entry contains an authz policy for a grpc server,
-	// how many 'allow' and 'deny' outcomes we expect (each test case makes 2 unary calls and one client-streaming call),
-	// and a structure to check if the audit.Event fields are properly populated.
+	// how many 'allow' and 'deny' outcomes we expect (each test case makes 2
+	// unary calls and one client-streaming call), and a structure to check if
+	// the audit.Event fields are properly populated.
 	tests := []struct {
 		name              string
 		authzPolicy       string
@@ -226,10 +228,9 @@ func (s) TestAuditLogger(t *testing.T) {
 			wantAuthzOutcomes: map[bool]int{true: 0, false: 3},
 		},
 	}
-
+	//Construct the credentials for the tests and the stub server
 	serverCreds := loadServerCreds(t)
 	clientCreds := loadClientCreds(t)
-
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
@@ -242,10 +243,10 @@ func (s) TestAuditLogger(t *testing.T) {
 			return nil
 		},
 	}
-
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// Setup test statAuditLogger, gRPC test server with authzPolicy, unary and stream interceptors.
+			// Setup test statAuditLogger, gRPC test server with authzPolicy, unary
+			// and stream interceptors.
 			lb := &loggerBuilder{
 				authzDecisionStat: map[bool]int{true: 0, false: 0},
 				lastEvent:         &audit.Event{},
@@ -261,7 +262,7 @@ func (s) TestAuditLogger(t *testing.T) {
 			testgrpc.RegisterTestServiceServer(s, ss)
 			lis, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
-				t.Fatalf("error listening: %v", err)
+				t.Fatalf("Error listening: %v", err)
 			}
 			go s.Serve(lis)
 
@@ -277,7 +278,7 @@ func (s) TestAuditLogger(t *testing.T) {
 
 			client.UnaryCall(ctx, &testpb.SimpleRequest{})
 			client.UnaryCall(ctx, &testpb.SimpleRequest{})
-			stream, err := client.StreamingInputCall(ctx)
+			stream, _ := client.StreamingInputCall(ctx)
 			req := &testpb.StreamingInputCallRequest{
 				Payload: &testpb.Payload{
 					Body: []byte("hi"),
@@ -286,7 +287,8 @@ func (s) TestAuditLogger(t *testing.T) {
 			stream.Send(req)
 			stream.CloseAndRecv()
 
-			// Compare expected number of allows/denies with content of internal map of statAuditLogger.
+			// Compare expected number of allows/denies with content of the internal
+			// map of statAuditLogger.
 			if diff := cmp.Diff(lb.authzDecisionStat, test.wantAuthzOutcomes); diff != "" {
 				t.Fatalf("Authorization decisions do not match\ndiff (-got +want):\n%s", diff)
 			}
@@ -346,7 +348,7 @@ func loadCaCerts(t *testing.T, certPath string) *x509.CertPool {
 	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(ca) {
-		t.Fatal("failed to append certificates")
+		t.Fatal("Failed to append certificates")
 	}
 	return roots
 }
