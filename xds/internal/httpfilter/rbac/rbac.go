@@ -54,6 +54,7 @@ func init() {
 	}
 }
 
+// Builder is the implementation of httpfilter.Filter for an RBAC filter.
 type Builder struct {
 	Name string
 }
