@@ -58,7 +58,8 @@ var (
 		},
 	}
 	// control number of concurrent created (but not closed) handshakes.
-	handshakes = semaphore.NewWeighted(int64(envconfig.ALTSMaxConcurrentHandshakes))
+	clientHandshakes = semaphore.NewWeighted(int64(envconfig.ALTSMaxConcurrentHandshakes))
+	serverHandshakes = semaphore.NewWeighted(int64(envconfig.ALTSMaxConcurrentHandshakes))
 	// errDropped occurs when maxPendingHandshakes is reached.
 	errDropped = errors.New("maximum number of concurrent ALTS handshakes is reached")
 	// errOutOfBound occurs when the handshake service returns a consumed
@@ -154,10 +155,10 @@ func NewServerHandshaker(ctx context.Context, conn *grpc.ClientConn, c net.Conn,
 // ClientHandshake starts and completes a client ALTS handshake for GCP. Once
 // done, ClientHandshake returns a secure connection.
 func (h *altsHandshaker) ClientHandshake(ctx context.Context) (net.Conn, credentials.AuthInfo, error) {
-	if handshakes.Acquire(ctx, 1) != nil {
+	if clientHandshakes.Acquire(ctx, 1) != nil {
 		return nil, nil, errDropped
 	}
-	defer handshakes.Release(1)
+	defer clientHandshakes.Release(1)
 
 	if h.side != core.ClientSide {
 		return nil, nil, errors.New("only handshakers created using NewClientHandshaker can perform a client handshaker")
@@ -207,10 +208,10 @@ func (h *altsHandshaker) ClientHandshake(ctx context.Context) (net.Conn, credent
 // ServerHandshake starts and completes a server ALTS handshake for GCP. Once
 // done, ServerHandshake returns a secure connection.
 func (h *altsHandshaker) ServerHandshake(ctx context.Context) (net.Conn, credentials.AuthInfo, error) {
-	if handshakes.Acquire(ctx, 1) != nil {
+	if serverHandshakes.Acquire(ctx, 1) != nil {
 		return nil, nil, errDropped
 	}
-	defer handshakes.Release(1)
+	defer serverHandshakes.Release(1)
 
 	if h.side != core.ServerSide {
 		return nil, nil, errors.New("only handshakers created using NewServerHandshaker can perform a server handshaker")
@@ -359,6 +360,9 @@ func (h *altsHandshaker) Close() {
 	}
 }
 
+// ResetConcurrentHandshakeSemaphoreForTesting resets the handshake semaphores
+// to allow numberOfAllowedHandshakes concurrent handshakes each.
 func ResetConcurrentHandshakeSemaphoreForTesting(numberOfAllowedHandshakes int64) {
-	handshakes = semaphore.NewWeighted(numberOfAllowedHandshakes)
+	clientHandshakes = semaphore.NewWeighted(numberOfAllowedHandshakes)
+	serverHandshakes = semaphore.NewWeighted(numberOfAllowedHandshakes)
 }

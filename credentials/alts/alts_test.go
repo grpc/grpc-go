@@ -334,25 +334,16 @@ func (s) TestFullHandshake(t *testing.T) {
 	}
 }
 
-// TestFullHandshake performs a several, concurrent ALTS handshakes between a
-// test client and server, where both client and server offload to a local,
-// fake handshaker service.
+// TestConcurrentHandshakes performs a several, concurrent ALTS handshakes
+// between a test client and server, where both client and server offload to a
+// local, fake handshaker service.
 func (s) TestConcurrentHandshakes(t *testing.T) {
-	// If GOMAXPROCS is set to less than 3, do not run this test. This test
-	// requires at least 2 goroutines to succeed (one goroutine where a
-	// server listens, another goroutine where a client runs).
-	if runtime.GOMAXPROCS(0) < 3 {
-		return
-	}
-
 	// The vmOnGCP global variable MUST be reset to true after the client
 	// or server credentials have been created, but before the ALTS
 	// handshake begins. If vmOnGCP is not reset and this test is run
 	// anywhere except for a GCP VM, then the ALTS handshake will
 	// immediately fail.
-	once.Do(func() {
-		vmOnGCP = true
-	})
+	once.Do(func() {})
 	vmOnGCP = true
 
 	// Set the max number of concurrent handshakes to 3, so that we can
