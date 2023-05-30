@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -112,7 +113,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		b.cfg = cfg
 	}
 
-	if b.cfg != nil && b.cfg.ShuffleAddressList {
+	if envconfig.PickFirstLBConfig && b.cfg != nil && b.cfg.ShuffleAddressList {
 		grpcrand.Shuffle(len(addrs), func(i, j int) { addrs[i], addrs[j] = addrs[j], addrs[i] })
 	}
 	if b.subConn != nil {
