@@ -33,15 +33,19 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz"
 	"google.golang.org/grpc/authz/audit"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
 
 	_ "google.golang.org/grpc/authz/audit/stdout"
 )
+
+var permissionDeniedStatus = status.New(codes.PermissionDenied, "unauthorized RPC request rejected")
 
 type s struct {
 	grpctest.Tester
@@ -53,7 +57,7 @@ func Test(t *testing.T) {
 
 type statAuditLogger struct {
 	authzDecisionStat map[bool]int // Map to hold the counts of authorization decisions
-	lastEvent         *audit.Event // Map to hold event fields in key:value fashion
+	lastEvent         *audit.Event // Field to store last received event
 }
 
 func (s *statAuditLogger) Log(event *audit.Event) {
@@ -227,7 +231,7 @@ func (s) TestAuditLogger(t *testing.T) {
 			wantAuthzOutcomes: map[bool]int{true: 0, false: 3},
 		},
 	}
-	//Construct the credentials for the tests and the stub server
+	// Construct the credentials for the tests and the stub server
 	serverCreds := loadServerCreds(t)
 	clientCreds := loadClientCreds(t)
 	ss := &stubserver.StubServer{
@@ -275,23 +279,26 @@ func (s) TestAuditLogger(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			client.UnaryCall(ctx, &testpb.SimpleRequest{})
-			client.UnaryCall(ctx, &testpb.SimpleRequest{})
+			_, err = client.UnaryCall(ctx, &testpb.SimpleRequest{})
+			validateCallResult(t, err)
+			_, err = client.UnaryCall(ctx, &testpb.SimpleRequest{})
+			validateCallResult(t, err)
 			stream, _ := client.StreamingInputCall(ctx)
 			req := &testpb.StreamingInputCallRequest{
 				Payload: &testpb.Payload{
 					Body: []byte("hi"),
 				},
 			}
-			stream.Send(req)
-			stream.CloseAndRecv()
+			validateCallResult(t, stream.Send(req))
+			_, err = stream.CloseAndRecv()
+			validateCallResult(t, err)
 
 			// Compare expected number of allows/denies with content of the internal
 			// map of statAuditLogger.
 			if diff := cmp.Diff(lb.authzDecisionStat, test.wantAuthzOutcomes); diff != "" {
 				t.Fatalf("Authorization decisions do not match\ndiff (-got +want):\n%s", diff)
 			}
-			// Compare event fields with expected values from authz policy.
+			// Compare last event received by statAuditLogger with expected event.
 			if test.eventContent != nil {
 				if diff := cmp.Diff(lb.lastEvent, test.eventContent); diff != "" {
 					t.Fatalf("Unexpected message\ndiff (-got +want):\n%s", diff)
@@ -305,7 +312,7 @@ func (s) TestAuditLogger(t *testing.T) {
 func loadServerCreds(t *testing.T) credentials.TransportCredentials {
 	t.Helper()
 	cert := loadKeys(t, "x509/server1_cert.pem", "x509/server1_key.pem")
-	certPool := loadCaCerts(t, "x509/client_ca_cert.pem")
+	certPool := loadCACerts(t, "x509/client_ca_cert.pem")
 	return credentials.NewTLS(&tls.Config{
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 		Certificates: []tls.Certificate{cert},
@@ -317,7 +324,7 @@ func loadServerCreds(t *testing.T) credentials.TransportCredentials {
 func loadClientCreds(t *testing.T) credentials.TransportCredentials {
 	t.Helper()
 	cert := loadKeys(t, "x509/client_with_spiffe_cert.pem", "x509/client_with_spiffe_key.pem")
-	roots := loadCaCerts(t, "x509/server_ca_cert.pem")
+	roots := loadCACerts(t, "x509/server_ca_cert.pem")
 	return credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      roots,
@@ -326,7 +333,7 @@ func loadClientCreds(t *testing.T) credentials.TransportCredentials {
 
 }
 
-// loadCaCerts loads X509 key pair from the provided file paths.
+// loadKeys loads X509 key pair from the provided file paths.
 // It is used for loading both client and server certificates for the test
 func loadKeys(t *testing.T, certPath, key string) tls.Certificate {
 	t.Helper()
@@ -337,9 +344,9 @@ func loadKeys(t *testing.T, certPath, key string) tls.Certificate {
 	return cert
 }
 
-// loadCaCerts loads CA certificates and constructs x509.CertPool
+// loadCACerts loads CA certificates and constructs x509.CertPool
 // It is used for loading both client and server CAs for the test
-func loadCaCerts(t *testing.T, certPath string) *x509.CertPool {
+func loadCACerts(t *testing.T, certPath string) *x509.CertPool {
 	t.Helper()
 	ca, err := os.ReadFile(testdata.Path(certPath))
 	if err != nil {
@@ -350,4 +357,16 @@ func loadCaCerts(t *testing.T, certPath string) *x509.CertPool {
 		t.Fatal("Failed to append certificates")
 	}
 	return roots
+}
+
+// validateCallResult checks if the error resulting from making a call can be
+// ignored. It is used for both unary and streaming calls in this test.
+func validateCallResult(t *testing.T, err error) {
+	t.Helper()
+	if err == nil || err == io.EOF {
+		return
+	}
+	if errStatus := status.Convert(err); errStatus.Code() != permissionDeniedStatus.Code() || errStatus.Message() != permissionDeniedStatus.Message() {
+		t.Errorf("Call failed:%v", err)
+	}
 }
