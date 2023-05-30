@@ -64,6 +64,7 @@ type config struct {
 	chainEngine *rbac.ChainEngine
 }
 
+// TypeURLs are the proto messages supported by the rbac builder/
 func (Builder) TypeURLs() []string {
 	return []string{
 		"type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC",
@@ -140,6 +141,7 @@ func parseConfig(rbacCfg *rpb.RBAC, filterName string) (httpfilter.FilterConfig,
 	return config{chainEngine: ce}, nil
 }
 
+// ParseFilterConfig parses the config proto into the FilterConfig type.
 func (b Builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("rbac: nil configuration message provided")
@@ -155,6 +157,7 @@ func (b Builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, 
 	return parseConfig(msg, b.Name)
 }
 
+// ParseFilterConfigOverride parses and applies the override configuration.
 func (b Builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
 	if override == nil {
 		return nil, fmt.Errorf("rbac: nil configuration message provided")
@@ -170,6 +173,7 @@ func (b Builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.F
 	return parseConfig(msg.Rbac, b.Name)
 }
 
+// IsTerminal returns false as the rbac filter is not terminal.
 func (Builder) IsTerminal() bool {
 	return false
 }
