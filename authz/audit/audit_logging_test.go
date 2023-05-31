@@ -45,8 +45,6 @@ import (
 	_ "google.golang.org/grpc/authz/audit/stdout"
 )
 
-var permissionDeniedStatus = status.New(codes.PermissionDenied, "unauthorized RPC request rejected")
-
 type s struct {
 	grpctest.Tester
 }
