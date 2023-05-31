@@ -1721,6 +1721,8 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 	}
 }
 
+// TestRbacNamePassthrough tests that the filter name is properly associated
+// with the RBAC after parsing.
 func TestRbacNamePassthrough(t *testing.T) {
 	filters := []*v3httppb.HttpFilter{
 		{
