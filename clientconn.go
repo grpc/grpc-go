@@ -706,6 +706,9 @@ func (cc *ClientConn) GetState() connectivity.State {
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 // release.
 func (cc *ClientConn) Connect() {
+	cc.exitIdleMode()
+	// If the ClientConn was not in idle mode, we need to call ExitIdle on the
+	// LB policy so that connections can be created.
 	cc.balancerWrapper.exitIdleMode()
 }
 
