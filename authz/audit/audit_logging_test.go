@@ -306,7 +306,7 @@ func (s) TestAuditLogger(t *testing.T) {
 				t.Errorf("stream.Send failed:%v", err)
 			}
 			if _, err := stream.CloseAndRecv(); status.Code(err) != test.wantStreamingCallCode {
-				t.Fatalf("Unexpected stream.CloseAndRecv fail: got %v want %v", err, test.wantUnaryCallCode)
+				t.Fatalf("Unexpected stream.CloseAndRecv fail: got %v want %v", err, test.wantStreamingCallCode)
 			}
 
 			// Compare expected number of allows/denies with content of the internal
