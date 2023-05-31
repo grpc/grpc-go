@@ -94,12 +94,15 @@ func (s) TestAuditLogger(t *testing.T) {
 	// Each test data entry contains an authz policy for a grpc server,
 	// how many 'allow' and 'deny' outcomes we expect (each test case makes 2
 	// unary calls and one client-streaming call), and a structure to check if
-	// the audit.Event fields are properly populated.
+	// the audit.Event fields are properly populated. Additionally, we specify
+	// directly which authz outcome we expect from each type of call.
 	tests := []struct {
-		name              string
-		authzPolicy       string
-		wantAuthzOutcomes map[bool]int
-		eventContent      *audit.Event
+		name                  string
+		authzPolicy           string
+		wantAuthzOutcomes     map[bool]int
+		eventContent          *audit.Event
+		wantUnaryCallCode     codes.Code
+		wantStreamingCallCode codes.Code
 	}{
 		{
 			name: "No audit",
@@ -126,7 +129,9 @@ func (s) TestAuditLogger(t *testing.T) {
 					]
 				}
 			}`,
-			wantAuthzOutcomes: map[bool]int{true: 0, false: 0},
+			wantAuthzOutcomes:     map[bool]int{true: 0, false: 0},
+			wantUnaryCallCode:     codes.OK,
+			wantStreamingCallCode: codes.PermissionDenied,
 		},
 		{
 			name: "Allow All Deny Streaming - Audit All",
@@ -175,6 +180,8 @@ func (s) TestAuditLogger(t *testing.T) {
 				MatchedRule:    "authz_deny_all",
 				Authorized:     false,
 			},
+			wantUnaryCallCode:     codes.OK,
+			wantStreamingCallCode: codes.PermissionDenied,
 		},
 		{
 			name: "Allow Unary - Audit Allow",
@@ -201,7 +208,9 @@ func (s) TestAuditLogger(t *testing.T) {
 					]
 				}
 			}`,
-			wantAuthzOutcomes: map[bool]int{true: 2, false: 0},
+			wantAuthzOutcomes:     map[bool]int{true: 2, false: 0},
+			wantUnaryCallCode:     codes.OK,
+			wantStreamingCallCode: codes.PermissionDenied,
 		},
 		{
 			name: "Allow Typo - Audit Deny",
@@ -228,7 +237,9 @@ func (s) TestAuditLogger(t *testing.T) {
 					]
 				}
 			}`,
-			wantAuthzOutcomes: map[bool]int{true: 0, false: 3},
+			wantAuthzOutcomes:     map[bool]int{true: 0, false: 3},
+			wantUnaryCallCode:     codes.PermissionDenied,
+			wantStreamingCallCode: codes.PermissionDenied,
 		},
 	}
 	// Construct the credentials for the tests and the stub server
@@ -279,19 +290,24 @@ func (s) TestAuditLogger(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			_, err = client.UnaryCall(ctx, &testpb.SimpleRequest{})
-			validateCallResult(t, err)
-			_, err = client.UnaryCall(ctx, &testpb.SimpleRequest{})
-			validateCallResult(t, err)
+			if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != test.wantUnaryCallCode {
+				t.Fatalf("Unexpected UnaryCall fail: got %v want %v", err, test.wantUnaryCallCode)
+			}
+			if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != test.wantUnaryCallCode {
+				t.Fatalf("Unexpected UnaryCall fail: got %v want %v", err, test.wantUnaryCallCode)
+			}
 			stream, _ := client.StreamingInputCall(ctx)
 			req := &testpb.StreamingInputCallRequest{
 				Payload: &testpb.Payload{
 					Body: []byte("hi"),
 				},
 			}
-			validateCallResult(t, stream.Send(req))
-			_, err = stream.CloseAndRecv()
-			validateCallResult(t, err)
+			if err := stream.Send(req); err != nil && err != io.EOF {
+				t.Errorf("stream.Send failed:%v", err)
+			}
+			if _, err := stream.CloseAndRecv(); status.Code(err) != test.wantStreamingCallCode {
+				t.Fatalf("Unexpected stream.CloseAndRecv fail: got %v want %v", err, test.wantUnaryCallCode)
+			}
 
 			// Compare expected number of allows/denies with content of the internal
 			// map of statAuditLogger.
@@ -357,16 +373,4 @@ func loadCACerts(t *testing.T, certPath string) *x509.CertPool {
 		t.Fatal("Failed to append certificates")
 	}
 	return roots
-}
-
-// validateCallResult checks if the error resulting from making a call can be
-// ignored. It is used for both unary and streaming calls in this test.
-func validateCallResult(t *testing.T, err error) {
-	t.Helper()
-	if err == nil || err == io.EOF {
-		return
-	}
-	if errStatus := status.Convert(err); errStatus.Code() != permissionDeniedStatus.Code() || errStatus.Message() != permissionDeniedStatus.Message() {
-		t.Errorf("Call failed:%v", err)
-	}
 }
