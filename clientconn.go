@@ -325,7 +325,8 @@ func (cc *ClientConn) exitIdleMode() error {
 		return errConnClosing
 	}
 	if cc.idlenessState != ccIdlenessStateIdle {
-		logger.Error("ClientConn asked to exit idle mode when not in idle mode")
+		cc.mu.Unlock()
+		logger.Info("ClientConn asked to exit idle mode when not in idle mode")
 		return nil
 	}
 
