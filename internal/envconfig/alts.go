@@ -18,17 +18,8 @@
 
 package envconfig
 
-const (
-	// ALTSMaxConcurrentHandshakesEnv is the env variable to set the
-	// maximum number of concurrent ALTS handshakes that can be performed.
-	// Its value is read and kept in the variable
-	// ALTSMaxConcurrentHandshakes.
-	ALTSMaxConcurrentHandshakesEnv     = "GRPC_ALTS_MAX_CONCURRENT_HANDSHAKES"
-	altsDefaultMaxConcurrentHandshakes = uint64(100)
-)
-
 var (
 	// ALTSMaxConcurrentHandshakes is the maximum number of concurrent ALTS
 	// handshakes that can be performed.
-	ALTSMaxConcurrentHandshakes = uint64FromEnv(ALTSMaxConcurrentHandshakesEnv, altsDefaultMaxConcurrentHandshakes, uint64(1), altsDefaultMaxConcurrentHandshakes)
+	ALTSMaxConcurrentHandshakes = uint64FromEnv("GRPC_ALTS_MAX_CONCURRENT_HANDSHAKES", 100, 1, 100)
 )
