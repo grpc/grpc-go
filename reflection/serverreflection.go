@@ -48,8 +48,9 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 
+	v1grpc "google.golang.org/grpc/reflection/grpc_reflection_v1"
+	v1pb "google.golang.org/grpc/reflection/grpc_reflection_v1"
 	v1alphagrpc "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
-	v1alphapb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 )
 
 // GRPCServer is the interface provided by a gRPC server. It is implemented by
@@ -63,9 +64,27 @@ type GRPCServer interface {
 var _ GRPCServer = (*grpc.Server)(nil)
 
 // Register registers the server reflection service on the given gRPC server.
+// Both the v1 and v1alpha versions are registered.
 func Register(s GRPCServer) {
-	svr := NewServer(ServerOptions{Services: s})
-	v1alphagrpc.RegisterServerReflectionServer(s, svr)
+	svr := NewServerV1(ServerOptions{Services: s})
+	v1alphagrpc.RegisterServerReflectionServer(s, asV1Alpha(svr))
+	v1grpc.RegisterServerReflectionServer(s, svr)
+}
+
+// RegisterV1 registers only the v1 version of the server reflection service
+// on the given gRPC server. Many clients may only support v1alpha so most
+// users should use Register instead.
+func RegisterV1(s GRPCServer) {
+	svr := NewServerV1(ServerOptions{Services: s})
+	v1grpc.RegisterServerReflectionServer(s, svr)
+}
+
+// RegisterV1Alpha registers only the v1alpha version of the server reflection
+// service. Some clients may prefer v1 or only support v1 exclusively, so most
+// users should use Register instead.
+func RegisterV1Alpha(s GRPCServer) {
+	svr := NewServerV1(ServerOptions{Services: s})
+	v1alphagrpc.RegisterServerReflectionServer(s, asV1Alpha(svr))
 }
 
 // ServiceInfoProvider is an interface used to retrieve metadata about the
@@ -120,13 +139,27 @@ type ServerOptions struct {
 
 // NewServer returns a reflection server implementation using the given options.
 // This can be used to customize behavior of the reflection service. Most usages
-// should prefer to use Register instead.
+// should prefer to use Register instead. For backwards compatibility reasons,
+// this returns the v1alpha version of the reflection server. For a v1 version
+// of the reflection server, see NewServerV1.
 //
 // # Experimental
 //
 // Notice: This function is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func NewServer(opts ServerOptions) v1alphagrpc.ServerReflectionServer {
+	return asV1Alpha(NewServerV1(opts))
+}
+
+// NewServerV1 returns a reflection server implementation using the given options.
+// This can be used to customize behavior of the reflection service. Most usages
+// should prefer to use Register instead.
+//
+// # Experimental
+//
+// Notice: This function is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func NewServerV1(opts ServerOptions) v1grpc.ServerReflectionServer {
 	if opts.DescriptorResolver == nil {
 		opts.DescriptorResolver = protoregistry.GlobalFiles
 	}
@@ -215,11 +248,11 @@ func (s *serverReflectionServer) allExtensionNumbersForTypeName(name string) ([]
 }
 
 // listServices returns the names of services this server exposes.
-func (s *serverReflectionServer) listServices() []*v1alphapb.ServiceResponse {
+func (s *serverReflectionServer) listServices() []*v1pb.ServiceResponse {
 	serviceInfo := s.s.GetServiceInfo()
-	resp := make([]*v1alphapb.ServiceResponse, 0, len(serviceInfo))
+	resp := make([]*v1pb.ServiceResponse, 0, len(serviceInfo))
 	for svc := range serviceInfo {
-		resp = append(resp, &v1alphapb.ServiceResponse{Name: svc})
+		resp = append(resp, &v1pb.ServiceResponse{Name: svc})
 	}
 	sort.Slice(resp, func(i, j int) bool {
 		return resp[i].Name < resp[j].Name
@@ -228,7 +261,7 @@ func (s *serverReflectionServer) listServices() []*v1alphapb.ServiceResponse {
 }
 
 // ServerReflectionInfo is the reflection service handler.
-func (s *serverReflectionServer) ServerReflectionInfo(stream v1alphagrpc.ServerReflection_ServerReflectionInfoServer) error {
+func (s *serverReflectionServer) ServerReflectionInfo(stream v1grpc.ServerReflection_ServerReflectionInfoServer) error {
 	sentFileDescriptors := make(map[string]bool)
 	for {
 		in, err := stream.Recv()
@@ -239,79 +272,79 @@ func (s *serverReflectionServer) ServerReflectionInfo(stream v1alphagrpc.ServerR
 			return err
 		}
 
-		out := &v1alphapb.ServerReflectionResponse{
+		out := &v1pb.ServerReflectionResponse{
 			ValidHost:       in.Host,
 			OriginalRequest: in,
 		}
 		switch req := in.MessageRequest.(type) {
-		case *v1alphapb.ServerReflectionRequest_FileByFilename:
+		case *v1pb.ServerReflectionRequest_FileByFilename:
 			var b [][]byte
 			fd, err := s.descResolver.FindFileByPath(req.FileByFilename)
 			if err == nil {
 				b, err = s.fileDescWithDependencies(fd, sentFileDescriptors)
 			}
 			if err != nil {
-				out.MessageResponse = &v1alphapb.ServerReflectionResponse_ErrorResponse{
-					ErrorResponse: &v1alphapb.ErrorResponse{
+				out.MessageResponse = &v1pb.ServerReflectionResponse_ErrorResponse{
+					ErrorResponse: &v1pb.ErrorResponse{
 						ErrorCode:    int32(codes.NotFound),
 						ErrorMessage: err.Error(),
 					},
 				}
 			} else {
-				out.MessageResponse = &v1alphapb.ServerReflectionResponse_FileDescriptorResponse{
-					FileDescriptorResponse: &v1alphapb.FileDescriptorResponse{FileDescriptorProto: b},
+				out.MessageResponse = &v1pb.ServerReflectionResponse_FileDescriptorResponse{
+					FileDescriptorResponse: &v1pb.FileDescriptorResponse{FileDescriptorProto: b},
 				}
 			}
-		case *v1alphapb.ServerReflectionRequest_FileContainingSymbol:
+		case *v1pb.ServerReflectionRequest_FileContainingSymbol:
 			b, err := s.fileDescEncodingContainingSymbol(req.FileContainingSymbol, sentFileDescriptors)
 			if err != nil {
-				out.MessageResponse = &v1alphapb.ServerReflectionResponse_ErrorResponse{
-					ErrorResponse: &v1alphapb.ErrorResponse{
+				out.MessageResponse = &v1pb.ServerReflectionResponse_ErrorResponse{
+					ErrorResponse: &v1pb.ErrorResponse{
 						ErrorCode:    int32(codes.NotFound),
 						ErrorMessage: err.Error(),
 					},
 				}
 			} else {
-				out.MessageResponse = &v1alphapb.ServerReflectionResponse_FileDescriptorResponse{
-					FileDescriptorResponse: &v1alphapb.FileDescriptorResponse{FileDescriptorProto: b},
+				out.MessageResponse = &v1pb.ServerReflectionResponse_FileDescriptorResponse{
+					FileDescriptorResponse: &v1pb.FileDescriptorResponse{FileDescriptorProto: b},
 				}
 			}
-		case *v1alphapb.ServerReflectionRequest_FileContainingExtension:
+		case *v1pb.ServerReflectionRequest_FileContainingExtension:
 			typeName := req.FileContainingExtension.ContainingType
 			extNum := req.FileContainingExtension.ExtensionNumber
 			b, err := s.fileDescEncodingContainingExtension(typeName, extNum, sentFileDescriptors)
 			if err != nil {
-				out.MessageResponse = &v1alphapb.ServerReflectionResponse_ErrorResponse{
-					ErrorResponse: &v1alphapb.ErrorResponse{
+				out.MessageResponse = &v1pb.ServerReflectionResponse_ErrorResponse{
+					ErrorResponse: &v1pb.ErrorResponse{
 						ErrorCode:    int32(codes.NotFound),
 						ErrorMessage: err.Error(),
 					},
 				}
 			} else {
-				out.MessageResponse = &v1alphapb.ServerReflectionResponse_FileDescriptorResponse{
-					FileDescriptorResponse: &v1alphapb.FileDescriptorResponse{FileDescriptorProto: b},
+				out.MessageResponse = &v1pb.ServerReflectionResponse_FileDescriptorResponse{
+					FileDescriptorResponse: &v1pb.FileDescriptorResponse{FileDescriptorProto: b},
 				}
 			}
-		case *v1alphapb.ServerReflectionRequest_AllExtensionNumbersOfType:
+		case *v1pb.ServerReflectionRequest_AllExtensionNumbersOfType:
 			extNums, err := s.allExtensionNumbersForTypeName(req.AllExtensionNumbersOfType)
 			if err != nil {
-				out.MessageResponse = &v1alphapb.ServerReflectionResponse_ErrorResponse{
-					ErrorResponse: &v1alphapb.ErrorResponse{
+				out.MessageResponse = &v1pb.ServerReflectionResponse_ErrorResponse{
+					ErrorResponse: &v1pb.ErrorResponse{
 						ErrorCode:    int32(codes.NotFound),
 						ErrorMessage: err.Error(),
 					},
 				}
 			} else {
-				out.MessageResponse = &v1alphapb.ServerReflectionResponse_AllExtensionNumbersResponse{
-					AllExtensionNumbersResponse: &v1alphapb.ExtensionNumberResponse{
+				out.MessageResponse = &v1pb.ServerReflectionResponse_AllExtensionNumbersResponse{
+					AllExtensionNumbersResponse: &v1pb.ExtensionNumberResponse{
 						BaseTypeName:    req.AllExtensionNumbersOfType,
 						ExtensionNumber: extNums,
 					},
 				}
 			}
-		case *v1alphapb.ServerReflectionRequest_ListServices:
-			out.MessageResponse = &v1alphapb.ServerReflectionResponse_ListServicesResponse{
-				ListServicesResponse: &v1alphapb.ListServiceResponse{
+		case *v1pb.ServerReflectionRequest_ListServices:
+			out.MessageResponse = &v1pb.ServerReflectionResponse_ListServicesResponse{
+				ListServicesResponse: &v1pb.ListServiceResponse{
 					Service: s.listServices(),
 				},
 			}
