@@ -18,6 +18,8 @@
 package outlierdetection
 
 import (
+	"encoding/json"
+
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -50,6 +52,24 @@ type SuccessRateEjection struct {
 	// is lower than this setting, outlier detection via success rate statistics
 	// is not performed for that host. Defaults to 100.
 	RequestVolume uint32 `json:"requestVolume,omitempty"`
+}
+
+// For UnmarshalJSON to work correctly and set defaults without infinite
+// recursion.
+type successRateEjection SuccessRateEjection
+
+// UnmarshalJSON unmarshals JSON into SuccessRateEjection. If a
+// SuccessRateEjection field is not set, that field will get it's default value.
+func (sre *SuccessRateEjection) UnmarshalJSON(j []byte) error {
+	sre.StdevFactor = 1900
+	sre.EnforcementPercentage = 100
+	sre.MinimumHosts = 5
+	sre.RequestVolume = 100
+	// Unmarshal JSON on a type with zero values for methods, including
+	// UnmarshalJSON. Overwrites defaults, leaves alone if not. typecast to
+	// avoid infinite recursion by not recalling this function and causing stack
+	// overflow.
+	return json.Unmarshal(j, (*successRateEjection)(sre))
 }
 
 // Equal returns whether the SuccessRateEjection is the same with the parameter.
@@ -97,6 +117,25 @@ type FailurePercentageEjection struct {
 	// lower than this setting, failure percentage-based ejection will not be
 	// performed for this host. Defaults to 50.
 	RequestVolume uint32 `json:"requestVolume,omitempty"`
+}
+
+// For UnmarshalJSON to work correctly and set defaults without infinite
+// recursion.
+type failurePercentageEjection FailurePercentageEjection
+
+// UnmarshalJSON unmarshals JSON into FailurePercentageEjection. If a
+// FailurePercentageEjection field is not set, that field will get it's default
+// value.
+func (fpe *FailurePercentageEjection) UnmarshalJSON(j []byte) error {
+	fpe.Threshold = 85
+	fpe.EnforcementPercentage = 0
+	fpe.MinimumHosts = 5
+	fpe.RequestVolume = 50
+	// Unmarshal JSON on a type with zero values for methods, including
+	// UnmarshalJSON. Overwrites defaults, leaves alone if not. typecast to
+	// avoid infinite recursion by not recalling this function and causing stack
+	// overflow.
+	return json.Unmarshal(j, (*failurePercentageEjection)(fpe))
 }
 
 // Equal returns whether the FailurePercentageEjection is the same with the
