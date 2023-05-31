@@ -35,9 +35,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
-	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
-	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 )
 
 const (
@@ -102,7 +100,7 @@ func RunChannelz(conn *grpc.ClientConn) error {
 	c := channelzgrpc.NewChannelzClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, err := c.GetTopChannels(ctx, &channelzpb.GetTopChannelsRequest{}, grpc.WaitForReady(true))
+	_, err := c.GetTopChannels(ctx, &channelzgrpc.GetTopChannelsRequest{}, grpc.WaitForReady(true))
 	return err
 }
 
@@ -111,6 +109,6 @@ func RunCSDS(conn *grpc.ClientConn) error {
 	c := v3statusgrpc.NewClientStatusDiscoveryServiceClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, err := c.FetchClientStatus(ctx, &v3statuspb.ClientStatusRequest{}, grpc.WaitForReady(true))
+	_, err := c.FetchClientStatus(ctx, &v3statusgrpc.ClientStatusRequest{}, grpc.WaitForReady(true))
 	return err
 }

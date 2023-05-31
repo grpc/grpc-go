@@ -32,7 +32,6 @@ import (
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	rlsgrpc "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
-	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 )
 
 var newAdaptiveThrottler = func() adaptiveThrottler { return adaptive.New() }
@@ -197,13 +196,13 @@ type lookupCallback func(targets []string, headerData string, err error)
 // The returned boolean indicates whether the request was throttled by the
 // client-side adaptive throttling algorithm in which case the provided callback
 // will not be invoked.
-func (cc *controlChannel) lookup(reqKeys map[string]string, reason rlspb.RouteLookupRequest_Reason, staleHeaders string, cb lookupCallback) (throttled bool) {
+func (cc *controlChannel) lookup(reqKeys map[string]string, reason rlsgrpc.RouteLookupRequest_Reason, staleHeaders string, cb lookupCallback) (throttled bool) {
 	if cc.throttler.ShouldThrottle() {
 		cc.logger.Infof("RLS request throttled by client-side adaptive throttling")
 		return true
 	}
 	go func() {
-		req := &rlspb.RouteLookupRequest{
+		req := &rlsgrpc.RouteLookupRequest{
 			TargetType:      "grpc",
 			KeyMap:          reqKeys,
 			Reason:          reason,
