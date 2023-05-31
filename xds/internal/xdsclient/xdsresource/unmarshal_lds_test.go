@@ -1763,7 +1763,7 @@ func TestRbacNamePassthrough(t *testing.T) {
 							LoggerConfigs: []*v3baserbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 								{
 									AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: testutils.MarshalAny(&v3auditloggersstreampb.StdoutAuditLog{})},
-									IsOptional: false,
+									IsOptional:  false,
 								},
 							},
 						},
