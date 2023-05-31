@@ -1735,15 +1735,23 @@ func TestRbacNamePassthrough(t *testing.T) {
 						Policies: map[string]*v3baserbacpb.Policy{
 							"authz_deny_policy_1": {
 								Principals: []*v3baserbacpb.Principal{
-									{Identifier: &v3baserbacpb.Principal_OrIds{OrIds: &v3baserbacpb.Principal_Set{
-										Ids: []*v3baserbacpb.Principal{
-											{Identifier: &v3baserbacpb.Principal_Authenticated_{
-												Authenticated: &v3baserbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
-													MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "spiffe://foo.abc"},
-												}},
-											}},
+									{
+										Identifier: &v3baserbacpb.Principal_OrIds{
+											OrIds: &v3baserbacpb.Principal_Set{
+												Ids: []*v3baserbacpb.Principal{
+													{
+														Identifier: &v3baserbacpb.Principal_Authenticated_{
+															Authenticated: &v3baserbacpb.Principal_Authenticated{
+																PrincipalName: &v3matcherpb.StringMatcher{
+																	MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "spiffe://foo.abc"},
+																},
+															},
+														},
+													},
+												},
+											},
 										},
-									}}},
+									},
 								},
 								Permissions: []*v3baserbacpb.Permission{
 									{Rule: &v3baserbacpb.Permission_Any{Any: true}},
@@ -1753,7 +1761,8 @@ func TestRbacNamePassthrough(t *testing.T) {
 						AuditLoggingOptions: &v3baserbacpb.RBAC_AuditLoggingOptions{
 							AuditCondition: v3baserbacpb.RBAC_AuditLoggingOptions_ON_DENY,
 							LoggerConfigs: []*v3baserbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-								{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: testutils.MarshalAny(&v3auditloggersstreampb.StdoutAuditLog{})},
+								{
+									AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: testutils.MarshalAny(&v3auditloggersstreampb.StdoutAuditLog{})},
 									IsOptional: false,
 								},
 							},
@@ -1775,7 +1784,7 @@ func TestRbacNamePassthrough(t *testing.T) {
 		t.Fatalf("Expected res[0].Filter to be of type rbac.Builder but was not")
 	}
 	if stdoutFilter.Name != "StdoutAuditLogger" {
-		t.Fatalf("Expected filter name to be StdoutAuditLogger but was not")
+		t.Fatalf("Expected filter name to be StdoutAuditLogger but was not %v", stdoutFilter.Name)
 	}
 
 }
