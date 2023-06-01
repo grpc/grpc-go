@@ -289,12 +289,15 @@ func (s) TestAuditLogger(t *testing.T) {
 			defer cancel()
 
 			if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != test.wantUnaryCallCode {
-				t.Fatalf("Unexpected UnaryCall fail: got %v want %v", err, test.wantUnaryCallCode)
+				t.Errorf("Unexpected UnaryCall fail: got %v want %v", err, test.wantUnaryCallCode)
 			}
 			if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != test.wantUnaryCallCode {
-				t.Fatalf("Unexpected UnaryCall fail: got %v want %v", err, test.wantUnaryCallCode)
+				t.Errorf("Unexpected UnaryCall fail: got %v want %v", err, test.wantUnaryCallCode)
 			}
-			stream, _ := client.StreamingInputCall(ctx)
+			stream, err := client.StreamingInputCall(ctx)
+			if err != nil {
+				t.Errorf("StreamingInputCall failed:%v", err)
+			}
 			req := &testpb.StreamingInputCallRequest{
 				Payload: &testpb.Payload{
 					Body: []byte("hi"),
@@ -304,18 +307,18 @@ func (s) TestAuditLogger(t *testing.T) {
 				t.Errorf("stream.Send failed:%v", err)
 			}
 			if _, err := stream.CloseAndRecv(); status.Code(err) != test.wantStreamingCallCode {
-				t.Fatalf("Unexpected stream.CloseAndRecv fail: got %v want %v", err, test.wantStreamingCallCode)
+				t.Errorf("Unexpected stream.CloseAndRecv fail: got %v want %v", err, test.wantStreamingCallCode)
 			}
 
 			// Compare expected number of allows/denies with content of the internal
 			// map of statAuditLogger.
 			if diff := cmp.Diff(lb.authzDecisionStat, test.wantAuthzOutcomes); diff != "" {
-				t.Fatalf("Authorization decisions do not match\ndiff (-got +want):\n%s", diff)
+				t.Errorf("Authorization decisions do not match\ndiff (-got +want):\n%s", diff)
 			}
 			// Compare last event received by statAuditLogger with expected event.
 			if test.eventContent != nil {
 				if diff := cmp.Diff(lb.lastEvent, test.eventContent); diff != "" {
-					t.Fatalf("Unexpected message\ndiff (-got +want):\n%s", diff)
+					t.Errorf("Unexpected message\ndiff (-got +want):\n%s", diff)
 				}
 			}
 		})
