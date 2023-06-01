@@ -1299,7 +1299,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 							ClusterSpecifier: &v3routepb.RouteAction_ClusterSpecifierPlugin{}}},
 				},
 			},
-			wantRoutes: []*Route{},
+			wantErr: true,
 		},
 		{
 			name: "default totalWeight is 100 in weighted clusters action",
