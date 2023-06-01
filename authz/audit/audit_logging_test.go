@@ -296,7 +296,7 @@ func (s) TestAuditLogger(t *testing.T) {
 			}
 			stream, err := client.StreamingInputCall(ctx)
 			if err != nil {
-				t.Errorf("StreamingInputCall failed:%v", err)
+				t.Fatalf("StreamingInputCall failed:%v", err)
 			}
 			req := &testpb.StreamingInputCallRequest{
 				Payload: &testpb.Payload{
@@ -304,7 +304,7 @@ func (s) TestAuditLogger(t *testing.T) {
 				},
 			}
 			if err := stream.Send(req); err != nil && err != io.EOF {
-				t.Errorf("stream.Send failed:%v", err)
+				t.Fatalf("stream.Send failed:%v", err)
 			}
 			if _, err := stream.CloseAndRecv(); status.Code(err) != test.wantStreamingCallCode {
 				t.Errorf("Unexpected stream.CloseAndRecv fail: got %v want %v", err, test.wantStreamingCallCode)
