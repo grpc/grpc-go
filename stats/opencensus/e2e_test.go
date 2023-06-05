@@ -1342,8 +1342,6 @@ func (fe *fakeExporter) ExportSpan(sd *trace.SpanData) {
 // list in an exporter. Returns an error if no server span found within the
 // passed context's timeout.
 func waitForServerSpan(ctx context.Context, fe *fakeExporter) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
 		fe.mu.Lock()
 		for _, seenSpan := range fe.seenSpans {
