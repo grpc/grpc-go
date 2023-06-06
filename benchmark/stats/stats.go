@@ -124,7 +124,7 @@ type Features struct {
 	ServerReadBufferSize int
 	// ServerWriteBufferSize is the size of the server write buffer in bytes. If negative, use the default buffer size.
 	ServerWriteBufferSize int
-	// SleepBetweenRPCs configures optional delay between RPCs
+	// SleepBetweenRPCs configures optional delay between RPCs.
 	SleepBetweenRPCs time.Duration
 }
 
