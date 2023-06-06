@@ -24,13 +24,15 @@ import (
 	"strings"
 	"time"
 
-	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/protobuf/types/known/anypb"
+
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
 func unmarshalRouteConfigResource(r *anypb.Any) (string, RouteConfigUpdate, error) {
@@ -273,6 +275,12 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 				header.PrefixMatch = &ht.PrefixMatch
 			case *v3routepb.HeaderMatcher_SuffixMatch:
 				header.SuffixMatch = &ht.SuffixMatch
+			case *v3routepb.HeaderMatcher_StringMatch:
+				sm, err := matcher.StringMatcherFromProto(ht.StringMatch)
+				if err != nil {
+					return nil, nil, fmt.Errorf("route %+v has an invalid string matcher: %v", err, ht.StringMatch)
+				}
+				header.StringMatch = &sm
 			default:
 				return nil, nil, fmt.Errorf("route %+v has an unrecognized header matcher: %+v", r, ht)
 			}

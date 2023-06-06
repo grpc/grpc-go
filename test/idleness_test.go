@@ -107,12 +107,12 @@ func (s) TestChannelIdleness_Disabled_NoActivity(t *testing.T) {
 	t.Cleanup(backend.Stop)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
-	// Veirfy that the ClientConn moves to READY.
+	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	awaitState(ctx, t, cc, connectivity.Ready)
 
-	// Veirfy that the ClientConn stay in READY.
+	// Verify that the ClientConn stay in READY.
 	sCtx, sCancel := context.WithTimeout(ctx, 3*defaultTestShortIdleTimeout)
 	defer sCancel()
 	awaitNoStateChange(sCtx, t, cc, connectivity.Ready)
@@ -152,12 +152,12 @@ func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 	t.Cleanup(backend.Stop)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
-	// Veirfy that the ClientConn moves to READY.
+	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	awaitState(ctx, t, cc, connectivity.Ready)
 
-	// Veirfy that the ClientConn moves to IDLE as there is no activity.
+	// Verify that the ClientConn moves to IDLE as there is no activity.
 	awaitState(ctx, t, cc, connectivity.Idle)
 
 	// Verify idleness related channelz events.
@@ -203,7 +203,7 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 	t.Cleanup(backend.Stop)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
-	// Veirfy that the ClientConn moves to READY.
+	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	awaitState(ctx, t, cc, connectivity.Ready)
@@ -213,7 +213,7 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 	// the server RPC handler and the unary call below.
 	errCh := make(chan error, 1)
 	go func() {
-		// Veirfy that the ClientConn stay in READY.
+		// Verify that the ClientConn stay in READY.
 		sCtx, sCancel := context.WithTimeout(ctx, 3*defaultTestShortIdleTimeout)
 		defer sCancel()
 		awaitNoStateChange(sCtx, t, cc, connectivity.Ready)
@@ -277,7 +277,7 @@ func (s) TestChannelIdleness_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	t.Cleanup(backend.Stop)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
-	// Veirfy that the ClientConn moves to READY.
+	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	awaitState(ctx, t, cc, connectivity.Ready)
@@ -302,7 +302,7 @@ func (s) TestChannelIdleness_Enabled_ActiveSinceLastCheck(t *testing.T) {
 		}
 	}()
 
-	// Veirfy that the ClientConn stay in READY.
+	// Verify that the ClientConn stay in READY.
 	awaitNoStateChange(sCtx, t, cc, connectivity.Ready)
 
 	// Verify that there are no idleness related channelz events.
@@ -343,12 +343,12 @@ func (s) TestChannelIdleness_Enabled_ExitIdleOnRPC(t *testing.T) {
 	}
 	t.Cleanup(func() { cc.Close() })
 
-	// Veirfy that the ClientConn moves to READY.
+	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	awaitState(ctx, t, cc, connectivity.Ready)
 
-	// Veirfy that the ClientConn moves to IDLE as there is no activity.
+	// Verify that the ClientConn moves to IDLE as there is no activity.
 	awaitState(ctx, t, cc, connectivity.Idle)
 
 	// Verify idleness related channelz events.
@@ -405,7 +405,7 @@ func (s) TestChannelIdleness_Enabled_IdleTimeoutRacesWithRPCs(t *testing.T) {
 	}
 	t.Cleanup(func() { cc.Close() })
 
-	// Veirfy that the ClientConn moves to READY.
+	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	awaitState(ctx, t, cc, connectivity.Ready)
@@ -420,4 +420,40 @@ func (s) TestChannelIdleness_Enabled_IdleTimeoutRacesWithRPCs(t *testing.T) {
 			t.Errorf("EmptyCall RPC failed: %v", err)
 		}
 	}
+}
+
+// Tests the case where the channel is IDLE and we call cc.Connect.
+func (s) TestChannelIdleness_Connect(t *testing.T) {
+	// Start a test backend and set the bootstrap state of the resolver to
+	// include this address. This will ensure that when the resolver is
+	// restarted when exiting idle, it will push the same address to grpc again.
+	r := manual.NewBuilderWithScheme("whatever")
+	backend := stubserver.StartTestService(t, nil)
+	t.Cleanup(backend.Stop)
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
+
+	// Create a ClientConn with a short idle_timeout.
+	dopts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(r),
+		grpc.WithIdleTimeout(defaultTestShortIdleTimeout),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	if err != nil {
+		t.Fatalf("grpc.Dial() failed: %v", err)
+	}
+	t.Cleanup(func() { cc.Close() })
+
+	// Verify that the ClientConn moves to IDLE.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	awaitState(ctx, t, cc, connectivity.Idle)
+
+	// Connect should exit channel idleness.
+	cc.Connect()
+
+	// Verify that the ClientConn moves back to READY.
+	awaitState(ctx, t, cc, connectivity.Ready)
 }

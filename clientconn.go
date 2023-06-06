@@ -325,7 +325,8 @@ func (cc *ClientConn) exitIdleMode() error {
 		return errConnClosing
 	}
 	if cc.idlenessState != ccIdlenessStateIdle {
-		logger.Error("ClientConn asked to exit idle mode when not in idle mode")
+		cc.mu.Unlock()
+		logger.Info("ClientConn asked to exit idle mode when not in idle mode")
 		return nil
 	}
 
@@ -706,6 +707,9 @@ func (cc *ClientConn) GetState() connectivity.State {
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 // release.
 func (cc *ClientConn) Connect() {
+	cc.exitIdleMode()
+	// If the ClientConn was not in idle mode, we need to call ExitIdle on the
+	// LB policy so that connections can be created.
 	cc.balancerWrapper.exitIdleMode()
 }
 
@@ -1866,7 +1870,12 @@ func (cc *ClientConn) determineAuthority() error {
 		// the channel authority given the user's dial target. For resolvers
 		// which don't implement this interface, we will use the endpoint from
 		// "scheme://authority/endpoint" as the default authority.
-		cc.authority = endpoint
+
+		// Path escape the endpoint to handle use cases where the endpoint
+		// might not be a valid authority by default.
+		// For example an endpoint which has multiple paths like
+		// 'a/b/c', which is not a valid authority by default.
+		cc.authority = url.PathEscape(endpoint)
 	}
 	channelz.Infof(logger, cc.channelzID, "Channel authority set to %q", cc.authority)
 	return nil
