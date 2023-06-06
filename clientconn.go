@@ -1870,7 +1870,12 @@ func (cc *ClientConn) determineAuthority() error {
 		// the channel authority given the user's dial target. For resolvers
 		// which don't implement this interface, we will use the endpoint from
 		// "scheme://authority/endpoint" as the default authority.
-		cc.authority = endpoint
+
+		// Path escape the endpoint to handle use cases where the endpoint
+		// might not be a valid authority by default.
+		// For example an endpoint which has multiple paths like
+		// 'a/b/c', which is not a valid authority by default.
+		cc.authority = url.PathEscape(endpoint)
 	}
 	channelz.Infof(logger, cc.channelzID, "Channel authority set to %q", cc.authority)
 	return nil
