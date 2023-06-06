@@ -47,7 +47,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	math_rand "math/rand"
+	"math/rand"
 	"net"
 	"os"
 	"reflect"
@@ -197,9 +197,9 @@ func runModesFromWorkloads(workload string) runModes {
 type startFunc func(mode string, bf stats.Features)
 type stopFunc func(count uint64)
 type ucStopFunc func(req uint64, resp uint64)
-type rpcCallFunc func(conn, pos int)
-type rpcSendFunc func(conn, pos int)
-type rpcRecvFunc func(conn, pos int)
+type rpcCallFunc func(cn, pos int)
+type rpcSendFunc func(cn, pos int)
+type rpcRecvFunc func(cn, pos int)
 type rpcCleanupFunc func()
 
 func unaryBenchmark(start startFunc, stop stopFunc, bf stats.Features, s *stats.Stats) {
@@ -239,12 +239,12 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 	wg.Add(2 * bf.Connections * bf.MaxConcurrentCalls)
 	maxSleep := int(bf.SleepBetweenRPCs)
 	for cn := 0; cn < bf.Connections; cn++ {
-		for i := 0; i < bf.MaxConcurrentCalls; i++ {
+		for pos := 0; pos < bf.MaxConcurrentCalls; pos++ {
 			go func(cn, pos int) {
 				defer wg.Done()
 				for {
 					if maxSleep > 0 {
-						time.Sleep(time.Duration(math_rand.Intn(maxSleep)))
+						time.Sleep(time.Duration(rand.Intn(maxSleep)))
 					}
 					t := time.Now()
 					if t.After(bmEnd) {
@@ -253,7 +253,7 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 					sender(cn, pos)
 					atomic.AddUint64(&req, 1)
 				}
-			}(cn, i)
+			}(cn, pos)
 			go func(cn, pos int) {
 				defer wg.Done()
 				for {
@@ -264,7 +264,7 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 					recver(cn, pos)
 					atomic.AddUint64(&resp, 1)
 				}
-			}(cn, i)
+			}(cn, pos)
 		}
 	}
 	wg.Wait()
@@ -357,9 +357,9 @@ func makeClients(bf stats.Features) ([]testpb.BenchmarkServiceClient, func()) {
 	stopper := bm.StartServer(bm.ServerInfo{Type: "protobuf", Listener: lis}, sopts...)
 	conns := make([]*grpc.ClientConn, bf.Connections)
 	clients := make([]testpb.BenchmarkServiceClient, bf.Connections)
-	for i := 0; i < bf.Connections; i++ {
-		conns[i] = bm.NewClientConn("" /* target not used */, opts...)
-		clients[i] = testgrpc.NewBenchmarkServiceClient(conns[i])
+	for cn := 0; cn < bf.Connections; cn++ {
+		conns[cn] = bm.NewClientConn("" /* target not used */, opts...)
+		clients[cn] = testgrpc.NewBenchmarkServiceClient(conns[cn])
 	}
 
 	return clients, func() {
@@ -372,7 +372,7 @@ func makeClients(bf stats.Features) ([]testpb.BenchmarkServiceClient, func()) {
 
 func makeFuncUnary(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 	clients, cleanup := makeClients(bf)
-	return func(conn, index int) {
+	return func(cn, pos int) {
 		reqSizeBytes := bf.ReqSizeBytes
 		respSizeBytes := bf.RespSizeBytes
 		if bf.ReqPayloadCurve != nil {
@@ -381,7 +381,7 @@ func makeFuncUnary(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 		if bf.RespPayloadCurve != nil {
 			respSizeBytes = bf.RespPayloadCurve.ChooseRandom()
 		}
-		unaryCaller(clients[conn], reqSizeBytes, respSizeBytes)
+		unaryCaller(clients[cn], reqSizeBytes, respSizeBytes)
 	}, cleanup
 }
 
@@ -392,17 +392,17 @@ func makeFuncStream(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 	for cn := 0; cn < bf.Connections; cn++ {
 		tc := clients[cn]
 		streams[cn] = make([]testgrpc.BenchmarkService_StreamingCallClient, bf.MaxConcurrentCalls)
-		for i := 0; i < bf.MaxConcurrentCalls; i++ {
+		for pos := 0; pos < bf.MaxConcurrentCalls; pos++ {
 
 			stream, err := tc.StreamingCall(context.Background())
 			if err != nil {
 				logger.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 			}
-			streams[cn][i] = stream
+			streams[cn][pos] = stream
 		}
 	}
 
-	return func(conn, pos int) {
+	return func(cn, pos int) {
 		reqSizeBytes := bf.ReqSizeBytes
 		respSizeBytes := bf.RespSizeBytes
 		if bf.ReqPayloadCurve != nil {
@@ -411,7 +411,7 @@ func makeFuncStream(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 		if bf.RespPayloadCurve != nil {
 			respSizeBytes = bf.RespPayloadCurve.ChooseRandom()
 		}
-		streamCaller(streams[conn][pos], reqSizeBytes, respSizeBytes)
+		streamCaller(streams[cn][pos], reqSizeBytes, respSizeBytes)
 	}, cleanup
 }
 
@@ -421,29 +421,29 @@ func makeFuncUnconstrainedStreamPreloaded(bf stats.Features) (rpcSendFunc, rpcRe
 	preparedMsg := make([][]*grpc.PreparedMsg, len(streams))
 	for cn, connStreams := range streams {
 		preparedMsg[cn] = make([]*grpc.PreparedMsg, len(connStreams))
-		for i, stream := range connStreams {
-			preparedMsg[cn][i] = &grpc.PreparedMsg{}
-			err := preparedMsg[cn][i].Encode(stream, req)
+		for pos, stream := range connStreams {
+			preparedMsg[cn][pos] = &grpc.PreparedMsg{}
+			err := preparedMsg[cn][pos].Encode(stream, req)
 			if err != nil {
-				logger.Fatalf("%v.Encode(%v, %v) = %v", preparedMsg[i], req, stream, err)
+				logger.Fatalf("%v.Encode(%v, %v) = %v", preparedMsg[cn][pos], req, stream, err)
 			}
 		}
 	}
 
-	return func(conn, pos int) {
-			streams[conn][pos].SendMsg(preparedMsg[conn][pos])
-		}, func(conn, pos int) {
-			streams[conn][pos].Recv()
+	return func(cn, pos int) {
+			streams[cn][pos].SendMsg(preparedMsg[cn][pos])
+		}, func(cn, pos int) {
+			streams[cn][pos].Recv()
 		}, cleanup
 }
 
 func makeFuncUnconstrainedStream(bf stats.Features) (rpcSendFunc, rpcRecvFunc, rpcCleanupFunc) {
 	streams, req, cleanup := setupUnconstrainedStream(bf)
 
-	return func(conn, pos int) {
-			streams[conn][pos].Send(req)
-		}, func(conn, pos int) {
-			streams[conn][pos].Recv()
+	return func(cn, pos int) {
+			streams[cn][pos].Send(req)
+		}, func(cn, pos int) {
+			streams[cn][pos].Recv()
 		}, cleanup
 }
 
@@ -457,12 +457,12 @@ func setupUnconstrainedStream(bf stats.Features) ([][]testgrpc.BenchmarkService_
 	for cn := 0; cn < bf.Connections; cn++ {
 		tc := clients[cn]
 		streams[cn] = make([]testgrpc.BenchmarkService_StreamingCallClient, bf.MaxConcurrentCalls)
-		for i := 0; i < bf.MaxConcurrentCalls; i++ {
+		for pos := 0; pos < bf.MaxConcurrentCalls; pos++ {
 			stream, err := tc.StreamingCall(ctx)
 			if err != nil {
 				logger.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 			}
-			streams[cn][i] = stream
+			streams[cn][pos] = stream
 		}
 	}
 
@@ -493,7 +493,7 @@ func streamCaller(stream testgrpc.BenchmarkService_StreamingCallClient, reqSize,
 func runBenchmark(caller rpcCallFunc, start startFunc, stop stopFunc, bf stats.Features, s *stats.Stats, mode string) {
 	// if SleepBetweenRPCs > 0 we skip the warmup because otherwise
 	// we are going to send a set of simultaneous requests on every connection,
-	// which is something we are trying to avoid when using SleepBetweenRPCs param.
+	// which is something we are trying to avoid when using SleepBetweenRPCs.
 	if bf.SleepBetweenRPCs == 0 {
 		// Warm up connections.
 		for i := 0; i < warmupCallCount; i++ {
@@ -511,12 +511,12 @@ func runBenchmark(caller rpcCallFunc, start startFunc, stop stopFunc, bf stats.F
 	maxSleep := int(bf.SleepBetweenRPCs)
 	var count uint64
 	for cn := 0; cn < bf.Connections; cn++ {
-		for i := 0; i < bf.MaxConcurrentCalls; i++ {
+		for pos := 0; pos < bf.MaxConcurrentCalls; pos++ {
 			go func(cn, pos int) {
 				defer wg.Done()
 				for {
 					if maxSleep > 0 {
-						time.Sleep(time.Duration(math_rand.Intn(maxSleep)))
+						time.Sleep(time.Duration(rand.Intn(maxSleep)))
 					}
 					t := time.Now()
 					if t.After(bmEnd) {
@@ -528,7 +528,7 @@ func runBenchmark(caller rpcCallFunc, start startFunc, stop stopFunc, bf stats.F
 					atomic.AddUint64(&count, 1)
 					s.AddDuration(elapse)
 				}
-			}(cn, i)
+			}(cn, pos)
 		}
 	}
 	wg.Wait()

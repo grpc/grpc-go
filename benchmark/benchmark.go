@@ -26,10 +26,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net"
 	"time"
-
-	"math/rand"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
