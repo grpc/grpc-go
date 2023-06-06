@@ -1805,8 +1805,7 @@ func (cc *ClientConn) parseTargetAndFindResolver() error {
 }
 
 // parseTarget uses RFC 3986 semantics to parse the given target into a
-// resolver.Target struct containing scheme, authority and url. Query
-// params are stripped from the endpoint.
+// resolver.Target struct containing url. Query params are stripped from the endpoint.
 func parseTarget(target string) (resolver.Target, error) {
 	u, err := url.Parse(target)
 	if err != nil {
@@ -1814,9 +1813,7 @@ func parseTarget(target string) (resolver.Target, error) {
 	}
 
 	return resolver.Target{
-		Scheme:    u.Scheme,
-		Authority: u.Host,
-		URL:       *u,
+		URL: *u,
 	}, nil
 }
 

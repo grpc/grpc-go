@@ -86,24 +86,24 @@ var (
 	minDNSResRate = 30 * time.Second
 )
 
-var customAuthorityDialler = func(authority string) func(ctx context.Context, network, address string) (net.Conn, error) {
+var customHostDialler = func(urlHost string) func(ctx context.Context, network, address string) (net.Conn, error) {
 	return func(ctx context.Context, network, address string) (net.Conn, error) {
 		var dialer net.Dialer
-		return dialer.DialContext(ctx, network, authority)
+		return dialer.DialContext(ctx, network, urlHost)
 	}
 }
 
-var customAuthorityResolver = func(authority string) (netResolver, error) {
-	host, port, err := parseTarget(authority, defaultDNSSvrPort)
+var customHostResolver = func(urlHost string) (netResolver, error) {
+	host, port, err := parseTarget(urlHost, defaultDNSSvrPort)
 	if err != nil {
 		return nil, err
 	}
 
-	authorityWithPort := net.JoinHostPort(host, port)
+	hostWithPort := net.JoinHostPort(host, port)
 
 	return &net.Resolver{
 		PreferGo: true,
-		Dial:     customAuthorityDialler(authorityWithPort),
+		Dial:     customHostDialler(hostWithPort),
 	}, nil
 }
 
@@ -143,7 +143,7 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 	if target.URL.Host == "" {
 		d.resolver = defaultResolver
 	} else {
-		d.resolver, err = customAuthorityResolver(target.URL.Host)
+		d.resolver, err = customHostResolver(target.URL.Host)
 		if err != nil {
 			return nil, err
 		}

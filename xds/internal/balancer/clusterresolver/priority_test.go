@@ -865,7 +865,7 @@ func (s) TestFallbackToDNS(t *testing.T) {
 	defer ctxCancel()
 	select {
 	case target := <-dnsTargetCh:
-		if diff := cmp.Diff(target, resolver.Target{Scheme: "dns", URL: *testutils.MustParseURL("dns:///" + testDNSTarget)}); diff != "" {
+		if diff := cmp.Diff(target, resolver.Target{URL: *testutils.MustParseURL("dns:///" + testDNSTarget)}); diff != "" {
 			t.Fatalf("got unexpected DNS target to watch, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():

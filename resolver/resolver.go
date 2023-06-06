@@ -264,10 +264,6 @@ type ClientConn interface {
 //   - "unknown_scheme://authority/endpoint"
 //     Target{Scheme: resolver.GetDefaultScheme(), Endpoint: "unknown_scheme://authority/endpoint"}
 type Target struct {
-	// Deprecated: use URL.Scheme instead.
-	Scheme string
-	// Deprecated: use URL.Host instead.
-	Authority string
 	// URL contains the parsed dial target with an optional default scheme added
 	// to it if the original dial target contained no scheme or contained an
 	// unregistered scheme. Any query params specified in the original dial

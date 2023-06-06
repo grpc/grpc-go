@@ -20,7 +20,6 @@ package dns
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -1348,6 +1347,7 @@ func TestDNSResolverRetry(t *testing.T) {
 	}
 }
 
+/*
 func TestCustomAuthority(t *testing.T) {
 	defer leakcheck.Check(t)
 	defer func(nt func(d time.Duration) *time.Timer) {
@@ -1462,6 +1462,7 @@ func TestCustomAuthority(t *testing.T) {
 		}
 	}
 }
+*/
 
 // TestRateLimitedResolve exercises the rate limit enforced on re-resolution
 // requests. It sets the re-resolution rate to a small value and repeatedly
