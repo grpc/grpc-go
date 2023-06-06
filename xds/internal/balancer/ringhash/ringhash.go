@@ -360,8 +360,9 @@ func (b *ringhashBalancer) UpdateSubConnState(sc balancer.SubConn, state balance
 	}
 
 	if oldSCState != newSCState {
-		// Because the picker caches the state of the subconns, we always regnerate
-		// and update the picker when the effective state changes.
+		// Because the picker caches the state of the subconns, we always
+		// regenerate and update the picker when the effective SubConn state
+		// changes.
 		b.regeneratePicker()
 		b.logger.Infof("Pushing new state %v and picker %p", b.state, b.picker)
 		b.cc.UpdateState(balancer.State{ConnectivityState: b.state, Picker: b.picker})
