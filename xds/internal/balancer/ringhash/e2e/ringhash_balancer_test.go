@@ -119,10 +119,7 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	// Make an RPC to get the ring_hash LB policy to reconnect and thereby move
 	// to TRANSIENT_FAILURE upon connection failure.
 	client.EmptyCall(ctx, &testpb.Empty{})
-	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		if cc.GetState() == connectivity.TransientFailure {
-			break
-		}
+	for state := cc.GetState(); state != connectivity.TransientFailure && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
 	}
 	if err := ctx.Err(); err != nil {
 		t.Fatalf("Timeout waiting for channel to reach %q after server shutdown: %v", connectivity.TransientFailure, err)
