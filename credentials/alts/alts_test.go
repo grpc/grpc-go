@@ -54,7 +54,7 @@ type s struct {
 
 func init() {
 	once.Do(func() {})
-        vmOnGCP = true
+	vmOnGCP = true
 }
 
 func Test(t *testing.T) {
