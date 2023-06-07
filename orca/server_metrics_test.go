@@ -16,17 +16,25 @@
  *
  */
 
-package orca_test
+package orca
 
 import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/internal/grpctest"
 )
 
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
 func (s) TestServerMetrics_Setters(t *testing.T) {
-	smr := orca.NewServerMetricsRecorder()
+	smr := NewServerMetricsRecorder()
 
 	smr.SetCPUUtilization(0.1)
 	smr.SetMemoryUtilization(0.2)
@@ -35,7 +43,7 @@ func (s) TestServerMetrics_Setters(t *testing.T) {
 	smr.SetEPS(0.5)
 	smr.SetNamedUtilization("x", 0.6)
 
-	want := &orca.ServerMetrics{
+	want := &ServerMetrics{
 		CPUUtilization: 0.1,
 		MemUtilization: 0.2,
 		AppUtilization: 0.3,
@@ -53,7 +61,7 @@ func (s) TestServerMetrics_Setters(t *testing.T) {
 }
 
 func (s) TestServerMetrics_Deleters(t *testing.T) {
-	smr := orca.NewServerMetricsRecorder()
+	smr := NewServerMetricsRecorder()
 
 	smr.SetCPUUtilization(0.1)
 	smr.SetMemoryUtilization(0.2)
@@ -71,7 +79,7 @@ func (s) TestServerMetrics_Deleters(t *testing.T) {
 	smr.DeleteEPS()
 	smr.DeleteNamedUtilization("x")
 
-	want := &orca.ServerMetrics{
+	want := &ServerMetrics{
 		CPUUtilization: -1,
 		MemUtilization: -1,
 		AppUtilization: -1,
@@ -89,7 +97,7 @@ func (s) TestServerMetrics_Deleters(t *testing.T) {
 }
 
 func (s) TestServerMetrics_Setters_Range(t *testing.T) {
-	smr := orca.NewServerMetricsRecorder()
+	smr := NewServerMetricsRecorder()
 
 	smr.SetCPUUtilization(0.1)
 	smr.SetMemoryUtilization(0.2)
@@ -106,11 +114,11 @@ func (s) TestServerMetrics_Setters_Range(t *testing.T) {
 	smr.SetEPS(-0.6)
 	smr.SetNamedUtilization("x", -2)
 
-	// Memory and named utilizations are max of 1.
+	// Memory and named utilizations over 1 are ignored.
 	smr.SetMemoryUtilization(1.1)
 	smr.SetNamedUtilization("x", 1.1)
 
-	want := &orca.ServerMetrics{
+	want := &ServerMetrics{
 		CPUUtilization: 0.1,
 		MemUtilization: 0.2,
 		AppUtilization: 0.3,
@@ -123,6 +131,45 @@ func (s) TestServerMetrics_Setters_Range(t *testing.T) {
 
 	got := smr.ServerMetrics()
 	if d := cmp.Diff(got, want); d != "" {
+		t.Fatalf("unexpected server metrics: -got +want: %v", d)
+	}
+}
+
+func (s) TestServerMetrics_Merge(t *testing.T) {
+	sm1 := &ServerMetrics{
+		CPUUtilization: 0.1,
+		MemUtilization: 0.2,
+		AppUtilization: 0.3,
+		QPS:            -1,
+		EPS:            0,
+		Utilization:    map[string]float64{"x": 0.6},
+		NamedMetrics:   map[string]float64{"y": 0.2},
+		RequestCost:    map[string]float64{"a": 0.1},
+	}
+
+	sm2 := &ServerMetrics{
+		CPUUtilization: -1,
+		AppUtilization: 0,
+		QPS:            0.9,
+		EPS:            20,
+		Utilization:    map[string]float64{"x": 0.5, "y": 0.4},
+		NamedMetrics:   map[string]float64{"x": 0.1},
+		RequestCost:    map[string]float64{"a": 0.2},
+	}
+
+	want := &ServerMetrics{
+		CPUUtilization: 0.1,
+		MemUtilization: 0,
+		AppUtilization: 0,
+		QPS:            0.9,
+		EPS:            20,
+		Utilization:    map[string]float64{"x": 0.5, "y": 0.4},
+		NamedMetrics:   map[string]float64{"x": 0.1, "y": 0.2},
+		RequestCost:    map[string]float64{"a": 0.2},
+	}
+
+	sm1.merge(sm2)
+	if d := cmp.Diff(sm1, want); d != "" {
 		t.Fatalf("unexpected server metrics: -got +want: %v", d)
 	}
 }

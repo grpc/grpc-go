@@ -23,13 +23,11 @@ import (
 	"errors"
 	"io"
 	"testing"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
@@ -40,16 +38,6 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
-
-const defaultTestTimeout = 5 * time.Second
 
 // TestE2ECallMetricsUnary tests the injection of custom backend metrics from
 // the server application for a unary RPC, and verifies that expected load
