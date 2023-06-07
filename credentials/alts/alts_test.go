@@ -53,6 +53,9 @@ type s struct {
 }
 
 func init() {
+	// The vmOnGCP global variable MUST be forced to true. Otherwise, if
+	// this test is run anywhere except on a GCP VM, then an ALTS handshake
+	// will immediately fail.
 	once.Do(func() {})
 	vmOnGCP = true
 }
