@@ -81,10 +81,10 @@ var (
 	XDSFederation = boolFromEnv("GRPC_EXPERIMENTAL_XDS_FEDERATION", true)
 
 	// XDSRLS indicates whether processing of Cluster Specifier plugins and
-	// support for the RLS CLuster Specifier is enabled, which can be enabled by
+	// support for the RLS CLuster Specifier is enabled, which can be disabled by
 	// setting the environment variable "GRPC_EXPERIMENTAL_XDS_RLS_LB" to
-	// "true".
-	XDSRLS = boolFromEnv("GRPC_EXPERIMENTAL_XDS_RLS_LB", false)
+	// "false".
+	XDSRLS = boolFromEnv("GRPC_EXPERIMENTAL_XDS_RLS_LB", true)
 
 	// C2PResolverTestOnlyTrafficDirectorURI is the TD URI for testing.
 	C2PResolverTestOnlyTrafficDirectorURI = os.Getenv("GRPC_TEST_ONLY_GOOGLE_C2P_RESOLVER_TRAFFIC_DIRECTOR_URI")
