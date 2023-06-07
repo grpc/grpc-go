@@ -65,9 +65,9 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 			injectMetrics: true,
 			wantProto: &v3orcapb.OrcaLoadReport{
 				CpuUtilization: 1.0,
-				MemUtilization: 50.0,
+				MemUtilization: 0.9,
 				RequestCost:    map[string]float64{"queryCost": 25.0},
-				Utilization:    map[string]float64{"queueSize": 75.0},
+				Utilization:    map[string]float64{"queueSize": 0.75},
 			},
 		},
 		{
@@ -92,7 +92,7 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 					t.Error(err)
 					return nil, err
 				}
-				recorder.SetMemoryUtilization(50.0)
+				recorder.SetMemoryUtilization(0.9)
 				// This value will be overwritten by a write to the same metric
 				// from the server handler.
 				recorder.SetNamedUtilization("queueSize", 1.0)
@@ -114,7 +114,7 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 						return nil, err
 					}
 					recorder.SetRequestCost("queryCost", 25.0)
-					recorder.SetNamedUtilization("queueSize", 75.0)
+					recorder.SetNamedUtilization("queueSize", 0.75)
 					return &testpb.Empty{}, nil
 				},
 			}
@@ -171,9 +171,9 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 			injectMetrics: true,
 			wantProto: &v3orcapb.OrcaLoadReport{
 				CpuUtilization: 1.0,
-				MemUtilization: 50.0,
-				RequestCost:    map[string]float64{"queryCost": 25.0},
-				Utilization:    map[string]float64{"queueSize": 75.0},
+				MemUtilization: 0.5,
+				RequestCost:    map[string]float64{"queryCost": 0.25},
+				Utilization:    map[string]float64{"queueSize": 0.75},
 			},
 		},
 		{
@@ -198,7 +198,7 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 					t.Error(err)
 					return err
 				}
-				recorder.SetMemoryUtilization(50.0)
+				recorder.SetMemoryUtilization(0.5)
 				// This value will be overwritten by a write to the same metric
 				// from the server handler.
 				recorder.SetNamedUtilization("queueSize", 1.0)
@@ -217,8 +217,8 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 							t.Error(err)
 							return err
 						}
-						recorder.SetRequestCost("queryCost", 25.0)
-						recorder.SetNamedUtilization("queueSize", 75.0)
+						recorder.SetRequestCost("queryCost", 0.25)
+						recorder.SetNamedUtilization("queueSize", 0.75)
 					}
 
 					// Streaming implementation replies with a dummy response until the
