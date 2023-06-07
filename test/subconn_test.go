@@ -110,7 +110,7 @@ func (s) TestSubConnEmpty(t *testing.T) {
 	}
 	defer ss.Stop()
 	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("UnaryCall RPC failed: %v", err)
+		t.Fatalf("EmptyCall failed: %v", err)
 	}
 
 	t.Log("Removing addresses from resolver and SubConn")
@@ -120,6 +120,6 @@ func (s) TestSubConnEmpty(t *testing.T) {
 	t.Log("Re-adding addresses to resolver and SubConn")
 	ss.R.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
 	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("UnaryCall RPC failed: %v", err)
+		t.Fatalf("EmptyCall failed: %v", err)
 	}
 }
