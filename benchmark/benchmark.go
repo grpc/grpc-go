@@ -28,6 +28,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"strconv"
 	"time"
 
 	"google.golang.org/grpc"
@@ -83,12 +84,32 @@ const UnconstrainedStreamingHeader = "unconstrained-streaming"
 // the server should sleep between consecutive RPC responses.
 const UnconstrainedStreamingDelayHeader = "unconstrained-streaming-delay"
 
+const PreloadMsgSizeHeader = "preload-msg-size"
+
 func (s *testServer) StreamingCall(stream testgrpc.BenchmarkService_StreamingCallServer) error {
+	preloadMsgSize := 0
+	if md, ok := metadata.FromIncomingContext(stream.Context()); ok && len(md[PreloadMsgSizeHeader]) != 0 {
+		val := md[PreloadMsgSizeHeader][0]
+		var err error
+		preloadMsgSize, err = strconv.Atoi(val)
+		if err != nil {
+			return fmt.Errorf("can't parse %q header: %s", PreloadMsgSizeHeader, err)
+		}
+	}
+
 	if md, ok := metadata.FromIncomingContext(stream.Context()); ok && len(md[UnconstrainedStreamingHeader]) != 0 {
-		return s.UnconstrainedStreamingCall(stream)
+		return s.UnconstrainedStreamingCall(stream, preloadMsgSize)
 	}
 	response := &testpb.SimpleResponse{
 		Payload: new(testpb.Payload),
+	}
+	preloadedResponse := &grpc.PreparedMsg{}
+	if preloadMsgSize > 0 {
+		setPayload(response.Payload, testpb.PayloadType_COMPRESSABLE, preloadMsgSize)
+		err := preloadedResponse.Encode(stream, response)
+		if err != nil {
+			return err
+		}
 	}
 	in := new(testpb.SimpleRequest)
 	for {
@@ -101,14 +122,19 @@ func (s *testServer) StreamingCall(stream testgrpc.BenchmarkService_StreamingCal
 		if err != nil {
 			return err
 		}
-		setPayload(response.Payload, in.ResponseType, int(in.ResponseSize))
-		if err := stream.Send(response); err != nil {
+		if preloadMsgSize > 0 {
+			err = stream.SendMsg(preloadedResponse)
+		} else {
+			setPayload(response.Payload, in.ResponseType, int(in.ResponseSize))
+			err = stream.Send(response)
+		}
+		if err != nil {
 			return err
 		}
 	}
 }
 
-func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService_StreamingCallServer) error {
+func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService_StreamingCallServer, preloadMsgSize int) error {
 	maxSleep := 0
 	if md, ok := metadata.FromIncomingContext(stream.Context()); ok && len(md[UnconstrainedStreamingDelayHeader]) != 0 {
 		val := md[UnconstrainedStreamingDelayHeader][0]
@@ -135,6 +161,14 @@ func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService
 	}
 	setPayload(response.Payload, in.ResponseType, int(in.ResponseSize))
 
+	preloadedResponse := &grpc.PreparedMsg{}
+	if preloadMsgSize > 0 {
+		err := preloadedResponse.Encode(stream, response)
+		if err != nil {
+			return err
+		}
+	}
+
 	go func() {
 		for {
 			// Using RecvMsg rather than Recv to prevent reallocation of SimpleRequest.
@@ -154,7 +188,12 @@ func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService
 			if maxSleep > 0 {
 				time.Sleep(time.Duration(rand.Intn(maxSleep)))
 			}
-			err := stream.Send(response)
+			var err error
+			if preloadMsgSize > 0 {
+				err = stream.SendMsg(preloadedResponse)
+			} else {
+				err = stream.Send(response)
+			}
 			switch status.Code(err) {
 			case codes.Unavailable, codes.Canceled:
 				return
@@ -258,7 +297,12 @@ func DoStreamingRoundTrip(stream testgrpc.BenchmarkService_StreamingCallClient, 
 		ResponseSize: int32(respSize),
 		Payload:      pl,
 	}
-	if err := stream.Send(req); err != nil {
+	return DoStreamingRoundTripPreloaded(stream, req)
+}
+
+func DoStreamingRoundTripPreloaded(stream testgrpc.BenchmarkService_StreamingCallClient, req interface{}) error {
+	// req could be either *testpb.SimpleRequest or *grpc.PreparedMsg
+	if err := stream.SendMsg(req); err != nil {
 		return fmt.Errorf("/BenchmarkService/StreamingCall.Send(_) = %v, want <nil>", err)
 	}
 	if _, err := stream.Recv(); err != nil {
