@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/cncf/udpa/go v0.0.0-20220112060539-c52dc94e7fbe
-	github.com/cncf/xds/go v0.0.0-20230310173818-32f1caf87195
+	github.com/cncf/xds/go v0.0.0-20230607035331-e9ce68804cb4
 	github.com/envoyproxy/go-control-plane v0.11.1-0.20230524094728-9239064ad72f
 	github.com/golang/glog v1.1.0
 	github.com/golang/protobuf v1.5.3
