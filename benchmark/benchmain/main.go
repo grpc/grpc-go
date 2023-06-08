@@ -275,7 +275,7 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 // service. The client is configured using the different options in the passed
 // 'bf'. Also returns a cleanup function to close the client and release
 // resources.
-func makeClients(bf stats.Features) ([]testpb.BenchmarkServiceClient, func()) {
+func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) {
 	nw := &latency.Network{Kbps: bf.Kbps, Latency: bf.Latency, MTU: bf.MTU}
 	opts := []grpc.DialOption{}
 	sopts := []grpc.ServerOption{}
@@ -356,7 +356,7 @@ func makeClients(bf stats.Features) ([]testpb.BenchmarkServiceClient, func()) {
 	lis = nw.Listener(lis)
 	stopper := bm.StartServer(bm.ServerInfo{Type: "protobuf", Listener: lis}, sopts...)
 	conns := make([]*grpc.ClientConn, bf.Connections)
-	clients := make([]testpb.BenchmarkServiceClient, bf.Connections)
+	clients := make([]testgrpc.BenchmarkServiceClient, bf.Connections)
 	for cn := 0; cn < bf.Connections; cn++ {
 		conns[cn] = bm.NewClientConn("" /* target not used */, opts...)
 		clients[cn] = testgrpc.NewBenchmarkServiceClient(conns[cn])
