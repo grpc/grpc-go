@@ -160,7 +160,7 @@ type exitIdle struct{}
 
 // cdsBalancer implements a CDS based LB policy. It instantiates a
 // cluster_resolver balancer to further resolve the serviceName received from
-// CDS, into localities and endpoints. Implements the balancer.bal
+// CDS, into localities and endpoints. Implements the balancer.Balancer
 // interface which is exposed to gRPC and implements the balancer.ClientConn
 // interface which is exposed to the cluster_resolver balancer.
 type cdsBalancer struct {
