@@ -27,24 +27,24 @@ import (
 	"google.golang.org/grpc/connectivity"
 )
 
-// Balancer is a balancer with all of its balancer operations as no-ops, other
-// than returning a Transient Failure Picker on a Client Conn update.
-type Balancer struct {
+// bal is a balancer with all of its balancer operations as no-ops, other than
+// returning a Transient Failure Picker on a Client Conn update.
+type bal struct {
 	cc  balancer.ClientConn
 	err error
 }
 
 // NewBalancer returns a no-op balancer.
-func NewBalancer(cc balancer.ClientConn, err error) *Balancer {
-	return &Balancer{
+func NewBalancer(cc balancer.ClientConn, err error) balancer.Balancer {
+	return &bal{
 		cc:  cc,
 		err: err,
 	}
 }
 
-// UpdateClientConnState updates the Balancer's Client Conn with an Error Picker
+// UpdateClientConnState updates the bal's Client Conn with an Error Picker
 // and a Connectivity State of TRANSIENT_FAILURE.
-func (b *Balancer) UpdateClientConnState(_ balancer.ClientConnState) error {
+func (b *bal) UpdateClientConnState(_ balancer.ClientConnState) error {
 	b.cc.UpdateState(balancer.State{
 		Picker:            base.NewErrPicker(b.err),
 		ConnectivityState: connectivity.TransientFailure,
@@ -53,10 +53,10 @@ func (b *Balancer) UpdateClientConnState(_ balancer.ClientConnState) error {
 }
 
 // ResolverError is a no-op.
-func (b *Balancer) ResolverError(_ error) {}
+func (b *bal) ResolverError(_ error) {}
 
 // UpdateSubConnState is a no-op.
-func (b *Balancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConnState) {}
+func (b *bal) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConnState) {}
 
 // Close is a no-op.
-func (b *Balancer) Close() {}
+func (b *bal) Close() {}
