@@ -193,7 +193,8 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 					"discoveryMechanisms": [{
 						"cluster": "%s",
 						"type": "EDS",
-						"edsServiceName": "%s"
+						"edsServiceName": "%s",
+						"outlierDetection": {}
 					}],
 					"xdsLbPolicy":[{"round_robin":{}}]
 				}
@@ -301,7 +302,8 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 					"discoveryMechanisms": [{
 						"cluster": "%s",
 						"type": "EDS",
-						"edsServiceName": "%s"
+						"edsServiceName": "%s",
+						"outlierDetection": {}
 					}],
 					"xdsLbPolicy":[{"round_robin":{}}]
 				}
@@ -422,7 +424,8 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 					"discoveryMechanisms": [{
 						"cluster": "%s",
 						"type": "EDS",
-						"edsServiceName": "%s"
+						"edsServiceName": "%s",
+						"outlierDetection": {}
 					}],
 					"xdsLbPolicy":[{"round_robin":{}}]
 				}
@@ -488,7 +491,8 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 					"discoveryMechanisms": [{
 						"cluster": "%s",
 						"type": "EDS",
-						"edsServiceName": "%s"
+						"edsServiceName": "%s",
+						"outlierDetection": {}
 					}],
 					"xdsLbPolicy":[{"round_robin":{}}]
 				}
