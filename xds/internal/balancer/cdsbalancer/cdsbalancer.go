@@ -79,13 +79,13 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 		// Shouldn't happen, registered through imported Cluster Resolver,
 		// defensive programming.
 		logger.Errorf("%q LB policy is needed but not registered", clusterresolver.Name)
-		return nop.NewNOPBalancer(cc)
+		return nop.NewBalancer(cc, fmt.Errorf("%q LB policy is needed but not registered", clusterresolver.Name))
 	}
 	crParser, ok := builder.(balancer.ConfigParser)
 	if !ok {
 		// Shouldn't happen, imported Cluster Resolver builder has this method.
 		logger.Errorf("%q LB policy does not implement a config parser", clusterresolver.Name)
-		return nop.NewNOPBalancer(cc)
+		return nop.NewBalancer(cc, fmt.Errorf("%q LB policy does not implement a config parser", clusterresolver.Name))
 	}
 	b := &cdsBalancer{
 		bOpts:    opts,

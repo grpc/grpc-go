@@ -65,12 +65,12 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 	priorityBuilder := balancer.Get(priority.Name)
 	if priorityBuilder == nil {
 		logger.Errorf("%q LB policy is needed but not registered", priority.Name)
-		return nop.NewNOPBalancer(cc)
+		return nop.NewBalancer(cc, fmt.Errorf("%q LB policy is needed but not registered", priority.Name))
 	}
 	priorityConfigParser, ok := priorityBuilder.(balancer.ConfigParser)
 	if !ok {
 		logger.Errorf("%q LB policy does not implement a config parser", priority.Name)
-		return nop.NewNOPBalancer(cc)
+		return nop.NewBalancer(cc, fmt.Errorf("%q LB policy does not implement a config parser", priority.Name))
 	}
 
 	b := &clusterResolverBalancer{
