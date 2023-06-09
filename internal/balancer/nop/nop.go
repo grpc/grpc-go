@@ -42,7 +42,7 @@ func NewBalancer(cc balancer.ClientConn, err error) balancer.Balancer {
 	}
 }
 
-// UpdateClientConnState updates the bal's Client Conn with an Error Picker
+// UpdateClientConnState updates the Balancer's Client Conn with an Error Picker
 // and a Connectivity State of TRANSIENT_FAILURE.
 func (b *bal) UpdateClientConnState(_ balancer.ClientConnState) error {
 	b.cc.UpdateState(balancer.State{
