@@ -664,9 +664,5 @@ func outlierConfigFromCluster(cluster *v3clusterpb.Cluster) (json.RawMessage, er
 		SuccessRateEjection:       sre,
 		FailurePercentageEjection: fpe,
 	}
-	odLBCfgJSON, err := json.Marshal(odLBCfg)
-	if err != nil {
-		return nil, err
-	}
-	return odLBCfgJSON, nil
+	return json.Marshal(odLBCfg)
 }

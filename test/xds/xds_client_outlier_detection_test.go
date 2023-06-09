@@ -267,7 +267,7 @@ func (s) TestOutlierDetectionXDSDefaultOn(t *testing.T) {
 	// Configure CDS resources with Outlier Detection set but
 	// EnforcingSuccessRate unset. This should cause Outlier Detection to be
 	// configured with SuccessRateEjection present in configuration, which will
-	// eventually be populated with it's default values along with the knobs set
+	// eventually be populated with its default values along with the knobs set
 	// as SuccessRate fields in the proto, and thus Outlier Detection should be
 	// on and actively eject upstreams.
 	const serviceName = "my-service-client-side-xds"

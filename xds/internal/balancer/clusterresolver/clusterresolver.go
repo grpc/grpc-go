@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/balancer/nop"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
@@ -64,12 +65,12 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 	priorityBuilder := balancer.Get(priority.Name)
 	if priorityBuilder == nil {
 		logger.Errorf("%q LB policy is needed but not registered", priority.Name)
-		return nil
+		return nop.NewNOPBalancer(cc)
 	}
 	priorityConfigParser, ok := priorityBuilder.(balancer.ConfigParser)
 	if !ok {
 		logger.Errorf("%q LB policy does not implement a config parser", priority.Name)
-		return nil
+		return nop.NewNOPBalancer(cc)
 	}
 
 	b := &clusterResolverBalancer{
@@ -116,23 +117,19 @@ func (bb) ParseConfig(j json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 		return nil, fmt.Errorf("unable to unmarshal balancer config %s into cluster-resolver config, error: %v", string(j), err)
 	}
 
-	odCfgs := make([]outlierdetection.LBConfig, len(cfg.DiscoveryMechanisms))
-	for i, dm := range cfg.DiscoveryMechanisms {
-		lbCfg, err := odParser.ParseConfig(dm.OutlierDetection)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing Outlier Detection config: %v", dm.OutlierDetection)
-		}
-		odCfg, ok := lbCfg.(*outlierdetection.LBConfig)
-		if !ok {
-			// Shouldn't happen, Parser built at build time with Outlier Detection
-			// builder pulled from gRPC LB Registry.
-			return nil, fmt.Errorf("odParser returned config with unexpected type %T: %v", lbCfg, lbCfg)
-		}
-		odCfgs[i] = *odCfg
-	}
 	if envconfig.XDSOutlierDetection {
-		for i, odCfg := range odCfgs {
-			cfg.DiscoveryMechanisms[i].outlierDetection = odCfg
+		for i, dm := range cfg.DiscoveryMechanisms {
+			lbCfg, err := odParser.ParseConfig(dm.OutlierDetection)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing Outlier Detection config %v: %v", dm.OutlierDetection, err)
+			}
+			odCfg, ok := lbCfg.(*outlierdetection.LBConfig)
+			if !ok {
+				// Shouldn't happen, Parser built at build time with Outlier Detection
+				// builder pulled from gRPC LB Registry.
+				return nil, fmt.Errorf("odParser returned config with unexpected type %T: %v", lbCfg, lbCfg)
+			}
+			cfg.DiscoveryMechanisms[i].outlierDetection = *odCfg
 		}
 	}
 	if err := json.Unmarshal(cfg.XDSLBPolicy, &cfg.xdsLBPolicy); err != nil {

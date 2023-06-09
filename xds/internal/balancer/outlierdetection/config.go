@@ -19,6 +19,7 @@ package outlierdetection
 
 import (
 	"encoding/json"
+	"time"
 
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
@@ -59,7 +60,7 @@ type SuccessRateEjection struct {
 type successRateEjection SuccessRateEjection
 
 // UnmarshalJSON unmarshals JSON into SuccessRateEjection. If a
-// SuccessRateEjection field is not set, that field will get it's default value.
+// SuccessRateEjection field is not set, that field will get its default value.
 func (sre *SuccessRateEjection) UnmarshalJSON(j []byte) error {
 	sre.StdevFactor = 1900
 	sre.EnforcementPercentage = 100
@@ -124,7 +125,7 @@ type FailurePercentageEjection struct {
 type failurePercentageEjection FailurePercentageEjection
 
 // UnmarshalJSON unmarshals JSON into FailurePercentageEjection. If a
-// FailurePercentageEjection field is not set, that field will get it's default
+// FailurePercentageEjection field is not set, that field will get its default
 // value.
 func (fpe *FailurePercentageEjection) UnmarshalJSON(j []byte) error {
 	fpe.Threshold = 85
@@ -186,6 +187,28 @@ type LBConfig struct {
 	FailurePercentageEjection *FailurePercentageEjection `json:"failurePercentageEjection,omitempty"`
 	// ChildPolicy is the config for the child policy.
 	ChildPolicy *iserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
+}
+
+// For UnmarshalJSON to work correctly and set defaults without infinite
+// recursion.
+type lbConfig LBConfig
+
+// UnmarshalJSON unmarshals JSON into LBConfig. If a top level LBConfig field
+// (i.e. not next layer sre or fpe) is not set, that field will get its default
+// value. If sre or fpe is not set, it will stay unset, otherwise it will
+// unmarshal on those types populating with default values for their fields if
+// needed.
+func (lbc *LBConfig) UnmarshalJSON(j []byte) error {
+	// Default top layer values as documented in A50.
+	lbc.Interval = iserviceconfig.Duration(10 * time.Second)
+	lbc.BaseEjectionTime = iserviceconfig.Duration(30 * time.Second)
+	lbc.MaxEjectionTime = iserviceconfig.Duration(300 * time.Second)
+	lbc.MaxEjectionPercent = 10
+	// Unmarshal JSON on a type with zero values for methods, including
+	// UnmarshalJSON. Overwrites defaults, leaves alone if not. typecast to
+	// avoid infinite recursion by not recalling this function and causing stack
+	// overflow.
+	return json.Unmarshal(j, (*lbConfig)(lbc))
 }
 
 // EqualIgnoringChildPolicy returns whether the LBConfig is same with the

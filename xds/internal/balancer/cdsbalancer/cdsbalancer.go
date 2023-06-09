@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/internal/balancer/nop"
 	"google.golang.org/grpc/internal/buffer"
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/envconfig"
@@ -78,13 +79,13 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 		// Shouldn't happen, registered through imported Cluster Resolver,
 		// defensive programming.
 		logger.Errorf("%q LB policy is needed but not registered", clusterresolver.Name)
-		return nil
+		return nop.NewNOPBalancer(cc)
 	}
 	crParser, ok := builder.(balancer.ConfigParser)
 	if !ok {
 		// Shouldn't happen, imported Cluster Resolver builder has this method.
 		logger.Errorf("%q LB policy does not implement a config parser", clusterresolver.Name)
-		return nil
+		return nop.NewNOPBalancer(cc)
 	}
 	b := &cdsBalancer{
 		bOpts:    opts,
