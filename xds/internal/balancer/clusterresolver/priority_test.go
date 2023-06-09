@@ -85,7 +85,7 @@ func setupTestEDS(t *testing.T, initChild *internalserviceconfig.BalancerConfig)
 				Cluster: testClusterName,
 				Type:    DiscoveryMechanismTypeEDS,
 			}},
-			XDSLBPolicy: wrrLocalityLBConfig,
+			xdsLBPolicy: *wrrLocalityLBConfig,
 		},
 	}); err != nil {
 		edsb.Close()
@@ -855,7 +855,7 @@ func (s) TestFallbackToDNS(t *testing.T) {
 					DNSHostname: testDNSTarget,
 				},
 			},
-			XDSLBPolicy: wrrLocalityLBConfig,
+			xdsLBPolicy: *wrrLocalityLBConfig,
 		},
 	}); err != nil {
 		t.Fatal(err)
