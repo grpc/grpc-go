@@ -73,18 +73,10 @@ func Register(s GRPCServer) {
 
 // RegisterV1 registers only the v1 version of the server reflection service
 // on the given gRPC server. Many clients may only support v1alpha so most
-// users should use Register instead.
+// users should use Register instead, at least until clients have upgraded.
 func RegisterV1(s GRPCServer) {
 	svr := NewServerV1(ServerOptions{Services: s})
 	v1grpc.RegisterServerReflectionServer(s, svr)
-}
-
-// RegisterV1Alpha registers only the v1alpha version of the server reflection
-// service. Some clients may prefer v1 or only support v1 exclusively, so most
-// users should use Register instead.
-func RegisterV1Alpha(s GRPCServer) {
-	svr := NewServerV1(ServerOptions{Services: s})
-	v1alphagrpc.RegisterServerReflectionServer(s, asV1Alpha(svr))
 }
 
 // ServiceInfoProvider is an interface used to retrieve metadata about the
