@@ -253,7 +253,7 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 		ClusterName: serviceName,
 		LBPolicy:    wrrLocalityLBConfigJSON,
 	}
-	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfig, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -312,7 +312,7 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 		ClusterName: serviceName,
 		LBPolicy:    wrrLocalityLBConfigJSON,
 	}
-	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfig, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -468,7 +468,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfig, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -502,7 +502,7 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfig, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
@@ -555,7 +555,7 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfig, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
@@ -608,7 +608,7 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfig, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
@@ -687,7 +687,7 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 		},
 		LBPolicy: wrrLocalityLBConfigJSON,
 	}
-	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfig, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
