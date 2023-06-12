@@ -84,6 +84,9 @@ const UnconstrainedStreamingHeader = "unconstrained-streaming"
 // the server should sleep between consecutive RPC responses.
 const UnconstrainedStreamingDelayHeader = "unconstrained-streaming-delay"
 
+// PreloadMsgSizeHeader indicates that the client is going to ask for
+// a fixed response size and passes this size to the server.
+// The server is expected to preload the response on startup.
 const PreloadMsgSizeHeader = "preload-msg-size"
 
 func (s *testServer) StreamingCall(stream testgrpc.BenchmarkService_StreamingCallServer) error {
@@ -300,6 +303,7 @@ func DoStreamingRoundTrip(stream testgrpc.BenchmarkService_StreamingCallClient, 
 	return DoStreamingRoundTripPreloaded(stream, req)
 }
 
+// DoStreamingRoundTrip performs a round trip for a single streaming rpc with preloaded payload.
 func DoStreamingRoundTripPreloaded(stream testgrpc.BenchmarkService_StreamingCallClient, req interface{}) error {
 	// req could be either *testpb.SimpleRequest or *grpc.PreparedMsg
 	if err := stream.SendMsg(req); err != nil {
