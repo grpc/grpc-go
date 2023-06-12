@@ -303,7 +303,7 @@ func DoStreamingRoundTrip(stream testgrpc.BenchmarkService_StreamingCallClient, 
 	return DoStreamingRoundTripPreloaded(stream, req)
 }
 
-// DoStreamingRoundTrip performs a round trip for a single streaming rpc with preloaded payload.
+// DoStreamingRoundTripPreloaded performs a round trip for a single streaming rpc with preloaded payload.
 func DoStreamingRoundTripPreloaded(stream testgrpc.BenchmarkService_StreamingCallClient, req interface{}) error {
 	// req could be either *testpb.SimpleRequest or *grpc.PreparedMsg
 	if err := stream.SendMsg(req); err != nil {
