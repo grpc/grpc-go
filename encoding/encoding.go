@@ -70,9 +70,10 @@ var registeredCompressor = make(map[string]Compressor)
 // header.  Servers also use it to send a response with the same encoding as
 // the request.
 //
-// NOTE: this function must only be called during initialization time (i.e. in
-// an init() function), and is not thread-safe.  If multiple Compressors are
-// registered with the same name, the one registered last will take effect.
+// NOTE: this function is not thread-safe, and must only be called during
+// initialization time (e.g. in an init() function, or in the main goroutine
+// before any other goroutines have been spawned). If multiple Compressors
+// are registered with the same name, the one registered last will take effect.
 func RegisterCompressor(c Compressor) {
 	registeredCompressor[c.Name()] = c
 	if !grpcutil.IsCompressorNameRegistered(c.Name()) {
@@ -112,8 +113,9 @@ var registeredCodecs = make(map[string]Codec)
 // https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests for
 // more details.
 //
-// NOTE: this function must only be called during initialization time (i.e. in
-// an init() function), and is not thread-safe.  If multiple Codecs are
+// NOTE: this function is not thread-safe, and must only be called during
+// initialization time (e.g. in an init() function, or in the main goroutine
+// before any other goroutines have been spawned). If multiple Codecs are
 // registered with the same name, the one registered last will take effect.
 func RegisterCodec(codec Codec) {
 	if codec == nil {
