@@ -29,6 +29,7 @@ import (
 
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/codes"
@@ -419,6 +420,8 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 		rbacCfg             *rpb.RBAC
 		wantStatusEmptyCall codes.Code
 		wantStatusUnaryCall codes.Code
+		wantAuthzOutcomes   map[bool]int
+		eventContent        *audit.Event
 	}{
 		// This test tests an RBAC HTTP Filter which is configured to allow any RPC.
 		// Any RPC passing through this RBAC HTTP Filter should proceed as normal.
@@ -453,6 +456,12 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 			},
 			wantStatusEmptyCall: codes.OK,
 			wantStatusUnaryCall: codes.OK,
+			wantAuthzOutcomes:   map[bool]int{true: 4, false: 0},
+			eventContent: &audit.Event{
+				FullMethodName: "/grpc.testing.TestService/UnaryCall",
+				MatchedRule:    "anyone",
+				Authorized:     true,
+			},
 		},
 		// This test tests an RBAC HTTP Filter which is configured to allow only
 		// RPC's with certain paths ("UnaryCall"). Only unary calls passing
@@ -621,8 +630,9 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			func() {
+				// TODO add check for these stats
 				lb := &loggerBuilder{
-					authzDecisionStat: map[bool]int{true: 0, false: 0},
+					authzDecisionStat: map[bool]int{true: 2, false: 0},
 					lastEvent:         &audit.Event{},
 				}
 				audit.RegisterLoggerBuilder(lb)
@@ -682,6 +692,15 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 				}
 				// Toggle RBAC back on for next iterations.
 				envconfig.XDSRBAC = true
+
+				if diff := cmp.Diff(lb.authzDecisionStat, test.wantAuthzOutcomes); diff != "" {
+					t.Errorf("Authorization decision do not match\ndiff (-got +want):\n%s", diff)
+				}
+				if test.eventContent != nil {
+					if diff := cmp.Diff(lb.lastEvent, test.eventContent); diff != "" {
+						t.Errorf("Unexpected Message\ndiff (-got + want):\n%s", diff)
+					}
+				}
 			}()
 		})
 	}
