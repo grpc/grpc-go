@@ -20,6 +20,7 @@ package xds_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -28,6 +29,7 @@ import (
 
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
@@ -894,4 +896,34 @@ func (s) TestRBACToggledOff_WithBadRouteConfiguration(t *testing.T) {
 	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.OK {
 		t.Fatalf("UnaryCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
 	}
+}
+
+type statAuditLogger struct {
+	authzDecisionStat map[bool]int // Map to hold counts of authorization decisions
+	lastEvent         *audit.Event // Field to store last received event
+}
+
+func (s *statAuditLogger) Log(event *audit.Event) {
+	s.authzDecisionStat[event.Authorized]++
+	*s.lastEvent = *event
+}
+
+type loggerBuilder struct {
+	authzDecisionStat map[bool]int
+	lastEvent         *audit.Event
+}
+
+func (loggerBuilder) Name() string {
+	return "stat_logger"
+}
+
+func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
+	return &statAuditLogger{
+		authzDecisionStat: lb.authzDecisionStat,
+		lastEvent:         lb.lastEvent,
+	}
+}
+
+func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
+	return nil, nil
 }
