@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
-	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	xdsinternal "google.golang.org/grpc/xds/internal"
@@ -325,12 +325,16 @@ func newLBConfigWithOneEDS(edsServiceName string) *LBConfig {
 			Type:           DiscoveryMechanismTypeEDS,
 			EDSServiceName: edsServiceName,
 		}},
+		xdsLBPolicy: iserviceconfig.BalancerConfig{
+			Name:   "ROUND_ROBIN",
+			Config: nil,
+		},
 	}
 }
 
 func newLBConfigWithOneEDSAndOutlierDetection(edsServiceName string, odCfg outlierdetection.LBConfig) *LBConfig {
 	lbCfg := newLBConfigWithOneEDS(edsServiceName)
-	lbCfg.DiscoveryMechanisms[0].OutlierDetection = odCfg
+	lbCfg.DiscoveryMechanisms[0].outlierDetection = odCfg
 	return lbCfg
 }
 
@@ -381,15 +385,22 @@ func (s) TestOutlierDetection(t *testing.T) {
 	pCfgWant := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config: &internalserviceconfig.BalancerConfig{
+				Config: &iserviceconfig.BalancerConfig{
 					Name: outlierdetection.Name,
 					Config: &outlierdetection.LBConfig{
-						Interval: 1<<63 - 1,
-						ChildPolicy: &internalserviceconfig.BalancerConfig{
+						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+						MaxEjectionPercent: 10,
+						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
 								Cluster:        testClusterName,
 								EDSServiceName: "test-eds-service-name",
+								ChildPolicy: &iserviceconfig.BalancerConfig{
+									Name:   "ROUND_ROBIN",
+									Config: nil,
+								},
 							},
 						},
 					},

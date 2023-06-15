@@ -419,7 +419,11 @@ func (w *weightedSubConn) OnLoadReport(load *v3orcapb.OrcaLoadReport) {
 		w.logger.Infof("Received load report for subchannel %v: %v", w.SubConn, load)
 	}
 	// Update weights of this subchannel according to the reported load
-	if load.CpuUtilization == 0 || load.RpsFractional == 0 {
+	utilization := load.ApplicationUtilization
+	if utilization == 0 {
+		utilization = load.CpuUtilization
+	}
+	if utilization == 0 || load.RpsFractional == 0 {
 		if w.logger.V(2) {
 			w.logger.Infof("Ignoring empty load report for subchannel %v", w.SubConn)
 		}
@@ -430,7 +434,7 @@ func (w *weightedSubConn) OnLoadReport(load *v3orcapb.OrcaLoadReport) {
 	defer w.mu.Unlock()
 
 	errorRate := load.Eps / load.RpsFractional
-	w.weightVal = load.RpsFractional / (load.CpuUtilization + errorRate*w.cfg.ErrorUtilizationPenalty)
+	w.weightVal = load.RpsFractional / (utilization + errorRate*w.cfg.ErrorUtilizationPenalty)
 	if w.logger.V(2) {
 		w.logger.Infof("New weight for subchannel %v: %v", w.SubConn, w.weightVal)
 	}
