@@ -456,7 +456,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 			},
 			wantStatusEmptyCall: codes.OK,
 			wantStatusUnaryCall: codes.OK,
-			wantAuthzOutcomes:   map[bool]int{true: 4, false: 0},
+			wantAuthzOutcomes:   map[bool]int{true: 2, false: 0},
 			eventContent: &audit.Event{
 				FullMethodName: "/grpc.testing.TestService/UnaryCall",
 				MatchedRule:    "anyone",
@@ -630,9 +630,8 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			func() {
-				// TODO add check for these stats
 				lb := &loggerBuilder{
-					authzDecisionStat: map[bool]int{true: 2, false: 0},
+					authzDecisionStat: map[bool]int{true: 0, false: 0},
 					lastEvent:         &audit.Event{},
 				}
 				audit.RegisterLoggerBuilder(lb)
