@@ -27,6 +27,7 @@ import (
 	"strings"
 	"testing"
 
+	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz/audit"
@@ -38,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -435,6 +437,18 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 							},
 						},
 					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{
+								AuditLogger: &v3corepb.TypedExtensionConfig{
+									Name:        "stat_logger",
+									TypedConfig: createXDSTypedStruct(t, map[string]interface{}{}, "stat_logger"),
+								},
+								IsOptional: false,
+							},
+						},
+					},
 				},
 			},
 			wantStatusEmptyCall: codes.OK,
@@ -607,6 +621,12 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			func() {
+				lb := &loggerBuilder{
+					authzDecisionStat: map[bool]int{true: 0, false: 0},
+					lastEvent:         &audit.Event{},
+				}
+				audit.RegisterLoggerBuilder(lb)
+
 				managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 				defer cleanup1()
 
@@ -926,4 +946,26 @@ func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 
 func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
 	return nil, nil
+}
+
+// This is used when converting a custom config from raw JSON to a TypedStruct.
+// The TypeURL of the TypeStruct will be "grpc.authz.audit_logging/<name>".
+const typeURLPrefix = "grpc.authz.audit_logging/"
+
+// Builds custom configs for audit logger RBAC protos.
+func createXDSTypedStruct(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
+	t.Helper()
+	pb, err := structpb.NewStruct(in)
+	if err != nil {
+		t.Fatalf("createXDSTypedStructFailed during structpb.NewStruct: %v", err)
+	}
+	typedStruct := &v3xdsxdstypepb.TypedStruct{
+		TypeUrl: typeURLPrefix + name,
+		Value:   pb,
+	}
+	customConfig, err := anypb.New(typedStruct)
+	if err != nil {
+		t.Fatalf("createXDSTypedStructFailed during anypb.New: %v", err)
+	}
+	return customConfig
 }
