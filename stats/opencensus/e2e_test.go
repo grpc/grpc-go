@@ -238,16 +238,21 @@ func distributionDataLatencyCount(vi *viewInformation, countWant int64, wantTags
 }
 
 // waitForServerCompletedRPCs waits until both Unary and Streaming metric rows
-// appear for server completed RPC's view (by checking for length of rows to be
-// 2). Returns an error if both the Unary and Streaming metric not found within
-// the passed context's timeout.
-func waitForServerCompletedRPCs(ctx context.Context, fe *fakeExporter) error {
+// appear for server completed RPC's view. Returns an error if the Unary and
+// Streaming metric are not found within the passed context's timeout.
+func waitForServerCompletedRPCs(ctx context.Context) error {
 	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
 		rows, err := view.RetrieveData("grpc.io/server/completed_rpcs")
 		if err != nil {
 			continue
 		}
-		if len(rows) == 2 {
+		m := make(map[string]bool)
+		for _, row := range rows {
+			for _, tag := range row.Tags {
+				m[tag.Value] = true
+			}
+		}
+		if m["grpc.testing.TestService/UnaryCall"] && m["grpc.testing.TestService/FullDuplexCall"] {
 			return nil
 		}
 	}
@@ -1008,7 +1013,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	// Streaming calls with respect to the RPC returning client side. Thus, add
 	// a sync point at the global view package level for these two rows to be
 	// recorded, which will be synchronously uploaded to exporters right after.
-	if err := waitForServerCompletedRPCs(ctx, fe); err != nil {
+	if err := waitForServerCompletedRPCs(ctx); err != nil {
 		t.Fatal(err)
 	}
 	view.Unregister(allViews...)
