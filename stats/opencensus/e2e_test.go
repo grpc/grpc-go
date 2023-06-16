@@ -238,7 +238,7 @@ func distributionDataLatencyCount(vi *viewInformation, countWant int64, wantTags
 }
 
 // waitForServerCompletedRPCs waits until both Unary and Streaming metric rows
-// appear, in two seperate rows, for server completed RPC's view. Returns an
+// appear, in two separate rows, for server completed RPC's view. Returns an
 // error if the Unary and Streaming metric are not found within the passed
 // context's timeout.
 func waitForServerCompletedRPCs(ctx context.Context) error {
