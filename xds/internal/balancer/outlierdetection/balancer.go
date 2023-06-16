@@ -47,7 +47,7 @@ import (
 
 // Globals to stub out in tests.
 var (
-	afterFunc = time.AfterFunc // it's fine to do a goroutine
+	afterFunc = time.AfterFunc
 	now       = time.Now
 )
 
