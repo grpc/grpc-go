@@ -299,7 +299,6 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 					})
 				}
 
-
 			}(idx)
 		}
 	}
@@ -363,7 +362,7 @@ func (bc *benchmarkClient) poissonUnary(client testgrpc.BenchmarkServiceClient, 
 		bc.lockingHistograms[idx].add(int64(elapse))
 	}()
 	timeBetweenRPCs := time.Duration((grpcrand.ExpFloat64() / lambda) * float64(time.Second))
-	time.AfterFunc(timeBetweenRPCs, func(){
+	time.AfterFunc(timeBetweenRPCs, func() {
 		bc.poissonUnary(client, idx, reqSize, respSize, lambda)
 	})
 }
@@ -378,7 +377,7 @@ func (bc *benchmarkClient) poissonStreaming(stream testgrpc.BenchmarkService_Str
 		bc.lockingHistograms[idx].add(int64(elapse))
 	}()
 	timeBetweenRPCs := time.Duration((grpcrand.ExpFloat64() / lambda) * float64(time.Second))
-	time.AfterFunc(timeBetweenRPCs, func(){
+	time.AfterFunc(timeBetweenRPCs, func() {
 		bc.poissonStreaming(stream, idx, reqSize, respSize, lambda, doRPC)
 	})
 }
