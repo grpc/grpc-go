@@ -68,7 +68,20 @@ func (s) TestParseConfig(t *testing.T) {
 	})
 
 	parser := bb{}
-
+	const (
+		defaultInterval                       = iserviceconfig.Duration(10 * time.Second)
+		defaultBaseEjectionTime               = iserviceconfig.Duration(30 * time.Second)
+		defaultMaxEjectionTime                = iserviceconfig.Duration(300 * time.Second)
+		defaultMaxEjectionPercent             = 10
+		defaultSuccessRateStdevFactor         = 1900
+		defaultEnforcingSuccessRate           = 100
+		defaultSuccessRateMinimumHosts        = 5
+		defaultSuccessRateRequestVolume       = 100
+		defaultFailurePercentageThreshold     = 85
+		defaultEnforcingFailurePercentage     = 0
+		defaultFailurePercentageMinimumHosts  = 5
+		defaultFailurePercentageRequestVolume = 50
+	)
 	tests := []struct {
 		name    string
 		input   string
@@ -76,7 +89,7 @@ func (s) TestParseConfig(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "noop-lb-config",
+			name: "no-fields-set-should-get-default",
 			input: `{
 				"childPolicy": [
 				{
@@ -87,6 +100,38 @@ func (s) TestParseConfig(t *testing.T) {
 				]
 			}`,
 			wantCfg: &LBConfig{
+				Interval:           defaultInterval,
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    defaultMaxEjectionTime,
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+
+		{
+			name: "some-top-level-fields-set",
+			input: `{
+				"interval": "15s",
+				"maxEjectionTime": "350s",
+				"childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			// Should get set fields + defaults for unset fields.
+			wantCfg: &LBConfig{
+				Interval:           iserviceconfig.Duration(15 * time.Second),
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    iserviceconfig.Duration(350 * time.Second),
+				MaxEjectionPercent: defaultMaxEjectionPercent,
 				ChildPolicy: &iserviceconfig.BalancerConfig{
 					Name: "xds_cluster_impl_experimental",
 					Config: &clusterimpl.LBConfig{
@@ -96,7 +141,253 @@ func (s) TestParseConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "good-lb-config",
+			name: "success-rate-ejection-present-but-no-fields",
+			input: `{
+				"successRateEjection": {},
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			// Should get defaults of success-rate-ejection struct.
+			wantCfg: &LBConfig{
+				Interval:           defaultInterval,
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    defaultMaxEjectionTime,
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				SuccessRateEjection: &SuccessRateEjection{
+					StdevFactor:           defaultSuccessRateStdevFactor,
+					EnforcementPercentage: defaultEnforcingSuccessRate,
+					MinimumHosts:          defaultSuccessRateMinimumHosts,
+					RequestVolume:         defaultSuccessRateRequestVolume,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+		{
+			name: "success-rate-ejection-present-partially-set",
+			input: `{
+				"successRateEjection": {
+					"stdevFactor": 1000,
+					"minimumHosts": 5
+				},
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			// Should get set fields + defaults for others in success rate
+			// ejection layer.
+			wantCfg: &LBConfig{
+				Interval:           defaultInterval,
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    defaultMaxEjectionTime,
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				SuccessRateEjection: &SuccessRateEjection{
+					StdevFactor:           1000,
+					EnforcementPercentage: defaultEnforcingSuccessRate,
+					MinimumHosts:          5,
+					RequestVolume:         defaultSuccessRateRequestVolume,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+		{
+			name: "success-rate-ejection-present-fully-set",
+			input: `{
+				"successRateEjection": {
+					"stdevFactor": 1000,
+					"enforcementPercentage": 50,
+					"minimumHosts": 5,
+					"requestVolume": 50
+				},
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			wantCfg: &LBConfig{
+				Interval:           defaultInterval,
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    defaultMaxEjectionTime,
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				SuccessRateEjection: &SuccessRateEjection{
+					StdevFactor:           1000,
+					EnforcementPercentage: 50,
+					MinimumHosts:          5,
+					RequestVolume:         50,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+		{
+			name: "failure-percentage-ejection-present-but-no-fields",
+			input: `{
+				"failurePercentageEjection": {},
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			// Should get defaults of failure percentage ejection layer.
+			wantCfg: &LBConfig{
+				Interval:           defaultInterval,
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    defaultMaxEjectionTime,
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				FailurePercentageEjection: &FailurePercentageEjection{
+					Threshold:             defaultFailurePercentageThreshold,
+					EnforcementPercentage: defaultEnforcingFailurePercentage,
+					MinimumHosts:          defaultFailurePercentageMinimumHosts,
+					RequestVolume:         defaultFailurePercentageRequestVolume,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+		{
+			name: "failure-percentage-ejection-present-partially-set",
+			input: `{
+				"failurePercentageEjection": {
+					"threshold": 80,
+					"minimumHosts": 10
+				},
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			// Should get set fields + defaults for others in success rate
+			// ejection layer.
+			wantCfg: &LBConfig{
+				Interval:           defaultInterval,
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    defaultMaxEjectionTime,
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				FailurePercentageEjection: &FailurePercentageEjection{
+					Threshold:             80,
+					EnforcementPercentage: defaultEnforcingFailurePercentage,
+					MinimumHosts:          10,
+					RequestVolume:         defaultFailurePercentageRequestVolume,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+		{
+			name: "failure-percentage-ejection-present-fully-set",
+			input: `{
+				"failurePercentageEjection": {
+					"threshold": 80,
+					"enforcementPercentage": 100,
+					"minimumHosts": 10,
+					"requestVolume": 40
+                },
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			wantCfg: &LBConfig{
+				Interval:           defaultInterval,
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    defaultMaxEjectionTime,
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				FailurePercentageEjection: &FailurePercentageEjection{
+					Threshold:             80,
+					EnforcementPercentage: 100,
+					MinimumHosts:          10,
+					RequestVolume:         40,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+		{ // to make sure zero values aren't overwritten by defaults
+			name: "lb-config-every-field-set-zero-value",
+			input: `{
+				"interval": "0s",
+				"baseEjectionTime": "0s",
+				"maxEjectionTime": "0s",
+				"maxEjectionPercent": 0,
+				"successRateEjection": {
+					"stdevFactor": 0,
+					"enforcementPercentage": 0,
+					"minimumHosts": 0,
+					"requestVolume": 0
+				},
+				"failurePercentageEjection": {
+					"threshold": 0,
+					"enforcementPercentage": 0,
+					"minimumHosts": 0,
+					"requestVolume": 0
+				},
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			wantCfg: &LBConfig{
+				SuccessRateEjection:       &SuccessRateEjection{},
+				FailurePercentageEjection: &FailurePercentageEjection{},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+		{
+			name: "lb-config-every-field-set",
 			input: `{
 				"interval": "10s",
 				"baseEjectionTime": "30s",
@@ -195,28 +486,6 @@ func (s) TestParseConfig(t *testing.T) {
 			wantErr: "OutlierDetectionLoadBalancingConfig.FailurePercentageEjection.enforcement_percentage = 150; must be <= 100",
 		},
 		{
-			name: "child-policy-not-present",
-			input: `{
-				"interval": "10s",
-				"baseEjectionTime": "30s",
-				"maxEjectionTime": "300s",
-				"maxEjectionPercent": 10,
-				"successRateEjection": {
-					"stdevFactor": 1900,
-					"enforcementPercentage": 100,
-					"minimumHosts": 5,
-					"requestVolume": 100
-				},
-				"failurePercentageEjection": {
-					"threshold": 85,
-					"enforcementPercentage": 5,
-					"minimumHosts": 5,
-					"requestVolume": 50
-				}
-			}`,
-			wantErr: "OutlierDetectionLoadBalancingConfig.child_policy must be present",
-		},
-		{
 			name: "child-policy-present-but-parse-error",
 			input: `{
 				"childPolicy": [
@@ -241,26 +510,6 @@ func (s) TestParseConfig(t *testing.T) {
 			]
 			}`,
 			wantErr: "invalid loadBalancingConfig: no supported policies found",
-		},
-		{
-			name: "child-policy",
-			input: `{
-				"childPolicy": [
-				{
-					"xds_cluster_impl_experimental": {
-						"cluster": "test_cluster"
-					}
-				}
-			]
-			}`,
-			wantCfg: &LBConfig{
-				ChildPolicy: &iserviceconfig.BalancerConfig{
-					Name: "xds_cluster_impl_experimental",
-					Config: &clusterimpl.LBConfig{
-						Cluster: "test_cluster",
-					},
-				},
-			},
 		},
 	}
 	for _, test := range tests {
