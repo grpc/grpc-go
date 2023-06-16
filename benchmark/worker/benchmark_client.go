@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"flag"
+	"google.golang.org/grpc/internal/grpcrand"
 	"math"
 	"runtime"
 	"sync"
@@ -75,7 +76,7 @@ type benchmarkClient struct {
 	stop              chan bool
 	lastResetTime     time.Time
 	histogramOptions  stats.HistogramOptions
-	lockingHistograms []lockingHistogram
+	lockingHistograms []lockingHistogram // this is fixed based on number of conns * rpc count, but poisson is dynamic, so either a. don't record or b: append and change construction site
 	rusageLastReset   *syscall.Rusage
 }
 
@@ -185,10 +186,19 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 		}
 	}
 
+	// poission: (this distribution has one parameter and is now a fixed equation - learn and figure out)
+	// on an poissonUnary - sending an RPC. Does that involve everything else listed here wrt preparing the payload etc?
+	// how does it fit in with CloseLoopUnary and streaming?
+
 	// TODO add open loop distribution.
 	switch config.LoadParams.Load.(type) {
 	case *testpb.LoadParams_ClosedLoop:
+		// does this actually do it's intention? i.e. run rpc, when finish do again?, I see this called once?
+		// these areeee only two options though.
 	case *testpb.LoadParams_Poisson:
+		//this right here needs async rpc starting - or even caller
+
+		// look into proto type to get float64 off it, I think it's t := ...(type)
 		return status.Errorf(codes.Unimplemented, "unsupported load params: %v", config.LoadParams)
 	default:
 		return status.Errorf(codes.InvalidArgument, "unknown load params: %v", config.LoadParams)
@@ -198,7 +208,7 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 
 	switch config.RpcType {
 	case testpb.RpcType_UNARY:
-		bc.doCloseLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize)
+		bc.doCloseLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize) // oh here
 		// TODO open loop.
 	case testpb.RpcType_STREAMING:
 		bc.doCloseLoopStreaming(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType)
@@ -229,7 +239,7 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 			BaseBucketSize: (1 + config.HistogramParams.Resolution),
 			MinValue:       0,
 		},
-		lockingHistograms: make([]lockingHistogram, rpcCountPerConn*len(conns)),
+		lockingHistograms: make([]lockingHistogram, rpcCountPerConn*len(conns)), // this is still the same fixed size
 
 		stop:            make(chan bool),
 		lastResetTime:   time.Now(),
@@ -246,7 +256,118 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 	return bc, nil
 }
 
-func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int) {
+// func on the client representing? all the same conns except...?
+
+func (bc *benchmarkClient) poisson() {
+
+}
+
+// what part to have the branching logic?
+func (bc *benchmarkClient) poissonUnary(client testgrpc.BenchmarkServiceClient, idx int, reqSize int, respSize int, lambda float64) { // this needs to capture all it needs for rpc
+	// async RPC based off configuration knobs...close on it for this function?
+	go func() {
+		// what happens if you error out of the rpc
+
+		start := time.Now()
+		if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil { // share state? also need to account for results somewhere
+			// what do I do with error just ignore or record somewhere?
+		}
+		elapse := time.Since(start)
+		// locking histogram? Seems to be crucial to stats collection...dynamically scale up?
+		// bc.lockingHistograms // persisted on the closure type
+
+		// Problem: what to do about idx...
+		// once you calculate what rpc to record for it's constant, I think just take it as an int
+		bc.lockingHistograms[idx].add(int64(elapse))
+	}()
+	// start another timer with poissonUnary wrapped in based off
+	// grpc rand math.rand exp / lambda passed in
+
+	// protect from infinite recursion because break in between, once this starts continues
+	timeBetweenRPCs := time.Duration((grpcrand.ExpFloat64() / lambda) * float64(time.Second))
+	time.AfterFunc(timeBetweenRPCs, func(){
+		bc.poissonUnary(client, idx, reqSize, respSize, lambda)
+	}) // persist it? or keep passing down?
+}
+
+// close on this in calling function - I still think you should make branch calling function
+func (bc *benchmarkClient) poissonStreaming(stream testgrpc.BenchmarkService_StreamingCallClient, idx int, reqSize int, respSize int, lambda float64, doRPC func(testgrpc.BenchmarkService_StreamingCallClient, int, int) error) {
+	// same exact thing as above except doRPC, probably need to figure out when to read the branch
+	go func() {
+		start := time.Now()
+		// Do errors just cause exits? Is this the right behavior?
+		// pass this in as an arg to function after lambda or pass in bool and get it at top, I think latter if paramterizing
+		if err := doRPC(stream, reqSize, respSize); err != nil {
+			// just return and stop doing RPC's? That's behavior of closed loop.
+		} // how to unit test this?
+		elapse := time.Since(start)
+		bc.lockingHistograms[idx].add(int64(elapse))
+	}()
+	// Can you have two concurrent writes to client? I think so...
+	timeBetweenRPCs := time.Duration((grpcrand.ExpFloat64() / lambda) * float64(time.Second))
+	time.AfterFunc(timeBetweenRPCs, func(){
+		bc.poissonStreaming(stream, idx, reqSize, respSize, lambda, doRPC)
+	}())
+}
+
+// goroutine (time.AfterFunc())
+//     poissonUnary above
+//         goroutine rpc
+//     create another after func
+
+// this recurses infinetly, how to clean all of these spawned goroutines up
+
+
+// this does
+// for conns
+//      for rpcs on conn
+//           do rpcs in loop (it's own goroutine)
+
+// does closed || poisson apply to the whole conns/rpcs, It think so, so need this whole loop with same stuff
+func (bc *benchmarkClient) doPoissonDistributionUnary(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, lambda float64) {
+	// I think you still need histogram...I think independent enough to warrant it's own function
+	for ic, conn := range conns { // ic used for histogram - triage if you really need the histogram for stats collection, logically I think you do...
+		client := testgrpc.NewBenchmarkServiceClient(conn) // once converted use for remainder for time including closure
+		for j := 0; j < rpcCountPerConn; j++ {
+			// poissonUnary() called - needs to be modularized...
+			// initial time.AfterFunc() call to get the chain started...
+
+			// Create histogram for each RPC.
+			idx := ic * rpcCountPerConn + j
+			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions) // thus, this applies to whole thing
+
+			// Honestly I think you can branch in the helper if you want to reuse code...
+
+			// Two problems:
+			// 1. grpcrand.ExpFloat64() / lambda - is a float64 representing seconds, need to convert to time.Duration of seconds
+			// time.Second // will lose it's precision, but only at the nanosecond level since 1 time.Duration is a nanosecond
+			// Done...
+
+			// 2. how to give bc.poissonUnary enough data to work if the
+			// AfterFunc() type is a func() with no parameters, another way to
+			// do this timer...see DNS for example?
+
+			// // will lose it's precision, but only at the nanosecond level since 1 time.Duration is a nanosecond
+			// I think float64 has enough digits to represent a time.Second in it's non decimal places...
+			timeBetweenRPCs := time.Duration((grpcrand.ExpFloat64() / lambda) * float64(time.Second)) // ping Richard about this, does it make sense to have the first one
+			time.AfterFunc(timeBetweenRPCs, func() { // same func will be created up there...
+				bc.poissonUnary(client, idx, reqSize, respSize, lambda)
+			}) // this handles first rpc
+		}
+	}
+}
+
+// conn (can have multiple)
+//      rpc      rpc      rpc
+// each of these RPCs does the poisson loop of time between events - only based off the random number generator not the RPCs completing
+
+// Give this to Richard
+
+// how did richard say it unit tests?
+// Streaming RPC I think is same thing just a different poissonUnary...
+
+
+func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int) { // keep the knobs these are derived from
 	for ic, conn := range conns {
 		client := testgrpc.NewBenchmarkServiceClient(conn)
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
@@ -255,16 +376,20 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 			idx := ic*rpcCountPerConn + j
 			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
 			// Start goroutine on the created mutex and histogram.
-			go func(idx int) {
+			go func(idx int) { // rpcs per channel
 				// TODO: do warm up if necessary.
 				// Now relying on worker client to reserve time to do warm up.
 				// The worker client needs to wait for some time after client is created,
 				// before starting benchmark.
 				done := make(chan bool)
 				for {
+					// right here needs float64()/lambda (either pass in lambda explicitly or pass in config and read)
+					// and that triggers a Unary Call which *doesn't block* like this
+
+
 					go func() {
 						start := time.Now()
-						if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
+						if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil { // blocks until this returns
 							select {
 							case <-bc.stop:
 							case done <- false:
@@ -275,7 +400,7 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 						bc.lockingHistograms[idx].add(int64(elapse))
 						select {
 						case <-bc.stop:
-						case done <- true:
+						case done <- true: // sends done to continue on the loop
 						}
 					}()
 					select {
@@ -289,9 +414,9 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 	}
 }
 
-func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, payloadType string) {
+func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, payloadType string) { // scaleup these functions to take closed || poisson and do (what is here || poisson with afterFunc()) accordingly
 	var doRPC func(testgrpc.BenchmarkService_StreamingCallClient, int, int) error
-	if payloadType == "bytebuf" {
+	if payloadType == "bytebuf" { // this branch needs to be reflected (lol) in my event...
 		doRPC = benchmark.DoByteBufStreamingRoundTrip
 	} else {
 		doRPC = benchmark.DoStreamingRoundTrip
@@ -318,7 +443,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 					if err := doRPC(stream, reqSize, respSize); err != nil {
 						return
 					}
-					elapse := time.Since(start)
+					elapse := time.Since(start) // you just need these stats after rpc is performed in goroutine in blocking manner here, I don't see any other way you do this...
 					bc.lockingHistograms[idx].add(int64(elapse))
 					select {
 					case <-bc.stop:
@@ -333,7 +458,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 
 // getStats returns the stats for benchmark client.
 // It resets lastResetTime and all histograms if argument reset is true.
-func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
+func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats { // this gets called eventually so you def need it
 	var wallTimeElapsed, uTimeElapsed, sTimeElapsed float64
 	mergedHistogram := stats.NewHistogram(bc.histogramOptions)
 
@@ -341,7 +466,7 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 		// Merging histogram may take some time.
 		// Put all histograms aside and merge later.
 		toMerge := make([]*stats.Histogram, len(bc.lockingHistograms))
-		for i := range bc.lockingHistograms {
+		for i := range bc.lockingHistograms { // looks at the bc.lockingHistograms type
 			toMerge[i] = bc.lockingHistograms[i].swap(stats.NewHistogram(bc.histogramOptions))
 		}
 
