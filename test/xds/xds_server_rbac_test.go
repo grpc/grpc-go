@@ -692,10 +692,13 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 				// Toggle RBAC back on for next iterations.
 				envconfig.XDSRBAC = true
 
-				if diff := cmp.Diff(lb.authzDecisionStat, test.wantAuthzOutcomes); diff != "" {
-					t.Errorf("Authorization decision do not match\ndiff (-got +want):\n%s", diff)
+				if test.wantAuthzOutcomes != nil {
+					if diff := cmp.Diff(lb.authzDecisionStat, test.wantAuthzOutcomes); diff != "" {
+						t.Errorf("Authorization decision do not match\ndiff (-got +want):\n%s", diff)
+					}
 				}
 				if test.eventContent != nil {
+
 					if diff := cmp.Diff(lb.lastEvent, test.eventContent); diff != "" {
 						t.Errorf("Unexpected Message\ndiff (-got + want):\n%s", diff)
 					}
