@@ -238,22 +238,30 @@ func distributionDataLatencyCount(vi *viewInformation, countWant int64, wantTags
 }
 
 // waitForServerCompletedRPCs waits until both Unary and Streaming metric rows
-// appear for server completed RPC's view. Returns an error if the Unary and
-// Streaming metric are not found within the passed context's timeout.
+// appear, in two seperate rows, for server completed RPC's view. Returns an
+// error if the Unary and Streaming metric are not found within the passed
+// context's timeout.
 func waitForServerCompletedRPCs(ctx context.Context) error {
 	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
 		rows, err := view.RetrieveData("grpc.io/server/completed_rpcs")
 		if err != nil {
 			continue
 		}
-		m := make(map[string]bool)
+		unaryFound := false
+		streamingFound := false
 		for _, row := range rows {
 			for _, tag := range row.Tags {
-				m[tag.Value] = true
+				if tag.Value == "grpc.testing.TestService/UnaryCall" {
+					unaryFound = true
+					break
+				} else if tag.Value == "grpc.testing.TestService/FullDuplexCall" {
+					streamingFound = true
+					break
+				}
 			}
-		}
-		if m["grpc.testing.TestService/UnaryCall"] && m["grpc.testing.TestService/FullDuplexCall"] {
-			return nil
+			if unaryFound && streamingFound {
+				return nil
+			}
 		}
 	}
 	return fmt.Errorf("timeout when waiting for Unary and Streaming rows to be present for \"grpc.io/server/completed_rpcs\"")
