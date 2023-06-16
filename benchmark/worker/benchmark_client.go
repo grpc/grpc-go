@@ -191,15 +191,32 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 	// how does it fit in with CloseLoopUnary and streaming?
 
 	// TODO add open loop distribution.
-	switch config.LoadParams.Load.(type) {
+
+	var poissonLambda *float64 // invariant - if nil then it's using poisson...
+	switch t := config.LoadParams.Load.(type) {
 	case *testpb.LoadParams_ClosedLoop:
 		// does this actually do it's intention? i.e. run rpc, when finish do again?, I see this called once?
 		// these areeee only two options though.
 	case *testpb.LoadParams_Poisson:
 		//this right here needs async rpc starting - or even caller
+		if t.Poisson == nil {
+			// return error
+			return status.Errorf(codes.InvalidArgument, "LoadParams_Poisson.Poisson is nil, needs to be set")
+		}
+		if t.Poisson.OfferedLoad <= 0 {
+			return status.Errorf(codes.InvalidArgument, "LoadParams_Poisson.Poisson is <= 0: %v, needs to be >0", t.Poisson.OfferedLoad)
+		}
+		// is 0 a valid, I think so will just never send
+		// If it's zero, will cause divide by zero I honestly think just return an invalid argument
+		// nack it and say won't send rpcs anyway so no point of benchmark:
+		// if 0 nack?
+		// can this be written to elsewhere
+		poissonLambda = &t.Poisson.OfferedLoad // what if this is nil, invalidate?. I think if it's zero break...and just not run anything?
+
+		//
 
 		// look into proto type to get float64 off it, I think it's t := ...(type)
-		return status.Errorf(codes.Unimplemented, "unsupported load params: %v", config.LoadParams)
+		// return status.Errorf(codes.Unimplemented, "unsupported load params: %v", config.LoadParams)
 	default:
 		return status.Errorf(codes.InvalidArgument, "unknown load params: %v", config.LoadParams)
 	}
@@ -208,10 +225,10 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 
 	switch config.RpcType {
 	case testpb.RpcType_UNARY:
-		bc.doCloseLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize) // oh here
+		bc.doCloseLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, poissonLambda)
 		// TODO open loop.
 	case testpb.RpcType_STREAMING:
-		bc.doCloseLoopStreaming(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType)
+		bc.doCloseLoopStreaming(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType, poissonLambda)
 		// TODO open loop.
 	default:
 		return status.Errorf(codes.InvalidArgument, "unknown rpc type: %v", config.RpcType)
@@ -367,7 +384,7 @@ func (bc *benchmarkClient) doPoissonDistributionUnary(conns []*grpc.ClientConn, 
 // Streaming RPC I think is same thing just a different poissonUnary...
 
 
-func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int) { // keep the knobs these are derived from
+func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, poissonLambda *float64) { // keep the knobs these are derived from
 	for ic, conn := range conns {
 		client := testgrpc.NewBenchmarkServiceClient(conn)
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
@@ -381,40 +398,57 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 				// Now relying on worker client to reserve time to do warm up.
 				// The worker client needs to wait for some time after client is created,
 				// before starting benchmark.
-				done := make(chan bool)
-				for {
-					// right here needs float64()/lambda (either pass in lambda explicitly or pass in config and read)
-					// and that triggers a Unary Call which *doesn't block* like this
 
+				if poissonLambda == nil/*invariant that determines closed loop*/ { // lambda and lambda are determined here
+					// Branch 1: Hit if closed loop parameter
+					done := make(chan bool)
+					for {
+						// right here needs float64()/lambda (either pass in lambda explicitly or pass in config and read)
+						// and that triggers a Unary Call which *doesn't block* like this
 
-					go func() {
-						start := time.Now()
-						if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil { // blocks until this returns
+						go func() {
+							start := time.Now()
+							if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil { // blocks until this returns
+								select {
+								case <-bc.stop:
+								case done <- false:
+								}
+								return
+							}
+							elapse := time.Since(start)
+							bc.lockingHistograms[idx].add(int64(elapse))
 							select {
 							case <-bc.stop:
-							case done <- false:
+							case done <- true: // sends done to continue on the loop
 							}
-							return
-						}
-						elapse := time.Since(start)
-						bc.lockingHistograms[idx].add(int64(elapse))
+						}()
 						select {
 						case <-bc.stop:
-						case done <- true: // sends done to continue on the loop
+							return
+						case <-done:
 						}
-					}()
-					select {
-					case <-bc.stop:
-						return
-					case <-done:
 					}
+				} else {
+					// Branch 2 based off Poisson distribution - pass lambda and etc. in...just pass config?
+					// two pieces of data needed from config:
+					// 1. branch of poisson vs. closed loop
+					// 2. within poisson, the lambda parameter
+
+					// If richard says to start first rpc immediately, switch this to a simple function call:
+					// bc.poissonUnary
+					timeBetweenRPCs := time.Duration((grpcrand.ExpFloat64() / *poissonLambda) * float64(time.Second)) // ping Richard about this, does it make sense to have the first one
+					time.AfterFunc(timeBetweenRPCs, func() { // same func will be created up there...
+						bc.poissonUnary(client, idx, reqSize, respSize, *poissonLambda)
+					})
 				}
+
+
 			}(idx)
 		}
 	}
 }
 
-func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, payloadType string) { // scaleup these functions to take closed || poisson and do (what is here || poisson with afterFunc()) accordingly
+func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, payloadType string, poissonLambda *float64) { // scaleup these functions to take closed || poisson and do (what is here || poisson with afterFunc()) accordingly
 	var doRPC func(testgrpc.BenchmarkService_StreamingCallClient, int, int) error
 	if payloadType == "bytebuf" { // this branch needs to be reflected (lol) in my event...
 		doRPC = benchmark.DoByteBufStreamingRoundTrip
@@ -431,27 +465,34 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 			}
 			// Create histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j
-			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
-			// Start goroutine on the created mutex and histogram.
-			go func(idx int) {
-				// TODO: do warm up if necessary.
-				// Now relying on worker client to reserve time to do warm up.
-				// The worker client needs to wait for some time after client is created,
-				// before starting benchmark.
-				for {
-					start := time.Now()
-					if err := doRPC(stream, reqSize, respSize); err != nil {
-						return
+			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions) // already persisted on the object, so will be there when I invoke streaming call
+			if poissonLambda == nil {
+				// Start goroutine on the created mutex and histogram.
+				go func(idx int) {
+					// TODO: do warm up if necessary.
+					// Now relying on worker client to reserve time to do warm up.
+					// The worker client needs to wait for some time after client is created,
+					// before starting benchmark.
+					for {
+						start := time.Now()
+						if err := doRPC(stream, reqSize, respSize); err != nil {
+							return
+						}
+						elapse := time.Since(start) // you just need these stats after rpc is performed in goroutine in blocking manner here, I don't see any other way you do this...
+						bc.lockingHistograms[idx].add(int64(elapse))
+						select {
+						case <-bc.stop:
+							return
+						default:
+						}
 					}
-					elapse := time.Since(start) // you just need these stats after rpc is performed in goroutine in blocking manner here, I don't see any other way you do this...
-					bc.lockingHistograms[idx].add(int64(elapse))
-					select {
-					case <-bc.stop:
-						return
-					default:
-					}
-				}
-			}(idx)
+				}(idx)
+			} else {
+				timeBetweenRPCs := time.Duration((grpcrand.ExpFloat64() / *poissonLambda) * float64(time.Second)) // ping Richard about this, does it make sense to have the first one
+				time.AfterFunc(timeBetweenRPCs, func() { // same func will be created up there...
+					bc.poissonStreaming(stream, idx, reqSize, respSize, *poissonLambda, doRPC)
+				})
+			}
 		}
 	}
 }
