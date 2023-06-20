@@ -462,11 +462,18 @@ func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts 
 }
 
 func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.Conn) (*http2Client, func()) {
+	return setUpWithNoPingServerWithOptions(t, copts, connCh, nil)
+}
+
+// setUpWithNoPingServerWithOptions setup a server which responsiveness is configurable through respModeCh channel.
+// Adding a true to the respModeCh channel makes the server ack ping messages, while adding false to the respModeCh
+// channel makes the server not to ack ping messages. By default, server acks ping messages until it's toggled.
+func setUpWithNoPingServerWithOptions(t *testing.T, copts ConnectOptions, connCh chan net.Conn, respModeCh chan bool) (*http2Client, func()) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	// Launch a non responsive server.
+	// Launch a server which can be switched from responsive to non-responsive by writing a toggle boolean to the respModeCh channel.
 	go func() {
 		defer lis.Close()
 		conn, err := lis.Accept()
@@ -480,6 +487,38 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 			t.Errorf("Error at server-side while writing settings: %v", err)
 			close(connCh)
 			return
+		}
+		if respModeCh != nil {
+			if err := framer.WriteSettingsAck(); err != nil {
+				t.Errorf("Error while writing settings: %v", err)
+				return
+			}
+			go func() {
+				respondToPing := true
+				var lock sync.Mutex
+				for {
+					frame, err := framer.ReadFrame()
+					if err != nil {
+						return
+					}
+					select {
+					case data, ok := <-respModeCh:
+						if !ok {
+							return
+						}
+						respondToPing = data
+					default:
+					}
+					// ack the ping if in responsive mode
+					if respondToPing {
+						if f, ok := frame.(*http2.PingFrame); ok {
+							lock.Lock()
+							framer.WritePing(true, f.Data)
+							lock.Unlock()
+						}
+					}
+				}
+			}()
 		}
 		connCh <- conn
 	}()

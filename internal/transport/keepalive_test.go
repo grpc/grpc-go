@@ -319,13 +319,13 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	copts := ConnectOptions{
 		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
 		KeepaliveParams: keepalive.ClientParameters{
-			Time:    500 * time.Millisecond,
-			Timeout: 500 * time.Millisecond,
+			Time:    10 * time.Millisecond,
+			Timeout: 10 * time.Millisecond,
 		},
 	}
-	// TODO(i/6099): Setup a server which can ping and no-ping based on a flag to
-	// reduce the flakiness in this test.
-	client, cancel := setUpWithNoPingServer(t, copts, connCh)
+	respModeCh := make(chan bool, 1)
+	defer close(respModeCh)
+	client, cancel := setUpWithNoPingServerWithOptions(t, copts, connCh, respModeCh)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
 
@@ -341,7 +341,8 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("Stream creation failed: %v", err)
 	}
-
+	// Toggle server from responsive to non-responsive
+	respModeCh <- false
 	if err := pollForStreamCreationError(client); err != nil {
 		t.Fatal(err)
 	}
