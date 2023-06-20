@@ -509,7 +509,7 @@ func setUpWithNoPingServerWithOptions(t *testing.T, copts ConnectOptions, connCh
 						respondToPing = data
 					default:
 					}
-					// ack the ping if in responsive mode
+					// ack the ping if in responsive mode.
 					if respondToPing {
 						if f, ok := frame.(*http2.PingFrame); ok {
 							lock.Lock()
