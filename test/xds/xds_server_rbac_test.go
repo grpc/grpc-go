@@ -457,6 +457,8 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 			wantStatusEmptyCall: codes.OK,
 			wantStatusUnaryCall: codes.OK,
 			wantAuthzOutcomes:   map[bool]int{true: 2, false: 0},
+			// TODO(gtcooke94) add policy name (RBAC filter name) once
+			// https://github.com/grpc/grpc-go/pull/6327 is merged.
 			eventContent: &audit.Event{
 				FullMethodName: "/grpc.testing.TestService/UnaryCall",
 				MatchedRule:    "anyone",
@@ -698,9 +700,8 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 					}
 				}
 				if test.eventContent != nil {
-
 					if diff := cmp.Diff(lb.lastEvent, test.eventContent); diff != "" {
-						t.Errorf("Unexpected Message\ndiff (-got + want):\n%s", diff)
+						t.Errorf("Unexpected event\ndiff (-got + want):\n%s", diff)
 					}
 				}
 			}()
@@ -978,7 +979,7 @@ func createXDSTypedStruct(t *testing.T, in map[string]interface{}, name string) 
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
 	if err != nil {
-		t.Fatalf("createXDSTypedStructFailed during structpb.NewStruct: %v", err)
+		t.Fatalf("createXDSTypedStruct Failed during structpb.NewStruct: %v", err)
 	}
 	typedStruct := &v3xdsxdstypepb.TypedStruct{
 		TypeUrl: typeURLPrefix + name,
@@ -986,7 +987,7 @@ func createXDSTypedStruct(t *testing.T, in map[string]interface{}, name string) 
 	}
 	customConfig, err := anypb.New(typedStruct)
 	if err != nil {
-		t.Fatalf("createXDSTypedStructFailed during anypb.New: %v", err)
+		t.Fatalf("createXDSTypedStruct Failed during anypb.New: %v", err)
 	}
 	return customConfig
 }
