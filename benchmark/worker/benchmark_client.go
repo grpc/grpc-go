@@ -186,6 +186,10 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 		}
 	}
 
+	// If set, perform an open loop, if not perform a closed loop. An open loop
+	// asynchronously starts RPCs based on random start times derived from a
+	// Poisson distribution. A closed loop performs RPCs in a blocking manner,
+	// and runs the next RPC after the previous RPC completes and returns.
 	var poissonLambda *float64
 	switch t := config.LoadParams.Load.(type) {
 	case *testpb.LoadParams_ClosedLoop:
@@ -319,7 +323,7 @@ func (bc *benchmarkClient) streamingLoop(conns []*grpc.ClientConn, rpcCountPerCo
 			}
 			idx := ic*rpcCountPerConn + j
 			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
-			if poissonLambda == nil { // Open loop.
+			if poissonLambda == nil { // Closed loop.
 				// Start goroutine on the created mutex and histogram.
 				go func(idx int) {
 					// TODO: do warm up if necessary.
@@ -340,7 +344,7 @@ func (bc *benchmarkClient) streamingLoop(conns []*grpc.ClientConn, rpcCountPerCo
 						}
 					}
 				}(idx)
-			} else { // Closed loop.
+			} else { // Open loop.
 				timeBetweenRPCs := time.Duration((grpcrand.ExpFloat64() / *poissonLambda) * float64(time.Second))
 				time.AfterFunc(timeBetweenRPCs, func() {
 					bc.poissonStreaming(stream, idx, reqSize, respSize, *poissonLambda, doRPC)
@@ -382,7 +386,7 @@ func (bc *benchmarkClient) poissonStreaming(stream testgrpc.BenchmarkService_Str
 
 // getStats returns the stats for benchmark client.
 // It resets lastResetTime and all histograms if argument reset is true.
-func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats { // can you get QPS out of this, maybe in metric key value pair somehow. Or poll every x time and see how many requests...
+func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 	var wallTimeElapsed, uTimeElapsed, sTimeElapsed float64
 	mergedHistogram := stats.NewHistogram(bc.histogramOptions)
 
