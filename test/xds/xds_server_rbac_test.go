@@ -696,12 +696,12 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 
 				if test.wantAuthzOutcomes != nil {
 					if diff := cmp.Diff(lb.authzDecisionStat, test.wantAuthzOutcomes); diff != "" {
-						t.Errorf("Authorization decision do not match\ndiff (-got +want):\n%s", diff)
+						t.Errorf("authorization decision do not match\ndiff (-got +want):\n%s", diff)
 					}
 				}
 				if test.eventContent != nil {
 					if diff := cmp.Diff(lb.lastEvent, test.eventContent); diff != "" {
-						t.Errorf("Unexpected event\ndiff (-got + want):\n%s", diff)
+						t.Errorf("unexpected event\ndiff (-got + want):\n%s", diff)
 					}
 				}
 			}()
