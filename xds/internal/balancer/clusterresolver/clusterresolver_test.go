@@ -240,29 +240,6 @@ func (s) TestSubConnStateChange(t *testing.T) {
 	}
 }
 
-// Given a list of resource names, verifies that EDS requests for the same are
-// sent by the EDS balancer, through the fake xDS client.
-func verifyExpectedRequests(ctx context.Context, fc *fakeclient.Client, resourceNames ...string) error {
-	for _, name := range resourceNames {
-		if name == "" {
-			// ResourceName empty string indicates a cancel.
-			if _, err := fc.WaitForCancelEDSWatch(ctx); err != nil {
-				return fmt.Errorf("timed out when expecting resource %q", name)
-			}
-			continue
-		}
-
-		resName, err := fc.WaitForWatchEDS(ctx)
-		if err != nil {
-			return fmt.Errorf("timed out when expecting resource %q, %p", name, fc)
-		}
-		if resName != name {
-			return fmt.Errorf("got EDS request for resource %q, expected: %q", resName, name)
-		}
-	}
-	return nil
-}
-
 func newLBConfigWithOneEDS(edsServiceName string) *LBConfig {
 	return &LBConfig{
 		DiscoveryMechanisms: []DiscoveryMechanism{{
