@@ -979,7 +979,7 @@ func createXDSTypedStruct(t *testing.T, in map[string]interface{}, name string) 
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
 	if err != nil {
-		t.Fatalf("createXDSTypedStruct Failed during structpb.NewStruct: %v", err)
+		t.Fatalf("createXDSTypedStruct failed during structpb.NewStruct: %v", err)
 	}
 	typedStruct := &v3xdsxdstypepb.TypedStruct{
 		TypeUrl: typeURLPrefix + name,
@@ -987,7 +987,7 @@ func createXDSTypedStruct(t *testing.T, in map[string]interface{}, name string) 
 	}
 	customConfig, err := anypb.New(typedStruct)
 	if err != nil {
-		t.Fatalf("createXDSTypedStruct Failed during anypb.New: %v", err)
+		t.Fatalf("createXDSTypedStruct failed during anypb.New: %v", err)
 	}
 	return customConfig
 }
