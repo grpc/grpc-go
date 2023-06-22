@@ -263,61 +263,6 @@ func verifyExpectedRequests(ctx context.Context, fc *fakeclient.Client, resource
 	return nil
 }
 
-// TestClientWatchEDS verifies that the xdsClient inside the top-level EDS LB
-// policy registers an EDS watch for expected resource upon receiving an update
-// from gRPC.
-func (s) TestClientWatchEDS(t *testing.T) {
-	edsLBCh := testutils.NewChannel()
-	xdsC, cleanup := setup(edsLBCh)
-	defer cleanup()
-
-	builder := balancer.Get(Name)
-	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{})
-	if edsB == nil {
-		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
-	}
-	defer edsB.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	// If eds service name is not set, should watch for cluster name.
-	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: newLBConfigWithOneEDS("cluster-1"),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := verifyExpectedRequests(ctx, xdsC, "cluster-1"); err != nil {
-		t.Fatal(err)
-	}
-
-	// Update with an non-empty edsServiceName should trigger an EDS watch for
-	// the same.
-	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: newLBConfigWithOneEDS("foobar-1"),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := verifyExpectedRequests(ctx, xdsC, "", "foobar-1"); err != nil {
-		t.Fatal(err)
-	}
-
-	// Also test the case where the edsServerName changes from one non-empty
-	// name to another, and make sure a new watch is registered. The previously
-	// registered watch will be cancelled, which will result in an EDS request
-	// with no resource names being sent to the server.
-	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: newLBConfigWithOneEDS("foobar-2"),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := verifyExpectedRequests(ctx, xdsC, "", "foobar-2"); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func newLBConfigWithOneEDS(edsServiceName string) *LBConfig {
 	return &LBConfig{
 		DiscoveryMechanisms: []DiscoveryMechanism{{
