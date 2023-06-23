@@ -526,10 +526,23 @@ func ClusterResourceWithOptions(opts ClusterOptions) *v3clusterpb.Cluster {
 
 // LocalityOptions contains options to configure a Locality.
 type LocalityOptions struct {
-	// Ports is a set of ports on "localhost" belonging to this locality.
-	Ports []uint32
+	// Name is the unique locality name.
+	Name string
 	// Weight is the weight of the locality, used for load balancing.
 	Weight uint32
+	// Backends is a set of backends belonging to this locality.
+	Backends []BackendOptions
+}
+
+// BackendOptions contains options to configure individual backends in a
+// locality.
+type BackendOptions struct {
+	// Port number on which the backend is accepting connections. All backends
+	// are expected to run on localhost, hence host name is not stored here.
+	Port uint32
+	// Health status of the backend. Default is UNKNOWN which is treated the
+	// same as HEALTHY.
+	HealthStatus v3corepb.HealthStatus
 }
 
 // EndpointOptions contains options to configure an Endpoint (or
@@ -550,13 +563,17 @@ type EndpointOptions struct {
 
 // DefaultEndpoint returns a basic xds Endpoint resource.
 func DefaultEndpoint(clusterName string, host string, ports []uint32) *v3endpointpb.ClusterLoadAssignment {
+	var bOpts []BackendOptions
+	for _, p := range ports {
+		bOpts = append(bOpts, BackendOptions{Port: p})
+	}
 	return EndpointResourceWithOptions(EndpointOptions{
 		ClusterName: clusterName,
 		Host:        host,
 		Localities: []LocalityOptions{
 			{
-				Ports:  ports,
-				Weight: 1,
+				Backends: bOpts,
+				Weight:   1,
 			},
 		},
 	})
@@ -568,16 +585,18 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 	var endpoints []*v3endpointpb.LocalityLbEndpoints
 	for i, locality := range opts.Localities {
 		var lbEndpoints []*v3endpointpb.LbEndpoint
-		for _, port := range locality.Ports {
+		for _, b := range locality.Backends {
 			lbEndpoints = append(lbEndpoints, &v3endpointpb.LbEndpoint{
 				HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{Endpoint: &v3endpointpb.Endpoint{
 					Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
 						SocketAddress: &v3corepb.SocketAddress{
 							Protocol:      v3corepb.SocketAddress_TCP,
 							Address:       opts.Host,
-							PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: port}},
+							PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: b.Port},
+						},
 					}},
 				}},
+				HealthStatus:        b.HealthStatus,
 				LoadBalancingWeight: &wrapperspb.UInt32Value{Value: 1},
 			})
 		}

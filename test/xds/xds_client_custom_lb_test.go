@@ -213,12 +213,12 @@ func (s) TestWrrLocality(t *testing.T) {
 					Host:        "localhost",
 					Localities: []e2e.LocalityOptions{
 						{
-							Ports:  []uint32{port1, port2},
-							Weight: 1,
+							Backends: []e2e.BackendOptions{{Port: port1}, {Port: port2}},
+							Weight:   1,
 						},
 						{
-							Ports:  []uint32{port3, port4, port5},
-							Weight: 2,
+							Backends: []e2e.BackendOptions{{Port: port3}, {Port: port4}, {Port: port5}},
+							Weight:   2,
 						},
 					},
 				})},
