@@ -18,16 +18,21 @@ package e2e_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -35,8 +40,14 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
+	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
+	"google.golang.org/grpc/xds/internal/balancer/priority"
+	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -300,5 +311,219 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	}
 	if ctx.Err() != nil {
 		t.Fatalf("RPCs did not fail after removal of Cluster resource")
+	}
+}
+
+// testChildPolicyBalancerBuilder wraps the priority LB policy (which is the
+// child policy for the cluster resolver LB policy), and makes certain events
+// available to the test (subConn state changes and config pushes).
+type testChildPolicyBalancerBuilder struct {
+	scStateCh       chan balancer.SubConnState
+	cfgCh           chan json.RawMessage
+	priorityBuilder balancer.Builder
+}
+
+func newTestChildPolicyBalancerBuilder(b balancer.Builder) *testChildPolicyBalancerBuilder {
+	return &testChildPolicyBalancerBuilder{
+		scStateCh:       make(chan balancer.SubConnState),
+		cfgCh:           make(chan json.RawMessage),
+		priorityBuilder: b,
+	}
+}
+
+func (b *testChildPolicyBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	priorityLB := b.priorityBuilder.Build(cc, opts)
+	return &testChildPolicyBalancer{
+		Balancer:  priorityLB,
+		scStateCh: b.scStateCh,
+	}
+}
+
+func (b *testChildPolicyBalancerBuilder) Name() string {
+	return priority.Name
+}
+
+func (b *testChildPolicyBalancerBuilder) ParseConfig(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+	select {
+	case b.cfgCh <- lbCfg:
+	default:
+	}
+	return b.priorityBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+}
+
+type testChildPolicyBalancer struct {
+	balancer.Balancer
+	scStateCh chan balancer.SubConnState
+}
+
+func (b *testChildPolicyBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	select {
+	case b.scStateCh <- state:
+	default:
+	}
+
+	b.Balancer.UpdateSubConnState(sc, state)
+}
+
+func (s) TestSubConnStateChangePropagationToChildPolicy(t *testing.T) {
+	// Unregister the priority balancer builder for the duration of this test,
+	// and register a policy under the same name which makes subConn state
+	// changes pushed to it available to the test.
+	priorityBuilder := balancer.Get(priority.Name)
+	internal.BalancerUnregister(priorityBuilder.Name())
+	testChildPolicy := newTestChildPolicyBalancerBuilder(priorityBuilder)
+	balancer.Register(testChildPolicy)
+	defer balancer.Register(priorityBuilder)
+
+	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+	defer cleanup()
+
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	// Configure cluster and endpoints resources in the management server.
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
+
+	// Spawn a goroutine which ensures that subConn state changes are propagated
+	// to the child policy. We *only* wait for READY state since we expect to
+	// get to that state when the below RPC succeeds.
+	doneCh := make(chan error, 1)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				doneCh <- fmt.Errorf("test timeout expired when waiting for child policy to see a READY subConn")
+				return
+			case state := <-testChildPolicy.scStateCh:
+				if state.ConnectivityState == connectivity.Ready {
+					doneCh <- nil
+					return
+				}
+			}
+		}
+	}()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	if err := <-doneCh; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
+	// Unregister the priority balancer builder for the duration of this test,
+	// and register a policy under the same name which makes the LB config
+	// pushed to it available to the test.
+	priorityBuilder := balancer.Get(priority.Name)
+	internal.BalancerUnregister(priorityBuilder.Name())
+	testChildPolicy := newTestChildPolicyBalancerBuilder(priorityBuilder)
+	balancer.Register(testChildPolicy)
+	defer balancer.Register(priorityBuilder)
+
+	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+	defer cleanup()
+
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	// Configure cluster and endpoints resources in the management server.
+	cluster := e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)
+	cluster.OutlierDetection = &v3clusterpb.OutlierDetection{
+		Interval:                 durationpb.New(10 * time.Second),
+		BaseEjectionTime:         durationpb.New(30 * time.Second),
+		MaxEjectionTime:          durationpb.New(300 * time.Second),
+		MaxEjectionPercent:       wrapperspb.UInt32(10),
+		SuccessRateStdevFactor:   wrapperspb.UInt32(2000),
+		EnforcingSuccessRate:     wrapperspb.UInt32(50),
+		SuccessRateMinimumHosts:  wrapperspb.UInt32(10),
+		SuccessRateRequestVolume: wrapperspb.UInt32(50),
+	}
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{cluster},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	_, cleanup = setupAndDial(t, bootstrapContents)
+	defer cleanup()
+
+	// The priority configuration generated should have Outlier Detection as a
+	// direct child due to Outlier Detection being turned on.
+	wantCfg := &priority.LBConfig{
+		Children: map[string]*priority.Child{
+			"priority-0-0": {
+				Config: &iserviceconfig.BalancerConfig{
+					Name: outlierdetection.Name,
+					Config: &outlierdetection.LBConfig{
+						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+						MaxEjectionPercent: 10,
+						SuccessRateEjection: &outlierdetection.SuccessRateEjection{
+							StdevFactor:           2000,
+							EnforcementPercentage: 50,
+							MinimumHosts:          10,
+							RequestVolume:         50,
+						},
+						ChildPolicy: &iserviceconfig.BalancerConfig{
+							Name: clusterimpl.Name,
+							Config: &clusterimpl.LBConfig{
+								Cluster:        clusterName,
+								EDSServiceName: edsServiceName,
+								ChildPolicy: &iserviceconfig.BalancerConfig{
+									Name: wrrlocality.Name,
+									Config: &wrrlocality.LBConfig{
+										ChildPolicy: &iserviceconfig.BalancerConfig{
+											Name: roundrobin.Name,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				IgnoreReresolutionRequests: true,
+			},
+		},
+		Priorities: []string{"priority-0-0"},
+	}
+
+	select {
+	case jsonCfg := <-testChildPolicy.cfgCh:
+		gotCfg := &priority.LBConfig{}
+		if err := json.Unmarshal(jsonCfg, gotCfg); err != nil {
+			t.Fatalf("Failed to unmarshal LB config received by child policy: %v", err)
+		}
+		if diff := cmp.Diff(wantCfg, gotCfg); diff != "" {
+			t.Fatalf("Child policy received unexpected diff in config (-want +got):\n%s", diff)
+		}
+	case <-ctx.Done():
+		t.Fatalf("Timeout when waiting for child policy to receive its configuration")
 	}
 }
