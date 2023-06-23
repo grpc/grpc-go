@@ -537,7 +537,8 @@ type LocalityOptions struct {
 // BackendOptions contains options to configure individual backends in a
 // locality.
 type BackendOptions struct {
-	// Port number on which the backend is accepting connections.
+	// Port number on which the backend is accepting connections. All backends
+	// are expected to run on localhost, hence host name is not stored here.
 	Port uint32
 	// Health status of the backend. Default is UNKNOWN which is treated the
 	// same as HEALTHY.
