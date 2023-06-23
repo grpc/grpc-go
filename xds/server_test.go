@@ -315,6 +315,24 @@ func (p *fakeProvider) Close() {
 	p.Distributor.Stop()
 }
 
+// setupClientOverride sets up an override for new xdsClient creation.
+func setupClientOverride(t *testing.T) func() {
+	origNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsclient.XDSClient, func(), error) {
+		c := fakeclient.NewClient()
+		c.SetBootstrapConfig(&bootstrap.Config{
+			XDSServer:                          xdstestutils.ServerConfigForAddress(t, "server-address"),
+			NodeProto:                          xdstestutils.EmptyNodeProtoV3,
+			ServerListenerResourceNameTemplate: testServerListenerResourceNameTemplate,
+			CertProviderConfigs:                certProviderConfigs,
+		})
+		return c, func() {}, nil
+	}
+	return func() {
+		newXDSClient = origNewXDSClient
+	}
+}
+
 // setupOverrides sets up overrides for bootstrap config, new xdsClient creation
 // and new gRPC.Server creation.
 func setupOverrides(t *testing.T) (*fakeGRPCServer, *testutils.Channel, func()) {
@@ -889,4 +907,38 @@ func verifyCertProviderNotCreated() error {
 		return errors.New("certificate provider created when no xDS creds were specified")
 	}
 	return nil
+}
+
+// TestServeReturnsErrorAfterClose tests that the xds Server returns
+// grpc.ErrServerStopped if Serve is called after Close on the server.
+func (s) TestServeReturnsErrorAfterClose(t *testing.T) {
+	cancel := setupClientOverride(t)
+	defer cancel()
+	server := NewGRPCServer()
+
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+
+	server.Stop()
+	serveDone := testutils.NewChannel()
+	// Do this in a goroutine, even though should just receive error. This is to
+	// prevent blocking for (which comes after, so doesn't apply here), but
+	// mainly to wrap this err Receive operation with a testing timeout.
+	go func() { serveDone.Send(server.Serve(lis)) }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	v, err := serveDone.Receive(ctx)
+	if err != nil {
+		t.Fatalf("error when waiting for Serve() to exit: %v", err)
+	}
+	var ok bool
+	if err, ok = v.(error); !ok || err == nil {
+		t.Fatal("Serve() did not exit with error")
+	}
+	if !strings.Contains(err.Error(), grpc.ErrServerStopped.Error()) {
+		t.Fatalf("server erorred with wrong error, want: %v, got :%v", grpc.ErrServerStopped, err)
+	}
 }
