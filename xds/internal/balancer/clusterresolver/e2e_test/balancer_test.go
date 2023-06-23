@@ -18,7 +18,6 @@ package e2e_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -32,6 +31,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/buffer"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -314,64 +314,72 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	}
 }
 
-// testChildPolicyBalancerBuilder wraps the priority LB policy (which is the
-// child policy for the cluster resolver LB policy), and makes certain events
-// available to the test (subConn state changes and config pushes).
-type testChildPolicyBalancerBuilder struct {
-	scStateCh       chan balancer.SubConnState
-	cfgCh           chan json.RawMessage
-	priorityBuilder balancer.Builder
+// wrappedPriorityBuilder implements the balancer.Builder interface and builds
+// an LB policy which is a thin wrapper around the priority LB policy. The built
+// LB policy and makes certain events available to the test (SubConn state
+// changes and LB config updates).
+type wrappedPriorityBuilder struct {
+	balancer.Builder
+	balancer.ConfigParser
+	// We use an unbounded buffer instead of a vanilla channel to ensure that no
+	// state updates are lost *and* pushing to the channel is non-blocking (to
+	// ensure that the sending goroutine does not block if the test is not
+	// reading from the channel).
+	scStateCh *buffer.Unbounded
+	lbCfgCh   chan serviceconfig.LoadBalancingConfig
 }
 
-func newTestChildPolicyBalancerBuilder(b balancer.Builder) *testChildPolicyBalancerBuilder {
-	return &testChildPolicyBalancerBuilder{
-		scStateCh:       make(chan balancer.SubConnState),
-		cfgCh:           make(chan json.RawMessage),
-		priorityBuilder: b,
+func newWrappedPriorityBuilder(b balancer.Builder) *wrappedPriorityBuilder {
+	return &wrappedPriorityBuilder{
+		scStateCh:    buffer.NewUnbounded(),
+		lbCfgCh:      make(chan serviceconfig.LoadBalancingConfig, 1),
+		Builder:      b,
+		ConfigParser: b.(balancer.ConfigParser),
 	}
 }
 
-func (b *testChildPolicyBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	priorityLB := b.priorityBuilder.Build(cc, opts)
-	return &testChildPolicyBalancer{
+func (b *wrappedPriorityBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	priorityLB := b.Builder.Build(cc, opts)
+	return &wrappedPriorityBalancer{
 		Balancer:  priorityLB,
 		scStateCh: b.scStateCh,
+		lbCfgCh:   b.lbCfgCh,
 	}
 }
 
-func (b *testChildPolicyBalancerBuilder) Name() string {
-	return priority.Name
-}
-
-func (b *testChildPolicyBalancerBuilder) ParseConfig(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	select {
-	case b.cfgCh <- lbCfg:
-	default:
-	}
-	return b.priorityBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
-}
-
-type testChildPolicyBalancer struct {
+type wrappedPriorityBalancer struct {
 	balancer.Balancer
-	scStateCh chan balancer.SubConnState
+	scStateCh *buffer.Unbounded
+	lbCfgCh   chan serviceconfig.LoadBalancingConfig
 }
 
-func (b *testChildPolicyBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	select {
-	case b.scStateCh <- state:
-	default:
-	}
-
+func (b *wrappedPriorityBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	b.scStateCh.Put(state)
 	b.Balancer.UpdateSubConnState(sc, state)
 }
 
+func (b *wrappedPriorityBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
+	select {
+	case b.lbCfgCh <- ccs.BalancerConfig:
+	default:
+	}
+	return b.Balancer.UpdateClientConnState(ccs)
+}
+
+func (b *wrappedPriorityBalancer) Close() {
+	b.scStateCh.Close()
+	b.Balancer.Close()
+}
+
+// Test verifies that SubConn state changes are propagated to the child policy
+// by the cluster resolver LB policy.
 func (s) TestSubConnStateChangePropagationToChildPolicy(t *testing.T) {
 	// Unregister the priority balancer builder for the duration of this test,
-	// and register a policy under the same name which makes subConn state
+	// and register a policy under the same name that makes SubConn state
 	// changes pushed to it available to the test.
 	priorityBuilder := balancer.Get(priority.Name)
 	internal.BalancerUnregister(priorityBuilder.Name())
-	testChildPolicy := newTestChildPolicyBalancerBuilder(priorityBuilder)
+	testChildPolicy := newWrappedPriorityBuilder(priorityBuilder)
 	balancer.Register(testChildPolicy)
 	defer balancer.Register(priorityBuilder)
 
@@ -399,17 +407,19 @@ func (s) TestSubConnStateChangePropagationToChildPolicy(t *testing.T) {
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
-	// Spawn a goroutine which ensures that subConn state changes are propagated
+	// Spawn a goroutine which ensures that SubConn state changes are propagated
 	// to the child policy. We *only* wait for READY state since we expect to
-	// get to that state when the below RPC succeeds.
+	// get to that state before the below RPC succeeds.
 	doneCh := make(chan error, 1)
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
-				doneCh <- fmt.Errorf("test timeout expired when waiting for child policy to see a READY subConn")
+				doneCh <- fmt.Errorf("test timeout expired when waiting for child policy to see a READY SubConn")
 				return
-			case state := <-testChildPolicy.scStateCh:
+			case s := <-testChildPolicy.scStateCh.Get():
+				testChildPolicy.scStateCh.Load()
+				state := s.(balancer.SubConnState)
 				if state.ConnectivityState == connectivity.Ready {
 					doneCh <- nil
 					return
@@ -428,13 +438,16 @@ func (s) TestSubConnStateChangePropagationToChildPolicy(t *testing.T) {
 	}
 }
 
+// Test verifies that when the received Cluster resource contains outlier
+// detection configuration, the LB config pushed to the child policy contains
+// the appropriate configuration for the outlier detection LB policy.
 func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 	// Unregister the priority balancer builder for the duration of this test,
-	// and register a policy under the same name which makes the LB config
+	// and register a policy under the same name that makes the LB config
 	// pushed to it available to the test.
 	priorityBuilder := balancer.Get(priority.Name)
 	internal.BalancerUnregister(priorityBuilder.Name())
-	testChildPolicy := newTestChildPolicyBalancerBuilder(priorityBuilder)
+	testChildPolicy := newWrappedPriorityBuilder(priorityBuilder)
 	balancer.Register(testChildPolicy)
 	defer balancer.Register(priorityBuilder)
 
@@ -515,11 +528,8 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 	}
 
 	select {
-	case jsonCfg := <-testChildPolicy.cfgCh:
-		gotCfg := &priority.LBConfig{}
-		if err := json.Unmarshal(jsonCfg, gotCfg); err != nil {
-			t.Fatalf("Failed to unmarshal LB config received by child policy: %v", err)
-		}
+	case lbCfg := <-testChildPolicy.lbCfgCh:
+		gotCfg := lbCfg.(*priority.LBConfig)
 		if diff := cmp.Diff(wantCfg, gotCfg); diff != "" {
 			t.Fatalf("Child policy received unexpected diff in config (-want +got):\n%s", diff)
 		}
