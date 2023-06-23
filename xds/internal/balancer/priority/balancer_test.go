@@ -149,6 +149,11 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 	case <-time.After(time.Millisecond * 100):
 	}
 
+	// Test roundrobin with only p0 subconns.
+	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
+		t.Fatal(err.Error())
+	}
+
 	// Remove p2, no updates.
 	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
@@ -174,6 +179,11 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 	case <-cc.RemoveSubConnCh:
 		t.Fatalf("got unexpected remove SubConn")
 	case <-time.After(time.Millisecond * 100):
+	}
+
+	// Test roundrobin with only p0 subconns.
+	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
+		t.Fatal(err.Error())
 	}
 }
 
