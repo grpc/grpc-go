@@ -407,34 +407,22 @@ func (s) TestSubConnStateChangePropagationToChildPolicy(t *testing.T) {
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
-	// Spawn a goroutine which ensures that SubConn state changes are propagated
-	// to the child policy. We *only* wait for READY state since we expect to
-	// get to that state before the below RPC succeeds.
-	doneCh := make(chan error, 1)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				doneCh <- fmt.Errorf("test timeout expired when waiting for child policy to see a READY SubConn")
-				return
-			case s := <-testChildPolicy.scStateCh.Get():
-				testChildPolicy.scStateCh.Load()
-				state := s.(balancer.SubConnState)
-				if state.ConnectivityState == connectivity.Ready {
-					doneCh <- nil
-					return
-				}
-			}
-		}
-	}()
-
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	if err := <-doneCh; err != nil {
-		t.Fatal(err)
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Timeout when waiting for child policy to see a READY SubConn")
+		case s := <-testChildPolicy.scStateCh.Get():
+			testChildPolicy.scStateCh.Load()
+			state := s.(balancer.SubConnState)
+			if state.ConnectivityState == connectivity.Ready {
+				return
+			}
+		}
 	}
 }
 
