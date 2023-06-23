@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -34,16 +35,20 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	rrutil "google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
@@ -125,7 +130,7 @@ func endpointResource(clusterName string, localities []localityInfo) *v3endpoint
 		localityEndpoints = append(localityEndpoints, &v3endpointpb.LocalityLbEndpoints{
 			Locality:            &v3corepb.Locality{SubZone: locality.name},
 			LbEndpoints:         endpoints,
-			LoadBalancingWeight: &wrapperspb.UInt32Value{Value: locality.weight},
+			LoadBalancingWeight: wrapperspb.UInt32(locality.weight),
 		})
 	}
 	return &v3endpointpb.ClusterLoadAssignment{
@@ -531,6 +536,296 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	}
 	if err := waitForAllPrioritiesRemovedError(ctx, t, testClient); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestEDS_ResourceRemoved tests the case where the EDS resource requested by
+// the clusterresolver LB policy is removed from the management server. The test
+// verifies that the EDS watch is not canceled and that RPCs continue to succeed
+// with the previously received configuration.
+func (s) TestEDS_ResourceRemoved(t *testing.T) {
+	// Start an xDS management server that uses a couple of channels to
+	// notify the test about the following events:
+	// - an EDS requested with the expected resource name is requested
+	// - EDS resource is unrequested, i.e, an EDS request with no resource name
+	//   is received, which indicates that we are not longer interested in that
+	//   resource.
+	edsResourceRequestedCh := make(chan struct{}, 1)
+	edsResourceCanceledCh := make(chan struct{}, 1)
+	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() == version.V3EndpointsURL {
+				switch len(req.GetResourceNames()) {
+				case 0:
+					select {
+					case edsResourceCanceledCh <- struct{}{}:
+					default:
+					}
+				case 1:
+					if req.GetResourceNames()[0] == edsServiceName {
+						select {
+						case edsResourceRequestedCh <- struct{}{}:
+						default:
+						}
+					}
+				default:
+					t.Errorf("Unexpected number of resources, %d, in an EDS request", len(req.GetResourceNames()))
+				}
+			}
+			return nil
+		},
+	})
+	defer cleanup()
+
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	// Configure cluster and endpoints resources in the management server.
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Delete the endpoints resource from the mangement server.
+	resources.Endpoints = nil
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure that RPCs continue to succeed for the next second, and that the
+	// EDS watch is not canceled.
+	for end := time.Now().Add(time.Second); time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			t.Fatalf("EmptyCall() failed: %v", err)
+		}
+		select {
+		case <-edsResourceCanceledCh:
+			t.Fatal("EDS watch canceled when not expected to be canceled")
+		default:
+		}
+	}
+}
+
+// TestEDS_ClusterResourceDoesNotContainEDSServiceName tests the case where the
+// Cluster resource sent by the management server does not contain an EDS
+// service name. The test verifies that the cluster_resolver LB policy uses the
+// cluster name for the EDS resource.
+func (s) TestEDS_ClusterResourceDoesNotContainEDSServiceName(t *testing.T) {
+	edsResourceCh := make(chan string, 1)
+	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() != version.V3EndpointsURL {
+				return nil
+			}
+			if len(req.GetResourceNames()) > 0 {
+				select {
+				case edsResourceCh <- req.GetResourceNames()[0]:
+				default:
+				}
+			}
+			return nil
+		},
+	})
+	defer cleanup()
+
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	// Configure cluster and endpoints resources with the same name in the management server. The cluster resource does not specify an EDS service name.
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, "", e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(clusterName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for EDS request to be received on the management server")
+	case name := <-edsResourceCh:
+		if name != clusterName {
+			t.Fatalf("Received EDS request with resource name %q, want %q", name, clusterName)
+		}
+	}
+}
+
+// TestEDS_ClusterResourceUpdates verifies different scenarios with regards to
+// cluster resource updates.
+//
+//   - The first cluster resource contains an eds_service_name. The test verifies
+//     that an EDS request is sent for the received eds_service_name. It also
+//     verifies that a subsequent RPC gets routed to a backend belonging to that
+//     service name.
+//   - The next cluster resource update contains no eds_service_name. The test
+//     verifies that a subsequent EDS request is sent for the cluster_name and
+//     that the previously received eds_service_name is no longer requested. It
+//     also verifies that a subsequent RPC gets routed to a backend belonging to
+//     the service represented by the cluster_name.
+//   - The next cluster resource update changes the circuit breaking
+//     configuration, but does not change the service name. The test verifies
+//     that a subsequent RPC gets routed to the same backend as before.
+func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Start an xDS management server that pushes the EDS resource names onto a
+	// channel.
+	edsResourceNameCh := make(chan []string, 1)
+	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() != version.V3EndpointsURL {
+				return nil
+			}
+			if len(req.GetResourceNames()) == 0 {
+				// This is the case for ACKs. Do nothing here.
+				return nil
+			}
+			select {
+			case <-ctx.Done():
+			case edsResourceNameCh <- req.GetResourceNames():
+			}
+			return nil
+		},
+		AllowResourceSubset: true,
+	})
+	defer cleanup()
+
+	// Start two test backends and extract their host and port. The first
+	// backend is used for the EDS resource identified by the eds_service_name,
+	// and the second backend is used for the EDS resource identified by the
+	// cluster_name.
+	servers, cleanup2 := startTestServiceBackends(t, 2)
+	defer cleanup2()
+	addrs, ports := backendAddressesAndPorts(t, servers)
+
+	// Configure cluster and endpoints resources in the management server.
+	resources := e2e.UpdateOptions{
+		NodeID:   nodeID,
+		Clusters: []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
+			e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{uint32(ports[0])}),
+			e2e.DefaultEndpoint(clusterName, "localhost", []uint32{uint32(ports[1])}),
+		},
+		SkipValidation: true,
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	peer := &peer.Peer{}
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+	if peer.Addr.String() != addrs[0].Addr {
+		t.Fatalf("EmptyCall() routed to backend %q, want %q", peer.Addr, addrs[0].Addr)
+	}
+
+	// Ensure EDS watch is registered for eds_service_name.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for EDS request to be received on the management server")
+	case names := <-edsResourceNameCh:
+		if !cmp.Equal(names, []string{edsServiceName}) {
+			t.Fatalf("Received EDS request with resource names %v, want %v", names, []string{edsServiceName})
+		}
+	}
+
+	// Change the cluster resource to not contain an eds_service_name.
+	resources.Clusters = []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, "", e2e.SecurityLevelNone)}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure that an EDS watch for eds_service_name is canceled and new watch
+	// for cluster_name is registered. The actual order in which this happens is
+	// not deterministic, i.e the watch for old resource could be canceled
+	// before the new one is registered or vice-versa. In either case,
+	// eventually, we want to see a request to the management server for just
+	// the cluster_name.
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		names := <-edsResourceNameCh
+		if cmp.Equal(names, []string{clusterName}) {
+			break
+		}
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("Timeout when waiting for old EDS watch %q to be canceled and new one %q to be registered", edsServiceName, clusterName)
+	}
+
+	// Make a RPC, and ensure that it gets routed to second backend,
+	// corresponding to the cluster_name.
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
+			continue
+		}
+		if peer.Addr.String() == addrs[1].Addr {
+			break
+		}
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("Timeout when waiting for EmptyCall() to be routed to correct backend %q", addrs[1].Addr)
+	}
+
+	// Change cluster resource circuit breaking count.
+	resources.Clusters[0].CircuitBreakers = &v3clusterpb.CircuitBreakers{
+		Thresholds: []*v3clusterpb.CircuitBreakers_Thresholds{
+			{
+				Priority:    v3corepb.RoutingPriority_DEFAULT,
+				MaxRequests: wrapperspb.UInt32(512),
+			},
+		},
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure that RPCs continue to get routed to the second backend for the
+	// next second.
+	for end := time.Now().Add(time.Second); time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
+			t.Fatalf("EmptyCall() failed: %v", err)
+		}
+		if peer.Addr.String() != addrs[1].Addr {
+			t.Fatalf("EmptyCall() routed to backend %q, want %q", peer.Addr, addrs[1].Addr)
+		}
 	}
 }
 
