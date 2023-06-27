@@ -151,5 +151,4 @@ func (nopBufferPool) Get(length int) []byte {
 }
 
 func (nopBufferPool) Put(*[]byte) {
-
 }
