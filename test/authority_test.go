@@ -126,7 +126,7 @@ var authorityTests = []authorityTest{
 		name:           "UnixPassthrough",
 		address:        "/tmp/sock.sock",
 		target:         "passthrough:///unix:///tmp/sock.sock",
-		authority:      "unix:%2F%2F%2Ftmp%2Fsock.sock",
+		authority:      "unix:///tmp/sock.sock",
 		dialTargetWant: "unix:///tmp/sock.sock",
 	},
 	{

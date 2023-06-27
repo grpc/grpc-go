@@ -27,8 +27,9 @@ import (
 // ServerMetrics is the data returned from a server to a client to describe the
 // current state of the server and/or the cost of a request when used per-call.
 type ServerMetrics struct {
-	CPUUtilization float64 // CPU utilization: [0, 1.0]; unset=-1
+	CPUUtilization float64 // CPU utilization: [0, inf); unset=-1
 	MemUtilization float64 // Memory utilization: [0, 1.0]; unset=-1
+	AppUtilization float64 // Application utilization: [0, inf); unset=-1
 	QPS            float64 // queries per second: [0, inf); unset=-1
 	EPS            float64 // errors per second: [0, inf); unset=-1
 
@@ -52,6 +53,9 @@ func (sm *ServerMetrics) toLoadReportProto() *v3orcapb.OrcaLoadReport {
 	if sm.MemUtilization != -1 {
 		ret.MemUtilization = sm.MemUtilization
 	}
+	if sm.AppUtilization != -1 {
+		ret.ApplicationUtilization = sm.AppUtilization
+	}
 	if sm.QPS != -1 {
 		ret.RpsFractional = sm.QPS
 	}
@@ -63,11 +67,17 @@ func (sm *ServerMetrics) toLoadReportProto() *v3orcapb.OrcaLoadReport {
 
 // merge merges o into sm, overwriting any values present in both.
 func (sm *ServerMetrics) merge(o *ServerMetrics) {
+	mergeMap(sm.Utilization, o.Utilization)
+	mergeMap(sm.RequestCost, o.RequestCost)
+	mergeMap(sm.NamedMetrics, o.NamedMetrics)
 	if o.CPUUtilization != -1 {
 		sm.CPUUtilization = o.CPUUtilization
 	}
 	if o.MemUtilization != -1 {
 		sm.MemUtilization = o.MemUtilization
+	}
+	if o.AppUtilization != -1 {
+		sm.AppUtilization = o.AppUtilization
 	}
 	if o.QPS != -1 {
 		sm.QPS = o.QPS
@@ -75,9 +85,6 @@ func (sm *ServerMetrics) merge(o *ServerMetrics) {
 	if o.EPS != -1 {
 		sm.EPS = o.EPS
 	}
-	mergeMap(sm.Utilization, o.Utilization)
-	mergeMap(sm.RequestCost, o.RequestCost)
-	mergeMap(sm.NamedMetrics, o.NamedMetrics)
 }
 
 func mergeMap(a, b map[string]float64) {
@@ -91,34 +98,46 @@ func mergeMap(a, b map[string]float64) {
 type ServerMetricsRecorder interface {
 	ServerMetricsProvider
 
-	// SetCPUUtilization sets the relevant server metric.
+	// SetCPUUtilization sets the CPU utilization server metric.  Must be
+	// greater than zero.
 	SetCPUUtilization(float64)
-	// DeleteCPUUtilization deletes the relevant server metric to prevent it
-	// from being sent.
+	// DeleteCPUUtilization deletes the CPU utilization server metric to
+	// prevent it from being sent.
 	DeleteCPUUtilization()
 
-	// SetMemoryUtilization sets the relevant server metric.
+	// SetMemoryUtilization sets the memory utilization server metric.  Must be
+	// in the range [0, 1].
 	SetMemoryUtilization(float64)
-	// DeleteMemoryUtilization deletes the relevant server metric to prevent it
-	// from being sent.
+	// DeleteMemoryUtilization deletes the memory utiliztion server metric to
+	// prevent it from being sent.
 	DeleteMemoryUtilization()
 
-	// SetQPS sets the relevant server metric.
+	// SetApplicationUtilization sets the application utilization server
+	// metric.  Must be greater than zero.
+	SetApplicationUtilization(float64)
+	// DeleteApplicationUtilization deletes the application utilization server
+	// metric to prevent it from being sent.
+	DeleteApplicationUtilization()
+
+	// SetQPS sets the Queries Per Second server metric.  Must be greater than
+	// zero.
 	SetQPS(float64)
-	// DeleteQPS deletes the relevant server metric to prevent it from being
-	// sent.
+	// DeleteQPS deletes the Queries Per Second server metric to prevent it
+	// from being sent.
 	DeleteQPS()
 
-	// SetEPS sets the relevant server metric.
+	// SetEPS sets the Errors Per Second server metric.  Must be greater than
+	// zero.
 	SetEPS(float64)
-	// DeleteEPS deletes the relevant server metric to prevent it from being
-	// sent.
+	// DeleteEPS deletes the Errors Per Second server metric to prevent it from
+	// being sent.
 	DeleteEPS()
 
-	// SetNamedUtilization sets the relevant server metric.
+	// SetNamedUtilization sets the named utilization server metric for the
+	// name provided.  val must be in the range [0, 1].
 	SetNamedUtilization(name string, val float64)
-	// DeleteNamedUtilization deletes the relevant server metric to prevent it
-	// from being sent.
+	// DeleteNamedUtilization deletes the named utilization server metric for
+	// the name provided to prevent it from being sent.
 	DeleteNamedUtilization(name string)
 }
 
@@ -139,6 +158,7 @@ func newServerMetricsRecorder() *serverMetricsRecorder {
 		state: &ServerMetrics{
 			CPUUtilization: -1,
 			MemUtilization: -1,
+			AppUtilization: -1,
 			QPS:            -1,
 			EPS:            -1,
 			Utilization:    make(map[string]float64),
@@ -155,6 +175,7 @@ func (s *serverMetricsRecorder) ServerMetrics() *ServerMetrics {
 	return &ServerMetrics{
 		CPUUtilization: s.state.CPUUtilization,
 		MemUtilization: s.state.MemUtilization,
+		AppUtilization: s.state.AppUtilization,
 		QPS:            s.state.QPS,
 		EPS:            s.state.EPS,
 		Utilization:    copyMap(s.state.Utilization),
@@ -173,6 +194,12 @@ func copyMap(m map[string]float64) map[string]float64 {
 
 // SetCPUUtilization records a measurement for the CPU utilization metric.
 func (s *serverMetricsRecorder) SetCPUUtilization(val float64) {
+	if val < 0 {
+		if logger.V(2) {
+			logger.Infof("Ignoring CPU Utilization value out of range: %v", val)
+		}
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.state.CPUUtilization = val
@@ -181,11 +208,19 @@ func (s *serverMetricsRecorder) SetCPUUtilization(val float64) {
 // DeleteCPUUtilization deletes the relevant server metric to prevent it from
 // being sent.
 func (s *serverMetricsRecorder) DeleteCPUUtilization() {
-	s.SetCPUUtilization(-1)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state.CPUUtilization = -1
 }
 
 // SetMemoryUtilization records a measurement for the memory utilization metric.
 func (s *serverMetricsRecorder) SetMemoryUtilization(val float64) {
+	if val < 0 || val > 1 {
+		if logger.V(2) {
+			logger.Infof("Ignoring Memory Utilization value out of range: %v", val)
+		}
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.state.MemUtilization = val
@@ -194,11 +229,41 @@ func (s *serverMetricsRecorder) SetMemoryUtilization(val float64) {
 // DeleteMemoryUtilization deletes the relevant server metric to prevent it
 // from being sent.
 func (s *serverMetricsRecorder) DeleteMemoryUtilization() {
-	s.SetMemoryUtilization(-1)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state.MemUtilization = -1
+}
+
+// SetApplicationUtilization records a measurement for a generic utilization
+// metric.
+func (s *serverMetricsRecorder) SetApplicationUtilization(val float64) {
+	if val < 0 {
+		if logger.V(2) {
+			logger.Infof("Ignoring Application Utilization value out of range: %v", val)
+		}
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state.AppUtilization = val
+}
+
+// DeleteApplicationUtilization deletes the relevant server metric to prevent
+// it from being sent.
+func (s *serverMetricsRecorder) DeleteApplicationUtilization() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state.AppUtilization = -1
 }
 
 // SetQPS records a measurement for the QPS metric.
 func (s *serverMetricsRecorder) SetQPS(val float64) {
+	if val < 0 {
+		if logger.V(2) {
+			logger.Infof("Ignoring QPS value out of range: %v", val)
+		}
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.state.QPS = val
@@ -206,11 +271,19 @@ func (s *serverMetricsRecorder) SetQPS(val float64) {
 
 // DeleteQPS deletes the relevant server metric to prevent it from being sent.
 func (s *serverMetricsRecorder) DeleteQPS() {
-	s.SetQPS(-1)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state.QPS = -1
 }
 
 // SetEPS records a measurement for the EPS metric.
 func (s *serverMetricsRecorder) SetEPS(val float64) {
+	if val < 0 {
+		if logger.V(2) {
+			logger.Infof("Ignoring EPS value out of range: %v", val)
+		}
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.state.EPS = val
@@ -218,12 +291,20 @@ func (s *serverMetricsRecorder) SetEPS(val float64) {
 
 // DeleteEPS deletes the relevant server metric to prevent it from being sent.
 func (s *serverMetricsRecorder) DeleteEPS() {
-	s.SetEPS(-1)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state.EPS = -1
 }
 
 // SetNamedUtilization records a measurement for a utilization metric uniquely
 // identifiable by name.
 func (s *serverMetricsRecorder) SetNamedUtilization(name string, val float64) {
+	if val < 0 || val > 1 {
+		if logger.V(2) {
+			logger.Infof("Ignoring Named Utilization value out of range: %v", val)
+		}
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.state.Utilization[name] = val

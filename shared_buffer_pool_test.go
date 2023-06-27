@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2019 gRPC authors.
+ * Copyright 2023 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,28 +16,33 @@
  *
  */
 
-package clusterresolver
+package grpc
 
-import (
-	"testing"
-	"time"
+import "testing"
 
-	"google.golang.org/grpc/internal/grpctest"
-)
+func (s) TestSharedBufferPool(t *testing.T) {
+	pools := []SharedBufferPool{
+		nopBufferPool{},
+		NewSharedBufferPool(),
+	}
 
-const (
-	defaultTestTimeout      = 5 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond
-	testEDSService          = "test-eds-service-name"
-	testClusterName         = "test-cluster-name"
-	testClusterName2        = "google_cfe_some-name"
-	testBalancerNameFooBar  = "foo.bar"
-)
+	lengths := []int{
+		level4PoolMaxSize + 1,
+		level4PoolMaxSize,
+		level3PoolMaxSize,
+		level2PoolMaxSize,
+		level1PoolMaxSize,
+		level0PoolMaxSize,
+	}
 
-type s struct {
-	grpctest.Tester
-}
+	for _, p := range pools {
+		for _, l := range lengths {
+			bs := p.Get(l)
+			if len(bs) != l {
+				t.Fatalf("Expected buffer of length %d, got %d", l, len(bs))
+			}
 
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
+			p.Put(&bs)
+		}
+	}
 }

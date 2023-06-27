@@ -31,6 +31,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/alts/internal/handshaker"
 	"google.golang.org/grpc/credentials/alts/internal/handshaker/service"
 	altsgrpc "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
@@ -49,6 +50,14 @@ const (
 
 type s struct {
 	grpctest.Tester
+}
+
+func init() {
+	// The vmOnGCP global variable MUST be forced to true. Otherwise, if
+	// this test is run anywhere except on a GCP VM, then an ALTS handshake
+	// will immediately fail.
+	once.Do(func() {})
+	vmOnGCP = true
 }
 
 func Test(t *testing.T) {
@@ -308,13 +317,31 @@ func (s) TestCheckRPCVersions(t *testing.T) {
 // server, where both client and server offload to a local, fake handshaker
 // service.
 func (s) TestFullHandshake(t *testing.T) {
-	// The vmOnGCP global variable MUST be reset to true after the client
-	// or server credentials have been created, but before the ALTS
-	// handshake begins. If vmOnGCP is not reset and this test is run
-	// anywhere except for a GCP VM, then the ALTS handshake will
-	// immediately fail.
-	once.Do(func() {})
-	vmOnGCP = true
+	// Start the fake handshaker service and the server.
+	var wait sync.WaitGroup
+	defer wait.Wait()
+	stopHandshaker, handshakerAddress := startFakeHandshakerService(t, &wait)
+	defer stopHandshaker()
+	stopServer, serverAddress := startServer(t, handshakerAddress, &wait)
+	defer stopServer()
+
+	// Ping the server, authenticating with ALTS.
+	establishAltsConnection(t, handshakerAddress, serverAddress)
+
+	// Close open connections to the fake handshaker service.
+	if err := service.CloseForTesting(); err != nil {
+		t.Errorf("service.CloseForTesting() failed: %v", err)
+	}
+}
+
+// TestConcurrentHandshakes performs a several, concurrent ALTS handshakes
+// between a test client and server, where both client and server offload to a
+// local, fake handshaker service.
+func (s) TestConcurrentHandshakes(t *testing.T) {
+	// Set the max number of concurrent handshakes to 3, so that we can
+	// test the handshaker behavior when handshakes are queued by
+	// performing more than 3 concurrent handshakes (specifically, 10).
+	handshaker.ResetConcurrentHandshakeSemaphoreForTesting(3)
 
 	// Start the fake handshaker service and the server.
 	var wait sync.WaitGroup
@@ -325,6 +352,37 @@ func (s) TestFullHandshake(t *testing.T) {
 	defer stopServer()
 
 	// Ping the server, authenticating with ALTS.
+	var waitForConnections sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		waitForConnections.Add(1)
+		go func() {
+			establishAltsConnection(t, handshakerAddress, serverAddress)
+			waitForConnections.Done()
+		}()
+	}
+	waitForConnections.Wait()
+
+	// Close open connections to the fake handshaker service.
+	if err := service.CloseForTesting(); err != nil {
+		t.Errorf("service.CloseForTesting() failed: %v", err)
+	}
+}
+
+func version(major, minor uint32) *altspb.RpcProtocolVersions_Version {
+	return &altspb.RpcProtocolVersions_Version{
+		Major: major,
+		Minor: minor,
+	}
+}
+
+func versions(minMajor, minMinor, maxMajor, maxMinor uint32) *altspb.RpcProtocolVersions {
+	return &altspb.RpcProtocolVersions{
+		MinRpcVersion: version(minMajor, minMinor),
+		MaxRpcVersion: version(maxMajor, maxMinor),
+	}
+}
+
+func establishAltsConnection(t *testing.T, handshakerAddress, serverAddress string) {
 	clientCreds := NewClientCreds(&ClientOptions{HandshakerServiceAddress: handshakerAddress})
 	conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(clientCreds))
 	if err != nil {
@@ -344,25 +402,6 @@ func (s) TestFullHandshake(t *testing.T) {
 			continue
 		}
 		t.Fatalf("c.UnaryCall() failed: %v", err)
-	}
-
-	// Close open connections to the fake handshaker service.
-	if err := service.CloseForTesting(); err != nil {
-		t.Errorf("service.CloseForTesting() failed: %v", err)
-	}
-}
-
-func version(major, minor uint32) *altspb.RpcProtocolVersions_Version {
-	return &altspb.RpcProtocolVersions_Version{
-		Major: major,
-		Minor: minor,
-	}
-}
-
-func versions(minMajor, minMinor, maxMajor, maxMinor uint32) *altspb.RpcProtocolVersions {
-	return &altspb.RpcProtocolVersions{
-		MinRpcVersion: version(minMajor, minMinor),
-		MaxRpcVersion: version(maxMajor, maxMinor),
 	}
 }
 

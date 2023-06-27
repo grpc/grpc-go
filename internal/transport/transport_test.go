@@ -297,7 +297,7 @@ type server struct {
 	port       string
 	startedErr chan error // error (or nil) with server start value
 	mu         sync.Mutex
-	conns      map[ServerTransport]bool
+	conns      map[ServerTransport]net.Conn
 	h          *testStreamHandler
 	ready      chan struct{}
 	channelzID *channelz.Identifier
@@ -329,13 +329,14 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		return
 	}
 	s.port = p
-	s.conns = make(map[ServerTransport]bool)
+	s.conns = make(map[ServerTransport]net.Conn)
 	s.startedErr <- nil
 	for {
 		conn, err := s.lis.Accept()
 		if err != nil {
 			return
 		}
+		rawConn := conn
 		transport, err := NewServerTransport(conn, serverConfig)
 		if err != nil {
 			return
@@ -346,7 +347,7 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 			transport.Close(errors.New("s.conns is nil"))
 			return
 		}
-		s.conns[transport] = true
+		s.conns[transport] = rawConn
 		h := &testStreamHandler{t: transport.(*http2Server)}
 		s.h = h
 		s.mu.Unlock()

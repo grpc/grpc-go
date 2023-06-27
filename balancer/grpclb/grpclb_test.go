@@ -973,7 +973,7 @@ func (s) TestGRPCLB_FallBackWithNoServerAddress(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		defer cancel()
 		if err := resolveNowCh.SendContext(ctx, nil); err != nil {
-			t.Error("timeout when attemping to send on resolverNowCh")
+			t.Error("timeout when attempting to send on resolverNowCh")
 		}
 	}
 
