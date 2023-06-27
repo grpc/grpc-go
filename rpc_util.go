@@ -803,7 +803,7 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 	if payInfo != nil {
 		payInfo.uncompressedBytes = buf
 	} else {
-		p.recvBufferPool.Put(buf)
+		p.recvBufferPool.Put(&buf)
 	}
 	return nil
 }

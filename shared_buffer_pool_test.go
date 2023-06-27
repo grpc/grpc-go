@@ -42,7 +42,7 @@ func (s) TestSharedBufferPool(t *testing.T) {
 				t.Fatalf("Expected buffer of length %d, got %d", l, len(bs))
 			}
 
-			p.Put(bs)
+			p.Put(&bs)
 		}
 	}
 }
