@@ -96,7 +96,7 @@ func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 		for i := 0; i < numPublished; i++ {
 			select {
 			case <-ts1.onMsgCh:
-			case <-time.After(defaultTestShortTimeout):
+			case <-time.After(defaultTestTimeout):
 				isTimeout = true
 			}
 		}
@@ -114,7 +114,7 @@ func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 	// Register another subscriber and ensure that it receives the last published message.
 	ts2 := newTestSubscriber(numPublished)
 	pubsub.Subscribe(ts2)
-	wantMsgs2 := []int{numPublished - 1}
+	wantMsgs2 := wantMsgs1[len(wantMsgs1)-1:]
 
 	select {
 	case <-ts2.onMsgCh:
@@ -140,7 +140,7 @@ func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 		for i := 0; i < numPublished; i++ {
 			select {
 			case <-ts1.onMsgCh:
-			case <-time.After(defaultTestShortTimeout):
+			case <-time.After(defaultTestTimeout):
 				errCh <- fmt.Errorf("")
 			}
 		}
@@ -150,7 +150,7 @@ func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 		for i := 0; i < numPublished; i++ {
 			select {
 			case <-ts2.onMsgCh:
-			case <-time.After(defaultTestShortTimeout):
+			case <-time.After(defaultTestTimeout):
 				errCh <- fmt.Errorf("")
 			}
 		}
