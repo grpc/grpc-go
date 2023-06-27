@@ -25,6 +25,7 @@ import (
 	"net"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -922,23 +923,36 @@ func (s) TestServeReturnsErrorAfterClose(t *testing.T) {
 	}
 
 	server.Stop()
-	serveDone := testutils.NewChannel()
-	// Do this in a goroutine, even though should just receive error. This is to
-	// prevent blocking for (which comes after, so doesn't apply here), but
-	// mainly to wrap this err Receive operation with a testing timeout.
-	go func() { serveDone.Send(server.Serve(lis)) }()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	v, err := serveDone.Receive(ctx)
-	if err != nil {
-		t.Fatalf("error when waiting for Serve() to exit: %v", err)
-	}
-	var ok bool
-	if err, ok = v.(error); !ok || err == nil {
-		t.Fatal("Serve() did not exit with error")
-	}
-	if !strings.Contains(err.Error(), grpc.ErrServerStopped.Error()) {
+	err = server.Serve(lis)
+	if err == nil || !strings.Contains(err.Error(), grpc.ErrServerStopped.Error()) {
 		t.Fatalf("server erorred with wrong error, want: %v, got :%v", grpc.ErrServerStopped, err)
 	}
+}
+
+// TestServeAndCloseDoNotRace tests that Serve and Close on the xDS Server do
+// not race and leak the xDS Client. A race would be found by the leak checker.
+func (s) TestServeAndCloseDoNotRace(t *testing.T) {
+	cleanup := setupClientOverride(t)
+	defer cleanup()
+
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+
+	wg := sync.WaitGroup{}
+	for i := 0; i < 100; i++ {
+		server := NewGRPCServer()
+		wg.Add(1)
+		go func() {
+			server.Serve(lis)
+			wg.Done()
+		}()
+		wg.Add(1)
+		go func() {
+			server.Stop()
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
