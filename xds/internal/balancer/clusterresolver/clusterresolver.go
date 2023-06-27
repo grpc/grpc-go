@@ -25,21 +25,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
-	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/balancer/nop"
 	"google.golang.org/grpc/internal/buffer"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
@@ -65,12 +65,12 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 	priorityBuilder := balancer.Get(priority.Name)
 	if priorityBuilder == nil {
 		logger.Errorf("%q LB policy is needed but not registered", priority.Name)
-		return nil
+		return nop.NewBalancer(cc, fmt.Errorf("%q LB policy is needed but not registered", priority.Name))
 	}
 	priorityConfigParser, ok := priorityBuilder.(balancer.ConfigParser)
 	if !ok {
 		logger.Errorf("%q LB policy does not implement a config parser", priority.Name)
-		return nil
+		return nop.NewBalancer(cc, fmt.Errorf("%q LB policy does not implement a config parser", priority.Name))
 	}
 
 	b := &clusterResolverBalancer{
@@ -99,15 +99,48 @@ func (bb) Name() string {
 	return Name
 }
 
-func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	var cfg LBConfig
-	if err := json.Unmarshal(c, &cfg); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal balancer config %s into cluster-resolver config, error: %v", string(c), err)
+func (bb) ParseConfig(j json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+	odBuilder := balancer.Get(outlierdetection.Name)
+	if odBuilder == nil {
+		// Shouldn't happen, registered through imported Outlier Detection,
+		// defensive programming.
+		return nil, fmt.Errorf("%q LB policy is needed but not registered", outlierdetection.Name)
 	}
-	if lbp := cfg.XDSLBPolicy; lbp != nil && !strings.EqualFold(lbp.Name, roundrobin.Name) && !strings.EqualFold(lbp.Name, ringhash.Name) {
-		return nil, fmt.Errorf("unsupported child policy with name %q, not one of {%q,%q}", lbp.Name, roundrobin.Name, ringhash.Name)
+	odParser, ok := odBuilder.(balancer.ConfigParser)
+	if !ok {
+		// Shouldn't happen, imported Outlier Detection builder has this method.
+		return nil, fmt.Errorf("%q LB policy does not implement a config parser", outlierdetection.Name)
 	}
-	return &cfg, nil
+
+	var cfg *LBConfig
+	if err := json.Unmarshal(j, &cfg); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal balancer config %s into cluster-resolver config, error: %v", string(j), err)
+	}
+
+	if envconfig.XDSOutlierDetection {
+		for i, dm := range cfg.DiscoveryMechanisms {
+			lbCfg, err := odParser.ParseConfig(dm.OutlierDetection)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing Outlier Detection config %v: %v", dm.OutlierDetection, err)
+			}
+			odCfg, ok := lbCfg.(*outlierdetection.LBConfig)
+			if !ok {
+				// Shouldn't happen, Parser built at build time with Outlier Detection
+				// builder pulled from gRPC LB Registry.
+				return nil, fmt.Errorf("odParser returned config with unexpected type %T: %v", lbCfg, lbCfg)
+			}
+			cfg.DiscoveryMechanisms[i].outlierDetection = *odCfg
+		}
+	}
+	if err := json.Unmarshal(cfg.XDSLBPolicy, &cfg.xdsLBPolicy); err != nil {
+		// This will never occur, valid configuration is emitted from the xDS
+		// Client. Validity is already checked in the xDS Client, however, this
+		// double validation is present because Unmarshalling and Validating are
+		// coupled into one json.Unmarshal operation). We will switch this in
+		// the future to two separate operations.
+		return nil, fmt.Errorf("error unmarshaling xDS LB Policy: %v", err)
+	}
+	return cfg, nil
 }
 
 // ccUpdate wraps a clientConn update received from gRPC.
@@ -208,7 +241,7 @@ func (b *clusterResolverBalancer) updateChildConfig() {
 		b.child = newChildBalancer(b.priorityBuilder, b.cc, b.bOpts)
 	}
 
-	childCfgBytes, addrs, err := buildPriorityConfigJSON(b.priorities, b.config.XDSLBPolicy)
+	childCfgBytes, addrs, err := buildPriorityConfigJSON(b.priorities, &b.config.xdsLBPolicy)
 	if err != nil {
 		b.logger.Warningf("Failed to build child policy config: %v", err)
 		return
@@ -265,7 +298,10 @@ func (b *clusterResolverBalancer) handleErrorFromUpdate(err error, fromParent bo
 func (b *clusterResolverBalancer) run() {
 	for {
 		select {
-		case u := <-b.updateCh.Get():
+		case u, ok := <-b.updateCh.Get():
+			if !ok {
+				return
+			}
 			b.updateCh.Load()
 			switch update := u.(type) {
 			case *ccUpdate:
@@ -303,6 +339,7 @@ func (b *clusterResolverBalancer) run() {
 				b.child.Close()
 				b.child = nil
 			}
+			b.updateCh.Close()
 			// This is the *ONLY* point of return from this function.
 			b.logger.Infof("Shutdown")
 			b.done.Fire()

@@ -26,8 +26,10 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/grpcsync"
+	util "google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal"
+
 	"google.golang.org/grpc/xds/internal/testutils"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -36,8 +38,6 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
 )
 
@@ -87,18 +87,7 @@ func setupTest(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptio
 func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	// Setting up a mgmt server with a done channel when OnStreamRequest is invoked.
-	serverOnReqDoneCh := make(chan struct{})
-	serverOpt := e2e.ManagementServerOptions{
-		OnStreamRequest: func(int64, *v3discoverypb.DiscoveryRequest) error {
-			select {
-			case serverOnReqDoneCh <- struct{}{}:
-			default:
-			}
-			return nil
-		},
-	}
-	a, ms, nodeID := setupTest(ctx, t, serverOpt, defaultTestTimeout)
+	a, ms, nodeID := setupTest(ctx, t, emptyServerOpts, defaultTestTimeout)
 	defer ms.Stop()
 	defer a.close()
 
@@ -107,16 +96,16 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	cancelResource := a.watchResource(listenerResourceType, rn, w)
 	defer cancelResource()
 
-	if err := compareWatchState(a, rn, watchStateStarted); err != nil {
-		t.Fatal(err)
+	// Looping until the underlying transport has successfully sent the request to
+	// the server, which would call the onSend callback and transition the watchState
+	// to `watchStateRequested`.
+	for ctx.Err() == nil {
+		if err := compareWatchState(a, rn, watchStateRequested); err == nil {
+			break
+		}
 	}
-
-	// This blocking read is to verify that the underlying transport has successfully
-	// sent the request to the server, hence the onSend callback was already invoked.
-	// onSend callback should transition the watchState to `watchStateRequested`.
-	<-serverOnReqDoneCh
-	if err := compareWatchState(a, rn, watchStateRequested); err != nil {
-		t.Fatal(err)
+	if ctx.Err() != nil {
+		t.Fatalf("Test timed out before state transiton to %q was verified.", watchStateRequested)
 	}
 
 	// Updating mgmt server with the same lds resource. Blocking on watcher's update
@@ -124,16 +113,18 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	if err := updateResourceInServer(ctx, ms, rn, nodeID); err != nil {
 		t.Fatalf("Failed to update server with resource: %q; err: %q", rn, err)
 	}
-	select {
-	case <-ctx.Done():
-		t.Fatal("Test timed out before watcher received an update from server.")
-	case err := <-w.ErrorCh:
-		t.Fatalf("Watch got an unexpected error update: %q. Want valid updates.", err)
-	case <-w.UpdateCh:
-		// This means the OnUpdate callback was invoked and the watcher was notified.
-	}
-	if err := compareWatchState(a, rn, watchStateReceived); err != nil {
-		t.Fatal(err)
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Test timed out before watcher received an update from server.")
+		case <-w.ErrorCh:
+		case <-w.UpdateCh:
+			// This means the OnUpdate callback was invoked and the watcher was notified.
+			if err := compareWatchState(a, rn, watchStateReceived); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
 	}
 }
 
@@ -173,21 +164,39 @@ func (s) TestTimerAndWatchStateOnErrorCallback(t *testing.T) {
 
 // This tests the case where the ADS stream breaks after successfully receiving
 // a message on the stream. The test performs the following:
-//   - configures the management server with resourceA.
+//   - configures the management server with the ability to dropRequests based on
+//     a boolean flag.
+//   - update the mgmt server with resourceA.
 //   - registers a watch for resourceA and verifies that the watcher's update
 //     callback is invoked.
 //   - registers a watch for resourceB and verifies that the watcher's update
 //     callback is not invoked. This is because the management server does not
 //     contain resourceB.
-//   - stops the management server to verify that the error propagated to the
-//     watcher is a connection error. This happens when the authority attempts
-//     to create a new stream.
+//   - force mgmt server to drop requests. Verify that watcher for resourceB gets
+//     connection error.
+//   - resume mgmt server to accept requests.
+//   - update the mgmt server with resourceB and verifies that the watcher's
+//     update callback is invoked.
 func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	// Create a restartable listener which can close existing connections.
+	l, err := util.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	lis := util.NewRestartableListener(l)
+	defer lis.Close()
+	streamRestarted := grpcsync.NewEvent()
+	serverOpt := e2e.ManagementServerOptions{
+		Listener: lis,
+		OnStreamClosed: func(int64, *v3corepb.Node) {
+			streamRestarted.Fire()
+		},
+	}
 
-	// Using a shorter expiry timeout to verify that the watch timeout was never fired.
-	a, ms, nodeID := setupTest(ctx, t, emptyServerOpts, defaultTestWatchExpiryTimeout)
+	a, ms, nodeID := setupTest(ctx, t, serverOpt, defaultTestTimeout)
+	defer ms.Stop()
 	defer a.close()
 
 	nameA := "xdsclient-test-lds-resourceA"
@@ -208,6 +217,9 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	case <-watcherA.UpdateCh:
 	}
 
+	cancelA()
+	lis.Stop()
+
 	nameB := "xdsclient-test-lds-resourceB"
 	watcherB := testutils.NewTestResourceWatcher()
 	cancelB := a.watchResource(listenerResourceType, nameB, watcherB)
@@ -215,14 +227,15 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 
 	// Blocking on resource B watcher's error channel. This error should be due to
 	// connectivity issue when reconnecting because the mgmt server was already been
-	// stopped. ALl other errors or an update will fail the test.
-	cancelA()
-	ms.Stop()
+	// stopped. Also verifying that OnResourceDoesNotExist() method was not invoked
+	// on the watcher.
 	select {
 	case <-ctx.Done():
 		t.Fatal("Test timed out before mgmt server got the request.")
 	case u := <-watcherB.UpdateCh:
 		t.Fatalf("Watch got an unexpected resource update: %v.", u)
+	case <-watcherB.ResourceDoesNotExistCh:
+		t.Fatalf("Illegal invocation of OnResourceDoesNotExist() method on the watcher.")
 	case gotErr := <-watcherB.ErrorCh:
 		wantErr := xdsresource.ErrorTypeConnection
 		if xdsresource.ErrType(gotErr) != wantErr {
@@ -230,13 +243,20 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 		}
 	}
 
-	// Since there was already a response on the stream, the timer for resource B
-	// should not fire. If the timer did fire, watch state would be in `watchStateTimeout`.
-	<-time.After(defaultTestWatchExpiryTimeout)
-	if err := compareWatchState(a, nameB, watchStateStarted); err != nil {
-		t.Fatalf("Invalid watch state: %v.", err)
+	// Updating server with resource B and also re-enabling requests on the server.
+	if err := updateResourceInServer(ctx, ms, nameB, nodeID); err != nil {
+		t.Fatalf("Failed to update server with resource: %q; err: %q", nameB, err)
 	}
+	lis.Restart()
 
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Test timed out before watcher received the update.")
+		case <-watcherB.UpdateCh:
+			return
+		}
+	}
 }
 
 func compareWatchState(a *authority, rn string, wantState watchState) error {
@@ -244,7 +264,7 @@ func compareWatchState(a *authority, rn string, wantState watchState) error {
 	defer a.resourcesMu.Unlock()
 	gotState := a.resources[listenerResourceType][rn].wState
 	if gotState != wantState {
-		return fmt.Errorf("%v. Want: %v", gotState, wantState)
+		return fmt.Errorf("Got %v. Want: %v", gotState, wantState)
 	}
 
 	wTimer := a.resources[listenerResourceType][rn].wTimer

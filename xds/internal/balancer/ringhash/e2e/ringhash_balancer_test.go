@@ -31,8 +31,8 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 
 	_ "google.golang.org/grpc/xds/internal/balancer/ringhash" // Register the ring_hash_experimental LB policy.
 )
@@ -51,7 +51,7 @@ const (
 )
 
 type testService struct {
-	testpb.TestServiceServer
+	testgrpc.TestServiceServer
 }
 
 func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
@@ -119,10 +119,7 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	// Make an RPC to get the ring_hash LB policy to reconnect and thereby move
 	// to TRANSIENT_FAILURE upon connection failure.
 	client.EmptyCall(ctx, &testpb.Empty{})
-	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		if cc.GetState() == connectivity.TransientFailure {
-			break
-		}
+	for state := cc.GetState(); state != connectivity.TransientFailure && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
 	}
 	if err := ctx.Err(); err != nil {
 		t.Fatalf("Timeout waiting for channel to reach %q after server shutdown: %v", connectivity.TransientFailure, err)

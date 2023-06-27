@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
+	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -57,9 +58,22 @@ var (
 			Type: "insecure",
 		},
 	}
-	noopODLBCfg = outlierdetection.LBConfig{
-		Interval: 1<<63 - 1,
+	noopODLBCfg         = outlierdetection.LBConfig{}
+	noopODLBCfgJSON, _  = json.Marshal(noopODLBCfg)
+	wrrLocalityLBConfig = &internalserviceconfig.BalancerConfig{
+		Name: wrrlocality.Name,
+		Config: &wrrlocality.LBConfig{
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name: "round_robin",
+			},
+		},
 	}
+	wrrLocalityLBConfigJSON, _ = json.Marshal(wrrLocalityLBConfig)
+	ringHashLBConfig           = &internalserviceconfig.BalancerConfig{
+		Name:   ringhash.Name,
+		Config: &ringhash.LBConfig{MinRingSize: 10, MaxRingSize: 100},
+	}
+	ringHashLBConfigJSON, _ = json.Marshal(ringHashLBConfig)
 )
 
 type s struct {
@@ -151,7 +165,11 @@ func (tb *testEDSBalancer) waitForClientConnUpdate(ctx context.Context, wantCCS 
 	if xdsclient.FromResolverState(gotCCS.ResolverState) == nil {
 		return fmt.Errorf("want resolver state with XDSClient attached, got one without")
 	}
-	if diff := cmp.Diff(gotCCS, wantCCS, cmpopts.IgnoreFields(resolver.State{}, "Attributes")); diff != "" {
+
+	// Calls into Cluster Resolver LB Config Equal(), which ignores JSON
+	// configuration but compares the Parsed Configuration of the JSON fields
+	// emitted from ParseConfig() on the cluster resolver.
+	if diff := cmp.Diff(gotCCS, wantCCS, cmpopts.IgnoreFields(resolver.State{}, "Attributes"), cmp.AllowUnexported(clusterresolver.LBConfig{})); diff != "" {
 		return fmt.Errorf("received unexpected ClientConnState, diff (-got +want): %v", diff)
 	}
 	return nil
@@ -214,9 +232,26 @@ func cdsCCS(cluster string, xdsC xdsclient.XDSClient) balancer.ClientConnState {
 	}
 }
 
-// edsCCS is a helper function to construct a good update passed from the
-// cdsBalancer to the edsBalancer.
-func edsCCS(service string, countMax *uint32, enableLRS bool, xdslbpolicy *internalserviceconfig.BalancerConfig, odConfig outlierdetection.LBConfig) balancer.ClientConnState {
+// edsCCS is a helper function to construct a Client Conn update which
+// represents what the CDS Balancer passes to the Cluster Resolver. It calls
+// into Cluster Resolver's ParseConfig to get the service config to fill out the
+// Client Conn State. This is to fill out unexported parts of the Cluster
+// Resolver config struct. Returns an empty Client Conn State if it encounters
+// an error building out the Client Conn State.
+func edsCCS(service string, countMax *uint32, enableLRS bool, xdslbpolicy json.RawMessage, odConfig json.RawMessage) balancer.ClientConnState {
+	builder := balancer.Get(clusterresolver.Name)
+	if builder == nil {
+		// Shouldn't happen, registered through imported Cluster Resolver,
+		// defensive programming.
+		logger.Errorf("%q LB policy is needed but not registered", clusterresolver.Name)
+		return balancer.ClientConnState{} // will fail the calling test eventually through error in diff.
+	}
+	crParser, ok := builder.(balancer.ConfigParser)
+	if !ok {
+		// Shouldn't happen, imported Cluster Resolver builder has this method.
+		logger.Errorf("%q LB policy does not implement a config parser", clusterresolver.Name)
+		return balancer.ClientConnState{}
+	}
 	discoveryMechanism := clusterresolver.DiscoveryMechanism{
 		Type:                  clusterresolver.DiscoveryMechanismTypeEDS,
 		Cluster:               service,
@@ -231,8 +266,21 @@ func edsCCS(service string, countMax *uint32, enableLRS bool, xdslbpolicy *inter
 		XDSLBPolicy:         xdslbpolicy,
 	}
 
+	crLBCfgJSON, err := json.Marshal(lbCfg)
+	if err != nil {
+		// Shouldn't happen, since we just prepared struct.
+		logger.Errorf("cds_balancer: error marshalling prepared config: %v", lbCfg)
+		return balancer.ClientConnState{}
+	}
+
+	var sc serviceconfig.LoadBalancingConfig
+	if sc, err = crParser.ParseConfig(crLBCfgJSON); err != nil {
+		logger.Errorf("cds_balancer: cluster_resolver config generated %v is invalid: %v", crLBCfgJSON, err)
+		return balancer.ClientConnState{}
+	}
+
 	return balancer.ClientConnState{
-		BalancerConfig: lbCfg,
+		BalancerConfig: sc,
 	}
 }
 
@@ -381,60 +429,86 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 		wantCCS   balancer.ClientConnState
 	}{
 		{
-			name:      "happy-case-with-lrs",
-			cdsUpdate: xdsresource.ClusterUpdate{ClusterName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf},
-			wantCCS:   edsCCS(serviceName, nil, true, nil, noopODLBCfg),
+			name: "happy-case-with-lrs",
+			cdsUpdate: xdsresource.ClusterUpdate{
+				ClusterName:     serviceName,
+				LRSServerConfig: xdsresource.ClusterLRSServerSelf,
+				LBPolicy:        wrrLocalityLBConfigJSON,
+			},
+			wantCCS: edsCCS(serviceName, nil, true, wrrLocalityLBConfigJSON, noopODLBCfgJSON),
 		},
 		{
-			name:      "happy-case-without-lrs",
-			cdsUpdate: xdsresource.ClusterUpdate{ClusterName: serviceName},
-			wantCCS:   edsCCS(serviceName, nil, false, nil, noopODLBCfg),
+			name: "happy-case-without-lrs",
+			cdsUpdate: xdsresource.ClusterUpdate{
+				ClusterName: serviceName,
+				LBPolicy:    wrrLocalityLBConfigJSON,
+			},
+			wantCCS: edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON),
 		},
 		{
 			name: "happy-case-with-ring-hash-lb-policy",
 			cdsUpdate: xdsresource.ClusterUpdate{
 				ClusterName: serviceName,
-				LBPolicy:    &xdsresource.ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
+				LBPolicy:    ringHashLBConfigJSON,
 			},
-			wantCCS: edsCCS(serviceName, nil, false, &internalserviceconfig.BalancerConfig{
-				Name:   ringhash.Name,
-				Config: &ringhash.LBConfig{MinRingSize: 10, MaxRingSize: 100},
-			}, noopODLBCfg),
+			wantCCS: edsCCS(serviceName, nil, false, ringHashLBConfigJSON, noopODLBCfgJSON),
 		},
 		{
-			name: "happy-case-outlier-detection",
-			cdsUpdate: xdsresource.ClusterUpdate{ClusterName: serviceName, OutlierDetection: &xdsresource.OutlierDetection{
-				Interval:                       10 * time.Second,
-				BaseEjectionTime:               30 * time.Second,
-				MaxEjectionTime:                300 * time.Second,
-				MaxEjectionPercent:             10,
-				SuccessRateStdevFactor:         1900,
-				EnforcingSuccessRate:           100,
-				SuccessRateMinimumHosts:        5,
-				SuccessRateRequestVolume:       100,
-				FailurePercentageThreshold:     85,
-				EnforcingFailurePercentage:     5,
-				FailurePercentageMinimumHosts:  5,
-				FailurePercentageRequestVolume: 50,
-			}},
-			wantCCS: edsCCS(serviceName, nil, false, nil, outlierdetection.LBConfig{
-				Interval:           10 * time.Second,
-				BaseEjectionTime:   30 * time.Second,
-				MaxEjectionTime:    300 * time.Second,
-				MaxEjectionPercent: 10,
-				SuccessRateEjection: &outlierdetection.SuccessRateEjection{
-					StdevFactor:           1900,
-					EnforcementPercentage: 100,
-					MinimumHosts:          5,
-					RequestVolume:         100,
+			name: "happy-case-outlier-detection-xds-defaults",
+			// i.e. od proto set but no proto fields set
+			cdsUpdate: xdsresource.ClusterUpdate{
+				ClusterName: serviceName,
+				OutlierDetection: json.RawMessage(`{
+				"successRateEjection": {}
+			}`),
+				LBPolicy: wrrLocalityLBConfigJSON,
+			},
+			wantCCS: edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, json.RawMessage(`{
+				"successRateEjection": {}
+			}`)),
+		},
+		{
+			name: "happy-case-outlier-detection-all-fields-set",
+			cdsUpdate: xdsresource.ClusterUpdate{
+				ClusterName: serviceName,
+				OutlierDetection: json.RawMessage(`{
+				"interval": "10s",
+				"baseEjectionTime": "30s",
+				"maxEjectionTime": "300s",
+				"maxEjectionPercent": 10,
+				"successRateEjection": {
+					"stdevFactor": 1900,
+					"enforcementPercentage": 100,
+					"minimumHosts": 5,
+					"requestVolume": 100
 				},
-				FailurePercentageEjection: &outlierdetection.FailurePercentageEjection{
-					Threshold:             85,
-					EnforcementPercentage: 5,
-					MinimumHosts:          5,
-					RequestVolume:         50,
+				"failurePercentageEjection": {
+					"threshold": 85,
+					"enforcementPercentage": 5,
+					"minimumHosts": 5,
+					"requestVolume": 50
+				}
+			}`),
+				LBPolicy: wrrLocalityLBConfigJSON,
+			},
+			wantCCS: edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, json.RawMessage(`{
+				"interval": "10s",
+				"baseEjectionTime": "30s",
+				"maxEjectionTime": "300s",
+				"maxEjectionPercent": 10,
+				"successRateEjection": {
+					"stdevFactor": 1900,
+					"enforcementPercentage": 100,
+					"minimumHosts": 5,
+					"requestVolume": 100
 				},
-			}),
+				"failurePercentageEjection": {
+					"threshold": 85,
+					"enforcementPercentage": 5,
+					"minimumHosts": 5,
+					"requestVolume": 50
+				}
+			}`)),
 		},
 	}
 
@@ -501,8 +575,11 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	cdsUpdate := xdsresource.ClusterUpdate{
+		ClusterName: serviceName,
+		LBPolicy:    wrrLocalityLBConfigJSON,
+	}
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -586,8 +663,11 @@ func (s) TestResolverError(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	cdsUpdate := xdsresource.ClusterUpdate{
+		ClusterName: serviceName,
+		LBPolicy:    wrrLocalityLBConfigJSON,
+	}
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -635,8 +715,11 @@ func (s) TestUpdateSubConnState(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	cdsUpdate := xdsresource.ClusterUpdate{
+		ClusterName: serviceName,
+		LBPolicy:    wrrLocalityLBConfigJSON,
+	}
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -665,13 +748,16 @@ func (s) TestCircuitBreaking(t *testing.T) {
 		cancel()
 		cdsB.Close()
 	}()
-
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will update
 	// the service's counter with the new max requests.
 	var maxRequests uint32 = 1
-	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: clusterName, MaxRequests: &maxRequests}
-	wantCCS := edsCCS(clusterName, &maxRequests, false, nil, noopODLBCfg)
+	cdsUpdate := xdsresource.ClusterUpdate{
+		ClusterName: clusterName,
+		MaxRequests: &maxRequests,
+		LBPolicy:    wrrLocalityLBConfigJSON,
+	}
+	wantCCS := edsCCS(clusterName, &maxRequests, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -699,14 +785,16 @@ func (s) TestClose(t *testing.T) {
 	// provided xdsClient.
 	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
 	defer cancel()
-
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	cdsUpdate := xdsresource.ClusterUpdate{
+		ClusterName: serviceName,
+		LBPolicy:    wrrLocalityLBConfigJSON,
+	}
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -776,8 +864,11 @@ func (s) TestExitIdle(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	cdsUpdate := xdsresource.ClusterUpdate{
+		ClusterName: serviceName,
+		LBPolicy:    wrrLocalityLBConfigJSON,
+	}
+	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -835,133 +926,6 @@ func (s) TestParseConfig(t *testing.T) {
 			}
 			if !cmp.Equal(gotCfg, test.wantCfg) {
 				t.Fatalf("ParseConfig(%v) = %v, want %v", string(test.input), gotCfg, test.wantCfg)
-			}
-		})
-	}
-}
-
-func (s) TestOutlierDetectionToConfig(t *testing.T) {
-	tests := []struct {
-		name        string
-		od          *xdsresource.OutlierDetection
-		odLBCfgWant outlierdetection.LBConfig
-	}{
-		// "if the outlier_detection field is not set in the Cluster resource,
-		// a "no-op" outlier_detection config will be generated in the
-		// corresponding DiscoveryMechanism config, with interval set to the
-		// maximum possible value and all other fields unset." - A50
-		{
-			name:        "no-op-outlier-detection-config",
-			od:          nil,
-			odLBCfgWant: noopODLBCfg,
-		},
-		// "if the enforcing_success_rate field is set to 0, the config
-		// success_rate_ejection field will be null and all success_rate_*
-		// fields will be ignored." - A50
-		{
-			name: "enforcing-success-rate-zero",
-			od: &xdsresource.OutlierDetection{
-				Interval:                       10 * time.Second,
-				BaseEjectionTime:               30 * time.Second,
-				MaxEjectionTime:                300 * time.Second,
-				MaxEjectionPercent:             10,
-				SuccessRateStdevFactor:         1900,
-				EnforcingSuccessRate:           0,
-				SuccessRateMinimumHosts:        5,
-				SuccessRateRequestVolume:       100,
-				FailurePercentageThreshold:     85,
-				EnforcingFailurePercentage:     5,
-				FailurePercentageMinimumHosts:  5,
-				FailurePercentageRequestVolume: 50,
-			},
-			odLBCfgWant: outlierdetection.LBConfig{
-				Interval:            10 * time.Second,
-				BaseEjectionTime:    30 * time.Second,
-				MaxEjectionTime:     300 * time.Second,
-				MaxEjectionPercent:  10,
-				SuccessRateEjection: nil,
-				FailurePercentageEjection: &outlierdetection.FailurePercentageEjection{
-					Threshold:             85,
-					EnforcementPercentage: 5,
-					MinimumHosts:          5,
-					RequestVolume:         50,
-				},
-			},
-		},
-		// "If the enforcing_failure_percent field is set to 0 or null, the
-		// config failure_percent_ejection field will be null and all
-		// failure_percent_* fields will be ignored." - A50
-		{
-			name: "enforcing-failure-percentage-zero",
-			od: &xdsresource.OutlierDetection{
-				Interval:                       10 * time.Second,
-				BaseEjectionTime:               30 * time.Second,
-				MaxEjectionTime:                300 * time.Second,
-				MaxEjectionPercent:             10,
-				SuccessRateStdevFactor:         1900,
-				EnforcingSuccessRate:           100,
-				SuccessRateMinimumHosts:        5,
-				SuccessRateRequestVolume:       100,
-				FailurePercentageThreshold:     85,
-				EnforcingFailurePercentage:     0,
-				FailurePercentageMinimumHosts:  5,
-				FailurePercentageRequestVolume: 50,
-			},
-			odLBCfgWant: outlierdetection.LBConfig{
-				Interval:           10 * time.Second,
-				BaseEjectionTime:   30 * time.Second,
-				MaxEjectionTime:    300 * time.Second,
-				MaxEjectionPercent: 10,
-				SuccessRateEjection: &outlierdetection.SuccessRateEjection{
-					StdevFactor:           1900,
-					EnforcementPercentage: 100,
-					MinimumHosts:          5,
-					RequestVolume:         100,
-				},
-				FailurePercentageEjection: nil,
-			},
-		},
-		{
-			name: "normal-conversion",
-			od: &xdsresource.OutlierDetection{
-				Interval:                       10 * time.Second,
-				BaseEjectionTime:               30 * time.Second,
-				MaxEjectionTime:                300 * time.Second,
-				MaxEjectionPercent:             10,
-				SuccessRateStdevFactor:         1900,
-				EnforcingSuccessRate:           100,
-				SuccessRateMinimumHosts:        5,
-				SuccessRateRequestVolume:       100,
-				FailurePercentageThreshold:     85,
-				EnforcingFailurePercentage:     5,
-				FailurePercentageMinimumHosts:  5,
-				FailurePercentageRequestVolume: 50,
-			},
-			odLBCfgWant: outlierdetection.LBConfig{
-				Interval:           10 * time.Second,
-				BaseEjectionTime:   30 * time.Second,
-				MaxEjectionTime:    300 * time.Second,
-				MaxEjectionPercent: 10,
-				SuccessRateEjection: &outlierdetection.SuccessRateEjection{
-					StdevFactor:           1900,
-					EnforcementPercentage: 100,
-					MinimumHosts:          5,
-					RequestVolume:         100,
-				},
-				FailurePercentageEjection: &outlierdetection.FailurePercentageEjection{
-					Threshold:             85,
-					EnforcementPercentage: 5,
-					MinimumHosts:          5,
-					RequestVolume:         50,
-				},
-			},
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			odLBCfgGot := outlierDetectionToConfig(test.od)
-			if diff := cmp.Diff(odLBCfgGot, test.odLBCfgWant); diff != "" {
-				t.Fatalf("outlierDetectionToConfig(%v) (-want, +got):\n%s", test.od, diff)
 			}
 		})
 	}

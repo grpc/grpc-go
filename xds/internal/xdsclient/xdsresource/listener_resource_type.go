@@ -27,16 +27,21 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
+const (
+	// ListenerResourceTypeName represents the transport agnostic name for the
+	// listener resource.
+	ListenerResourceTypeName = "ListenerResource"
+)
+
 var (
 	// Compile time interface checks.
-	_ Type         = listenerResourceType{}
-	_ ResourceData = &ListenerResourceData{}
+	_ Type = listenerResourceType{}
 
 	// Singleton instantiation of the resource type implementation.
 	listenerType = listenerResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3ListenerURL,
-			typeEnum:                   ListenerResource,
+			typeName:                   ListenerResourceTypeName,
 			allResourcesRequiredInSotW: true,
 		},
 	}

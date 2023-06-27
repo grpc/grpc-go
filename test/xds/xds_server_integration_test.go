@@ -34,12 +34,12 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
 
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 type testService struct {
-	testpb.TestServiceServer
+	testgrpc.TestServiceServer
 }
 
 func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {

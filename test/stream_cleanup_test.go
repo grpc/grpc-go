@@ -28,7 +28,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/status"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 func (s) TestStreamCleanup(t *testing.T) {
@@ -68,7 +70,7 @@ func (s) TestStreamCleanupAfterSendStatus(t *testing.T) {
 	serverReturnedStatus := make(chan struct{})
 
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			defer func() {
 				close(serverReturnedStatus)
 			}()

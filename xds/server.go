@@ -272,6 +272,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 		// need to explicitly close the listener. Cancellation of the xDS watch
 		// is handled by the listenerWrapper.
 		lw.Close()
+		modeUpdateCh.Close()
 		return nil
 	case <-goodUpdateCh:
 	}
@@ -295,7 +296,10 @@ func (s *GRPCServer) handleServingModeChanges(updateCh *buffer.Unbounded) {
 		select {
 		case <-s.quit.Done():
 			return
-		case u := <-updateCh.Get():
+		case u, ok := <-updateCh.Get():
+			if !ok {
+				return
+			}
 			updateCh.Load()
 			args := u.(*modeChangeArgs)
 			if args.mode == connectivity.ServingModeNotServing {

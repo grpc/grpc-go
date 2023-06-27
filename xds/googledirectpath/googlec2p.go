@@ -120,7 +120,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	{
 		"server_uri": "%s",
 		"channel_creds": [{"type": "google_default"}],
-		"server_features": ["xds_v3"]
+		"server_features": ["xds_v3", "ignore_resource_deletion"]
 	}`, balancerName)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to build bootstrap configuration: %v", err)

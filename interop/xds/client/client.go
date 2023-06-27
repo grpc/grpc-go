@@ -43,6 +43,7 @@ import (
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	_ "google.golang.org/grpc/interop/xds" // to register Custom LB.
 )
 
 func init() {

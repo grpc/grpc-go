@@ -18,12 +18,11 @@
 package xdsresource
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
-	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/envconfig"
@@ -31,16 +30,19 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
+	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
+	v3ringhashpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/ring_hash/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	anypb "github.com/golang/protobuf/ptypes/any"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 const (
@@ -51,6 +53,11 @@ const (
 var emptyUpdate = ClusterUpdate{ClusterName: clusterName, LRSServerConfig: ClusterLRSOff}
 
 func (s) TestValidateCluster_Failure(t *testing.T) {
+	oldCustomLBSupport := envconfig.XDSCustomLBPolicy
+	envconfig.XDSCustomLBPolicy = true
+	defer func() {
+		envconfig.XDSCustomLBPolicy = oldCustomLBSupport
+	}()
 	tests := []struct {
 		name       string
 		cluster    *v3clusterpb.Cluster
@@ -155,39 +162,68 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 			wantErr:    true,
 		},
 		{
-			name: "ring-hash-min-bound-greater-than-max",
-			cluster: &v3clusterpb.Cluster{
-				LbPolicy: v3clusterpb.Cluster_RING_HASH,
-				LbConfig: &v3clusterpb.Cluster_RingHashLbConfig_{
-					RingHashLbConfig: &v3clusterpb.Cluster_RingHashLbConfig{
-						MinimumRingSize: wrapperspb.UInt64(100),
-						MaximumRingSize: wrapperspb.UInt64(10),
-					},
-				},
-			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
-		},
-		{
-			name: "ring-hash-min-bound-greater-than-upper-bound",
-			cluster: &v3clusterpb.Cluster{
-				LbPolicy: v3clusterpb.Cluster_RING_HASH,
-				LbConfig: &v3clusterpb.Cluster_RingHashLbConfig_{
-					RingHashLbConfig: &v3clusterpb.Cluster_RingHashLbConfig{
-						MinimumRingSize: wrapperspb.UInt64(ringHashSizeUpperBound + 1),
-					},
-				},
-			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
-		},
-		{
 			name: "ring-hash-max-bound-greater-than-upper-bound",
 			cluster: &v3clusterpb.Cluster{
 				LbPolicy: v3clusterpb.Cluster_RING_HASH,
 				LbConfig: &v3clusterpb.Cluster_RingHashLbConfig_{
 					RingHashLbConfig: &v3clusterpb.Cluster_RingHashLbConfig{
 						MaximumRingSize: wrapperspb.UInt64(ringHashSizeUpperBound + 1),
+					},
+				},
+			},
+			wantUpdate: emptyUpdate,
+			wantErr:    true,
+		},
+		{
+			name: "ring-hash-max-bound-greater-than-upper-bound-load-balancing-policy",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LoadBalancingPolicy: &v3clusterpb.LoadBalancingPolicy{
+					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+						{
+							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+								TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
+									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
+									MinimumRingSize: wrapperspb.UInt64(10),
+									MaximumRingSize: wrapperspb.UInt64(ringHashSizeUpperBound + 1),
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantUpdate: emptyUpdate,
+			wantErr:    true,
+		},
+		{
+			name: "least-request-unsupported-in-converter",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LoadBalancingPolicy: &v3clusterpb.LoadBalancingPolicy{
+					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+						{
+							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+								TypedConfig: testutils.MarshalAny(&v3leastrequestpb.LeastRequest{}),
+							},
+						},
 					},
 				},
 			},
@@ -243,230 +279,6 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 	}
 }
 
-func (s) TestValidateCluster_Success(t *testing.T) {
-	tests := []struct {
-		name       string
-		cluster    *v3clusterpb.Cluster
-		wantUpdate ClusterUpdate
-	}{
-		{
-			name: "happy-case-logical-dns",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_LOGICAL_DNS},
-				LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
-				LoadAssignment: &v3endpointpb.ClusterLoadAssignment{
-					Endpoints: []*v3endpointpb.LocalityLbEndpoints{{
-						LbEndpoints: []*v3endpointpb.LbEndpoint{{
-							HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{
-								Endpoint: &v3endpointpb.Endpoint{
-									Address: &v3corepb.Address{
-										Address: &v3corepb.Address_SocketAddress{
-											SocketAddress: &v3corepb.SocketAddress{
-												Address: "dns_host",
-												PortSpecifier: &v3corepb.SocketAddress_PortValue{
-													PortValue: 8080,
-												},
-											},
-										},
-									},
-								},
-							},
-						}},
-					}},
-				},
-			},
-			wantUpdate: ClusterUpdate{
-				ClusterName: clusterName,
-				ClusterType: ClusterTypeLogicalDNS,
-				DNSHostName: "dns_host:8080",
-			},
-		},
-		{
-			name: "happy-case-aggregate-v3",
-			cluster: &v3clusterpb.Cluster{
-				Name: clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
-					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
-						Name: "envoy.clusters.aggregate",
-						TypedConfig: testutils.MarshalAny(&v3aggregateclusterpb.ClusterConfig{
-							Clusters: []string{"a", "b", "c"},
-						}),
-					},
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-			},
-			wantUpdate: ClusterUpdate{
-				ClusterName: clusterName, LRSServerConfig: ClusterLRSOff, ClusterType: ClusterTypeAggregate,
-				PrioritizedClusterNames: []string{"a", "b", "c"},
-			},
-		},
-		{
-			name: "happy-case-no-service-name-no-lrs",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-			},
-			wantUpdate: emptyUpdate,
-		},
-		{
-			name: "happy-case-no-lrs",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: serviceName,
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-			},
-			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSOff},
-		},
-		{
-			name: "happiest-case",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: serviceName,
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
-					},
-				},
-			},
-			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf},
-		},
-		{
-			name: "happiest-case-with-circuitbreakers",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: serviceName,
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-				CircuitBreakers: &v3clusterpb.CircuitBreakers{
-					Thresholds: []*v3clusterpb.CircuitBreakers_Thresholds{
-						{
-							Priority:    v3corepb.RoutingPriority_DEFAULT,
-							MaxRequests: wrapperspb.UInt32(512),
-						},
-						{
-							Priority:    v3corepb.RoutingPriority_HIGH,
-							MaxRequests: nil,
-						},
-					},
-				},
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
-					},
-				},
-			},
-			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf, MaxRequests: func() *uint32 { i := uint32(512); return &i }()},
-		},
-		{
-			name: "happiest-case-with-ring-hash-lb-policy-with-default-config",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: serviceName,
-				},
-				LbPolicy: v3clusterpb.Cluster_RING_HASH,
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
-					},
-				},
-			},
-			wantUpdate: ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf,
-				LBPolicy: &ClusterLBPolicyRingHash{MinimumRingSize: defaultRingHashMinSize, MaximumRingSize: defaultRingHashMaxSize},
-			},
-		},
-		{
-			name: "happiest-case-with-ring-hash-lb-policy-with-none-default-config",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: serviceName,
-				},
-				LbPolicy: v3clusterpb.Cluster_RING_HASH,
-				LbConfig: &v3clusterpb.Cluster_RingHashLbConfig_{
-					RingHashLbConfig: &v3clusterpb.Cluster_RingHashLbConfig{
-						MinimumRingSize: wrapperspb.UInt64(10),
-						MaximumRingSize: wrapperspb.UInt64(100),
-					},
-				},
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
-					},
-				},
-			},
-			wantUpdate: ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf,
-				LBPolicy: &ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
-			},
-		},
-	}
-
-	oldAggregateAndDNSSupportEnv := envconfig.XDSAggregateAndDNS
-	envconfig.XDSAggregateAndDNS = true
-	defer func() { envconfig.XDSAggregateAndDNS = oldAggregateAndDNSSupportEnv }()
-	oldRingHashSupport := envconfig.XDSRingHash
-	envconfig.XDSRingHash = true
-	defer func() { envconfig.XDSRingHash = oldRingHashSupport }()
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			update, err := validateClusterAndConstructClusterUpdate(test.cluster)
-			if err != nil {
-				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) failed: %v", test.cluster, err)
-			}
-			if diff := cmp.Diff(update, test.wantUpdate, cmpopts.EquateEmpty()); diff != "" {
-				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) got diff: %v (-got, +want)", test.cluster, diff)
-			}
-		})
-	}
-}
-
 func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
 	// Turn off the env var protection for client-side security.
 	origClientSideSecurityEnvVar := envconfig.XDSClientSideSecurity
@@ -510,7 +322,7 @@ func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
 	if err != nil {
 		t.Errorf("validateClusterAndConstructClusterUpdate() failed: %v", err)
 	}
-	if diff := cmp.Diff(wantUpdate, gotUpdate); diff != "" {
+	if diff := cmp.Diff(wantUpdate, gotUpdate, cmpopts.IgnoreFields(ClusterUpdate{}, "LBPolicy")); diff != "" {
 		t.Errorf("validateClusterAndConstructClusterUpdate() returned unexpected diff (-want, got):\n%s", diff)
 	}
 }
@@ -1403,7 +1215,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 			if (err != nil) != test.wantErr {
 				t.Errorf("validateClusterAndConstructClusterUpdate() returned err %v wantErr %v)", err, test.wantErr)
 			}
-			if diff := cmp.Diff(test.wantUpdate, update, cmpopts.EquateEmpty(), cmp.AllowUnexported(regexp.Regexp{})); diff != "" {
+			if diff := cmp.Diff(test.wantUpdate, update, cmpopts.EquateEmpty(), cmp.AllowUnexported(regexp.Regexp{}), cmpopts.IgnoreFields(ClusterUpdate{}, "LBPolicy")); diff != "" {
 				t.Errorf("validateClusterAndConstructClusterUpdate() returned unexpected diff (-want, +got):\n%s", diff)
 			}
 		})
@@ -1545,7 +1357,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			if name != test.wantName {
 				t.Errorf("unmarshalClusterResource(%s), got name: %s, want: %s", pretty.ToJSON(test.resource), name, test.wantName)
 			}
-			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
+			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts, cmpopts.IgnoreFields(ClusterUpdate{}, "LBPolicy")); diff != "" {
 				t.Errorf("unmarshalClusterResource(%s), got unexpected update, diff (-got +want): %v", pretty.ToJSON(test.resource), diff)
 			}
 		})
@@ -1570,43 +1382,55 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 			OutlierDetection: od,
 		}
 	}
-	odToClusterUpdate := func(od *OutlierDetection) ClusterUpdate {
-		return ClusterUpdate{
-			ClusterName:      clusterName,
-			LRSServerConfig:  ClusterLRSOff,
-			OutlierDetection: od,
-		}
-	}
 
 	tests := []struct {
-		name       string
-		cluster    *v3clusterpb.Cluster
-		wantUpdate ClusterUpdate
-		wantErr    bool
+		name      string
+		cluster   *v3clusterpb.Cluster
+		wantODCfg string
+		wantErr   bool
 	}{
 		{
-			name: "successful-case-all-defaults",
-			// Outlier detection proto is present without any fields specified,
-			// so should trigger all default values in the update.
-			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{}),
-			wantUpdate: odToClusterUpdate(&OutlierDetection{
-				Interval:                       10 * time.Second,
-				BaseEjectionTime:               30 * time.Second,
-				MaxEjectionTime:                300 * time.Second,
-				MaxEjectionPercent:             10,
-				SuccessRateStdevFactor:         1900,
-				EnforcingSuccessRate:           100,
-				SuccessRateMinimumHosts:        5,
-				SuccessRateRequestVolume:       100,
-				FailurePercentageThreshold:     85,
-				EnforcingFailurePercentage:     0,
-				FailurePercentageMinimumHosts:  5,
-				FailurePercentageRequestVolume: 50,
-			}),
+			name:      "success-and-failure-null",
+			cluster:   odToClusterProto(&v3clusterpb.OutlierDetection{}),
+			wantODCfg: `{"successRateEjection": {}}`,
 		},
 		{
-			name: "successful-case-all-fields-configured-and-valid",
+			name: "success-and-failure-zero",
 			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{
+				EnforcingSuccessRate:       &wrapperspb.UInt32Value{Value: 0}, // Thus doesn't create sre - to focus on fpe
+				EnforcingFailurePercentage: &wrapperspb.UInt32Value{Value: 0},
+			}),
+			wantODCfg: `{}`,
+		},
+		{
+			name: "some-fields-set",
+			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{
+				Interval:                       &durationpb.Duration{Seconds: 1},
+				MaxEjectionTime:                &durationpb.Duration{Seconds: 3},
+				EnforcingSuccessRate:           &wrapperspb.UInt32Value{Value: 3},
+				SuccessRateRequestVolume:       &wrapperspb.UInt32Value{Value: 5},
+				EnforcingFailurePercentage:     &wrapperspb.UInt32Value{Value: 7},
+				FailurePercentageRequestVolume: &wrapperspb.UInt32Value{Value: 9},
+			}),
+			wantODCfg: `{
+				"interval": "1s",
+				"maxEjectionTime": "3s",
+				"successRateEjection": {
+					"enforcementPercentage": 3,
+					"requestVolume": 5
+				},
+				"failurePercentageEjection": {
+					"enforcementPercentage": 7,
+					"requestVolume": 9
+				}
+			}`,
+		},
+		{
+			name: "every-field-set-non-zero",
+			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{
+				// all fields set (including ones that will be layered) should
+				// pick up those too and explicitly all fields, including those
+				// put in layers, in the JSON generated.
 				Interval:                       &durationpb.Duration{Seconds: 1},
 				BaseEjectionTime:               &durationpb.Duration{Seconds: 2},
 				MaxEjectionTime:                &durationpb.Duration{Seconds: 3},
@@ -1620,20 +1444,24 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 				FailurePercentageMinimumHosts:  &wrapperspb.UInt32Value{Value: 8},
 				FailurePercentageRequestVolume: &wrapperspb.UInt32Value{Value: 9},
 			}),
-			wantUpdate: odToClusterUpdate(&OutlierDetection{
-				Interval:                       time.Second,
-				BaseEjectionTime:               time.Second * 2,
-				MaxEjectionTime:                time.Second * 3,
-				MaxEjectionPercent:             1,
-				SuccessRateStdevFactor:         2,
-				EnforcingSuccessRate:           3,
-				SuccessRateMinimumHosts:        4,
-				SuccessRateRequestVolume:       5,
-				FailurePercentageThreshold:     6,
-				EnforcingFailurePercentage:     7,
-				FailurePercentageMinimumHosts:  8,
-				FailurePercentageRequestVolume: 9,
-			}),
+			wantODCfg: `{
+				"interval": "1s",
+				"baseEjectionTime": "2s",
+				"maxEjectionTime": "3s",
+				"maxEjectionPercent": 1,
+				"successRateEjection": {
+					"stdevFactor": 2,
+					"enforcementPercentage": 3,
+					"minimumHosts": 4,
+					"requestVolume": 5
+				},
+				"failurePercentageEjection": {
+					"threshold": 6,
+					"enforcementPercentage": 7,
+					"minimumHosts": 8,
+					"requestVolume": 9
+				}
+			}`,
 		},
 		{
 			name:    "interval-is-negative",
@@ -1695,8 +1523,21 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 			if (err != nil) != test.wantErr {
 				t.Errorf("validateClusterAndConstructClusterUpdate() returned err %v wantErr %v)", err, test.wantErr)
 			}
-			if diff := cmp.Diff(test.wantUpdate, update, cmpopts.EquateEmpty()); diff != "" {
-				t.Errorf("validateClusterAndConstructClusterUpdate() returned unexpected diff (-want, +got):\n%s", diff)
+			if test.wantErr {
+				return
+			}
+			// got and want must be unmarshalled since JSON strings shouldn't
+			// generally be directly compared.
+			var got map[string]interface{}
+			if err := json.Unmarshal(update.OutlierDetection, &got); err != nil {
+				t.Fatalf("Error unmarshalling update.OutlierDetection (%q): %v", update.OutlierDetection, err)
+			}
+			var want map[string]interface{}
+			if err := json.Unmarshal(json.RawMessage(test.wantODCfg), &want); err != nil {
+				t.Fatalf("Error unmarshalling wantODCfg (%q): %v", test.wantODCfg, err)
+			}
+			if diff := cmp.Diff(got, want); diff != "" {
+				t.Fatalf("cluster.OutlierDetection got unexpected output, diff (-got, +want): %v", diff)
 			}
 		})
 	}

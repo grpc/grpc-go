@@ -21,8 +21,6 @@ package xds_test
 import (
 	"context"
 	"fmt"
-	"net"
-	"strconv"
 	"testing"
 	"time"
 
@@ -30,10 +28,11 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 type s struct {
@@ -49,44 +48,19 @@ const (
 	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
 )
 
-// startTestService spins up a server exposing the TestService on a local port.
-//
-// Returns the following:
-// - the port the server is listening on
-// - cleanup function to be invoked by the tests when done
-func startTestService(t *testing.T, server *stubserver.StubServer) (uint32, func()) {
-	if server == nil {
-		server = &stubserver.StubServer{
-			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
-		}
-	}
-	server.StartServer()
-
-	_, p, err := net.SplitHostPort(server.Address)
-	if err != nil {
-		t.Fatalf("invalid serving address for stub server: %v", err)
-	}
-	port, err := strconv.ParseUint(p, 10, 32)
-	if err != nil {
-		t.Fatalf("invalid serving port for stub server: %v", err)
-	}
-	t.Logf("Started test service backend at %q", server.Address)
-	return uint32(port), server.Stop
-}
-
 func (s) TestClientSideXDS(t *testing.T) {
 	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
-	port, cleanup2 := startTestService(t, nil)
-	defer cleanup2()
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
 
 	const serviceName = "my-service-client-side-xds"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
 		Host:       "localhost",
-		Port:       port,
+		Port:       testutils.ParsePort(t, server.Address),
 		SecLevel:   e2e.SecurityLevelNone,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

@@ -33,11 +33,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -52,15 +53,19 @@ func (s) TestOutlierDetection_NoopConfig(t *testing.T) {
 	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
-	port, cleanup2 := startTestService(t, nil)
-	defer cleanup2()
+	server := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+	}
+	server.StartServer()
+	t.Logf("Started test service backend at %q", server.Address)
+	defer server.Stop()
 
 	const serviceName = "my-service-client-side-xds"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
 		Host:       "localhost",
-		Port:       port,
+		Port:       testutils.ParsePort(t, server.Address),
 		SecLevel:   e2e.SecurityLevelNone,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -85,9 +90,9 @@ func (s) TestOutlierDetection_NoopConfig(t *testing.T) {
 // clientResourcesMultipleBackendsAndOD returns xDS resources which correspond
 // to multiple upstreams, corresponding different backends listening on
 // different localhost:port combinations. The resources also configure an
-// Outlier Detection Balancer set up with Failure Percentage Algorithm, which
-// ejects endpoints based on failure rate.
-func clientResourcesMultipleBackendsAndOD(params e2e.ResourceParams, ports []uint32) e2e.UpdateOptions {
+// Outlier Detection Balancer configured through the passed in Outlier Detection
+// proto.
+func clientResourcesMultipleBackendsAndOD(params e2e.ResourceParams, ports []uint32, od *v3clusterpb.OutlierDetection) e2e.UpdateOptions {
 	routeConfigName := "route-" + params.DialTarget
 	clusterName := "cluster-" + params.DialTarget
 	endpointsName := "endpoints-" + params.DialTarget
@@ -95,23 +100,14 @@ func clientResourcesMultipleBackendsAndOD(params e2e.ResourceParams, ports []uin
 		NodeID:    params.NodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(params.DialTarget, routeConfigName)},
 		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, params.DialTarget, clusterName)},
-		Clusters:  []*v3clusterpb.Cluster{clusterWithOutlierDetection(clusterName, endpointsName, params.SecLevel)},
+		Clusters:  []*v3clusterpb.Cluster{clusterWithOutlierDetection(clusterName, endpointsName, params.SecLevel, od)},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointsName, params.Host, ports)},
 	}
 }
 
-func clusterWithOutlierDetection(clusterName, edsServiceName string, secLevel e2e.SecurityLevel) *v3clusterpb.Cluster {
+func clusterWithOutlierDetection(clusterName, edsServiceName string, secLevel e2e.SecurityLevel, od *v3clusterpb.OutlierDetection) *v3clusterpb.Cluster {
 	cluster := e2e.DefaultCluster(clusterName, edsServiceName, secLevel)
-	cluster.OutlierDetection = &v3clusterpb.OutlierDetection{
-		Interval:                       &durationpb.Duration{Nanos: 50000000}, // .5 seconds
-		BaseEjectionTime:               &durationpb.Duration{Seconds: 30},
-		MaxEjectionTime:                &durationpb.Duration{Seconds: 300},
-		MaxEjectionPercent:             &wrapperspb.UInt32Value{Value: 1},
-		FailurePercentageThreshold:     &wrapperspb.UInt32Value{Value: 50},
-		EnforcingFailurePercentage:     &wrapperspb.UInt32Value{Value: 100},
-		FailurePercentageRequestVolume: &wrapperspb.UInt32Value{Value: 8},
-		FailurePercentageMinimumHosts:  &wrapperspb.UInt32Value{Value: 3},
-	}
+	cluster.OutlierDetection = od
 	return cluster
 }
 
@@ -121,7 +117,7 @@ func clusterWithOutlierDetection(clusterName, edsServiceName string, secLevel e2
 //
 // Returns a non-nil error if context deadline expires before RPCs start to get
 // roundrobined across the given backends.
-func checkRoundRobinRPCs(ctx context.Context, client testpb.TestServiceClient, addrs []resolver.Address) error {
+func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient, addrs []resolver.Address) error {
 	wantAddrCount := make(map[string]int)
 	for _, addr := range addrs {
 		wantAddrCount[addr.Addr]++
@@ -170,31 +166,21 @@ func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
 	defer cleanup()
 
 	// Working backend 1.
-	backend1 := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-	port1, cleanup1 := startTestService(t, backend1)
-	defer cleanup1()
+	backend1 := stubserver.StartTestService(t, nil)
+	port1 := testutils.ParsePort(t, backend1.Address)
+	defer backend1.Stop()
 
 	// Working backend 2.
-	backend2 := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-	port2, cleanup2 := startTestService(t, backend2)
-	defer cleanup2()
+	backend2 := stubserver.StartTestService(t, nil)
+	port2 := testutils.ParsePort(t, backend2.Address)
+	defer backend2.Stop()
 
 	// Backend 3 that will always return an error and eventually ejected.
-	backend3 := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			return nil, errors.New("some error")
-		},
-	}
-	port3, cleanup3 := startTestService(t, backend3)
-	defer cleanup3()
+	backend3 := stubserver.StartTestService(t, &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return nil, errors.New("some error") },
+	})
+	port3 := testutils.ParsePort(t, backend3.Address)
+	defer backend3.Stop()
 
 	const serviceName = "my-service-client-side-xds"
 	resources := clientResourcesMultipleBackendsAndOD(e2e.ResourceParams{
@@ -202,7 +188,103 @@ func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
 		NodeID:     nodeID,
 		Host:       "localhost",
 		SecLevel:   e2e.SecurityLevelNone,
-	}, []uint32{port1, port2, port3})
+	}, []uint32{port1, port2, port3}, &v3clusterpb.OutlierDetection{
+		Interval:                       &durationpb.Duration{Nanos: 50000000}, // .5 seconds
+		BaseEjectionTime:               &durationpb.Duration{Seconds: 30},
+		MaxEjectionTime:                &durationpb.Duration{Seconds: 300},
+		MaxEjectionPercent:             &wrapperspb.UInt32Value{Value: 1},
+		FailurePercentageThreshold:     &wrapperspb.UInt32Value{Value: 50},
+		EnforcingFailurePercentage:     &wrapperspb.UInt32Value{Value: 100},
+		FailurePercentageRequestVolume: &wrapperspb.UInt32Value{Value: 8},
+		FailurePercentageMinimumHosts:  &wrapperspb.UInt32Value{Value: 3},
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	fullAddresses := []resolver.Address{
+		{Addr: backend1.Address},
+		{Addr: backend2.Address},
+		{Addr: backend3.Address},
+	}
+	// At first, due to no statistics on each of the backends, the 3
+	// upstreams should all be round robined across.
+	if err = checkRoundRobinRPCs(ctx, client, fullAddresses); err != nil {
+		t.Fatalf("error in expected round robin: %v", err)
+	}
+
+	// The addresses which don't return errors.
+	okAddresses := []resolver.Address{
+		{Addr: backend1.Address},
+		{Addr: backend2.Address},
+	}
+	// After calling the three upstreams, one of them constantly error
+	// and should eventually be ejected for a period of time. This
+	// period of time should cause the RPC's to be round robined only
+	// across the two that are healthy.
+	if err = checkRoundRobinRPCs(ctx, client, okAddresses); err != nil {
+		t.Fatalf("error in expected round robin: %v", err)
+	}
+}
+
+// TestOutlierDetectionXDSDefaultOn tests that Outlier Detection is by default
+// configured on in the xDS Flow. If the Outlier Detection proto message is
+// present with SuccessRateEjection unset, then Outlier Detection should be
+// turned on. The test setups and xDS system with xDS resources with Outlier
+// Detection present in the CDS update, but with SuccessRateEjection unset, and
+// asserts that Outlier Detection is turned on and ejects upstreams.
+func (s) TestOutlierDetectionXDSDefaultOn(t *testing.T) {
+	managementServer, nodeID, _, r, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+	defer cleanup()
+
+	// Working backend 1.
+	backend1 := stubserver.StartTestService(t, nil)
+	port1 := testutils.ParsePort(t, backend1.Address)
+	defer backend1.Stop()
+
+	// Working backend 2.
+	backend2 := stubserver.StartTestService(t, nil)
+	port2 := testutils.ParsePort(t, backend2.Address)
+	defer backend2.Stop()
+
+	// Backend 3 that will always return an error and eventually ejected.
+	backend3 := stubserver.StartTestService(t, &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return nil, errors.New("some error") },
+	})
+	port3 := testutils.ParsePort(t, backend3.Address)
+	defer backend3.Stop()
+
+	// Configure CDS resources with Outlier Detection set but
+	// EnforcingSuccessRate unset. This should cause Outlier Detection to be
+	// configured with SuccessRateEjection present in configuration, which will
+	// eventually be populated with its default values along with the knobs set
+	// as SuccessRate fields in the proto, and thus Outlier Detection should be
+	// on and actively eject upstreams.
+	const serviceName = "my-service-client-side-xds"
+	resources := clientResourcesMultipleBackendsAndOD(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		SecLevel:   e2e.SecurityLevelNone,
+	}, []uint32{port1, port2, port3}, &v3clusterpb.OutlierDetection{
+		// Need to set knobs to trigger ejection within the test time frame.
+		Interval: &durationpb.Duration{Nanos: 50000000},
+		// EnforcingSuccessRateSet to nil, causes success rate algorithm to be
+		// turned on.
+		SuccessRateMinimumHosts:  &wrapperspb.UInt32Value{Value: 1},
+		SuccessRateRequestVolume: &wrapperspb.UInt32Value{Value: 8},
+		SuccessRateStdevFactor:   &wrapperspb.UInt32Value{Value: 1},
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {

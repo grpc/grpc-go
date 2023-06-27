@@ -44,8 +44,10 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
-	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 func czCleanupWrapper(cleanup func() error, t *testing.T) {
@@ -518,7 +520,7 @@ func (s) TestCZChannelMetrics(t *testing.T) {
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn(grpc.WithResolvers(r))
 	defer te.tearDown()
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
@@ -598,7 +600,7 @@ func (s) TestCZServerMetrics(t *testing.T) {
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
@@ -646,7 +648,7 @@ func (s) TestCZServerMetrics(t *testing.T) {
 }
 
 type testServiceClientWrapper struct {
-	testpb.TestServiceClient
+	testgrpc.TestServiceClient
 	mu             sync.RWMutex
 	streamsCreated int
 }
@@ -671,35 +673,35 @@ func (t *testServiceClientWrapper) UnaryCall(ctx context.Context, in *testpb.Sim
 	return t.TestServiceClient.UnaryCall(ctx, in, opts...)
 }
 
-func (t *testServiceClientWrapper) StreamingOutputCall(ctx context.Context, in *testpb.StreamingOutputCallRequest, opts ...grpc.CallOption) (testpb.TestService_StreamingOutputCallClient, error) {
+func (t *testServiceClientWrapper) StreamingOutputCall(ctx context.Context, in *testpb.StreamingOutputCallRequest, opts ...grpc.CallOption) (testgrpc.TestService_StreamingOutputCallClient, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.streamsCreated++
 	return t.TestServiceClient.StreamingOutputCall(ctx, in, opts...)
 }
 
-func (t *testServiceClientWrapper) StreamingInputCall(ctx context.Context, opts ...grpc.CallOption) (testpb.TestService_StreamingInputCallClient, error) {
+func (t *testServiceClientWrapper) StreamingInputCall(ctx context.Context, opts ...grpc.CallOption) (testgrpc.TestService_StreamingInputCallClient, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.streamsCreated++
 	return t.TestServiceClient.StreamingInputCall(ctx, opts...)
 }
 
-func (t *testServiceClientWrapper) FullDuplexCall(ctx context.Context, opts ...grpc.CallOption) (testpb.TestService_FullDuplexCallClient, error) {
+func (t *testServiceClientWrapper) FullDuplexCall(ctx context.Context, opts ...grpc.CallOption) (testgrpc.TestService_FullDuplexCallClient, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.streamsCreated++
 	return t.TestServiceClient.FullDuplexCall(ctx, opts...)
 }
 
-func (t *testServiceClientWrapper) HalfDuplexCall(ctx context.Context, opts ...grpc.CallOption) (testpb.TestService_HalfDuplexCallClient, error) {
+func (t *testServiceClientWrapper) HalfDuplexCall(ctx context.Context, opts ...grpc.CallOption) (testgrpc.TestService_HalfDuplexCallClient, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.streamsCreated++
 	return t.TestServiceClient.HalfDuplexCall(ctx, opts...)
 }
 
-func doSuccessfulUnaryCall(tc testpb.TestServiceClient, t *testing.T) {
+func doSuccessfulUnaryCall(tc testgrpc.TestServiceClient, t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -707,7 +709,7 @@ func doSuccessfulUnaryCall(tc testpb.TestServiceClient, t *testing.T) {
 	}
 }
 
-func doStreamingInputCallWithLargePayload(tc testpb.TestServiceClient, t *testing.T) {
+func doStreamingInputCallWithLargePayload(tc testgrpc.TestServiceClient, t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	s, err := tc.StreamingInputCall(ctx)
@@ -721,7 +723,7 @@ func doStreamingInputCallWithLargePayload(tc testpb.TestServiceClient, t *testin
 	s.Send(&testpb.StreamingInputCallRequest{Payload: payload})
 }
 
-func doServerSideFailedUnaryCall(tc testpb.TestServiceClient, t *testing.T) {
+func doServerSideFailedUnaryCall(tc testgrpc.TestServiceClient, t *testing.T) {
 	const smallSize = 1
 	const largeSize = 2000
 
@@ -741,7 +743,7 @@ func doServerSideFailedUnaryCall(tc testpb.TestServiceClient, t *testing.T) {
 	}
 }
 
-func doClientSideInitiatedFailedStream(tc testpb.TestServiceClient, t *testing.T) {
+func doClientSideInitiatedFailedStream(tc testgrpc.TestServiceClient, t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
@@ -774,7 +776,7 @@ func doClientSideInitiatedFailedStream(tc testpb.TestServiceClient, t *testing.T
 }
 
 // This func is to be used to test client side counting of failed streams.
-func doServerSideInitiatedFailedStreamWithRSTStream(tc testpb.TestServiceClient, t *testing.T, l *listenerWrapper) {
+func doServerSideInitiatedFailedStreamWithRSTStream(tc testgrpc.TestServiceClient, t *testing.T, l *listenerWrapper) {
 	stream, err := tc.FullDuplexCall(context.Background())
 	if err != nil {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
@@ -812,7 +814,7 @@ func doServerSideInitiatedFailedStreamWithRSTStream(tc testpb.TestServiceClient,
 }
 
 // this func is to be used to test client side counting of failed streams.
-func doServerSideInitiatedFailedStreamWithGoAway(tc testpb.TestServiceClient, t *testing.T, l *listenerWrapper) {
+func doServerSideInitiatedFailedStreamWithGoAway(tc testgrpc.TestServiceClient, t *testing.T, l *listenerWrapper) {
 	// This call is just to keep the transport from shutting down (socket will be deleted
 	// in this case, and we will not be able to get metrics).
 	s, err := tc.FullDuplexCall(context.Background())
@@ -854,7 +856,7 @@ func doServerSideInitiatedFailedStreamWithGoAway(tc testpb.TestServiceClient, t 
 	}
 }
 
-func doIdleCallToInvokeKeepAlive(tc testpb.TestServiceClient, t *testing.T) {
+func doIdleCallToInvokeKeepAlive(tc testgrpc.TestServiceClient, t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	_, err := tc.FullDuplexCall(ctx)
 	if err != nil {
@@ -875,7 +877,7 @@ func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	rcw := te.startServerWithConnControl(&testServer{security: e.security})
 	defer te.tearDown()
 	cc := te.clientConn()
-	tc := &testServiceClientWrapper{TestServiceClient: testpb.NewTestServiceClient(cc)}
+	tc := &testServiceClientWrapper{TestServiceClient: testgrpc.NewTestServiceClient(cc)}
 
 	doSuccessfulUnaryCall(tc, t)
 	var scID, skID int64
@@ -974,7 +976,7 @@ func (s) TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *t
 	// Avoid overflowing connection level flow control window, which will lead to
 	// transport being closed.
 	te.serverInitialConnWindowSize = 65536 * 2
-	ts := &stubserver.StubServer{FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+	ts := &stubserver.StubServer{FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 		stream.Send(&testpb.StreamingOutputCallResponse{})
 		<-stream.Context().Done()
 		return status.Errorf(codes.DeadlineExceeded, "deadline exceeded or cancelled")
@@ -982,7 +984,7 @@ func (s) TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *t
 	te.startServer(ts)
 	defer te.tearDown()
 	cc, dw := te.clientConnWithConnControl()
-	tc := &testServiceClientWrapper{TestServiceClient: testpb.NewTestServiceClient(cc)}
+	tc := &testServiceClientWrapper{TestServiceClient: testgrpc.NewTestServiceClient(cc)}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	stream, err := tc.FullDuplexCall(ctx)
@@ -1062,7 +1064,7 @@ func (s) TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 
 	for i := 0; i < 10; i++ {
 		doSuccessfulUnaryCall(tc, t)
@@ -1225,7 +1227,7 @@ func (s) TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	cc, _ := te.clientConnWithConnControl()
-	tc := &testServiceClientWrapper{TestServiceClient: testpb.NewTestServiceClient(cc)}
+	tc := &testServiceClientWrapper{TestServiceClient: testgrpc.NewTestServiceClient(cc)}
 
 	var svrID int64
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -1296,7 +1298,7 @@ func (s) TestCZServerSocketMetricsKeepAlive(t *testing.T) {
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	start := time.Now()
 	doIdleCallToInvokeKeepAlive(tc, t)
 
@@ -1529,21 +1531,11 @@ func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Wait for ready
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	for src := te.cc.GetState(); src != connectivity.Ready; src = te.cc.GetState() {
-		if !te.cc.WaitForStateChange(ctx, src) {
-			t.Fatalf("timed out waiting for state change.  got %v; want %v", src, connectivity.Ready)
-		}
-	}
+	awaitState(ctx, t, te.cc, connectivity.Ready)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}})
-	// Wait for not-ready.
-	for src := te.cc.GetState(); src == connectivity.Ready; src = te.cc.GetState() {
-		if !te.cc.WaitForStateChange(ctx, src) {
-			t.Fatalf("timed out waiting for state change.  got %v; want !%v", src, connectivity.Ready)
-		}
-	}
+	awaitNotState(ctx, t, te.cc, connectivity.Ready)
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0, 0)
@@ -1697,7 +1689,7 @@ func (s) TestCZSubChannelPickedNewAddress(t *testing.T) {
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn(grpc.WithResolvers(r))
 	defer te.tearDown()
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	// make sure the connection is up
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -1766,7 +1758,7 @@ func (s) TestCZSubChannelConnectivityState(t *testing.T) {
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn(grpc.WithResolvers(r))
 	defer te.tearDown()
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	// make sure the connection is up
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -1865,7 +1857,7 @@ func (s) TestCZChannelConnectivityState(t *testing.T) {
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn(grpc.WithResolvers(r))
 	defer te.tearDown()
-	tc := testpb.NewTestServiceClient(cc)
+	tc := testgrpc.NewTestServiceClient(cc)
 	// make sure the connection is up
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -2014,21 +2006,11 @@ func (s) TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Wait for ready
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	for src := te.cc.GetState(); src != connectivity.Ready; src = te.cc.GetState() {
-		if !te.cc.WaitForStateChange(ctx, src) {
-			t.Fatalf("timed out waiting for state change.  got %v; want %v", src, connectivity.Ready)
-		}
-	}
+	awaitState(ctx, t, te.cc, connectivity.Ready)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}})
-	// Wait for not-ready.
-	for src := te.cc.GetState(); src == connectivity.Ready; src = te.cc.GetState() {
-		if !te.cc.WaitForStateChange(ctx, src) {
-			t.Fatalf("timed out waiting for state change.  got %v; want !%v", src, connectivity.Ready)
-		}
-	}
+	awaitNotState(ctx, t, te.cc, connectivity.Ready)
 
 	// verify that the subchannel no longer exist due to trace referencing it got overwritten.
 	if err := verifyResultWithDelay(func() (bool, error) {

@@ -36,7 +36,10 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
+
 	_ "google.golang.org/grpc/xds/internal/balancer/outlierdetection" // To register helper functions which register/unregister Outlier Detection LB Policy.
 )
 
@@ -99,7 +102,7 @@ func setupBackends(t *testing.T) ([]string, func()) {
 //
 // Returns a non-nil error if context deadline expires before RPCs start to get
 // roundrobined across the given backends.
-func checkRoundRobinRPCs(ctx context.Context, client testpb.TestServiceClient, addrs []resolver.Address) error {
+func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient, addrs []resolver.Address) error {
 	wantAddrCount := make(map[string]int)
 	for _, addr := range addrs {
 		wantAddrCount[addr.Addr]++
@@ -156,9 +159,9 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
   "loadBalancingConfig": [
     {
       "outlier_detection_experimental": {
-        "interval": 50000000,
-		"baseEjectionTime": 100000000,
-		"maxEjectionTime": 300000000000,
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
+		"maxEjectionTime": "300s",
 		"maxEjectionPercent": 33,
 		"successRateEjection": {
 			"stdevFactor": 50,
@@ -179,9 +182,9 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
   "loadBalancingConfig": [
     {
       "outlier_detection_experimental": {
-        "interval": 50000000,
-		"baseEjectionTime": 100000000,
-		"maxEjectionTime": 300000000000,
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
+		"maxEjectionTime": "300s",
 		"maxEjectionPercent": 33,
 		"failurePercentageEjection": {
 			"threshold": 50,
@@ -224,7 +227,7 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
 			defer cc.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			testServiceClient := testpb.NewTestServiceClient(cc)
+			testServiceClient := testgrpc.NewTestServiceClient(cc)
 
 			// At first, due to no statistics on each of the backends, the 3
 			// upstreams should all be round robined across.
@@ -274,9 +277,9 @@ func (s) TestNoopConfiguration(t *testing.T) {
   "loadBalancingConfig": [
     {
       "outlier_detection_experimental": {
-        "interval": 50000000,
-		"baseEjectionTime": 100000000,
-		"maxEjectionTime": 300000000000,
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
+		"maxEjectionTime": "300s",
 		"maxEjectionPercent": 33,
         "childPolicy": [{"round_robin": {}}]
       }
@@ -301,7 +304,7 @@ func (s) TestNoopConfiguration(t *testing.T) {
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	testServiceClient := testpb.NewTestServiceClient(cc)
+	testServiceClient := testgrpc.NewTestServiceClient(cc)
 
 	for i := 0; i < 2; i++ {
 		// Since the Outlier Detection Balancer starts with a noop
@@ -322,9 +325,9 @@ func (s) TestNoopConfiguration(t *testing.T) {
   "loadBalancingConfig": [
     {
       "outlier_detection_experimental": {
-        "interval": 50000000,
-		"baseEjectionTime": 100000000,
-		"maxEjectionTime": 300000000000,
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
+		"maxEjectionTime": "300s",
 		"maxEjectionPercent": 33,
 		"failurePercentageEjection": {
 			"threshold": 50,

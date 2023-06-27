@@ -31,7 +31,9 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/status"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 // connWrapperWithCloseCh wraps a net.Conn and fires an event when closed.
@@ -85,7 +87,7 @@ func (s) TestClientTransportRestartsAfterStreamIDExhausted(t *testing.T) {
 	}()
 
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			if _, err := stream.Recv(); err != nil {
 				return status.Errorf(codes.Internal, "unexpected error receiving: %v", err)
 			}
@@ -108,7 +110,7 @@ func (s) TestClientTransportRestartsAfterStreamIDExhausted(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	var streams []testpb.TestService_FullDuplexCallClient
+	var streams []testgrpc.TestService_FullDuplexCallClient
 
 	const numStreams = 3
 	// expected number of conns when each stream is created i.e., 3rd stream is created

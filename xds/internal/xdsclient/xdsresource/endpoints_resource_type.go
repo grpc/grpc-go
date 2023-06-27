@@ -24,16 +24,21 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
+const (
+	// EndpointsResourceTypeName represents the transport agnostic name for the
+	// endpoint resource.
+	EndpointsResourceTypeName = "EndpointsResource"
+)
+
 var (
 	// Compile time interface checks.
-	_ Type         = endpointsResourceType{}
-	_ ResourceData = &EndpointsResourceData{}
+	_ Type = endpointsResourceType{}
 
 	// Singleton instantiation of the resource type implementation.
 	endpointsType = endpointsResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3EndpointsURL,
-			typeEnum:                   EndpointsResource,
+			typeName:                   "EndpointsResource",
 			allResourcesRequiredInSotW: false,
 		},
 	}
