@@ -35,7 +35,7 @@ type SharedBufferPool interface {
 	Get(length int) []byte
 
 	// Put returns a buffer to the pool.
-	Put(*[]byte)
+	Put([]byte)
 }
 
 // NewSharedBufferPool creates a simple SharedBufferPool with buckets
@@ -68,8 +68,8 @@ func (p *simpleSharedBufferPool) Get(size int) []byte {
 	return p.pools[p.poolIdx(size)].Get(size)
 }
 
-func (p *simpleSharedBufferPool) Put(bs *[]byte) {
-	p.pools[p.poolIdx(cap(*bs))].Put(bs)
+func (p *simpleSharedBufferPool) Put(bs []byte) {
+	p.pools[p.poolIdx(cap(bs))].Put(bs)
 }
 
 func (p *simpleSharedBufferPool) poolIdx(size int) int {
@@ -119,23 +119,22 @@ type bufferPool struct {
 }
 
 func (p *bufferPool) Get(size int) []byte {
-	bs := p.Pool.Get().(*[]byte)
+	bs := p.Pool.Get().([]byte)
 
-	if cap(*bs) < size {
+	if cap(bs) < size {
 		p.Pool.Put(bs)
 
 		return make([]byte, size)
 	}
 
-	return (*bs)[:size]
+	return (bs)[:size]
 }
 
 func newBytesPool(size int) simpleSharedBufferChildPool {
 	return &bufferPool{
 		Pool: sync.Pool{
 			New: func() interface{} {
-				bs := make([]byte, size)
-				return &bs
+				return make([]byte, size)
 			},
 		},
 		defaultSize: size,
@@ -150,5 +149,5 @@ func (nopBufferPool) Get(length int) []byte {
 	return make([]byte, length)
 }
 
-func (nopBufferPool) Put(*[]byte) {
+func (nopBufferPool) Put([]byte) {
 }
