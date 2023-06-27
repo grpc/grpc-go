@@ -79,9 +79,13 @@ const (
 	defaultTestShortTimeout = 100 * time.Microsecond
 )
 
-var target = resolver.Target{URL: *testutils.MustParseURL("xds:///" + targetStr)}
+var (
+	target = resolver.Target{URL: *testutils.MustParseURL("xds:///" + targetStr)}
 
-var routerFilter = xdsresource.HTTPFilter{Name: "rtr", Filter: httpfilter.Get(router.TypeURL)}
+	routerHTTPFilter = httpfilter.Get(router.TypeURL)
+	routerConfig, _  = routerHTTPFilter.ParseFilterConfig(testutils.MarshalAny(&v3routerpb.Router{}))
+	routerFilter     = xdsresource.HTTPFilter{Name: "rtr", Filter: routerHTTPFilter, Config: routerConfig}
+)
 
 type s struct {
 	grpctest.Tester
@@ -1810,36 +1814,6 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 		newStreamErr string
 	}{
 		{
-			name: "no router filter",
-			ldsFilters: []xdsresource.HTTPFilter{
-				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
-			},
-			rpcRes: map[string][][]string{
-				"1": {
-					{"build:foo1", "override:foo2", "build:bar1", "override:bar2", "newstream:foo1", "newstream:bar1", "done:bar1", "done:foo1"},
-				},
-			},
-			selectErr: "no router filter present",
-		},
-		{
-			name: "ignored after router filter",
-			ldsFilters: []xdsresource.HTTPFilter{
-				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
-				routerFilter,
-				{Name: "foo2", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo2"}},
-			},
-			rpcRes: map[string][][]string{
-				"1": {
-					{"build:foo1", "newstream:foo1", "done:foo1"},
-				},
-				"2": {
-					{"build:foo1", "newstream:foo1", "done:foo1"},
-					{"build:foo1", "newstream:foo1", "done:foo1"},
-					{"build:foo1", "newstream:foo1", "done:foo1"},
-				},
-			},
-		},
-		{
 			name: "NewStream error; ensure earlier interceptor Done is still called",
 			ldsFilters: []xdsresource.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
@@ -1913,12 +1887,14 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 								"A": {Weight: 1},
 								"B": {Weight: 1},
 							},
+							ActionType: xdsresource.RouteActionRoute,
 						}, {
 							Prefix: newStringP("2"), WeightedClusters: map[string]xdsresource.WeightedCluster{
 								"A": {Weight: 1},
 								"B": {Weight: 1, HTTPFilterConfigOverride: tc.clOverrides},
 							},
 							HTTPFilterConfigOverride: tc.rtOverrides,
+							ActionType:               xdsresource.RouteActionRoute,
 						}},
 						HTTPFilterConfigOverride: tc.vhOverrides,
 					},

@@ -121,7 +121,7 @@ type routeCluster struct {
 
 type route struct {
 	m                 *xdsresource.CompositeMatcher // converted from route matchers
-	actionType        xdsresource.RouteActionType   //holds route action type from type_rds.Route
+	actionType        xdsresource.RouteActionType   // holds route action type
 	clusters          wrr.WRR                       // holds *routeCluster entries
 	maxStreamDuration time.Duration
 	// map from filter name to its config
@@ -143,8 +143,6 @@ type configSelector struct {
 }
 
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
-var errRouteActionUnsupported = status.Errorf(codes.Unavailable, "received route was of type RouteActionUnsupported, require type RouteActionRoute")
-var errRouteActionNonForwardingAction = status.Errorf(codes.Unavailable, "received route was of type RouteActionNonForwardingAction, require type RouteActionRoute")
 
 func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
 	if cs == nil {
@@ -158,17 +156,13 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 			break
 		}
 	}
+
 	if rt == nil || rt.clusters == nil {
-		var err error
-		switch rt.actionType {
-		case xdsresource.RouteActionUnsupported:
-			err = errRouteActionUnsupported
-		case xdsresource.RouteActionNonForwardingAction:
-			err = errRouteActionNonForwardingAction
-		default:
-			err = errNoMatchedRouteFound
-		}
-		return nil, err
+		return nil, errNoMatchedRouteFound
+	}
+
+	if rt.actionType != xdsresource.RouteActionRoute {
+		return nil, status.Errorf(codes.Unavailable, "matched route does not have a supported route type")
 	}
 
 	cluster, ok := rt.clusters.Next().(*routeCluster)
@@ -292,11 +286,11 @@ func (cs *configSelector) newInterceptor(rt *route, cluster *routeCluster) (ires
 	}
 	interceptors := make([]iresolver.ClientInterceptor, 0, len(cs.httpFilterConfig))
 	for _, filter := range cs.httpFilterConfig {
+		// TODO: Ignoring terminal filters has no effect, need to ignore routers - why?
 		if router.IsRouterFilter(filter.Filter) {
-			// Ignore any filters after the router filter.  The router itself
-			// is currently a nop.
-			return &interceptorList{interceptors: interceptors}, nil
+			continue
 		}
+
 		override := cluster.httpFilterConfigOverride[filter.Name] // cluster is highest priority
 		if override == nil {
 			override = rt.httpFilterConfigOverride[filter.Name] // route is second priority
@@ -317,7 +311,7 @@ func (cs *configSelector) newInterceptor(rt *route, cluster *routeCluster) (ires
 			interceptors = append(interceptors, i)
 		}
 	}
-	return nil, fmt.Errorf("error in xds config: no router filter present")
+	return &interceptorList{interceptors: interceptors}, nil
 }
 
 // stop decrements refs of all clusters referenced by this config selector.
