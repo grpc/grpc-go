@@ -96,7 +96,7 @@ func (s *testServer) StreamingCall(stream testgrpc.BenchmarkService_StreamingCal
 		var err error
 		preloadMsgSize, err = strconv.Atoi(val)
 		if err != nil {
-			return fmt.Errorf("can't parse %q header: %s", PreloadMsgSizeHeader, err)
+			return fmt.Errorf("%q header value is not an integer: %s", PreloadMsgSizeHeader, err)
 		}
 	}
 
@@ -109,8 +109,7 @@ func (s *testServer) StreamingCall(stream testgrpc.BenchmarkService_StreamingCal
 	preloadedResponse := &grpc.PreparedMsg{}
 	if preloadMsgSize > 0 {
 		setPayload(response.Payload, testpb.PayloadType_COMPRESSABLE, preloadMsgSize)
-		err := preloadedResponse.Encode(stream, response)
-		if err != nil {
+		if err := preloadedResponse.Encode(stream, response); err != nil {
 			return err
 		}
 	}
@@ -166,8 +165,7 @@ func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService
 
 	preloadedResponse := &grpc.PreparedMsg{}
 	if preloadMsgSize > 0 {
-		err := preloadedResponse.Encode(stream, response)
-		if err != nil {
+		if err := preloadedResponse.Encode(stream, response); err != nil {
 			return err
 		}
 	}

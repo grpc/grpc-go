@@ -82,7 +82,7 @@ var (
 	traceMode = flags.StringWithAllowedValues("trace", toggleModeOff,
 		fmt.Sprintf("Trace mode - One of: %v", strings.Join(allToggleModes, ", ")), allToggleModes)
 	preloaderMode = flags.StringWithAllowedValues("preloader", toggleModeOff,
-		fmt.Sprintf("Preloader mode - One of: %v, preloader works only in streaming and unconstrained modes and will bi ignored in unary mode",
+		fmt.Sprintf("Preloader mode - One of: %v, preloader works only in streaming and unconstrained modes and will be ignored in unary mode",
 			strings.Join(allToggleModes, ", ")), allToggleModes)
 	channelzOn = flags.StringWithAllowedValues("channelz", toggleModeOff,
 		fmt.Sprintf("Channelz mode - One of: %v", strings.Join(allToggleModes, ", ")), allToggleModes)
@@ -403,7 +403,7 @@ func makeFuncUnary(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 }
 
 func makeFuncStream(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
-	streams, req, cleanup := setupStream(bf, workloadsStreaming)
+	streams, req, cleanup := setupStream(bf, false)
 
 	var preparedMsg [][]*grpc.PreparedMsg
 	if bf.EnablePreloader {
@@ -435,7 +435,7 @@ func makeFuncStream(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 }
 
 func makeFuncUnconstrainedStreamPreloaded(bf stats.Features) (rpcSendFunc, rpcRecvFunc, rpcCleanupFunc) {
-	streams, req, cleanup := setupStream(bf, workloadsUnconstrained)
+	streams, req, cleanup := setupStream(bf, true)
 
 	preparedMsg := prepareMessages(streams, req)
 
@@ -447,7 +447,7 @@ func makeFuncUnconstrainedStreamPreloaded(bf stats.Features) (rpcSendFunc, rpcRe
 }
 
 func makeFuncUnconstrainedStream(bf stats.Features) (rpcSendFunc, rpcRecvFunc, rpcCleanupFunc) {
-	streams, req, cleanup := setupStream(bf, workloadsUnconstrained)
+	streams, req, cleanup := setupStream(bf, true)
 
 	return func(cn, pos int) {
 			streams[cn][pos].Send(req)
@@ -456,19 +456,17 @@ func makeFuncUnconstrainedStream(bf stats.Features) (rpcSendFunc, rpcRecvFunc, r
 		}, cleanup
 }
 
-func setupStream(bf stats.Features, mode string) ([][]testgrpc.BenchmarkService_StreamingCallClient, *testpb.SimpleRequest, rpcCleanupFunc) {
+func setupStream(bf stats.Features, unconstrained bool) ([][]testgrpc.BenchmarkService_StreamingCallClient, *testpb.SimpleRequest, rpcCleanupFunc) {
 	clients, cleanup := makeClients(bf)
 
 	streams := make([][]testgrpc.BenchmarkService_StreamingCallClient, bf.Connections)
 	ctx := context.Background()
-	if mode == workloadsUnconstrained {
-		md := metadata.Pairs(benchmark.UnconstrainedStreamingHeader, "1",
-			benchmark.UnconstrainedStreamingDelayHeader, bf.SleepBetweenRPCs.String())
+	if unconstrained {
+		md := metadata.Pairs(benchmark.UnconstrainedStreamingHeader, "1", benchmark.UnconstrainedStreamingDelayHeader, bf.SleepBetweenRPCs.String())
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
 	if bf.EnablePreloader {
-		md := metadata.Pairs(benchmark.PreloadMsgSizeHeader, strconv.Itoa(bf.RespSizeBytes),
-			benchmark.UnconstrainedStreamingDelayHeader, bf.SleepBetweenRPCs.String())
+		md := metadata.Pairs(benchmark.PreloadMsgSizeHeader, strconv.Itoa(bf.RespSizeBytes), benchmark.UnconstrainedStreamingDelayHeader, bf.SleepBetweenRPCs.String())
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
 	for cn := 0; cn < bf.Connections; cn++ {
@@ -499,8 +497,7 @@ func prepareMessages(streams [][]testgrpc.BenchmarkService_StreamingCallClient, 
 		preparedMsg[cn] = make([]*grpc.PreparedMsg, len(connStreams))
 		for pos, stream := range connStreams {
 			preparedMsg[cn][pos] = &grpc.PreparedMsg{}
-			err := preparedMsg[cn][pos].Encode(stream, req)
-			if err != nil {
+			if err := preparedMsg[cn][pos].Encode(stream, req); err != nil {
 				logger.Fatalf("%v.Encode(%v, %v) = %v", preparedMsg[cn][pos], req, stream, err)
 			}
 		}
