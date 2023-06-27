@@ -56,6 +56,7 @@ const (
 	ClientWriteBufferSize
 	ServerReadBufferSize
 	ServerWriteBufferSize
+	SleepBetweenRPCs
 	RecvBufferPool
 
 	// MaxFeatureIndex is a place holder to indicate the total number of feature
@@ -79,6 +80,8 @@ type Features struct {
 	EnableKeepalive bool
 	// BenchTime indicates the duration of the benchmark run.
 	BenchTime time.Duration
+	// Connections configures the number of grpc connections between client and server.
+	Connections int
 
 	// Features defined above are usually the same for all benchmark runs in a
 	// particular invocation, while the features defined below could vary from
@@ -122,6 +125,8 @@ type Features struct {
 	ServerReadBufferSize int
 	// ServerWriteBufferSize is the size of the server write buffer in bytes. If negative, use the default buffer size.
 	ServerWriteBufferSize int
+	// SleepBetweenRPCs configures optional delay between RPCs.
+	SleepBetweenRPCs time.Duration
 	// RecvBufferPool represents the shared recv buffer pool used.
 	RecvBufferPool string
 }
@@ -143,12 +148,13 @@ func (f Features) String() string {
 		"trace_%v-latency_%v-kbps_%v-MTU_%v-maxConcurrentCalls_%v-%s-%s-"+
 		"compressor_%v-channelz_%v-preloader_%v-clientReadBufferSize_%v-"+
 		"clientWriteBufferSize_%v-serverReadBufferSize_%v-serverWriteBufferSize_%v-"+
-		"recvBufferPool_%v-",
+		"sleepBetweenRPCs_%v-connections_%v-recvBufferPool_%v-",
 		f.NetworkMode, f.UseBufConn, f.EnableKeepalive, f.BenchTime, f.EnableTrace,
 		f.Latency, f.Kbps, f.MTU, f.MaxConcurrentCalls, reqPayloadString,
 		respPayloadString, f.ModeCompressor, f.EnableChannelz, f.EnablePreloader,
 		f.ClientReadBufferSize, f.ClientWriteBufferSize, f.ServerReadBufferSize,
-		f.ServerWriteBufferSize, f.RecvBufferPool)
+		f.ServerWriteBufferSize, f.SleepBetweenRPCs, f.Connections,
+		f.RecvBufferPool)
 }
 
 // SharedFeatures returns the shared features as a pretty printable string.
@@ -220,6 +226,8 @@ func (f Features) partialString(b *bytes.Buffer, wantFeatures []bool, sep, delim
 				b.WriteString(fmt.Sprintf("ServerReadBufferSize%v%v%v", sep, f.ServerReadBufferSize, delim))
 			case ServerWriteBufferSize:
 				b.WriteString(fmt.Sprintf("ServerWriteBufferSize%v%v%v", sep, f.ServerWriteBufferSize, delim))
+			case SleepBetweenRPCs:
+				b.WriteString(fmt.Sprintf("SleepBetweenRPCs%v%v%v", sep, f.SleepBetweenRPCs, delim))
 			case RecvBufferPool:
 				b.WriteString(fmt.Sprintf("RecvBufferPool%v%v%v", sep, f.RecvBufferPool, delim))
 			default:

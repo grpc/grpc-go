@@ -158,12 +158,12 @@ func (s) TestProducer(t *testing.T) {
 
 	// Set a few metrics and wait for them on the client side.
 	smr.SetCPUUtilization(10)
-	smr.SetMemoryUtilization(100)
-	smr.SetNamedUtilization("bob", 555)
+	smr.SetMemoryUtilization(0.1)
+	smr.SetNamedUtilization("bob", 0.555)
 	loadReportWant := &v3orcapb.OrcaLoadReport{
 		CpuUtilization: 10,
-		MemUtilization: 100,
-		Utilization:    map[string]float64{"bob": 555},
+		MemUtilization: 0.1,
+		Utilization:    map[string]float64{"bob": 0.555},
 	}
 
 testReport:
@@ -181,13 +181,13 @@ testReport:
 	}
 
 	// Change and add metrics and wait for them on the client side.
-	smr.SetCPUUtilization(50)
-	smr.SetMemoryUtilization(200)
-	smr.SetNamedUtilization("mary", 321)
+	smr.SetCPUUtilization(0.5)
+	smr.SetMemoryUtilization(0.2)
+	smr.SetNamedUtilization("mary", 0.321)
 	loadReportWant = &v3orcapb.OrcaLoadReport{
-		CpuUtilization: 50,
-		MemUtilization: 200,
-		Utilization:    map[string]float64{"bob": 555, "mary": 321},
+		CpuUtilization: 0.5,
+		MemUtilization: 0.2,
+		Utilization:    map[string]float64{"bob": 0.555, "mary": 0.321},
 	}
 
 	for {
@@ -322,8 +322,8 @@ func (s) TestProducerBackoff(t *testing.T) {
 	// Define a load report to send and expect the client to see.
 	loadReportWant := &v3orcapb.OrcaLoadReport{
 		CpuUtilization: 10,
-		MemUtilization: 100,
-		Utilization:    map[string]float64{"bob": 555},
+		MemUtilization: 0.1,
+		Utilization:    map[string]float64{"bob": 0.555},
 	}
 
 	// Unblock the fake.
@@ -444,8 +444,8 @@ func (s) TestProducerMultipleListeners(t *testing.T) {
 	// Define a load report to send and expect the client to see.
 	loadReportWant := &v3orcapb.OrcaLoadReport{
 		CpuUtilization: 10,
-		MemUtilization: 100,
-		Utilization:    map[string]float64{"bob": 555},
+		MemUtilization: 0.1,
+		Utilization:    map[string]float64{"bob": 0.555},
 	}
 
 	// Receive reports and update counts for the three listeners.

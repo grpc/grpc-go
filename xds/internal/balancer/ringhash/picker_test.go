@@ -26,6 +26,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/grpclog"
+	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/testutils"
 )
 
@@ -96,7 +98,7 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &picker{ring: tt.ring}
+			p := newPicker(tt.ring, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
 			got, err := p.Pick(balancer.PickInfo{
 				Ctx: SetRequestHash(context.Background(), tt.hash),
 			})
@@ -126,7 +128,7 @@ func (s) TestPickerPickTriggerTFConnect(t *testing.T) {
 		connectivity.TransientFailure, connectivity.TransientFailure, connectivity.TransientFailure, connectivity.TransientFailure,
 		connectivity.Idle, connectivity.TransientFailure, connectivity.TransientFailure, connectivity.TransientFailure,
 	})
-	p := &picker{ring: ring}
+	p := newPicker(ring, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
 	_, err := p.Pick(balancer.PickInfo{Ctx: SetRequestHash(context.Background(), 5)})
 	if err == nil {
 		t.Fatalf("Pick() error = %v, want non-nil", err)
@@ -156,7 +158,7 @@ func (s) TestPickerPickTriggerTFReturnReady(t *testing.T) {
 	ring := newTestRing([]connectivity.State{
 		connectivity.TransientFailure, connectivity.TransientFailure, connectivity.TransientFailure, connectivity.Ready,
 	})
-	p := &picker{ring: ring}
+	p := newPicker(ring, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
 	pr, err := p.Pick(balancer.PickInfo{Ctx: SetRequestHash(context.Background(), 5)})
 	if err != nil {
 		t.Fatalf("Pick() error = %v, want nil", err)
@@ -182,7 +184,7 @@ func (s) TestPickerPickTriggerTFWithIdle(t *testing.T) {
 	ring := newTestRing([]connectivity.State{
 		connectivity.TransientFailure, connectivity.TransientFailure, connectivity.Idle, connectivity.TransientFailure, connectivity.TransientFailure,
 	})
-	p := &picker{ring: ring}
+	p := newPicker(ring, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
 	_, err := p.Pick(balancer.PickInfo{Ctx: SetRequestHash(context.Background(), 5)})
 	if err == balancer.ErrNoSubConnAvailable {
 		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)

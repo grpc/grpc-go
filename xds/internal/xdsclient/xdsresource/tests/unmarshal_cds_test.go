@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
-	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/serviceconfig"
 	_ "google.golang.org/grpc/xds" // Register the xDS LB Registry Converters.
@@ -107,7 +107,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		name             string
 		cluster          *v3clusterpb.Cluster
 		wantUpdate       xdsresource.ClusterUpdate
-		wantLBConfig     *internalserviceconfig.BalancerConfig
+		wantLBConfig     *iserviceconfig.BalancerConfig
 		customLBDisabled bool
 	}{
 		{
@@ -142,10 +142,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				ClusterType: xdsresource.ClusterTypeLogicalDNS,
 				DNSHostName: "dns_host:8080",
 			},
-			wantLBConfig: &internalserviceconfig.BalancerConfig{
+			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
 				Config: &wrrlocality.LBConfig{
-					ChildPolicy: &internalserviceconfig.BalancerConfig{
+					ChildPolicy: &iserviceconfig.BalancerConfig{
 						Name: "round_robin",
 					},
 				},
@@ -169,10 +169,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				ClusterName: clusterName, LRSServerConfig: xdsresource.ClusterLRSOff, ClusterType: xdsresource.ClusterTypeAggregate,
 				PrioritizedClusterNames: []string{"a", "b", "c"},
 			},
-			wantLBConfig: &internalserviceconfig.BalancerConfig{
+			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
 				Config: &wrrlocality.LBConfig{
-					ChildPolicy: &internalserviceconfig.BalancerConfig{
+					ChildPolicy: &iserviceconfig.BalancerConfig{
 						Name: "round_robin",
 					},
 				},
@@ -193,10 +193,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
 			wantUpdate: emptyUpdate,
-			wantLBConfig: &internalserviceconfig.BalancerConfig{
+			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
 				Config: &wrrlocality.LBConfig{
-					ChildPolicy: &internalserviceconfig.BalancerConfig{
+					ChildPolicy: &iserviceconfig.BalancerConfig{
 						Name: "round_robin",
 					},
 				},
@@ -218,10 +218,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
 			wantUpdate: xdsresource.ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSOff},
-			wantLBConfig: &internalserviceconfig.BalancerConfig{
+			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
 				Config: &wrrlocality.LBConfig{
-					ChildPolicy: &internalserviceconfig.BalancerConfig{
+					ChildPolicy: &iserviceconfig.BalancerConfig{
 						Name: "round_robin",
 					},
 				},
@@ -248,10 +248,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				},
 			},
 			wantUpdate: xdsresource.ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf},
-			wantLBConfig: &internalserviceconfig.BalancerConfig{
+			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
 				Config: &wrrlocality.LBConfig{
-					ChildPolicy: &internalserviceconfig.BalancerConfig{
+					ChildPolicy: &iserviceconfig.BalancerConfig{
 						Name: "round_robin",
 					},
 				},
@@ -290,10 +290,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				},
 			},
 			wantUpdate: xdsresource.ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf, MaxRequests: func() *uint32 { i := uint32(512); return &i }()},
-			wantLBConfig: &internalserviceconfig.BalancerConfig{
+			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
 				Config: &wrrlocality.LBConfig{
-					ChildPolicy: &internalserviceconfig.BalancerConfig{
+					ChildPolicy: &iserviceconfig.BalancerConfig{
 						Name: "round_robin",
 					},
 				},
@@ -322,7 +322,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf,
 			},
-			wantLBConfig: &internalserviceconfig.BalancerConfig{
+			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
 				Config: &ringhash.LBConfig{
 					MinRingSize: 1024,
@@ -359,7 +359,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf,
 			},
-			wantLBConfig: &internalserviceconfig.BalancerConfig{
+			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
 				Config: &ringhash.LBConfig{
 					MinRingSize: 10,
@@ -397,7 +397,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName: clusterName, EDSServiceName: serviceName,
 			},
-			wantLBConfig: &internalserviceconfig.BalancerConfig{
+			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
 				Config: &ringhash.LBConfig{
 					MinRingSize: 10,
@@ -431,10 +431,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName: clusterName, EDSServiceName: serviceName,
 			},
-			wantLBConfig: &internalserviceconfig.BalancerConfig{
+			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
 				Config: &wrrlocality.LBConfig{
-					ChildPolicy: &internalserviceconfig.BalancerConfig{
+					ChildPolicy: &iserviceconfig.BalancerConfig{
 						Name: "round_robin",
 					},
 				},
@@ -469,10 +469,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName: clusterName, EDSServiceName: serviceName,
 			},
-			wantLBConfig: &internalserviceconfig.BalancerConfig{
+			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
 				Config: &wrrlocality.LBConfig{
-					ChildPolicy: &internalserviceconfig.BalancerConfig{
+					ChildPolicy: &iserviceconfig.BalancerConfig{
 						Name:   "myorg.MyCustomLeastRequestPolicy",
 						Config: customLBConfig{},
 					},
@@ -516,7 +516,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName: clusterName, EDSServiceName: serviceName,
 			},
-			wantLBConfig: &internalserviceconfig.BalancerConfig{
+			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
 				Config: &ringhash.LBConfig{
 					MinRingSize: 20,
@@ -562,7 +562,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName: clusterName, EDSServiceName: serviceName,
 			},
-			wantLBConfig: &internalserviceconfig.BalancerConfig{
+			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
 				Config: &ringhash.LBConfig{
 					MinRingSize: 10,
@@ -592,7 +592,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			if diff := cmp.Diff(update, test.wantUpdate, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "LBPolicy")); diff != "" {
 				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) got diff: %v (-got, +want)", test.cluster, diff)
 			}
-			bc := &internalserviceconfig.BalancerConfig{}
+			bc := &iserviceconfig.BalancerConfig{}
 			if err := json.Unmarshal(update.LBPolicy, bc); err != nil {
 				t.Fatalf("failed to unmarshal JSON: %v", err)
 			}

@@ -23,7 +23,6 @@ package outlierdetection
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -41,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcsync"
+	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -81,19 +81,27 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 }
 
 func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	var lbCfg *LBConfig
-	if err := json.Unmarshal(s, &lbCfg); err != nil { // Validates child config if present as well.
+	lbCfg := &LBConfig{
+		// Default top layer values as documented in A50.
+		Interval:           iserviceconfig.Duration(10 * time.Second),
+		BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+		MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+		MaxEjectionPercent: 10,
+	}
+
+	// This unmarshalling handles underlying layers sre and fpe which have their
+	// own defaults for their fields if either sre or fpe are present.
+	if err := json.Unmarshal(s, lbCfg); err != nil { // Validates child config if present as well.
 		return nil, fmt.Errorf("xds: unable to unmarshal LBconfig: %s, error: %v", string(s), err)
 	}
 
 	// Note: in the xds flow, these validations will never fail. The xdsclient
 	// performs the same validations as here on the xds Outlier Detection
-	// resource before parsing into the internal struct which gets marshaled
-	// into JSON before calling this function. A50 defines two separate places
-	// for these validations to take place, the xdsclient and this ParseConfig
-	// method. "When parsing a config from JSON, if any of these requirements is
-	// violated, that should be treated as a parsing error." - A50
-
+	// resource before parsing resource into JSON which this function gets
+	// called with. A50 defines two separate places for these validations to
+	// take place, the xdsclient and this ParseConfig method. "When parsing a
+	// config from JSON, if any of these requirements is violated, that should
+	// be treated as a parsing error." - A50
 	switch {
 	// "The google.protobuf.Duration fields interval, base_ejection_time, and
 	// max_ejection_time must obey the restrictions in the
@@ -122,10 +130,7 @@ func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 		return nil, fmt.Errorf("OutlierDetectionLoadBalancingConfig.FailurePercentageEjection.threshold = %v; must be <= 100", lbCfg.FailurePercentageEjection.Threshold)
 	case lbCfg.FailurePercentageEjection != nil && lbCfg.FailurePercentageEjection.EnforcementPercentage > 100:
 		return nil, fmt.Errorf("OutlierDetectionLoadBalancingConfig.FailurePercentageEjection.enforcement_percentage = %v; must be <= 100", lbCfg.FailurePercentageEjection.EnforcementPercentage)
-	case lbCfg.ChildPolicy == nil:
-		return nil, errors.New("OutlierDetectionLoadBalancingConfig.child_policy must be present")
 	}
-
 	return lbCfg, nil
 }
 
