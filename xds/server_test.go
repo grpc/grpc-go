@@ -930,7 +930,7 @@ func (s) TestServeReturnsErrorAfterClose(t *testing.T) {
 }
 
 // TestServeAndCloseDoNotRace tests that Serve and Close on the xDS Server do
-// not race and leak the xDS Client. A race would be found by the leak checker.
+// not race and leak the xDS Client. A leak would be found by the leak checker.
 func (s) TestServeAndCloseDoNotRace(t *testing.T) {
 	cleanup := setupClientOverride(t)
 	defer cleanup()
