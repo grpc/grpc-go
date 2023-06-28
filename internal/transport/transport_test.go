@@ -465,9 +465,12 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 	return setUpWithNoPingServerWithOptions(t, copts, connCh, nil)
 }
 
-// setUpWithNoPingServerWithOptions setup a server which responsiveness is configurable through respModeCh channel.
-// Adding a true to the respModeCh channel makes the server ack ping messages, while adding false to the respModeCh
-// channel makes the server not to ack ping messages. By default, server acks ping messages until it's toggled.
+// setUpWithNoPingServerWithOptions sets up a server that can be toggled between
+// responding to ping acks and not responding based on the writes to the respModeCh
+// channel.
+//
+// * If `true` is written to respModeCh, the server will respond to ping acks. (default) 
+// * If `false` is written to respModeCh, the server will not respond to ping acks.
 func setUpWithNoPingServerWithOptions(t *testing.T, copts ConnectOptions, connCh chan net.Conn, respModeCh chan bool) (*http2Client, func()) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
