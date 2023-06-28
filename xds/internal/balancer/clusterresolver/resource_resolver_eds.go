@@ -25,11 +25,8 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
-type edsResourceWatcher interface {
-	WatchEndpoints(string, func(xdsresource.EndpointsUpdate, error)) func()
-}
-
 type edsDiscoveryMechanism struct {
+	nameToWatch      string
 	cancelWatch      func()
 	topLevelResolver topLevelResolver
 	stopped          *grpcsync.Event
@@ -64,31 +61,44 @@ func (er *edsDiscoveryMechanism) stop() {
 	er.cancelWatch()
 }
 
-func (er *edsDiscoveryMechanism) handleEndpointsUpdate(update xdsresource.EndpointsUpdate, err error) {
+// newEDSResolver returns an implementation of the endpointsResolver interface
+// that uses EDS to resolve the given name to endpoints.
+func newEDSResolver(nameToWatch string, producer xdsresource.Producer, topLevelResolver topLevelResolver) *edsDiscoveryMechanism {
+	ret := &edsDiscoveryMechanism{
+		nameToWatch:      nameToWatch,
+		topLevelResolver: topLevelResolver,
+		stopped:          grpcsync.NewEvent(),
+	}
+	ret.cancelWatch = xdsresource.WatchEndpoints(producer, nameToWatch, ret)
+	return ret
+}
+
+// OnUpdate is invoked to report an update for the resource being watched.
+func (er *edsDiscoveryMechanism) OnUpdate(update *xdsresource.EndpointsResourceData) {
 	if er.stopped.HasFired() {
 		return
 	}
 
-	if err != nil {
-		er.topLevelResolver.onError(err)
-		return
-	}
-
 	er.mu.Lock()
-	er.update = update
+	er.update = update.Resource
 	er.updateReceived = true
 	er.mu.Unlock()
 
 	er.topLevelResolver.onUpdate()
 }
 
-// newEDSResolver returns an implementation of the endpointsResolver interface
-// that uses EDS to resolve the given name to endpoints.
-func newEDSResolver(nameToWatch string, watcher edsResourceWatcher, topLevelResolver topLevelResolver) *edsDiscoveryMechanism {
-	ret := &edsDiscoveryMechanism{
-		topLevelResolver: topLevelResolver,
-		stopped:          grpcsync.NewEvent(),
+func (er *edsDiscoveryMechanism) OnError(err error) {
+	if er.stopped.HasFired() {
+		return
 	}
-	ret.cancelWatch = watcher.WatchEndpoints(nameToWatch, ret.handleEndpointsUpdate)
-	return ret
+
+	er.topLevelResolver.onError(err)
+}
+
+func (er *edsDiscoveryMechanism) OnResourceDoesNotExist() {
+	if er.stopped.HasFired() {
+		return
+	}
+
+	er.topLevelResolver.onError(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Endpoints not found in received response", er.nameToWatch))
 }

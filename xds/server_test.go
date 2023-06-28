@@ -25,6 +25,7 @@ import (
 	"net"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -313,6 +314,24 @@ type fakeProvider struct {
 // Close helps implement the Provider interface.
 func (p *fakeProvider) Close() {
 	p.Distributor.Stop()
+}
+
+// setupClientOverride sets up an override for new xdsClient creation.
+func setupClientOverride(t *testing.T) func() {
+	origNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsclient.XDSClient, func(), error) {
+		c := fakeclient.NewClient()
+		c.SetBootstrapConfig(&bootstrap.Config{
+			XDSServer:                          xdstestutils.ServerConfigForAddress(t, "server-address"),
+			NodeProto:                          xdstestutils.EmptyNodeProtoV3,
+			ServerListenerResourceNameTemplate: testServerListenerResourceNameTemplate,
+			CertProviderConfigs:                certProviderConfigs,
+		})
+		return c, func() {}, nil
+	}
+	return func() {
+		newXDSClient = origNewXDSClient
+	}
 }
 
 // setupOverrides sets up overrides for bootstrap config, new xdsClient creation
@@ -889,4 +908,51 @@ func verifyCertProviderNotCreated() error {
 		return errors.New("certificate provider created when no xDS creds were specified")
 	}
 	return nil
+}
+
+// TestServeReturnsErrorAfterClose tests that the xds Server returns
+// grpc.ErrServerStopped if Serve is called after Close on the server.
+func (s) TestServeReturnsErrorAfterClose(t *testing.T) {
+	cancel := setupClientOverride(t)
+	defer cancel()
+	server := NewGRPCServer()
+
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+
+	server.Stop()
+	err = server.Serve(lis)
+	if err == nil || !strings.Contains(err.Error(), grpc.ErrServerStopped.Error()) {
+		t.Fatalf("server erorred with wrong error, want: %v, got :%v", grpc.ErrServerStopped, err)
+	}
+}
+
+// TestServeAndCloseDoNotRace tests that Serve and Close on the xDS Server do
+// not race and leak the xDS Client. A leak would be found by the leak checker.
+func (s) TestServeAndCloseDoNotRace(t *testing.T) {
+	cleanup := setupClientOverride(t)
+	defer cleanup()
+
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+
+	wg := sync.WaitGroup{}
+	for i := 0; i < 100; i++ {
+		server := NewGRPCServer()
+		wg.Add(1)
+		go func() {
+			server.Serve(lis)
+			wg.Done()
+		}()
+		wg.Add(1)
+		go func() {
+			server.Stop()
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }

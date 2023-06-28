@@ -237,6 +237,36 @@ func distributionDataLatencyCount(vi *viewInformation, countWant int64, wantTags
 	return nil
 }
 
+// waitForServerCompletedRPCs waits until both Unary and Streaming metric rows
+// appear, in two separate rows, for server completed RPC's view. Returns an
+// error if the Unary and Streaming metric are not found within the passed
+// context's timeout.
+func waitForServerCompletedRPCs(ctx context.Context) error {
+	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
+		rows, err := view.RetrieveData("grpc.io/server/completed_rpcs")
+		if err != nil {
+			continue
+		}
+		unaryFound := false
+		streamingFound := false
+		for _, row := range rows {
+			for _, tag := range row.Tags {
+				if tag.Value == "grpc.testing.TestService/UnaryCall" {
+					unaryFound = true
+					break
+				} else if tag.Value == "grpc.testing.TestService/FullDuplexCall" {
+					streamingFound = true
+					break
+				}
+			}
+			if unaryFound && streamingFound {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("timeout when waiting for Unary and Streaming rows to be present for \"grpc.io/server/completed_rpcs\"")
+}
+
 // TestAllMetricsOneFunction tests emitted metrics from gRPC. It registers all
 // the metrics provided by this package. It then configures a system with a gRPC
 // Client and gRPC server with the OpenCensus Dial and Server Option configured,
@@ -987,10 +1017,13 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			},
 		},
 	}
-	// Unregister all the views. Unregistering a view causes a synchronous
-	// upload of any collected data for the view to any registered exporters.
-	// Thus, after this unregister call, the exporter has the data to make
-	// assertions on immediately.
+	// Server Side stats.End call happens asynchronously for both Unary and
+	// Streaming calls with respect to the RPC returning client side. Thus, add
+	// a sync point at the global view package level for these two rows to be
+	// recorded, which will be synchronously uploaded to exporters right after.
+	if err := waitForServerCompletedRPCs(ctx); err != nil {
+		t.Fatal(err)
+	}
 	view.Unregister(allViews...)
 	// Assert the expected emissions for each metric match the expected
 	// emissions.
@@ -1338,6 +1371,23 @@ func (fe *fakeExporter) ExportSpan(sd *trace.SpanData) {
 	fe.seenSpans = append(fe.seenSpans, gotSI)
 }
 
+// waitForServerSpan waits until a server span appears somewhere in the span
+// list in an exporter. Returns an error if no server span found within the
+// passed context's timeout.
+func waitForServerSpan(ctx context.Context, fe *fakeExporter) error {
+	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
+		fe.mu.Lock()
+		for _, seenSpan := range fe.seenSpans {
+			if seenSpan.spanKind == trace.SpanKindServer {
+				fe.mu.Unlock()
+				return nil
+			}
+		}
+		fe.mu.Unlock()
+	}
+	return fmt.Errorf("timeout when waiting for server span to be present in exporter")
+}
+
 // TestSpan tests emitted spans from gRPC. It configures a system with a gRPC
 // Client and gRPC server with the OpenCensus Dial and Server Option configured,
 // and makes a Unary RPC and a Streaming RPC. This should cause spans with
@@ -1375,18 +1425,30 @@ func (s) TestSpan(t *testing.T) {
 
 	// Make a Unary RPC. This should cause a span with message events
 	// corresponding to the request message and response message to be emitted
-	// both from the client and the server. Note that RPCs trigger exports of
-	// corresponding span data synchronously, thus the Span Data is guaranteed
-	// to have been read by exporter and is ready to make assertions on.
+	// both from the client and the server.
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
-
-	// The spans received are server first, then client. This is due to the RPC
-	// finishing on the server first. The ordering of message events for a Unary
-	// Call is as follows: (client send, server recv), (server send (server span
-	// end), client recv (client span end)).
 	wantSI := []spanInformation{
+		{
+			sc: trace.SpanContext{
+				TraceOptions: 1,
+			},
+			name: "Attempt.grpc.testing.TestService.UnaryCall",
+			messageEvents: []trace.MessageEvent{
+				{
+					EventType:            trace.MessageEventTypeSent,
+					MessageID:            1, // First msg send so 1 (see comment above)
+					UncompressedByteSize: 2,
+					CompressedByteSize:   2,
+				},
+				{
+					EventType: trace.MessageEventTypeRecv,
+					MessageID: 1, // First msg recv so 1 (see comment above)
+				},
+			},
+			hasRemoteParent: false,
+		},
 		{
 			// Sampling rate of 100 percent, so this should populate every span
 			// with the information that this span is being sampled. Here and
@@ -1428,44 +1490,38 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
-			name: "Attempt.grpc.testing.TestService.UnaryCall",
-			messageEvents: []trace.MessageEvent{
-				{
-					EventType:            trace.MessageEventTypeSent,
-					MessageID:            1, // First msg send so 1 (see comment above)
-					UncompressedByteSize: 2,
-					CompressedByteSize:   2,
-				},
-				{
-					EventType: trace.MessageEventTypeRecv,
-					MessageID: 1, // First msg recv so 1 (see comment above)
-				},
-			},
-			hasRemoteParent: false,
-		},
-		{
-			sc: trace.SpanContext{
-				TraceOptions: 1,
-			},
 			spanKind:        trace.SpanKindClient,
 			name:            "grpc.testing.TestService.UnaryCall",
 			hasRemoteParent: false,
 			childSpanCount:  1,
 		},
 	}
-	if diff := cmp.Diff(fe.seenSpans, wantSI); diff != "" {
-		t.Fatalf("got unexpected spans, diff (-got, +want): %v", diff)
+	if err := waitForServerSpan(ctx, fe); err != nil {
+		t.Fatal(err)
+	}
+	var spanInfoSort = func(i, j int) bool {
+		// This will order into attempt span (which has an unset span kind to
+		// not prepend Sent. to span names in backends), then call span, then
+		// server span.
+		return fe.seenSpans[i].spanKind < fe.seenSpans[j].spanKind
 	}
 	fe.mu.Lock()
+	// Sort the underlying seen Spans for cmp.Diff assertions and ID
+	// relationship assertions.
+	sort.Slice(fe.seenSpans, spanInfoSort)
+	if diff := cmp.Diff(fe.seenSpans, wantSI); diff != "" {
+		fe.mu.Unlock()
+		t.Fatalf("got unexpected spans, diff (-got, +want): %v", diff)
+	}
 	if err := validateTraceAndSpanIDs(fe.seenSpans); err != nil {
 		fe.mu.Unlock()
 		t.Fatalf("Error in runtime data assertions: %v", err)
 	}
-	if !cmp.Equal(fe.seenSpans[0].parentSpanID, fe.seenSpans[1].sc.SpanID) {
-		t.Fatalf("server span should point to the client attempt span as its parent. parentSpanID: %v, clientAttemptSpanID: %v", fe.seenSpans[0].parentSpanID, fe.seenSpans[1].sc.SpanID)
+	if !cmp.Equal(fe.seenSpans[1].parentSpanID, fe.seenSpans[0].sc.SpanID) {
+		t.Fatalf("server span should point to the client attempt span as its parent. parentSpanID: %v, clientAttemptSpanID: %v", fe.seenSpans[1].parentSpanID, fe.seenSpans[0].sc.SpanID)
 	}
-	if !cmp.Equal(fe.seenSpans[1].parentSpanID, fe.seenSpans[2].sc.SpanID) {
-		t.Fatalf("client attempt span should point to the client call span as its parent. parentSpanID: %v, clientCallSpanID: %v", fe.seenSpans[1].parentSpanID, fe.seenSpans[2].sc.SpanID)
+	if !cmp.Equal(fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID) {
+		t.Fatalf("client attempt span should point to the client call span as its parent. parentSpanID: %v, clientCallSpanID: %v", fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID)
 	}
 
 	fe.seenSpans = nil
@@ -1490,6 +1546,23 @@ func (s) TestSpan(t *testing.T) {
 	}
 
 	wantSI = []spanInformation{
+		{
+			sc: trace.SpanContext{
+				TraceOptions: 1,
+			},
+			name: "Attempt.grpc.testing.TestService.FullDuplexCall",
+			messageEvents: []trace.MessageEvent{
+				{
+					EventType: trace.MessageEventTypeSent,
+					MessageID: 1, // First msg send so 1
+				},
+				{
+					EventType: trace.MessageEventTypeSent,
+					MessageID: 2, // Second msg send so 2
+				},
+			},
+			hasRemoteParent: false,
+		},
 		{
 			sc: trace.SpanContext{
 				TraceOptions: 1,
@@ -1522,36 +1595,25 @@ func (s) TestSpan(t *testing.T) {
 			hasRemoteParent: false,
 			childSpanCount:  1,
 		},
-		{
-			sc: trace.SpanContext{
-				TraceOptions: 1,
-			},
-			name: "Attempt.grpc.testing.TestService.FullDuplexCall",
-			messageEvents: []trace.MessageEvent{
-				{
-					EventType: trace.MessageEventTypeSent,
-					MessageID: 1, // First msg send so 1
-				},
-				{
-					EventType: trace.MessageEventTypeSent,
-					MessageID: 2, // Second msg send so 2
-				},
-			},
-			hasRemoteParent: false,
-		},
+	}
+	if err := waitForServerSpan(ctx, fe); err != nil {
+		t.Fatal(err)
 	}
 	fe.mu.Lock()
 	defer fe.mu.Unlock()
+	// Sort the underlying seen Spans for cmp.Diff assertions and ID
+	// relationship assertions.
+	sort.Slice(fe.seenSpans, spanInfoSort)
 	if diff := cmp.Diff(fe.seenSpans, wantSI); diff != "" {
 		t.Fatalf("got unexpected spans, diff (-got, +want): %v", diff)
 	}
 	if err := validateTraceAndSpanIDs(fe.seenSpans); err != nil {
 		t.Fatalf("Error in runtime data assertions: %v", err)
 	}
-	if !cmp.Equal(fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID) {
-		t.Fatalf("server span should point to the client attempt span as its parent. parentSpanID: %v, clientAttemptSpanID: %v", fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID)
+	if !cmp.Equal(fe.seenSpans[1].parentSpanID, fe.seenSpans[0].sc.SpanID) {
+		t.Fatalf("server span should point to the client attempt span as its parent. parentSpanID: %v, clientAttemptSpanID: %v", fe.seenSpans[1].parentSpanID, fe.seenSpans[0].sc.SpanID)
 	}
-	if !cmp.Equal(fe.seenSpans[2].parentSpanID, fe.seenSpans[1].sc.SpanID) {
-		t.Fatalf("client attempt span should point to the client call span as its parent. parentSpanID: %v, clientCallSpanID: %v", fe.seenSpans[2].parentSpanID, fe.seenSpans[1].sc.SpanID)
+	if !cmp.Equal(fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID) {
+		t.Fatalf("client attempt span should point to the client call span as its parent. parentSpanID: %v, clientCallSpanID: %v", fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID)
 	}
 }
