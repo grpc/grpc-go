@@ -505,11 +505,11 @@ func setUpWithNoPingServerWithOptions(t *testing.T, copts ConnectOptions, connCh
 						return
 					}
 					select {
-					case data, ok := <-respModeCh:
+					case mode, ok := <-respModeCh:
 						if !ok {
 							return
 						}
-						respondToPing = data
+						respondToPing = mode
 					default:
 					}
 					// ack the ping if in responsive mode.
