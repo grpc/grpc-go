@@ -165,7 +165,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	if config.MaxHeaderListSize != nil {
 		maxHeaderListSize = *config.MaxHeaderListSize
 	}
-	framer := newFramer(conn, writeBufSize, readBufSize, maxHeaderListSize)
+	framer := newFramer(conn, writeBufSize, readBufSize, config.ShareWriteBuffer, maxHeaderListSize)
 	// Send initial settings as connection preface to client.
 	isettings := []http2.Setting{{
 		ID:  http2.SettingMaxFrameSize,

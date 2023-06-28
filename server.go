@@ -170,6 +170,7 @@ type serverOptions struct {
 	initialConnWindowSize int32
 	writeBufferSize       int
 	readBufferSize        int
+	shareWriteBuffer      bool
 	connectionTimeout     time.Duration
 	maxHeaderListSize     *uint32
 	headerTableSize       *uint32
@@ -233,6 +234,15 @@ func (mdo *joinServerOption) apply(do *serverOptions) {
 
 func newJoinServerOption(opts ...ServerOption) ServerOption {
 	return &joinServerOption{opts: opts}
+}
+
+// ShareWriteBuffer allows reusing per-connection transport write buffer.
+// If this option is set to true every connection will release the buffer after
+// flushing the data on the wire.
+func ShareWriteBuffer(val bool) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.shareWriteBuffer = val
+	})
 }
 
 // WriteBufferSize determines how much data can be batched before doing a write
@@ -938,6 +948,7 @@ func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 		InitialConnWindowSize: s.opts.initialConnWindowSize,
 		WriteBufferSize:       s.opts.writeBufferSize,
 		ReadBufferSize:        s.opts.readBufferSize,
+		ShareWriteBuffer:      s.opts.shareWriteBuffer,
 		ChannelzParentID:      s.channelzID,
 		MaxHeaderListSize:     s.opts.maxHeaderListSize,
 		HeaderTableSize:       s.opts.headerTableSize,

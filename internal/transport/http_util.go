@@ -319,11 +319,16 @@ type bufWriter struct {
 }
 
 func newBufWriter(conn net.Conn, batchSize int, pool *sync.Pool) *bufWriter {
-	return &bufWriter{
+	w := &bufWriter{
 		batchSize: batchSize,
 		conn:      conn,
 		pool:      pool,
 	}
+	// this indicates that we should use non shared buf
+	if pool == nil {
+		w.buf = make([]byte, batchSize)
+	}
+	return w
 }
 
 func (w *bufWriter) Write(b []byte) (n int, err error) {
@@ -339,7 +344,7 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 		w.buf = *b
 	}
 	for len(b) > 0 {
-		nn := copy((w.buf)[w.offset:], b)
+		nn := copy(w.buf[w.offset:], b)
 		b = b[nn:]
 		w.offset += nn
 		n += nn
@@ -352,7 +357,8 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 
 func (w *bufWriter) Flush() error {
 	err := w.flush()
-	if w.buf != nil {
+	// Only release the buffer if we are in a "shared" mode
+	if w.buf != nil && w.pool != nil {
 		b := w.buf
 		w.pool.Put(&b)
 		w.buf = nil
@@ -399,8 +405,10 @@ type framer struct {
 
 var writeBufferPoolMap map[int]*sync.Pool = make(map[int]*sync.Pool)
 var writeBufferMutex sync.Mutex
+var readBufferPoolMap map[int]*sync.Pool = make(map[int]*sync.Pool)
+var readBufferMutex sync.Mutex
 
-func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderListSize uint32) *framer {
+func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, shareWriteBuffer bool, maxHeaderListSize uint32) *framer {
 	if writeBufferSize < 0 {
 		writeBufferSize = 0
 	}
@@ -408,19 +416,7 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderList
 	if readBufferSize > 0 {
 		r = bufio.NewReaderSize(r, readBufferSize)
 	}
-	writeBufferMutex.Lock()
-	size := writeBufferSize * 2
-	pool, ok := writeBufferPoolMap[size]
-	if !ok {
-		pool = &sync.Pool{
-			New: func() interface{} {
-				b := make([]byte, size)
-				return &b
-			},
-		}
-		writeBufferPoolMap[size] = pool
-	}
-	writeBufferMutex.Unlock()
+	pool := getWriteBufferPool(writeBufferSize, shareWriteBuffer)
 	w := newBufWriter(conn, writeBufferSize, pool)
 	f := &framer{
 		writer: w,
@@ -433,6 +429,26 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderList
 	f.fr.MaxHeaderListSize = maxHeaderListSize
 	f.fr.ReadMetaHeaders = hpack.NewDecoder(http2InitHeaderTableSize, nil)
 	return f
+}
+
+func getWriteBufferPool(writeBufferSize int, shareWriteBuffer bool) *sync.Pool {
+	if !shareWriteBuffer {
+		return nil
+	}
+	writeBufferMutex.Lock()
+	defer writeBufferMutex.Unlock()
+	size := writeBufferSize * 2
+	pool, ok := writeBufferPoolMap[size]
+	if !ok {
+		pool = &sync.Pool{
+			New: func() interface{} {
+				b := make([]byte, size)
+				return &b
+			},
+		}
+		writeBufferPoolMap[size] = pool
+	}
+	return pool
 }
 
 // parseDialTarget returns the network and address to pass to dialer.

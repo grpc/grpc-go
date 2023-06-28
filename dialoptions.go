@@ -139,6 +139,15 @@ func newJoinDialOption(opts ...DialOption) DialOption {
 	return &joinDialOption{opts: opts}
 }
 
+// WithShareWriteBuffer allows reusing per-connection transport write buffer.
+// If this option is set to true every connection will release the buffer after
+// flushing the data on the wire.
+func WithShareWriteBuffer(val bool) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.copts.ShareWriteBuffer = val
+	})
+}
+
 // WithWriteBufferSize determines how much data can be batched before doing a
 // write on the wire. The corresponding memory allocation for this buffer will
 // be twice the size to keep syscalls low. The default value for this buffer is

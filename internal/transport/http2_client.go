@@ -330,7 +330,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		readerDone:            make(chan struct{}),
 		writerDone:            make(chan struct{}),
 		goAway:                make(chan struct{}),
-		framer:                newFramer(conn, writeBufSize, readBufSize, maxHeaderListSize),
+		framer:                newFramer(conn, writeBufSize, readBufSize, opts.ShareWriteBuffer, maxHeaderListSize),
 		fc:                    &trInFlow{limit: uint32(icwz)},
 		scheme:                scheme,
 		activeStreams:         make(map[uint32]*Stream),
