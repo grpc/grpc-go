@@ -405,8 +405,6 @@ type framer struct {
 
 var writeBufferPoolMap map[int]*sync.Pool = make(map[int]*sync.Pool)
 var writeBufferMutex sync.Mutex
-var readBufferPoolMap map[int]*sync.Pool = make(map[int]*sync.Pool)
-var readBufferMutex sync.Mutex
 
 func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, shareWriteBuffer bool, maxHeaderListSize uint32) *framer {
 	if writeBufferSize < 0 {
