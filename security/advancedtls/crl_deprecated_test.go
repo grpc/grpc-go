@@ -223,7 +223,7 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 	if err != nil {
 		t.Fatalf("x509.ParseCRL(dummyCrlFile) failed: %v", err)
 	}
-	crlExt := &certificateListExt{CertList: crl}
+	crlExt := &CRL{CertList: crl}
 	var crlIssuer pkix.Name
 	crlIssuer.FillFromRDNSequence(&crl.TBSCertList.Issuer)
 
@@ -339,7 +339,7 @@ func makeChain(t *testing.T, name string) []*x509.Certificate {
 	return certChain
 }
 
-func loadCRL(t *testing.T, path string) *certificateListExt {
+func loadCRL(t *testing.T, path string) *CRL {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("readFile(%v) failed err = %v", path, err)
@@ -372,7 +372,7 @@ func TestCachedCRL(t *testing.T) {
 	}{
 		{
 			desc: "Valid",
-			val: &certificateListExt{
+			val: &CRL{
 				CertList: &pkix.CertificateList{
 					TBSCertList: pkix.TBSCertificateList{
 						NextUpdate: time.Now().Add(time.Hour),
@@ -382,7 +382,7 @@ func TestCachedCRL(t *testing.T) {
 		},
 		{
 			desc: "Expired",
-			val: &certificateListExt{
+			val: &CRL{
 				CertList: &pkix.CertificateList{
 					TBSCertList: pkix.TBSCertificateList{
 						NextUpdate: time.Now().Add(-time.Hour),
@@ -464,7 +464,7 @@ func TestVerifyCrl(t *testing.T) {
 
 	verifyTests := []struct {
 		desc    string
-		crl     *certificateListExt
+		crl     *CRL
 		certs   []*x509.Certificate
 		cert    *x509.Certificate
 		errWant string

@@ -729,7 +729,7 @@ func TestIssuerNonPrintableString(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to decode issuer: %s", err)
 	}
-	_, err = fetchCRL(rawIssuer, RevocationConfig{RootDir: testdata.Path("crl")})
+	_, err = fetchCRLOpenSSLHashDir(rawIssuer, RevocationConfig{RootDir: testdata.Path("crl")})
 	if err != nil {
 		t.Fatalf("fetchCRL failed: %s", err)
 	}

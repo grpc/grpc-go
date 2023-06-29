@@ -244,7 +244,7 @@ func fetchIssuerCRL(rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg Revo
 		}
 	}
 
-	crl, err := fetchCRL(rawIssuer, cfg)
+	crl, err := fetchCRLOpenSSLHashDir(rawIssuer, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("fetchCRL() failed: %v", err)
 	}
@@ -258,13 +258,23 @@ func fetchIssuerCRL(rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg Revo
 	return crl, nil
 }
 
+func fetchCRL(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) (*CRL, error) {
+	if cfg.CRLProvider != nil {
+		//TODO
+	} else {
+		return fetchIssuerCRL(c.RawIssuer, crlVerifyCrt, cfg)
+	}
+	// TODO
+	return nil, nil
+}
+
 // checkCert checks a single certificate against the CRL defined in the certificate.
 // It will fetch and verify the CRL(s) defined in the root directory specified by cfg.
 // If we can't load any authoritative CRL files, the status is RevocationUndetermined.
 // c is the certificate to check.
 // crlVerifyCrt is the group of possible certificates to verify the crl.
 func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) RevocationStatus {
-	crl, err := fetchIssuerCRL(c.RawIssuer, crlVerifyCrt, cfg)
+	crl, err := fetchCRL(c, crlVerifyCrt, cfg)
 	if err != nil {
 		// We couldn't load any CRL files for the certificate, so we don't know if it's RevocationUnrevoked or not.
 		grpclogLogger.Warningf("getIssuerCRL(%v) err = %v", c.Issuer, err)
@@ -429,7 +439,7 @@ func parseCRLExtensions(c *x509.RevocationList) (*CRL, error) {
 	return certList, nil
 }
 
-func fetchCRL(rawIssuer []byte, cfg RevocationConfig) (*CRL, error) {
+func fetchCRLOpenSSLHashDir(rawIssuer []byte, cfg RevocationConfig) (*CRL, error) {
 	var parsedCRL *CRL
 	// 6.3.3 (a) (1) (ii)
 	// According to X509_LOOKUP_hash_dir the format is issuer_hash.rN where N is an increasing number.
