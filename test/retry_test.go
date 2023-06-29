@@ -543,6 +543,8 @@ func (s) TestRetryStats(t *testing.T) {
 	handler.mu.Lock()
 	want := []stats.RPCStats{
 		&stats.Begin{},
+		&stats.PickerPicked{},
+		&stats.PickerPicked{},
 		&stats.OutHeader{FullMethod: "/grpc.testing.TestService/EmptyCall"},
 		&stats.OutPayload{WireLength: 5},
 		&stats.End{},
