@@ -19,14 +19,23 @@
 package advancedtls
 
 import (
-	"context"
 	"crypto/x509"
 )
 
 type CRLProvider interface {
 	// Callers are expected to use the returned value as read-only.
-	CRL(ctx context.Context, cert x509.Certificate) (*CRL, error)
+	CRL(cert *x509.Certificate) (*CRL, error)
+}
 
-	// Close cleans up resources allocated by the Provider.
-	Close()
+type StaticCRLProvider struct {
+	crls map[string]*CRL
+}
+
+func (p *StaticCRLProvider) AddCRL(crl *CRL) {
+	p.crls[crl.CertList.Issuer.ToRDNSequence().String()] = crl
+}
+
+func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
+	// TODO what to do if no CRL found
+	return p.crls[cert.Issuer.ToRDNSequence().String()], nil
 }

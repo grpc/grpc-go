@@ -260,12 +260,14 @@ func fetchIssuerCRL(rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg Revo
 
 func fetchCRL(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) (*CRL, error) {
 	if cfg.CRLProvider != nil {
-		//TODO
+		crl, err := cfg.CRLProvider.CRL(c)
+		if err != nil {
+			return nil, fmt.Errorf("CrlProvider failed err = %v", err)
+		}
+		return crl, nil
 	} else {
 		return fetchIssuerCRL(c.RawIssuer, crlVerifyCrt, cfg)
 	}
-	// TODO
-	return nil, nil
 }
 
 // checkCert checks a single certificate against the CRL defined in the certificate.
