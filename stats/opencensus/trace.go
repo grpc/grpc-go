@@ -99,9 +99,9 @@ func populateSpan(ctx context.Context, rs stats.RPCStats, ti *traceInfo) {
 			trace.BoolAttribute("Client", rs.Client),
 			trace.BoolAttribute("FailFast", rs.FailFast),
 		)
-	case *stats.ResolverResolved:
+	case *stats.InitialResolverResult:
 		span.Annotate(nil, "Delayed name resolution complete")
-	case *stats.PickerPicked:
+	case *stats.PickerUpdated:
 		span.Annotate(nil, "Delayed LB pick complete")
 	case *stats.InPayload:
 		// message id - "must be calculated as two different counters starting

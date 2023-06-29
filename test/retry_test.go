@@ -543,8 +543,8 @@ func (s) TestRetryStats(t *testing.T) {
 	handler.mu.Lock()
 	want := []stats.RPCStats{
 		&stats.Begin{},
-		&stats.PickerPicked{},
-		&stats.PickerPicked{},
+		&stats.PickerUpdated{},
+		&stats.PickerUpdated{},
 		&stats.OutHeader{FullMethod: "/grpc.testing.TestService/EmptyCall"},
 		&stats.OutPayload{WireLength: 5},
 		&stats.End{},
@@ -581,7 +581,7 @@ func (s) TestRetryStats(t *testing.T) {
 	// There is a race between receiving the payload (triggered by the
 	// application / gRPC library) and receiving the trailer (triggered at the
 	// transport layer).  Adjust the received stats accordingly if necessary.
-	const tIdx, pIdx = 13, 14
+	const tIdx, pIdx = 15, 16
 	_, okT := handler.s[tIdx].(*stats.InTrailer)
 	_, okP := handler.s[pIdx].(*stats.InPayload)
 	if okT && okP {
@@ -596,7 +596,11 @@ func (s) TestRetryStats(t *testing.T) {
 			t.Fatalf("at position %v: got %T; want %T", i, s, w)
 		}
 		wv, sv := reflect.ValueOf(w).Elem(), reflect.ValueOf(s).Elem()
-
+		if sv.NumField() == 0 {
+			// Resolver blocking and Picker blocking events have no fields,
+			// isClient() always returns true.
+			continue
+		}
 		// Validate that Client is always true
 		if sv.FieldByName("Client").Interface().(bool) != true {
 			t.Fatalf("at position %v: got Client=false; want true", i)
@@ -622,8 +626,8 @@ func (s) TestRetryStats(t *testing.T) {
 	}
 
 	// Validate timings between last Begin and preceding End.
-	end := handler.s[8].(*stats.End)
-	begin := handler.s[9].(*stats.Begin)
+	end := handler.s[10].(*stats.End)
+	begin := handler.s[11].(*stats.Begin)
 	diff := begin.BeginTime.Sub(end.EndTime)
 	if diff < 10*time.Millisecond || diff > 50*time.Millisecond {
 		t.Fatalf("pushback time before final attempt = %v; want ~10ms", diff)

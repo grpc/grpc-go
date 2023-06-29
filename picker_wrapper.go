@@ -131,7 +131,7 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 				}
 			case <-ch:
 				for _, sh := range pw.statsHandlers {
-					sh.HandleRPC(ctx, &stats.PickerPicked{})
+					sh.HandleRPC(ctx, &stats.PickerUpdated{})
 				}
 
 			}
