@@ -42,6 +42,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 
 	_ "google.golang.org/grpc/balancer/roundrobin"           // To register roundrobin.
@@ -349,7 +350,7 @@ func (cc *ClientConn) exitIdleMode() error {
 	cc.idlenessState = ccIdlenessStateExitingIdle
 	exitedIdle := false
 	if cc.blockingpicker == nil {
-		cc.blockingpicker = newPickerWrapper()
+		cc.blockingpicker = newPickerWrapper(cc.dopts.copts.StatsHandlers)
 	} else {
 		cc.blockingpicker.exitIdleMode()
 		exitedIdle = true
@@ -743,6 +744,9 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 	}
 	select {
 	case <-cc.firstResolveEvent.Done():
+		for _, sh := range cc.dopts.copts.StatsHandlers {
+			sh.HandleRPC(ctx, &stats.ResolverResolved{})
+		}
 		return nil
 	case <-ctx.Done():
 		return status.FromContextError(ctx.Err()).Err()

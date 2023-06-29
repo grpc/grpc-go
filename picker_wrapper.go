@@ -28,21 +28,26 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	istatus "google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
 
 // pickerWrapper is a wrapper of balancer.Picker. It blocks on certain pick
 // actions and unblock when there's a picker update.
 type pickerWrapper struct {
-	mu         sync.Mutex
-	done       bool
-	idle       bool
-	blockingCh chan struct{}
-	picker     balancer.Picker
+	mu            sync.Mutex
+	done          bool
+	idle          bool
+	blockingCh    chan struct{}
+	picker        balancer.Picker
+	statsHandlers []stats.Handler
 }
 
-func newPickerWrapper() *pickerWrapper {
-	return &pickerWrapper{blockingCh: make(chan struct{})}
+func newPickerWrapper(statsHandlers []stats.Handler) *pickerWrapper {
+	return &pickerWrapper{
+		blockingCh:    make(chan struct{}),
+		statsHandlers: statsHandlers,
+	}
 }
 
 // updatePicker is called by UpdateBalancerState. It unblocks all blocked pick.
@@ -125,6 +130,10 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 					return nil, balancer.PickResult{}, status.Error(codes.Canceled, errStr)
 				}
 			case <-ch:
+				for _, sh := range pw.statsHandlers {
+					sh.HandleRPC(ctx, &stats.PickerPicked{})
+				}
+
 			}
 			continue
 		}
