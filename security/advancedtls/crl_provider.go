@@ -28,7 +28,16 @@ type CRLProvider interface {
 }
 
 type StaticCRLProvider struct {
+	// TODO CRL is sort of our internal representation - provide an API for
+	// people to read into it, or provide a simpler type in the API then
+	// internally convert to this form
 	crls map[string]*CRL
+}
+
+func MakeStaticCRLProvider() *StaticCRLProvider {
+	p := StaticCRLProvider{}
+	p.crls = make(map[string]*CRL)
+	return &p
 }
 
 func (p *StaticCRLProvider) AddCRL(crl *CRL) {
@@ -36,6 +45,6 @@ func (p *StaticCRLProvider) AddCRL(crl *CRL) {
 }
 
 func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
-	// TODO what to do if no CRL found
+	// TODO handle no CRL found
 	return p.crls[cert.Issuer.ToRDNSequence().String()], nil
 }
