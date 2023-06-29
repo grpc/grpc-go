@@ -65,6 +65,11 @@ type RevocationConfig struct {
 	AllowUndetermined bool
 	// Cache will store CRL files if not nil, otherwise files are reloaded for every lookup.
 	Cache Cache
+	// CRLProvider is an alternative to using RootDir directly for the
+	// X509_LOOKUP_hash_dir approach to CRL files. If set, the CRLProvider's CRL
+	// function will be called when looking up and fetching CRLs during the
+	// handshake.
+	CRLProvider CRLProvider
 }
 
 // RevocationStatus is the revocation status for a certificate or chain.
