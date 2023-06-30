@@ -34,23 +34,39 @@ func TestStaticCRLProvider(t *testing.T) {
 	}
 
 	tests := []struct {
-		desc  string
-		certs []*x509.Certificate
+		desc        string
+		certs       []*x509.Certificate
+		expectNoCRL bool
 	}{
 		{
-			desc:  "TODO",
+			desc:  "Unrevoked chain",
 			certs: makeChain(t, testdata.Path("crl/unrevoked.pem")),
+		},
+		{
+			desc:  "Revoked Intermediate chain",
+			certs: makeChain(t, testdata.Path("crl/revokedInt.pem")),
+		},
+		{
+			desc:  "Revoked leaf chain",
+			certs: makeChain(t, testdata.Path("crl/revokedLeaf.pem")),
+		},
+		{
+			desc:        "Chain with no CRL for issuer",
+			certs:       makeChain(t, testdata.Path("client_cert_1.pem")),
+			expectNoCRL: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			crl, err := p.CRL(tt.certs[0])
-			if err != nil {
-				t.Fatalf("TODO fetching from provider")
-			}
-			if crl == nil {
-				t.Fatalf("TODO CRL is nil")
+			for _, c := range tt.certs {
+				crl, err := p.CRL(c)
+				if err != nil {
+					t.Fatalf("Expected error fetch from provider: %v", err)
+				}
+				if crl == nil && !tt.expectNoCRL {
+					t.Fatalf("CRL is unexpectedly nil")
+				}
 			}
 		})
 	}
