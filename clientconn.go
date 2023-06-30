@@ -744,9 +744,6 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 	}
 	select {
 	case <-cc.firstResolveEvent.Done():
-		for _, sh := range cc.dopts.copts.StatsHandlers {
-			sh.HandleRPC(ctx, &stats.InitialResolverResult{})
-		}
 		return nil
 	case <-ctx.Done():
 		return status.FromContextError(ctx.Err()).Err()

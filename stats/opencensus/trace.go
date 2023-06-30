@@ -99,8 +99,6 @@ func populateSpan(ctx context.Context, rs stats.RPCStats, ti *traceInfo) {
 			trace.BoolAttribute("Client", rs.Client),
 			trace.BoolAttribute("FailFast", rs.FailFast),
 		)
-	case *stats.InitialResolverResult:
-		span.Annotate(nil, "Delayed name resolution complete")
 	case *stats.PickerUpdated:
 		span.Annotate(nil, "Delayed LB pick complete")
 	case *stats.InPayload:
