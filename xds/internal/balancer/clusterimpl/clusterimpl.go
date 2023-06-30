@@ -255,7 +255,7 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 
 	if b.config == nil || b.config.ChildPolicy.Name != newConfig.ChildPolicy.Name {
 		if err := b.child.SwitchTo(bb); err != nil {
-			return fmt.Errorf("cluster impl: error switching to child of type %q: %v", newConfig.ChildPolicy.Name, err)
+			return fmt.Errorf("error switching to child of type %q: %v", newConfig.ChildPolicy.Name, err)
 		}
 	}
 	b.config = newConfig
