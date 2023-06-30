@@ -294,6 +294,10 @@ func fetchCRL(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revocat
 		if err != nil {
 			return nil, fmt.Errorf("CrlProvider failed err = %v", err)
 		}
+		if crl == nil {
+			// TODO print out cert info here? What cert contents are okay to have in a log?
+			return nil, fmt.Errorf("no CRL found for certificate's issuer")
+		}
 		return crl, nil
 	} else {
 		return fetchIssuerCRL(c.RawIssuer, crlVerifyCrt, cfg)
@@ -308,7 +312,11 @@ func fetchCRL(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revocat
 func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) RevocationStatus {
 	crl, err := fetchCRL(c, crlVerifyCrt, cfg)
 	if err != nil {
-		// We couldn't load any CRL files for the certificate, so we don't know if it's RevocationUnrevoked or not.
+		// We couldn't load any CRL files for the certificate, so we don't know
+		// if it's RevocationUnrevoked or not.  This is not necessarily a
+		// problem - it's not invalid to have no CRLs if you don't have any
+		// revocations for an issuer. We just return RevocationUndetermined and
+		// there is a setting for the user to control the handling of that.
 		grpclogLogger.Warningf("fetchCRL(%v) err = %v", c.Issuer, err)
 		return RevocationUndetermined
 	}

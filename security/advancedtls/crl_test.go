@@ -509,6 +509,11 @@ func TestRevokedCert(t *testing.T) {
 	revokedLeafChain := makeChain(t, testdata.Path("crl/revokedLeaf.pem"))
 	validChain := makeChain(t, testdata.Path("crl/unrevoked.pem"))
 	cache, err := lru.New(5)
+	cRLProvider := MakeStaticCRLProvider()
+	for i := 1; i <= 6; i++ {
+		crl := loadCRL(t, testdata.Path(fmt.Sprintf("crl/%d.crl", i)))
+		cRLProvider.AddCRL(crl)
+	}
 	if err != nil {
 		t.Fatalf("lru.New: err = %v", err)
 	}
@@ -567,11 +572,23 @@ func TestRevokedCert(t *testing.T) {
 	}
 
 	for _, tt := range revocationTests {
-		t.Run(tt.desc, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%v with x509 crl hash dir", tt.desc), func(t *testing.T) {
 			err := CheckRevocation(tt.in, RevocationConfig{
 				RootDir:           testdata.Path("crl"),
 				AllowUndetermined: tt.allowUndetermined,
 				Cache:             cache,
+			})
+			t.Logf("CheckRevocation err = %v", err)
+			if tt.revoked && err == nil {
+				t.Error("Revoked certificate chain was allowed")
+			} else if !tt.revoked && err != nil {
+				t.Error("Unrevoked certificate not allowed")
+			}
+		})
+		t.Run(fmt.Sprintf("%v with static provider", tt.desc), func(t *testing.T) {
+			err := CheckRevocation(tt.in, RevocationConfig{
+				AllowUndetermined: tt.allowUndetermined,
+				CRLProvider:       cRLProvider,
 			})
 			t.Logf("CheckRevocation err = %v", err)
 			if tt.revoked && err == nil {
@@ -627,6 +644,7 @@ func setupTLSConn(t *testing.T) (net.Listener, *x509.Certificate, *ecdsa.Private
 }
 
 // TestVerifyConnection will setup a client/server connection and check revocation in the real TLS dialer
+// TODO add CRL provider tests here?
 func TestVerifyConnection(t *testing.T) {
 	lis, cert, key := setupTLSConn(t)
 	defer func() {
