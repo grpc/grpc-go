@@ -90,11 +90,41 @@ func (s RevocationStatus) String() string {
 
 // CRL contains a pkix.CertificateList and parsed
 // extensions that aren't provided by the golang CRL parser.
+// GRPC requires certain specifics for CRLs - all CRLs should be loaded using
+// NewCRL() for bytes directly or ReadCRLFile() to read directly from a filepath
 type CRL struct {
 	CertList *x509.RevocationList
 	// RFC5280, 5.2.1, all conforming CRLs must have a AKID with the ID method.
 	AuthorityKeyID []byte
 	RawIssuer      []byte
+}
+
+func NewCRL(b []byte) (*CRL, error) {
+	crl, err := parseRevocationList(b)
+	if err != nil {
+		return nil, fmt.Errorf("parseCrl() failed err = %v", err)
+	}
+	crlExt, err := parseCRLExtensions(crl)
+	if err != nil {
+		return nil, fmt.Errorf("parseCRLExtensions() failed err = %v", err)
+	}
+	crlExt.RawIssuer, err = extractCRLIssuer(b)
+	if err != nil {
+		return nil, fmt.Errorf("extractCRLIssuer() failed err= %v", err)
+	}
+	return crlExt, nil
+}
+
+func ReadCRLFile(path string) (*CRL, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("readFile(%v) failed err = %v", path, err)
+	}
+	crl, err := NewCRL(b)
+	if err != nil {
+		return nil, fmt.Errorf("ReadCRLFile(%v) failed err = %v", path, err)
+	}
+	return crl, nil
 }
 
 const tagDirectoryName = 4

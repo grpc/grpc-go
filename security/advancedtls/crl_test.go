@@ -339,23 +339,11 @@ func makeChain(t *testing.T, name string) []*x509.Certificate {
 }
 
 func loadCRL(t *testing.T, path string) *CRL {
-	b, err := os.ReadFile(path)
+	crl, err := ReadCRLFile(path)
 	if err != nil {
-		t.Fatalf("readFile(%v) failed err = %v", path, err)
+		t.Fatalf("ReadCRLFile(%v) failed err = %v", path, err)
 	}
-	crl, err := parseRevocationList(b)
-	if err != nil {
-		t.Fatalf("parseCrl(%v) failed err = %v", path, err)
-	}
-	crlExt, err := parseCRLExtensions(crl)
-	if err != nil {
-		t.Fatalf("parseCRLExtensions(%v) failed err = %v", path, err)
-	}
-	crlExt.RawIssuer, err = extractCRLIssuer(b)
-	if err != nil {
-		t.Fatalf("extractCRLIssuer(%v) failed err= %v", path, err)
-	}
-	return crlExt
+	return crl
 }
 
 func TestCachedCRL(t *testing.T) {
