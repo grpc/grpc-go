@@ -19,6 +19,7 @@
 package advancedtls
 
 import (
+	"crypto/x509"
 	"fmt"
 	"testing"
 
@@ -31,12 +32,26 @@ func TestStaticCRLProvider(t *testing.T) {
 		crl := loadCRL(t, testdata.Path(fmt.Sprintf("crl/%d.crl", i)))
 		p.AddCRL(crl)
 	}
-	certs := makeChain(t, testdata.Path("crl/unrevoked.pem"))
-	crl, err := p.CRL(certs[0])
-	if err != nil {
-		t.Fatalf("TODO fetching from provider")
+
+	tests := []struct {
+		desc  string
+		certs []*x509.Certificate
+	}{
+		{
+			desc:  "TODO",
+			certs: makeChain(t, testdata.Path("crl/unrevoked.pem")),
+		},
 	}
-	if crl == nil {
-		t.Fatalf("TODO CRL is nil")
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			crl, err := p.CRL(tt.certs[0])
+			if err != nil {
+				t.Fatalf("TODO fetching from provider")
+			}
+			if crl == nil {
+				t.Fatalf("TODO CRL is nil")
+			}
+		})
 	}
 }
