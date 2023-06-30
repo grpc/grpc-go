@@ -28,11 +28,7 @@ import (
 func TestStaticCRLProvider(t *testing.T) {
 	p := MakeStaticCRLProvider()
 	for i := 1; i <= 6; i++ {
-		// TODO use loadCRL in test instead of new readCRLFile func
-		crl, err := readCRLFile(testdata.Path(fmt.Sprintf("crl/%d.crl", i)))
-		if err != nil {
-			t.Fatalf("TODO couldn't read file")
-		}
+		crl := loadCRL(t, testdata.Path(fmt.Sprintf("crl/%d.crl", i)))
 		p.AddCRL(crl)
 	}
 	certs := makeChain(t, testdata.Path("crl/unrevoked.pem"))

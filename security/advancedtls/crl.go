@@ -441,39 +441,6 @@ func parseCRLExtensions(c *x509.RevocationList) (*CRL, error) {
 	return certList, nil
 }
 
-func readCRLFile(crlPath string) (*CRL, error) {
-	crlBytes, err := os.ReadFile(crlPath)
-	if err != nil {
-		return nil, err
-	}
-
-	crl, err := parseRevocationList(crlBytes)
-	if err != nil {
-		return nil, fmt.Errorf("parseRevocationList(%v) failed: %v", crlPath, err)
-	}
-	var certList *CRL
-	if certList, err = parseCRLExtensions(crl); err != nil {
-		grpclogLogger.Infof("fetchCRL: unsupported crl %v: %v", crlPath, err)
-		return nil, fmt.Errorf("fetchCRL: unsupported crl %v: %v", crlPath, err)
-	}
-
-	rawCRLIssuer, err := extractCRLIssuer(crlBytes)
-	if err != nil {
-		return nil, err
-	}
-	certList.RawIssuer = rawCRLIssuer
-	// // RFC5280, 6.3.3 (b) Verify the issuer and scope of the complete CRL.
-	// TODO we may need to do this check elsewhere
-	// HOWEVER, the structure of CRL providers is that we let people use their
-	// own impl, so they should be making sure issuers match if
-	// bytes.Equal(rawIssuer, rawCRLIssuer) {
-	// 	parsedCRL = certList
-	// 	// Continue to find the highest number in the .rN suffix.
-	// 	continue
-	// }
-	return certList, nil
-}
-
 func fetchCRLOpenSSLHashDir(rawIssuer []byte, cfg RevocationConfig) (*CRL, error) {
 	var parsedCRL *CRL
 	// 6.3.3 (a) (1) (ii)
