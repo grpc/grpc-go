@@ -59,16 +59,15 @@ func (s *Begin) IsClient() bool { return s.Client }
 
 func (s *Begin) isRPCStats() {}
 
-// InitialResolverResult represents an event that the resolved finished
-// resolving if the ClientConn blocks on resolver resolution while performing a
-// RPC.
+// InitialResolverResult represents an event of a resolver finishing resolving
+// if an RPC occurs before the initial resolver result.
 type InitialResolverResult struct{}
 
 // IsClient indicates if the stats information is from client side. Only Client
 // Side interfaces with a resolver, thus always returns true.
-func (irr *InitialResolverResult) IsClient() bool { return true }
+func (*InitialResolverResult) IsClient() bool { return true }
 
-func (irr *InitialResolverResult) isRPCStats() {}
+func (*InitialResolverResult) isRPCStats() {}
 
 // PickerUpdated represents an event that the picker finished picking if the
 // ClientConn blocks on picker picking while performing a RPC.
@@ -76,9 +75,9 @@ type PickerUpdated struct{}
 
 // IsClient indicates if the stats information is from client side. Only Client
 // Side interfaces with a Picker, thus always returns true.
-func (pu *PickerUpdated) IsClient() bool { return true }
+func (*PickerUpdated) IsClient() bool { return true }
 
-func (pu *PickerUpdated) isRPCStats() {}
+func (*PickerUpdated) isRPCStats() {}
 
 // InPayload contains the information for an incoming payload.
 type InPayload struct {

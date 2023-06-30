@@ -40,7 +40,7 @@ type pickerWrapper struct {
 	idle          bool
 	blockingCh    chan struct{}
 	picker        balancer.Picker
-	statsHandlers []stats.Handler
+	statsHandlers []stats.Handler // to record blocking picker calls
 }
 
 func newPickerWrapper(statsHandlers []stats.Handler) *pickerWrapper {
@@ -133,7 +133,6 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 				for _, sh := range pw.statsHandlers {
 					sh.HandleRPC(ctx, &stats.PickerUpdated{})
 				}
-
 			}
 			continue
 		}
