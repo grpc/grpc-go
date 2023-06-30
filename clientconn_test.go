@@ -1221,3 +1221,40 @@ func stayConnected(cc *ClientConn) {
 		}
 	}
 }
+
+func (s) TestURLAuthorityEscape(t *testing.T) {
+	tests := []struct {
+		name      string
+		authority string
+		want      string
+	}{
+		{
+			name:      "ipv6_authority",
+			authority: "[::1]",
+			want:      "[::1]",
+		},
+		{
+			name:      "with_user_and_host",
+			authority: "userinfo@host:10001",
+			want:      "userinfo@host:10001",
+		},
+		{
+			name:      "with_multiple_slashes",
+			authority: "projects/123/network/abc/service",
+			want:      "projects%2F123%2Fnetwork%2Fabc%2Fservice",
+		},
+		{
+			name:      "all_possible_allowed_chars",
+			authority: "abc123-._~!$&'()*+,;=@:[]",
+			want:      "abc123-._~!$&'()*+,;=@:[]",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got, want := encodeAuthority(test.authority), test.want; got != want {
+				t.Errorf("encodeAuthority(%s) = %s, want %s", test.authority, got, test.want)
+			}
+		})
+	}
+}
