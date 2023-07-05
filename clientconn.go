@@ -42,7 +42,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 
 	_ "google.golang.org/grpc/balancer/roundrobin"           // To register roundrobin.
