@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -541,11 +542,16 @@ func getChainStreamer(interceptors []StreamClientInterceptor, curr int, finalStr
 
 // connectivityStateManager keeps the connectivity.State of ClientConn.
 // This struct will eventually be exported so the balancers can access it.
+//
+// TODO: If possible, get rid of the `connectivityStateManager` type, and
+// provide this functionality using the `PubSub`, to avoid keeping track of
+// the connectivity state at two places.
 type connectivityStateManager struct {
-	mu         sync.Mutex
-	state      connectivity.State
-	notifyChan chan struct{}
-	channelzID *channelz.Identifier
+	mu                      sync.Mutex
+	state                   connectivity.State
+	notifyChan              chan struct{}
+	channelzID              *channelz.Identifier
+	connectivityStatePubSub *grpcsync.PubSub
 }
 
 // updateState updates the connectivity.State of ClientConn.
@@ -561,6 +567,9 @@ func (csm *connectivityStateManager) updateState(state connectivity.State) {
 		return
 	}
 	csm.state = state
+	if csm.connectivityStatePubSub != nil {
+		csm.connectivityStatePubSub.Publish(state)
+	}
 	channelz.Infof(logger, csm.channelzID, "Channel Connectivity change to %v", state)
 	if csm.notifyChan != nil {
 		// There are other goroutines waiting on this channel.
@@ -759,6 +768,13 @@ func init() {
 		panic(fmt.Sprintf("impossible error parsing empty service config: %v", cfg.Err))
 	}
 	emptyServiceConfig = cfg.Config.(*ServiceConfig)
+
+	internal.AddConnectivityStateSubscriber = func(cc *ClientConn, s grpcsync.Subscriber) func() {
+		if cc.csMgr.connectivityStatePubSub == nil {
+			cc.csMgr.connectivityStatePubSub = grpcsync.NewPubSub()
+		}
+		return cc.csMgr.connectivityStatePubSub.Subscribe(s)
+	}
 }
 
 func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
@@ -1193,6 +1209,13 @@ func (cc *ClientConn) ResetConnectBackoff() {
 // Close tears down the ClientConn and all underlying connections.
 func (cc *ClientConn) Close() error {
 	defer cc.cancel()
+
+	cc.csMgr.mu.Lock()
+	if cc.csMgr.connectivityStatePubSub != nil {
+		cc.csMgr.connectivityStatePubSub.Stop()
+		cc.csMgr.connectivityStatePubSub = nil
+	}
+	cc.csMgr.mu.Unlock()
 
 	cc.mu.Lock()
 	if cc.conns == nil {
