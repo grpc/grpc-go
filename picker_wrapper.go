@@ -130,7 +130,6 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 					return nil, balancer.PickResult{}, status.Error(codes.Canceled, errStr)
 				}
 			case <-ch:
-				print("picker blocking stats handler call sent")
 				for _, sh := range pw.statsHandlers {
 					sh.HandleRPC(ctx, &stats.PickerUpdated{})
 				}
