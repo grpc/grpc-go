@@ -86,7 +86,7 @@ const defaultHealthService = "grpc.health.v1.Health"
 
 func init() {
 	channelz.TurnOn()
-	balancer.Register(blockingPickerBalancerBuilder{})
+	balancer.Register(triggerRPCBlockPickerBalancerBuilder{})
 }
 
 type s struct {
@@ -6378,53 +6378,48 @@ func (*statsHandlerRecordEvents) TagRPC(ctx context.Context, _ *stats.RPCTagInfo
 }
 func (h *statsHandlerRecordEvents) HandleRPC(_ context.Context, s stats.RPCStats) {
 	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.s = append(h.s, s)
-	h.mu.Unlock()
 }
 func (*statsHandlerRecordEvents) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
 	return ctx
 }
 func (*statsHandlerRecordEvents) HandleConn(context.Context, stats.ConnStats) {}
 
-type blockingPicker struct {
+type triggerRPCBlockPicker struct {
 	pickDone func()
 }
 
-func (bp *blockingPicker) Pick(pi balancer.PickInfo) (balancer.PickResult, error) {
-	defer bp.pickDone()
+func (bp *triggerRPCBlockPicker) Pick(pi balancer.PickInfo) (balancer.PickResult, error) {
+	bp.pickDone()
 	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }
 
-const name = "blockingPickerBalancer"
+const name = "triggerRPCBlockBalancer"
 
-type blockingPickerBalancerBuilder struct{}
+type triggerRPCBlockPickerBalancerBuilder struct{}
 
-func (blockingPickerBalancerBuilder) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
-	b := &blockingPickerBalancer{
+func (triggerRPCBlockPickerBalancerBuilder) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
+	b := &triggerRPCBlockBalancer{
 		ClientConn: cc,
 	}
 	// round_robin child to complete balancer tree with a usable leaf policy and
 	// have RPCs actually work.
 	builder := balancer.Get(roundrobin.Name)
-	if builder == nil {
-		// Shouldn't happen, defensive programming. Registered from import of
-		// roundrobin package.
-		return nil
-	}
 	rr := builder.Build(b, bOpts)
 	if rr == nil {
 		// Shouldn't happen, defensive programming.
-		return nil
+		panic("round robin builder returned nil")
 	}
 	b.Balancer = rr
 	return b
 }
 
-func (blockingPickerBalancerBuilder) ParseConfig(json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+func (triggerRPCBlockPickerBalancerBuilder) ParseConfig(json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return &bpbConfig{}, nil
 }
 
-func (blockingPickerBalancerBuilder) Name() string {
+func (triggerRPCBlockPickerBalancerBuilder) Name() string {
 	return name
 }
 
@@ -6432,7 +6427,7 @@ type bpbConfig struct {
 	serviceconfig.LoadBalancingConfig
 }
 
-type blockingPickerBalancer struct {
+type triggerRPCBlockBalancer struct {
 	stateMu    sync.Mutex
 	childState balancer.State
 
@@ -6443,14 +6438,14 @@ type blockingPickerBalancer struct {
 	balancer.Balancer
 }
 
-func (bpb *blockingPickerBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+func (bpb *triggerRPCBlockBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	bpb.blockingPickerDone = grpcsync.NewEvent()
 	err := bpb.Balancer.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: s.ResolverState,
 	})
 	bpb.ClientConn.UpdateState(balancer.State{
 		ConnectivityState: connectivity.Connecting,
-		Picker: &blockingPicker{
+		Picker: &triggerRPCBlockPicker{
 			pickDone: func() {
 				bpb.blockingPickerDone.Fire()
 				bpb.stateMu.Lock()
@@ -6463,7 +6458,7 @@ func (bpb *blockingPickerBalancer) UpdateClientConnState(s balancer.ClientConnSt
 	return err
 }
 
-func (bpb *blockingPickerBalancer) UpdateState(state balancer.State) {
+func (bpb *triggerRPCBlockBalancer) UpdateState(state balancer.State) {
 	bpb.stateMu.Lock()
 	bpb.childState = state
 	bpb.stateMu.Unlock()
@@ -6473,8 +6468,8 @@ func (bpb *blockingPickerBalancer) UpdateState(state balancer.State) {
 }
 
 // TestPickerBlockingStatsCall tests the emission of a stats handler call that
-// represents the picker had to block due to ErrNoSubConnAvailable being
-// returned from the first picker call.
+// represents the RPC had to block waiting for a new picker due to
+// ErrNoSubConnAvailable being returned from the first picker call.
 func (s) TestPickerBlockingStatsCall(t *testing.T) {
 	sh := &statsHandlerRecordEvents{}
 	ss := &stubserver.StubServer{
@@ -6491,9 +6486,9 @@ func (s) TestPickerBlockingStatsCall(t *testing.T) {
 	lbCfgJSON := `{
   		"loadBalancingConfig": [
     		{
-      			"blockingPickerBalancer": {}
-    	}
-  	]
+      			"triggerRPCBlockBalancer": {}
+    		}
+		]
 	}`
 
 	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(lbCfgJSON)
@@ -6525,7 +6520,7 @@ func (s) TestPickerBlockingStatsCall(t *testing.T) {
 			pickerUpdatedCount++
 		}
 	}
-	if pickerUpdatedCount == 0 {
-		t.Fatalf("sh.pickerUpdated count: %v, want: >0", pickerUpdatedCount)
+	if pickerUpdatedCount != 2 {
+		t.Fatalf("sh.pickerUpdated count: %v, want: %v", pickerUpdatedCount, 2)
 	}
 }
