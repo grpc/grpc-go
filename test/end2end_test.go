@@ -6467,10 +6467,10 @@ func (bpb *triggerRPCBlockBalancer) UpdateState(state balancer.State) {
 	}
 }
 
-// TestPickerBlockingStatsCall tests the emission of a stats handler call that
-// represents the RPC had to block waiting for a new picker due to
+// TestRPCBlockingOnPickerStatsCall tests the emission of a stats handler call
+// that represents the RPC had to block waiting for a new picker due to
 // ErrNoSubConnAvailable being returned from the first picker call.
-func (s) TestPickerBlockingStatsCall(t *testing.T) {
+func (s) TestRPCBlockingOnPickerStatsCall(t *testing.T) {
 	sh := &statsHandlerRecordEvents{}
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
