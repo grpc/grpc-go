@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -44,6 +45,8 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
@@ -62,6 +65,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
@@ -82,6 +86,7 @@ const defaultHealthService = "grpc.health.v1.Health"
 
 func init() {
 	channelz.TurnOn()
+	balancer.Register(blockingPickerBalancerBuilder{})
 }
 
 type s struct {
@@ -6362,3 +6367,221 @@ func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
 		t.Fatalf("want 8 server side binary logging events, got %v", ssbl.mml.events)
 	}
 }
+
+// It's in same package so can reuse component - no different functionality
+
+/*type retryStatsHandler struct {
+
+}*/
+
+
+
+type retryStatsHandler2 struct {
+	mu sync.Mutex
+	s  []stats.RPCStats
+}
+
+func (*retryStatsHandler2) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	return ctx
+}
+func (h *retryStatsHandler2) HandleRPC(_ context.Context, s stats.RPCStats) {
+	h.mu.Lock()
+	h.s = append(h.s, s)
+	h.mu.Unlock()
+}
+func (*retryStatsHandler2) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+func (*retryStatsHandler2) HandleConn(context.Context, stats.ConnStats) {}
+
+// or could reuse same one in other test but remove it since non deterministic
+// either reuse or fork, but need to deal with branch either way
+
+
+
+// send on a channel that it's received picker update stats handler call, this
+// blocks RPC from proceeding (does this already verify)?
+
+type blockingPicker struct {
+	pickDone func()
+}
+
+func (bp *blockingPicker) Pick(pi balancer.PickInfo) (balancer.PickResult, error) {
+	// Just needs one ErrNoSubConnAvaiable to trigger blocking wait
+	// Trigger another UpdateStateCall with this call - perhaps with channel
+	// defer /*send on balancerclosure*/ // balancer.UpdateState(pick firsts picker?)
+	// no, just differ a signal on channel, update ccs
+	// will read that signal and that'll cause a new picker update...
+	print("in blocking picker pick")
+	defer bp.pickDone()
+	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+}
+
+// register in init
+const name = "blockingPickerBalancer"
+
+type blockingPickerBalancerBuilder struct{}
+
+func (blockingPickerBalancerBuilder) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
+	b := &blockingPickerBalancer{
+		ClientConn: cc,
+	}
+	// round_robin child to complete balancer tree with a usable leaf policy and
+	// have RPCs actually work.
+	builder := balancer.Get(roundrobin.Name)
+	if builder == nil {
+		// Shouldn't happen, defensive programming. Registered from import of
+		// roundrobin package.
+		return nil
+	}
+	rr := builder.Build(b, bOpts)
+	if rr == nil {
+		// Shouldn't happen, defensive programming.
+		return nil
+	}
+	b.Balancer = rr
+	return b
+}
+
+func (blockingPickerBalancerBuilder) ParseConfig(json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+	return &bpbConfig{}, nil
+}
+
+func (blockingPickerBalancerBuilder) Name() string {
+	return name
+}
+
+type bpbConfig struct {
+	serviceconfig.LoadBalancingConfig
+}
+
+type blockingPickerBalancer struct {
+	// accessed synchronously
+	childState balancer.State
+
+	blockingPickerDone *grpcsync.Event
+	// embed a ClientConn to wrap only UpdateState() operation
+	balancer.ClientConn
+	// embed a Balancer to wrap only UpdateClientConnState() operation
+	balancer.Balancer
+}
+
+func (bpb *blockingPickerBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+	bpb.blockingPickerDone = grpcsync.NewEvent()
+	err := bpb.Balancer.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: s.ResolverState,
+	})
+	// errNoSubConnSent := grpcsync.NewEvent()
+	print("updating client conn state")
+	bpb.ClientConn.UpdateState(balancer.State{
+		ConnectivityState: connectivity.Connecting, // what will trigger that picker codepath?...if connecting doesn't work try ready...
+		Picker: &blockingPicker{
+			pickDone: func(){
+				print("in pickDone()") // gets here so picker must continue
+				print("child")
+				bpb.blockingPickerDone.Fire()
+				bpb.ClientConn.UpdateState(bpb.childState) // get the persisted first pick first picker update sent....this might be non determinisitic then...
+			},
+		},
+	}) // this isn't triggering a picker pick like I thought...
+	// will this get called again if it fails?
+	return err // needs to return this to proceed normally...
+
+	// <- picker channel it closed on that it send on after pick
+	// if event works no need to switch to channel
+	/*<-errNoSubConnSent.Done()
+
+	// update state with a pick first picker - persisted below
+	bpb.ClientConn.UpdateState(bpb.childState) // I think this read is synchronized with the call below
+	return err*/ // will this work without it sending yet...I think so...
+}
+
+func (bpb *blockingPickerBalancer) UpdateState(state balancer.State) {
+	// Persist picker to send later - I think this write is sync with the read above
+	print("in update state")
+	// this will need a mu
+	bpb.childState = state // can come in any time...so guard this?
+	if bpb.blockingPickerDone.HasFired() { // guard first one to get a picker sending ErrNoSubConnAvailable first
+		bpb.ClientConn.UpdateState(bpb.childState) // after the first rr picker update, cc will trigger more, so actually forward these
+	}
+}
+
+func (s) TestPickerBlockingStatsCall(t *testing.T) {
+	sh := &retryStatsHandler2{}
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+	// Does it even need to pass a ServiceConfig?
+
+
+
+	if err := ss.StartServer(); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	lbCfgJSON := `{
+  		"loadBalancingConfig": [
+    		{
+      			"blockingPickerBalancer": {}
+    	}
+  	]
+	}`
+
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(lbCfgJSON)
+	mr := manual.NewBuilderWithScheme("pickerupdatedbalancer")
+	defer mr.Close()
+	print("ss.Address when setting: ", ss.Address)
+	mr.InitialState(resolver.State{
+		Addresses: []resolver.Address{
+			{Addr: ss.Address},
+		},
+		ServiceConfig: sc,
+	})
+
+	cc, err := grpc.Dial(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithStatsHandler(sh), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.Dial() failed: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	/*mr.UpdateState(resolver.State{
+		Addresses: []resolver.Address{
+			{Addr: ss.Address},
+		},
+		ServiceConfig: sc,
+	})*/
+	testServiceClient := testgrpc.NewTestServiceClient(cc)
+	// make an rpc - blocks until returns and completes successfully, sync point, both pickers will have been send at that point
+	if _, err := testServiceClient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+
+	// loop over events stats handler has received and make sure picker Picked is there...
+
+	// don't need to grab a mu I think...nothing coming in concurrently from server side
+	var pickerUpdatedCount uint
+	for _, stat := range sh.s {
+		if _, ok := stat.(*stats.PickerUpdated); ok {
+			pickerUpdatedCount++
+		} // other one needs to ignore this type...
+	}
+	// but a pick first shouldn't need to trigger it...
+	if pickerUpdatedCount == 0 { // i think this is non deterministic...?
+		t.Fatalf("sh.pickerUpdated count: %v, want: >0", pickerUpdatedCount)
+	}
+}
+
+
+// lb policy first pick - err no subconn, return value from that picker will cause? queue
+
+// UpdateState triggered by first picker
+
+// Both of those events have gone through when RPC returns as a result...
+// Corresponding logic in gRPC from picker
+
+
+// run above to make sure not non determinisitic...
