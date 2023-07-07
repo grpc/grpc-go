@@ -6402,7 +6402,7 @@ type triggerRPCBlockPickerBalancerBuilder struct{}
 func (triggerRPCBlockPickerBalancerBuilder) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &triggerRPCBlockBalancer{
 		blockingPickerDone: grpcsync.NewEvent(),
-		ClientConn: cc,
+		ClientConn:         cc,
 	}
 	// round_robin child to complete balancer tree with a usable leaf policy and
 	// have RPCs actually work.
@@ -6448,10 +6448,6 @@ func (bpb *triggerRPCBlockBalancer) UpdateClientConnState(s balancer.ClientConnS
 		Picker: &triggerRPCBlockPicker{
 			pickDone: func() {
 				bpb.blockingPickerDone.Fire()
-				bpb.stateMu.Lock()
-				cs := bpb.childState
-				bpb.stateMu.Unlock()
-				bpb.ClientConn.UpdateState(cs)
 			},
 		},
 	})
@@ -6460,10 +6456,11 @@ func (bpb *triggerRPCBlockBalancer) UpdateClientConnState(s balancer.ClientConnS
 
 func (bpb *triggerRPCBlockBalancer) UpdateState(state balancer.State) {
 	bpb.stateMu.Lock()
-	bpb.childState = state
-	bpb.stateMu.Unlock()
+	defer bpb.stateMu.Unlock()
 	if bpb.blockingPickerDone.HasFired() { // guard first one to get a picker sending ErrNoSubConnAvailable first
-		bpb.ClientConn.UpdateState(state) // after the first rr picker update, cc will trigger more, so actually forward these
+		if state.ConnectivityState == connectivity.Ready {
+			bpb.ClientConn.UpdateState(state) // after the first rr picker update, only forward once READY for deterministic picker counts
+		}
 	}
 }
 
