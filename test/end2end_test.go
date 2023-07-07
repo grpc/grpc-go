@@ -6429,7 +6429,7 @@ type bpbConfig struct {
 }
 
 type triggerRPCBlockBalancer struct {
-	stateMu    sync.Mutex
+	stateMu sync.Mutex
 
 	blockingPickerDone *grpcsync.Event
 	// embed a ClientConn to wrap only UpdateState() operation
