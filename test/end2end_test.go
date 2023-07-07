@@ -6401,6 +6401,7 @@ type triggerRPCBlockPickerBalancerBuilder struct{}
 
 func (triggerRPCBlockPickerBalancerBuilder) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &triggerRPCBlockBalancer{
+		blockingPickerDone: grpcsync.NewEvent(),
 		ClientConn: cc,
 	}
 	// round_robin child to complete balancer tree with a usable leaf policy and
@@ -6439,7 +6440,6 @@ type triggerRPCBlockBalancer struct {
 }
 
 func (bpb *triggerRPCBlockBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	bpb.blockingPickerDone = grpcsync.NewEvent()
 	err := bpb.Balancer.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: s.ResolverState,
 	})

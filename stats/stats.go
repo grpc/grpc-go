@@ -59,8 +59,8 @@ func (s *Begin) IsClient() bool { return s.Client }
 
 func (s *Begin) isRPCStats() {}
 
-// PickerUpdated represents an event that the picker finished picking if the
-// ClientConn blocks on picker picking while performing a RPC.
+// PickerUpdated indicates that the LB policy provided a new picker while the
+// RPC was waiting for one.
 type PickerUpdated struct{}
 
 // IsClient indicates if the stats information is from client side. Only Client
