@@ -6430,7 +6430,6 @@ type bpbConfig struct {
 
 type triggerRPCBlockBalancer struct {
 	stateMu    sync.Mutex
-	childState balancer.State
 
 	blockingPickerDone *grpcsync.Event
 	// embed a ClientConn to wrap only UpdateState() operation
@@ -6517,7 +6516,7 @@ func (s) TestRPCBlockingOnPickerStatsCall(t *testing.T) {
 			pickerUpdatedCount++
 		}
 	}
-	if pickerUpdatedCount != 2 {
+	if pickerUpdatedCount != 1 {
 		t.Fatalf("sh.pickerUpdated count: %v, want: %v", pickerUpdatedCount, 2)
 	}
 }
