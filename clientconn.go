@@ -1210,13 +1210,6 @@ func (cc *ClientConn) ResetConnectBackoff() {
 func (cc *ClientConn) Close() error {
 	defer cc.cancel()
 
-	cc.csMgr.mu.Lock()
-	if cc.csMgr.connectivityStatePubSub != nil {
-		cc.csMgr.connectivityStatePubSub.Stop()
-		cc.csMgr.connectivityStatePubSub = nil
-	}
-	cc.csMgr.mu.Unlock()
-
 	cc.mu.Lock()
 	if cc.conns == nil {
 		cc.mu.Unlock()
@@ -1230,6 +1223,13 @@ func (cc *ClientConn) Close() error {
 	conns := cc.conns
 	cc.conns = nil
 	cc.csMgr.updateState(connectivity.Shutdown)
+
+	cc.csMgr.mu.Lock()
+	if cc.csMgr.connectivityStatePubSub != nil {
+		cc.csMgr.connectivityStatePubSub.Stop()
+		cc.csMgr.connectivityStatePubSub = nil
+	}
+	cc.csMgr.mu.Unlock()
 
 	pWrapper := cc.blockingpicker
 	rWrapper := cc.resolverWrapper
