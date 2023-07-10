@@ -1347,6 +1347,23 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				Raw: v3ClusterAnyWithEDSConfigSourceSelf,
 			},
 		},
+		{
+			name: "xdstp cluster resource with unset EDS service name",
+			resource: testutils.MarshalAny(&v3clusterpb.Cluster{
+				Name:                 "xdstp:foo",
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: "",
+				},
+			}),
+			wantName: "xdstp:foo",
+			wantErr:  true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
