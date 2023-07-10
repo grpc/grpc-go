@@ -1818,6 +1818,61 @@ func parseTarget(target string) (resolver.Target, error) {
 	return resolver.Target{URL: *u}, nil
 }
 
+func encodeAuthority(authority string) string {
+	const upperhex = "0123456789ABCDEF"
+
+	// Return for characters that must be escaped as per
+	// Valid chars are mentioned here:
+	// https://datatracker.ietf.org/doc/html/rfc3986#section-3.2
+	shouldEscape := func(c byte) bool {
+		// Alphanum are always allowed.
+		if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' {
+			return false
+		}
+		switch c {
+		case '-', '_', '.', '~': // Unreserved characters
+			return false
+		case '!', '$', '&', '\'', '(', ')', '*', '+', ',', ';', '=': // Subdelim characters
+			return false
+		case ':', '[', ']', '@': // Authority related delimeters
+			return false
+		}
+		// Everything else must be escaped.
+		return true
+	}
+
+	hexCount := 0
+	for i := 0; i < len(authority); i++ {
+		c := authority[i]
+		if shouldEscape(c) {
+			hexCount++
+		}
+	}
+
+	if hexCount == 0 {
+		return authority
+	}
+
+	required := len(authority) + 2*hexCount
+	t := make([]byte, required)
+
+	j := 0
+	// This logic is a barebones version of escape in the go net/url library.
+	for i := 0; i < len(authority); i++ {
+		switch c := authority[i]; {
+		case shouldEscape(c):
+			t[j] = '%'
+			t[j+1] = upperhex[c>>4]
+			t[j+2] = upperhex[c&15]
+			j += 3
+		default:
+			t[j] = authority[i]
+			j++
+		}
+	}
+	return string(t)
+}
+
 // Determine channel authority. The order of precedence is as follows:
 // - user specified authority override using `WithAuthority` dial option
 // - creds' notion of server name for the authentication handshake
@@ -1868,7 +1923,11 @@ func (cc *ClientConn) determineAuthority() error {
 		// the channel authority given the user's dial target. For resolvers
 		// which don't implement this interface, we will use the endpoint from
 		// "scheme://authority/endpoint" as the default authority.
-		cc.authority = endpoint
+		// Escape the endpoint to handle use cases where the endpoint
+		// might not be a valid authority by default.
+		// For example an endpoint which has multiple paths like
+		// 'a/b/c', which is not a valid authority by default.
+		cc.authority = encodeAuthority(endpoint)
 	}
 	channelz.Infof(logger, cc.channelzID, "Channel authority set to %q", cc.authority)
 	return nil
