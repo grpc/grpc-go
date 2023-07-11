@@ -115,16 +115,27 @@ func (a *Attributes) String() string {
 		var key, val string
 		if str, ok := k.(interface{ String() string }); ok {
 			key = str.String()
+		} else if str, ok := k.(string); ok {
+			key = str
 		}
 		if str, ok := v.(interface{ String() string }); ok {
 			val = str.String()
+		} else if str, ok := v.(string); ok {
+			val = str
 		}
 		if !first {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(fmt.Sprintf("%q: %q, ", key, val))
+		sb.WriteString(fmt.Sprintf("%q: %q ", key, val))
 		first = false
 	}
 	sb.WriteString("}")
 	return sb.String()
+}
+
+// MarshalJSON helps implement the json.Marshaler interface, thereby rendering
+// the Attributes correctly when printing (via pretty.JSON) structs containing
+// Attributes as fields.
+func (a *Attributes) MarshalJSON() ([]byte, error) {
+	return []byte(a.String()), nil
 }
