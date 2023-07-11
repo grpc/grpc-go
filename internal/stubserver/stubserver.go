@@ -56,9 +56,12 @@ type StubServer struct {
 
 	// Parameters for Listen and Dial. Defaults will be used if these are empty
 	// before Start.
-	Network  string
-	Address  string
-	Target   string
+	Network string
+	Address string
+	Target  string
+
+	// Custom listener to use for serving. If unspecified, a new listener is
+	// created on a local port.
 	Listener net.Listener
 
 	cleanups []func() // Lambdas executed in Stop(); populated by Start().

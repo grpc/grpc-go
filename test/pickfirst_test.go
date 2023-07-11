@@ -351,13 +351,7 @@ func (s) TestPickFirst_StickyTransientFailure(t *testing.T) {
 	}
 	t.Cleanup(func() { cc.Close() })
 
-	// Wait for the channel to move to TransientFailure.
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Errorf("Timeout when waiting for state to change to TransientFailure. Current state is %s", state)
-			return
-		}
-	}
+	awaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Spawn a goroutine to ensure that the channel stays in TransientFailure.
 	// The call to cc.WaitForStateChange will return false when the main
