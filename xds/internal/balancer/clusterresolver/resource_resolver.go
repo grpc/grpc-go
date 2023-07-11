@@ -21,6 +21,7 @@ package clusterresolver
 import (
 	"sync"
 
+	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -84,6 +85,7 @@ type discoveryMechanismAndResolver struct {
 
 type resourceResolver struct {
 	parent        *clusterResolverBalancer
+	logger        *grpclog.PrefixLogger
 	updateChannel chan *resourceUpdate
 
 	// mu protects the slice and map, and content of the resolvers in the slice.
@@ -104,9 +106,10 @@ type resourceResolver struct {
 	childNameGeneratorSeqID uint64
 }
 
-func newResourceResolver(parent *clusterResolverBalancer) *resourceResolver {
+func newResourceResolver(parent *clusterResolverBalancer, logger *grpclog.PrefixLogger) *resourceResolver {
 	return &resourceResolver{
 		parent:        parent,
+		logger:        logger,
 		updateChannel: make(chan *resourceUpdate, 1),
 		childrenMap:   make(map[discoveryMechanismKey]discoveryMechanismAndResolver),
 	}
@@ -172,7 +175,7 @@ func (rr *resourceResolver) updateMechanisms(mechanisms []DiscoveryMechanism) {
 		var resolver endpointsResolver
 		switch dm.Type {
 		case DiscoveryMechanismTypeEDS:
-			resolver = newEDSResolver(dmKey.name, rr.parent.xdsClient, rr)
+			resolver = newEDSResolver(dmKey.name, rr.parent.xdsClient, rr, rr.logger)
 		case DiscoveryMechanismTypeLogicalDNS:
 			resolver = newDNSResolver(dmKey.name, rr)
 		}
