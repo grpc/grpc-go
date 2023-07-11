@@ -601,7 +601,7 @@ func (s) TestPickFirst_AddressUpdateWithAttributes(t *testing.T) {
 	if _, err := conn.CloseCh.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when expecting existing connection to be closed: %v", err)
 	}
-	val, err = listeners[1].NewConnCh.Receive(ctx)
+	_, err = listeners[1].NewConnCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Failed to receive new connection from wrapped listener: %v", err)
 	}
