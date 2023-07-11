@@ -115,7 +115,7 @@ func (a *Attributes) String() string {
 		if !first {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(fmt.Sprintf("%s: %s ", str(k), str(v)))
+		sb.WriteString(fmt.Sprintf("%q: %q ", str(k), str(v)))
 		first = false
 	}
 	sb.WriteString("}")
@@ -124,9 +124,9 @@ func (a *Attributes) String() string {
 
 func str(x interface{}) string {
 	if v, ok := x.(fmt.Stringer); ok {
-		return fmt.Sprintf("%q", v.String())
+		return v.String()
 	} else if v, ok := x.(string); ok {
-		return fmt.Sprintf("%q", v)
+		return v
 	}
 	return fmt.Sprintf("<%p>", x)
 }
