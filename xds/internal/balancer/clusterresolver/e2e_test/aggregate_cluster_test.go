@@ -1007,7 +1007,6 @@ func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 		t.Fatalf("failed to create xds client: %v", err)
 	}
 	defer close()
-	defer close()
 
 	// Create a manual resolver and push a service config specifying the use of
 	// the cds LB policy as the top-level LB policy, and a corresponding config

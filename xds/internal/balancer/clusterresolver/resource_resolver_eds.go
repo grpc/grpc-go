@@ -97,15 +97,20 @@ func (er *edsDiscoveryMechanism) OnError(err error) {
 		er.logger.Infof("EDS discovery mechanism for resource %q reported error: %v", er.nameToWatch, err)
 	}
 
-	// If a previously received good configuration exists, continue to use it.
-	// Else report an empty update that would result in the child policy
-	// reporting TRANSIENT_FAILURE (as there would be no priorities or
-	// localities).
 	er.mu.Lock()
 	if er.update != nil {
+		// Continue using a previously received good configuration if one
+		// exists.
 		er.mu.Unlock()
 		return
 	}
+
+	// Else report an empty update that would result in no priority child being
+	// created for this discovery mechanism. This would result in the priority
+	// LB policy reporting TRANSIENT_FAILURE (as there would be no priorities or
+	// localities) if this was the only discovery mechanism, or would result in
+	// the priority LB policy using a lower priority discovery mechanism when
+	// that becomes available.
 	er.update = &xdsresource.EndpointsUpdate{}
 	er.mu.Unlock()
 
@@ -121,8 +126,12 @@ func (er *edsDiscoveryMechanism) OnResourceDoesNotExist() {
 		er.logger.Infof("EDS discovery mechanism for resource %q reported resource-does-not-exist error", er.nameToWatch)
 	}
 
-	// Report an empty update that would result in the child policy reporting
-	// TRANSIENT_FAILURE (as there would be no priorities or localities).
+	// Report an empty update that would result in no priority child being
+	// created for this discovery mechanism. This would result in the priority
+	// LB policy reporting TRANSIENT_FAILURE (as there would be no priorities or
+	// localities) if this was the only discovery mechanism, or would result in
+	// the priority LB policy using a lower priority discovery mechanism when
+	// that becomes available.
 	er.mu.Lock()
 	er.update = &xdsresource.EndpointsUpdate{}
 	er.mu.Unlock()

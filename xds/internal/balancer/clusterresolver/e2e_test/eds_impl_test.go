@@ -867,7 +867,7 @@ func (s) TestEDS_BadUpdateWithoutPreviousGoodUpdate(t *testing.T) {
 	mgmtServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
-	// Start a backend server that implementats the TestService.
+	// Start a backend server that implements the TestService.
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
@@ -887,7 +887,7 @@ func (s) TestEDS_BadUpdateWithoutPreviousGoodUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -937,7 +937,7 @@ func (s) TestEDS_BadUpdateWithPreviousGoodUpdate(t *testing.T) {
 	mgmtServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
-	// Start a backend server that implementats the TestService.
+	// Start a backend server that implements the TestService.
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
@@ -953,7 +953,7 @@ func (s) TestEDS_BadUpdateWithPreviousGoodUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS xdsClient for use by the cluster_resolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -1003,8 +1003,8 @@ func (s) TestEDS_BadUpdateWithPreviousGoodUpdate(t *testing.T) {
 
 	// Ensure that RPCs continue to succeed for the next second.
 	for end := time.Now().Add(time.Second); time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-			t.Fatalf("EmptyCall() failed: %v", err)
+		if err := rrutil.CheckRoundRobinRPCs(ctx, client, []resolver.Address{{Addr: server.Address}}); err != nil {
+			t.Fatal(err)
 		}
 	}
 }
