@@ -115,7 +115,7 @@ var (
 	sleepBetweenRPCs      = flags.DurationSlice("sleepBetweenRPCs", []time.Duration{0}, "Configures the maximum amount of time the client should sleep between consecutive RPCs - may be a a comma-separated list")
 	connections           = flag.Int("connections", 1, "The number of connections. Each connection will handle maxConcurrentCalls RPC streams")
 	recvBufferPool        = flags.StringWithAllowedValues("recvBufferPool", recvBufferPoolNil, "Configures the shared receive buffer pool. One of: nil, simple, all", allRecvBufferPools)
-	shareWriteBuffer      = flags.StringWithAllowedValues("shareWriteBuffer", toggleModeOff,
+	sharedWriteBuffer     = flags.StringWithAllowedValues("sharedWriteBuffer", toggleModeOff,
 		fmt.Sprintf("Configures both client and server to share write buffer - One of: %v", strings.Join(allToggleModes, ", ")), allToggleModes)
 
 	logger = grpclog.Component("benchmark")
@@ -337,9 +337,9 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 	if bf.ServerReadBufferSize >= 0 {
 		sopts = append(sopts, grpc.ReadBufferSize(bf.ServerReadBufferSize))
 	}
-	if bf.ShareWriteBuffer {
-		opts = append(opts, grpc.WithShareWriteBuffer(true))
-		sopts = append(sopts, grpc.ShareWriteBuffer(true))
+	if bf.SharedWriteBuffer {
+		opts = append(opts, grpc.WithSharedWriteBuffer(true))
+		sopts = append(sopts, grpc.SharedWriteBuffer(true))
 	}
 	if bf.ServerWriteBufferSize >= 0 {
 		sopts = append(sopts, grpc.WriteBufferSize(bf.ServerWriteBufferSize))
@@ -609,7 +609,7 @@ type featureOpts struct {
 	serverWriteBufferSize []int
 	sleepBetweenRPCs      []time.Duration
 	recvBufferPools       []string
-	shareWriteBuffer      []bool
+	sharedWriteBuffer     []bool
 }
 
 // makeFeaturesNum returns a slice of ints of size 'maxFeatureIndex' where each
@@ -658,8 +658,8 @@ func makeFeaturesNum(b *benchOpts) []int {
 			featuresNum[i] = len(b.features.sleepBetweenRPCs)
 		case stats.RecvBufferPool:
 			featuresNum[i] = len(b.features.recvBufferPools)
-		case stats.ShareWriteBuffer:
-			featuresNum[i] = len(b.features.shareWriteBuffer)
+		case stats.SharedWriteBuffer:
+			featuresNum[i] = len(b.features.sharedWriteBuffer)
 		default:
 			log.Fatalf("Unknown feature index %v in generateFeatures. maxFeatureIndex is %v", i, stats.MaxFeatureIndex)
 		}
@@ -729,7 +729,7 @@ func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 			ServerWriteBufferSize: b.features.serverWriteBufferSize[curPos[stats.ServerWriteBufferSize]],
 			SleepBetweenRPCs:      b.features.sleepBetweenRPCs[curPos[stats.SleepBetweenRPCs]],
 			RecvBufferPool:        b.features.recvBufferPools[curPos[stats.RecvBufferPool]],
-			ShareWriteBuffer:      b.features.shareWriteBuffer[curPos[stats.ShareWriteBuffer]],
+			SharedWriteBuffer:     b.features.sharedWriteBuffer[curPos[stats.SharedWriteBuffer]],
 		}
 		if len(b.features.reqPayloadCurves) == 0 {
 			f.ReqSizeBytes = b.features.reqSizeBytes[curPos[stats.ReqSizeBytesIndex]]
@@ -803,7 +803,7 @@ func processFlags() *benchOpts {
 			serverWriteBufferSize: append([]int(nil), *serverWriteBufferSize...),
 			sleepBetweenRPCs:      append([]time.Duration(nil), *sleepBetweenRPCs...),
 			recvBufferPools:       setRecvBufferPool(*recvBufferPool),
-			shareWriteBuffer:      setToggleMode(*shareWriteBuffer),
+			sharedWriteBuffer:     setToggleMode(*sharedWriteBuffer),
 		},
 	}
 

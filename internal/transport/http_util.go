@@ -406,7 +406,7 @@ type framer struct {
 var writeBufferPoolMap map[int]*sync.Pool = make(map[int]*sync.Pool)
 var writeBufferMutex sync.Mutex
 
-func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, shareWriteBuffer bool, maxHeaderListSize uint32) *framer {
+func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, sharedWriteBuffer bool, maxHeaderListSize uint32) *framer {
 	if writeBufferSize < 0 {
 		writeBufferSize = 0
 	}
@@ -414,7 +414,10 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, shareWriteBuf
 	if readBufferSize > 0 {
 		r = bufio.NewReaderSize(r, readBufferSize)
 	}
-	pool := getWriteBufferPool(writeBufferSize, shareWriteBuffer)
+	var pool *sync.Pool
+	if sharedWriteBuffer {
+		pool = getWriteBufferPool(writeBufferSize)
+	}
 	w := newBufWriter(conn, writeBufferSize, pool)
 	f := &framer{
 		writer: w,
@@ -429,23 +432,21 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, shareWriteBuf
 	return f
 }
 
-func getWriteBufferPool(writeBufferSize int, shareWriteBuffer bool) *sync.Pool {
-	if !shareWriteBuffer {
-		return nil
-	}
+func getWriteBufferPool(writeBufferSize int) *sync.Pool {
 	writeBufferMutex.Lock()
 	defer writeBufferMutex.Unlock()
 	size := writeBufferSize * 2
 	pool, ok := writeBufferPoolMap[size]
-	if !ok {
-		pool = &sync.Pool{
-			New: func() interface{} {
-				b := make([]byte, size)
-				return &b
-			},
-		}
-		writeBufferPoolMap[size] = pool
+	if ok {
+		return pool
 	}
+	pool = &sync.Pool{
+		New: func() interface{} {
+			b := make([]byte, size)
+			return &b
+		},
+	}
+	writeBufferPoolMap[size] = pool
 	return pool
 }
 
