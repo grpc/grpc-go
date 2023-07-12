@@ -28,6 +28,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"strconv"
 	"time"
 
 	"google.golang.org/grpc"
@@ -83,12 +84,34 @@ const UnconstrainedStreamingHeader = "unconstrained-streaming"
 // the server should sleep between consecutive RPC responses.
 const UnconstrainedStreamingDelayHeader = "unconstrained-streaming-delay"
 
+// PreloadMsgSizeHeader indicates that the client is going to ask for
+// a fixed response size and passes this size to the server.
+// The server is expected to preload the response on startup.
+const PreloadMsgSizeHeader = "preload-msg-size"
+
 func (s *testServer) StreamingCall(stream testgrpc.BenchmarkService_StreamingCallServer) error {
+	preloadMsgSize := 0
+	if md, ok := metadata.FromIncomingContext(stream.Context()); ok && len(md[PreloadMsgSizeHeader]) != 0 {
+		val := md[PreloadMsgSizeHeader][0]
+		var err error
+		preloadMsgSize, err = strconv.Atoi(val)
+		if err != nil {
+			return fmt.Errorf("%q header value is not an integer: %s", PreloadMsgSizeHeader, err)
+		}
+	}
+
 	if md, ok := metadata.FromIncomingContext(stream.Context()); ok && len(md[UnconstrainedStreamingHeader]) != 0 {
-		return s.UnconstrainedStreamingCall(stream)
+		return s.UnconstrainedStreamingCall(stream, preloadMsgSize)
 	}
 	response := &testpb.SimpleResponse{
 		Payload: new(testpb.Payload),
+	}
+	preloadedResponse := &grpc.PreparedMsg{}
+	if preloadMsgSize > 0 {
+		setPayload(response.Payload, testpb.PayloadType_COMPRESSABLE, preloadMsgSize)
+		if err := preloadedResponse.Encode(stream, response); err != nil {
+			return err
+		}
 	}
 	in := new(testpb.SimpleRequest)
 	for {
@@ -101,14 +124,19 @@ func (s *testServer) StreamingCall(stream testgrpc.BenchmarkService_StreamingCal
 		if err != nil {
 			return err
 		}
-		setPayload(response.Payload, in.ResponseType, int(in.ResponseSize))
-		if err := stream.Send(response); err != nil {
+		if preloadMsgSize > 0 {
+			err = stream.SendMsg(preloadedResponse)
+		} else {
+			setPayload(response.Payload, in.ResponseType, int(in.ResponseSize))
+			err = stream.Send(response)
+		}
+		if err != nil {
 			return err
 		}
 	}
 }
 
-func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService_StreamingCallServer) error {
+func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService_StreamingCallServer, preloadMsgSize int) error {
 	maxSleep := 0
 	if md, ok := metadata.FromIncomingContext(stream.Context()); ok && len(md[UnconstrainedStreamingDelayHeader]) != 0 {
 		val := md[UnconstrainedStreamingDelayHeader][0]
@@ -135,6 +163,13 @@ func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService
 	}
 	setPayload(response.Payload, in.ResponseType, int(in.ResponseSize))
 
+	preloadedResponse := &grpc.PreparedMsg{}
+	if preloadMsgSize > 0 {
+		if err := preloadedResponse.Encode(stream, response); err != nil {
+			return err
+		}
+	}
+
 	go func() {
 		for {
 			// Using RecvMsg rather than Recv to prevent reallocation of SimpleRequest.
@@ -154,7 +189,12 @@ func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService
 			if maxSleep > 0 {
 				time.Sleep(time.Duration(rand.Intn(maxSleep)))
 			}
-			err := stream.Send(response)
+			var err error
+			if preloadMsgSize > 0 {
+				err = stream.SendMsg(preloadedResponse)
+			} else {
+				err = stream.Send(response)
+			}
 			switch status.Code(err) {
 			case codes.Unavailable, codes.Canceled:
 				return
@@ -258,7 +298,13 @@ func DoStreamingRoundTrip(stream testgrpc.BenchmarkService_StreamingCallClient, 
 		ResponseSize: int32(respSize),
 		Payload:      pl,
 	}
-	if err := stream.Send(req); err != nil {
+	return DoStreamingRoundTripPreloaded(stream, req)
+}
+
+// DoStreamingRoundTripPreloaded performs a round trip for a single streaming rpc with preloaded payload.
+func DoStreamingRoundTripPreloaded(stream testgrpc.BenchmarkService_StreamingCallClient, req interface{}) error {
+	// req could be either *testpb.SimpleRequest or *grpc.PreparedMsg
+	if err := stream.SendMsg(req); err != nil {
 		return fmt.Errorf("/BenchmarkService/StreamingCall.Send(_) = %v, want <nil>", err)
 	}
 	if _, err := stream.Recv(); err != nil {

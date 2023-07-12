@@ -60,6 +60,10 @@ type StubServer struct {
 	Address string
 	Target  string
 
+	// Custom listener to use for serving. If unspecified, a new listener is
+	// created on a local port.
+	Listener net.Listener
+
 	cleanups []func() // Lambdas executed in Stop(); populated by Start().
 
 	// Set automatically if Target == ""
@@ -118,9 +122,13 @@ func (ss *StubServer) StartServer(sopts ...grpc.ServerOption) error {
 		ss.R = manual.NewBuilderWithScheme("whatever")
 	}
 
-	lis, err := net.Listen(ss.Network, ss.Address)
-	if err != nil {
-		return fmt.Errorf("net.Listen(%q, %q) = %v", ss.Network, ss.Address, err)
+	lis := ss.Listener
+	if lis == nil {
+		var err error
+		lis, err = net.Listen(ss.Network, ss.Address)
+		if err != nil {
+			return fmt.Errorf("net.Listen(%q, %q) = %v", ss.Network, ss.Address, err)
+		}
 	}
 	ss.Address = lis.Addr().String()
 	ss.cleanups = append(ss.cleanups, func() { lis.Close() })

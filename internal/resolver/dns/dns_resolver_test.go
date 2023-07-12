@@ -1419,14 +1419,14 @@ func TestCustomAuthority(t *testing.T) {
 			true,
 		},
 	}
-	oldCustomAuthorityDialler := customAuthorityDialler
+	oldAddressDialer := addressDialer
 	defer func() {
-		customAuthorityDialler = oldCustomAuthorityDialler
+		addressDialer = oldAddressDialer
 	}()
 
 	for _, a := range tests {
 		errChan := make(chan error, 1)
-		customAuthorityDialler = func(authority string) func(ctx context.Context, network, address string) (net.Conn, error) {
+		addressDialer = func(authority string) func(ctx context.Context, network, address string) (net.Conn, error) {
 			if authority != a.authorityWant {
 				errChan <- fmt.Errorf("wrong custom authority passed to resolver. input: %s expected: %s actual: %s", a.authority, a.authorityWant, authority)
 			} else {
@@ -1441,8 +1441,7 @@ func TestCustomAuthority(t *testing.T) {
 		b := NewBuilder()
 		cc := &testClientConn{target: mockEndpointTarget, errChan: make(chan error, 1)}
 		target := resolver.Target{
-			Authority: a.authority,
-			URL:       *testutils.MustParseURL(fmt.Sprintf("scheme://%s/%s", a.authority, mockEndpointTarget)),
+			URL: *testutils.MustParseURL(fmt.Sprintf("scheme://%s/%s", a.authority, mockEndpointTarget)),
 		}
 		r, err := b.Build(target, cc, resolver.BuildOptions{})
 

@@ -75,7 +75,7 @@ func newDNSResolver(target string, topLevelResolver topLevelResolver) *dnsDiscov
 		return ret
 	}
 
-	r, err := newDNS(resolver.Target{Scheme: "dns", URL: *u}, ret, resolver.BuildOptions{})
+	r, err := newDNS(resolver.Target{URL: *u}, ret, resolver.BuildOptions{})
 	if err != nil {
 		topLevelResolver.onError(fmt.Errorf("failed to build DNS resolver for target %q: %v", target, err))
 		return ret
