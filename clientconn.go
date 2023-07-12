@@ -37,7 +37,6 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/internal/pretty"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
@@ -868,20 +867,6 @@ func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivi
 	cc.balancerWrapper.updateSubConnState(sc, s, err)
 }
 
-// Makes a copy of the input addresses slice and clears out the balancer
-// attributes field. Addresses are passed during subconn creation and address
-// update operations. In both cases, we will clear the balancer attributes by
-// calling this function, and therefore we will be able to use the Equal method
-// provided by the resolver.Address type for comparison.
-func copyAddressesWithoutBalancerAttributes(in []resolver.Address) []resolver.Address {
-	out := make([]resolver.Address, len(in))
-	for i := range in {
-		out[i] = in[i]
-		out[i].BalancerAttributes = nil
-	}
-	return out
-}
-
 // newAddrConn creates an addrConn for addrs and adds it to cc.conns.
 //
 // Caller needs to make sure len(addrs) > 0.
@@ -889,7 +874,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSub
 	ac := &addrConn{
 		state:        connectivity.Idle,
 		cc:           cc,
-		addrs:        copyAddressesWithoutBalancerAttributes(addrs),
+		addrs:        addrs,
 		scopts:       opts,
 		dopts:        cc.dopts,
 		czData:       new(channelzData),
@@ -1010,9 +995,8 @@ func equalAddresses(a, b []resolver.Address) bool {
 // connections or connection attempts.
 func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 	ac.mu.Lock()
-	channelz.Infof(logger, ac.channelzID, "addrConn: updateAddrs curAddr: %v, addrs: %v", pretty.ToJSON(ac.curAddr), pretty.ToJSON(addrs))
+	channelz.Infof(logger, ac.channelzID, "addrConn: updateAddrs curAddr: %v, addrs: %v", ac.curAddr, addrs)
 
-	addrs = copyAddressesWithoutBalancerAttributes(addrs)
 	if equalAddresses(ac.addrs, addrs) {
 		ac.mu.Unlock()
 		return
