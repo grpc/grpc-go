@@ -139,7 +139,7 @@ func newJoinDialOption(opts ...DialOption) DialOption {
 	return &joinDialOption{opts: opts}
 }
 
-// WithSharedWriteBufferWithSharedWriteBuffer allows reusing per-connection transport write buffer.
+// WithSharedWriteBuffer allows reusing per-connection transport write buffer.
 // If this option is set to true every connection will release the buffer after
 // flushing the data on the wire.
 func WithSharedWriteBuffer(val bool) DialOption {
