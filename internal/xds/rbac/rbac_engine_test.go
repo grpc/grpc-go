@@ -671,7 +671,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 			audit.RegisterLoggerBuilder(&b)
 			b2 := TestAuditLoggerCustomConfigBuilder{testName: test.name}
 			audit.RegisterLoggerBuilder(&b2)
-			if _, err := NewChainEngine(test.policies, test.policyName); (err != nil) != test.wantErr {
+			if _, err := NewChainEngine(test.policies); (err != nil) != test.wantErr {
 				t.Fatalf("NewChainEngine(%+v) returned err: %v, wantErr: %v", test.policies, err, test.wantErr)
 			}
 		})
@@ -1736,7 +1736,8 @@ func (s) TestChainEngine(t *testing.T) {
 
 			// Instantiate the chainedRBACEngine with different configurations that are
 			// interesting to test and to query.
-			cre, err := NewChainEngine(test.rbacConfigs, test.policyName)
+			cre, err := NewChainEngine(test.rbacConfigs)
+			cre.SetName(test.policyName)
 			if err != nil {
 				t.Fatalf("Error constructing RBAC Engine: %v", err)
 			}

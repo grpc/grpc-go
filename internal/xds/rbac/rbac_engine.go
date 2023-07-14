@@ -52,10 +52,10 @@ type ChainEngine struct {
 
 // NewChainEngine returns a chain of RBAC engines, used to make authorization
 // decisions on incoming RPCs. Returns a non-nil error for invalid policies.
-func NewChainEngine(policies []*v3rbacpb.RBAC, policyName string) (*ChainEngine, error) {
+func NewChainEngine(policies []*v3rbacpb.RBAC) (*ChainEngine, error) {
 	engines := make([]*engine, 0, len(policies))
 	for _, policy := range policies {
-		engine, err := newEngine(policy, policyName)
+		engine, err := newEngine(policy)
 		if err != nil {
 			return nil, err
 		}
@@ -132,7 +132,7 @@ type engine struct {
 
 // newEngine creates an RBAC Engine based on the contents of a policy. Returns a
 // non-nil error if the policy is invalid.
-func newEngine(config *v3rbacpb.RBAC, policyName string) (*engine, error) {
+func newEngine(config *v3rbacpb.RBAC) (*engine, error) {
 	a := config.GetAction()
 	if a != v3rbacpb.RBAC_ALLOW && a != v3rbacpb.RBAC_DENY {
 		return nil, fmt.Errorf("unsupported action %s", config.Action)
@@ -152,7 +152,6 @@ func newEngine(config *v3rbacpb.RBAC, policyName string) (*engine, error) {
 		return nil, err
 	}
 	return &engine{
-		policyName:     policyName,
 		policies:       policies,
 		action:         a,
 		auditLoggers:   auditLoggers,

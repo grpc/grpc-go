@@ -126,10 +126,7 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 		return config{}, nil
 	}
 
-	// TODO(gregorycooke) - change the call chain to here so we have the filter
-	// name to input here instead of an empty string. It will come from here:
-	// https://github.com/grpc/grpc-go/blob/eff0942e95d93112921414aee758e619ec86f26f/xds/internal/xdsclient/xdsresource/unmarshal_lds.go#L199
-	ce, err := rbac.NewChainEngine([]*v3rbacpb.RBAC{rbacCfg.GetRules()}, "")
+	ce, err := rbac.NewChainEngine([]*v3rbacpb.RBAC{rbacCfg.GetRules()})
 	if err != nil {
 		// "At this time, if the RBAC.action is Action.LOG then the policy will be
 		// completely ignored, as if RBAC was not configurated." - A41
@@ -177,8 +174,8 @@ func (builder) IsTerminal() bool {
 
 var _ httpfilter.ServerInterceptorBuilder = builder{}
 
-// BuildServerInterceptor is an optional interface builder implements in order
-// to signify it works server side.
+// BuildServerInterceptor is an optional interface that builder implements in
+// order to signify it works server side.
 func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig, name string) (resolver.ServerInterceptor, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("rbac: nil config provided")

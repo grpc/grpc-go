@@ -48,7 +48,8 @@ func NewStatic(authzPolicy string) (*StaticInterceptor, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainEngine, err := rbac.NewChainEngine(rbacs, policyName)
+	chainEngine, err := rbac.NewChainEngine(rbacs)
+	chainEngine.SetName(policyName)
 	if err != nil {
 		return nil, err
 	}
