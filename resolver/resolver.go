@@ -77,25 +77,6 @@ func GetDefaultScheme() string {
 	return defaultScheme
 }
 
-// AddressType indicates the address type returned by name resolution.
-//
-// Deprecated: use Attributes in Address instead.
-type AddressType uint8
-
-const (
-	// Backend indicates the address is for a backend server.
-	//
-	// Deprecated: use Attributes in Address instead.
-	Backend AddressType = iota
-	// GRPCLB indicates the address is for a grpclb load balancer.
-	//
-	// Deprecated: to select the GRPCLB load balancing policy, use a service
-	// config with a corresponding loadBalancingConfig.  To supply balancer
-	// addresses to the GRPCLB load balancing policy, set State.Attributes
-	// using balancer/grpclb/state.Set.
-	GRPCLB
-)
-
 // Address represents a server the client connects to.
 //
 // # Experimental
@@ -111,9 +92,6 @@ type Address struct {
 	// the address, instead of the hostname from the Dial target string. In most cases,
 	// this should not be set.
 	//
-	// If Type is GRPCLB, ServerName should be the name of the remote load
-	// balancer, not the name of the backend.
-	//
 	// WARNING: ServerName must only be populated with trusted values. It
 	// is insecure to populate it with data from untrusted inputs since untrusted
 	// values could be used to bypass the authority checks performed by TLS.
@@ -127,11 +105,6 @@ type Address struct {
 	// for consumption by the LB policy.  These attributes do not affect SubConn
 	// creation, connection establishment, handshaking, etc.
 	BalancerAttributes *attributes.Attributes
-
-	// Type is the type of this address.
-	//
-	// Deprecated: use Attributes instead.
-	Type AddressType
 
 	// Metadata is the information associated with Addr, which may be used
 	// to make load balancing decision.
@@ -150,7 +123,7 @@ func (a Address) Equal(o Address) bool {
 	return a.Addr == o.Addr && a.ServerName == o.ServerName &&
 		a.Attributes.Equal(o.Attributes) &&
 		a.BalancerAttributes.Equal(o.BalancerAttributes) &&
-		a.Type == o.Type && a.Metadata == o.Metadata
+		a.Metadata == o.Metadata
 }
 
 // String returns JSON formatted string representation of the address.

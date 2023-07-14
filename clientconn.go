@@ -54,8 +54,6 @@ import (
 const (
 	// minimum time to give a connection to complete
 	minConnectTimeout = 20 * time.Second
-	// must match grpclbName in grpclb/grpclb.go
-	grpclbName = "grpclb"
 )
 
 var (
