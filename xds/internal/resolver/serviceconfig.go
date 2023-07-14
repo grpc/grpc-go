@@ -39,7 +39,6 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/httpfilter"
-	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -285,12 +284,8 @@ func (cs *configSelector) newInterceptor(rt *route, cluster *routeCluster) (ires
 		return nil, nil
 	}
 	interceptors := make([]iresolver.ClientInterceptor, 0, len(cs.httpFilterConfig))
-	for _, filter := range cs.httpFilterConfig {
-		// TODO: Ignoring terminal filters has no effect, need to ignore routers - why?
-		if router.IsRouterFilter(filter.Filter) {
-			continue
-		}
 
+	for _, filter := range cs.httpFilterConfig {
 		override := cluster.httpFilterConfigOverride[filter.Name] // cluster is highest priority
 		if override == nil {
 			override = rt.httpFilterConfigOverride[filter.Name] // route is second priority
