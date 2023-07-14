@@ -1153,23 +1153,13 @@ func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSel
 	}
 
 	var newBalancerName string
-	if cc.sc != nil && cc.sc.lbConfig != nil {
+	if cc.sc == nil || (cc.sc.lbConfig == nil && cc.sc.LB == nil) {
+		// No service config or no LB policy specified in config.
+		newBalancerName = PickFirstBalancerName
+	} else if cc.sc.lbConfig != nil {
 		newBalancerName = cc.sc.lbConfig.name
-	} else {
-		var isGRPCLB bool
-		for _, a := range addrs {
-			if a.Type == resolver.GRPCLB {
-				isGRPCLB = true
-				break
-			}
-		}
-		if isGRPCLB {
-			newBalancerName = grpclbName
-		} else if cc.sc != nil && cc.sc.LB != nil {
-			newBalancerName = *cc.sc.LB
-		} else {
-			newBalancerName = PickFirstBalancerName
-		}
+	} else { // cc.sc.LB != nil
+		newBalancerName = *cc.sc.LB
 	}
 	cc.balancerWrapper.switchTo(newBalancerName)
 }
