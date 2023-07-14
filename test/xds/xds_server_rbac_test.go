@@ -299,7 +299,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 
 // serverListenerWithRBACHTTPFilters returns an xds Listener resource with HTTP Filters defined in the HCM, and a route
 // configuration that always matches to a route and a VH.
-func serverListenerWithRBACHTTPFilters(host string, port uint32, rbacCfg *rpb.RBAC) *v3listenerpb.Listener {
+func serverListenerWithRBACHTTPFilters(host string, port uint32, rbacCfg *rpb.RBAC, filterName string) *v3listenerpb.Listener {
 	// Rather than declare typed config inline, take a HCM proto and append the
 	// RBAC Filters to it.
 	hcm := &v3httppb.HttpConnectionManager{
@@ -323,7 +323,7 @@ func serverListenerWithRBACHTTPFilters(host string, port uint32, rbacCfg *rpb.RB
 		},
 	}
 	hcm.HttpFilters = nil
-	hcm.HttpFilters = append(hcm.HttpFilters, e2e.HTTPFilter("rbac", rbacCfg))
+	hcm.HttpFilters = append(hcm.HttpFilters, e2e.HTTPFilter(filterName, rbacCfg))
 	hcm.HttpFilters = append(hcm.HttpFilters, e2e.RouterHTTPFilter)
 
 	return &v3listenerpb.Listener{
@@ -415,6 +415,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 	}()
 	internal.RegisterRBACHTTPFilterForTesting()
 	defer internal.UnregisterRBACHTTPFilterForTesting()
+	const rbacFilterName = "rbac-test"
 	tests := []struct {
 		name                string
 		rbacCfg             *rpb.RBAC
@@ -460,6 +461,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 			// TODO(gtcooke94) add policy name (RBAC filter name) once
 			// https://github.com/grpc/grpc-go/pull/6327 is merged.
 			eventContent: &audit.Event{
+				PolicyName:     rbacFilterName,
 				FullMethodName: "/grpc.testing.TestService/UnaryCall",
 				MatchedRule:    "anyone",
 				Authorized:     true,
@@ -656,7 +658,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 					Port:       port,
 					SecLevel:   e2e.SecurityLevelNone,
 				})
-				inboundLis := serverListenerWithRBACHTTPFilters(host, port, test.rbacCfg)
+				inboundLis := serverListenerWithRBACHTTPFilters(host, port, test.rbacCfg, rbacFilterName)
 				resources.Listeners = append(resources.Listeners, inboundLis)
 
 				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
