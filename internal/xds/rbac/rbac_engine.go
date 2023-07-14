@@ -112,6 +112,7 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 	return nil
 }
 
+// SetName sets the policyName on each engine in the chain to name.
 func (cre *ChainEngine) SetName(name string) {
 	for _, e := range cre.chainedEngines {
 		e.policyName = name
