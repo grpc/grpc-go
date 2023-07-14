@@ -2596,7 +2596,7 @@ type filterBuilder struct {
 
 var _ httpfilter.ServerInterceptorBuilder = &filterBuilder{}
 
-func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig, _ string) (iresolver.ServerInterceptor, error) {
 	var level string
 	level = config.(filterCfg).level
 

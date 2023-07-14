@@ -95,7 +95,7 @@ func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (ir
 	return nil, nil
 }
 
-func (builder) BuildServerInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+func (builder) BuildServerInterceptor(cfg, override httpfilter.FilterConfig, _ string) (iresolver.ServerInterceptor, error) {
 	if _, ok := cfg.(config); !ok {
 		return nil, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
 	}

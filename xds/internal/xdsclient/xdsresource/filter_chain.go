@@ -129,7 +129,7 @@ func (f *FilterChain) convertVirtualHost(virtualHost *VirtualHost) (VirtualHostW
 				// Should not happen if it passed xdsClient validation.
 				return VirtualHostWithInterceptors{}, fmt.Errorf("filter does not support use in server")
 			}
-			si, err := sb.BuildServerInterceptor(filter.Config, override)
+			si, err := sb.BuildServerInterceptor(filter.Config, override, filter.Name)
 			if err != nil {
 				return VirtualHostWithInterceptors{}, fmt.Errorf("filter construction: %v", err)
 			}

@@ -59,7 +59,7 @@ type builder struct {
 
 type config struct {
 	httpfilter.FilterConfig
-	chainEngine *rbac.ChainEngine
+	ChainEngine *rbac.ChainEngine
 }
 
 func (builder) TypeURLs() []string {
@@ -138,7 +138,7 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 		}
 	}
 
-	return config{chainEngine: ce}, nil
+	return config{ChainEngine: ce}, nil
 }
 
 func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
@@ -179,7 +179,7 @@ var _ httpfilter.ServerInterceptorBuilder = builder{}
 
 // BuildServerInterceptor is an optional interface builder implements in order
 // to signify it works server side.
-func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
+func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig, name string) (resolver.ServerInterceptor, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("rbac: nil config provided")
 	}
@@ -203,10 +203,12 @@ func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override http
 	// Documentation for Rules field.
 	// "At this time, if the RBAC.action is Action.LOG then the policy will be
 	// completely ignored, as if RBAC was not configurated." - A41
-	if c.chainEngine == nil {
+	if c.ChainEngine == nil {
 		return nil, nil
 	}
-	return &interceptor{chainEngine: c.chainEngine}, nil
+
+	c.ChainEngine.SetName(name)
+	return &interceptor{chainEngine: c.ChainEngine}, nil
 }
 
 type interceptor struct {

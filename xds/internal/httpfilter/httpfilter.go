@@ -75,7 +75,7 @@ type ServerInterceptorBuilder interface {
 	// but override may be nil if no override config exists for the filter.  It
 	// is valid for Build to return a nil Interceptor and a nil error.  In this
 	// case, the RPC will not be intercepted by this filter.
-	BuildServerInterceptor(config, override FilterConfig) (iresolver.ServerInterceptor, error)
+	BuildServerInterceptor(config, override FilterConfig, name string) (iresolver.ServerInterceptor, error)
 }
 
 var (

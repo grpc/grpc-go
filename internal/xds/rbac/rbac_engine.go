@@ -112,6 +112,12 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 	return nil
 }
 
+func (cre *ChainEngine) SetName(name string) {
+	for _, e := range cre.chainedEngines {
+		e.policyName = name
+	}
+}
+
 // engine is used for matching incoming RPCs to policies.
 type engine struct {
 	// TODO(gtcooke94) - differentiate between `policyName`, `policies`, and `rules`
