@@ -59,7 +59,7 @@ type builder struct {
 
 type config struct {
 	httpfilter.FilterConfig
-	ChainEngine *rbac.ChainEngine
+	chainEngine *rbac.ChainEngine
 }
 
 func (builder) TypeURLs() []string {
@@ -138,7 +138,7 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 		}
 	}
 
-	return config{ChainEngine: ce}, nil
+	return config{chainEngine: ce}, nil
 }
 
 func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
@@ -203,12 +203,12 @@ func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override http
 	// Documentation for Rules field.
 	// "At this time, if the RBAC.action is Action.LOG then the policy will be
 	// completely ignored, as if RBAC was not configurated." - A41
-	if c.ChainEngine == nil {
+	if c.chainEngine == nil {
 		return nil, nil
 	}
 
-	c.ChainEngine.SetName(name)
-	return &interceptor{chainEngine: c.ChainEngine}, nil
+	c.chainEngine.SetName(name)
+	return &interceptor{chainEngine: c.chainEngine}, nil
 }
 
 type interceptor struct {
