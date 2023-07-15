@@ -169,7 +169,10 @@ func (b *baseBalancer) regeneratePicker() {
 	// Filter out all ready SCs from full subConn map.
 	for _, addr := range b.subConns.Keys() {
 		sci, _ := b.subConns.Get(addr)
-		sc := sci.(balancer.SubConn)
+		sc, ok := sci.(balancer.SubConn)
+		if !ok {
+			continues
+		}
 		if st, ok := b.scStates[sc]; ok && st == connectivity.Ready {
 			readySCs[sc] = SubConnInfo{Address: addr}
 		}
