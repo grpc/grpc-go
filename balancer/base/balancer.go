@@ -171,7 +171,7 @@ func (b *baseBalancer) regeneratePicker() {
 		sci, _ := b.subConns.Get(addr)
 		sc, ok := sci.(balancer.SubConn)
 		if !ok {
-			continues
+			continue
 		}
 		if st, ok := b.scStates[sc]; ok && st == connectivity.Ready {
 			readySCs[sc] = SubConnInfo{Address: addr}
