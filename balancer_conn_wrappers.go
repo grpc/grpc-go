@@ -99,20 +99,6 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 	// lock held. But the lock guards only the scheduling part. The actual
 	// callback is called asynchronously without the lock being held.
 	ok := ccb.serializer.Schedule(func(_ context.Context) {
-		// If the addresses specified in the update contain addresses of type
-		// "grpclb" and the selected LB policy is not "grpclb", these addresses
-		// will be filtered out and ccs will be modified with the updated
-		// address list.
-		if ccb.curBalancerName != grpclbName {
-			var addrs []resolver.Address
-			for _, addr := range ccs.ResolverState.Addresses {
-				if addr.Type == resolver.GRPCLB {
-					continue
-				}
-				addrs = append(addrs, addr)
-			}
-			ccs.ResolverState.Addresses = addrs
-		}
 		errCh <- ccb.balancer.UpdateClientConnState(*ccs)
 	})
 	if !ok {
