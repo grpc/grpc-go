@@ -82,13 +82,13 @@ func DefaultBootstrapContents(nodeID, serverURI string) ([]byte, error) {
 	// Create a directory to hold certs and key files used on the server side.
 	serverDir, err := createTmpDirWithFiles("testServerSideXDS*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create bootstrap configuration: %v", err)
+		return nil, fmt.Errorf("failed to create bootstrap configuration: %v", err)
 	}
 
 	// Create a directory to hold certs and key files used on the client side.
 	clientDir, err := createTmpDirWithFiles("testClientSideXDS*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/server_ca_cert.pem")
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create bootstrap configuration: %v", err)
+		return nil, fmt.Errorf("failed to create bootstrap configuration: %v", err)
 	}
 
 	// Create certificate providers section of the bootstrap config with entries
@@ -106,7 +106,7 @@ func DefaultBootstrapContents(nodeID, serverURI string) ([]byte, error) {
 		ServerListenerResourceNameTemplate: ServerListenerResourceNameTemplate,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create bootstrap configuration: %v", err)
+		return nil, fmt.Errorf("failed to create bootstrap configuration: %v", err)
 	}
 	return bs, nil
 }
