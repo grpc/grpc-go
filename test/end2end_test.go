@@ -6429,7 +6429,8 @@ type bpbConfig struct {
 }
 
 type triggerRPCBlockBalancer struct {
-	stateMu sync.Mutex
+	stateMu    sync.Mutex
+	childState balancer.State
 
 	blockingPickerDone *grpcsync.Event
 	// embed a ClientConn to wrap only UpdateState() operation
@@ -6447,6 +6448,11 @@ func (bpb *triggerRPCBlockBalancer) UpdateClientConnState(s balancer.ClientConnS
 		Picker: &triggerRPCBlockPicker{
 			pickDone: func() {
 				bpb.blockingPickerDone.Fire()
+				bpb.stateMu.Lock()
+				defer bpb.stateMu.Unlock()
+				if bpb.childState.ConnectivityState == connectivity.Ready {
+					bpb.ClientConn.UpdateState(bpb.childState)
+				}
 			},
 		},
 	})
@@ -6456,6 +6462,7 @@ func (bpb *triggerRPCBlockBalancer) UpdateClientConnState(s balancer.ClientConnS
 func (bpb *triggerRPCBlockBalancer) UpdateState(state balancer.State) {
 	bpb.stateMu.Lock()
 	defer bpb.stateMu.Unlock()
+	bpb.childState = state
 	if bpb.blockingPickerDone.HasFired() { // guard first one to get a picker sending ErrNoSubConnAvailable first
 		if state.ConnectivityState == connectivity.Ready {
 			bpb.ClientConn.UpdateState(state) // after the first rr picker update, only forward once READY for deterministic picker counts

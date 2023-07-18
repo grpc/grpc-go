@@ -100,6 +100,7 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 	var ch chan struct{}
 
 	var lastPickErr error
+
 	for {
 		pw.mu.Lock()
 		if pw.done {
@@ -130,11 +131,19 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 					return nil, balancer.PickResult{}, status.Error(codes.Canceled, errStr)
 				}
 			case <-ch:
-				for _, sh := range pw.statsHandlers {
-					sh.HandleRPC(ctx, &stats.PickerUpdated{})
-				}
 			}
 			continue
+		}
+
+		// If the channel is set, it means that the pick call had to wait for a
+		// new picker at some point. Either there was no picker and it received
+		// a new one, or a picker errored with ErrNoSubConnAvailable/error with
+		// failfast false, then continues to next iteration. In that case the
+		// only way it gets to this codeblock is to receive a new picker.
+		if ch != nil {
+			for _, sh := range pw.statsHandlers {
+				sh.HandleRPC(ctx, &stats.PickerUpdated{})
+			}
 		}
 
 		ch = pw.blockingCh
