@@ -2,4 +2,4 @@ module google.golang.org/grpc/cmd/protoc-gen-go-grpc
 
 go 1.17
 
-require google.golang.org/protobuf v1.30.0
+require google.golang.org/protobuf v1.31.0
