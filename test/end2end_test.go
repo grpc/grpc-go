@@ -6409,7 +6409,6 @@ func (triggerRPCBlockPickerBalancerBuilder) Build(cc balancer.ClientConn, bOpts 
 	builder := balancer.Get(roundrobin.Name)
 	rr := builder.Build(b, bOpts)
 	if rr == nil {
-		// Shouldn't happen, defensive programming.
 		panic("round robin builder returned nil")
 	}
 	b.Balancer = rr
@@ -6428,6 +6427,12 @@ type bpbConfig struct {
 	serviceconfig.LoadBalancingConfig
 }
 
+// triggerRPCBlockBalancer uses a child RR balancer, but blocks all UpdateState
+// calls until the first Pick call. That first Pick returns
+// ErrNoSubConnAvailable to make the RPC block and trigger the appropriate stats
+// handler callout. After the first Pick call, it will forward at least one
+// READY picker update from the child, causing RPCs to proceed as normal using a
+// round robin balancer's picker if it updates with a READY picker.
 type triggerRPCBlockBalancer struct {
 	stateMu    sync.Mutex
 	childState balancer.State
@@ -6440,16 +6445,14 @@ type triggerRPCBlockBalancer struct {
 }
 
 func (bpb *triggerRPCBlockBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	err := bpb.Balancer.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: s.ResolverState,
-	})
+	err := bpb.Balancer.UpdateClientConnState(s)
 	bpb.ClientConn.UpdateState(balancer.State{
 		ConnectivityState: connectivity.Connecting,
 		Picker: &triggerRPCBlockPicker{
 			pickDone: func() {
-				bpb.blockingPickerDone.Fire()
 				bpb.stateMu.Lock()
 				defer bpb.stateMu.Unlock()
+				bpb.blockingPickerDone.Fire()
 				if bpb.childState.ConnectivityState == connectivity.Ready {
 					bpb.ClientConn.UpdateState(bpb.childState)
 				}
@@ -6497,7 +6500,6 @@ func (s) TestRPCBlockingOnPickerStatsCall(t *testing.T) {
 	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(lbCfgJSON)
 	mr := manual.NewBuilderWithScheme("pickerupdatedbalancer")
 	defer mr.Close()
-	print("ss.Address when setting: ", ss.Address)
 	mr.InitialState(resolver.State{
 		Addresses: []resolver.Address{
 			{Addr: ss.Address},

@@ -136,11 +136,13 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 		}
 
 		// If the channel is set, it means that the pick call had to wait for a
-		// new picker at some point. Either there was no picker and it received
-		// a new one, or a picker errored with ErrNoSubConnAvailable or errored
-		// with failfast set to false, which will trigger a continue to the next
-		// iteration. In that second case the only way it gets to this codeblock
-		// is to receive a new picker either in UpdateState or the select above.
+		// new picker at some point. Either it's the first iteration and this
+		// function received the first picker, or a picker errored with
+		// ErrNoSubConnAvailable or errored with failfast set to false, which
+		// will trigger a continue to the next iteration. In the first case this
+		// conditional will hit if this call had to block (the channel is set).
+		// In the second case, the only way it will get to this conditional is
+		// if there is a new picker.
 		if ch != nil {
 			for _, sh := range pw.statsHandlers {
 				sh.HandleRPC(ctx, &stats.PickerUpdated{})
