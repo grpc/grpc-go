@@ -85,7 +85,10 @@ func main() {
 		}
 	}
 
-	greeterServer := xds.NewGRPCServer(grpc.Creds(creds))
+	greeterServer, err := xds.NewGRPCServer(grpc.Creds(creds))
+	if err != nil {
+		log.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
+	}
 	pb.RegisterGreeterServer(greeterServer, &server{serverName: determineHostname()})
 
 	healthPort := fmt.Sprintf(":%d", *port+1)
