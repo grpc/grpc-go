@@ -348,7 +348,7 @@ func (cc *ClientConn) exitIdleMode() error {
 	cc.idlenessState = ccIdlenessStateExitingIdle
 	exitedIdle := false
 	if cc.blockingpicker == nil {
-		cc.blockingpicker = newPickerWrapper()
+		cc.blockingpicker = newPickerWrapper(cc.dopts.copts.StatsHandlers)
 	} else {
 		cc.blockingpicker.exitIdleMode()
 		exitedIdle = true
