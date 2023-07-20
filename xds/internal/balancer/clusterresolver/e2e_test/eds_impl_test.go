@@ -41,7 +41,6 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal/balancer/priority"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -1073,30 +1072,6 @@ func (s) TestEDS_ResourceNotFound(t *testing.T) {
 	if err := waitForProducedZeroAddressesError(ctx, t, client); err != nil {
 		t.Fatal(err)
 	}
-}
-
-// waitForAllPrioritiesRemovedError repeatedly makes RPCs using the
-// TestServiceClient until they fail with an error which indicates that all
-// priorities have been removed. A non-nil error is returned if the context
-// expires before RPCs fail with the expected error.
-func waitForAllPrioritiesRemovedError(ctx context.Context, t *testing.T, client testgrpc.TestServiceClient) error {
-	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
-		_, err := client.EmptyCall(ctx, &testpb.Empty{})
-		if err == nil {
-			t.Log("EmptyCall() succeeded after EDS update with no localities")
-			continue
-		}
-		if code := status.Code(err); code != codes.Unavailable {
-			t.Logf("EmptyCall() returned code: %v, want: %v", code, codes.Unavailable)
-			continue
-		}
-		if !strings.Contains(err.Error(), priority.ErrAllPrioritiesRemoved.Error()) {
-			t.Logf("EmptyCall() = %v, want %v", err, priority.ErrAllPrioritiesRemoved)
-			continue
-		}
-		return nil
-	}
-	return errors.New("timeout when waiting for RPCs to fail with UNAVAILABLE status and priority.ErrAllPrioritiesRemoved error")
 }
 
 // waitForAllPrioritiesRemovedError repeatedly makes RPCs using the
