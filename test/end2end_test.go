@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -44,6 +45,8 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
@@ -62,6 +65,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
@@ -82,6 +86,7 @@ const defaultHealthService = "grpc.health.v1.Health"
 
 func init() {
 	channelz.TurnOn()
+	balancer.Register(triggerRPCBlockPickerBalancerBuilder{})
 }
 
 type s struct {
@@ -6360,5 +6365,167 @@ func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
 	}
 	if ssbl.mml.events != 8 {
 		t.Fatalf("want 8 server side binary logging events, got %v", ssbl.mml.events)
+	}
+}
+
+type statsHandlerRecordEvents struct {
+	mu sync.Mutex
+	s  []stats.RPCStats
+}
+
+func (*statsHandlerRecordEvents) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	return ctx
+}
+func (h *statsHandlerRecordEvents) HandleRPC(_ context.Context, s stats.RPCStats) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.s = append(h.s, s)
+}
+func (*statsHandlerRecordEvents) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+func (*statsHandlerRecordEvents) HandleConn(context.Context, stats.ConnStats) {}
+
+type triggerRPCBlockPicker struct {
+	pickDone func()
+}
+
+func (bp *triggerRPCBlockPicker) Pick(pi balancer.PickInfo) (balancer.PickResult, error) {
+	bp.pickDone()
+	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+}
+
+const name = "triggerRPCBlockBalancer"
+
+type triggerRPCBlockPickerBalancerBuilder struct{}
+
+func (triggerRPCBlockPickerBalancerBuilder) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
+	b := &triggerRPCBlockBalancer{
+		blockingPickerDone: grpcsync.NewEvent(),
+		ClientConn:         cc,
+	}
+	// round_robin child to complete balancer tree with a usable leaf policy and
+	// have RPCs actually work.
+	builder := balancer.Get(roundrobin.Name)
+	rr := builder.Build(b, bOpts)
+	if rr == nil {
+		panic("round robin builder returned nil")
+	}
+	b.Balancer = rr
+	return b
+}
+
+func (triggerRPCBlockPickerBalancerBuilder) ParseConfig(json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+	return &bpbConfig{}, nil
+}
+
+func (triggerRPCBlockPickerBalancerBuilder) Name() string {
+	return name
+}
+
+type bpbConfig struct {
+	serviceconfig.LoadBalancingConfig
+}
+
+// triggerRPCBlockBalancer uses a child RR balancer, but blocks all UpdateState
+// calls until the first Pick call. That first Pick returns
+// ErrNoSubConnAvailable to make the RPC block and trigger the appropriate stats
+// handler callout. After the first Pick call, it will forward at least one
+// READY picker update from the child, causing RPCs to proceed as normal using a
+// round robin balancer's picker if it updates with a READY picker.
+type triggerRPCBlockBalancer struct {
+	stateMu    sync.Mutex
+	childState balancer.State
+
+	blockingPickerDone *grpcsync.Event
+	// embed a ClientConn to wrap only UpdateState() operation
+	balancer.ClientConn
+	// embed a Balancer to wrap only UpdateClientConnState() operation
+	balancer.Balancer
+}
+
+func (bpb *triggerRPCBlockBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+	err := bpb.Balancer.UpdateClientConnState(s)
+	bpb.ClientConn.UpdateState(balancer.State{
+		ConnectivityState: connectivity.Connecting,
+		Picker: &triggerRPCBlockPicker{
+			pickDone: func() {
+				bpb.stateMu.Lock()
+				defer bpb.stateMu.Unlock()
+				bpb.blockingPickerDone.Fire()
+				if bpb.childState.ConnectivityState == connectivity.Ready {
+					bpb.ClientConn.UpdateState(bpb.childState)
+				}
+			},
+		},
+	})
+	return err
+}
+
+func (bpb *triggerRPCBlockBalancer) UpdateState(state balancer.State) {
+	bpb.stateMu.Lock()
+	defer bpb.stateMu.Unlock()
+	bpb.childState = state
+	if bpb.blockingPickerDone.HasFired() { // guard first one to get a picker sending ErrNoSubConnAvailable first
+		if state.ConnectivityState == connectivity.Ready {
+			bpb.ClientConn.UpdateState(state) // after the first rr picker update, only forward once READY for deterministic picker counts
+		}
+	}
+}
+
+// TestRPCBlockingOnPickerStatsCall tests the emission of a stats handler call
+// that represents the RPC had to block waiting for a new picker due to
+// ErrNoSubConnAvailable being returned from the first picker call.
+func (s) TestRPCBlockingOnPickerStatsCall(t *testing.T) {
+	sh := &statsHandlerRecordEvents{}
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+
+	if err := ss.StartServer(); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	lbCfgJSON := `{
+  		"loadBalancingConfig": [
+    		{
+      			"triggerRPCBlockBalancer": {}
+    		}
+		]
+	}`
+
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(lbCfgJSON)
+	mr := manual.NewBuilderWithScheme("pickerupdatedbalancer")
+	defer mr.Close()
+	mr.InitialState(resolver.State{
+		Addresses: []resolver.Address{
+			{Addr: ss.Address},
+		},
+		ServiceConfig: sc,
+	})
+
+	cc, err := grpc.Dial(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithStatsHandler(sh), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.Dial() failed: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	testServiceClient := testgrpc.NewTestServiceClient(cc)
+	if _, err := testServiceClient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+
+	var pickerUpdatedCount uint
+	for _, stat := range sh.s {
+		if _, ok := stat.(*stats.PickerUpdated); ok {
+			pickerUpdatedCount++
+		}
+	}
+	if pickerUpdatedCount != 1 {
+		t.Fatalf("sh.pickerUpdated count: %v, want: %v", pickerUpdatedCount, 2)
 	}
 }
