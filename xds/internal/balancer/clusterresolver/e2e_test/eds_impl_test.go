@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -41,7 +42,9 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -62,8 +65,9 @@ const (
 	localityName2  = "my-locality-2"
 	localityName3  = "my-locality-3"
 
-	defaultTestTimeout      = 5 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond
+	defaultTestTimeout            = 5 * time.Second
+	defaultTestShortTimeout       = 10 * time.Millisecond
+	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
 )
 
 type s struct {
@@ -849,6 +853,225 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 		if peer.Addr.String() != addrs[1].Addr {
 			t.Fatalf("EmptyCall() routed to backend %q, want %q", peer.Addr, addrs[1].Addr)
 		}
+	}
+}
+
+// TestEDS_BadUpdateWithoutPreviousGoodUpdate tests the case where the
+// management server sends a bad update (one that is NACKed by the xDS client).
+// Since the cluster_resolver LB policy does not have a previously received good
+// update, it is expected to treat this bad update as though it received an
+// update with no endpoints. Hence RPCs are expected to fail with "all
+// priorities removed" error.
+func (s) TestEDS_BadUpdateWithoutPreviousGoodUpdate(t *testing.T) {
+	// Spin up a management server to receive xDS resources from.
+	mgmtServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+	defer cleanup1()
+
+	// Start a backend server that implements the TestService.
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	// Create an EDS resource with a load balancing weight of 0. This will
+	// result in the resource being NACKed by the xDS client. Since the
+	// cluster_resolver LB policy does not have a previously received good EDS
+	// update, it should treat this update as an empty EDS update.
+	resources := clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+		Name:     localityName1,
+		Weight:   1,
+		Backends: []e2e.BackendOptions{{Port: testutils.ParsePort(t, server.Address)}},
+	}})
+	resources.Endpoints[0].Endpoints[0].LbEndpoints[0].LoadBalancingWeight = &wrapperspb.UInt32Value{Value: 0}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an xDS client for use by the cluster_resolver LB policy.
+	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	// Create a manual resolver and push a service config specifying the use of
+	// the cluster_resolver LB policy with a single discovery mechanism.
+	r := manual.NewBuilderWithScheme("whatever")
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cluster_resolver_experimental":{
+					"discoveryMechanisms": [{
+						"cluster": "%s",
+						"type": "EDS",
+						"edsServiceName": "%s",
+						"outlierDetection": {}
+					}],
+					"xdsLbPolicy":[{"round_robin":{}}]
+				}
+			}]
+		}`, clusterName, edsServiceName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+	// Create a ClientConn and verify that RPCs fail with "all priorities
+	// removed" error.
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+	client := testgrpc.NewTestServiceClient(cc)
+	if err := waitForAllPrioritiesRemovedError(ctx, t, client); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestEDS_BadUpdateWithPreviousGoodUpdate tests the case where the
+// cluster_resolver LB policy receives a good EDS update from the management
+// server and the test verifies that RPCs are successful. Then, a bad update is
+// received from the management server (one that is NACKed by the xDS client).
+// The test verifies that the previously received good update is still being
+// used and that RPCs are still successful.
+func (s) TestEDS_BadUpdateWithPreviousGoodUpdate(t *testing.T) {
+	// Spin up a management server to receive xDS resources from.
+	mgmtServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+	defer cleanup1()
+
+	// Start a backend server that implements the TestService.
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	// Create an EDS resource for consumption by the test.
+	resources := clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+		Name:     localityName1,
+		Weight:   1,
+		Backends: []e2e.BackendOptions{{Port: testutils.ParsePort(t, server.Address)}},
+	}})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an xDS client for use by the cluster_resolver LB policy.
+	xdsClient, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	// Create a manual resolver and push a service config specifying the use of
+	// the cluster_resolver LB policy with a single discovery mechanism.
+	r := manual.NewBuilderWithScheme("whatever")
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cluster_resolver_experimental":{
+					"discoveryMechanisms": [{
+						"cluster": "%s",
+						"type": "EDS",
+						"edsServiceName": "%s",
+						"outlierDetection": {}
+					}],
+					"xdsLbPolicy":[{"round_robin":{}}]
+				}
+			}]
+		}`, clusterName, edsServiceName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	// Ensure RPCs are being roundrobined across the single backend.
+	client := testgrpc.NewTestServiceClient(cc)
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, []resolver.Address{{Addr: server.Address}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Update the endpoints resource in the management server with a load
+	// balancing weight of 0. This will result in the resource being NACKed by
+	// the xDS client. But since the cluster_resolver LB policy has a previously
+	// received good EDS update, it should continue using it.
+	resources.Endpoints[0].Endpoints[0].LbEndpoints[0].LoadBalancingWeight = &wrapperspb.UInt32Value{Value: 0}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure that RPCs continue to succeed for the next second.
+	for end := time.Now().Add(time.Second); time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
+		if err := rrutil.CheckRoundRobinRPCs(ctx, client, []resolver.Address{{Addr: server.Address}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// TestEDS_ResourceNotFound tests the case where the requested EDS resource does
+// not exist on the management server. Once the watch timer associated with the
+// requested resource expires, the cluster_resolver LB policy receives a
+// "resource-not-found" callback from the xDS client and is expected to treat it
+// as though it received an update with no endpoints. Hence RPCs are expected to
+// fail with "all priorities removed" error.
+func (s) TestEDS_ResourceNotFound(t *testing.T) {
+	// Spin up a management server to receive xDS resources from.
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
+	if err != nil {
+		t.Fatalf("Failed to spin up the xDS management server: %v", err)
+	}
+	defer mgmtServer.Stop()
+
+	// Create an xDS client talking to the above management server, configured
+	// with a short watch expiry timeout.
+	nodeID := uuid.New().String()
+	xdsClient, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+		XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
+		NodeProto: &v3corepb.Node{Id: nodeID},
+	}, defaultTestWatchExpiryTimeout, time.Duration(0))
+	if err != nil {
+		t.Fatalf("failed to create xds client: %v", err)
+	}
+	defer close()
+
+	// Configure no resources on the management server.
+	resources := e2e.UpdateOptions{NodeID: nodeID, SkipValidation: true}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
+	}
+
+	// Create a manual resolver and push a service config specifying the use of
+	// the cluster_resolver LB policy with a single discovery mechanism.
+	r := manual.NewBuilderWithScheme("whatever")
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cluster_resolver_experimental":{
+					"discoveryMechanisms": [{
+						"cluster": "%s",
+						"type": "EDS",
+						"edsServiceName": "%s",
+						"outlierDetection": {}
+					}],
+					"xdsLbPolicy":[{"round_robin":{}}]
+				}
+			}]
+		}`, clusterName, edsServiceName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+	// Create a ClientConn and verify that RPCs fail with "all priorities
+	// removed" error.
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+	client := testgrpc.NewTestServiceClient(cc)
+	if err := waitForAllPrioritiesRemovedError(ctx, t, client); err != nil {
+		t.Fatal(err)
 	}
 }
 

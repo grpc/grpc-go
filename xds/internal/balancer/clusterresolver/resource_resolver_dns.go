@@ -23,6 +23,8 @@ import (
 	"net/url"
 	"sync"
 
+	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -42,6 +44,7 @@ type dnsDiscoveryMechanism struct {
 	target           string
 	topLevelResolver topLevelResolver
 	dnsR             resolver.Resolver
+	logger           *grpclog.PrefixLogger
 
 	mu             sync.Mutex
 	addrs          []string
@@ -64,10 +67,11 @@ type dnsDiscoveryMechanism struct {
 //
 // The `dnsR` field is unset if we run into erros in this function. Therefore, a
 // nil check is required wherever we access that field.
-func newDNSResolver(target string, topLevelResolver topLevelResolver) *dnsDiscoveryMechanism {
+func newDNSResolver(target string, topLevelResolver topLevelResolver, logger *grpclog.PrefixLogger) *dnsDiscoveryMechanism {
 	ret := &dnsDiscoveryMechanism{
 		target:           target,
 		topLevelResolver: topLevelResolver,
+		logger:           logger,
 	}
 	u, err := url.Parse("dns:///" + target)
 	if err != nil {
@@ -75,7 +79,7 @@ func newDNSResolver(target string, topLevelResolver topLevelResolver) *dnsDiscov
 		return ret
 	}
 
-	r, err := newDNS(resolver.Target{Scheme: "dns", URL: *u}, ret, resolver.BuildOptions{})
+	r, err := newDNS(resolver.Target{URL: *u}, ret, resolver.BuildOptions{})
 	if err != nil {
 		topLevelResolver.onError(fmt.Errorf("failed to build DNS resolver for target %q: %v", target, err))
 		return ret
@@ -116,6 +120,10 @@ func (dr *dnsDiscoveryMechanism) stop() {
 // updates from the real DNS resolver.
 
 func (dr *dnsDiscoveryMechanism) UpdateState(state resolver.State) error {
+	if dr.logger.V(2) {
+		dr.logger.Infof("DNS discovery mechanism for resource %q reported an update: %s", dr.target, pretty.ToJSON(state))
+	}
+
 	dr.mu.Lock()
 	addrs := make([]string, len(state.Addresses))
 	for i, a := range state.Addresses {
@@ -130,6 +138,10 @@ func (dr *dnsDiscoveryMechanism) UpdateState(state resolver.State) error {
 }
 
 func (dr *dnsDiscoveryMechanism) ReportError(err error) {
+	if dr.logger.V(2) {
+		dr.logger.Infof("DNS discovery mechanism for resource %q reported error: %v", dr.target, err)
+	}
+
 	dr.topLevelResolver.onError(err)
 }
 

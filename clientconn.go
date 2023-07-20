@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/pretty"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
@@ -53,8 +54,6 @@ import (
 const (
 	// minimum time to give a connection to complete
 	minConnectTimeout = 20 * time.Second
-	// must match grpclbName in grpclb/grpclb.go
-	grpclbName = "grpclb"
 )
 
 var (
@@ -349,7 +348,7 @@ func (cc *ClientConn) exitIdleMode() error {
 	cc.idlenessState = ccIdlenessStateExitingIdle
 	exitedIdle := false
 	if cc.blockingpicker == nil {
-		cc.blockingpicker = newPickerWrapper()
+		cc.blockingpicker = newPickerWrapper(cc.dopts.copts.StatsHandlers)
 	} else {
 		cc.blockingpicker.exitIdleMode()
 		exitedIdle = true
@@ -867,6 +866,20 @@ func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivi
 	cc.balancerWrapper.updateSubConnState(sc, s, err)
 }
 
+// Makes a copy of the input addresses slice and clears out the balancer
+// attributes field. Addresses are passed during subconn creation and address
+// update operations. In both cases, we will clear the balancer attributes by
+// calling this function, and therefore we will be able to use the Equal method
+// provided by the resolver.Address type for comparison.
+func copyAddressesWithoutBalancerAttributes(in []resolver.Address) []resolver.Address {
+	out := make([]resolver.Address, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].BalancerAttributes = nil
+	}
+	return out
+}
+
 // newAddrConn creates an addrConn for addrs and adds it to cc.conns.
 //
 // Caller needs to make sure len(addrs) > 0.
@@ -874,7 +887,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSub
 	ac := &addrConn{
 		state:        connectivity.Idle,
 		cc:           cc,
-		addrs:        addrs,
+		addrs:        copyAddressesWithoutBalancerAttributes(addrs),
 		scopts:       opts,
 		dopts:        cc.dopts,
 		czData:       new(channelzData),
@@ -995,8 +1008,9 @@ func equalAddresses(a, b []resolver.Address) bool {
 // connections or connection attempts.
 func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 	ac.mu.Lock()
-	channelz.Infof(logger, ac.channelzID, "addrConn: updateAddrs curAddr: %v, addrs: %v", ac.curAddr, addrs)
+	channelz.Infof(logger, ac.channelzID, "addrConn: updateAddrs curAddr: %v, addrs: %v", pretty.ToJSON(ac.curAddr), pretty.ToJSON(addrs))
 
+	addrs = copyAddressesWithoutBalancerAttributes(addrs)
 	if equalAddresses(ac.addrs, addrs) {
 		ac.mu.Unlock()
 		return
@@ -1137,23 +1151,13 @@ func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSel
 	}
 
 	var newBalancerName string
-	if cc.sc != nil && cc.sc.lbConfig != nil {
+	if cc.sc == nil || (cc.sc.lbConfig == nil && cc.sc.LB == nil) {
+		// No service config or no LB policy specified in config.
+		newBalancerName = PickFirstBalancerName
+	} else if cc.sc.lbConfig != nil {
 		newBalancerName = cc.sc.lbConfig.name
-	} else {
-		var isGRPCLB bool
-		for _, a := range addrs {
-			if a.Type == resolver.GRPCLB {
-				isGRPCLB = true
-				break
-			}
-		}
-		if isGRPCLB {
-			newBalancerName = grpclbName
-		} else if cc.sc != nil && cc.sc.LB != nil {
-			newBalancerName = *cc.sc.LB
-		} else {
-			newBalancerName = PickFirstBalancerName
-		}
+	} else { // cc.sc.LB != nil
+		newBalancerName = *cc.sc.LB
 	}
 	cc.balancerWrapper.switchTo(newBalancerName)
 }
@@ -1807,19 +1811,70 @@ func (cc *ClientConn) parseTargetAndFindResolver() error {
 }
 
 // parseTarget uses RFC 3986 semantics to parse the given target into a
-// resolver.Target struct containing scheme, authority and url. Query
-// params are stripped from the endpoint.
+// resolver.Target struct containing url. Query params are stripped from the
+// endpoint.
 func parseTarget(target string) (resolver.Target, error) {
 	u, err := url.Parse(target)
 	if err != nil {
 		return resolver.Target{}, err
 	}
 
-	return resolver.Target{
-		Scheme:    u.Scheme,
-		Authority: u.Host,
-		URL:       *u,
-	}, nil
+	return resolver.Target{URL: *u}, nil
+}
+
+func encodeAuthority(authority string) string {
+	const upperhex = "0123456789ABCDEF"
+
+	// Return for characters that must be escaped as per
+	// Valid chars are mentioned here:
+	// https://datatracker.ietf.org/doc/html/rfc3986#section-3.2
+	shouldEscape := func(c byte) bool {
+		// Alphanum are always allowed.
+		if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' {
+			return false
+		}
+		switch c {
+		case '-', '_', '.', '~': // Unreserved characters
+			return false
+		case '!', '$', '&', '\'', '(', ')', '*', '+', ',', ';', '=': // Subdelim characters
+			return false
+		case ':', '[', ']', '@': // Authority related delimeters
+			return false
+		}
+		// Everything else must be escaped.
+		return true
+	}
+
+	hexCount := 0
+	for i := 0; i < len(authority); i++ {
+		c := authority[i]
+		if shouldEscape(c) {
+			hexCount++
+		}
+	}
+
+	if hexCount == 0 {
+		return authority
+	}
+
+	required := len(authority) + 2*hexCount
+	t := make([]byte, required)
+
+	j := 0
+	// This logic is a barebones version of escape in the go net/url library.
+	for i := 0; i < len(authority); i++ {
+		switch c := authority[i]; {
+		case shouldEscape(c):
+			t[j] = '%'
+			t[j+1] = upperhex[c>>4]
+			t[j+2] = upperhex[c&15]
+			j += 3
+		default:
+			t[j] = authority[i]
+			j++
+		}
+	}
+	return string(t)
 }
 
 // Determine channel authority. The order of precedence is as follows:
@@ -1872,7 +1927,11 @@ func (cc *ClientConn) determineAuthority() error {
 		// the channel authority given the user's dial target. For resolvers
 		// which don't implement this interface, we will use the endpoint from
 		// "scheme://authority/endpoint" as the default authority.
-		cc.authority = endpoint
+		// Escape the endpoint to handle use cases where the endpoint
+		// might not be a valid authority by default.
+		// For example an endpoint which has multiple paths like
+		// 'a/b/c', which is not a valid authority by default.
+		cc.authority = encodeAuthority(endpoint)
 	}
 	channelz.Infof(logger, cc.channelzID, "Channel authority set to %q", cc.authority)
 	return nil

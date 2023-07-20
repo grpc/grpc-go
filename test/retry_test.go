@@ -474,6 +474,10 @@ func (*retryStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) conte
 	return ctx
 }
 func (h *retryStatsHandler) HandleRPC(_ context.Context, s stats.RPCStats) {
+	// these calls come in nondeterministically - so can just ignore
+	if _, ok := s.(*stats.PickerUpdated); ok {
+		return
+	}
 	h.mu.Lock()
 	h.s = append(h.s, s)
 	h.mu.Unlock()
