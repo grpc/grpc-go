@@ -142,7 +142,17 @@ func (dr *dnsDiscoveryMechanism) ReportError(err error) {
 		dr.logger.Infof("DNS discovery mechanism for resource %q reported error: %v", dr.target, err)
 	}
 
-	dr.topLevelResolver.onError(err)
+	dr.mu.Lock()
+	// Don't report any errors after first error or good address update.
+	if dr.addrs != nil {
+		dr.mu.Unlock()
+		return
+	}
+	dr.addrs = make([]string, 0)
+	dr.updateReceived = true
+	dr.mu.Unlock()
+
+	dr.topLevelResolver.onUpdate()
 }
 
 func (dr *dnsDiscoveryMechanism) NewAddress(addresses []resolver.Address) {

@@ -18,6 +18,7 @@ package e2e_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -596,8 +597,8 @@ func (s) TestAggregateCluster_SwitchEDSAndDNS(t *testing.T) {
 // DNS resolver yet. Once the DNS resolver pushes an update, the test verifies
 // that we switch to the DNS cluster and can make a successful RPC. At this
 // point when the DNS cluster returns an error, the test verifies that RPCs are
-// still successful. This is the expected behavior because pick_first (the leaf
-// policy) ignores resolver errors when it is not in TransientFailure.
+// still successful. This is the expected behavior because the cluster resolver
+// policy eats errors from DNS Resolver after it has returned an error.
 func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 	dnsTargetCh, _, _, dnsR, cleanup1 := setupDNS()
 	defer cleanup1()
@@ -612,8 +613,8 @@ func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 	addrs, _ := backendAddressesAndPorts(t, servers)
 
 	// Configure an aggregate cluster pointing to an EDS and LOGICAL_DNS
-	// cluster. Also configure an empty endpoints resource for the EDS cluster
-	// that contains no endpoints.
+	// cluster. Also configure an endpoints resource for the EDS cluster which
+	// triggers an NACK.
 	const (
 		edsClusterName = clusterName + "-eds"
 		dnsClusterName = clusterName + "-dns"
@@ -698,13 +699,174 @@ func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 	}
 }
 
+// TestAggregateCluster_BadEDS_GoodToBadDNS tests the case where the top-level
+// cluster is an aggregate cluster that resolves to an EDS and LOGICAL_DNS
+// cluster. The test first sends an EDS response which triggers an NACK. Once
+// the DNS resolver pushes an update, the test verifies that we switch to the
+// DNS cluster and can make a successful RPC.
+func (s) TestAggregateCluster_BadEDSFromError_GoodToBadDNS(t *testing.T) {
+	dnsTargetCh, _, _, dnsR, cleanup1 := setupDNS()
+	defer cleanup1()
+
+	// Start an xDS management server.
+	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer cleanup2()
+
+	// Start two test backends.
+	servers, cleanup3 := startTestServiceBackends(t, 2)
+	defer cleanup3()
+	addrs, _ := backendAddressesAndPorts(t, servers)
+
+	// Configure an aggregate cluster pointing to an EDS and LOGICAL_DNS
+	// cluster. Also configure an empty endpoints resource for the EDS cluster
+	// that contains no endpoints.
+	const (
+		edsClusterName = clusterName + "-eds"
+		dnsClusterName = clusterName + "-dns"
+		dnsHostName    = "dns_host"
+		dnsPort        = uint32(8080)
+	)
+	nackEndpointResource := e2e.DefaultEndpoint(edsServiceName, "localhost", nil)
+	nackEndpointResource.Endpoints = []*v3endpointpb.LocalityLbEndpoints{
+		{
+			LoadBalancingWeight: &wrapperspb.UInt32Value{
+				Value: 0, // causes an NACK
+			},
+		},
+	}
+	resources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
+			e2e.DefaultCluster(edsClusterName, edsServiceName, e2e.SecurityLevelNone),
+			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
+		},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{nackEndpointResource},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	// Ensure that the DNS resolver is started for the expected target.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for DNS resolver to be started")
+	case target := <-dnsTargetCh:
+		got, want := target.Endpoint(), fmt.Sprintf("%s:%d", dnsHostName, dnsPort)
+		if got != want {
+			t.Fatalf("DNS resolution started for target %q, want %q", got, want)
+		}
+	}
+
+	// Update DNS resolver with test backend addresses.
+	dnsR.UpdateState(resolver.State{Addresses: addrs})
+
+	// Ensure that RPCs start getting routed to the first backend since the
+	// child policy for a LOGICAL_DNS cluster is pick_first by default.
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		peer := &peer.Peer{}
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
+			t.Logf("EmptyCall() failed: %v", err)
+			continue
+		}
+		if peer.Addr.String() == addrs[0].Addr {
+			break
+		}
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("Timeout when waiting for RPCs to be routed to backend %q in the DNS cluster", addrs[0].Addr)
+	}
+}
+
+// TestAggregateCluster_BadDNS_GoodEDS tests the case where the top-level
+// cluster is an aggregate cluster that resolves to an LOGICAL_DNS and EDS
+// cluster. When the DNS Resolver returns an error and EDS cluster returns a
+// good update, this test verifies the cluster_resolver balancer correctly falls
+// back from the LOGICAL_DNS cluster to the EDS cluster.
+func (s) TestAggregateCluster_BadDNS_GoodEDS(t *testing.T) {
+	dnsTargetCh, _, _, dnsR, cleanup1 := setupDNS()
+	defer cleanup1()
+
+	// Start an xDS management server.
+	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer cleanup2()
+
+	// Start two test backends.
+	servers, cleanup3 := startTestServiceBackends(t, 2)
+	defer cleanup3()
+	addrs, ports := backendAddressesAndPorts(t, servers)
+
+	// Configure an aggregate cluster pointing to an LOGICAL_DNS and EDS
+	// cluster. Also configure an endpoints resource for the EDS cluster.
+	const (
+		edsClusterName = clusterName + "-eds"
+		dnsClusterName = clusterName + "-dns"
+		dnsHostName    = "dns_host"
+		dnsPort        = uint32(8080)
+	)
+	resources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterName, []string{dnsClusterName, edsClusterName}),
+			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
+			e2e.DefaultCluster(edsClusterName, edsServiceName, e2e.SecurityLevelNone),
+		},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{uint32(ports[0])})},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
+
+	// Ensure that the DNS resolver is started for the expected target.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for DNS resolver to be started")
+	case target := <-dnsTargetCh:
+		got, want := target.Endpoint(), fmt.Sprintf("%s:%d", dnsHostName, dnsPort)
+		if got != want {
+			t.Fatalf("DNS resolution started for target %q, want %q", got, want)
+		}
+	}
+
+	// Push an error through the DNS resolver.
+	dnsR.ReportError(errors.New("some error"))
+
+	// RPCs should work, higher level DNS cluster errors so should fallback to
+	// EDS cluster.
+	client := testgrpc.NewTestServiceClient(cc)
+	peer := &peer.Peer{}
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+	if peer.Addr.String() != addrs[0].Addr {
+		t.Fatalf("EmptyCall() routed to backend %q, want %q", peer.Addr, addrs[0].Addr)
+	}
+}
+
 // TestAggregateCluster_BadEDS_BadDNS tests the case where the top-level cluster
 // is an aggregate cluster that resolves to an EDS and LOGICAL_DNS cluster. When
 // the EDS request returns a resource that contains no endpoints, the test
 // verifies that we switch to the DNS cluster. When the DNS cluster returns an
-// error, the test verifies that RPCs fail with the error returned by the DNS
-// resolver, and thus, ensures that pick_first (the leaf policy) does not ignore
-// resolver errors.
+// error, the test verifies that RPCs fail with the error triggered by the DNS
+// Discovery Mechanism (from sending an empty address list down).
 func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 	dnsTargetCh, _, _, dnsR, cleanup1 := setupDNS()
 	defer cleanup1()
@@ -769,14 +931,14 @@ func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 	dnsErr := fmt.Errorf("DNS error")
 	dnsR.ReportError(dnsErr)
 
-	// Ensure that the error returned from the DNS resolver is reported to the
-	// caller of the RPC.
+	// Ensure that the error from the DNS Resolver leads to an empty address
+	// update for both priorities.
 	_, err := client.EmptyCall(ctx, &testpb.Empty{})
 	if code := status.Code(err); code != codes.Unavailable {
 		t.Fatalf("EmptyCall() failed with code %s, want %s", code, codes.Unavailable)
 	}
-	if err == nil || !strings.Contains(err.Error(), dnsErr.Error()) {
-		t.Fatalf("EmptyCall() failed with error %v, want %v", err, dnsErr)
+	if err == nil || !strings.Contains(err.Error(), "produced zero addresses") {
+		t.Fatalf("EmptyCall() failed with error: %v, want: produced zero addresses", err)
 	}
 }
 
