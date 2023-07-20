@@ -167,6 +167,7 @@ main() {
     "outlier_detection_test"
     "remove_neg_test"
     "round_robin_test"
+    "bootstrap_generator_test"
   )
   for test in "${test_suites[@]}"; do
     run_test $test || (( ++failed_tests ))
