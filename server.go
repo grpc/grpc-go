@@ -239,6 +239,11 @@ func newJoinServerOption(opts ...ServerOption) ServerOption {
 // SharedWriteBuffer allows reusing per-connection transport write buffer.
 // If this option is set to true every connection will release the buffer after
 // flushing the data on the wire.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func SharedWriteBuffer(val bool) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.sharedWriteBuffer = val

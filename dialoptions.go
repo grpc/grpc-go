@@ -142,6 +142,11 @@ func newJoinDialOption(opts ...DialOption) DialOption {
 // WithSharedWriteBuffer allows reusing per-connection transport write buffer.
 // If this option is set to true every connection will release the buffer after
 // flushing the data on the wire.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func WithSharedWriteBuffer(val bool) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.SharedWriteBuffer = val
