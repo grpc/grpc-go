@@ -325,7 +325,7 @@ func (cc *ClientConn) exitIdleMode() error {
 	}
 	if cc.idlenessState != ccIdlenessStateIdle {
 		cc.mu.Unlock()
-		logger.Info("ClientConn asked to exit idle mode when not in idle mode")
+		channelz.Infof(logger, cc.channelzID, "ClientConn asked to exit idle mode, current mode is %v", cc.idlenessState)
 		return nil
 	}
 
@@ -396,7 +396,7 @@ func (cc *ClientConn) enterIdleMode() error {
 		return ErrClientConnClosing
 	}
 	if cc.idlenessState != ccIdlenessStateActive {
-		logger.Error("ClientConn asked to enter idle mode when not active")
+		channelz.Errorf(logger, cc.channelzID, "ClientConn asked to enter idle mode, current mode is %v", cc.idlenessState)
 		return nil
 	}
 
@@ -666,6 +666,19 @@ const (
 	ccIdlenessStateIdle
 	ccIdlenessStateExitingIdle
 )
+
+func (s ccIdlenessState) String() string {
+	switch s {
+	case ccIdlenessStateActive:
+		return "active"
+	case ccIdlenessStateIdle:
+		return "idle"
+	case ccIdlenessStateExitingIdle:
+		return "exitingIdle"
+	default:
+		return "unknown"
+	}
+}
 
 // WaitForStateChange waits until the connectivity.State of ClientConn changes from sourceState or
 // ctx expires. A true value is returned in former case and false in latter.
