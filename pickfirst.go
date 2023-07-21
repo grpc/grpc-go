@@ -58,6 +58,19 @@ type pfConfig struct {
 }
 
 func (*pickfirstBuilder) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+	if !envconfig.PickFirstLBConfig {
+		// Prior to supporting loadbalancing configuration, the pick_first LB
+		// policy did not implement the balancer.ConfigParser interface. This
+		// meant that if a non-empty configuration was passed to it, the service
+		// config unmarshaling code would throw a warning log, but would
+		// continue using the pick_first LB policy. The code below ensures the
+		// same behavior is retained if the env var is not set.
+		if string(js) != "{}" {
+			logger.Warningf("Ignoring non-empty balancer configuration %q for the pick_first LB policy", string(js))
+		}
+		return nil, nil
+	}
+
 	cfg := &pfConfig{}
 	if err := json.Unmarshal(js, cfg); err != nil {
 		return nil, fmt.Errorf("pickfirst: unable to unmarshal LB policy config: %s, error: %v", string(js), err)
@@ -69,7 +82,6 @@ type pickfirstBalancer struct {
 	state   connectivity.State
 	cc      balancer.ClientConn
 	subConn balancer.SubConn
-	cfg     *pfConfig
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
@@ -106,18 +118,21 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		return balancer.ErrBadResolverState
 	}
 
+	// We don't have to guard this block with the env var because ParseConfig
+	// already does so.
+	var cfg *pfConfig
 	if state.BalancerConfig != nil {
-		cfg, ok := state.BalancerConfig.(*pfConfig)
+		var ok bool
+		cfg, ok = state.BalancerConfig.(*pfConfig)
 		if !ok {
 			return fmt.Errorf("pickfirstBalancer: received nil or illegal BalancerConfig (type %T): %v", state.BalancerConfig, state.BalancerConfig)
 		}
-		b.cfg = cfg
 	}
-
-	if envconfig.PickFirstLBConfig && b.cfg != nil && b.cfg.ShuffleAddressList {
+	if cfg != nil && cfg.ShuffleAddressList {
 		addrs = append([]resolver.Address{}, addrs...)
 		grpcrand.Shuffle(len(addrs), func(i, j int) { addrs[i], addrs[j] = addrs[j], addrs[i] })
 	}
+
 	if b.subConn != nil {
 		b.cc.UpdateAddresses(b.subConn, addrs)
 		return nil
