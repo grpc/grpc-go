@@ -165,6 +165,20 @@ func (s) TestSubsettingE2E(t *testing.T) {
 			subsetSize: 5,
 			maxDiff:    2,
 		},
+		{
+			name:       "Nbackends %% subsetSize == 0, but there are not enough clients to fill the last round",
+			backends:   20,
+			clients:    7,
+			subsetSize: 5,
+			maxDiff:    1,
+		},
+		{
+			name:       "last round is completely filled, but there are some excluded backends on every round",
+			backends:   21,
+			clients:    8,
+			subsetSize: 5,
+			maxDiff:    1,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
