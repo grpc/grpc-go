@@ -75,6 +75,9 @@ func newDNSResolver(target string, topLevelResolver topLevelResolver, logger *gr
 	}
 	u, err := url.Parse("dns:///" + target)
 	if err != nil {
+		if ret.logger.V(2) {
+			ret.logger.Infof("failed to parse dns hostname %q in clusterresolver LB policy", target)
+		}
 		ret.updateReceived = true
 		ret.topLevelResolver.onUpdate()
 		return ret
@@ -82,6 +85,9 @@ func newDNSResolver(target string, topLevelResolver topLevelResolver, logger *gr
 
 	r, err := newDNS(resolver.Target{URL: *u}, ret, resolver.BuildOptions{})
 	if err != nil {
+		if ret.logger.V(2) {
+			ret.logger.Infof("failed to build DNS resolver for target %q: %v", target, err)
+		}
 		ret.updateReceived = true
 		ret.topLevelResolver.onUpdate()
 		return ret
@@ -145,7 +151,11 @@ func (dr *dnsDiscoveryMechanism) ReportError(err error) {
 	}
 
 	dr.mu.Lock()
-	// Don't report any errors after first error or good address update.
+	// If a previous good update was received, suppress the error and continue
+	// using the previous update. If RPCs were succeeding prior to this, they
+	// will continue to do so. Also suppress errors if we previously received an
+	// error, since there will be no downstream effects of propagating this
+	// error.
 	if dr.updateReceived {
 		dr.mu.Unlock()
 		return
