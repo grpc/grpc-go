@@ -64,11 +64,21 @@ func (b *subsettingBalancer) prepareChildResolverState(s resolver.State) resolve
 	}
 	subsetCount := uint64(len(s.Addresses)) / b.cfg.SubsetSize
 	clientIndex := *b.cfg.ClientIndex
-
-	addr := make([]resolver.Address, len(s.Addresses))
-	copy(addr, s.Addresses)
-
+	
 	round := clientIndex / subsetCount
+	
+	excludedCount := uint64(len(s.Addresses)) % b.cfg.SubsetSize
+	excludedIndex := round*excludedCount % len(s.Addresses)
+	
+	addr := make([]resolver.Address, 0, len(s.Addresses) - excludedCount)
+
+	if excludedIndex+excludedCount < len(addresses) {
+		addr = append(addr, s.Addresses[:excludedIndex]...)
+		addr = append(addr, s.Addresses[excludedIndex+excludedCount:]...)
+	} else {
+		addr = append(addr, addresses[(excludedIndex+excludedCount)%len(s.Addresses):excludedIndex]...)
+	}	
+	
 	r := rand.New(rand.NewSource(int64(round)))
 	r.Shuffle(len(addr), func(i, j int) { addr[i], addr[j] = addr[j], addr[i] })
 
