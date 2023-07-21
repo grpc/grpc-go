@@ -2,6 +2,7 @@ package subsetting
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"google.golang.org/grpc/balancer"
@@ -40,6 +41,11 @@ func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 
 	if lbCfg.ClientIndex == nil {
 		return nil, fmt.Errorf("subsetting: clientIndex field is missing: %s", string(s))
+	}
+
+	// if someonw needs subsetSize == 1, he should use pick_first instead
+	if lbCfg.SubsetSize < 2 {
+		return nil, errors.New("subsetting: subsetSize must be >= 2")
 	}
 
 	return lbCfg, nil

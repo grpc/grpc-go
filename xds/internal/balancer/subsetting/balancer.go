@@ -1,7 +1,6 @@
 package subsetting
 
 import (
-	"errors"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -41,15 +40,6 @@ func (b *subsettingBalancer) UpdateClientConnState(s balancer.ClientConnState) e
 		}
 	}
 	b.cfg = lbCfg
-
-	// If resolver state contains no addresses, return an error so ClientConn
-	// will trigger re-resolve. Also records this as an resolver error, so when
-	// the overall state turns transient failure, the error message will have
-	// the zero address information.
-	if len(s.ResolverState.Addresses) == 0 {
-		b.ResolverError(errors.New("produced zero addresses"))
-		return balancer.ErrBadResolverState
-	}
 
 	err := b.child.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  b.prepareChildResolverState(s.ResolverState),
