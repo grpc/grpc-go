@@ -75,13 +75,15 @@ func newDNSResolver(target string, topLevelResolver topLevelResolver, logger *gr
 	}
 	u, err := url.Parse("dns:///" + target)
 	if err != nil {
-		topLevelResolver.onError(fmt.Errorf("failed to parse dns hostname %q in clusterresolver LB policy", target))
+		ret.updateReceived = true
+		ret.topLevelResolver.onUpdate()
 		return ret
 	}
 
 	r, err := newDNS(resolver.Target{URL: *u}, ret, resolver.BuildOptions{})
 	if err != nil {
-		topLevelResolver.onError(fmt.Errorf("failed to build DNS resolver for target %q: %v", target, err))
+		ret.updateReceived = true
+		ret.topLevelResolver.onUpdate()
 		return ret
 	}
 	ret.dnsR = r
@@ -144,11 +146,11 @@ func (dr *dnsDiscoveryMechanism) ReportError(err error) {
 
 	dr.mu.Lock()
 	// Don't report any errors after first error or good address update.
-	if dr.addrs != nil {
+	if dr.updateReceived {
 		dr.mu.Unlock()
 		return
 	}
-	dr.addrs = make([]string, 0)
+	dr.addrs = nil
 	dr.updateReceived = true
 	dr.mu.Unlock()
 

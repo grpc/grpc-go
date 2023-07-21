@@ -191,15 +191,14 @@ func buildClusterImplConfigForEDS(g *nameGenerator, edsResp xdsresource.Endpoint
 	}
 
 	var priorities [][]xdsresource.Locality
-	// Triggered by an EDS error before update, or empty localities list in a
-	// update. In either case want to create a priority, and send down empty
-	// address list, causing TF for that priority.
+	// Triggered by an NACK or resource-not-found error before update, or a
+	// empty localities list in a update. In either case want to create a
+	// priority, and send down empty address list, causing TF for that priority.
 	if len(edsResp.Localities) == 0 {
 		// "If any discovery mechanism instance experiences an error retrieving
 		// data, and it has not previously reported any results, it should
 		// report a result that is a single priority with no endpoints." - A37
-		priorities = make([][]xdsresource.Locality, 1)
-		priorities[0] = make([]xdsresource.Locality, 0)
+		priorities = [][]xdsresource.Locality{{}}
 	} else {
 		priorities = groupLocalitiesByPriority(edsResp.Localities)
 	}
