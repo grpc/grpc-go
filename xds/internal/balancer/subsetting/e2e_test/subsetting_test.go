@@ -4,6 +4,7 @@ package e2e_test
 import (
 	"context"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -105,19 +106,18 @@ func setupClients(t *testing.T, clientsCount int, subsetSize int, addresses []re
 	return clients, cancel
 }
 
-func checkRoundRobinRPCs(t *testing.T, ctx context.Context, clients []testgrpc.TestServiceClient, reqPerClient, expectedClientsPerBackend, expectedReqPerBackend int) {
-	reqPerBackend := map[string]int{}
+func checkRoundRobinRPCs(t *testing.T, ctx context.Context, clients []testgrpc.TestServiceClient, subsetSize int, maxDiff int) {
 	clientsPerBackend := map[string]map[int]struct{}{}
 
 	for clientIdx, client := range clients {
-		for i := 0; i < reqPerClient; i++ {
+		// make sure that every client send exactly 1 request to each server in its subset
+		for i := 0; i < subsetSize; i++ {
 			var peer peer.Peer
 			_, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer))
 			if err != nil {
 				t.Fatalf("failed to call server: %v", err)
 			}
 			if peer.Addr != nil {
-				reqPerBackend[peer.Addr.String()]++
 				if m, ok := clientsPerBackend[peer.Addr.String()]; !ok {
 					clientsPerBackend[peer.Addr.String()] = map[int]struct{}{clientIdx: struct{}{}}
 				} else {
@@ -127,16 +127,19 @@ func checkRoundRobinRPCs(t *testing.T, ctx context.Context, clients []testgrpc.T
 		}
 	}
 
-	for k, v := range reqPerBackend {
-		if v != expectedReqPerBackend {
-			t.Fatalf("got unepected number of req per backend, expected : %d, actual: %d, backend: %s", expectedReqPerBackend, v, k)
+	minClientsPerBackend := math.MaxInt
+	maxClientsPerBackend := 0
+	for _, v := range clientsPerBackend {
+		if len(v) < minClientsPerBackend {
+			minClientsPerBackend = len(v)
+		}
+		if len(v) > maxClientsPerBackend {
+			maxClientsPerBackend = len(v)
 		}
 	}
 
-	for k, v := range clientsPerBackend {
-		if len(v) != expectedClientsPerBackend {
-			t.Fatalf("got unepected number of clients per backend, expected : %d, actual: %d, backend: %s", expectedReqPerBackend, len(v), k)
-		}
+	if maxClientsPerBackend > minClientsPerBackend+maxDiff {
+		t.Fatalf("the difference between min and max clients per backend should be <= %d, min: %d, max: %d", maxDiff, minClientsPerBackend, maxClientsPerBackend)
 	}
 }
 
@@ -146,12 +149,21 @@ func (s) TestSubsettingE2E(t *testing.T) {
 		subsetSize int
 		clients    int
 		backends   int
+		maxDiff    int
 	}{
 		{
 			name:       "backends could be evenly distributed between clients",
 			backends:   12,
 			clients:    8,
 			subsetSize: 3,
+			maxDiff:    0,
+		},
+		{
+			name:       "backends could NOT be evenly distributed between clients",
+			backends:   37,
+			clients:    22,
+			subsetSize: 5,
+			maxDiff:    2,
 		},
 	}
 	for _, test := range tests {
@@ -165,10 +177,7 @@ func (s) TestSubsettingE2E(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
-			requPerClient := 2 * test.subsetSize
-			expectedClientsPerBackend := test.clients * test.subsetSize / test.backends
-			expectedReqPerBackend := 2 * expectedClientsPerBackend
-			checkRoundRobinRPCs(t, ctx, clients, requPerClient, expectedClientsPerBackend, expectedReqPerBackend)
+			checkRoundRobinRPCs(t, ctx, clients, test.subsetSize, test.maxDiff)
 		})
 	}
 }

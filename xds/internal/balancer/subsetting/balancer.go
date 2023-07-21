@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sort"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
@@ -62,35 +63,41 @@ func (b *subsettingBalancer) prepareChildResolverState(s resolver.State) resolve
 	if len(s.Addresses) <= int(b.cfg.SubsetSize) {
 		return s
 	}
-	subsetCount := uint64(len(s.Addresses)) / b.cfg.SubsetSize
-	clientIndex := *b.cfg.ClientIndex
-	
-	round := clientIndex / subsetCount
-	
-	excludedCount := uint64(len(s.Addresses)) % b.cfg.SubsetSize
-	excludedIndex := round*excludedCount % len(s.Addresses)
-	
-	addr := make([]resolver.Address, 0, len(s.Addresses) - excludedCount)
+	backendCount := len(s.Addresses)
+	addresses := make([]resolver.Address, backendCount)
+	copy(addresses, s.Addresses)
 
-	if excludedIndex+excludedCount < len(addresses) {
-		addr = append(addr, s.Addresses[:excludedIndex]...)
-		addr = append(addr, s.Addresses[excludedIndex+excludedCount:]...)
+	// sort address list by IP because the algorithm assumes that the initial
+	// order of the addresses is the same for every client
+	sort.Slice(addresses, func(i, j int) bool {
+		return addresses[i].Addr < addresses[j].Addr
+	})
+
+	subsetCount := backendCount / int(b.cfg.SubsetSize)
+	clientIndex := int(*b.cfg.ClientIndex)
+
+	round := clientIndex / subsetCount
+
+	excludedCount := backendCount % int(b.cfg.SubsetSize)
+	excludedStart := (round * excludedCount) % backendCount
+	excludedEnd := (excludedStart + excludedCount) % backendCount
+	if excludedStart < excludedEnd {
+		addresses = append(addresses[:excludedStart], addresses[excludedEnd:]...)
 	} else {
-		addr = append(addr, addresses[(excludedIndex+excludedCount)%len(s.Addresses):excludedIndex]...)
-	}	
-	
+		addresses = addresses[excludedEnd:excludedStart]
+	}
+
 	r := rand.New(rand.NewSource(int64(round)))
-	r.Shuffle(len(addr), func(i, j int) { addr[i], addr[j] = addr[j], addr[i] })
+	r.Shuffle(len(addresses), func(i, j int) {
+		addresses[i], addresses[j] = addresses[j], addresses[i]
+	})
 
 	subsetId := clientIndex % subsetCount
 
-	start := int(subsetId * b.cfg.SubsetSize)
+	start := int(subsetId * int(b.cfg.SubsetSize))
 	end := start + int(b.cfg.SubsetSize)
-	if end > len(addr) {
-		addr = append(addr, addr[:(end-len(addr))]...)
-	}
 	return resolver.State{
-		Addresses:     addr[start:end],
+		Addresses:     addresses[start:end],
 		ServiceConfig: s.ServiceConfig,
 		Attributes:    s.Attributes,
 	}
