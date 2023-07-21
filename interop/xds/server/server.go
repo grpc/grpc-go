@@ -156,7 +156,10 @@ func main() {
 
 	// Create an xDS enabled gRPC server, register the test service
 	// implementation and start serving.
-	testServer := xds.NewGRPCServer(grpc.Creds(creds), xds.ServingModeCallback(xdsServingModeCallback))
+	testServer, err := xds.NewGRPCServer(grpc.Creds(creds), xds.ServingModeCallback(xdsServingModeCallback))
+	if err != nil {
+		logger.Fatal("Failed to create an xDS enabled gRPC server: %v", err)
+	}
 	testgrpc.RegisterTestServiceServer(testServer, testService)
 	go func() {
 		if err := testServer.Serve(testLis); err != nil {
