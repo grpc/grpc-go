@@ -142,6 +142,7 @@ type configSelector struct {
 }
 
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
+var errMatchedRouteTypeNotRouteActionRoute = status.Errorf(codes.Unavailable, "matched route does not have a supported route type")
 
 func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
 	if cs == nil {
@@ -161,7 +162,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	if rt.actionType != xdsresource.RouteActionRoute {
-		return nil, status.Errorf(codes.Unavailable, "matched route does not have a supported route type")
+		return nil, errMatchedRouteTypeNotRouteActionRoute
 	}
 
 	cluster, ok := rt.clusters.Next().(*routeCluster)
