@@ -597,8 +597,8 @@ func (csm *connectivityStateManager) getNotifyChan() <-chan struct{} {
 
 func (csm *connectivityStateManager) close() {
 	csm.mu.Lock()
+	defer csm.mu.Unlock()
 	csm.pubSub.Stop()
-	csm.mu.Unlock()
 }
 
 // ClientConnInterface defines the functions clients need to perform unary and
