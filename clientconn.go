@@ -138,7 +138,9 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target: target,
-		csMgr:  &connectivityStateManager{},
+		csMgr: &connectivityStateManager{
+			pubSub: grpcsync.NewPubSub(),
+		},
 		conns:  make(map[*addrConn]struct{}),
 		dopts:  defaultDialOptions(),
 		czData: new(channelzData),
@@ -593,6 +595,12 @@ func (csm *connectivityStateManager) getNotifyChan() <-chan struct{} {
 	return csm.notifyChan
 }
 
+func (csm *connectivityStateManager) close() {
+	csm.mu.Lock()
+	csm.pubSub.Stop()
+	csm.mu.Unlock()
+}
+
 // ClientConnInterface defines the functions clients need to perform unary and
 // streaming RPCs.  It is implemented by *ClientConn, and is only intended to
 // be referenced by generated code.
@@ -770,9 +778,6 @@ func init() {
 	emptyServiceConfig = cfg.Config.(*ServiceConfig)
 
 	internal.SubscribeToConnectivityStateChanges = func(cc *ClientConn, s grpcsync.Subscriber) func() {
-		if cc.csMgr.pubSub == nil {
-			cc.csMgr.pubSub = grpcsync.NewPubSub()
-		}
 		return cc.csMgr.pubSub.Subscribe(s)
 	}
 }
@@ -1223,13 +1228,7 @@ func (cc *ClientConn) Close() error {
 	conns := cc.conns
 	cc.conns = nil
 	cc.csMgr.updateState(connectivity.Shutdown)
-
-	cc.csMgr.mu.Lock()
-	if cc.csMgr.pubSub != nil {
-		cc.csMgr.pubSub.Stop()
-		cc.csMgr.pubSub = nil
-	}
-	cc.csMgr.mu.Unlock()
+	cc.csMgr.close()
 
 	pWrapper := cc.blockingpicker
 	rWrapper := cc.resolverWrapper

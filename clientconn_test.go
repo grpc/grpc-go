@@ -1139,6 +1139,7 @@ func (s) TestReportStateChangesToSubscriber(t *testing.T) {
 	internal.SubscribeToConnectivityStateChanges.(func(cc *ClientConn, s grpcsync.Subscriber) func())(client, s)
 
 	expectedStates := []connectivity.State{
+		connectivity.Ready,
 		connectivity.Idle,
 		connectivity.Connecting,
 		connectivity.Shutdown,
