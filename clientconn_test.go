@@ -1136,7 +1136,7 @@ func (s) TestReportStateChangesToSubscriber(t *testing.T) {
 	}
 
 	s := newTestSubscriber()
-	internal.AddConnectivityStateSubscriber.(func(cc *ClientConn, s grpcsync.Subscriber) func())(client, s)
+	internal.SubscribeToConnectivityStateChanges.(func(cc *ClientConn, s grpcsync.Subscriber) func())(client, s)
 
 	expectedStates := []connectivity.State{
 		connectivity.Idle,

@@ -547,11 +547,11 @@ func getChainStreamer(interceptors []StreamClientInterceptor, curr int, finalStr
 // provide this functionality using the `PubSub`, to avoid keeping track of
 // the connectivity state at two places.
 type connectivityStateManager struct {
-	mu                      sync.Mutex
-	state                   connectivity.State
-	notifyChan              chan struct{}
-	channelzID              *channelz.Identifier
-	connectivityStatePubSub *grpcsync.PubSub
+	mu         sync.Mutex
+	state      connectivity.State
+	notifyChan chan struct{}
+	channelzID *channelz.Identifier
+	pubSub     *grpcsync.PubSub
 }
 
 // updateState updates the connectivity.State of ClientConn.
@@ -567,8 +567,8 @@ func (csm *connectivityStateManager) updateState(state connectivity.State) {
 		return
 	}
 	csm.state = state
-	if csm.connectivityStatePubSub != nil {
-		csm.connectivityStatePubSub.Publish(state)
+	if csm.pubSub != nil {
+		csm.pubSub.Publish(state)
 	}
 	channelz.Infof(logger, csm.channelzID, "Channel Connectivity change to %v", state)
 	if csm.notifyChan != nil {
@@ -769,11 +769,11 @@ func init() {
 	}
 	emptyServiceConfig = cfg.Config.(*ServiceConfig)
 
-	internal.AddConnectivityStateSubscriber = func(cc *ClientConn, s grpcsync.Subscriber) func() {
-		if cc.csMgr.connectivityStatePubSub == nil {
-			cc.csMgr.connectivityStatePubSub = grpcsync.NewPubSub()
+	internal.SubscribeToConnectivityStateChanges = func(cc *ClientConn, s grpcsync.Subscriber) func() {
+		if cc.csMgr.pubSub == nil {
+			cc.csMgr.pubSub = grpcsync.NewPubSub()
 		}
-		return cc.csMgr.connectivityStatePubSub.Subscribe(s)
+		return cc.csMgr.pubSub.Subscribe(s)
 	}
 }
 
@@ -1225,9 +1225,9 @@ func (cc *ClientConn) Close() error {
 	cc.csMgr.updateState(connectivity.Shutdown)
 
 	cc.csMgr.mu.Lock()
-	if cc.csMgr.connectivityStatePubSub != nil {
-		cc.csMgr.connectivityStatePubSub.Stop()
-		cc.csMgr.connectivityStatePubSub = nil
+	if cc.csMgr.pubSub != nil {
+		cc.csMgr.pubSub.Stop()
+		cc.csMgr.pubSub = nil
 	}
 	cc.csMgr.mu.Unlock()
 
