@@ -100,6 +100,9 @@ func (s) TestResolverCaseSensitivity(t *testing.T) {
 // TestResolverAddressesToEndpoints ensures one Endpoint is created for each
 // entry in resolver.State.Addresses automatically.
 func (s) TestResolverAddressesToEndpoints(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	const scheme = "testresolveraddressestoendpoints"
 	r := manual.NewBuilderWithScheme(scheme)
 
@@ -124,15 +127,18 @@ func (s) TestResolverAddressesToEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error dialing: %v", err)
 	}
-	got := <-stateCh
-	cc.Close()
+	defer cc.Close()
 
-	want := []resolver.Endpoint{
-		{Addresses: []resolver.Address{{Addr: "addr1"}}, Attributes: a1},
-		{Addresses: []resolver.Address{{Addr: "addr2"}}, Attributes: a2},
-	}
-
-	if diff := cmp.Diff(got.ResolverState.Endpoints, want); diff != "" {
-		t.Errorf("Did not receive expected endpoints.  Diff (-got +want):\n%v", diff)
+	select {
+	case got := <-stateCh:
+		want := []resolver.Endpoint{
+			{Addresses: []resolver.Address{{Addr: "addr1"}}, Attributes: a1},
+			{Addresses: []resolver.Address{{Addr: "addr2"}}, Attributes: a2},
+		}
+		if diff := cmp.Diff(got.ResolverState.Endpoints, want); diff != "" {
+			t.Errorf("Did not receive expected endpoints.  Diff (-got +want):\n%v", diff)
+		}
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for endpoints")
 	}
 }
