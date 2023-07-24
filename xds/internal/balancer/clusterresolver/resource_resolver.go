@@ -38,7 +38,6 @@ type resourceUpdate struct {
 // from underlying concrete resolvers.
 type topLevelResolver interface {
 	onUpdate()
-	onError(error)
 }
 
 // endpointsResolver wraps the functionality to resolve a given resource name to
@@ -276,12 +275,4 @@ func (rr *resourceResolver) onUpdate() {
 	rr.mu.Lock()
 	rr.generateLocked()
 	rr.mu.Unlock()
-}
-
-func (rr *resourceResolver) onError(err error) {
-	select {
-	case <-rr.updateChannel:
-	default:
-	}
-	rr.updateChannel <- &resourceUpdate{err: err}
 }
