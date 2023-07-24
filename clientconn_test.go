@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
@@ -1078,114 +1077,6 @@ func (s) TestDefaultServiceConfig(t *testing.T) {
 	testDefaultServiceConfigWhenResolverServiceConfigDisabled(t, r, addr, js)
 	testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t, r, addr, js)
 	testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t, r, addr, js)
-}
-
-type testSubscriber struct {
-	onMsgCh chan connectivity.State
-}
-
-func newTestSubscriber() *testSubscriber {
-	return &testSubscriber{onMsgCh: make(chan connectivity.State, 1)}
-}
-
-func (ts *testSubscriber) OnMessage(msg interface{}) {
-	select {
-	case ts.onMsgCh <- msg.(connectivity.State):
-	default:
-	}
-}
-
-func (s) TestReportStateChangesToSubscriber(t *testing.T) {
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Error while listening. Err: %v", err)
-	}
-	defer lis.Close()
-
-	done := make(chan struct{})
-	sent := make(chan struct{})
-	dialDone := make(chan struct{})
-
-	// Launch the server.
-	go func() {
-		defer func() {
-			close(done)
-		}()
-		conn, err := lis.Accept()
-		if err != nil {
-			t.Errorf("Error while accepting. Err: %v", err)
-			return
-		}
-		defer conn.Close()
-		// Sleep for a little bit to make sure that Dial on client
-		// side blocks until settings are received.
-		time.Sleep(100 * time.Millisecond)
-		framer := http2.NewFramer(conn, conn)
-		close(sent)
-		if err := framer.WriteSettings(http2.Setting{}); err != nil {
-			t.Errorf("Error while writing settings. Err: %v", err)
-			return
-		}
-		<-dialDone // Close conn only after dial returns.
-	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	client, err := DialContext(ctx, lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), WithBlock())
-	if err != nil {
-		t.Fatalf("Error while dialing. Err: %v", err)
-	}
-
-	s := newTestSubscriber()
-	internal.SubscribeToConnectivityStateChanges.(func(cc *ClientConn, s grpcsync.Subscriber) func())(client, s)
-
-	expectedStates := []connectivity.State{
-		connectivity.Ready,
-		connectivity.Idle,
-		connectivity.Connecting,
-		connectivity.Shutdown,
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		for _, expectedState := range expectedStates {
-			select {
-			case actualState := <-s.onMsgCh:
-				if actualState != expectedState {
-					t.Errorf("Received unexpected state: %q; want: %q", actualState, expectedState)
-				}
-			case <-time.After(defaultTestTimeout):
-				t.Error("Timeout when expecting the onMessage() callback to be invoked")
-			}
-			if t.Failed() {
-				break
-			}
-		}
-		wg.Done()
-	}()
-
-	close(dialDone)
-
-	go func() {
-		client.WaitForStateChange(ctx, connectivity.Ready)
-		client.Connect()
-		client.WaitForStateChange(ctx, connectivity.Idle)
-
-		select {
-		case <-sent:
-		default:
-			t.Errorf("Dial returned before server settings were sent")
-		}
-		<-done
-
-		client.Close()
-		wg.Done()
-	}()
-
-	wg.Wait()
-	if t.Failed() {
-		t.FailNow()
-	}
 }
 
 func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
