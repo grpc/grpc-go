@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/pickfirst"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -614,7 +615,7 @@ func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 
 	// Configure an aggregate cluster pointing to an EDS and LOGICAL_DNS
 	// cluster. Also configure an endpoints resource for the EDS cluster which
-	// triggers an NACK.
+	// triggers a NACK.
 	const (
 		edsClusterName = clusterName + "-eds"
 		dnsClusterName = clusterName + "-dns"
@@ -755,8 +756,6 @@ func (s) TestAggregateCluster_BadEDSFromError_GoodToBadDNS(t *testing.T) {
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
-	client := testgrpc.NewTestServiceClient(cc)
-
 	// Ensure that the DNS resolver is started for the expected target.
 	select {
 	case <-ctx.Done():
@@ -773,19 +772,7 @@ func (s) TestAggregateCluster_BadEDSFromError_GoodToBadDNS(t *testing.T) {
 
 	// Ensure that RPCs start getting routed to the first backend since the
 	// child policy for a LOGICAL_DNS cluster is pick_first by default.
-	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		peer := &peer.Peer{}
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
-			t.Logf("EmptyCall() failed: %v", err)
-			continue
-		}
-		if peer.Addr.String() == addrs[0].Addr {
-			break
-		}
-	}
-	if ctx.Err() != nil {
-		t.Fatalf("Timeout when waiting for RPCs to be routed to backend %q in the DNS cluster", addrs[0].Addr)
-	}
+	pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0])
 }
 
 // TestAggregateCluster_BadDNS_GoodEDS tests the case where the top-level

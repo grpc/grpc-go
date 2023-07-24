@@ -76,7 +76,7 @@ func newDNSResolver(target string, topLevelResolver topLevelResolver, logger *gr
 	u, err := url.Parse("dns:///" + target)
 	if err != nil {
 		if ret.logger.V(2) {
-			ret.logger.Infof("failed to parse dns hostname %q in clusterresolver LB policy", target)
+			ret.logger.Infof("Failed to parse dns hostname %q in clusterresolver LB policy", target)
 		}
 		ret.updateReceived = true
 		ret.topLevelResolver.onUpdate()
@@ -86,7 +86,7 @@ func newDNSResolver(target string, topLevelResolver topLevelResolver, logger *gr
 	r, err := newDNS(resolver.Target{URL: *u}, ret, resolver.BuildOptions{})
 	if err != nil {
 		if ret.logger.V(2) {
-			ret.logger.Infof("failed to build DNS resolver for target %q: %v", target, err)
+			ret.logger.Infof("Failed to build DNS resolver for target %q: %v", target, err)
 		}
 		ret.updateReceived = true
 		ret.topLevelResolver.onUpdate()
