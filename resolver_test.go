@@ -24,8 +24,13 @@ import (
 	"net"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/attributes"
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 )
 
 type wrapResolverBuilder struct {
@@ -90,4 +95,44 @@ func (s) TestResolverCaseSensitivity(t *testing.T) {
 		t.Fatalf("Dialer got address %q; wanted %q", got, want)
 	}
 	cc.Close()
+}
+
+// TestResolverAddressesToEndpoints ensures one Endpoint is created for each
+// entry in resolver.State.Addresses automatically.
+func (s) TestResolverAddressesToEndpoints(t *testing.T) {
+	const scheme = "testresolveraddressestoendpoints"
+	r := manual.NewBuilderWithScheme(scheme)
+
+	stateCh := make(chan balancer.ClientConnState, 1)
+	bf := stub.BalancerFuncs{
+		UpdateClientConnState: func(_ *stub.BalancerData, ccs balancer.ClientConnState) error {
+			stateCh <- ccs
+			return nil
+		},
+	}
+	balancerName := "stub-balancer-" + scheme
+	stub.Register(balancerName, bf)
+
+	a1 := attributes.New("x", "y")
+	a2 := attributes.New("a", "b")
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: "addr1", BalancerAttributes: a1}, {Addr: "addr2", BalancerAttributes: a2}}})
+
+	cc, err := Dial(r.Scheme()+":///",
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithResolvers(r),
+		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, balancerName)))
+	if err != nil {
+		t.Fatalf("Unexpected error dialing: %v", err)
+	}
+	got := <-stateCh
+	cc.Close()
+
+	want := []resolver.Endpoint{
+		{Addresses: []resolver.Address{{Addr: "addr1"}}, Attributes: a1},
+		{Addresses: []resolver.Address{{Addr: "addr2"}}, Attributes: a2},
+	}
+
+	if diff := cmp.Diff(got.ResolverState.Endpoints, want); diff != "" {
+		t.Errorf("Did not receive expected endpoints.  Diff (-got +want):\n%v", diff)
+	}
 }

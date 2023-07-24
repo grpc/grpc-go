@@ -253,8 +253,15 @@ func (b *clusterResolverBalancer) updateChildConfig() {
 	}
 	b.logger.Infof("Built child policy config: %v", pretty.ToJSON(childCfg))
 
+	endpoints := make([]resolver.Endpoint, len(addrs))
+	for i, a := range addrs {
+		endpoints[i].Attributes = a.BalancerAttributes
+		endpoints[i].Addresses = []resolver.Address{a}
+		endpoints[i].Addresses[0].BalancerAttributes = nil
+	}
 	if err := b.child.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
+			Endpoints:     endpoints,
 			Addresses:     addrs,
 			ServiceConfig: b.configRaw,
 			Attributes:    b.attrsWithClient,

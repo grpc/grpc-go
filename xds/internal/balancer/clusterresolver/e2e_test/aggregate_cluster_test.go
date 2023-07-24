@@ -121,7 +121,6 @@ func setupDNS() (chan resolver.Target, chan struct{}, chan resolver.ResolveNowOp
 	mr.ResolveNowCallback = func(opts resolver.ResolveNowOptions) { resolveNowCh <- opts }
 
 	dnsResolverBuilder := resolver.Get("dns")
-	resolver.UnregisterForTesting("dns")
 	resolver.Register(mr)
 
 	return targetCh, closeCh, resolveNowCh, mr, func() { resolver.Register(dnsResolverBuilder) }

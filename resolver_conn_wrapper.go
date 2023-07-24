@@ -152,6 +152,14 @@ func (ccr *ccResolverWrapper) serializerScheduleLocked(f func(context.Context)) 
 // which includes addresses and service config.
 func (ccr *ccResolverWrapper) UpdateState(s resolver.State) error {
 	errCh := make(chan error, 1)
+	if s.Endpoints == nil {
+		s.Endpoints = make([]resolver.Endpoint, 0, len(s.Addresses))
+		for _, a := range s.Addresses {
+			ep := resolver.Endpoint{Addresses: []resolver.Address{a}, Attributes: a.BalancerAttributes}
+			ep.Addresses[0].BalancerAttributes = nil
+			s.Endpoints = append(s.Endpoints, ep)
+		}
+	}
 	ok := ccr.serializer.Schedule(func(context.Context) {
 		ccr.addChannelzTraceEvent(s)
 		ccr.curState = s

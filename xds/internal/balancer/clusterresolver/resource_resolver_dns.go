@@ -125,9 +125,21 @@ func (dr *dnsDiscoveryMechanism) UpdateState(state resolver.State) error {
 	}
 
 	dr.mu.Lock()
-	addrs := make([]string, len(state.Addresses))
-	for i, a := range state.Addresses {
-		addrs[i] = a.Addr
+	var addrs []string
+	if len(state.Endpoints) > 0 {
+		// Assume 1 address per endpoint, which is how DNS is expected to
+		// behave.  The slice will grow as needed, however.
+		addrs = make([]string, 0, len(state.Endpoints))
+		for _, e := range state.Endpoints {
+			for _, a := range e.Addresses {
+				addrs = append(addrs, a.Addr)
+			}
+		}
+	} else {
+		addrs = make([]string, len(state.Addresses))
+		for i, a := range state.Addresses {
+			addrs[i] = a.Addr
+		}
 	}
 	dr.addrs = addrs
 	dr.updateReceived = true
