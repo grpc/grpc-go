@@ -1209,7 +1209,11 @@ func (cc *ClientConn) ResetConnectBackoff() {
 
 // Close tears down the ClientConn and all underlying connections.
 func (cc *ClientConn) Close() error {
-	defer cc.cancel()
+	defer func() {
+		if cc.cancel != nil {
+			cc.cancel()
+		}
+	}()
 
 	cc.mu.Lock()
 	if cc.conns == nil {

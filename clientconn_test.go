@@ -254,6 +254,18 @@ func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 	}
 }
 
+// 1. Client creates an empty ClientConn instance
+// 2. Client calls Close() on uninitialized ClientConn instance
+// 3. Close() should return ErrClientConnClosing
+func (s) TestCloseConnectionUninitialized(t *testing.T) {
+	client := ClientConn{}
+	err := client.Close()
+
+	if err != ErrClientConnClosing {
+		t.Fatalf("error return from Close() is %v; want %v", err, ErrClientConnClosing)
+	}
+}
+
 // 1. Client connects to a server that doesn't send preface.
 // 2. After minConnectTimeout(500 ms here), client disconnects and retries.
 // 3. The new server sends its preface.
