@@ -71,8 +71,8 @@ func (*pickfirstBuilder) ParseConfig(js json.RawMessage) (serviceconfig.LoadBala
 		return nil, nil
 	}
 
-	cfg := &pfConfig{}
-	if err := json.Unmarshal(js, cfg); err != nil {
+	var cfg pfConfig
+	if err := json.Unmarshal(js, &cfg); err != nil {
 		return nil, fmt.Errorf("pickfirst: unable to unmarshal LB policy config: %s, error: %v", string(js), err)
 	}
 	return cfg, nil
@@ -120,15 +120,11 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 
 	// We don't have to guard this block with the env var because ParseConfig
 	// already does so.
-	var cfg *pfConfig
-	if state.BalancerConfig != nil {
-		var ok bool
-		cfg, ok = state.BalancerConfig.(*pfConfig)
-		if !ok {
-			return fmt.Errorf("pickfirstBalancer: received nil or illegal BalancerConfig (type %T): %v", state.BalancerConfig, state.BalancerConfig)
-		}
+	cfg, ok := state.BalancerConfig.(pfConfig)
+	if state.BalancerConfig != nil && !ok {
+		return fmt.Errorf("pickfirstBalancer: received illegal BalancerConfig (type %T): %v", state.BalancerConfig, state.BalancerConfig)
 	}
-	if cfg != nil && cfg.ShuffleAddressList {
+	if cfg.ShuffleAddressList {
 		addrs = append([]resolver.Address{}, addrs...)
 		grpcrand.Shuffle(len(addrs), func(i, j int) { addrs[i], addrs[j] = addrs[j], addrs[i] })
 	}
