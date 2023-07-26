@@ -43,7 +43,7 @@ import (
 )
 
 // Name is the name of the weighted round robin balancer.
-const Name = "weighted_round_robin_experimental"
+const Name = "weighted_round_robin"
 
 func init() {
 	balancer.Register(bb{})
