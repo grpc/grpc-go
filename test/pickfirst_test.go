@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcrand"
@@ -37,6 +38,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/pickfirst"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -465,6 +467,107 @@ func (s) TestPickFirst_ShuffleAddressListDisabled(t *testing.T) {
 	r.UpdateState(shufState)
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Test config parsing with the env var turned on and off for various scenarios.
+func (s) TestPickFirst_ParseConfig_Success(t *testing.T) {
+	// Install a shuffler that always reverses two entries.
+	origShuf := grpcrand.Shuffle
+	defer func() { grpcrand.Shuffle = origShuf }()
+	grpcrand.Shuffle = func(n int, f func(int, int)) {
+		if n != 2 {
+			t.Errorf("Shuffle called with n=%v; want 2", n)
+			return
+		}
+		f(0, 1) // reverse the two addresses
+	}
+
+	tests := []struct {
+		name          string
+		envVar        bool
+		serviceConfig string
+		wantFirstAddr bool
+	}{
+		{
+			name:          "env var disabled with empty pickfirst config",
+			envVar:        false,
+			serviceConfig: `{"loadBalancingConfig": [{"pick_first":{}}]}`,
+			wantFirstAddr: true,
+		},
+		{
+			name:          "env var disabled with non-empty good pickfirst config",
+			envVar:        false,
+			serviceConfig: `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": true }}]}`,
+			wantFirstAddr: true,
+		},
+		{
+			name:          "env var disabled with non-empty bad pickfirst config",
+			envVar:        false,
+			serviceConfig: `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": 666 }}]}`,
+			wantFirstAddr: true,
+		},
+		{
+			name:          "env var enabled with empty pickfirst config",
+			envVar:        true,
+			serviceConfig: `{"loadBalancingConfig": [{"pick_first":{}}]}`,
+			wantFirstAddr: true,
+		},
+		{
+			name:          "env var enabled with empty good pickfirst config",
+			envVar:        true,
+			serviceConfig: `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": true }}]}`,
+			wantFirstAddr: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Set the env var as specified by the test table.
+			origPickFirstLBConfig := envconfig.PickFirstLBConfig
+			envconfig.PickFirstLBConfig = test.envVar
+			defer func() { envconfig.PickFirstLBConfig = origPickFirstLBConfig }()
+
+			// Set up our backends.
+			cc, r, backends := setupPickFirst(t, 2)
+			addrs := stubBackendsToResolverAddrs(backends)
+
+			r.UpdateState(resolver.State{
+				ServiceConfig: parseServiceConfig(t, r, test.serviceConfig),
+				Addresses:     addrs,
+			})
+
+			// Some tests expect address shuffling to happen, and indicate that
+			// by setting wantFirstAddr to false (since our shuffling function
+			// defined at the top of this test, simply reverses the list of
+			// addresses provided to it).
+			wantAddr := addrs[0]
+			if !test.wantFirstAddr {
+				wantAddr = addrs[1]
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			if err := pickfirst.CheckRPCsToBackend(ctx, cc, wantAddr); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// Test config parsing for a bad service config.
+func (s) TestPickFirst_ParseConfig_Failure(t *testing.T) {
+	origPickFirstLBConfig := envconfig.PickFirstLBConfig
+	envconfig.PickFirstLBConfig = true
+	defer func() { envconfig.PickFirstLBConfig = origPickFirstLBConfig }()
+
+	// Service config should fail with the below config. Name resolvers are
+	// expected to perform this parsing before they push the parsed service
+	// config to the channel.
+	const sc = `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": 666 }}]}`
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(sc)
+	if scpr.Err == nil {
+		t.Fatalf("ParseConfig() succeeded and returned %+v, when expected to fail", scpr)
 	}
 }
 
