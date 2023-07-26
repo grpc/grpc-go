@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	_ "google.golang.org/grpc/balancer/weightedroundrobin" // To register weighted_round_robin_experimental.
+	_ "google.golang.org/grpc/balancer/weightedroundrobin" // To register weighted_round_robin
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
