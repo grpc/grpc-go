@@ -11,8 +11,9 @@ import (
 type LBConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
 
-	ClientIndex *uint64 `json:"clientIndex,omitempty"`
-	SubsetSize  uint64  `json:"subsetSize,omitempty"`
+	ClientIndex   *uint64 `json:"client_index,omitempty"`
+	SubsetSize    uint64  `json:"subset_size,omitempty"`
+	SortAddresses bool    `json:"sort_addresses,omitempty"`
 
 	ChildPolicy *iserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }

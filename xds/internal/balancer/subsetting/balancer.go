@@ -57,11 +57,13 @@ func (b *subsettingBalancer) prepareChildResolverState(s resolver.State) resolve
 	addresses := make([]resolver.Address, backendCount)
 	copy(addresses, s.Addresses)
 
-	// sort address list by IP because the algorithm assumes that the initial
-	// order of the addresses is the same for every client
-	sort.Slice(addresses, func(i, j int) bool {
-		return addresses[i].Addr < addresses[j].Addr
-	})
+	if b.cfg.SortAddresses {
+		// sort address list by IP because the algorithm assumes that the initial
+		// order of the addresses is the same for every client
+		sort.Slice(addresses, func(i, j int) bool {
+			return addresses[i].Addr < addresses[j].Addr
+		})
+	}
 
 	subsetCount := backendCount / int(b.cfg.SubsetSize)
 	clientIndex := int(*b.cfg.ClientIndex)
