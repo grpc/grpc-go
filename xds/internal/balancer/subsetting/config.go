@@ -15,7 +15,7 @@ type LBConfig struct {
 	SubsetSize    uint64  `json:"subset_size,omitempty"`
 	SortAddresses bool    `json:"sort_addresses,omitempty"`
 
-	ChildPolicy *iserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
+	ChildPolicy *iserviceconfig.BalancerConfig `json:"child_policy,omitempty"`
 }
 
 // For UnmarshalJSON to work correctly and set defaults without infinite
