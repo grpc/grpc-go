@@ -93,8 +93,8 @@ type pickfirstBalancer struct {
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
-	if logger.V(2) {
-		logger.Infof("Received error from the name resolver: %v", err)
+	if b.logger.V(2) {
+		b.logger.Infof("Received error from the name resolver: %v", err)
 	}
 	if b.subConn == nil {
 		b.state = connectivity.TransientFailure
