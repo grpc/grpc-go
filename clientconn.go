@@ -138,9 +138,6 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target: target,
-		csMgr: &connectivityStateManager{
-			pubSub: grpcsync.NewPubSub(),
-		},
 		conns:  make(map[*addrConn]struct{}),
 		dopts:  defaultDialOptions(),
 		czData: new(channelzData),
@@ -192,6 +189,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	// Register ClientConn with channelz.
 	cc.channelzRegistration(target)
+
+	cc.csMgr = newConnectivityStateManager(cc.channelzID)
 
 	if err := cc.validateTransportCredentials(); err != nil {
 		return nil, err
@@ -477,7 +476,6 @@ func (cc *ClientConn) validateTransportCredentials() error {
 func (cc *ClientConn) channelzRegistration(target string) {
 	cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, cc.dopts.channelzParentID, target)
 	cc.addTraceEvent("created")
-	cc.csMgr.channelzID = cc.channelzID
 }
 
 // chainUnaryClientInterceptors chains all unary client interceptors into one.
@@ -539,6 +537,15 @@ func getChainStreamer(interceptors []StreamClientInterceptor, curr int, finalStr
 	}
 	return func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
 		return interceptors[curr+1](ctx, desc, cc, method, getChainStreamer(interceptors, curr+1, finalStreamer), opts...)
+	}
+}
+
+// newConnectivityStateManager creates an connectivityStateManager with
+// the specified id.
+func newConnectivityStateManager(id *channelz.Identifier) *connectivityStateManager {
+	return &connectivityStateManager{
+		channelzID: id,
+		pubSub:     grpcsync.NewPubSub(),
 	}
 }
 
