@@ -903,16 +903,10 @@ func (s) TestPickFirst_ResolverError_WithPreviousUpdate_Connecting(t *testing.T)
 	}
 
 	// Closing this channel leads to closing of the connection by our listener.
-	// gRPC should see this as an error reading server preface.
+	// gRPC should see this as a connection error.
 	close(waitForConnecting)
 	awaitState(ctx, t, cc, connectivity.TransientFailure)
-
-	// RPCs should fail with the error that caused the channel to move to
-	// TRANSIENT_FAILURE and not the error returned by the name resolver.
-	wantErr := "error reading server preface"
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("EmptyCall() failed with error: %v, want error: %v", err, wantErr)
-	}
+	checkForConnectionError(ctx, t, cc)
 }
 
 // Tests the case where the pick_first LB policy receives an error from the name
@@ -952,20 +946,14 @@ func (s) TestPickFirst_ResolverError_WithPreviousUpdate_TransientFailure(t *test
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	awaitState(ctx, t, cc, connectivity.TransientFailure)
-
-	// RPCs should fail with the error that caused the channel to move to
-	// TRANSIENT_FAILURE.
-	wantErr := "error reading server preface"
-	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("EmptyCall() failed with error: %v, want error: %v", err, wantErr)
-	}
+	checkForConnectionError(ctx, t, cc)
 
 	// An error from the name resolver should result in RPCs failing with that
 	// error instead of the old error that caused the channel to move to
 	// TRANSIENT_FAILURE in the first place.
 	nrErr := errors.New("error from name resolver")
 	r.ReportError(nrErr)
+	client := testgrpc.NewTestServiceClient(cc)
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); strings.Contains(err.Error(), nrErr.Error()) {
 			break
@@ -973,6 +961,21 @@ func (s) TestPickFirst_ResolverError_WithPreviousUpdate_TransientFailure(t *test
 	}
 	if ctx.Err() != nil {
 		t.Fatal("Timeout when waiting for RPCs to fail with error returned by the name resolver")
+	}
+}
+
+func checkForConnectionError(ctx context.Context, t *testing.T, cc *grpc.ClientConn) {
+	t.Helper()
+
+	// RPCs may fail on the client side in two ways, once the fake server closes
+	// the accepted connection:
+	// - writing the client preface succeeds, but not reading the server preface
+	// - writing the client preface fails
+	const readErr = "error reading server preface"
+	const writeErr = "write: broken pipe"
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); !strings.Contains(err.Error(), readErr) && !strings.Contains(err.Error(), writeErr) {
+		t.Fatalf("EmptyCall() failed with error: %v, want %q or %q", err, readErr, writeErr)
 	}
 }
 
