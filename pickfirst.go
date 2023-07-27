@@ -26,13 +26,18 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/envconfig"
+	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
 
-// PickFirstBalancerName is the name of the pick_first balancer.
-const PickFirstBalancerName = "pick_first"
+const (
+	// PickFirstBalancerName is the name of the pick_first balancer.
+	PickFirstBalancerName = "pick_first"
+	logPrefix             = "[pick-first-lb %p] "
+)
 
 func newPickfirstBuilder() balancer.Builder {
 	return &pickfirstBuilder{}
@@ -41,7 +46,9 @@ func newPickfirstBuilder() balancer.Builder {
 type pickfirstBuilder struct{}
 
 func (*pickfirstBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
-	return &pickfirstBalancer{cc: cc}
+	b := &pickfirstBalancer{cc: cc}
+	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(logPrefix, b))
+	return b
 }
 
 func (*pickfirstBuilder) Name() string {
@@ -79,6 +86,7 @@ func (*pickfirstBuilder) ParseConfig(js json.RawMessage) (serviceconfig.LoadBala
 }
 
 type pickfirstBalancer struct {
+	logger  *internalgrpclog.PrefixLogger
 	state   connectivity.State
 	cc      balancer.ClientConn
 	subConn balancer.SubConn
@@ -86,7 +94,7 @@ type pickfirstBalancer struct {
 
 func (b *pickfirstBalancer) ResolverError(err error) {
 	if logger.V(2) {
-		logger.Infof("pickfirstBalancer: ResolverError called with error: %v", err)
+		logger.Infof("Received error from the name resolver: %v", err)
 	}
 	if b.subConn == nil {
 		b.state = connectivity.TransientFailure
@@ -122,11 +130,15 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 	// already does so.
 	cfg, ok := state.BalancerConfig.(pfConfig)
 	if state.BalancerConfig != nil && !ok {
-		return fmt.Errorf("pickfirstBalancer: received illegal BalancerConfig (type %T): %v", state.BalancerConfig, state.BalancerConfig)
+		return fmt.Errorf("pickfirst: received illegal BalancerConfig (type %T): %v", state.BalancerConfig, state.BalancerConfig)
 	}
 	if cfg.ShuffleAddressList {
 		addrs = append([]resolver.Address{}, addrs...)
 		grpcrand.Shuffle(len(addrs), func(i, j int) { addrs[i], addrs[j] = addrs[j], addrs[i] })
+	}
+
+	if b.logger.V(2) {
+		b.logger.Infof("Received new config %s, resolver state %s", pretty.ToJSON(cfg), pretty.ToJSON(state.ResolverState))
 	}
 
 	if b.subConn != nil {
@@ -136,8 +148,8 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 
 	subConn, err := b.cc.NewSubConn(addrs, balancer.NewSubConnOptions{})
 	if err != nil {
-		if logger.V(2) {
-			logger.Errorf("pickfirstBalancer: failed to NewSubConn: %v", err)
+		if b.logger.V(2) {
+			b.logger.Infof("Failed to create new SubConn: %v", err)
 		}
 		b.state = connectivity.TransientFailure
 		b.cc.UpdateState(balancer.State{
@@ -157,12 +169,12 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 }
 
 func (b *pickfirstBalancer) UpdateSubConnState(subConn balancer.SubConn, state balancer.SubConnState) {
-	if logger.V(2) {
-		logger.Infof("pickfirstBalancer: UpdateSubConnState: %p, %v", subConn, state)
+	if b.logger.V(2) {
+		b.logger.Infof("Received SubConn state update: %p, %+v", subConn, state)
 	}
 	if b.subConn != subConn {
-		if logger.V(2) {
-			logger.Infof("pickfirstBalancer: ignored state change because subConn is not recognized")
+		if b.logger.V(2) {
+			b.logger.Infof("Ignored state change because subConn is not recognized")
 		}
 		return
 	}
