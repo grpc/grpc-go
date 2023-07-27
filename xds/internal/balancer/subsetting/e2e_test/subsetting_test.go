@@ -76,7 +76,7 @@ func setupClients(t *testing.T, clientsCount int, subsetSize int, addresses []re
 		{
 		  "loadBalancingConfig": [
 			{
-			  "subsetting_experimental": {
+			  "deterministic_subsetting": {
 				"client_index": %d,
 				"subset_size": %d,
 				"child_policy": [{"round_robin": {}}]

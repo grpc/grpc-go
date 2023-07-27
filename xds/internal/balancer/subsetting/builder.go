@@ -11,7 +11,7 @@ import (
 )
 
 // Name is the name of the weiighted aperture balancer.
-const Name = "subsetting_experimental"
+const Name = "deterministic_subsetting"
 
 func init() {
 	balancer.Register(bb{})
