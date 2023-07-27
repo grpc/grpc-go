@@ -56,7 +56,6 @@ func (s) TestConnectivityStateUpdates(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(r),
 		grpc.WithIdleTimeout(defaultTestShortIdleTimeout),
-		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
 	}
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
@@ -64,14 +63,14 @@ func (s) TestConnectivityStateUpdates(t *testing.T) {
 	}
 	t.Cleanup(func() { cc.Close() })
 
+	s := newTestSubscriber()
+	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, s)
+
 	// Start a test backend and push an address update via the resolver.
 	backend := stubserver.StartTestService(t, nil)
 	t.Cleanup(backend.Stop)
 
-	s := newTestSubscriber()
-	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, s)
-
-	expectedStates := []connectivity.State{
+	wantStates := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,
 		connectivity.Idle,
@@ -81,11 +80,12 @@ func (s) TestConnectivityStateUpdates(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
-		for _, expectedState := range expectedStates {
+		defer wg.Done()
+		for _, expectedState := range wantStates {
 			select {
-			case actualState := <-s.onMsgCh:
-				if actualState != expectedState {
-					t.Errorf("Received unexpected state: %q; want: %q", actualState, expectedState)
+			case gotState := <-s.onMsgCh:
+				if gotState != expectedState {
+					t.Errorf("Received unexpected state: %q; want: %q", gotState, expectedState)
 				}
 			case <-time.After(defaultTestTimeout):
 				t.Error("Timeout when expecting the onMessage() callback to be invoked")
@@ -94,10 +94,10 @@ func (s) TestConnectivityStateUpdates(t *testing.T) {
 				break
 			}
 		}
-		wg.Done()
 	}()
 
 	go func() {
+		defer wg.Done()
 		r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
 		// Verify that the ClientConn moves to READY.
@@ -110,8 +110,6 @@ func (s) TestConnectivityStateUpdates(t *testing.T) {
 
 		cc.Close()
 		awaitState(ctx, t, cc, connectivity.Shutdown)
-
-		wg.Done()
 	}()
 
 	wg.Wait()

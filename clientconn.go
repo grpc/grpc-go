@@ -528,8 +528,8 @@ func chainStreamClientInterceptors(cc *ClientConn) {
 		chainedInt = func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error) {
 			return interceptors[0](ctx, desc, cc, method, getChainStreamer(interceptors, 0, streamer), opts...)
 		}
+		cc.dopts.streamInt = chainedInt
 	}
-	cc.dopts.streamInt = chainedInt
 }
 
 // getChainStreamer recursively generate the chained client stream constructor.
@@ -569,9 +569,8 @@ func (csm *connectivityStateManager) updateState(state connectivity.State) {
 		return
 	}
 	csm.state = state
-	if csm.pubSub != nil {
-		csm.pubSub.Publish(state)
-	}
+	csm.pubSub.Publish(state)
+
 	channelz.Infof(logger, csm.channelzID, "Channel Connectivity change to %v", state)
 	if csm.notifyChan != nil {
 		// There are other goroutines waiting on this channel.
