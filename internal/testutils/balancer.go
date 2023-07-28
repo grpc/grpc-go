@@ -74,6 +74,7 @@ func (tsc *TestSubConn) GetOrBuildProducer(balancer.ProducerBuilder) (balancer.P
 	return nil, nil
 }
 
+// UpdateState pushes the state to the listener, if one is registered.
 func (tsc *TestSubConn) UpdateState(state balancer.SubConnState) {
 	if tsc.stateListener != nil {
 		tsc.stateListener(state)
