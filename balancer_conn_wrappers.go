@@ -132,13 +132,6 @@ func (ccb *ccBalancerWrapper) updateSubConnState(sc balancer.SubConn, s connecti
 	ccb.mu.Unlock()
 }
 
-func (ccb *ccBalancerWrapper) handleExitIdle() {
-	if ccb.cc.GetState() != connectivity.Idle {
-		return
-	}
-	ccb.balancer.ExitIdle()
-}
-
 func (ccb *ccBalancerWrapper) resolverError(err error) {
 	ccb.mu.Lock()
 	ccb.serializer.Schedule(func(_ context.Context) {
