@@ -914,20 +914,6 @@ func (mb1 *mockBalancer) waitForClientConnUpdate(ctx context.Context, wantCCS ba
 	return nil
 }
 
-// waitForSubConnUpdate verifies if the mockBalancer receives the provided
-// SubConn update before the context expires.
-func (mb1 *mockBalancer) waitForSubConnUpdate(ctx context.Context, wantSCS subConnWithState) error {
-	scs, err := mb1.scStateCh.Receive(ctx)
-	if err != nil {
-		return fmt.Errorf("error waiting for SubConnUpdate: %v", err)
-	}
-	gotSCS := scs.(subConnWithState)
-	if !cmp.Equal(gotSCS, wantSCS, cmp.AllowUnexported(subConnWithState{}, testutils.TestSubConn{})) {
-		return fmt.Errorf("error in SubConnUpdate: received SubConnState: %+v, want %+v", gotSCS, wantSCS)
-	}
-	return nil
-}
-
 // waitForResolverError verifies if the mockBalancer receives the provided
 // resolver error before the context expires.
 func (mb1 *mockBalancer) waitForResolverError(ctx context.Context, wantErr error) error {
