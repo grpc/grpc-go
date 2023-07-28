@@ -971,11 +971,10 @@ func checkForConnectionError(ctx context.Context, t *testing.T, cc *grpc.ClientC
 	// the accepted connection:
 	// - writing the client preface succeeds, but not reading the server preface
 	// - writing the client preface fails
-	const readErr = "error reading server preface"
-	const writeErr = "write: broken pipe"
+	// In either case, we should see it fail with UNAVAILABLE.
 	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); !strings.Contains(err.Error(), readErr) && !strings.Contains(err.Error(), writeErr) {
-		t.Fatalf("EmptyCall() failed with error: %v, want %q or %q", err, readErr, writeErr)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("EmptyCall() failed with error: %v, want code %v", err, codes.Unavailable)
 	}
 }
 
