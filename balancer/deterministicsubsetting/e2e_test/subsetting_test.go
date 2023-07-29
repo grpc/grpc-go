@@ -21,7 +21,7 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
-	_ "google.golang.org/grpc/xds/internal/balancer/subsetting"
+	_ "google.golang.org/grpc/balancer/deterministicsubsetting"
 )
 
 var defaultTestTimeout = 5 * time.Second

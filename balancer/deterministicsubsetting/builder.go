@@ -1,4 +1,4 @@
-package subsetting
+package deterministicsubsetting
 
 import (
 	"encoding/json"
