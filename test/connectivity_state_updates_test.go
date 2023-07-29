@@ -66,7 +66,6 @@ func (s) TestConnectivityStateUpdates(t *testing.T) {
 	s := newTestSubscriber()
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, s)
 
-	// Start a test backend and push an address update via the resolver.
 	backend := stubserver.StartTestService(t, nil)
 	t.Cleanup(backend.Stop)
 
@@ -81,11 +80,11 @@ func (s) TestConnectivityStateUpdates(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for _, expectedState := range wantStates {
+		for _, wantState := range wantStates {
 			select {
 			case gotState := <-s.onMsgCh:
-				if gotState != expectedState {
-					t.Errorf("Received unexpected state: %q; want: %q", gotState, expectedState)
+				if gotState != wantState {
+					t.Errorf("Received unexpected state: %q; want: %q", gotState, wantState)
 				}
 			case <-time.After(defaultTestTimeout):
 				t.Error("Timeout when expecting the onMessage() callback to be invoked")
