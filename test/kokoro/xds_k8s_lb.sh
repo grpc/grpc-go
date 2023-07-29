@@ -158,7 +158,6 @@ main() {
   # Run tests
   cd "${TEST_DRIVER_FULL_DIR}"
   local failed_tests=0
-  set -x
   test_suites=(
     "affinity_test"
     "api_listener_test"
