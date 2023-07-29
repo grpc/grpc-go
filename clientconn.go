@@ -526,8 +526,8 @@ func chainStreamClientInterceptors(cc *ClientConn) {
 		chainedInt = func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error) {
 			return interceptors[0](ctx, desc, cc, method, getChainStreamer(interceptors, 0, streamer), opts...)
 		}
-		cc.dopts.streamInt = chainedInt
 	}
+	cc.dopts.streamInt = chainedInt
 }
 
 // getChainStreamer recursively generate the chained client stream constructor.
