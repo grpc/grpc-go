@@ -101,9 +101,9 @@ func (b *subsettingBalancer) prepareChildResolverState(s resolver.State) resolve
 		addresses[i], addresses[j] = addresses[j], addresses[i]
 	})
 
-	subsetId := clientIndex % subsetCount
+	subsetID := clientIndex % subsetCount
 
-	start := int(subsetId * int(b.cfg.SubsetSize))
+	start := int(subsetID * int(b.cfg.SubsetSize))
 	end := start + int(b.cfg.SubsetSize)
 
 	b.logger.Infof("resulting subset: %v", addresses[start:end])

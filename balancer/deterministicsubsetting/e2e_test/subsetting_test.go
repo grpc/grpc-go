@@ -141,7 +141,7 @@ func checkRoundRobinRPCs(t *testing.T, ctx context.Context, clients []testgrpc.T
 				} else if _, ok := m[clientIdx]; !ok {
 					m[clientIdx] = struct{}{}
 				} else {
-					// The backend recieves a second request from the same client. This could happen if the client have 1 backend in READY
+					// The backend receives a second request from the same client. This could happen if the client have 1 backend in READY
 					// state while the other  are CONNECTING. In this case round_robbin will pick the same address twice.
 					// We are going to retry after short timeout.
 					time.Sleep(10 * time.Microsecond)

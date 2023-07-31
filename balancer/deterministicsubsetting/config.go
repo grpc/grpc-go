@@ -19,8 +19,6 @@
 package deterministicsubsetting
 
 import (
-	"encoding/json"
-
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -34,18 +32,4 @@ type LBConfig struct {
 	SortAddresses bool    `json:"sort_addresses,omitempty"`
 
 	ChildPolicy *iserviceconfig.BalancerConfig `json:"child_policy,omitempty"`
-}
-
-// For UnmarshalJSON to work correctly and set defaults without infinite
-// recursion.
-type lbConfig LBConfig
-
-func (lbc *LBConfig) UnmarshalJSON(j []byte) error {
-	// Default top layer values.
-	lbc.SubsetSize = 10
-	// Unmarshal JSON on a type with zero values for methods, including
-	// UnmarshalJSON. Overwrites defaults, leaves alone if not. typecast to
-	// avoid infinite recursion by not recalling this function and causing stack
-	// overflow.
-	return json.Unmarshal(j, (*lbConfig)(lbc))
 }
