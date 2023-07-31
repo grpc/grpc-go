@@ -68,18 +68,18 @@ var serverConnectionCounter uint64
 
 // http2Server implements the ServerTransport interface with HTTP2.
 type http2Server struct {
-	lastRead    int64 // Keep this field 64-bit aligned. Accessed atomically.
-	ctx         context.Context
-	done        chan struct{}
-	conn        net.Conn
-	loopy       *loopyWriter
-	readerDone  chan struct{} // sync point to enable testing.
-	writerDone  chan struct{} // sync point to enable testing.
-	remoteAddr  net.Addr
-	localAddr   net.Addr
-	authInfo    credentials.AuthInfo // auth info about the connection
-	inTapHandle tap.ServerInHandle
-	framer      *framer
+	lastRead        int64 // Keep this field 64-bit aligned. Accessed atomically.
+	ctx             context.Context
+	done            chan struct{}
+	conn            net.Conn
+	loopy           *loopyWriter
+	readerDone      chan struct{} // sync point to enable testing.
+	loopyWriterDone chan struct{}
+	remoteAddr      net.Addr
+	localAddr       net.Addr
+	authInfo        credentials.AuthInfo // auth info about the connection
+	inTapHandle     tap.ServerInHandle
+	framer          *framer
 	// The max number of concurrent streams.
 	maxStreams uint32
 	// controlBuf delivers all the control related tasks (e.g., window
@@ -257,7 +257,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		authInfo:          authInfo,
 		framer:            framer,
 		readerDone:        make(chan struct{}),
-		writerDone:        make(chan struct{}),
+		loopyWriterDone:   make(chan struct{}),
 		maxStreams:        maxStreams,
 		inTapHandle:       config.InTapHandle,
 		fc:                &trInFlow{limit: uint32(icwz)},
@@ -300,6 +300,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 
 	defer func() {
 		if err != nil {
+			close(t.loopyWriterDone)
 			t.Close(err)
 		}
 	}()
@@ -339,7 +340,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger)
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
 		t.loopy.run()
-		close(t.writerDone)
+		close(t.loopyWriterDone)
 	}()
 	go t.keepalive()
 	return t, nil
@@ -1249,6 +1250,8 @@ func (t *http2Server) Close(err error) {
 		connEnd := &stats.ConnEnd{}
 		sh.HandleConn(t.ctx, connEnd)
 	}
+
+	<-t.loopyWriterDone
 }
 
 // deleteStream deletes the stream s from transport's active streams.
