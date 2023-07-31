@@ -76,10 +76,9 @@ func (s) TestConnectivityStateUpdates(t *testing.T) {
 		connectivity.Shutdown,
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(2)
+	doneCh := make(chan struct{})
 	go func() {
-		defer wg.Done()
+		defer close(doneCh)
 		for _, wantState := range wantStates {
 			select {
 			case gotState := <-s.onMsgCh:
@@ -95,23 +94,19 @@ func (s) TestConnectivityStateUpdates(t *testing.T) {
 		}
 	}()
 
-	go func() {
-		defer wg.Done()
-		r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
+	// Verify that the ClientConn moves to READY.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
+	awaitState(ctx, t, cc, connectivity.Ready)
 
-		// Verify that the ClientConn moves to READY.
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-		awaitState(ctx, t, cc, connectivity.Ready)
+	// Verify that the ClientConn moves to IDLE as there is no activity.
+	awaitState(ctx, t, cc, connectivity.Idle)
 
-		// Verify that the ClientConn moves to IDLE as there is no activity.
-		awaitState(ctx, t, cc, connectivity.Idle)
-
-		cc.Close()
-		awaitState(ctx, t, cc, connectivity.Shutdown)
-	}()
-
-	wg.Wait()
+	cc.Close()
+	awaitState(ctx, t, cc, connectivity.Shutdown)
+	
+	<-doneCh
 	if t.Failed() {
 		t.FailNow()
 	}
