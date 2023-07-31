@@ -29,26 +29,10 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// TestSubConnsCount is the number of TestSubConns initialized as part of
-// package init.
-const TestSubConnsCount = 16
-
 // testingLogger wraps the logging methods from testing.T.
 type testingLogger interface {
 	Log(args ...interface{})
 	Logf(format string, args ...interface{})
-}
-
-// TestSubConns contains a list of SubConns to be used in tests.
-var TestSubConns []*TestSubConn
-
-func init() {
-	for i := 0; i < TestSubConnsCount; i++ {
-		TestSubConns = append(TestSubConns, &TestSubConn{
-			id:        fmt.Sprintf("sc%d", i),
-			ConnectCh: make(chan struct{}, 1),
-		})
-	}
 }
 
 // TestSubConn implements the SubConn interface, to be used in tests.
@@ -121,8 +105,11 @@ func NewTestClientConn(t *testing.T) *TestClientConn {
 
 // NewSubConn creates a new SubConn.
 func (tcc *TestClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	sc := TestSubConns[tcc.subConnIdx]
-	sc.stateListener = o.StateListener
+	sc := &TestSubConn{
+		id:            fmt.Sprintf("sc%d", tcc.subConnIdx),
+		ConnectCh:     make(chan struct{}, 1),
+		stateListener: o.StateListener,
+	}
 	tcc.subConnIdx++
 	tcc.logger.Logf("testClientConn: NewSubConn(%v, %+v) => %s", a, o, sc)
 	select {
