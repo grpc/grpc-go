@@ -67,6 +67,7 @@ func (b *subsettingBalancer) UpdateClientConnState(s balancer.ClientConnState) e
 	return err
 }
 
+// implements the subsetting algorithm, as described in A68: https://github.com/grpc/proposal/pull/383
 func (b *subsettingBalancer) prepareChildResolverState(s resolver.State) resolver.State {
 	if len(s.Addresses) <= int(b.cfg.SubsetSize) {
 		return s
@@ -76,8 +77,6 @@ func (b *subsettingBalancer) prepareChildResolverState(s resolver.State) resolve
 	copy(addresses, s.Addresses)
 
 	if b.cfg.SortAddresses {
-		// sort address list by IP because the algorithm assumes that the initial
-		// order of the addresses is the same for every client
 		sort.Slice(addresses, func(i, j int) bool {
 			return addresses[i].Addr < addresses[j].Addr
 		})
