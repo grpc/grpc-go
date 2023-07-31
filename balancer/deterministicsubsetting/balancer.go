@@ -16,6 +16,11 @@
  *
  */
 
+// Package deterministicsubsetting defines a deterministic subsetting balancer.
+//
+// To install deterministic subsetting balancer, import this package as:
+//
+//	import _ "google.golang.org/grpc/balancer/deterministicsubsetting"
 package deterministicsubsetting
 
 import (
