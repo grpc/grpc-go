@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
@@ -328,7 +327,7 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 
 	// p2 SubConns are removed.
 	scToRemove := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
+	if scToRemove != sc2 {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove)
 	}
 
@@ -426,7 +425,7 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 
 	// p1 subconn should be removed.
 	scToRemove := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+	if scToRemove != sc1 {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc0, scToRemove)
 	}
 
@@ -618,10 +617,7 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 	// With localities caching, the lower priorities are closed after a timeout,
 	// in goroutines. The order is no longer guaranteed.
 	scToRemove := []balancer.SubConn{<-cc.RemoveSubConnCh, <-cc.RemoveSubConnCh}
-	if !(cmp.Equal(scToRemove[0], sc1, cmp.AllowUnexported(testutils.TestSubConn{})) &&
-		cmp.Equal(scToRemove[1], sc2, cmp.AllowUnexported(testutils.TestSubConn{}))) &&
-		!(cmp.Equal(scToRemove[0], sc2, cmp.AllowUnexported(testutils.TestSubConn{})) &&
-			cmp.Equal(scToRemove[1], sc1, cmp.AllowUnexported(testutils.TestSubConn{}))) {
+	if !(scToRemove[0] == sc1 && scToRemove[1] == sc2) && !(scToRemove[0] == sc2 && scToRemove[1] == sc1) {
 		t.Errorf("RemoveSubConn, want [%v, %v], got %v", sc1, sc2, scToRemove)
 	}
 
@@ -771,7 +767,7 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 
 	// p0 subconn should be removed.
 	scToRemove := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove, sc0, cmp.AllowUnexported(testutils.TestSubConn{})) {
+	if scToRemove != sc0 {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc0, scToRemove)
 	}
 
@@ -842,7 +838,7 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 
 	// p1 subconn should be removed.
 	scToRemove1 := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove1, sc11, cmp.AllowUnexported(testutils.TestSubConn{})) {
+	if scToRemove1 != sc11 {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc11, scToRemove1)
 	}
 
@@ -1085,7 +1081,7 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 
 	// Old subconn should be removed.
 	scToRemove := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+	if scToRemove != sc1 {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
 	}
 
@@ -1186,7 +1182,7 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 
 	// Old subconn from child-0 should be removed.
 	scToRemove := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove, sc0, cmp.AllowUnexported(testutils.TestSubConn{})) {
+	if scToRemove != sc0 {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc0, scToRemove)
 	}
 
@@ -1279,7 +1275,7 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 
 	// Old subconn from child-1 should be removed.
 	scToRemove := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+	if scToRemove != sc1 {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
 	}
 
@@ -1469,7 +1465,7 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 
 	// Old subconn should be removed.
 	scToRemove := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+	if scToRemove != sc1 {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
 	}
 

@@ -89,7 +89,7 @@ func setupTest(t *testing.T, addrs []resolver.Address) (*testutils.TestClientCon
 		sc1 := <-cc.NewSubConnCh
 		// All the SubConns start in Idle, and should not Connect().
 		select {
-		case <-sc1.(*testutils.TestSubConn).ConnectCh:
+		case <-sc1.ConnectCh:
 			t.Errorf("unexpected Connect() from SubConn %v", sc1)
 		case <-time.After(defaultTestShortTimeout):
 		}

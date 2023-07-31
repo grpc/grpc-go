@@ -142,6 +142,7 @@ func (bb) Name() string {
 type scUpdate struct {
 	scw   *subConnWrapper
 	state balancer.SubConnState
+	cb    func(balancer.SubConnState)
 }
 
 type ejectionUpdate struct {
@@ -345,7 +346,7 @@ func (b *outlierDetectionBalancer) ResolverError(err error) {
 	b.child.ResolverError(err)
 }
 
-func (b *outlierDetectionBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+func (b *outlierDetectionBalancer) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState, cb func(balancer.SubConnState)) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	scw, ok := b.scWrappers[sc]
@@ -361,7 +362,12 @@ func (b *outlierDetectionBalancer) UpdateSubConnState(sc balancer.SubConn, state
 	b.scUpdateCh.Put(&scUpdate{
 		scw:   scw,
 		state: state,
+		cb:    cb,
 	})
+}
+
+func (b *outlierDetectionBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	b.updateSubConnState(sc, state, nil)
 }
 
 func (b *outlierDetectionBalancer) Close() {
@@ -466,6 +472,9 @@ func (b *outlierDetectionBalancer) UpdateState(s balancer.State) {
 }
 
 func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	var sc balancer.SubConn
+	oldListener := opts.StateListener
+	opts.StateListener = func(state balancer.SubConnState) { b.updateSubConnState(sc, state, oldListener) }
 	sc, err := b.cc.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err
@@ -615,7 +624,11 @@ func (b *outlierDetectionBalancer) handleSubConnUpdate(u *scUpdate) {
 	scw.latestState = u.state
 	if !scw.ejected {
 		b.childMu.Lock()
-		b.child.UpdateSubConnState(scw, u.state)
+		if u.cb != nil {
+			u.cb(u.state)
+		} else {
+			b.child.UpdateSubConnState(scw, u.state)
+		}
 		b.childMu.Unlock()
 	}
 }

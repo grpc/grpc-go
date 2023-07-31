@@ -200,8 +200,8 @@ func (gsb *Balancer) ExitIdle() {
 	}
 }
 
-// UpdateSubConnState forwards the update to the appropriate child.
-func (gsb *Balancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+// updateSubConnState forwards the update to the appropriate child.
+func (gsb *Balancer) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState, cb func(balancer.SubConnState)) {
 	gsb.currentMu.Lock()
 	defer gsb.currentMu.Unlock()
 	gsb.mu.Lock()
@@ -214,13 +214,26 @@ func (gsb *Balancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubC
 	} else if gsb.balancerPending != nil && gsb.balancerPending.subconns[sc] {
 		balToUpdate = gsb.balancerPending
 	}
-	gsb.mu.Unlock()
 	if balToUpdate == nil {
 		// SubConn belonged to a stale lb policy that has not yet fully closed,
 		// or the balancer was already closed.
+		gsb.mu.Unlock()
 		return
 	}
-	balToUpdate.UpdateSubConnState(sc, state)
+	if state.ConnectivityState == connectivity.Shutdown {
+		delete(balToUpdate.subconns, sc)
+	}
+	gsb.mu.Unlock()
+	if cb != nil {
+		cb(state)
+	} else {
+		balToUpdate.UpdateSubConnState(sc, state)
+	}
+}
+
+// UpdateSubConnState forwards the update to the appropriate child.
+func (gsb *Balancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	gsb.updateSubConnState(sc, state, nil)
 }
 
 // Close closes any active child balancers.
@@ -252,18 +265,6 @@ type balancerWrapper struct {
 
 	lastState balancer.State
 	subconns  map[balancer.SubConn]bool // subconns created by this balancer
-}
-
-func (bw *balancerWrapper) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	if state.ConnectivityState == connectivity.Shutdown {
-		bw.gsb.mu.Lock()
-		delete(bw.subconns, sc)
-		bw.gsb.mu.Unlock()
-	}
-	// There is no need to protect this read with a mutex, as the write to the
-	// Balancer field happens in SwitchTo, which completes before this can be
-	// called.
-	bw.Balancer.UpdateSubConnState(sc, state)
 }
 
 // Close closes the underlying LB policy and removes the subconns it created. bw
@@ -335,6 +336,9 @@ func (bw *balancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.Ne
 	}
 	bw.gsb.mu.Unlock()
 
+	var sc balancer.SubConn
+	oldListener := opts.StateListener
+	opts.StateListener = func(state balancer.SubConnState) { bw.gsb.updateSubConnState(sc, state, oldListener) }
 	sc, err := bw.gsb.cc.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err

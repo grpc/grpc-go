@@ -129,6 +129,11 @@ type NewSubConnOptions struct {
 	// HealthCheckEnabled indicates whether health check service should be
 	// enabled on this SubConn
 	HealthCheckEnabled bool
+	// StateListener is called when the state of the subconn changes.  If nil,
+	// Balancer.UpdateSubConnState will be called instead.  Will never be
+	// invoked until after Connect() is called on the SubConn created with
+	// these options.
+	StateListener func(SubConnState)
 }
 
 // State contains the balancer's state relevant to the gRPC ClientConn.
@@ -349,6 +354,9 @@ type Balancer interface {
 	ResolverError(error)
 	// UpdateSubConnState is called by gRPC when the state of a SubConn
 	// changes.
+	//
+	// Deprecated: Use NewSubConnOptions.StateListener when creating the
+	// SubConn instead.
 	UpdateSubConnState(SubConn, SubConnState)
 	// Close closes the balancer. The balancer is not required to call
 	// ClientConn.RemoveSubConn for its existing SubConns.
