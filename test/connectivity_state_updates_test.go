@@ -20,7 +20,6 @@ package test
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
@@ -105,7 +104,7 @@ func (s) TestConnectivityStateUpdates(t *testing.T) {
 
 	cc.Close()
 	awaitState(ctx, t, cc, connectivity.Shutdown)
-	
+
 	<-doneCh
 	if t.Failed() {
 		t.FailNow()
