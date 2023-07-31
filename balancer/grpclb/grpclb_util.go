@@ -93,8 +93,10 @@ const subConnCacheTime = time.Second * 10
 // lbCacheClientConn is a wrapper balancer.ClientConn with a SubConn cache.
 // SubConns will be kept in cache for subConnCacheTime before being removed.
 //
-// Its new and remove methods are updated to do cache first.
+// Its NewSubconn and SubConn.Shutdown methods are updated to do cache first.
 type lbCacheClientConn struct {
+	balancer.ClientConn
+
 	cc      balancer.ClientConn
 	timeout time.Duration
 
@@ -113,6 +115,7 @@ type subConnCacheEntry struct {
 
 func newLBCacheClientConn(cc balancer.ClientConn) *lbCacheClientConn {
 	return &lbCacheClientConn{
+		ClientConn:    cc,
 		cc:            cc,
 		timeout:       subConnCacheTime,
 		subConnCache:  make(map[resolver.Address]*subConnCacheEntry),
@@ -141,12 +144,23 @@ func (ccc *lbCacheClientConn) NewSubConn(addrs []resolver.Address, opts balancer
 	if err != nil {
 		return nil, err
 	}
+	scNew = &lbCacheSubConn{SubConn: scNew, ccc: ccc}
 
 	ccc.subConnToAddr[scNew] = addrWithoutAttrs
 	return scNew, nil
 }
 
 func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
+	sc.Shutdown()
+}
+
+type lbCacheSubConn struct {
+	balancer.SubConn
+	ccc *lbCacheClientConn
+}
+
+func (sc *lbCacheSubConn) Shutdown() {
+	ccc := sc.ccc
 	ccc.mu.Lock()
 	defer ccc.mu.Unlock()
 	addr, ok := ccc.subConnToAddr[sc]
@@ -160,7 +174,7 @@ func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
 			// same address, and those SubConns are all removed. We remove sc
 			// immediately here.
 			delete(ccc.subConnToAddr, sc)
-			ccc.cc.RemoveSubConn(sc)
+			sc.SubConn.Shutdown()
 		}
 		return
 	}
@@ -176,7 +190,7 @@ func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
 		if entry.abortDeleting {
 			return
 		}
-		ccc.cc.RemoveSubConn(sc)
+		sc.SubConn.Shutdown()
 		delete(ccc.subConnToAddr, sc)
 		delete(ccc.subConnCache, addr)
 	})
@@ -195,14 +209,28 @@ func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
 }
 
 func (ccc *lbCacheClientConn) UpdateState(s balancer.State) {
+	s.Picker = &lbCachePicker{Picker: s.Picker}
 	ccc.cc.UpdateState(s)
 }
 
 func (ccc *lbCacheClientConn) close() {
 	ccc.mu.Lock()
+	defer ccc.mu.Unlock()
 	// Only cancel all existing timers. There's no need to remove SubConns.
 	for _, entry := range ccc.subConnCache {
 		entry.cancel()
 	}
-	ccc.mu.Unlock()
+}
+
+type lbCachePicker struct {
+	balancer.Picker
+}
+
+func (cp *lbCachePicker) Pick(i balancer.PickInfo) (balancer.PickResult, error) {
+	res, err := cp.Picker.Pick(i)
+	if err != nil {
+		return res, err
+	}
+	res.SubConn = res.SubConn.(*lbCacheSubConn).SubConn
+	return res, nil
 }

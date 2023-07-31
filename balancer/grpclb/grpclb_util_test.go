@@ -30,6 +30,13 @@ import (
 
 type mockSubConn struct {
 	balancer.SubConn
+	mcc *mockClientConn
+}
+
+func (msc *mockSubConn) Shutdown() {
+	msc.mcc.mu.Lock()
+	defer msc.mcc.mu.Unlock()
+	delete(msc.mcc.subConns, msc)
 }
 
 type mockClientConn struct {
@@ -46,7 +53,7 @@ func newMockClientConn() *mockClientConn {
 }
 
 func (mcc *mockClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	sc := &mockSubConn{}
+	sc := &mockSubConn{mcc: mcc}
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
 	mcc.subConns[sc] = addrs[0]
@@ -54,9 +61,7 @@ func (mcc *mockClientConn) NewSubConn(addrs []resolver.Address, opts balancer.Ne
 }
 
 func (mcc *mockClientConn) RemoveSubConn(sc balancer.SubConn) {
-	mcc.mu.Lock()
-	defer mcc.mu.Unlock()
-	delete(mcc.subConns, sc)
+	sc.Shutdown()
 }
 
 const testCacheTimeout = 100 * time.Millisecond

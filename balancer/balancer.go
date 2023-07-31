@@ -115,6 +115,13 @@ type SubConn interface {
 	// creates a new one and returns it.  Returns a close function which must
 	// be called when the Producer is no longer needed.
 	GetOrBuildProducer(ProducerBuilder) (p Producer, close func())
+	// Shutdown shuts down the SubConn gracefully.  Any started RPCs will be
+	// allowed to complete.  No future calls should be made on the SubConn.
+	// One final state update will be delivered to the StateListener (or
+	// UpdateSubConnState; deprecated) with ConnectivityState of Shutdown to
+	// indicate the shutdown operation.  This will be delivered before
+	// in-progress operations are complete and the actual connection is closed.
+	Shutdown()
 }
 
 // NewSubConnOptions contains options to create new SubConn.
@@ -161,6 +168,8 @@ type ClientConn interface {
 	NewSubConn([]resolver.Address, NewSubConnOptions) (SubConn, error)
 	// RemoveSubConn removes the SubConn from ClientConn.
 	// The SubConn will be shutdown.
+	//
+	// Deprecated: use SubConn.Shutdown instead.
 	RemoveSubConn(SubConn)
 	// UpdateAddresses updates the addresses used in the passed in SubConn.
 	// gRPC checks if the currently connected address is still in the new list.

@@ -364,13 +364,7 @@ func (bw *balancerWrapper) ResolveNow(opts resolver.ResolveNowOptions) {
 }
 
 func (bw *balancerWrapper) RemoveSubConn(sc balancer.SubConn) {
-	bw.gsb.mu.Lock()
-	if !bw.gsb.balancerCurrentOrPending(bw) {
-		bw.gsb.mu.Unlock()
-		return
-	}
-	bw.gsb.mu.Unlock()
-	bw.gsb.cc.RemoveSubConn(sc)
+	sc.Shutdown()
 }
 
 func (bw *balancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {

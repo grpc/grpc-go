@@ -1061,3 +1061,59 @@ func (s) TestBalancerProducerHonorsContext(t *testing.T) {
 		t.Fatalf("RPC error: %v; want status.Code(err)=%v", err, codes.Canceled)
 	}
 }
+
+// TestSubConnShutdown confirms that the Shutdown method on subconns properly
+// initiates their shutdown.
+func (s) TestSubConnShutdown(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	gotShutdown := grpcsync.NewEvent()
+
+	bf := stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			var sc balancer.SubConn
+			opts := balancer.NewSubConnOptions{
+				StateListener: func(scs balancer.SubConnState) {
+					switch scs.ConnectivityState {
+					case connectivity.Connecting:
+						// Ignored.
+					case connectivity.Ready:
+						sc.Shutdown()
+					case connectivity.Shutdown:
+						gotShutdown.Fire()
+					default:
+						t.Errorf("got unexpected state %q in listener", scs.ConnectivityState)
+					}
+				},
+			}
+			sc, err := bd.ClientConn.NewSubConn(ccs.ResolverState.Addresses, opts)
+			if err != nil {
+				return err
+			}
+			sc.Connect()
+			// Report the state as READY to unblock ss.Start(), which waits for ready.
+			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.Ready})
+			return nil
+		},
+	}
+
+	const testBalName = "shutdown-test-balancer"
+	stub.Register(testBalName, bf)
+	t.Logf("Registered balancer %s...", testBalName)
+
+	ss := &stubserver.StubServer{}
+	if err := ss.Start(nil, grpc.WithDefaultServiceConfig(
+		fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, testBalName),
+	)); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	select {
+	case <-gotShutdown.Done():
+		// Success
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for gotShutdown to be fired.")
+	}
+}

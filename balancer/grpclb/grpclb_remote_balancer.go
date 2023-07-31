@@ -152,6 +152,7 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 			sc.Connect()
 			return
 		}
+		opts.StateListener = func(scs balancer.SubConnState) { lb.updateSubConnState(sc, scs) }
 		// This bypasses the cc wrapper with SubConn cache.
 		sc, err := lb.cc.cc.NewSubConn(backendAddrs, opts)
 		if err != nil {
@@ -176,6 +177,8 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 
 		if _, ok := lb.subConns[addrWithoutAttrs]; !ok {
 			// Use addrWithMD to create the SubConn.
+			var sc balancer.SubConn
+			opts.StateListener = func(scs balancer.SubConnState) { lb.updateSubConnState(sc, scs) }
 			sc, err := lb.cc.NewSubConn([]resolver.Address{addr}, opts)
 			if err != nil {
 				logger.Warningf("grpclb: failed to create new SubConn: %v", err)

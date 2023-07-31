@@ -44,6 +44,8 @@ func (sc *testSubConn) UpdateAddresses(addresses []resolver.Address) {}
 
 func (sc *testSubConn) Connect() {}
 
+func (sc *testSubConn) Shutdown() {}
+
 func (sc *testSubConn) GetOrBuildProducer(balancer.ProducerBuilder) (balancer.Producer, func()) {
 	return nil, nil
 }

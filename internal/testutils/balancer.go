@@ -37,6 +37,7 @@ type testingLogger interface {
 
 // TestSubConn implements the SubConn interface, to be used in tests.
 type TestSubConn struct {
+	tcc           *TestClientConn // the CC that owns this SubConn
 	id            string
 	ConnectCh     chan struct{}
 	stateListener func(balancer.SubConnState)
@@ -63,6 +64,16 @@ func (tsc *TestSubConn) UpdateState(state balancer.SubConnState) {
 	if tsc.stateListener != nil {
 		tsc.stateListener(state)
 		return
+	}
+}
+
+// Shutdown pushes the SubConn to the RemoveSubConn channel in the parent
+// TestClientConn.
+func (tsc *TestSubConn) Shutdown() {
+	tsc.tcc.logger.Logf("SubConn %s: Shutdown", tsc)
+	select {
+	case tsc.tcc.RemoveSubConnCh <- tsc:
+	default:
 	}
 }
 
@@ -106,6 +117,7 @@ func NewTestClientConn(t *testing.T) *TestClientConn {
 // NewSubConn creates a new SubConn.
 func (tcc *TestClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	sc := &TestSubConn{
+		tcc:           tcc,
 		id:            fmt.Sprintf("sc%d", tcc.subConnIdx),
 		ConnectCh:     make(chan struct{}, 1),
 		stateListener: o.StateListener,
@@ -127,11 +139,7 @@ func (tcc *TestClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubCon
 
 // RemoveSubConn removes the SubConn.
 func (tcc *TestClientConn) RemoveSubConn(sc balancer.SubConn) {
-	tcc.logger.Logf("testClientConn: RemoveSubConn(%s)", sc)
-	select {
-	case tcc.RemoveSubConnCh <- sc.(*TestSubConn):
-	default:
-	}
+	sc.(*TestSubConn).Shutdown()
 }
 
 // UpdateAddresses updates the addresses on the SubConn.

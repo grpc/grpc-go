@@ -303,6 +303,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 		return nil, err
 	}
 	acbw := &acBalancerWrapper{
+		ccb:           ccb,
 		ac:            ac,
 		producers:     make(map[balancer.ProducerBuilder]*refCountedProducer),
 		stateListener: opts.StateListener,
@@ -372,7 +373,8 @@ func (ccb *ccBalancerWrapper) Target() string {
 // acBalancerWrapper is a wrapper on top of ac for balancers.
 // It implements balancer.SubConn interface.
 type acBalancerWrapper struct {
-	ac            *addrConn // read-only
+	ac            *addrConn          // read-only
+	ccb           *ccBalancerWrapper // read-only
 	stateListener func(balancer.SubConnState)
 
 	mu        sync.Mutex
@@ -389,6 +391,10 @@ func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 
 func (acbw *acBalancerWrapper) Connect() {
 	go acbw.ac.connect()
+}
+
+func (acbw *acBalancerWrapper) Shutdown() {
+	acbw.ccb.RemoveSubConn(acbw)
 }
 
 // NewStream begins a streaming RPC on the addrConn.  If the addrConn is not
