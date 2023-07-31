@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/balancerload"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -196,14 +197,10 @@ func testPickExtraMetadata(t *testing.T, e env) {
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
-	// Set resolver to xds to trigger the extra metadata code path.
-	r := manual.NewBuilderWithScheme("xds")
-	resolver.Register(r)
-	defer func() {
-		resolver.UnregisterForTesting("xds")
-	}()
-	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
-	te.resolverScheme = "xds"
+	// Trigger the extra-metadata-adding code path.
+	defer func(old string) { internal.GRPCResolverSchemeExtraMetadata = old }(internal.GRPCResolverSchemeExtraMetadata)
+	internal.GRPCResolverSchemeExtraMetadata = "passthrough"
+
 	cc := te.clientConn()
 	tc := testgrpc.NewTestServiceClient(cc)
 

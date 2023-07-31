@@ -164,6 +164,10 @@ var (
 
 	// ORCAAllowAnyMinReportingInterval is for examples/orca use ONLY.
 	ORCAAllowAnyMinReportingInterval interface{} // func(so *orca.ServiceOptions)
+
+	// GRPCResolverSchemeExtraMetadata determines when gRPC will add extra
+	// metadata to RPCs.
+	GRPCResolverSchemeExtraMetadata string = "xds"
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.

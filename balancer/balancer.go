@@ -105,8 +105,8 @@ type SubConn interface {
 	//
 	// This will trigger a state transition for the SubConn.
 	//
-	// Deprecated: This method is now part of the ClientConn interface and will
-	// eventually be removed from here.
+	// Deprecated: this method will be removed.  Create new SubConns for new
+	// addresses instead.
 	UpdateAddresses([]resolver.Address)
 	// Connect starts the connecting for this SubConn.
 	Connect()
@@ -150,6 +150,9 @@ type ClientConn interface {
 	// NewSubConn is called by balancer to create a new SubConn.
 	// It doesn't block and wait for the connections to be established.
 	// Behaviors of the SubConn can be controlled by options.
+	//
+	// Deprecated: please be aware that in a future version, SubConns will only
+	// support one address per SubConn.
 	NewSubConn([]resolver.Address, NewSubConnOptions) (SubConn, error)
 	// RemoveSubConn removes the SubConn from ClientConn.
 	// The SubConn will be shutdown.
@@ -159,7 +162,10 @@ type ClientConn interface {
 	// If so, the connection will be kept. Else, the connection will be
 	// gracefully closed, and a new connection will be created.
 	//
-	// This will trigger a state transition for the SubConn.
+	// This may trigger a state transition for the SubConn.
+	//
+	// Deprecated: this method will be removed.  Create new SubConns for new
+	// addresses instead.
 	UpdateAddresses(SubConn, []resolver.Address)
 
 	// UpdateState notifies gRPC that the balancer's internal state has

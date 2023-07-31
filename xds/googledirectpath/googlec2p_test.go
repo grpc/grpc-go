@@ -60,31 +60,13 @@ var (
 )
 
 func replaceResolvers() func() {
-	var registerForTesting bool
-	if resolver.Get(c2pScheme) == nil {
-		// If env var to enable c2p is not set, the resolver isn't registered.
-		// Need to register and unregister in defer.
-		registerForTesting = true
-		resolver.Register(&c2pResolverBuilder{})
-	}
 	oldDNS := resolver.Get("dns")
 	resolver.Register(testDNSResolver)
 	oldXDS := resolver.Get("xds")
 	resolver.Register(testXDSResolver)
 	return func() {
-		if oldDNS != nil {
-			resolver.Register(oldDNS)
-		} else {
-			resolver.UnregisterForTesting("dns")
-		}
-		if oldXDS != nil {
-			resolver.Register(oldXDS)
-		} else {
-			resolver.UnregisterForTesting("xds")
-		}
-		if registerForTesting {
-			resolver.UnregisterForTesting(c2pScheme)
-		}
+		resolver.Register(oldDNS)
+		resolver.Register(oldXDS)
 	}
 }
 
