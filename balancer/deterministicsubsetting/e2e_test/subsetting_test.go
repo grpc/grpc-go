@@ -141,6 +141,8 @@ func checkRoundRobinRPCs(t *testing.T, ctx context.Context, clients []testgrpc.T
 				} else {
 					m[clientIdx] = struct{}{}
 				}
+			} else {
+				t.Fatalf("peer.Addr == nil, peer: %v", peer)
 			}
 		}
 	}

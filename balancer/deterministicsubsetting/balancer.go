@@ -90,7 +90,7 @@ func (b *subsettingBalancer) prepareChildResolverState(s resolver.State) resolve
 	excludedCount := backendCount % int(b.cfg.SubsetSize)
 	excludedStart := (round * excludedCount) % backendCount
 	excludedEnd := (excludedStart + excludedCount) % backendCount
-	if excludedStart < excludedEnd {
+	if excludedStart <= excludedEnd {
 		addresses = append(addresses[:excludedStart], addresses[excludedEnd:]...)
 	} else {
 		addresses = addresses[excludedEnd:excludedStart]
