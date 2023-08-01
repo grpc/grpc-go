@@ -176,6 +176,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 // UpdateSubConnState is unused as a StateListener is always registered when
 // creating SubConns.
 func (b *pickfirstBalancer) UpdateSubConnState(subConn balancer.SubConn, state balancer.SubConnState) {
+	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", subConn, state)
 }
 
 func (b *pickfirstBalancer) updateSubConnState(subConn balancer.SubConn, state balancer.SubConnState) {
