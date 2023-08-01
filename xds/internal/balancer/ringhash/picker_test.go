@@ -31,10 +31,18 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 )
 
+var testSubConns []*testutils.TestSubConn
+
+func init() {
+	for i := 0; i < 8; i++ {
+		testSubConns = append(testSubConns, &testutils.TestSubConn{ConnectCh: make(chan struct{}, 1)})
+	}
+}
+
 func newTestRing(cStats []connectivity.State) *ring {
 	var items []*ringEntry
 	for i, st := range cStats {
-		testSC := testutils.TestSubConns[i]
+		testSC := testSubConns[i]
 		items = append(items, &ringEntry{
 			idx:  i,
 			hash: uint64((i + 1) * 10),
@@ -61,7 +69,7 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 			name:   "picked is Ready",
 			ring:   newTestRing([]connectivity.State{connectivity.Ready, connectivity.Idle}),
 			hash:   5,
-			wantSC: testutils.TestSubConns[0],
+			wantSC: testSubConns[0],
 		},
 		{
 			name:    "picked is connecting, queue",
@@ -74,13 +82,13 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 			ring:            newTestRing([]connectivity.State{connectivity.Idle, connectivity.Idle}),
 			hash:            5,
 			wantErr:         balancer.ErrNoSubConnAvailable,
-			wantSCToConnect: testutils.TestSubConns[0],
+			wantSCToConnect: testSubConns[0],
 		},
 		{
 			name:   "picked is TransientFailure, next is ready, return",
 			ring:   newTestRing([]connectivity.State{connectivity.TransientFailure, connectivity.Ready}),
 			hash:   5,
-			wantSC: testutils.TestSubConns[1],
+			wantSC: testSubConns[1],
 		},
 		{
 			name:    "picked is TransientFailure, next is connecting, queue",
@@ -93,7 +101,7 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 			ring:            newTestRing([]connectivity.State{connectivity.TransientFailure, connectivity.Idle}),
 			hash:            5,
 			wantErr:         balancer.ErrNoSubConnAvailable,
-			wantSCToConnect: testutils.TestSubConns[1],
+			wantSCToConnect: testSubConns[1],
 		},
 	}
 	for _, tt := range tests {
@@ -106,7 +114,7 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 				t.Errorf("Pick() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !cmp.Equal(got, balancer.PickResult{SubConn: tt.wantSC}, cmpOpts) {
+			if got.SubConn != tt.wantSC {
 				t.Errorf("Pick() got = %v, want picked SubConn: %v", got, tt.wantSC)
 			}
 			if sc := tt.wantSCToConnect; sc != nil {
@@ -163,7 +171,7 @@ func (s) TestPickerPickTriggerTFReturnReady(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Pick() error = %v, want nil", err)
 	}
-	if wantSC := testutils.TestSubConns[3]; pr.SubConn != wantSC {
+	if wantSC := testSubConns[3]; pr.SubConn != wantSC {
 		t.Fatalf("Pick() = %v, want %v", pr.SubConn, wantSC)
 	}
 	// The first 3 SubConns, all in TransientFailure, should be queued to
@@ -199,9 +207,9 @@ func (s) TestPickerPickTriggerTFWithIdle(t *testing.T) {
 	}
 	// SubConn 3 was in Idle, so should Connect()
 	select {
-	case <-testutils.TestSubConns[2].ConnectCh:
+	case <-testSubConns[2].ConnectCh:
 	case <-time.After(defaultTestShortTimeout):
-		t.Errorf("timeout waiting for Connect() from SubConn %v", testutils.TestSubConns[2])
+		t.Errorf("timeout waiting for Connect() from SubConn %v", testSubConns[2])
 	}
 	// The other SubConns, after the first Idle, should not be queued to
 	// connect.
