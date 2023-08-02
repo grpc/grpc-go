@@ -1828,6 +1828,13 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 								"B": {Weight: 1},
 							},
 							ActionType: xdsresource.RouteActionUnsupported,
+						}, {
+							Prefix: newStringP("2"),
+							WeightedClusters: map[string]xdsresource.WeightedCluster{
+								"A": {Weight: 1},
+								"B": {Weight: 1},
+							},
+							ActionType: xdsresource.RouteActionNonForwardingAction,
 						}},
 					},
 				},
@@ -1836,8 +1843,11 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 				"1": {
 					{"build:foo1", "override:foo2", "build:bar1", "override:bar2", "newstream:foo1", "newstream:bar1", "done:bar1", "done:foo1"},
 				},
+				"2": {
+					{"build:foo1", "override:foo2", "build:bar1", "override:bar2", "newstream:foo1", "newstream:bar1", "done:bar1", "done:foo1"},
+				},
 			},
-			selectErr: errMatchedRouteTypeNotRouteActionRoute.Error(),
+			selectErr: errUnsupportedClientRouteAction.Error(),
 		},
 		{
 			name: "NewStream error; ensure earlier interceptor Done is still called",
@@ -1857,13 +1867,6 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 								"B": {Weight: 1},
 							},
 							ActionType: xdsresource.RouteActionRoute,
-						}, {
-							Prefix: newStringP("2"),
-							WeightedClusters: map[string]xdsresource.WeightedCluster{
-								"A": {Weight: 1},
-								"B": {Weight: 1},
-							},
-							ActionType: xdsresource.RouteActionRoute,
 						}},
 					},
 				},
@@ -1871,9 +1874,6 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 			rpcRes: map[string][][]string{
 				"1": {
 					{"build:foo1", "build:bar1", "newstream:foo1", "newstream:bar1" /* <err in bar1 NewStream> */, "done:foo1"},
-				},
-				"2": {
-					{"build:foo1", "build:bar1", "newstream:foo1", "newstream:bar1" /* <err in bar1 NewSteam> */, "done:foo1"},
 				},
 			},
 			newStreamErr: "bar newstream err",
