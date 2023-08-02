@@ -1813,7 +1813,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 	}{
 
 		{
-			name: "route type not RouteActionRoute",
+			name: "route type RouteActionUnsupported invalid for client",
 			ldsFilters: []xdsresource.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
 			},
@@ -1828,8 +1828,28 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 								"B": {Weight: 1},
 							},
 							ActionType: xdsresource.RouteActionUnsupported,
-						}, {
-							Prefix: newStringP("2"),
+						}},
+					},
+				},
+			},
+			rpcRes: map[string][][]string{
+				"1": {
+					{"build:foo1", "override:foo2", "build:bar1", "override:bar2", "newstream:foo1", "newstream:bar1", "done:bar1", "done:foo1"},
+				},
+			},
+			selectErr: errUnsupportedClientRouteAction.Error(),
+		},
+		{
+			name: "route type RouteActionNonForwardingAction invalid for client",
+			ldsFilters: []xdsresource.HTTPFilter{
+				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
+			},
+			rtCfgUpdate: xdsresource.RouteConfigUpdate{
+				VirtualHosts: []*xdsresource.VirtualHost{
+					{
+						Domains: []string{targetStr},
+						Routes: []*xdsresource.Route{{
+							Prefix: newStringP("1"),
 							WeightedClusters: map[string]xdsresource.WeightedCluster{
 								"A": {Weight: 1},
 								"B": {Weight: 1},
@@ -1841,9 +1861,6 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 			},
 			rpcRes: map[string][][]string{
 				"1": {
-					{"build:foo1", "override:foo2", "build:bar1", "override:bar2", "newstream:foo1", "newstream:bar1", "done:bar1", "done:foo1"},
-				},
-				"2": {
 					{"build:foo1", "override:foo2", "build:bar1", "override:bar2", "newstream:foo1", "newstream:bar1", "done:bar1", "done:foo1"},
 				},
 			},
