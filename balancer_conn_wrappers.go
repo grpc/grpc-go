@@ -226,11 +226,9 @@ func (ccb *ccBalancerWrapper) closeBalancer(m ccbMode) {
 	}
 	ccb.mu.Unlock()
 
-	// Give enqueued callbacks a chance to finish.
+	// Give enqueued callbacks a chance to finish before closing the balancer.
 	<-done
-	// Spawn a goroutine to close the balancer (since it may block trying to
-	// cleanup all allocated resources) and return early.
-	go b.Close()
+	b.Close()
 }
 
 // exitIdleMode is invoked by grpc when the channel exits idle mode either
