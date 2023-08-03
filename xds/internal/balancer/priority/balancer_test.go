@@ -1746,7 +1746,11 @@ func init() {
 		ii := i
 		stub.Register(fmt.Sprintf("%s-%d", initIdleBalancerName, ii), stub.BalancerFuncs{
 			UpdateClientConnState: func(bd *stub.BalancerData, opts balancer.ClientConnState) error {
-				bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{})
+				sc, err := bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{})
+				if err != nil {
+					return err
+				}
+				sc.Connect()
 				bd.ClientConn.UpdateState(balancer.State{
 					ConnectivityState: connectivity.Connecting,
 					Picker:            &testutils.TestConstPicker{Err: balancer.ErrNoSubConnAvailable},

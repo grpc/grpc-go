@@ -375,7 +375,11 @@ func (s) TestPickerUpdateAfterClose(t *testing.T) {
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			// Create a subConn which will be used later on to test the race
 			// between UpdateSubConnState() and Close().
-			bd.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{})
+			sc, err := bd.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{})
+			if err != nil {
+				return err
+			}
+			sc.Connect()
 			return nil
 		},
 		UpdateSubConnState: func(bd *stub.BalancerData, _ balancer.SubConn, _ balancer.SubConnState) {
