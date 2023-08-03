@@ -97,7 +97,6 @@ const subConnCacheTime = time.Second * 10
 type lbCacheClientConn struct {
 	balancer.ClientConn
 
-	cc      balancer.ClientConn
 	timeout time.Duration
 
 	mu sync.Mutex
@@ -116,7 +115,6 @@ type subConnCacheEntry struct {
 func newLBCacheClientConn(cc balancer.ClientConn) *lbCacheClientConn {
 	return &lbCacheClientConn{
 		ClientConn:    cc,
-		cc:            cc,
 		timeout:       subConnCacheTime,
 		subConnCache:  make(map[resolver.Address]*subConnCacheEntry),
 		subConnToAddr: make(map[balancer.SubConn]resolver.Address),
@@ -140,7 +138,7 @@ func (ccc *lbCacheClientConn) NewSubConn(addrs []resolver.Address, opts balancer
 		return entry.sc, nil
 	}
 
-	scNew, err := ccc.cc.NewSubConn(addrs, opts)
+	scNew, err := ccc.ClientConn.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +208,7 @@ func (sc *lbCacheSubConn) Shutdown() {
 
 func (ccc *lbCacheClientConn) UpdateState(s balancer.State) {
 	s.Picker = &lbCachePicker{Picker: s.Picker}
-	ccc.cc.UpdateState(s)
+	ccc.ClientConn.UpdateState(s)
 }
 
 func (ccc *lbCacheClientConn) close() {

@@ -119,8 +119,8 @@ type SubConn interface {
 	// allowed to complete.  No future calls should be made on the SubConn.
 	// One final state update will be delivered to the StateListener (or
 	// UpdateSubConnState; deprecated) with ConnectivityState of Shutdown to
-	// indicate the shutdown operation.  This will be delivered before
-	// in-progress operations are complete and the actual connection is closed.
+	// indicate the shutdown operation.  This may be delivered before
+	// in-progress RPCs are complete and the actual connection is closed.
 	Shutdown()
 }
 

@@ -126,7 +126,7 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 			if oldUsePickFirst {
 				// If old SubConn were created for pickfirst, bypass cache and
 				// remove directly.
-				lb.cc.cc.RemoveSubConn(sc)
+				lb.cc.ClientConn.RemoveSubConn(sc)
 			} else {
 				lb.cc.RemoveSubConn(sc)
 			}
@@ -144,17 +144,17 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 		}
 		if sc != nil {
 			if len(backendAddrs) == 0 {
-				lb.cc.cc.RemoveSubConn(sc)
+				lb.cc.ClientConn.RemoveSubConn(sc)
 				delete(lb.subConns, scKey)
 				return
 			}
-			lb.cc.cc.UpdateAddresses(sc, backendAddrs)
+			lb.cc.ClientConn.UpdateAddresses(sc, backendAddrs)
 			sc.Connect()
 			return
 		}
 		opts.StateListener = func(scs balancer.SubConnState) { lb.updateSubConnState(sc, scs) }
 		// This bypasses the cc wrapper with SubConn cache.
-		sc, err := lb.cc.cc.NewSubConn(backendAddrs, opts)
+		sc, err := lb.cc.ClientConn.NewSubConn(backendAddrs, opts)
 		if err != nil {
 			logger.Warningf("grpclb: failed to create new SubConn: %v", err)
 			return
@@ -422,7 +422,7 @@ func (ccw *remoteBalancerCCWrapper) watchRemoteBalancer() {
 			}
 		}
 		// Trigger a re-resolve when the stream errors.
-		ccw.lb.cc.cc.ResolveNow(resolver.ResolveNowOptions{})
+		ccw.lb.cc.ClientConn.ResolveNow(resolver.ResolveNowOptions{})
 
 		ccw.lb.mu.Lock()
 		ccw.lb.remoteBalancerConnected = false
