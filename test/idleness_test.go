@@ -408,17 +408,20 @@ func (s) TestChannelIdleness_Enabled_IdleTimeoutRacesWithRPCs(t *testing.T) {
 	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, cc, connectivity.Ready)
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Errorf("EmptyCall RPC failed: %v", err)
+	}
 
 	// Make an RPC every defaultTestShortTimeout duration so as to race with the
 	// idle timeout. Whether the idle timeout wins the race or the RPC wins the
 	// race, RPCs must succeed.
-	client := testgrpc.NewTestServiceClient(cc)
 	for i := 0; i < 20; i++ {
 		<-time.After(defaultTestShortTimeout)
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-			t.Errorf("EmptyCall RPC failed: %v", err)
+			t.Fatalf("EmptyCall RPC failed: %v", err)
 		}
+		t.Logf("Iteration %d succeeded", i)
 	}
 }
 
