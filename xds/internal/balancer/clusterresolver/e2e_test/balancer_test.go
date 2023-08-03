@@ -279,7 +279,7 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	// Ensure that the ClientConn moves to TransientFailure.
 	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
 		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("Timed out waiting for state change.  got %v; want %v", state, connectivity.TransientFailure)
+			t.Fatalf("Timed out waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
 		}
 	}
 
