@@ -17,7 +17,7 @@
  */
 
 // Package clusterresolver contains the implementation of the
-// xds_cluster_resolver_experimental LB policy which resolves endpoint addresses
+// cluster_resolver_experimental LB policy which resolves endpoint addresses
 // using a list of one or more discovery mechanisms.
 package clusterresolver
 
@@ -148,13 +148,6 @@ func (bb) ParseConfig(j json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 type ccUpdate struct {
 	state balancer.ClientConnState
 	err   error
-}
-
-// scUpdate wraps a subConn update received from gRPC. This is directly passed
-// on to the child policy.
-type scUpdate struct {
-	subConn balancer.SubConn
-	state   balancer.SubConnState
 }
 
 type exitIdle struct{}
@@ -314,14 +307,6 @@ func (b *clusterResolverBalancer) run() {
 			switch update := u.(type) {
 			case *ccUpdate:
 				b.handleClientConnUpdate(update)
-			case *scUpdate:
-				// SubConn updates are simply handed over to the underlying
-				// child balancer.
-				if b.child == nil {
-					b.logger.Errorf("Received a SubConn update {%+v} with no child policy", update)
-					break
-				}
-				b.child.UpdateSubConnState(update.subConn, update.state)
 			case exitIdle:
 				if b.child == nil {
 					b.logger.Errorf("xds: received ExitIdle with no child balancer")
@@ -388,11 +373,7 @@ func (b *clusterResolverBalancer) ResolverError(err error) {
 
 // UpdateSubConnState handles subConn updates from gRPC.
 func (b *clusterResolverBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	if b.closed.HasFired() {
-		b.logger.Warningf("Received subConn update {%v, %v} after close", sc, state)
-		return
-	}
-	b.updateCh.Put(&scUpdate{subConn: sc, state: state})
+	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
 // Close closes the cdsBalancer and the underlying child balancer.
@@ -421,11 +402,7 @@ func (c *ccWrapper) ResolveNow(resolver.ResolveNowOptions) {
 }
 
 func (c *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (sc balancer.SubConn, err error) {
-	if opts.StateListener == nil {
-		// If already set, just allow updates to be sent directly to the
-		// child's listener.  Otherwise, we are responsible for forwarding the
-		// update we'll receive to the proper child.
-		opts.StateListener = func(state balancer.SubConnState) { c.b.UpdateSubConnState(sc, state) }
-	}
+	// No need to override opts.StateListener; just forward all calls to the
+	// child that created the SubConn.
 	return c.ClientConn.NewSubConn(addrs, opts)
 }

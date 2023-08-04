@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/buffer"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -315,99 +314,6 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	}
 	if ctx.Err() != nil {
 		t.Fatalf("RPCs did not fail after removal of Cluster resource")
-	}
-}
-
-// testCCWrapper wraps a balancer.ClientConn and intercepts NewSubConn to make
-// subConn state changes available to the test.
-type testCCWrapper struct {
-	balancer.ClientConn
-	scStateCh *buffer.Unbounded
-}
-
-func (t *testCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (sc balancer.SubConn, err error) {
-	oldListener := opts.StateListener
-	opts.StateListener = func(state balancer.SubConnState) {
-		t.scStateCh.Put(state)
-		if oldListener != nil {
-			oldListener(state)
-		}
-	}
-	return t.ClientConn.NewSubConn(addrs, opts)
-}
-
-// Test verifies that SubConn state changes are propagated to the child policy
-// by the cluster resolver LB policy.
-func (s) TestSubConnStateChangePropagationToChildPolicy(t *testing.T) {
-	// Unregister the priority balancer builder for the duration of this test,
-	// and register a policy under the same name that makes SubConn state
-	// changes pushed to it available to the test.
-	priorityBuilder := balancer.Get(priority.Name)
-	internal.BalancerUnregister(priorityBuilder.Name())
-	var ccWrapper *testCCWrapper
-	stub.Register(priority.Name, stub.BalancerFuncs{
-		Init: func(bd *stub.BalancerData) {
-			ccWrapper = &testCCWrapper{
-				ClientConn: bd.ClientConn,
-				scStateCh:  buffer.NewUnbounded(),
-			}
-			bd.Data = priorityBuilder.Build(ccWrapper, bd.BuildOptions)
-		},
-		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-			return priorityBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
-		},
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			bal := bd.Data.(balancer.Balancer)
-			return bal.UpdateClientConnState(ccs)
-		},
-		Close: func(bd *stub.BalancerData) {
-			bal := bd.Data.(balancer.Balancer)
-			bal.Close()
-		},
-	})
-
-	defer balancer.Register(priorityBuilder)
-
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
-
-	server := stubserver.StartTestService(t, nil)
-	defer server.Stop()
-
-	// Configure cluster and endpoints resources in the management server.
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
-		SkipValidation: true,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
-	cc, cleanup := setupAndDial(t, bootstrapContents)
-	defer cleanup()
-
-	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("EmptyCall() failed: %v", err)
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			t.Fatal("Timeout when waiting for child policy to see a READY SubConn")
-		case s := <-ccWrapper.scStateCh.Get():
-			ccWrapper.scStateCh.Load()
-			state := s.(balancer.SubConnState)
-			if state.ConnectivityState == connectivity.Ready {
-				return
-			}
-		}
 	}
 }
 
