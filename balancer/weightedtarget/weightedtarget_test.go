@@ -1211,22 +1211,23 @@ var errTestInitIdle = fmt.Errorf("init Idle balancer error 0")
 func init() {
 	stub.Register(initIdleBalancerName, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, opts balancer.ClientConnState) error {
-			sc, err := bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{})
+			sc, err := bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) {
+					err := fmt.Errorf("wrong picker error")
+					if state.ConnectivityState == connectivity.Idle {
+						err = errTestInitIdle
+					}
+					bd.ClientConn.UpdateState(balancer.State{
+						ConnectivityState: state.ConnectivityState,
+						Picker:            &testutils.TestConstPicker{Err: err},
+					})
+				},
+			})
 			if err != nil {
 				return err
 			}
 			sc.Connect()
 			return nil
-		},
-		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-			err := fmt.Errorf("wrong picker error")
-			if state.ConnectivityState == connectivity.Idle {
-				err = errTestInitIdle
-			}
-			bd.ClientConn.UpdateState(balancer.State{
-				ConnectivityState: state.ConnectivityState,
-				Picker:            &testutils.TestConstPicker{Err: err},
-			})
 		},
 	})
 }
