@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -150,7 +149,7 @@ func (ccc *lbCacheClientConn) NewSubConn(addrs []resolver.Address, opts balancer
 }
 
 func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
-	grpclog.Errorf("RemoveSubConn(%v) called unexpectedly", sc)
+	logger.Errorf("RemoveSubConn(%v) called unexpectedly", sc)
 }
 
 type lbCacheSubConn struct {

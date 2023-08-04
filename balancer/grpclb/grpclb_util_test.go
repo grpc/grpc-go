@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -62,7 +61,7 @@ func (mcc *mockClientConn) NewSubConn(addrs []resolver.Address, opts balancer.Ne
 }
 
 func (mcc *mockClientConn) RemoveSubConn(sc balancer.SubConn) {
-	grpclog.Errorf("RemoveSubConn(%v) called unexpectedly", sc)
+	panic(fmt.Sprintf("RemoveSubConn(%v) called unexpectedly", sc))
 }
 
 const testCacheTimeout = 100 * time.Millisecond
