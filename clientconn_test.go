@@ -1143,18 +1143,10 @@ func testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t *testing.T
 }
 
 type stateRecordingBalancer struct {
-	notifier chan<- connectivity.State
 	balancer.Balancer
 }
 
-func (b *stateRecordingBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
-	b.notifier <- s.ConnectivityState
-	b.Balancer.UpdateSubConnState(sc, s)
-}
-
-func (b *stateRecordingBalancer) ResetNotifier(r chan<- connectivity.State) {
-	b.notifier = r
-}
+func (b *stateRecordingBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {}
 
 func (b *stateRecordingBalancer) Close() {
 	b.Balancer.Close()
@@ -1179,8 +1171,7 @@ func (b *stateRecordingBalancerBuilder) Build(cc balancer.ClientConn, opts balan
 	b.notifier = stateNotifications
 	b.mu.Unlock()
 	return &stateRecordingBalancer{
-		notifier: stateNotifications,
-		Balancer: balancer.Get("pick_first").Build(cc, opts),
+		Balancer: balancer.Get("pick_first").Build(&stateRecordingCCWrapper{cc, stateNotifications}, opts),
 	}
 }
 
@@ -1190,6 +1181,20 @@ func (b *stateRecordingBalancerBuilder) nextStateNotifier() <-chan connectivity.
 	ret := b.notifier
 	b.notifier = nil
 	return ret
+}
+
+type stateRecordingCCWrapper struct {
+	balancer.ClientConn
+	notifier chan<- connectivity.State
+}
+
+func (ccw *stateRecordingCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	oldListener := opts.StateListener
+	opts.StateListener = func(s balancer.SubConnState) {
+		ccw.notifier <- s.ConnectivityState
+		oldListener(s)
+	}
+	return ccw.ClientConn.NewSubConn(addrs, opts)
 }
 
 // Keep reading until something causes the connection to die (EOF, server
