@@ -117,9 +117,9 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		// The resolver reported an empty address list. Treat it like an error by
 		// calling b.ResolverError.
 		if b.subConn != nil {
-			// Remove the old subConn. All addresses were removed, so it is no longer
-			// valid.
-			b.cc.RemoveSubConn(b.subConn)
+			// Shut down the old subConn. All addresses were removed, so it is
+			// no longer valid.
+			b.subConn.Shutdown()
 			b.subConn = nil
 		}
 		b.ResolverError(errors.New("produced zero addresses"))

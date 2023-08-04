@@ -553,7 +553,7 @@ func (bg *BalancerGroup) Close() {
 		bg.incomingStarted = false
 		// Also remove all SubConns.
 		for sc := range bg.scToSubBalancer {
-			bg.cc.RemoveSubConn(sc)
+			sc.Shutdown()
 			delete(bg.scToSubBalancer, sc)
 		}
 	}

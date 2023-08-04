@@ -502,7 +502,7 @@ func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts bal
 }
 
 func (b *outlierDetectionBalancer) RemoveSubConn(sc balancer.SubConn) {
-	sc.Shutdown()
+	b.logger.Errorf("RemoveSubConn(%v) called unexpectedly", sc)
 }
 
 // appendIfPresent appends the scw to the address, if the address is present in

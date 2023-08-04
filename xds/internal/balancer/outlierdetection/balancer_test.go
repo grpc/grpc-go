@@ -1538,7 +1538,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		od.RemoveSubConn(scw1)
+		scw1.Shutdown()
 	}()
 
 	wg.Add(1)

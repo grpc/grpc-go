@@ -453,7 +453,7 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		select {
 		case <-time.After(time.Millisecond * 500):
 			t.Fatalf("timeout waiting for remove subconn")
-		case <-cc.RemoveSubConnCh:
+		case <-cc.ShutdownSubConnCh:
 		}
 	}
 
@@ -729,12 +729,12 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	defer cancel()
 	select {
 	case <-ctx.Done():
-		t.Fatalf("error waiting for RemoveSubConn()")
-	case rsc := <-cc.RemoveSubConnCh:
+		t.Fatalf("error waiting for sc.Shutdown()")
+	case rsc := <-cc.ShutdownSubConnCh:
 		// The SubConn removed should have been the created SubConn
 		// from the child before switching.
 		if rsc != sc1 {
-			t.Fatalf("RemoveSubConn() got: %v, want %v", rsc, sc1)
+			t.Fatalf("Shutdown() got: %v, want %v", rsc, sc1)
 		}
 	}
 }

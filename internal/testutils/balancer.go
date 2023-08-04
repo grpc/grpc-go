@@ -34,6 +34,7 @@ import (
 type testingLogger interface {
 	Log(args ...interface{})
 	Logf(format string, args ...interface{})
+	Errorf(format string, args ...interface{})
 }
 
 // TestSubConn implements the SubConn interface, to be used in tests.
@@ -82,12 +83,12 @@ func (tsc *TestSubConn) UpdateState(state balancer.SubConnState) {
 	}
 }
 
-// Shutdown pushes the SubConn to the RemoveSubConn channel in the parent
+// Shutdown pushes the SubConn to the ShutdownSubConn channel in the parent
 // TestClientConn.
 func (tsc *TestSubConn) Shutdown() {
 	tsc.tcc.logger.Logf("SubConn %s: Shutdown", tsc)
 	select {
-	case tsc.tcc.RemoveSubConnCh <- tsc:
+	case tsc.tcc.ShutdownSubConnCh <- tsc:
 	default:
 	}
 }
@@ -103,7 +104,7 @@ type TestClientConn struct {
 
 	NewSubConnAddrsCh      chan []resolver.Address // the last 10 []Address to create subconn.
 	NewSubConnCh           chan *TestSubConn       // the last 10 subconn created.
-	RemoveSubConnCh        chan *TestSubConn       // the last 10 subconn removed.
+	ShutdownSubConnCh      chan *TestSubConn       // the last 10 subconn removed.
 	UpdateAddressesAddrsCh chan []resolver.Address // last updated address via UpdateAddresses().
 
 	NewPickerCh  chan balancer.Picker            // the last picker updated.
@@ -120,7 +121,7 @@ func NewTestClientConn(t *testing.T) *TestClientConn {
 
 		NewSubConnAddrsCh:      make(chan []resolver.Address, 10),
 		NewSubConnCh:           make(chan *TestSubConn, 10),
-		RemoveSubConnCh:        make(chan *TestSubConn, 10),
+		ShutdownSubConnCh:      make(chan *TestSubConn, 10),
 		UpdateAddressesAddrsCh: make(chan []resolver.Address, 1),
 
 		NewPickerCh:  make(chan balancer.Picker, 1),
@@ -153,9 +154,10 @@ func (tcc *TestClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubCon
 	return sc, nil
 }
 
-// RemoveSubConn removes the SubConn.
+// RemoveSubConn is a nop; tests should all be updated to use sc.Shutdown()
+// instead.
 func (tcc *TestClientConn) RemoveSubConn(sc balancer.SubConn) {
-	sc.(*TestSubConn).Shutdown()
+	tcc.logger.Errorf("RemoveSubConn(%v) called unexpectedly", sc)
 }
 
 // UpdateAddresses updates the addresses on the SubConn.

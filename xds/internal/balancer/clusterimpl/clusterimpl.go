@@ -403,7 +403,7 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 }
 
 func (b *clusterImplBalancer) RemoveSubConn(sc balancer.SubConn) {
-	sc.Shutdown()
+	b.logger.Errorf("RemoveSubConn(%v) called unexpectedly", sc)
 }
 
 func (b *clusterImplBalancer) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
