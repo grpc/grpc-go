@@ -65,7 +65,6 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		closed:          grpcsync.NewEvent(),
 		done:            grpcsync.NewEvent(),
 		loadWrapper:     loadstore.NewWrapper(),
-		scWrappers:      make(map[balancer.SubConn]*scWrapper),
 		pickerUpdateCh:  buffer.NewUnbounded(),
 		requestCountMax: defaultRequestCountMax,
 	}
@@ -112,18 +111,6 @@ type clusterImplBalancer struct {
 
 	clusterNameMu sync.Mutex
 	clusterName   string
-
-	scWrappersMu sync.Mutex
-	// The SubConns passed to the child policy are wrapped in a wrapper, to keep
-	// locality ID. But when the parent ClientConn sends updates, it's going to
-	// give the original SubConn, not the wrapper. But the child policies only
-	// know about the wrapper, so when forwarding SubConn updates, they must be
-	// sent for the wrappers.
-	//
-	// This keeps a map from original SubConn to wrapper, so that when
-	// forwarding the SubConn state update, the child policy will get the
-	// wrappers.
-	scWrappers map[balancer.SubConn]*scWrapper
 
 	// childState/drops/requestCounter keeps the state used by the most recently
 	// generated picker. All fields can only be accessed in run(). And run() is
@@ -296,24 +283,13 @@ func (b *clusterImplBalancer) updateSubConnState(sc balancer.SubConn, s balancer
 		b.ClientConn.ResolveNow(resolver.ResolveNowOptions{})
 	}
 
-	b.scWrappersMu.Lock()
-	if scw, ok := b.scWrappers[sc]; ok {
-		sc = scw
-		if s.ConnectivityState == connectivity.Shutdown {
-			// Remove this SubConn from the map on Shutdown.
-			delete(b.scWrappers, scw.SubConn)
-		}
-	}
-	b.scWrappersMu.Unlock()
 	if cb != nil {
 		cb(s)
-	} else {
-		b.child.UpdateSubConnState(sc, s)
 	}
 }
 
 func (b *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
-	b.updateSubConnState(sc, s, nil)
+	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, s)
 }
 
 func (b *clusterImplBalancer) Close() {
@@ -394,11 +370,8 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 		return nil, err
 	}
 	// Wrap this SubConn in a wrapper, and add it to the map.
-	b.scWrappersMu.Lock()
 	ret := &scWrapper{SubConn: sc}
 	ret.updateLocalityID(lID)
-	b.scWrappers[sc] = ret
-	b.scWrappersMu.Unlock()
 	return ret, nil
 }
 
