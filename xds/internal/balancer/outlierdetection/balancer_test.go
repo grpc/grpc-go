@@ -1085,7 +1085,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 
 		// Since no addresses are ejected, a SubConn update should forward down
 		// to the child.
-		od.UpdateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
+		od.updateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
 			ConnectivityState: connectivity.Connecting,
 		})
 
@@ -1147,7 +1147,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 		// that address should not be forwarded downward. These SubConn updates
 		// will be cached to update the child sometime in the future when the
 		// address gets unejected.
-		od.UpdateSubConnState(pi.SubConn, balancer.SubConnState{
+		od.updateSubConnState(pi.SubConn, balancer.SubConnState{
 			ConnectivityState: connectivity.Connecting,
 		})
 		sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -1564,7 +1564,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 
 	// Call balancer.Balancers synchronously in this goroutine, upholding the
 	// balancer.Balancer API guarantee.
-	od.UpdateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
+	od.updateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
 		ConnectivityState: connectivity.Connecting,
 	})
 	od.ResolverError(errors.New("some error"))
