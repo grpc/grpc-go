@@ -319,7 +319,13 @@ func (lb *lbBalancer) aggregateSubConnStates() connectivity.State {
 	return connectivity.TransientFailure
 }
 
+// UpdateSubConnState is unused; NewSubConn's options always specifies
+// updateSubConnState as the listener.
 func (lb *lbBalancer) UpdateSubConnState(sc balancer.SubConn, scs balancer.SubConnState) {
+	logger.Errorf("grpclb: UpdateSubConnState(%v, %+v) called unexpectedly", sc, scs)
+}
+
+func (lb *lbBalancer) updateSubConnState(sc balancer.SubConn, scs balancer.SubConnState) {
 	s := scs.ConnectivityState
 	if logger.V(2) {
 		logger.Infof("lbBalancer: handle SubConn state change: %p, %v", sc, s)
@@ -373,8 +379,13 @@ func (lb *lbBalancer) updateStateAndPicker(forceRegeneratePicker bool, resetDrop
 	if forceRegeneratePicker || (lb.state != oldAggrState) {
 		lb.regeneratePicker(resetDrop)
 	}
+	var cc balancer.ClientConn = lb.cc
+	if lb.usePickFirst {
+		// Bypass the caching layer that would wrap the picker.
+		cc = lb.cc.ClientConn
+	}
 
-	lb.cc.UpdateState(balancer.State{ConnectivityState: lb.state, Picker: lb.picker})
+	cc.UpdateState(balancer.State{ConnectivityState: lb.state, Picker: lb.picker})
 }
 
 // fallbackToBackendsAfter blocks for fallbackTimeout and falls back to use

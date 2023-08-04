@@ -403,19 +403,7 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 }
 
 func (b *clusterImplBalancer) RemoveSubConn(sc balancer.SubConn) {
-	scw, ok := sc.(*scWrapper)
-	if !ok {
-		b.ClientConn.RemoveSubConn(sc)
-		return
-	}
-	// Remove the original SubConn from the parent ClientConn.
-	//
-	// Note that we don't remove this SubConn from the scWrappers map. We will
-	// need it to forward the final SubConn state Shutdown to the child policy.
-	//
-	// This entry is kept in the map until it's state is changes to Shutdown,
-	// and will be deleted in UpdateSubConnState().
-	b.ClientConn.RemoveSubConn(scw.SubConn)
+	sc.Shutdown()
 }
 
 func (b *clusterImplBalancer) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {

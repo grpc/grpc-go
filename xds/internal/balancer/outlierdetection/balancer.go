@@ -502,14 +502,7 @@ func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts bal
 }
 
 func (b *outlierDetectionBalancer) RemoveSubConn(sc balancer.SubConn) {
-	scw, ok := sc.(*subConnWrapper)
-	if !ok { // Shouldn't happen
-		return
-	}
-	// Remove the wrapped SubConn from the parent Client Conn. We don't remove
-	// from map entry until we get a Shutdown state for the SubConn, as we need
-	// that data to forward that state down.
-	b.cc.RemoveSubConn(scw.SubConn)
+	sc.Shutdown()
 }
 
 // appendIfPresent appends the scw to the address, if the address is present in
