@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -91,7 +92,7 @@ func (r *lbManualResolver) UpdateState(s resolver.State) {
 const subConnCacheTime = time.Second * 10
 
 // lbCacheClientConn is a wrapper balancer.ClientConn with a SubConn cache.
-// SubConns will be kept in cache for subConnCacheTime before being removed.
+// SubConns will be kept in cache for subConnCacheTime before being shut down.
 //
 // Its NewSubconn and SubConn.Shutdown methods are updated to do cache first.
 type lbCacheClientConn struct {
@@ -149,7 +150,7 @@ func (ccc *lbCacheClientConn) NewSubConn(addrs []resolver.Address, opts balancer
 }
 
 func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
-	sc.Shutdown()
+	grpclog.Errorf("RemoveSubConn(%v) called unexpectedly", sc)
 }
 
 type lbCacheSubConn struct {
@@ -168,9 +169,9 @@ func (sc *lbCacheSubConn) Shutdown() {
 
 	if entry, ok := ccc.subConnCache[addr]; ok {
 		if entry.sc != sc {
-			// This could happen if NewSubConn was called multiple times for the
-			// same address, and those SubConns are all removed. We remove sc
-			// immediately here.
+			// This could happen if NewSubConn was called multiple times for
+			// the same address, and those SubConns are all shut down. We
+			// remove sc immediately here.
 			delete(ccc.subConnToAddr, sc)
 			sc.SubConn.Shutdown()
 		}
@@ -214,7 +215,7 @@ func (ccc *lbCacheClientConn) UpdateState(s balancer.State) {
 func (ccc *lbCacheClientConn) close() {
 	ccc.mu.Lock()
 	defer ccc.mu.Unlock()
-	// Only cancel all existing timers. There's no need to remove SubConns.
+	// Only cancel all existing timers. There's no need to shut down SubConns.
 	for _, entry := range ccc.subConnCache {
 		entry.cancel()
 	}

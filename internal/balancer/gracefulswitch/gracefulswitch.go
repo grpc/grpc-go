@@ -255,7 +255,7 @@ func (gsb *Balancer) Close() {
 //
 // It implements the balancer.ClientConn interface and is passed down in that
 // capacity to the wrapped balancer. It maintains a set of subConns created by
-// the wrapped balancer and calls from the latter to create/update/remove
+// the wrapped balancer and calls from the latter to create/update/shutdown
 // SubConns update this set before being forwarded to the parent ClientConn.
 // State updates from the wrapped balancer can result in invocation of the
 // graceful switch logic.
@@ -267,9 +267,10 @@ type balancerWrapper struct {
 	subconns  map[balancer.SubConn]bool // subconns created by this balancer
 }
 
-// Close closes the underlying LB policy and removes the subconns it created. bw
-// must not be referenced via balancerCurrent or balancerPending in gsb when
-// called. gsb.mu must not be held.  Does not panic with a nil receiver.
+// Close closes the underlying LB policy and shuts down the subconns it
+// created. bw must not be referenced via balancerCurrent or balancerPending in
+// gsb when called. gsb.mu must not be held.  Does not panic with a nil
+// receiver.
 func (bw *balancerWrapper) Close() {
 	// before Close is called.
 	if bw == nil {
@@ -282,7 +283,7 @@ func (bw *balancerWrapper) Close() {
 	bw.Balancer.Close()
 	bw.gsb.mu.Lock()
 	for sc := range bw.subconns {
-		bw.gsb.cc.RemoveSubConn(sc)
+		sc.Shutdown()
 	}
 	bw.gsb.mu.Unlock()
 }
@@ -345,7 +346,7 @@ func (bw *balancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.Ne
 	}
 	bw.gsb.mu.Lock()
 	if !bw.gsb.balancerCurrentOrPending(bw) { // balancer was closed during this call
-		bw.gsb.cc.RemoveSubConn(sc)
+		sc.Shutdown()
 		bw.gsb.mu.Unlock()
 		return nil, fmt.Errorf("%T at address %p that called NewSubConn is deleted", bw, bw)
 	}
@@ -364,6 +365,8 @@ func (bw *balancerWrapper) ResolveNow(opts resolver.ResolveNowOptions) {
 }
 
 func (bw *balancerWrapper) RemoveSubConn(sc balancer.SubConn) {
+	// Note: existing third party balancers may call this, so it must remain
+	// until RemoveSubConn is fully removed.
 	sc.Shutdown()
 }
 

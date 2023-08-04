@@ -213,7 +213,7 @@ type lbBalancer struct {
 	backendAddrsWithoutMetadata []resolver.Address
 	// Roundrobin functionalities.
 	state    connectivity.State
-	subConns map[resolver.Address]balancer.SubConn   // Used to new/remove SubConn.
+	subConns map[resolver.Address]balancer.SubConn   // Used to new/shutdown SubConn.
 	scStates map[balancer.SubConn]connectivity.State // Used to filter READY SubConns.
 	picker   balancer.Picker
 	// Support fallback to resolved backend addresses if there's no response
@@ -290,7 +290,7 @@ func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 // aggregateSubConnStats calculate the aggregated state of SubConns in
 // lb.SubConns. These SubConns are subconns in use (when switching between
 // fallback and grpclb). lb.scState contains states for all SubConns, including
-// those in cache (SubConns are cached for 10 seconds after remove).
+// those in cache (SubConns are cached for 10 seconds after shutdown).
 //
 //	The aggregated state is:
 //	- If at least one SubConn in Ready, the aggregated state is Ready;
@@ -345,8 +345,8 @@ func (lb *lbBalancer) updateSubConnState(sc balancer.SubConn, scs balancer.SubCo
 	case connectivity.Idle:
 		sc.Connect()
 	case connectivity.Shutdown:
-		// When an address was removed by resolver, b called RemoveSubConn but
-		// kept the sc's state in scStates. Remove state for this sc here.
+		// When an address was removed by resolver, b called Shutdown but kept
+		// the sc's state in scStates. Remove state for this sc here.
 		delete(lb.scStates, sc)
 	case connectivity.TransientFailure:
 		lb.connErr = scs.ConnectionError

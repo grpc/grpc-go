@@ -116,7 +116,7 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	gator.Stop()
 	bg.Close()
 	for i := 0; i < 4; i++ {
-		(<-cc.RemoveSubConnCh).UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
+		(<-cc.ShutdownSubConnCh).UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 	}
 
 	// Add b3, weight 1, backends [1,2].
@@ -244,8 +244,8 @@ func initBalancerGroupForCachingTest(t *testing.T) (*weightedaggregator.Aggregat
 	// removed after close timeout.
 	for i := 0; i < 10; i++ {
 		select {
-		case <-cc.RemoveSubConnCh:
-			t.Fatalf("Got request to remove subconn, want no remove subconn (because subconns were still in cache)")
+		case <-cc.ShutdownSubConnCh:
+			t.Fatalf("Got request to shut down subconn, want no shut down subconn (because subconns were still in cache)")
 		default:
 		}
 		time.Sleep(time.Millisecond)
@@ -310,7 +310,7 @@ func (s) TestBalancerGroup_locality_caching(t *testing.T) {
 	}
 }
 
-// Sub-balancers are put in cache when they are removed. If balancer group is
+// Sub-balancers are put in cache when they are shut down. If balancer group is
 // closed within close timeout, all subconns should still be rmeoved
 // immediately.
 func (s) TestBalancerGroup_locality_caching_close_group(t *testing.T) {
@@ -318,51 +318,51 @@ func (s) TestBalancerGroup_locality_caching_close_group(t *testing.T) {
 	_, bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
 
 	bg.Close()
-	// The balancer group is closed. The subconns should be removed immediately.
-	removeTimeout := time.After(time.Millisecond * 500)
-	scToRemove := map[balancer.SubConn]int{
+	// The balancer group is closed. The subconns should be shutdown immediately.
+	shutdownTimeout := time.After(time.Millisecond * 500)
+	scToShutdown := map[balancer.SubConn]int{
 		addrToSC[testBackendAddrs[0]]: 1,
 		addrToSC[testBackendAddrs[1]]: 1,
 		addrToSC[testBackendAddrs[2]]: 1,
 		addrToSC[testBackendAddrs[3]]: 1,
 	}
-	for i := 0; i < len(scToRemove); i++ {
+	for i := 0; i < len(scToShutdown); i++ {
 		select {
-		case sc := <-cc.RemoveSubConnCh:
-			c := scToRemove[sc]
+		case sc := <-cc.ShutdownSubConnCh:
+			c := scToShutdown[sc]
 			if c == 0 {
-				t.Fatalf("Got removeSubConn for %v when there's %d remove expected", sc, c)
+				t.Fatalf("Got Shutdown for %v when there's %d shutdown expected", sc, c)
 			}
-			scToRemove[sc] = c - 1
-		case <-removeTimeout:
-			t.Fatalf("timeout waiting for subConns (from balancer in cache) to be removed")
+			scToShutdown[sc] = c - 1
+		case <-shutdownTimeout:
+			t.Fatalf("timeout waiting for subConns (from balancer in cache) to be shut down")
 		}
 	}
 }
 
 // Sub-balancers in cache will be closed if not re-added within timeout, and
-// subConns will be removed.
+// subConns will be shut down.
 func (s) TestBalancerGroup_locality_caching_not_readd_within_timeout(t *testing.T) {
 	defer replaceDefaultSubBalancerCloseTimeout(time.Second)()
 	_, _, cc, addrToSC := initBalancerGroupForCachingTest(t)
 
 	// The sub-balancer is not re-added within timeout. The subconns should be
-	// removed.
-	removeTimeout := time.After(DefaultSubBalancerCloseTimeout)
-	scToRemove := map[balancer.SubConn]int{
+	// shut down.
+	shutdownTimeout := time.After(DefaultSubBalancerCloseTimeout)
+	scToShutdown := map[balancer.SubConn]int{
 		addrToSC[testBackendAddrs[2]]: 1,
 		addrToSC[testBackendAddrs[3]]: 1,
 	}
-	for i := 0; i < len(scToRemove); i++ {
+	for i := 0; i < len(scToShutdown); i++ {
 		select {
-		case sc := <-cc.RemoveSubConnCh:
-			c := scToRemove[sc]
+		case sc := <-cc.ShutdownSubConnCh:
+			c := scToShutdown[sc]
 			if c == 0 {
-				t.Fatalf("Got removeSubConn for %v when there's %d remove expected", sc, c)
+				t.Fatalf("Got Shutdown for %v when there's %d shutdown expected", sc, c)
 			}
-			scToRemove[sc] = c - 1
-		case <-removeTimeout:
-			t.Fatalf("timeout waiting for subConns (from balancer in cache) to be removed")
+			scToShutdown[sc] = c - 1
+		case <-shutdownTimeout:
+			t.Fatalf("timeout waiting for subConns (from balancer in cache) to be shut down")
 		}
 	}
 }
@@ -381,35 +381,35 @@ func (*noopBalancerBuilderWrapper) Name() string {
 }
 
 // After removing a sub-balancer, re-add with same ID, but different balancer
-// builder. Old subconns should be removed, and new subconns should be created.
+// builder. Old subconns should be shut down, and new subconns should be created.
 func (s) TestBalancerGroup_locality_caching_readd_with_different_builder(t *testing.T) {
 	defer replaceDefaultSubBalancerCloseTimeout(10 * time.Second)()
 	gator, bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
 
 	// Re-add sub-balancer-1, but with a different balancer builder. The
 	// sub-balancer was still in cache, but cann't be reused. This should cause
-	// old sub-balancer's subconns to be removed immediately, and new subconns
-	// to be created.
+	// old sub-balancer's subconns to be shut down immediately, and new
+	// subconns to be created.
 	gator.Add(testBalancerIDs[1], 1)
 	bg.Add(testBalancerIDs[1], &noopBalancerBuilderWrapper{rrBuilder})
 
 	// The cached sub-balancer should be closed, and the subconns should be
-	// removed immediately.
-	removeTimeout := time.After(time.Millisecond * 500)
-	scToRemove := map[balancer.SubConn]int{
+	// shut down immediately.
+	shutdownTimeout := time.After(time.Millisecond * 500)
+	scToShutdown := map[balancer.SubConn]int{
 		addrToSC[testBackendAddrs[2]]: 1,
 		addrToSC[testBackendAddrs[3]]: 1,
 	}
-	for i := 0; i < len(scToRemove); i++ {
+	for i := 0; i < len(scToShutdown); i++ {
 		select {
-		case sc := <-cc.RemoveSubConnCh:
-			c := scToRemove[sc]
+		case sc := <-cc.ShutdownSubConnCh:
+			c := scToShutdown[sc]
 			if c == 0 {
-				t.Fatalf("Got removeSubConn for %v when there's %d remove expected", sc, c)
+				t.Fatalf("Got Shutdown for %v when there's %d shutdown expected", sc, c)
 			}
-			scToRemove[sc] = c - 1
-		case <-removeTimeout:
-			t.Fatalf("timeout waiting for subConns (from balancer in cache) to be removed")
+			scToShutdown[sc] = c - 1
+		case <-shutdownTimeout:
+			t.Fatalf("timeout waiting for subConns (from balancer in cache) to be shut down")
 		}
 	}
 
@@ -630,15 +630,15 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		select {
 		case <-ctx.Done():
-			t.Fatalf("error waiting for RemoveSubConn()")
-		case sc := <-cc.RemoveSubConnCh:
-			// The SubConn removed should have been one of the two created
+			t.Fatalf("error waiting for Shutdown()")
+		case sc := <-cc.ShutdownSubConnCh:
+			// The SubConn shut down should have been one of the two created
 			// SubConns, and both should be deleted.
 			if ok := scs[sc]; ok {
 				delete(scs, sc)
 				continue
 			} else {
-				t.Fatalf("RemoveSubConn called for wrong SubConn %v, want in %v", sc, scs)
+				t.Fatalf("Shutdown called for wrong SubConn %v, want in %v", sc, scs)
 			}
 		}
 	}

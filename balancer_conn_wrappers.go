@@ -311,23 +311,8 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 }
 
 func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
-	if ccb.isIdleOrClosed() {
-		// It it safe to ignore this call when the balancer is closed or in idle
-		// because the ClientConn takes care of closing the connections.
-		//
-		// Not returning early from here when the balancer is closed or in idle
-		// leads to a deadlock though, because of the following sequence of
-		// calls when holding cc.mu:
-		// cc.exitIdleMode --> ccb.enterIdleMode --> gsw.Close -->
-		// ccb.RemoveAddrConn --> cc.removeAddrConn
-		return
-	}
-
-	acbw, ok := sc.(*acBalancerWrapper)
-	if !ok {
-		return
-	}
-	ccb.cc.removeAddrConn(acbw.ac, errConnDrain)
+	// The graceful switch balancer will never call this.
+	logger.Errorf("ccb RemoveSubConn(%v) called unexpectedly, sc")
 }
 
 func (ccb *ccBalancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
@@ -392,7 +377,20 @@ func (acbw *acBalancerWrapper) Connect() {
 }
 
 func (acbw *acBalancerWrapper) Shutdown() {
-	acbw.ccb.RemoveSubConn(acbw)
+	ccb := acbw.ccb
+	if ccb.isIdleOrClosed() {
+		// It it safe to ignore this call when the balancer is closed or in idle
+		// because the ClientConn takes care of closing the connections.
+		//
+		// Not returning early from here when the balancer is closed or in idle
+		// leads to a deadlock though, because of the following sequence of
+		// calls when holding cc.mu:
+		// cc.exitIdleMode --> ccb.enterIdleMode --> gsw.Close -->
+		// ccb.RemoveAddrConn --> cc.removeAddrConn
+		return
+	}
+
+	ccb.cc.removeAddrConn(acbw.ac, errConnDrain)
 }
 
 // NewStream begins a streaming RPC on the addrConn.  If the addrConn is not

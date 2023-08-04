@@ -113,7 +113,6 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 	}
 
 	balancingPolicyChanged := lb.usePickFirst != pickFirst
-	oldUsePickFirst := lb.usePickFirst
 	lb.usePickFirst = pickFirst
 
 	if fallbackModeChanged || balancingPolicyChanged {
@@ -123,13 +122,7 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 		// For fallback mode switching with pickfirst, we want to recreate the
 		// SubConn because the creds could be different.
 		for a, sc := range lb.subConns {
-			if oldUsePickFirst {
-				// If old SubConn were created for pickfirst, bypass cache and
-				// remove directly.
-				lb.cc.ClientConn.RemoveSubConn(sc)
-			} else {
-				lb.cc.RemoveSubConn(sc)
-			}
+			sc.Shutdown()
 			delete(lb.subConns, a)
 		}
 	}
@@ -144,7 +137,7 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 		}
 		if sc != nil {
 			if len(backendAddrs) == 0 {
-				lb.cc.ClientConn.RemoveSubConn(sc)
+				sc.Shutdown()
 				delete(lb.subConns, scKey)
 				return
 			}
@@ -197,7 +190,7 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 	for a, sc := range lb.subConns {
 		// a was removed by resolver.
 		if _, ok := addrsSet[a]; !ok {
-			lb.cc.RemoveSubConn(sc)
+			sc.Shutdown()
 			delete(lb.subConns, a)
 			// Keep the state of this sc in b.scStates until sc's state becomes Shutdown.
 			// The entry will be deleted in UpdateSubConnState.

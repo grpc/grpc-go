@@ -360,11 +360,11 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 	}
 }
 
-// TestBalancerSwitch_OldBalancerCallsRemoveSubConnInClose tests the scenario
-// where the balancer being switched out calls RemoveSubConn() in its Close()
+// TestBalancerSwitch_OldBalancerCallsShutdownInClose tests the scenario where
+// the balancer being switched out calls Shutdown() in its Close()
 // method. Verifies that this sequence of calls doesn't lead to a deadlock.
-func (s) TestBalancerSwitch_OldBalancerCallsRemoveSubConnInClose(t *testing.T) {
-	// Register a stub balancer which calls RemoveSubConn() from its Close().
+func (s) TestBalancerSwitch_OldBalancerCallsShutdownInClose(t *testing.T) {
+	// Register a stub balancer which calls Shutdown() from its Close().
 	scChan := make(chan balancer.SubConn, 1)
 	uccsCalled := make(chan struct{}, 1)
 	stub.Register(t.Name(), stub.BalancerFuncs{
@@ -378,7 +378,7 @@ func (s) TestBalancerSwitch_OldBalancerCallsRemoveSubConnInClose(t *testing.T) {
 			return nil
 		},
 		Close: func(data *stub.BalancerData) {
-			data.ClientConn.RemoveSubConn(<-scChan)
+			(<-scChan).Shutdown()
 		},
 	})
 
@@ -406,10 +406,9 @@ func (s) TestBalancerSwitch_OldBalancerCallsRemoveSubConnInClose(t *testing.T) {
 
 	// The following service config update will switch balancer from our stub
 	// balancer to pick_first. The former will be closed, which will call
-	// cc.RemoveSubConn() inline (this RemoveSubConn is not required by the API,
-	// but some balancers might do it).
+	// sc.Shutdown() inline.
 	//
-	// This is to make sure the cc.RemoveSubConn() from Close() doesn't cause a
+	// This is to make sure the sc.Shutdown() from Close() doesn't cause a
 	// deadlock (e.g. trying to grab a mutex while it's already locked).
 	//
 	// Do it in a goroutine so this test will fail with a helpful message

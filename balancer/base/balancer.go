@@ -121,7 +121,7 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		sc := sci.(balancer.SubConn)
 		// a was removed by resolver.
 		if _, ok := addrsSet.Get(a); !ok {
-			b.cc.RemoveSubConn(sc)
+			sc.Shutdown()
 			b.subConns.Delete(a)
 			// Keep the state of this sc in b.scStates until sc's state becomes Shutdown.
 			// The entry will be deleted in UpdateSubConnState.
@@ -204,8 +204,8 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 	case connectivity.Idle:
 		sc.Connect()
 	case connectivity.Shutdown:
-		// When an address was removed by resolver, b called RemoveSubConn but
-		// kept the sc's state in scStates. Remove state for this sc here.
+		// When an address was removed by resolver, b called Shutdown but kept
+		// the sc's state in scStates. Remove state for this sc here.
 		delete(b.scStates, sc)
 	case connectivity.TransientFailure:
 		// Save error to be reported via picker.
@@ -226,7 +226,7 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 }
 
 // Close is a nop because base balancer doesn't have internal state to clean up,
-// and it doesn't need to call RemoveSubConn for the SubConns.
+// and it doesn't need to call Shutdown for the SubConns.
 func (b *baseBalancer) Close() {
 }
 

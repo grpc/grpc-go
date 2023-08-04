@@ -143,8 +143,8 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 	select {
 	case sc := <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn: %s", sc)
-	case sc := <-cc.RemoveSubConnCh:
-		t.Fatalf("got unexpected remove SubConn: %v", sc)
+	case sc := <-cc.ShutdownSubConnCh:
+		t.Fatalf("got unexpected shutdown SubConn: %v", sc)
 	case <-time.After(time.Millisecond * 100):
 	}
 
@@ -175,8 +175,8 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 	select {
 	case <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn")
-	case <-cc.RemoveSubConnCh:
-		t.Fatalf("got unexpected remove SubConn")
+	case <-cc.ShutdownSubConnCh:
+		t.Fatalf("got unexpected shutdown SubConn")
 	case <-time.After(time.Millisecond * 100):
 	}
 
@@ -279,8 +279,8 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	select {
 	case sc := <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn, %s", sc)
-	case <-cc.RemoveSubConnCh:
-		t.Fatalf("got unexpected remove SubConn")
+	case <-cc.ShutdownSubConnCh:
+		t.Fatalf("got unexpected shutdown SubConn")
 	case <-time.After(time.Millisecond * 100):
 	}
 
@@ -325,10 +325,10 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// p2 SubConns are removed.
-	scToRemove := <-cc.RemoveSubConnCh
-	if scToRemove != sc2 {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove)
+	// p2 SubConns are shut down.
+	scToShutdown := <-cc.ShutdownSubConnCh
+	if scToShutdown != sc2 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc2, scToShutdown)
 	}
 
 	// Should get an update with 1's old transient failure picker, to override
@@ -423,10 +423,10 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
-	// p1 subconn should be removed.
-	scToRemove := <-cc.RemoveSubConnCh
-	if scToRemove != sc1 {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc0, scToRemove)
+	// p1 subconn should be shut down.
+	scToShutdown := <-cc.ShutdownSubConnCh
+	if scToShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
 	}
 
 	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
@@ -612,13 +612,13 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 	// When 0 becomes ready, 0 should be used, 1 and 2 should all be closed.
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
-	// sc1 and sc2 should be removed.
+	// sc1 and sc2 should be shut down.
 	//
 	// With localities caching, the lower priorities are closed after a timeout,
 	// in goroutines. The order is no longer guaranteed.
-	scToRemove := []balancer.SubConn{<-cc.RemoveSubConnCh, <-cc.RemoveSubConnCh}
-	if !(scToRemove[0] == sc1 && scToRemove[1] == sc2) && !(scToRemove[0] == sc2 && scToRemove[1] == sc1) {
-		t.Errorf("RemoveSubConn, want [%v, %v], got %v", sc1, sc2, scToRemove)
+	scToShutdown := []balancer.SubConn{<-cc.ShutdownSubConnCh, <-cc.ShutdownSubConnCh}
+	if !(scToShutdown[0] == sc1 && scToShutdown[1] == sc2) && !(scToShutdown[0] == sc2 && scToShutdown[1] == sc1) {
+		t.Errorf("ShutdownSubConn, want [%v, %v], got %v", sc1, sc2, scToShutdown)
 	}
 
 	// Test pick with 0.
@@ -765,10 +765,10 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// p0 subconn should be removed.
-	scToRemove := <-cc.RemoveSubConnCh
-	if scToRemove != sc0 {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc0, scToRemove)
+	// p0 subconn should be shut down.
+	scToShutdown := <-cc.ShutdownSubConnCh
+	if scToShutdown != sc0 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
 	}
 
 	// Test pick return TransientFailure.
@@ -836,10 +836,10 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// p1 subconn should be removed.
-	scToRemove1 := <-cc.RemoveSubConnCh
-	if scToRemove1 != sc11 {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc11, scToRemove1)
+	// p1 subconn should be shut down.
+	scToShutdown1 := <-cc.ShutdownSubConnCh
+	if scToShutdown1 != sc11 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc11, scToShutdown1)
 	}
 
 	// Test pick return NoSubConn.
@@ -862,8 +862,8 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 		t.Fatalf("got unexpected new picker")
 	case <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn")
-	case <-cc.RemoveSubConnCh:
-		t.Fatalf("got unexpected remove SubConn")
+	case <-cc.ShutdownSubConnCh:
+		t.Fatalf("got unexpected shutdown SubConn")
 	case <-time.After(time.Millisecond * 100):
 	}
 }
@@ -931,10 +931,10 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// p0 will remove the subconn, and ClientConn will send a sc update to
+	// p0 will shutdown the subconn, and ClientConn will send a sc update to
 	// shutdown.
-	scToRemove := <-cc.RemoveSubConnCh
-	scToRemove.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
+	scToShutdown := <-cc.ShutdownSubConnCh
+	scToShutdown.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 
 	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testBackendAddrStrs[1]; got != want {
@@ -1079,10 +1079,10 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	// Old subconn should be removed.
-	scToRemove := <-cc.RemoveSubConnCh
-	if scToRemove != sc1 {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
+	// Old subconn should be shut down.
+	scToShutdown := <-cc.ShutdownSubConnCh
+	if scToShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scToShutdown)
 	}
 
 	addrs2 := <-cc.NewSubConnAddrsCh
@@ -1181,9 +1181,9 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 	}
 
 	// Old subconn from child-0 should be removed.
-	scToRemove := <-cc.RemoveSubConnCh
-	if scToRemove != sc0 {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc0, scToRemove)
+	scToShutdown := <-cc.ShutdownSubConnCh
+	if scToShutdown != sc0 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
 	}
 
 	// Because this was a ready child moved to a higher priority, no new subconn
@@ -1191,8 +1191,8 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 	select {
 	case <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn")
-	case <-cc.RemoveSubConnCh:
-		t.Fatalf("got unexpected remove SubConn")
+	case <-cc.ShutdownSubConnCh:
+		t.Fatalf("got unexpected shutdown SubConn")
 	case <-time.After(time.Millisecond * 100):
 	}
 }
@@ -1273,10 +1273,10 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// Old subconn from child-1 should be removed.
-	scToRemove := <-cc.RemoveSubConnCh
-	if scToRemove != sc1 {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
+	// Old subconn from child-1 should be shut down.
+	scToShutdown := <-cc.ShutdownSubConnCh
+	if scToShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scToShutdown)
 	}
 
 	if err := cc.WaitForErrPicker(ctx); err != nil {
@@ -1363,8 +1363,8 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 	select {
 	case sc := <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn: %s", sc)
-	case sc := <-cc.RemoveSubConnCh:
-		t.Fatalf("got unexpected remove SubConn: %v", sc)
+	case sc := <-cc.ShutdownSubConnCh:
+		t.Fatalf("got unexpected shutdown SubConn: %v", sc)
 	case <-time.After(time.Millisecond * 100):
 	}
 
@@ -1395,8 +1395,8 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 	select {
 	case sc := <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn: %s", sc)
-	case sc := <-cc.RemoveSubConnCh:
-		t.Fatalf("got unexpected remove SubConn: %v", sc)
+	case sc := <-cc.ShutdownSubConnCh:
+		t.Fatalf("got unexpected shutdown SubConn: %v", sc)
 	case <-time.After(time.Millisecond * 100):
 	}
 }
@@ -1463,10 +1463,10 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// Old subconn should be removed.
-	scToRemove := <-cc.RemoveSubConnCh
-	if scToRemove != sc1 {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
+	// Old subconn should be shut down.
+	scToShutdown := <-cc.ShutdownSubConnCh
+	if scToShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scToShutdown)
 	}
 
 	// A new subconn should be created.

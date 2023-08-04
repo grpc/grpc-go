@@ -367,8 +367,9 @@ type Balancer interface {
 	// Deprecated: Use NewSubConnOptions.StateListener when creating the
 	// SubConn instead.
 	UpdateSubConnState(SubConn, SubConnState)
-	// Close closes the balancer. The balancer is not required to call
-	// ClientConn.RemoveSubConn for its existing SubConns.
+	// Close closes the balancer. The balancer is not currently required to
+	// call SubConn.Shutdown for its existing SubConns; however, this will be
+	// required in a future release, so it is recommended.
 	Close()
 }
 

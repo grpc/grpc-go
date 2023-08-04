@@ -241,12 +241,12 @@ func (s) TestWeightedTarget(t *testing.T) {
 	// attribute set to the config that was passed to it.
 	verifyAddressInNewSubConn(t, cc, setConfigKey(addr2, "cluster_2"))
 
-	// The subconn for cluster_1 should be removed.
-	scRemoved := <-cc.RemoveSubConnCh
-	if scRemoved != sc1 {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scRemoved)
+	// The subconn for cluster_1 should be shut down.
+	scShutdown := <-cc.ShutdownSubConnCh
+	if scShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scShutdown)
 	}
-	scRemoved.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
+	scShutdown.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 
 	sc2 := <-cc.NewSubConnCh
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
@@ -286,12 +286,12 @@ func (s) TestWeightedTarget(t *testing.T) {
 	}
 	verifyAddressInNewSubConn(t, cc, addr3)
 
-	// The subconn from the test_config_balancer should be removed.
-	scRemoved = <-cc.RemoveSubConnCh
-	if scRemoved != sc2 {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scRemoved)
+	// The subconn from the test_config_balancer should be shut down.
+	scShutdown = <-cc.ShutdownSubConnCh
+	if scShutdown != sc2 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scShutdown)
 	}
-	scRemoved.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
+	scShutdown.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 
 	// Send subconn state change.
 	sc3 := <-cc.NewSubConnCh
@@ -409,12 +409,12 @@ func (s) TestWeightedTarget_OneSubBalancer_AddRemoveBackend(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// Expect one SubConn to be removed.
-	scRemoved := <-cc.RemoveSubConnCh
-	if scRemoved != sc1 {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scRemoved)
+	// Expect one SubConn to be shut down.
+	scShutdown := <-cc.ShutdownSubConnCh
+	if scShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scShutdown)
 	}
-	scRemoved.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
+	scShutdown.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 	p = <-cc.NewPickerCh
 
 	// Test pick with only the second SubConn.
@@ -579,7 +579,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
-	// Remove subConn corresponding to addr3.
+	// Shut down subConn corresponding to addr3.
 	if err := wtb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(addr1, []string{"cluster_1"}),
@@ -590,11 +590,11 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
-	scRemoved := <-cc.RemoveSubConnCh
-	if scRemoved != sc3 {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc3, scRemoved)
+	scShutdown := <-cc.ShutdownSubConnCh
+	if scShutdown != sc3 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc3, scShutdown)
 	}
-	scRemoved.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
+	scShutdown.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 	p = <-cc.NewPickerCh
 	want = []balancer.SubConn{sc1, sc4}
 	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
@@ -823,9 +823,9 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 	// picker which ensures that the removed subBalancer is not picked for RPCs.
 	p = <-cc.NewPickerCh
 
-	scRemoved := <-cc.RemoveSubConnCh
-	if scRemoved != sc2 {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scRemoved)
+	scShutdown := <-cc.ShutdownSubConnCh
+	if scShutdown != sc2 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc2, scShutdown)
 	}
 	want = []balancer.SubConn{sc1, sc3}
 	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
@@ -865,9 +865,9 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 	// Removing a subBalancer causes the weighted target LB policy to push a new
 	// picker which ensures that the removed subBalancer is not picked for RPCs.
 
-	scRemoved = <-cc.RemoveSubConnCh
-	if scRemoved != sc1 {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scRemoved)
+	scShutdown = <-cc.ShutdownSubConnCh
+	if scShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scShutdown)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
