@@ -115,18 +115,6 @@ func (sbc *subBalancerWrapper) exitIdle() (complete bool) {
 	return true
 }
 
-func (sbc *subBalancerWrapper) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	b := sbc.balancer
-	if b == nil {
-		// This sub-balancer was closed. This can happen when EDS removes a
-		// locality. The balancer for this locality was already closed, and the
-		// SubConns are being deleted. But SubConn state change can still
-		// happen.
-		return
-	}
-	b.UpdateSubConnState(sc, state)
-}
-
 func (sbc *subBalancerWrapper) updateClientConnState(s balancer.ClientConnState) error {
 	sbc.ccState = &s
 	b := sbc.balancer
@@ -244,7 +232,7 @@ type BalancerGroup struct {
 	// incomingMu guards all operations in the direction:
 	// Sub-balancer-->ClientConn. Including NewSubConn, RemoveSubConn. It also
 	// guards the map from SubConn to balancer ID, so updateSubConnState needs
-	// to hold it shortly to find the sub-balancer to forward the update.
+	// to hold it shortly to potentially delete from the map.
 	//
 	// UpdateState is called by the balancer state aggretator, and it will
 	// decide when and whether to call.
@@ -449,12 +437,11 @@ func (bg *BalancerGroup) connect(sb *subBalancerWrapper) {
 
 // Following are actions from the parent grpc.ClientConn, forward to sub-balancers.
 
-// updateSubConnState handles the state for the subconn. It finds the
-// corresponding balancer and forwards the update to cb.
+// updateSubConnState forwards the update to cb and updates scToSubBalancer if
+// needed.
 func (bg *BalancerGroup) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState, cb func(balancer.SubConnState)) {
 	bg.incomingMu.Lock()
-	config, ok := bg.scToSubBalancer[sc]
-	if !ok {
+	if _, ok := bg.scToSubBalancer[sc]; !ok {
 		bg.incomingMu.Unlock()
 		return
 	}
@@ -467,8 +454,6 @@ func (bg *BalancerGroup) updateSubConnState(sc balancer.SubConn, state balancer.
 	bg.outgoingMu.Lock()
 	if cb != nil {
 		cb(state)
-	} else {
-		config.updateSubConnState(sc, state)
 	}
 	bg.outgoingMu.Unlock()
 }
@@ -476,7 +461,7 @@ func (bg *BalancerGroup) updateSubConnState(sc balancer.SubConn, state balancer.
 // UpdateSubConnState handles the state for the subconn. It finds the
 // corresponding balancer and forwards the update.
 func (bg *BalancerGroup) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	bg.updateSubConnState(sc, state, nil)
+	bg.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
 // UpdateClientConnState handles ClientState (including balancer config and
