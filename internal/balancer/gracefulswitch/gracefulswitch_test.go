@@ -889,7 +889,7 @@ func (mb1 *mockBalancer) ResolverError(err error) {
 }
 
 func (mb1 *mockBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	mb1.scStateCh.Send(subConnWithState{sc: sc, state: state})
+	panic(fmt.Sprintf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state))
 }
 
 func (mb1 *mockBalancer) Close() {
@@ -951,7 +951,9 @@ func (mb1 *mockBalancer) updateState(state balancer.State) {
 
 func (mb1 *mockBalancer) newSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (sc balancer.SubConn, err error) {
 	if opts.StateListener == nil {
-		opts.StateListener = func(state balancer.SubConnState) { mb1.UpdateSubConnState(sc, state) }
+		opts.StateListener = func(state balancer.SubConnState) {
+			mb1.scStateCh.Send(subConnWithState{sc: sc, state: state})
+		}
 	}
 	defer func() {
 		if sc != nil {
@@ -994,13 +996,13 @@ func (verifyBalancerBuilder) Name() string {
 	return verifyBalName
 }
 
-// verifyBalancer is a balancer that verifies that after a Close() call, an
-// updateSubConnState() call never happens.
+// verifyBalancer is a balancer that verifies that after a Close() call, a
+// StateListener() call never happens.
 type verifyBalancer struct {
 	closed *grpcsync.Event
 	// Hold onto the ClientConn wrapper to communicate with it.
 	cc balancer.ClientConn
-	// To fail the test if UpdateSubConnState gets called after Close().
+	// To fail the test if StateListener gets called after Close().
 	t *testing.T
 }
 
@@ -1011,9 +1013,7 @@ func (vb *verifyBalancer) UpdateClientConnState(ccs balancer.ClientConnState) er
 func (vb *verifyBalancer) ResolverError(err error) {}
 
 func (vb *verifyBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	if vb.closed.HasFired() {
-		vb.t.Fatal("UpdateSubConnState was called after Close(), which breaks the balancer API")
-	}
+	panic(fmt.Sprintf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state))
 }
 
 func (vb *verifyBalancer) Close() {
@@ -1022,7 +1022,11 @@ func (vb *verifyBalancer) Close() {
 
 func (vb *verifyBalancer) newSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (sc balancer.SubConn, err error) {
 	if opts.StateListener == nil {
-		opts.StateListener = func(state balancer.SubConnState) { vb.UpdateSubConnState(sc, state) }
+		opts.StateListener = func(state balancer.SubConnState) {
+			if vb.closed.HasFired() {
+				vb.t.Fatalf("UpdateSubConnState(%+v) was called after Close(), which breaks the balancer API", state)
+			}
+		}
 	}
 	defer func() { sc.Connect() }()
 	return vb.cc.NewSubConn(addrs, opts)
@@ -1064,7 +1068,9 @@ func (bcb *buildCallbackBal) UpdateClientConnState(ccs balancer.ClientConnState)
 
 func (bcb *buildCallbackBal) ResolverError(err error) {}
 
-func (bcb *buildCallbackBal) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {}
+func (bcb *buildCallbackBal) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	panic(fmt.Sprintf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state))
+}
 
 func (bcb *buildCallbackBal) Close() {
 	bcb.closeCh.Send(struct{}{})
@@ -1075,9 +1081,6 @@ func (bcb *buildCallbackBal) updateState(state balancer.State) {
 }
 
 func (bcb *buildCallbackBal) newSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (sc balancer.SubConn, err error) {
-	if opts.StateListener == nil {
-		opts.StateListener = func(state balancer.SubConnState) { bcb.UpdateSubConnState(sc, state) }
-	}
 	defer func() {
 		if sc != nil {
 			sc.Connect()
