@@ -1736,7 +1736,18 @@ func init() {
 		ii := i
 		stub.Register(fmt.Sprintf("%s-%d", initIdleBalancerName, ii), stub.BalancerFuncs{
 			UpdateClientConnState: func(bd *stub.BalancerData, opts balancer.ClientConnState) error {
-				sc, err := bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{})
+				lis := func(state balancer.SubConnState) {
+					err := fmt.Errorf("wrong picker error")
+					if state.ConnectivityState == connectivity.Idle {
+						err = errsTestInitIdle[ii]
+					}
+					bd.ClientConn.UpdateState(balancer.State{
+						ConnectivityState: state.ConnectivityState,
+						Picker:            &testutils.TestConstPicker{Err: err},
+					})
+				}
+
+				sc, err := bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{StateListener: lis})
 				if err != nil {
 					return err
 				}
@@ -1746,16 +1757,6 @@ func init() {
 					Picker:            &testutils.TestConstPicker{Err: balancer.ErrNoSubConnAvailable},
 				})
 				return nil
-			},
-			UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-				err := fmt.Errorf("wrong picker error")
-				if state.ConnectivityState == connectivity.Idle {
-					err = errsTestInitIdle[ii]
-				}
-				bd.ClientConn.UpdateState(balancer.State{
-					ConnectivityState: state.ConnectivityState,
-					Picker:            &testutils.TestConstPicker{Err: err},
-				})
 			},
 		})
 	}
