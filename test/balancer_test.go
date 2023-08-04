@@ -87,6 +87,7 @@ func (b *testBalancer) UpdateClientConnState(state balancer.ClientConnState) err
 	// Only create a subconn at the first time.
 	if b.sc == nil {
 		var err error
+		b.newSubConnOptions.StateListener = b.updateSubConnState
 		b.sc, err = b.cc.NewSubConn(state.ResolverState.Addresses, b.newSubConnOptions)
 		if err != nil {
 			logger.Errorf("testBalancer: failed to NewSubConn: %v", err)
@@ -99,21 +100,17 @@ func (b *testBalancer) UpdateClientConnState(state balancer.ClientConnState) err
 }
 
 func (b *testBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
-	logger.Infof("testBalancer: UpdateSubConnState: %p, %v", sc, s)
-	if b.sc != sc {
-		logger.Infof("testBalancer: ignored state change because sc is not recognized")
-		return
-	}
-	if s.ConnectivityState == connectivity.Shutdown {
-		b.sc = nil
-		return
-	}
+	panic(fmt.Sprintf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, s))
+}
+
+func (b *testBalancer) updateSubConnState(s balancer.SubConnState) {
+	logger.Infof("testBalancer: updateSubConnState: %v", s)
 
 	switch s.ConnectivityState {
 	case connectivity.Ready:
-		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{sc: sc, bal: b}})
+		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{bal: b}})
 	case connectivity.Idle:
-		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{sc: sc, bal: b, idle: true}})
+		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{bal: b, idle: true}})
 	case connectivity.Connecting:
 		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{err: balancer.ErrNoSubConnAvailable, bal: b}})
 	case connectivity.TransientFailure:
@@ -127,7 +124,6 @@ func (b *testBalancer) ExitIdle() {}
 
 type picker struct {
 	err  error
-	sc   balancer.SubConn
 	bal  *testBalancer
 	idle bool
 }
@@ -137,14 +133,14 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		return balancer.PickResult{}, p.err
 	}
 	if p.idle {
-		p.sc.Connect()
+		p.bal.sc.Connect()
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
 	extraMD, _ := grpcutil.ExtraMetadata(info.Ctx)
 	info.Ctx = nil // Do not validate context.
 	p.bal.pickInfos = append(p.bal.pickInfos, info)
 	p.bal.pickExtraMDs = append(p.bal.pickExtraMDs, extraMD)
-	return balancer.PickResult{SubConn: p.sc, Done: func(d balancer.DoneInfo) { p.bal.doneInfo = append(p.bal.doneInfo, d) }}, nil
+	return balancer.PickResult{SubConn: p.bal.sc, Done: func(d balancer.DoneInfo) { p.bal.doneInfo = append(p.bal.doneInfo, d) }}, nil
 }
 
 func (s) TestCredsBundleFromBalancer(t *testing.T) {
@@ -397,15 +393,17 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 			// Only use the first address.
 			attr := attributes.New(testAttrKey, testAttrVal)
 			addrs[0].Attributes = attr
-			sc, err := bd.ClientConn.NewSubConn([]resolver.Address{addrs[0]}, balancer.NewSubConnOptions{})
+			var sc balancer.SubConn
+			sc, err := bd.ClientConn.NewSubConn([]resolver.Address{addrs[0]}, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) {
+					bd.ClientConn.UpdateState(balancer.State{ConnectivityState: state.ConnectivityState, Picker: &aiPicker{result: balancer.PickResult{SubConn: sc}, err: state.ConnectionError}})
+				},
+			})
 			if err != nil {
 				return err
 			}
 			sc.Connect()
 			return nil
-		},
-		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: state.ConnectivityState, Picker: &aiPicker{result: balancer.PickResult{SubConn: sc}, err: state.ConnectionError}})
 		},
 	}
 	stub.Register(attrBalancerName, bf)
@@ -483,17 +481,19 @@ func (s) TestMetadataInAddressAttributes(t *testing.T) {
 				return nil
 			}
 			// Only use the first address.
+			var sc balancer.SubConn
 			sc, err := bd.ClientConn.NewSubConn([]resolver.Address{
 				imetadata.Set(addrs[0], metadata.Pairs(testMDKey, testMDValue)),
-			}, balancer.NewSubConnOptions{})
+			}, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) {
+					bd.ClientConn.UpdateState(balancer.State{ConnectivityState: state.ConnectivityState, Picker: &aiPicker{result: balancer.PickResult{SubConn: sc}, err: state.ConnectionError}})
+				},
+			})
 			if err != nil {
 				return err
 			}
 			sc.Connect()
 			return nil
-		},
-		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: state.ConnectivityState, Picker: &aiPicker{result: balancer.PickResult{SubConn: sc}, err: state.ConnectionError}})
 		},
 	}
 	stub.Register(mdBalancerName, bf)
@@ -717,15 +717,17 @@ func (s) TestAuthorityInBuildOptions(t *testing.T) {
 					}
 
 					// Only use the first address.
-					sc, err := bd.ClientConn.NewSubConn([]resolver.Address{addrs[0]}, balancer.NewSubConnOptions{})
+					var sc balancer.SubConn
+					sc, err := bd.ClientConn.NewSubConn([]resolver.Address{addrs[0]}, balancer.NewSubConnOptions{
+						StateListener: func(state balancer.SubConnState) {
+							bd.ClientConn.UpdateState(balancer.State{ConnectivityState: state.ConnectivityState, Picker: &aiPicker{result: balancer.PickResult{SubConn: sc}, err: state.ConnectionError}})
+						},
+					})
 					if err != nil {
 						return err
 					}
 					sc.Connect()
 					return nil
-				},
-				UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-					bd.ClientConn.UpdateState(balancer.State{ConnectivityState: state.ConnectivityState, Picker: &aiPicker{result: balancer.PickResult{SubConn: sc}, err: state.ConnectionError}})
 				},
 			}
 			balancerName := "stub-balancer-" + test.name

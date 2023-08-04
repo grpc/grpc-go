@@ -483,10 +483,6 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 			}()
 			return nil
 		},
-		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-			bal := bd.Data.(balancer.Balancer)
-			bal.UpdateSubConnState(sc, state)
-		},
 	})
 
 	// Push a resolver update with the service config specifying our stub
