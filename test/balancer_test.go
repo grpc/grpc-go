@@ -170,7 +170,9 @@ func (s) TestCredsBundleFromBalancer(t *testing.T) {
 
 	cc := te.clientConn()
 	tc := testgrpc.NewTestServiceClient(cc)
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("Test failed. Reason: %v", err)
 	}
 }
@@ -244,7 +246,7 @@ func testDoneInfo(t *testing.T, e env) {
 	cc := te.clientConn()
 	tc := testgrpc.NewTestServiceClient(cc)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	wantErr := detailedError
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); !testutils.StatusErrEqual(err, wantErr) {
@@ -321,7 +323,7 @@ func testDoneLoads(t *testing.T) {
 
 	tc := testgrpc.NewTestServiceClient(ss.CC)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, nil)
@@ -438,7 +440,7 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	t.Log("Created a ClientConn...")
 
 	// The first RPC should fail because there's no address.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err == nil || status.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
@@ -450,7 +452,7 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	t.Logf("Pushing resolver state update: %v through the manual resolver", state)
 
 	// The second RPC should succeed.
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
@@ -519,7 +521,7 @@ func (s) TestMetadataInAddressAttributes(t *testing.T) {
 	defer ss.Stop()
 
 	// The RPC should succeed with the expected md.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
@@ -536,7 +538,7 @@ func (s) TestMetadataInAddressAttributes(t *testing.T) {
 // TestServersSwap creates two servers and verifies the client switches between
 // them when the name resolver reports the first and then the second.
 func (s) TestServersSwap(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// Initialize servers
@@ -592,7 +594,7 @@ func (s) TestServersSwap(t *testing.T) {
 }
 
 func (s) TestWaitForReady(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// Initialize server
@@ -1035,7 +1037,7 @@ func (s) TestBalancerProducerHonorsContext(t *testing.T) {
 	// rpcErrChan is given to the LB policy to report the status of the
 	// producer's one RPC.
 	ctxChan := make(chan context.Context, 1)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	ctxChan <- ctx
 
 	rpcErrChan := make(chan error)

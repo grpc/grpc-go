@@ -141,7 +141,7 @@ func (s) TestCancelWhileRecvingWithCompression(t *testing.T) {
 	defer ss.Stop()
 
 	for i := 0; i < 10; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		s, err := ss.Client.FullDuplexCall(ctx, grpc.UseCompressor(gzip.Name))
 		if err != nil {
 			t.Fatalf("failed to start bidi streaming RPC: %v", err)

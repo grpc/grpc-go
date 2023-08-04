@@ -192,12 +192,12 @@ func testServiceConfigTimeoutTD(t *testing.T, e env) {
 	cc := te.clientConn()
 	tc := testgrpc.NewTestServiceClient(cc)
 	// The following RPCs are expected to become non-fail-fast ones with 1ns deadline.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); status.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), time.Nanosecond)
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	if _, err := tc.FullDuplexCall(ctx, grpc.WaitForReady(true)); status.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
 	}
@@ -227,17 +227,15 @@ func testServiceConfigTimeoutTD(t *testing.T, e env) {
 		t.Fatalf("Timeout when waiting for service config to take effect")
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Hour)
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); status.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
-	cancel()
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Hour)
 	if _, err := tc.FullDuplexCall(ctx, grpc.WaitForReady(true)); status.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
 	}
-	cancel()
 }
 
 func (s) TestServiceConfigMaxMsgSizeTD(t *testing.T) {
