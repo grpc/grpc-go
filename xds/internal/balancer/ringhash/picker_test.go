@@ -20,6 +20,7 @@ package ringhash
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -35,7 +36,7 @@ var testSubConns []*testutils.TestSubConn
 
 func init() {
 	for i := 0; i < 8; i++ {
-		testSubConns = append(testSubConns, &testutils.TestSubConn{ConnectCh: make(chan struct{}, 1)})
+		testSubConns = append(testSubConns, testutils.NewTestSubConn(fmt.Sprint(i)))
 	}
 }
 

@@ -953,6 +953,11 @@ func (mb1 *mockBalancer) newSubConn(addrs []resolver.Address, opts balancer.NewS
 	if opts.StateListener == nil {
 		opts.StateListener = func(state balancer.SubConnState) { mb1.UpdateSubConnState(sc, state) }
 	}
+	defer func() {
+		if sc != nil {
+			sc.Connect()
+		}
+	}()
 	return mb1.cc.NewSubConn(addrs, opts)
 }
 
@@ -1023,6 +1028,7 @@ func (vb *verifyBalancer) newSubConn(addrs []resolver.Address, opts balancer.New
 	if opts.StateListener == nil {
 		opts.StateListener = func(state balancer.SubConnState) { vb.UpdateSubConnState(sc, state) }
 	}
+	defer func() { sc.Connect() }()
 	return vb.cc.NewSubConn(addrs, opts)
 }
 
@@ -1076,6 +1082,11 @@ func (bcb *buildCallbackBal) newSubConn(addrs []resolver.Address, opts balancer.
 	if opts.StateListener == nil {
 		opts.StateListener = func(state balancer.SubConnState) { bcb.UpdateSubConnState(sc, state) }
 	}
+	defer func() {
+		if sc != nil {
+			sc.Connect()
+		}
+	}()
 	return bcb.cc.NewSubConn(addrs, opts)
 }
 

@@ -26,6 +26,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -40,6 +41,18 @@ type TestSubConn struct {
 	id            string
 	ConnectCh     chan struct{}
 	stateListener func(balancer.SubConnState)
+	connectCalled *grpcsync.Event
+}
+
+// NewTestSubConn returns a newly initialized SubConn.  Typically, subconns
+// should be created via TestClientConn.NewSubConn instead, but can be useful
+// for some tests.
+func NewTestSubConn(id string) *TestSubConn {
+	return &TestSubConn{
+		ConnectCh:     make(chan struct{}, 1),
+		connectCalled: grpcsync.NewEvent(),
+		id:            id,
+	}
 }
 
 // UpdateAddresses is a no-op.
@@ -47,6 +60,7 @@ func (tsc *TestSubConn) UpdateAddresses([]resolver.Address) {}
 
 // Connect is a no-op.
 func (tsc *TestSubConn) Connect() {
+	tsc.connectCalled.Fire()
 	select {
 	case tsc.ConnectCh <- struct{}{}:
 	default:
@@ -60,6 +74,7 @@ func (tsc *TestSubConn) GetOrBuildProducer(balancer.ProducerBuilder) (balancer.P
 
 // UpdateState pushes the state to the listener, if one is registered.
 func (tsc *TestSubConn) UpdateState(state balancer.SubConnState) {
+	<-tsc.connectCalled.Done()
 	if tsc.stateListener != nil {
 		tsc.stateListener(state)
 		return
@@ -109,6 +124,7 @@ func (tcc *TestClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubCon
 		id:            fmt.Sprintf("sc%d", tcc.subConnIdx),
 		ConnectCh:     make(chan struct{}, 1),
 		stateListener: o.StateListener,
+		connectCalled: grpcsync.NewEvent(),
 	}
 	tcc.subConnIdx++
 	tcc.logger.Logf("testClientConn: NewSubConn(%v, %+v) => %s", a, o, sc)
