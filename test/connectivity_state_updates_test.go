@@ -21,7 +21,6 @@ package test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
@@ -49,6 +48,9 @@ func (ts *testSubscriber) OnMessage(msg interface{}) {
 }
 
 func (s) TestConnectivityStateUpdates(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	// Create a ClientConn with a short idle_timeout.
 	r := manual.NewBuilderWithScheme("whatever")
 	dopts := []grpc.DialOption{
@@ -84,7 +86,7 @@ func (s) TestConnectivityStateUpdates(t *testing.T) {
 				if gotState != wantState {
 					t.Errorf("Received unexpected state: %q; want: %q", gotState, wantState)
 				}
-			case <-time.After(defaultTestTimeout):
+			case <-ctx.Done():
 				t.Error("Timeout when expecting the onMessage() callback to be invoked")
 			}
 			if t.Failed() {
@@ -94,10 +96,7 @@ func (s) TestConnectivityStateUpdates(t *testing.T) {
 	}()
 
 	// Verify that the ClientConn moves to READY.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
-	awaitState(ctx, t, cc, connectivity.Ready)
 
 	// Verify that the ClientConn moves to IDLE as there is no activity.
 	awaitState(ctx, t, cc, connectivity.Idle)
@@ -106,7 +105,4 @@ func (s) TestConnectivityStateUpdates(t *testing.T) {
 	awaitState(ctx, t, cc, connectivity.Shutdown)
 
 	<-doneCh
-	if t.Failed() {
-		t.FailNow()
-	}
 }
