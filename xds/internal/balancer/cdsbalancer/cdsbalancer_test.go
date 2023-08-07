@@ -174,20 +174,6 @@ func (tb *testEDSBalancer) waitForClientConnUpdate(ctx context.Context, wantCCS 
 	return nil
 }
 
-// waitForSubConnUpdate verifies if the testEDSBalancer receives the provided
-// SubConn update before the context expires.
-func (tb *testEDSBalancer) waitForSubConnUpdate(ctx context.Context, wantSCS subConnWithState) error {
-	scs, err := tb.scStateCh.Receive(ctx)
-	if err != nil {
-		return err
-	}
-	gotSCS := scs.(subConnWithState)
-	if !cmp.Equal(gotSCS, wantSCS, cmp.AllowUnexported(subConnWithState{})) {
-		return fmt.Errorf("received SubConnState: %+v, want %+v", gotSCS, wantSCS)
-	}
-	return nil
-}
-
 // waitForResolverError verifies if the testEDSBalancer receives the provided
 // resolver error before the context expires.
 func (tb *testEDSBalancer) waitForResolverError(ctx context.Context, wantErr error) error {
