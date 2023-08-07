@@ -822,11 +822,9 @@ func doServerSideInitiatedFailedStreamWithRSTStream(tc testgrpc.TestServiceClien
 }
 
 // this func is to be used to test client side counting of failed streams.
-func doServerSideInitiatedFailedStreamWithGoAway(tc testgrpc.TestServiceClient, t *testing.T, l *listenerWrapper) {
+func doServerSideInitiatedFailedStreamWithGoAway(ctx context.Context, tc testgrpc.TestServiceClient, t *testing.T, l *listenerWrapper) {
 	// This call is just to keep the transport from shutting down (socket will be deleted
 	// in this case, and we will not be able to get metrics).
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	s, err := tc.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
@@ -878,6 +876,9 @@ func doIdleCallToInvokeKeepAlive(tc testgrpc.TestServiceClient, t *testing.T) {
 }
 
 func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
@@ -914,9 +915,6 @@ func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 			break
 		}
 		skt := channelz.GetSocket(skID)
-		if skt == nil {
-			return false, fmt.Errorf("couldn't find socket for ID: %v", skID)
-		}
 		sktData := skt.SocketData
 		if sktData.StreamsStarted != 1 || sktData.StreamsSucceeded != 1 || sktData.MessagesSent != 1 || sktData.MessagesReceived != 1 {
 			return false, fmt.Errorf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, MessagesSent, MessagesReceived) = (1, 1, 1, 1), got (%d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.MessagesSent, sktData.MessagesReceived)
@@ -929,9 +927,6 @@ func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	doServerSideFailedUnaryCall(tc, t)
 	if err := verifyResultWithDelay(func() (bool, error) {
 		skt := channelz.GetSocket(skID)
-		if skt == nil {
-			return false, fmt.Errorf("couldn't find socket for ID: %v", skID)
-		}
 		sktData := skt.SocketData
 		if sktData.StreamsStarted != 2 || sktData.StreamsSucceeded != 2 || sktData.MessagesSent != 2 || sktData.MessagesReceived != 1 {
 			return false, fmt.Errorf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, MessagesSent, MessagesReceived) = (2, 2, 2, 1), got (%d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.MessagesSent, sktData.MessagesReceived)
@@ -944,9 +939,6 @@ func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	doClientSideInitiatedFailedStream(tc, t)
 	if err := verifyResultWithDelay(func() (bool, error) {
 		skt := channelz.GetSocket(skID)
-		if skt == nil {
-			return false, fmt.Errorf("couldn't find socket for ID: %v", skID)
-		}
 		sktData := skt.SocketData
 		if sktData.StreamsStarted != 3 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 1 || sktData.MessagesSent != 3 || sktData.MessagesReceived != 2 {
 			return false, fmt.Errorf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (3, 2, 1, 3, 2), got (%d, %d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
@@ -959,9 +951,6 @@ func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	doServerSideInitiatedFailedStreamWithRSTStream(tc, t, rcw)
 	if err := verifyResultWithDelay(func() (bool, error) {
 		skt := channelz.GetSocket(skID)
-		if skt == nil {
-			return false, fmt.Errorf("couldn't find socket for ID: %v", skID)
-		}
 		sktData := skt.SocketData
 		if sktData.StreamsStarted != 4 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 2 || sktData.MessagesSent != 4 || sktData.MessagesReceived != 3 {
 			return false, fmt.Errorf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (4, 2, 2, 4, 3), got (%d, %d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
@@ -971,12 +960,9 @@ func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	doServerSideInitiatedFailedStreamWithGoAway(tc, t, rcw)
+	doServerSideInitiatedFailedStreamWithGoAway(ctx, tc, t, rcw)
 	if err := verifyResultWithDelay(func() (bool, error) {
 		skt := channelz.GetSocket(skID)
-		if skt == nil {
-			return false, fmt.Errorf("couldn't find socket for ID: %v", skID)
-		}
 		sktData := skt.SocketData
 		if sktData.StreamsStarted != 6 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 3 || sktData.MessagesSent != 6 || sktData.MessagesReceived != 5 {
 			return false, fmt.Errorf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (6, 2, 3, 6, 5), got (%d, %d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
