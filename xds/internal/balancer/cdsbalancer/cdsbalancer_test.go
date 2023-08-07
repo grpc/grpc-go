@@ -27,7 +27,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -698,45 +697,6 @@ func (s) TestResolverError(t *testing.T) {
 	}
 }
 
-// TestUpdateSubConnState verifies the UpdateSubConnState() method in the CDS
-// balancer.
-func (s) TestUpdateSubConnState(t *testing.T) {
-	// This creates a CDS balancer, pushes a ClientConnState update with a fake
-	// xdsClient, and makes sure that the CDS balancer registers a watch on the
-	// provided xdsClient.
-	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
-	defer func() {
-		cancel()
-		cdsB.Close()
-	}()
-
-	// Here we invoke the watch callback registered on the fake xdsClient. This
-	// will trigger the watch handler on the CDS balancer, which will attempt to
-	// create a new EDS balancer. The fake EDS balancer created above will be
-	// returned to the CDS balancer, because we have overridden the
-	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsresource.ClusterUpdate{
-		ClusterName: serviceName,
-		LBPolicy:    wrrLocalityLBConfigJSON,
-	}
-	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
-	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
-	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
-		t.Fatal(err)
-	}
-
-	// Push a subConn state change to the CDS balancer.
-	var sc balancer.SubConn
-	state := balancer.SubConnState{ConnectivityState: connectivity.Ready}
-	cdsB.UpdateSubConnState(sc, state)
-
-	// Make sure that the update is forwarded to the EDS balancer.
-	if err := edsB.waitForSubConnUpdate(ctx, subConnWithState{sc: sc, state: state}); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // TestCircuitBreaking verifies that the CDS balancer correctly updates a
 // service's counter on watch updates.
 func (s) TestCircuitBreaking(t *testing.T) {
@@ -827,15 +787,6 @@ func (s) TestClose(t *testing.T) {
 	// returns error.
 	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != errBalancerClosed {
 		t.Fatalf("UpdateClientConnState() after close returned %v, want %v", err, errBalancerClosed)
-	}
-
-	// Make sure that the UpdateSubConnState() method on the CDS balancer does
-	// not forward the update to the EDS balancer.
-	cdsB.UpdateSubConnState(&testutils.TestSubConn{}, balancer.SubConnState{})
-	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if err := edsB.waitForSubConnUpdate(sCtx, subConnWithState{}); err != context.DeadlineExceeded {
-		t.Fatal("UpdateSubConnState() forwarded to EDS balancer after Close()")
 	}
 
 	// Make sure that the ResolverErr() method on the CDS balancer does not
