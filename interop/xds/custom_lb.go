@@ -35,7 +35,11 @@ func init() {
 	balancer.Register(rpcBehaviorBB{})
 }
 
-const name = "test.RpcBehaviorLoadBalancer"
+const (
+	name                   = "test.RpcBehaviorLoadBalancer"
+	RPCBehaviorMetadataKey = "rpc-behavior"
+	ErrorCodePrefix        = "error-code-"
+)
 
 type rpcBehaviorBB struct{}
 
@@ -128,7 +132,7 @@ func (p *rpcBehaviorPicker) Pick(info balancer.PickInfo) (balancer.PickResult, e
 	if err != nil {
 		return balancer.PickResult{}, err
 	}
-	pr.Metadata = metadata.Join(pr.Metadata, metadata.Pairs("rpc-behavior", p.rpcBehavior))
+	pr.Metadata = metadata.Join(pr.Metadata, metadata.Pairs(RPCBehaviorMetadataKey, p.rpcBehavior))
 	return pr, nil
 }
 

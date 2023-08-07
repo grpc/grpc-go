@@ -26,12 +26,16 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/admin"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/xds"
@@ -41,6 +45,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	xdsinterop "google.golang.org/grpc/interop/xds"
 )
 
 var (
@@ -80,6 +85,36 @@ func (s *testServiceImpl) EmptyCall(ctx context.Context, _ *testpb.Empty) (*test
 func (s *testServiceImpl) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	grpc.SetHeader(ctx, metadata.Pairs("hostname", s.hostname))
 	return &testpb.SimpleResponse{ServerId: s.serverID, Hostname: s.hostname}, nil
+}
+
+func getRPCBehaviorMetadata(ctx context.Context) map[string]bool {
+	var mdRPCBehavior []string
+	if md, ok := metadata.FromIncomingContext(ctx); !ok {
+		logger.Error("failed to receive metadata")
+		return nil
+	} else {
+		mdRPCBehavior = md.Get(xdsinterop.RPCBehaviorMetadataKey)
+	}
+
+	var rpcBehaviorMetadata map[string]bool
+	for _, val := range mdRPCBehavior {
+		splitVals := strings.Split(val, ",")
+
+		for _, behavior := range splitVals {
+			rpcBehaviorMetadata[strings.TrimSpace(behavior)] = true
+		}
+	}
+	return rpcBehaviorMetadata
+}
+
+func getStatusForRPCBehaviorMetadata(headerValue string) *status.Status {
+	if !strings.HasPrefix(headerValue, xdsinterop.ErrorCodePrefix) {
+		return nil
+	} else if errCode, err := strconv.Atoi(headerValue[len(xdsinterop.ErrorCodePrefix):]); err != nil {
+		return status.New(codes.InvalidArgument, "Invalid format for rpc-behavior header: "+headerValue)
+	} else {
+		return status.New(codes.Code(errCode), "RPC failed as per the rpc-behavior header value: "+headerValue)
+	}
 }
 
 // xdsUpdateHealthServiceImpl provides an implementation of the
