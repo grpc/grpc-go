@@ -90,7 +90,7 @@ func (s) TestRetryUnary(t *testing.T) {
 	}
 	for num, tc := range testCases {
 		t.Log("Case", num)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
 		if status.Code(err) != tc.code {
@@ -154,7 +154,7 @@ func (s) TestRetryThrottling(t *testing.T) {
 		{codes.Unavailable, 17}, // tokens = 4.5
 	}
 	for _, tc := range testCases {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
 		if status.Code(err) != tc.code {
@@ -429,7 +429,8 @@ func (s) TestRetryStreaming(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for {
 		if ctx.Err() != nil {
 			t.Fatalf("Timed out waiting for service config update")
@@ -439,15 +440,12 @@ func (s) TestRetryStreaming(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	cancel()
 
 	for _, tc := range testCases {
 		func() {
 			serverOpIter = 0
 			serverOps = tc.serverOps
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
 			stream, err := ss.Client.FullDuplexCall(ctx)
 			if err != nil {
 				t.Fatalf("%v: Error while creating stream: %v", tc.desc, err)

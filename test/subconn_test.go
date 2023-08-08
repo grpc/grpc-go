@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
@@ -46,7 +45,7 @@ func (p *tsccPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 // TestSubConnEmpty tests that removing all addresses from a SubConn and then
 // re-adding them does not cause a panic and properly reconnects.
 func (s) TestSubConnEmpty(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// sc is the one SubConn used throughout the test.  Created on demand and

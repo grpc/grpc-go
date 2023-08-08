@@ -79,13 +79,14 @@ func (s) TestGracefulClientOnGoAway(t *testing.T) {
 	defer cc.Close()
 	c := testgrpc.NewTestServiceClient(cc)
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	endTime := time.Now().Add(testTime)
 	for time.Now().Before(endTime) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		if _, err := c.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			t.Fatalf("EmptyCall(_, _) = _, %v; want _, <nil>", err)
 		}
-		cancel()
 	}
 }
 
@@ -184,7 +185,7 @@ func testClientConnCloseAfterGoAwayWithActiveStream(t *testing.T, e env) {
 	cc := te.clientConn()
 	tc := testgrpc.NewTestServiceClient(cc)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.FullDuplexCall(ctx); err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want _, <nil>", tc, err)
@@ -222,7 +223,7 @@ func testServerGoAway(t *testing.T, e env) {
 	cc := te.clientConn()
 	tc := testgrpc.NewTestServiceClient(cc)
 	// Finish an RPC to make sure the connection is good.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
@@ -234,7 +235,7 @@ func testServerGoAway(t *testing.T, e env) {
 	}()
 	// Loop until the server side GoAway signal is propagated to the client.
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil && status.Code(err) != codes.DeadlineExceeded {
 			cancel()
 			break
@@ -242,7 +243,7 @@ func testServerGoAway(t *testing.T, e env) {
 		cancel()
 	}
 	// A new RPC should fail.
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable && status.Code(err) != codes.Internal {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s or %s", err, codes.Unavailable, codes.Internal)
@@ -273,7 +274,7 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 
 	cc := te.clientConn()
 	tc := testgrpc.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	stream, err := tc.FullDuplexCall(ctx, grpc.WaitForReady(true))
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -291,7 +292,7 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 	start := time.Now()
 	errored := false
 	for time.Since(start) < time.Second {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		_, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
 		cancel()
 		if err != nil {
@@ -347,7 +348,7 @@ func testServerMultipleGoAwayPendingRPC(t *testing.T, e env) {
 
 	cc := te.clientConn()
 	tc := testgrpc.NewTestServiceClient(cc)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	stream, err := tc.FullDuplexCall(ctx, grpc.WaitForReady(true))
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -369,7 +370,7 @@ func testServerMultipleGoAwayPendingRPC(t *testing.T, e env) {
 	// Loop until the server side GoAway signal is propagated to the client.
 
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 			cancel()
 			break
@@ -494,7 +495,7 @@ func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
 	}()
 	// Loop until the server side GoAway signal is propagated to the client.
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 			cancel()
 			break

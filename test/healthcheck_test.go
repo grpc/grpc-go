@@ -890,7 +890,7 @@ func verifyHealthCheckErrCode(t *testing.T, d time.Duration, cc *grpc.ClientConn
 // RPC, and returns the stream.
 func newHealthCheckStream(t *testing.T, cc *grpc.ClientConn, service string) (healthgrpc.Health_WatchClient, context.CancelFunc) {
 	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	hc := healthgrpc.NewHealthClient(cc)
 	stream, err := hc.Watch(ctx, &healthpb.HealthCheckRequest{Service: service})
 	if err != nil {
