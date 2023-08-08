@@ -551,15 +551,12 @@ func awaitNoStateChange(ctx context.Context, t *testing.T, cc *grpc.ClientConn, 
 	}
 }
 
-type testConnectivityStateSubscriber struct {
-	onMsgCh chan connectivity.State
+type funcConnectivityStateSubscriber struct {
+	onMsg func(connectivity.State)
 }
 
-func (ts *testConnectivityStateSubscriber) OnMessage(msg interface{}) {
-	ts.onMsgCh <- msg.(connectivity.State)
-	if msg.(connectivity.State) == connectivity.Shutdown {
-		close(ts.onMsgCh)
-	}
+func (f *funcConnectivityStateSubscriber) OnMessage(msg interface{}) {
+	f.onMsg(msg.(connectivity.State))
 }
 
 // TestConnectivityStateSubscriber confirms updates sent by the balancer in
@@ -605,7 +602,19 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 	}
 
 	// Subscribe to state updates
-	s := &testConnectivityStateSubscriber{onMsgCh: make(chan connectivity.State)}
+	connCh := make(chan connectivity.State)
+	s := &funcConnectivityStateSubscriber{
+		onMsg: func(s connectivity.State) {
+			select {
+			case connCh <- s:
+			case <-ctx.Done():
+			}
+			if s == connectivity.Shutdown {
+				close(connCh)
+			}
+		},
+	}
+
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, s)
 
 	// Send an update from the resolver that will trigger the LB policy's UpdateClientConnState.
@@ -614,11 +623,12 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 	// Verify the resulting states.
 	for i, want := range wantStates {
 		if i == len(sendStates) {
-			// Trigger Shutdown to be sent by the channel.
-			cc.Close()
+			// Trigger Shutdown to be sent by the channel.  Use a goroutine to
+			// ensure the operation does not block.
+			go cc.Close()
 		}
 		select {
-		case got := <-s.onMsgCh:
+		case got := <-connCh:
 			if got != want {
 				t.Errorf("Update %v was %s; want %s", i, got, want)
 			} else {
