@@ -130,12 +130,13 @@ type Server struct {
 	// conns contains all active server transports. It is a map keyed on a
 	// listener address with the value being the set of active transports
 	// belonging to that listener.
-	conns    map[string]map[transport.ServerTransport]bool
-	serve    bool
-	drain    bool
-	cv       *sync.Cond              // signaled when connections close for GracefulStop
-	services map[string]*serviceInfo // service name -> service info
-	events   trace.EventLog
+	conns             map[string]map[transport.ServerTransport]bool
+	serve             bool
+	drain             bool
+	abortGracefulStop atomic.Bool
+	cv                *sync.Cond              // signaled when connections close for GracefulStop
+	services          map[string]*serviceInfo // service name -> service info
+	events            trace.EventLog
 
 	quit               *grpcsync.Event
 	done               *grpcsync.Event
@@ -1837,27 +1838,28 @@ func ServerTransportStreamFromContext(ctx context.Context) ServerTransportStream
 // errors.
 func (s *Server) Stop() {
 	s.quit.Fire()
-
-	defer func() {
-		s.serveWG.Wait()
-		s.done.Fire()
-	}()
+	defer s.done.Fire()
 
 	s.channelzRemoveOnce.Do(func() { channelz.RemoveEntry(s.channelzID) })
+	s.abortGracefulStop.Store(true)
 
-	s.mu.Lock()
-	listeners := s.lis
-	s.lis = nil
-	conns := s.conns
-	s.conns = nil
 	// interrupt GracefulStop if Stop and GracefulStop are called concurrently.
 	s.cv.Broadcast()
-	s.mu.Unlock()
 
-	for lis := range listeners {
+	s.mu.Lock()
+	for lis := range s.lis {
 		lis.Close()
 	}
-	for _, cs := range conns {
+	s.lis = nil
+	s.mu.Unlock()
+
+	// Wait for serving threads to be ready to exit.  Only then can we be sure no
+	// new conns will be created.
+	s.serveWG.Wait()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, cs := range s.conns {
 		for st := range cs {
 			st.Close(errors.New("Server.Stop called"))
 		}
@@ -1866,12 +1868,15 @@ func (s *Server) Stop() {
 		s.stopServerWorkers()
 	}
 
-	s.mu.Lock()
+	for len(s.conns) != 0 {
+		s.cv.Wait()
+	}
+	s.conns = nil
+
 	if s.events != nil {
 		s.events.Finish()
 		s.events = nil
 	}
-	s.mu.Unlock()
 }
 
 // GracefulStop stops the gRPC server gracefully. It stops the server from
@@ -1883,7 +1888,7 @@ func (s *Server) GracefulStop() {
 
 	s.channelzRemoveOnce.Do(func() { channelz.RemoveEntry(s.channelzID) })
 	s.mu.Lock()
-	if s.conns == nil {
+	if s.conns == nil || s.abortGracefulStop.Load() {
 		s.mu.Unlock()
 		return
 	}
@@ -1900,22 +1905,29 @@ func (s *Server) GracefulStop() {
 		}
 		s.drain = true
 	}
+	s.mu.Unlock()
 
 	// Wait for serving threads to be ready to exit.  Only then can we be sure no
 	// new conns will be created.
-	s.mu.Unlock()
 	s.serveWG.Wait()
-	s.mu.Lock()
 
-	for len(s.conns) != 0 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for {
+		if s.abortGracefulStop.Load() {
+			return
+		}
+		if len(s.conns) == 0 {
+			break
+		}
 		s.cv.Wait()
 	}
 	s.conns = nil
+
 	if s.events != nil {
 		s.events.Finish()
 		s.events = nil
 	}
-	s.mu.Unlock()
 }
 
 // contentSubtype must be lowercase
