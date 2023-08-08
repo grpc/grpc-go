@@ -723,6 +723,7 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 // DoSoakTest runs large unary RPCs in a loop for a configurable number of times, with configurable failure thresholds.
 // If resetChannel is false, then each RPC will be performed on tc. Otherwise, each RPC will be performed on a new
 // stub that is created with the provided server address and dial options.
+// TODO(mohanli-ml): Create SoakTestOptions as a parameter for this method.
 func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.DialOption, resetChannel bool, soakIterations int, maxFailures int, soakRequestSize int, soakResponseSize int, perIterationMaxAcceptableLatency time.Duration, minTimeBetweenRPCs time.Duration, overallDeadline time.Time) {
 	start := time.Now()
 	ctx, cancel := context.WithDeadline(context.Background(), overallDeadline)
