@@ -1626,25 +1626,6 @@ func (s) TestPriority_IgnoreReresolutionRequest(t *testing.T) {
 
 }
 
-type wrappedRoundRobinBalancerBuilder struct {
-	name string
-	ccCh *testutils.Channel
-}
-
-func (w *wrappedRoundRobinBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	w.ccCh.Send(cc)
-	rrBuilder := balancer.Get(roundrobin.Name)
-	return &wrappedRoundRobinBalancer{Balancer: rrBuilder.Build(cc, opts)}
-}
-
-func (w *wrappedRoundRobinBalancerBuilder) Name() string {
-	return w.name
-}
-
-type wrappedRoundRobinBalancer struct {
-	balancer.Balancer
-}
-
 // TestPriority_IgnoreReresolutionRequestTwoChildren tests the case where the
 // priority policy has two child policies, one of them has the
 // IgnoreReresolutionRequests field set to true while the other one has it set
@@ -1652,12 +1633,21 @@ type wrappedRoundRobinBalancer struct {
 // set to ignore reresolution requests are ignored, while calls from the other
 // child are processed.
 func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
-	// Register a wrapping balancer to act the child policy of the priority
-	// policy. The wrapping balancer builder's Build() method pushes the
-	// balancer.ClientConn on a channel for this test to use.
+	// Register a stub balancer to act the child policy of the priority policy.
+	// Provide an init function to the stub balancer to capture the ClientConn
+	// passed to the child policy.
 	ccCh := testutils.NewChannel()
 	childPolicyName := t.Name()
-	balancer.Register(&wrappedRoundRobinBalancerBuilder{name: childPolicyName, ccCh: ccCh})
+	stub.Register(childPolicyName, stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			ccCh.Send(bd.ClientConn)
+			bd.Data = balancer.Get(roundrobin.Name).Build(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			bal := bd.Data.(balancer.Balancer)
+			return bal.UpdateClientConnState(ccs)
+		},
+	})
 
 	cc := testutils.NewTestClientConn(t)
 	bb := balancer.Get(Name)

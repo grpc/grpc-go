@@ -778,38 +778,15 @@ func (s) TestAuthorityInBuildOptions(t *testing.T) {
 	}
 }
 
-// wrappedPickFirstBalancerBuilder builds a custom balancer which wraps an
-// underlying pick_first balancer.
-type wrappedPickFirstBalancerBuilder struct {
-	name string
-}
-
-func (*wrappedPickFirstBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	builder := balancer.Get(grpc.PickFirstBalancerName)
-	wpfb := &wrappedPickFirstBalancer{
-		ClientConn: cc,
-	}
-	pf := builder.Build(wpfb, opts)
-	wpfb.Balancer = pf
-	return wpfb
-}
-
-func (wbb *wrappedPickFirstBalancerBuilder) Name() string {
-	return wbb.name
-}
-
-// wrappedPickFirstBalancer contains a pick_first balancer and forwards all
-// calls from the ClientConn to it. For state updates from the pick_first
-// balancer, it creates a custom picker which injects arbitrary metadata on a
-// per-call basis.
-type wrappedPickFirstBalancer struct {
-	balancer.Balancer
+// testCCWrapper wraps a balancer.ClientConn and intercepts UpdateState and
+// returns a custom picker which injects arbitrary metadata on a per-call basis.
+type testCCWrapper struct {
 	balancer.ClientConn
 }
 
-func (wb *wrappedPickFirstBalancer) UpdateState(state balancer.State) {
+func (t *testCCWrapper) UpdateState(state balancer.State) {
 	state.Picker = &wrappedPicker{p: state.Picker}
-	wb.ClientConn.UpdateState(state)
+	t.ClientConn.UpdateState(state)
 }
 
 const (
@@ -861,10 +838,20 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 	defer ss.Stop()
 	t.Logf("Started test backend at %q", ss.Address)
 
-	name := t.Name() + "wrappedPickFirstBalancer"
-	t.Logf("Registering test balancer with name %q...", name)
-	b := &wrappedPickFirstBalancerBuilder{name: t.Name() + "wrappedPickFirstBalancer"}
-	balancer.Register(b)
+	// Register a test balancer that contains a pick_first balancer and forwards
+	// all calls from the ClientConn to it. For state updates from the
+	// pick_first balancer, it creates a custom picker which injects arbitrary
+	// metadata on a per-call basis.
+	stub.Register(t.Name(), stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			cc := &testCCWrapper{ClientConn: bd.ClientConn}
+			bd.Data = balancer.Get(grpc.PickFirstBalancerName).Build(cc, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			bal := bd.Data.(balancer.Balancer)
+			return bal.UpdateClientConnState(ccs)
+		},
+	})
 
 	t.Log("Creating ClientConn to test backend...")
 	r := manual.NewBuilderWithScheme("whatever")
@@ -872,7 +859,7 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(r),
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, b.Name())),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, t.Name())),
 	}
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
