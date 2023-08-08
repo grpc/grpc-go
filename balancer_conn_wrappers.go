@@ -209,7 +209,7 @@ func (ccb *ccBalancerWrapper) closeBalancer(m ccbMode) {
 	}
 
 	ccb.mode = m
-	done := ccb.serializer.Done
+	done := ccb.serializer.Done()
 	b := ccb.balancer
 	ok := ccb.serializer.Schedule(func(_ context.Context) {
 		// Close the serializer to ensure that no more calls from gRPC are sent

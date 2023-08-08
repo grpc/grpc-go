@@ -43,22 +43,18 @@ type Subscriber interface {
 // Once a PubSub is stopped, no more messages can be published, and
 // it is guaranteed that no more subscriber callback will be invoked.
 type PubSub struct {
-	cs     *CallbackSerializer
-	cancel context.CancelFunc
+	cs *CallbackSerializer
 
 	// Access to the below fields are guarded by this mutex.
 	mu          sync.Mutex
 	msg         interface{}
 	subscribers map[Subscriber]bool
-	stopped     bool
 }
 
 // NewPubSub returns a new PubSub instance.
-func NewPubSub() *PubSub {
-	ctx, cancel := context.WithCancel(context.Background())
+func NewPubSub(ctx context.Context) *PubSub {
 	return &PubSub{
 		cs:          NewCallbackSerializer(ctx),
-		cancel:      cancel,
 		subscribers: map[Subscriber]bool{},
 	}
 }
@@ -74,10 +70,6 @@ func NewPubSub() *PubSub {
 func (ps *PubSub) Subscribe(sub Subscriber) (cancel func()) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-
-	if ps.stopped {
-		return func() {}
-	}
 
 	ps.subscribers[sub] = true
 
@@ -106,10 +98,6 @@ func (ps *PubSub) Publish(msg interface{}) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
-	if ps.stopped {
-		return
-	}
-
 	ps.msg = msg
 	for sub := range ps.subscribers {
 		s := sub
@@ -124,13 +112,6 @@ func (ps *PubSub) Publish(msg interface{}) {
 	}
 }
 
-// Stop shuts down the PubSub and releases any resources allocated by it.
-// It is guaranteed that no subscriber callbacks would be invoked once this
-// method returns.
-func (ps *PubSub) Stop() {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
-	ps.stopped = true
-
-	ps.cancel()
+func (ps *PubSub) Done() <-chan struct{} {
+	return ps.cs.Done()
 }

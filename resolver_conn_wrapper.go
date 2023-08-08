@@ -133,7 +133,7 @@ func (ccr *ccResolverWrapper) close() {
 	ccr.mu.Unlock()
 
 	// Give enqueued callbacks a chance to finish.
-	<-ccr.serializer.Done
+	<-ccr.serializer.Done()
 
 	// Spawn a goroutine to close the resolver (since it may block trying to
 	// cleanup all allocated resources) and return early.
