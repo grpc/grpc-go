@@ -1230,7 +1230,7 @@ func (cc *ClientConn) ResetConnectBackoff() {
 
 // Close tears down the ClientConn and all underlying connections.
 func (cc *ClientConn) Close() error {
-	defer cc.csMgr.pubSub.Done()
+	defer func() { <-cc.csMgr.pubSub.Done() }()
 	defer cc.cancel()
 
 	cc.mu.Lock()
