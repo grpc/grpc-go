@@ -589,7 +589,7 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 	}
 	stub.Register(testBalName, bf)
 
-	// Create the ClientConn
+	// Create the ClientConn.
 	const testResName = "any"
 	rb := manual.NewBuilderWithScheme(testResName)
 	cc, err := grpc.Dial(testResName+":///",
@@ -601,8 +601,9 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 		t.Fatalf("Unexpected error from grpc.Dial: %v", err)
 	}
 
-	// Subscribe to state updates
-	connCh := make(chan connectivity.State)
+	// Subscribe to state updates.  Use a buffer size of 1 to allow the
+	// Shutdown state to go into the channel when Close()ing.
+	connCh := make(chan connectivity.State, 1)
 	s := &funcConnectivityStateSubscriber{
 		onMsg: func(s connectivity.State) {
 			select {
@@ -625,7 +626,7 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 		if i == len(sendStates) {
 			// Trigger Shutdown to be sent by the channel.  Use a goroutine to
 			// ensure the operation does not block.
-			go cc.Close()
+			cc.Close()
 		}
 		select {
 		case got := <-connCh:
