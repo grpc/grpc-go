@@ -285,7 +285,6 @@ func (cs *configSelector) newInterceptor(rt *route, cluster *routeCluster) (ires
 		return nil, nil
 	}
 	interceptors := make([]iresolver.ClientInterceptor, 0, len(cs.httpFilterConfig))
-
 	for _, filter := range cs.httpFilterConfig {
 		override := cluster.httpFilterConfigOverride[filter.Name] // cluster is highest priority
 		if override == nil {
