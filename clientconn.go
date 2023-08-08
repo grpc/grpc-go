@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -136,7 +137,6 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target: target,
-		csMgr:  &connectivityStateManager{},
 		conns:  make(map[*addrConn]struct{}),
 		dopts:  defaultDialOptions(),
 		czData: new(channelzData),
@@ -188,6 +188,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	// Register ClientConn with channelz.
 	cc.channelzRegistration(target)
+
+	cc.csMgr = newConnectivityStateManager(cc.channelzID)
 
 	if err := cc.validateTransportCredentials(); err != nil {
 		return nil, err
@@ -473,7 +475,6 @@ func (cc *ClientConn) validateTransportCredentials() error {
 func (cc *ClientConn) channelzRegistration(target string) {
 	cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, cc.dopts.channelzParentID, target)
 	cc.addTraceEvent("created")
-	cc.csMgr.channelzID = cc.channelzID
 }
 
 // chainUnaryClientInterceptors chains all unary client interceptors into one.
@@ -538,13 +539,27 @@ func getChainStreamer(interceptors []StreamClientInterceptor, curr int, finalStr
 	}
 }
 
+// newConnectivityStateManager creates an connectivityStateManager with
+// the specified id.
+func newConnectivityStateManager(id *channelz.Identifier) *connectivityStateManager {
+	return &connectivityStateManager{
+		channelzID: id,
+		pubSub:     grpcsync.NewPubSub(),
+	}
+}
+
 // connectivityStateManager keeps the connectivity.State of ClientConn.
 // This struct will eventually be exported so the balancers can access it.
+//
+// TODO: If possible, get rid of the `connectivityStateManager` type, and
+// provide this functionality using the `PubSub`, to avoid keeping track of
+// the connectivity state at two places.
 type connectivityStateManager struct {
 	mu         sync.Mutex
 	state      connectivity.State
 	notifyChan chan struct{}
 	channelzID *channelz.Identifier
+	pubSub     *grpcsync.PubSub
 }
 
 // updateState updates the connectivity.State of ClientConn.
@@ -560,6 +575,8 @@ func (csm *connectivityStateManager) updateState(state connectivity.State) {
 		return
 	}
 	csm.state = state
+	csm.pubSub.Publish(state)
+
 	channelz.Infof(logger, csm.channelzID, "Channel Connectivity change to %v", state)
 	if csm.notifyChan != nil {
 		// There are other goroutines waiting on this channel.
@@ -581,6 +598,10 @@ func (csm *connectivityStateManager) getNotifyChan() <-chan struct{} {
 		csm.notifyChan = make(chan struct{})
 	}
 	return csm.notifyChan
+}
+
+func (csm *connectivityStateManager) close() {
+	csm.pubSub.Stop()
 }
 
 // ClientConnInterface defines the functions clients need to perform unary and
@@ -771,6 +792,10 @@ func init() {
 		panic(fmt.Sprintf("impossible error parsing empty service config: %v", cfg.Err))
 	}
 	emptyServiceConfig = cfg.Config.(*ServiceConfig)
+
+	internal.SubscribeToConnectivityStateChanges = func(cc *ClientConn, s grpcsync.Subscriber) func() {
+		return cc.csMgr.pubSub.Subscribe(s)
+	}
 }
 
 func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
@@ -1224,6 +1249,7 @@ func (cc *ClientConn) Close() error {
 	conns := cc.conns
 	cc.conns = nil
 	cc.csMgr.updateState(connectivity.Shutdown)
+	cc.csMgr.close()
 
 	pWrapper := cc.blockingpicker
 	rWrapper := cc.resolverWrapper

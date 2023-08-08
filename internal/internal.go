@@ -122,6 +122,9 @@ var (
 	// deleted or changed.
 	BinaryLogger interface{} // func(binarylog.Logger) grpc.ServerOption
 
+	// SubscribeToConnectivityStateChanges adds a grpcsync.Subscriber to a provided grpc.ClientConn
+	SubscribeToConnectivityStateChanges interface{} // func(*grpc.ClientConn, grpcsync.Subscriber)
+
 	// NewXDSResolverWithConfigForTesting creates a new xds resolver builder using
 	// the provided xds bootstrap config instead of the global configuration from
 	// the supported environment variables.  The resolver.Builder is meant to be
