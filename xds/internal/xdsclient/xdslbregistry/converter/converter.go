@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
+	"google.golang.org/grpc/internal/balancer/leastrequest"
 	"google.golang.org/grpc/internal/envconfig"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
@@ -41,6 +42,7 @@ import (
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clientsideweightedroundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/client_side_weighted_round_robin/v3"
+	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
 	v3pickfirstpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/pick_first/v3"
 	v3ringhashpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/ring_hash/v3"
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
@@ -53,13 +55,15 @@ func init() {
 	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.pick_first.v3.PickFirst", convertPickFirstProtoToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.round_robin.v3.RoundRobin", convertRoundRobinProtoToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.wrr_locality.v3.WrrLocality", convertWRRLocalityProtoToServiceConfig)
+	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.least_request.v3.LeastRequest", convertLeastRequestProtoToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/udpa.type.v1.TypedStruct", convertV1TypedStructToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/xds.type.v3.TypedStruct", convertV3TypedStructToServiceConfig)
 }
 
 const (
-	defaultRingHashMinSize = 1024
-	defaultRingHashMaxSize = 8 * 1024 * 1024 // 8M
+	defaultRingHashMinSize         = 1024
+	defaultRingHashMaxSize         = 8 * 1024 * 1024 // 8M
+	defaultLeastRequestChoiceCount = 2
 )
 
 func convertRingHashProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
@@ -175,6 +179,29 @@ func convertWeightedRoundRobinProtoToServiceConfig(rawProto []byte, _ int) (json
 		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", wrrLBCfg, err)
 	}
 	return makeBalancerConfigJSON(weightedroundrobin.Name, lbCfgJSON), nil
+}
+
+func convertLeastRequestProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
+	if !envconfig.LeastRequestLB {
+		return nil, nil
+	}
+	lrProto := &v3leastrequestpb.LeastRequest{}
+	if err := proto.Unmarshal(rawProto, lrProto); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
+	}
+	// "The configuration for the Least Request LB policy is the
+	// least_request_lb_config field. The field is optional; if not present,
+	// defaults will be assumed for all of its values." - A48
+	var choiceCountSize uint32 = defaultLeastRequestChoiceCount
+	if choiceCount := lrProto.GetChoiceCount(); choiceCount != nil {
+		choiceCountSize = choiceCount.GetValue()
+	}
+	lrCfg := &leastrequest.LBConfig{ChoiceCount: choiceCountSize}
+	js, err := json.Marshal(lrCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", lrCfg, err)
+	}
+	return makeBalancerConfigJSON(leastrequest.Name, js), nil
 }
 
 func convertV1TypedStructToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {

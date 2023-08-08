@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	_ "google.golang.org/grpc/balancer/roundrobin" // To register round_robin load balancer.
+	"google.golang.org/grpc/internal/balancer/leastrequest"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
@@ -103,6 +104,8 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 	defer func() {
 		envconfig.XDSCustomLBPolicy = origCustomLBSupport
 	}()
+	defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
+	envconfig.LeastRequestLB = true
 	tests := []struct {
 		name             string
 		cluster          *v3clusterpb.Cluster
@@ -331,6 +334,36 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 		},
 		{
+			name: "happiest-case-with-least-request-lb-policy-with-default-config",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_LEAST_REQUEST,
+				LrsServer: &v3corepb.ConfigSource{
+					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+						Self: &v3corepb.SelfConfigSource{},
+					},
+				},
+			},
+			wantUpdate: xdsresource.ClusterUpdate{
+				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf,
+			},
+			wantLBConfig: &iserviceconfig.BalancerConfig{
+				Name: "least_request_experimental",
+				Config: &leastrequest.LBConfig{
+					ChoiceCount: 2,
+				},
+			},
+		},
+		{
 			name: "happiest-case-with-ring-hash-lb-policy-with-none-default-config",
 			cluster: &v3clusterpb.Cluster{
 				Name:                 clusterName,
@@ -364,6 +397,41 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				Config: &ringhash.LBConfig{
 					MinRingSize: 10,
 					MaxRingSize: 100,
+				},
+			},
+		},
+		{
+			name: "happiest-case-with-least-request-lb-policy-with-none-default-config",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_LEAST_REQUEST,
+				LbConfig: &v3clusterpb.Cluster_LeastRequestLbConfig_{
+					LeastRequestLbConfig: &v3clusterpb.Cluster_LeastRequestLbConfig{
+						ChoiceCount: wrapperspb.UInt32(3),
+					},
+				},
+				LrsServer: &v3corepb.ConfigSource{
+					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+						Self: &v3corepb.SelfConfigSource{},
+					},
+				},
+			},
+			wantUpdate: xdsresource.ClusterUpdate{
+				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf,
+			},
+			wantLBConfig: &iserviceconfig.BalancerConfig{
+				Name: "least_request_experimental",
+				Config: &leastrequest.LBConfig{
+					ChoiceCount: 3,
 				},
 			},
 		},

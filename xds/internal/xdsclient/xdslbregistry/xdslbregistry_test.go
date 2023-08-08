@@ -69,6 +69,9 @@ func wrrLocalityBalancerConfig(childPolicy *internalserviceconfig.BalancerConfig
 }
 
 func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
+	defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
+	envconfig.LeastRequestLB = true
+
 	const customLBPolicyName = "myorg.MyCustomLeastRequestPolicy"
 	stub.Register(customLBPolicyName, stub.BalancerFuncs{})
 
@@ -95,6 +98,21 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				},
 			},
 			wantConfig: `[{"ring_hash_experimental": { "minRingSize": 10, "maxRingSize": 100 }}]`,
+		},
+		{
+			name: "least_request",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3leastrequestpb.LeastRequest{
+								ChoiceCount: wrapperspb.UInt32(3),
+							}),
+						},
+					},
+				},
+			},
+			wantConfig: `[{"least_request_experimental": { "choiceCount": 3 }}]`,
 		},
 		{
 			name: "pick_first_shuffle",
