@@ -118,6 +118,8 @@ func (cs *CallbackSerializer) fetchPendingCallbacks() []func(context.Context) {
 	}
 }
 
+// Done returns a channel that is closed after the context passed to
+// NewCallbackSerializer is canceled and all callbacks have been executed.
 func (cs *CallbackSerializer) Done() <-chan struct{} {
 	return cs.done
 }

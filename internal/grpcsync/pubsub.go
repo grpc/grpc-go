@@ -112,6 +112,8 @@ func (ps *PubSub) Publish(msg interface{}) {
 	}
 }
 
+// Done returns a channel that is closed after the context passed to NewPubSub
+// is canceled and all updates have been sent to subscribers.
 func (ps *PubSub) Done() <-chan struct{} {
 	return ps.cs.Done()
 }
