@@ -256,23 +256,34 @@ type BalancerGroup struct {
 	scToSubBalancer map[balancer.SubConn]*subBalancerWrapper
 }
 
-// DefaultSubBalancerCloseTimeout is defined as a variable instead of const for
-// testing.
-//
-// TODO: make it a parameter for New().
-var DefaultSubBalancerCloseTimeout = 15 * time.Minute
+// Options wraps the arguments to be passed to the BalancerGroup ctor.
+type Options struct {
+	// CC is a reference to the parent balancer.ClientConn.
+	CC balancer.ClientConn
+	// BuildOpts contains build options to be used when creating sub-balancers.
+	BuildOpts balancer.BuildOptions
+	// StateAggregator is an implementation of the BalancerStateAggregator
+	// interface to aggregate picker and connectivity states from sub-balancers.
+	StateAggregator BalancerStateAggregator
+	// Logger is a group specific prefix logger.
+	Logger *grpclog.PrefixLogger
+	// SubBalancerCloseTimeout is the amount of time deleted sub-balancers spend
+	// in the idle cache. A value of zero here disables caching of deleted
+	// sub-balancers.
+	SubBalancerCloseTimeout time.Duration
+}
 
 // New creates a new BalancerGroup. Note that the BalancerGroup
 // needs to be started to work.
-func New(cc balancer.ClientConn, bOpts balancer.BuildOptions, stateAggregator BalancerStateAggregator, logger *grpclog.PrefixLogger) *BalancerGroup {
+func New(opts Options) *BalancerGroup {
 	return &BalancerGroup{
-		cc:              cc,
-		buildOpts:       bOpts,
-		logger:          logger,
-		stateAggregator: stateAggregator,
+		cc:              opts.CC,
+		buildOpts:       opts.BuildOpts,
+		stateAggregator: opts.StateAggregator,
+		logger:          opts.Logger,
 
 		idToBalancerConfig: make(map[string]*subBalancerWrapper),
-		balancerCache:      cache.NewTimeoutCache(DefaultSubBalancerCloseTimeout),
+		balancerCache:      cache.NewTimeoutCache(opts.SubBalancerCloseTimeout),
 		scToSubBalancer:    make(map[balancer.SubConn]*subBalancerWrapper),
 	}
 }

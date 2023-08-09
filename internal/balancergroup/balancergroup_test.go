@@ -53,10 +53,6 @@ func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
 		testBackendAddrs = append(testBackendAddrs, resolver.Address{Addr: fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i)})
 	}
-
-	// Disable caching for all tests. It will be re-enabled in caching specific
-	// tests.
-	DefaultSubBalancerCloseTimeout = time.Millisecond
 }
 
 type s struct {
@@ -80,7 +76,13 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, balancer.BuildOptions{}, gator, nil)
+	bg := New(Options{
+		CC:                      cc,
+		BuildOpts:               balancer.BuildOptions{},
+		StateAggregator:         gator,
+		Logger:                  nil,
+		SubBalancerCloseTimeout: time.Duration(0),
+	})
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -177,7 +179,13 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, balancer.BuildOptions{}, gator, nil)
+	bg := New(Options{
+		CC:                      cc,
+		BuildOpts:               balancer.BuildOptions{},
+		StateAggregator:         gator,
+		Logger:                  nil,
+		SubBalancerCloseTimeout: time.Duration(0),
+	})
 
 	gator.Add(testBalancerIDs[0], 2)
 	bg.Add(testBalancerIDs[0], builder)
@@ -189,23 +197,23 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	bg.Start()
 }
 
-func replaceDefaultSubBalancerCloseTimeout(n time.Duration) func() {
-	old := DefaultSubBalancerCloseTimeout
-	DefaultSubBalancerCloseTimeout = n
-	return func() { DefaultSubBalancerCloseTimeout = old }
-}
-
 // initBalancerGroupForCachingTest creates a balancer group, and initialize it
 // to be ready for caching tests.
 //
 // Two rr balancers are added to bg, each with 2 ready subConns. A sub-balancer
 // is removed later, so the balancer group returned has one sub-balancer in its
 // own map, and one sub-balancer in cache.
-func initBalancerGroupForCachingTest(t *testing.T) (*weightedaggregator.Aggregator, *BalancerGroup, *testutils.TestClientConn, map[resolver.Address]*testutils.TestSubConn) {
+func initBalancerGroupForCachingTest(t *testing.T, idleCacheTimeout time.Duration) (*weightedaggregator.Aggregator, *BalancerGroup, *testutils.TestClientConn, map[resolver.Address]*testutils.TestSubConn) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, balancer.BuildOptions{}, gator, nil)
+	bg := New(Options{
+		CC:                      cc,
+		BuildOpts:               balancer.BuildOptions{},
+		StateAggregator:         gator,
+		Logger:                  nil,
+		SubBalancerCloseTimeout: idleCacheTimeout,
+	})
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -244,8 +252,8 @@ func initBalancerGroupForCachingTest(t *testing.T) (*weightedaggregator.Aggregat
 	// removed after close timeout.
 	for i := 0; i < 10; i++ {
 		select {
-		case <-cc.ShutdownSubConnCh:
-			t.Fatalf("Got request to shut down subconn, want no shut down subconn (because subconns were still in cache)")
+		case sc := <-cc.ShutdownSubConnCh:
+			t.Fatalf("Got request to shut down subconn %v, want no shut down subconn (because subconns were still in cache)", sc)
 		default:
 		}
 		time.Sleep(time.Millisecond)
@@ -265,8 +273,7 @@ func initBalancerGroupForCachingTest(t *testing.T) (*weightedaggregator.Aggregat
 // Test that if a sub-balancer is removed, and re-added within close timeout,
 // the subConns won't be re-created.
 func (s) TestBalancerGroup_locality_caching(t *testing.T) {
-	defer replaceDefaultSubBalancerCloseTimeout(10 * time.Second)()
-	gator, bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
+	gator, bg, cc, addrToSC := initBalancerGroupForCachingTest(t, defaultTestTimeout)
 
 	// Turn down subconn for addr2, shouldn't get picker update because
 	// sub-balancer1 was removed.
@@ -277,11 +284,8 @@ func (s) TestBalancerGroup_locality_caching(t *testing.T) {
 			t.Fatalf("Got new picker, want no new picker (because the sub-balancer was removed)")
 		default:
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(defaultTestShortTimeout)
 	}
-
-	// Sleep, but sleep less then close timeout.
-	time.Sleep(time.Millisecond * 100)
 
 	// Re-add sub-balancer-1, because subconns were in cache, no new subconns
 	// should be created. But a new picker will still be generated, with subconn
@@ -306,7 +310,7 @@ func (s) TestBalancerGroup_locality_caching(t *testing.T) {
 			t.Fatalf("Got new subconn, want no new subconn (because subconns were still in cache)")
 		default:
 		}
-		time.Sleep(time.Millisecond * 10)
+		time.Sleep(defaultTestShortTimeout)
 	}
 }
 
@@ -314,8 +318,7 @@ func (s) TestBalancerGroup_locality_caching(t *testing.T) {
 // closed within close timeout, all subconns should still be rmeoved
 // immediately.
 func (s) TestBalancerGroup_locality_caching_close_group(t *testing.T) {
-	defer replaceDefaultSubBalancerCloseTimeout(10 * time.Second)()
-	_, bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
+	_, bg, cc, addrToSC := initBalancerGroupForCachingTest(t, defaultTestTimeout)
 
 	bg.Close()
 	// The balancer group is closed. The subconns should be shutdown immediately.
@@ -343,12 +346,12 @@ func (s) TestBalancerGroup_locality_caching_close_group(t *testing.T) {
 // Sub-balancers in cache will be closed if not re-added within timeout, and
 // subConns will be shut down.
 func (s) TestBalancerGroup_locality_caching_not_readd_within_timeout(t *testing.T) {
-	defer replaceDefaultSubBalancerCloseTimeout(time.Second)()
-	_, _, cc, addrToSC := initBalancerGroupForCachingTest(t)
+	_, _, cc, addrToSC := initBalancerGroupForCachingTest(t, time.Second)
 
 	// The sub-balancer is not re-added within timeout. The subconns should be
 	// shut down.
-	shutdownTimeout := time.After(DefaultSubBalancerCloseTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	scToShutdown := map[balancer.SubConn]int{
 		addrToSC[testBackendAddrs[2]]: 1,
 		addrToSC[testBackendAddrs[3]]: 1,
@@ -361,7 +364,7 @@ func (s) TestBalancerGroup_locality_caching_not_readd_within_timeout(t *testing.
 				t.Fatalf("Got Shutdown for %v when there's %d shutdown expected", sc, c)
 			}
 			scToShutdown[sc] = c - 1
-		case <-shutdownTimeout:
+		case <-ctx.Done():
 			t.Fatalf("timeout waiting for subConns (from balancer in cache) to be shut down")
 		}
 	}
@@ -383,8 +386,7 @@ func (*noopBalancerBuilderWrapper) Name() string {
 // After removing a sub-balancer, re-add with same ID, but different balancer
 // builder. Old subconns should be shut down, and new subconns should be created.
 func (s) TestBalancerGroup_locality_caching_readd_with_different_builder(t *testing.T) {
-	defer replaceDefaultSubBalancerCloseTimeout(10 * time.Second)()
-	gator, bg, cc, addrToSC := initBalancerGroupForCachingTest(t)
+	gator, bg, cc, addrToSC := initBalancerGroupForCachingTest(t, defaultTestTimeout)
 
 	// Re-add sub-balancer-1, but with a different balancer builder. The
 	// sub-balancer was still in cache, but cann't be reused. This should cause
@@ -459,8 +461,7 @@ func (s) TestBalancerGroup_CloseStopsBalancerInCache(t *testing.T) {
 	}})
 	builder := balancer.Get(balancerName)
 
-	defer replaceDefaultSubBalancerCloseTimeout(time.Second)()
-	gator, bg, _, _ := initBalancerGroupForCachingTest(t)
+	gator, bg, _, _ := initBalancerGroupForCachingTest(t, time.Second)
 
 	// Add balancer, and remove
 	gator.Add(testBalancerIDs[2], 1)
@@ -503,7 +504,12 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 		},
 	})
 	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, bOpts, nil, nil)
+	bg := New(Options{
+		CC:              cc,
+		BuildOpts:       bOpts,
+		StateAggregator: nil,
+		Logger:          nil,
+	})
 	bg.Start()
 
 	// Add the stub balancer build above as a child policy.
@@ -526,7 +532,12 @@ func (s) TestBalancerExitIdleOne(t *testing.T) {
 		},
 	})
 	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, balancer.BuildOptions{}, nil, nil)
+	bg := New(Options{
+		CC:              cc,
+		BuildOpts:       balancer.BuildOptions{},
+		StateAggregator: nil,
+		Logger:          nil,
+	})
 	bg.Start()
 	defer bg.Close()
 
@@ -553,7 +564,12 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, balancer.BuildOptions{}, gator, nil)
+	bg := New(Options{
+		CC:              cc,
+		BuildOpts:       balancer.BuildOptions{},
+		StateAggregator: gator,
+		Logger:          nil,
+	})
 	gator.Add(testBalancerIDs[0], 1)
 	bg.Add(testBalancerIDs[0], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
