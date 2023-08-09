@@ -615,13 +615,11 @@ func (b *outlierDetectionBalancer) handleSubConnUpdate(u *scUpdate) {
 	scw := u.scw
 	scw.latestState = u.state
 	if !scw.ejected {
-		b.childMu.Lock()
 		if scw.listener != nil {
+			b.childMu.Lock()
 			scw.listener(u.state)
-		} else {
-			b.child.UpdateSubConnState(scw, u.state)
+			b.childMu.Unlock()
 		}
-		b.childMu.Unlock()
 	}
 }
 
@@ -638,13 +636,11 @@ func (b *outlierDetectionBalancer) handleEjectedUpdate(u *ejectionUpdate) {
 			ConnectivityState: connectivity.TransientFailure,
 		}
 	}
-	b.childMu.Lock()
 	if scw.listener != nil {
+		b.childMu.Lock()
 		scw.listener(stateToUpdate)
-	} else {
-		b.child.UpdateSubConnState(scw, stateToUpdate)
+		b.childMu.Unlock()
 	}
-	b.childMu.Unlock()
 }
 
 // handleChildStateUpdate forwards the picker update wrapped in a wrapped picker
