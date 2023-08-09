@@ -182,6 +182,29 @@ func (sbc *subBalancerWrapper) stopBalancer() {
 	sbc.balancer = nil
 }
 
+type balancerCache interface {
+	// Add adds item with key to the cache. callback is invoked when item is
+	// removed from the cache.
+	Add(key, item interface{}, callback func()) (interface{}, bool)
+
+	// Remove the item with the key from the cache.
+	Remove(key interface{}) (item interface{}, ok bool)
+
+	// Clear removes all entries, and runs the callbacks if runCallback is true.
+	Clear(runCallback bool)
+}
+
+// A no-op implementation of the balancerCache interface when caching is
+// disabled due to Options.SubBalancerCloseTimeout set to 0.
+type noopBalancerCache struct{}
+
+func (noopBalancerCache) Add(_ interface{}, _ interface{}, cb func()) (interface{}, bool) {
+	cb()
+	return nil, false
+}
+func (noopBalancerCache) Remove(key interface{}) (item interface{}, ok bool) { return nil, false }
+func (noopBalancerCache) Clear(bool)                                         {}
+
 // BalancerGroup takes a list of balancers, and make them into one balancer.
 //
 // Note that this struct doesn't implement balancer.Balancer, because it's not
@@ -226,7 +249,7 @@ type BalancerGroup struct {
 	outgoingStarted    bool
 	idToBalancerConfig map[string]*subBalancerWrapper
 	// Cache for sub-balancers when they are removed.
-	balancerCache *cache.TimeoutCache
+	deletedBalancerCache balancerCache
 
 	// incomingMu is to make sure this balancer group doesn't send updates to cc
 	// after it's closed.
@@ -276,15 +299,22 @@ type Options struct {
 // New creates a new BalancerGroup. Note that the BalancerGroup
 // needs to be started to work.
 func New(opts Options) *BalancerGroup {
+	var bc balancerCache
+	if opts.SubBalancerCloseTimeout != time.Duration(0) {
+		bc = cache.NewTimeoutCache(opts.SubBalancerCloseTimeout)
+	} else {
+		bc = noopBalancerCache{}
+	}
+
 	return &BalancerGroup{
 		cc:              opts.CC,
 		buildOpts:       opts.BuildOpts,
 		stateAggregator: opts.StateAggregator,
 		logger:          opts.Logger,
 
-		idToBalancerConfig: make(map[string]*subBalancerWrapper),
-		balancerCache:      cache.NewTimeoutCache(opts.SubBalancerCloseTimeout),
-		scToSubBalancer:    make(map[balancer.SubConn]*subBalancerWrapper),
+		deletedBalancerCache: bc,
+		idToBalancerConfig:   make(map[string]*subBalancerWrapper),
+		scToSubBalancer:      make(map[balancer.SubConn]*subBalancerWrapper),
 	}
 }
 
@@ -332,7 +362,7 @@ func (bg *BalancerGroup) AddWithClientConn(id, balancerName string, cc balancer.
 	// If outgoingStarted is true, search in the cache. Otherwise, cache is
 	// guaranteed to be empty, searching is unnecessary.
 	if bg.outgoingStarted {
-		if old, ok := bg.balancerCache.Remove(id); ok {
+		if old, ok := bg.deletedBalancerCache.Remove(id); ok {
 			sbc, _ = old.(*subBalancerWrapper)
 			if sbc != nil && sbc.builder != builder {
 				// If the sub-balancer in cache was built with a different
@@ -406,18 +436,22 @@ func (bg *BalancerGroup) Remove(id string) {
 	bg.outgoingMu.Lock()
 	if sbToRemove, ok := bg.idToBalancerConfig[id]; ok {
 		if bg.outgoingStarted {
-			bg.balancerCache.Add(id, sbToRemove, func() {
-				// A sub-balancer evicted from the timeout cache needs to closed
-				// and its subConns need to removed, unconditionally. There is a
-				// possibility that a sub-balancer might be removed (thereby
-				// moving it to the cache) around the same time that the
-				// balancergroup is closed, and by the time we get here the
-				// balancergroup might be closed.  Check for `outgoingStarted ==
-				// true` at that point can lead to a leaked sub-balancer.
-				bg.outgoingMu.Lock()
-				sbToRemove.stopBalancer()
-				bg.outgoingMu.Unlock()
-				bg.cleanupSubConns(sbToRemove)
+			bg.deletedBalancerCache.Add(id, sbToRemove, func() {
+				// Spawn a goroutine to stop the sub-balancer as the callback
+				// could be called inline from the cache, leading to a deadlock.
+				go func() {
+					// A sub-balancer evicted from the timeout cache needs to closed
+					// and its subConns need to removed, unconditionally. There is a
+					// possibility that a sub-balancer might be removed (thereby
+					// moving it to the cache) around the same time that the
+					// balancergroup is closed, and by the time we get here the
+					// balancergroup might be closed.  Check for `outgoingStarted ==
+					// true` at that point can lead to a leaked sub-balancer.
+					bg.outgoingMu.Lock()
+					sbToRemove.stopBalancer()
+					bg.outgoingMu.Unlock()
+					bg.cleanupSubConns(sbToRemove)
+				}()
 			})
 		}
 		delete(bg.idToBalancerConfig, id)
@@ -572,7 +606,7 @@ func (bg *BalancerGroup) Close() {
 
 	// Clear(true) runs clear function to close sub-balancers in cache. It
 	// must be called out of outgoing mutex.
-	bg.balancerCache.Clear(true)
+	bg.deletedBalancerCache.Clear(true)
 
 	bg.outgoingMu.Lock()
 	if bg.outgoingStarted {
