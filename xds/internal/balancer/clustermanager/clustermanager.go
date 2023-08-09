@@ -134,7 +134,7 @@ func (b *bal) ResolverError(err error) {
 }
 
 func (b *bal) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	b.bg.UpdateSubConnState(sc, state)
+	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
 func (b *bal) Close() {
