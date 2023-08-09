@@ -32,7 +32,7 @@ import (
 //
 // This type is safe for concurrent access.
 type CallbackSerializer struct {
-	// Done is closed once the serializer is shut down completely, i.e all
+	// done is closed once the serializer is shut down completely, i.e all
 	// scheduled callbacks are executed and the serializer has deallocated all
 	// its resources.
 	done chan struct{}

@@ -40,8 +40,9 @@ type Subscriber interface {
 // subscribers interested in receiving these messages register a callback
 // via the Subscribe() method.
 //
-// Once a PubSub is stopped, no more messages can be published, and
-// it is guaranteed that no more subscriber callback will be invoked.
+// Once a PubSub is stopped, no more messages can be published, but any pending
+// published messages will be delivered to the subscribers.  Done may be used
+// to determine when all published messages have been delivered.
 type PubSub struct {
 	cs *CallbackSerializer
 
@@ -51,7 +52,8 @@ type PubSub struct {
 	subscribers map[Subscriber]bool
 }
 
-// NewPubSub returns a new PubSub instance.
+// NewPubSub returns a new PubSub instance.  Users should cancel the
+// provided context to shutdown the PubSub.
 func NewPubSub(ctx context.Context) *PubSub {
 	return &PubSub{
 		cs:          NewCallbackSerializer(ctx),
