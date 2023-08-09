@@ -400,9 +400,3 @@ type ccWrapper struct {
 func (c *ccWrapper) ResolveNow(resolver.ResolveNowOptions) {
 	c.resourceWatcher.resolveNow()
 }
-
-func (c *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (sc balancer.SubConn, err error) {
-	// No need to override opts.StateListener; just forward all calls to the
-	// child that created the SubConn.
-	return c.ClientConn.NewSubConn(addrs, opts)
-}
