@@ -270,10 +270,11 @@ func (s) TestWaitForReadyRPCErrorOnBadCertificates(t *testing.T) {
 	defer cc.Close()
 
 	tc := testgrpc.NewTestServiceClient(cc)
-	if _, err = tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
-		return
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	if _, err = tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want err.Error() contains %q", err, clientAlwaysFailCredErrorMsg)
 	}
-	te.t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want err.Error() contains %q", err, clientAlwaysFailCredErrorMsg)
 }
 
 var (
