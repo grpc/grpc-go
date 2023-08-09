@@ -59,7 +59,22 @@ func (s) TestSubConnEmpty(t *testing.T) {
 		UpdateClientConnState: func(d *stub.BalancerData, ccs balancer.ClientConnState) error {
 			if sc == nil {
 				var err error
-				sc, err = d.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{})
+				sc, err = d.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{
+					StateListener: func(state balancer.SubConnState) {
+						switch state.ConnectivityState {
+						case connectivity.Ready:
+							d.ClientConn.UpdateState(balancer.State{
+								ConnectivityState: connectivity.Ready,
+								Picker:            &tsccPicker{sc: sc},
+							})
+						case connectivity.TransientFailure:
+							d.ClientConn.UpdateState(balancer.State{
+								ConnectivityState: connectivity.TransientFailure,
+								Picker:            base.NewErrPicker(fmt.Errorf("error connecting: %v", state.ConnectionError)),
+							})
+						}
+					},
+				})
 				if err != nil {
 					t.Errorf("error creating initial subconn: %v", err)
 				}
@@ -80,20 +95,6 @@ func (s) TestSubConnEmpty(t *testing.T) {
 				})
 			}
 			return nil
-		},
-		UpdateSubConnState: func(d *stub.BalancerData, sc balancer.SubConn, scs balancer.SubConnState) {
-			switch scs.ConnectivityState {
-			case connectivity.Ready:
-				d.ClientConn.UpdateState(balancer.State{
-					ConnectivityState: connectivity.Ready,
-					Picker:            &tsccPicker{sc: sc},
-				})
-			case connectivity.TransientFailure:
-				d.ClientConn.UpdateState(balancer.State{
-					ConnectivityState: connectivity.TransientFailure,
-					Picker:            base.NewErrPicker(fmt.Errorf("error connecting: %v", scs.ConnectionError)),
-				})
-			}
 		},
 	}
 	stub.Register("tscc", bal)
