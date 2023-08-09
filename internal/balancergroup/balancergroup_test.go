@@ -583,7 +583,19 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 	// change it to a balancer that has separate behavior logically (creating
 	// SubConn for second address in address list and always picking that
 	// SubConn), and see if the downstream behavior reflects that change.
-	bg.UpdateBuilder(testBalancerIDs[0], wrappedPickFirstBalancerBuilder{})
+	childPolicyName := t.Name()
+	stub.Register(childPolicyName, stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			bd.Data = balancer.Get(grpc.PickFirstBalancerName).Build(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			ccs.ResolverState.Addresses = ccs.ResolverState.Addresses[1:]
+			bal := bd.Data.(balancer.Balancer)
+			return bal.UpdateClientConnState(ccs)
+		},
+	})
+	builder := balancer.Get(childPolicyName)
+	bg.UpdateBuilder(testBalancerIDs[0], builder)
 	if err := bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}}); err != nil {
 		t.Fatalf("error updating ClientConn state: %v", err)
 	}
@@ -642,38 +654,4 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 			}
 		}
 	}
-}
-
-type wrappedPickFirstBalancerBuilder struct{}
-
-func (wrappedPickFirstBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	builder := balancer.Get(grpc.PickFirstBalancerName)
-	wpfb := &wrappedPickFirstBalancer{
-		ClientConn: cc,
-	}
-	pf := builder.Build(wpfb, opts)
-	wpfb.Balancer = pf
-	return wpfb
-}
-
-func (wrappedPickFirstBalancerBuilder) Name() string {
-	return "wrappedPickFirstBalancer"
-}
-
-type wrappedPickFirstBalancer struct {
-	balancer.Balancer
-	balancer.ClientConn
-}
-
-func (wb *wrappedPickFirstBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	s.ResolverState.Addresses = s.ResolverState.Addresses[1:]
-	return wb.Balancer.UpdateClientConnState(s)
-}
-
-func (wb *wrappedPickFirstBalancer) UpdateState(state balancer.State) {
-	// Eat it if IDLE - allows it to switch over only on a READY SubConn.
-	if state.ConnectivityState == connectivity.Idle {
-		return
-	}
-	wb.ClientConn.UpdateState(state)
 }
