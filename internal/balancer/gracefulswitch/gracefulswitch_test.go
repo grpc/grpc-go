@@ -1024,7 +1024,7 @@ func (vb *verifyBalancer) newSubConn(addrs []resolver.Address, opts balancer.New
 	if opts.StateListener == nil {
 		opts.StateListener = func(state balancer.SubConnState) {
 			if vb.closed.HasFired() {
-				vb.t.Fatalf("UpdateSubConnState(%+v) was called after Close(), which breaks the balancer API", state)
+				vb.t.Fatalf("StateListener(%+v) was called after Close(), which breaks the balancer API", state)
 			}
 		}
 	}
