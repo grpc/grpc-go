@@ -200,7 +200,7 @@ func (b *priorityBalancer) ResolverError(err error) {
 }
 
 func (b *priorityBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	b.bg.UpdateSubConnState(sc, state)
+	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
 func (b *priorityBalancer) Close() {
