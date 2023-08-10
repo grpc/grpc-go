@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -68,7 +67,9 @@ func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
 		testBackendAddrStrs = append(testBackendAddrStrs, fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i))
 	}
-	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond
+	// Disable sub-balancer caching for all but the tests which exercise the
+	// caching behavior.
+	DefaultSubBalancerCloseTimeout = time.Duration(0)
 	balancer.Register(&anotherRR{Builder: balancer.Get(roundrobin.Name)})
 }
 
@@ -1302,10 +1303,10 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 
 	const testChildCacheTimeout = time.Second
 	defer func() func() {
-		old := balancergroup.DefaultSubBalancerCloseTimeout
-		balancergroup.DefaultSubBalancerCloseTimeout = testChildCacheTimeout
+		old := DefaultSubBalancerCloseTimeout
+		DefaultSubBalancerCloseTimeout = testChildCacheTimeout
 		return func() {
-			balancergroup.DefaultSubBalancerCloseTimeout = old
+			DefaultSubBalancerCloseTimeout = old
 		}
 	}()()
 

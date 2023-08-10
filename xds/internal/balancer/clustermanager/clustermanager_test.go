@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
@@ -60,7 +59,6 @@ func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
 		testBackendAddrStrs = append(testBackendAddrStrs, fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i))
 	}
-	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond
 }
 
 func testPick(t *testing.T, p balancer.Picker, info balancer.PickInfo, wantSC balancer.SubConn, wantErr error) {
