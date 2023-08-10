@@ -189,7 +189,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	// Register ClientConn with channelz.
 	cc.channelzRegistration(target)
 
-	cc.csMgr = newConnectivityStateManager(cc.channelzID)
+	cc.csMgr = newConnectivityStateManager(cc.ctx, cc.channelzID)
 
 	if err := cc.validateTransportCredentials(); err != nil {
 		return nil, err
@@ -541,10 +541,10 @@ func getChainStreamer(interceptors []StreamClientInterceptor, curr int, finalStr
 
 // newConnectivityStateManager creates an connectivityStateManager with
 // the specified id.
-func newConnectivityStateManager(id *channelz.Identifier) *connectivityStateManager {
+func newConnectivityStateManager(ctx context.Context, id *channelz.Identifier) *connectivityStateManager {
 	return &connectivityStateManager{
 		channelzID: id,
-		pubSub:     grpcsync.NewPubSub(),
+		pubSub:     grpcsync.NewPubSub(ctx),
 	}
 }
 
@@ -598,10 +598,6 @@ func (csm *connectivityStateManager) getNotifyChan() <-chan struct{} {
 		csm.notifyChan = make(chan struct{})
 	}
 	return csm.notifyChan
-}
-
-func (csm *connectivityStateManager) close() {
-	csm.pubSub.Stop()
 }
 
 // ClientConnInterface defines the functions clients need to perform unary and
@@ -1234,7 +1230,10 @@ func (cc *ClientConn) ResetConnectBackoff() {
 
 // Close tears down the ClientConn and all underlying connections.
 func (cc *ClientConn) Close() error {
-	defer cc.cancel()
+	defer func() {
+		cc.cancel()
+		<-cc.csMgr.pubSub.Done()
+	}()
 
 	cc.mu.Lock()
 	if cc.conns == nil {
@@ -1249,7 +1248,6 @@ func (cc *ClientConn) Close() error {
 	conns := cc.conns
 	cc.conns = nil
 	cc.csMgr.updateState(connectivity.Shutdown)
-	cc.csMgr.close()
 
 	pWrapper := cc.blockingpicker
 	rWrapper := cc.resolverWrapper

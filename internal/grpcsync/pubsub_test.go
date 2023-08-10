@@ -19,6 +19,7 @@
 package grpcsync
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -40,8 +41,9 @@ func (ts *testSubscriber) OnMessage(msg interface{}) {
 }
 
 func (s) TestPubSub_PublishNoMsg(t *testing.T) {
-	pubsub := NewPubSub()
-	defer pubsub.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	pubsub := NewPubSub(ctx)
 
 	ts := newTestSubscriber(1)
 	pubsub.Subscribe(ts)
@@ -54,7 +56,9 @@ func (s) TestPubSub_PublishNoMsg(t *testing.T) {
 }
 
 func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
-	pubsub := NewPubSub()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	pubsub := NewPubSub(ctx)
 
 	const numPublished = 10
 
@@ -148,7 +152,8 @@ func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 		t.FailNow()
 	}
 
-	pubsub.Stop()
+	cancel()
+	<-pubsub.Done()
 
 	go func() {
 		pubsub.Publish(99)
@@ -165,8 +170,9 @@ func (s) TestPubSub_PublishMsgs_RegisterSubs_And_Stop(t *testing.T) {
 }
 
 func (s) TestPubSub_PublishMsgs_BeforeRegisterSub(t *testing.T) {
-	pubsub := NewPubSub()
-	defer pubsub.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	pubsub := NewPubSub(ctx)
 
 	const numPublished = 3
 	for i := 0; i < numPublished; i++ {

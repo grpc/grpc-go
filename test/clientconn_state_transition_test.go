@@ -32,6 +32,9 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -545,5 +548,95 @@ func awaitNoStateChange(ctx context.Context, t *testing.T, cc *grpc.ClientConn, 
 	t.Helper()
 	if cc.WaitForStateChange(ctx, currState) {
 		t.Fatalf("State changed from %q to %q when no state change was expected", currState, cc.GetState())
+	}
+}
+
+type funcConnectivityStateSubscriber struct {
+	onMsg func(connectivity.State)
+}
+
+func (f *funcConnectivityStateSubscriber) OnMessage(msg interface{}) {
+	f.onMsg(msg.(connectivity.State))
+}
+
+// TestConnectivityStateSubscriber confirms updates sent by the balancer in
+// rapid succession are not missed by the subscriber.
+func (s) TestConnectivityStateSubscriber(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	sendStates := []connectivity.State{
+		connectivity.Connecting,
+		connectivity.Ready,
+		connectivity.Idle,
+		connectivity.Connecting,
+		connectivity.Idle,
+		connectivity.Connecting,
+		connectivity.Ready,
+	}
+	wantStates := append(sendStates, connectivity.Shutdown)
+
+	const testBalName = "any"
+	bf := stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
+			// Send the expected states in rapid succession.
+			for _, s := range sendStates {
+				t.Logf("Sending state update %s", s)
+				bd.ClientConn.UpdateState(balancer.State{ConnectivityState: s})
+			}
+			return nil
+		},
+	}
+	stub.Register(testBalName, bf)
+
+	// Create the ClientConn.
+	const testResName = "any"
+	rb := manual.NewBuilderWithScheme(testResName)
+	cc, err := grpc.Dial(testResName+":///",
+		grpc.WithResolvers(rb),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, testBalName)),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		t.Fatalf("Unexpected error from grpc.Dial: %v", err)
+	}
+
+	// Subscribe to state updates.  Use a buffer size of 1 to allow the
+	// Shutdown state to go into the channel when Close()ing.
+	connCh := make(chan connectivity.State, 1)
+	s := &funcConnectivityStateSubscriber{
+		onMsg: func(s connectivity.State) {
+			select {
+			case connCh <- s:
+			case <-ctx.Done():
+			}
+			if s == connectivity.Shutdown {
+				close(connCh)
+			}
+		},
+	}
+
+	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, s)
+
+	// Send an update from the resolver that will trigger the LB policy's UpdateClientConnState.
+	go rb.UpdateState(resolver.State{})
+
+	// Verify the resulting states.
+	for i, want := range wantStates {
+		if i == len(sendStates) {
+			// Trigger Shutdown to be sent by the channel.  Use a goroutine to
+			// ensure the operation does not block.
+			cc.Close()
+		}
+		select {
+		case got := <-connCh:
+			if got != want {
+				t.Errorf("Update %v was %s; want %s", i, got, want)
+			} else {
+				t.Logf("Update %v was %s as expected", i, got)
+			}
+		case <-ctx.Done():
+			t.Fatalf("Timed out waiting for state update %v: %s", i, want)
+		}
 	}
 }
