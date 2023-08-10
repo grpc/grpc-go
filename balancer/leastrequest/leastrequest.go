@@ -37,7 +37,7 @@ var grpcranduint32 = grpcrand.Uint32
 // Name is the name of the least request balancer.
 const Name = "least_request_experimental"
 
-var logger = grpclog.Component("least request")
+var logger = grpclog.Component("least-request")
 
 func init() {
 	balancer.Register(bb{})
@@ -47,9 +47,9 @@ func init() {
 type LBConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
 
-	// ChoiceCount is the number of random SubConns to sample to try and find
-	// the one with the Least Request. If unset, defaults to 2. If set to < 2,
-	// will become 2, and if set to > 10, will become 10.
+	// ChoiceCount is the number of random SubConns to sample to find the one
+	// with the fewest outstanding requests. If unset, defaults to 2. If set to
+	// < 2, the config will be rejected, and if set to > 10, will become 10.
 	ChoiceCount uint32 `json:"choiceCount,omitempty"`
 }
 
@@ -82,8 +82,7 @@ func (bb) Name() string {
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &leastRequestBalancer{scRPCCounts: make(map[balancer.SubConn]*int32)}
 	baseBuilder := base.NewBalancerBuilder(Name, b, base.Config{HealthCheck: true})
-	baseBalancer := baseBuilder.Build(cc, bOpts)
-	b.Balancer = baseBalancer
+	b.Balancer = baseBuilder.Build(cc, bOpts)
 	return b
 }
 

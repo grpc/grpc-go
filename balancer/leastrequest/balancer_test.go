@@ -350,7 +350,7 @@ func (s) TestLeastRequestPersistsCounts(t *testing.T) {
 	}(grpcranduint32)
 	var index int
 	indexes := []uint32{
-		0, 1, 2, 3, 4, 5, // Triggers a round robin distribution of indexes for two addresses or three addresses.
+		0, 0, 1, 1,
 	}
 	grpcranduint32 = func() uint32 {
 		ret := indexes[index%len(indexes)]
@@ -423,6 +423,9 @@ func (s) TestLeastRequestPersistsCounts(t *testing.T) {
 	// SubConns. Thus, since address 3 is the new address and the first two
 	// addresses are populated with RPCs, once the picker update of all 3 READY
 	// SubConns takes effect, all new streams should be started on address 3.
+	indexes = []uint32{
+		0, 1, 2, 3, 4, 5,
+	}
 	lrscJSON = `
 {
   "loadBalancingConfig": [
