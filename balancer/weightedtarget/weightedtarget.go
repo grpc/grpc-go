@@ -163,7 +163,7 @@ func (b *weightedTargetBalancer) ResolverError(err error) {
 }
 
 func (b *weightedTargetBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	b.bg.UpdateSubConnState(sc, state)
+	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
 func (b *weightedTargetBalancer) Close() {
