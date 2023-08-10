@@ -192,8 +192,8 @@ func (b *wrrLocalityBalancer) ResolverError(err error) {
 	b.child.ResolverError(err)
 }
 
-func (b *wrrLocalityBalancer) UpdateSubConnState(sc balancer.SubConn, scState balancer.SubConnState) {
-	b.child.UpdateSubConnState(sc, scState)
+func (b *wrrLocalityBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
 func (b *wrrLocalityBalancer) Close() {
