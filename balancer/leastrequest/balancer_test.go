@@ -117,8 +117,8 @@ func (s) TestParseConfig(t *testing.T) {
 	}
 }
 
-// setupBackends spins up four test backends, each listening on a port on
-// localhost. The four backends always reply with an empty response with no
+// setupBackends spins up three test backends, each listening on a port on
+// localhost. The three backends always reply with an empty response with no
 // error, and for streaming receive until hitting an EOF error.
 func setupBackends(t *testing.T) ([]string, func()) {
 	t.Helper()
@@ -336,5 +336,125 @@ func (s) TestLeastRequestE2E(t *testing.T) {
 	}
 	if peer3.Addr.String() != peerAtIndex[2] {
 		t.Fatalf("got: %v, want: %v", peer3.Addr.String(), peerAtIndex[2])
+	}
+}
+
+// TestLeastRequestPersistsCounts tests that the Least Request Balancer persists
+// counts once it gets a new picker update. It first updates the Least Request
+// Balancer with two backends, and creates a bunch of streams on them. Then, it
+// updates the Least Request Balancer with three backends, including the two
+// previous. Any created streams should then be started on the new backend.
+func (s) TestLeastRequestPersistsCounts(t *testing.T) {
+	defer func(u func() uint32) {
+		grpcranduint32 = u
+	}(grpcranduint32)
+	var index int
+	indexes := []uint32{
+		0, 1, 2, 3, 4, 5, // Triggers a round robin distribution of indexes for two addresses or three addresses.
+	}
+	grpcranduint32 = func() uint32 {
+		ret := indexes[index%len(indexes)]
+		index++
+		return ret
+	}
+	addresses, cancel := setupBackends(t)
+	defer cancel()
+
+	mr := manual.NewBuilderWithScheme("lr-e2e")
+	defer mr.Close()
+
+	// Configure least request as top level balancer of channel.
+	lrscJSON := `
+{
+  "loadBalancingConfig": [
+    {
+      "least_request_experimental": {
+        "choiceCount": 2
+      }
+    }
+  ]
+}`
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(lrscJSON)
+	firstTwoAddresses := []resolver.Address{
+		{Addr: addresses[0]},
+		{Addr: addresses[1]},
+	}
+	mr.InitialState(resolver.State{
+		Addresses:     firstTwoAddresses,
+		ServiceConfig: sc,
+	})
+
+	cc, err := grpc.Dial(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.Dial() failed: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	testServiceClient := testgrpc.NewTestServiceClient(cc)
+
+	// Start 50 streaming RPCs, and leave them unfinished for the duration of
+	// the test. This will populate the first two addresses with many active
+	// RPCs.
+	for i := 0; i < 50; i++ {
+		stream, err := testServiceClient.FullDuplexCall(ctx)
+		if err != nil {
+			t.Fatalf("testServiceClient.FullDuplexCall failed: %v", err)
+		}
+		defer func() {
+			stream.CloseSend()
+			if _, err = stream.Recv(); err != io.EOF {
+				t.Fatalf("unexpected error: %v, expected an EOF error", err)
+			}
+		}()
+	}
+
+	// Update the least request balancer to choice count 3. Also update the
+	// address list adding a third address. Alongside the injected randomness,
+	// this should trigger the least request balancer to search all created
+	// SubConns. Thus, since address 3 is the new address and the first two
+	// addresses are populated with RPCs, once the picker update of all 3 READY
+	// SubConns takes effect, all new streams should be started on address 3.
+	lrscJSON = `
+{
+  "loadBalancingConfig": [
+    {
+      "least_request_experimental": {
+        "choiceCount": 3
+      }
+    }
+  ]
+}`
+	sc = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(lrscJSON)
+	fullAddresses := []resolver.Address{
+		{Addr: addresses[0]},
+		{Addr: addresses[1]},
+		{Addr: addresses[2]},
+	}
+	mr.UpdateState(resolver.State{
+		Addresses:     fullAddresses,
+		ServiceConfig: sc,
+	})
+	newAddress := fullAddresses[2]
+	// Poll for only address 3 to show up. This requires a polling loop because
+	// picker update with all three SubConns doesn't take into effect
+	// immediately, needs the third SubConn to become READY.
+	if err := checkRoundRobinRPCs(ctx, testServiceClient, []resolver.Address{newAddress}); err != nil {
+		t.Fatalf("error in expected round robin: %v", err)
+	}
+
+	for i := 0; i < 50; i++ {
+		var peer peer.Peer
+		stream, err := testServiceClient.FullDuplexCall(ctx, grpc.Peer(&peer))
+		if err != nil {
+			t.Fatalf("testServiceClient.FullDuplexCall failed: %v", err)
+		}
+		stream.CloseSend() // Finish stream to populate peer.
+		if _, err = stream.Recv(); err != io.EOF {
+			t.Fatalf("unexpected error: %v, expected an EOF error", err)
+		}
+		if peer.Addr.String() != addresses[2] {
+			t.Fatalf("got: %v, want: %v", peer.Addr.String(), addresses[2])
+		}
 	}
 }

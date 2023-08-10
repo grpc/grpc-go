@@ -16,6 +16,7 @@
  *
  */
 
+// Package leastrequest implements a least request load balancer.
 package leastrequest
 
 import (
