@@ -79,9 +79,13 @@ const (
 	defaultTestShortTimeout = 100 * time.Microsecond
 )
 
-var target = resolver.Target{URL: *testutils.MustParseURL("xds:///" + targetStr)}
+var (
+	target = resolver.Target{URL: *testutils.MustParseURL("xds:///" + targetStr)}
 
-var routerFilter = xdsresource.HTTPFilter{Name: "rtr", Filter: httpfilter.Get(router.TypeURL)}
+	routerHTTPFilter = httpfilter.Get(router.TypeURL)
+	routerConfig, _  = routerHTTPFilter.ParseFilterConfig(testutils.MarshalAny(&v3routerpb.Router{}))
+	routerFilter     = xdsresource.HTTPFilter{Name: "rtr", Filter: routerHTTPFilter, Config: routerConfig}
+)
 
 type s struct {
 	grpctest.Tester
@@ -1802,42 +1806,65 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 	testCases := []struct {
 		name         string
 		ldsFilters   []xdsresource.HTTPFilter
-		vhOverrides  map[string]httpfilter.FilterConfig
-		rtOverrides  map[string]httpfilter.FilterConfig
-		clOverrides  map[string]httpfilter.FilterConfig
+		rtCfgUpdate  xdsresource.RouteConfigUpdate
 		rpcRes       map[string][][]string
 		selectErr    string
 		newStreamErr string
 	}{
+
 		{
-			name: "no router filter",
+			name: "route type RouteActionUnsupported invalid for client",
 			ldsFilters: []xdsresource.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
+			},
+			rtCfgUpdate: xdsresource.RouteConfigUpdate{
+				VirtualHosts: []*xdsresource.VirtualHost{
+					{
+						Domains: []string{targetStr},
+						Routes: []*xdsresource.Route{{
+							Prefix: newStringP("1"),
+							WeightedClusters: map[string]xdsresource.WeightedCluster{
+								"A": {Weight: 1},
+								"B": {Weight: 1},
+							},
+							ActionType: xdsresource.RouteActionUnsupported,
+						}},
+					},
+				},
 			},
 			rpcRes: map[string][][]string{
 				"1": {
 					{"build:foo1", "override:foo2", "build:bar1", "override:bar2", "newstream:foo1", "newstream:bar1", "done:bar1", "done:foo1"},
 				},
 			},
-			selectErr: "no router filter present",
+			selectErr: errUnsupportedClientRouteAction.Error(),
 		},
 		{
-			name: "ignored after router filter",
+			name: "route type RouteActionNonForwardingAction invalid for client",
 			ldsFilters: []xdsresource.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
-				routerFilter,
-				{Name: "foo2", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo2"}},
+			},
+			rtCfgUpdate: xdsresource.RouteConfigUpdate{
+				VirtualHosts: []*xdsresource.VirtualHost{
+					{
+						Domains: []string{targetStr},
+						Routes: []*xdsresource.Route{{
+							Prefix: newStringP("1"),
+							WeightedClusters: map[string]xdsresource.WeightedCluster{
+								"A": {Weight: 1},
+								"B": {Weight: 1},
+							},
+							ActionType: xdsresource.RouteActionNonForwardingAction,
+						}},
+					},
+				},
 			},
 			rpcRes: map[string][][]string{
 				"1": {
-					{"build:foo1", "newstream:foo1", "done:foo1"},
-				},
-				"2": {
-					{"build:foo1", "newstream:foo1", "done:foo1"},
-					{"build:foo1", "newstream:foo1", "done:foo1"},
-					{"build:foo1", "newstream:foo1", "done:foo1"},
+					{"build:foo1", "override:foo2", "build:bar1", "override:bar2", "newstream:foo1", "newstream:bar1", "done:bar1", "done:foo1"},
 				},
 			},
+			selectErr: errUnsupportedClientRouteAction.Error(),
 		},
 		{
 			name: "NewStream error; ensure earlier interceptor Done is still called",
@@ -1846,12 +1873,24 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 				{Name: "bar", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "bar1", newStreamErr: errors.New("bar newstream err")}},
 				routerFilter,
 			},
+			rtCfgUpdate: xdsresource.RouteConfigUpdate{
+				VirtualHosts: []*xdsresource.VirtualHost{
+					{
+						Domains: []string{targetStr},
+						Routes: []*xdsresource.Route{{
+							Prefix: newStringP("1"),
+							WeightedClusters: map[string]xdsresource.WeightedCluster{
+								"A": {Weight: 1},
+								"B": {Weight: 1},
+							},
+							ActionType: xdsresource.RouteActionRoute,
+						}},
+					},
+				},
+			},
 			rpcRes: map[string][][]string{
 				"1": {
 					{"build:foo1", "build:bar1", "newstream:foo1", "newstream:bar1" /* <err in bar1 NewStream> */, "done:foo1"},
-				},
-				"2": {
-					{"build:foo1", "build:bar1", "newstream:foo1", "newstream:bar1" /* <err in bar1 NewSteam> */, "done:foo1"},
 				},
 			},
 			newStreamErr: "bar newstream err",
@@ -1863,9 +1902,30 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 				{Name: "bar", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "bar1"}},
 				routerFilter,
 			},
-			vhOverrides: map[string]httpfilter.FilterConfig{"foo": filterCfg{s: "foo2"}, "bar": filterCfg{s: "bar2"}},
-			rtOverrides: map[string]httpfilter.FilterConfig{"foo": filterCfg{s: "foo3"}, "bar": filterCfg{s: "bar3"}},
-			clOverrides: map[string]httpfilter.FilterConfig{"foo": filterCfg{s: "foo4"}, "bar": filterCfg{s: "bar4"}},
+			rtCfgUpdate: xdsresource.RouteConfigUpdate{
+				VirtualHosts: []*xdsresource.VirtualHost{
+					{
+						Domains: []string{targetStr},
+						Routes: []*xdsresource.Route{{
+							Prefix: newStringP("1"),
+							WeightedClusters: map[string]xdsresource.WeightedCluster{
+								"A": {Weight: 1},
+								"B": {Weight: 1},
+							},
+							ActionType: xdsresource.RouteActionRoute,
+						}, {
+							Prefix: newStringP("2"),
+							WeightedClusters: map[string]xdsresource.WeightedCluster{
+								"A": {Weight: 1},
+								"B": {Weight: 1, HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{"foo": filterCfg{s: "foo4"}, "bar": filterCfg{s: "bar4"}}},
+							},
+							HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{"foo": filterCfg{s: "foo3"}, "bar": filterCfg{s: "bar3"}},
+							ActionType:               xdsresource.RouteActionRoute,
+						}},
+						HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{"foo": filterCfg{s: "foo2"}, "bar": filterCfg{s: "bar2"}},
+					},
+				},
+			},
 			rpcRes: map[string][][]string{
 				"1": {
 					{"build:foo1", "override:foo2", "build:bar1", "override:bar2", "newstream:foo1", "newstream:bar1", "done:bar1", "done:foo1"},
@@ -1904,26 +1964,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 
 			// Invoke the watchAPI callback with a good service update and wait for the
 			// UpdateState method to be called on the ClientConn.
-			xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
-				VirtualHosts: []*xdsresource.VirtualHost{
-					{
-						Domains: []string{targetStr},
-						Routes: []*xdsresource.Route{{
-							Prefix: newStringP("1"), WeightedClusters: map[string]xdsresource.WeightedCluster{
-								"A": {Weight: 1},
-								"B": {Weight: 1},
-							},
-						}, {
-							Prefix: newStringP("2"), WeightedClusters: map[string]xdsresource.WeightedCluster{
-								"A": {Weight: 1},
-								"B": {Weight: 1, HTTPFilterConfigOverride: tc.clOverrides},
-							},
-							HTTPFilterConfigOverride: tc.rtOverrides,
-						}},
-						HTTPFilterConfigOverride: tc.vhOverrides,
-					},
-				},
-			}, nil)
+			xdsC.InvokeWatchRouteConfigCallback("", tc.rtCfgUpdate, nil)
 
 			gotState, err := tcc.stateCh.Receive(ctx)
 			if err != nil {
