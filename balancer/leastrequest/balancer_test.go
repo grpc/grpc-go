@@ -393,6 +393,14 @@ func (s) TestLeastRequestPersistsCounts(t *testing.T) {
 	defer cancel()
 	testServiceClient := testgrpc.NewTestServiceClient(cc)
 
+	// Wait for the two backends to round robin across. The happens because a
+	// SubConn transitioning into READY causes a new picker update. Once the
+	// picker update with the two backends is present, this test can start to
+	// populate those backends with streams.
+	if err := checkRoundRobinRPCs(ctx, testServiceClient, firstTwoAddresses); err != nil {
+		t.Fatalf("error in expected round robin: %v", err)
+	}
+
 	// Start 50 streaming RPCs, and leave them unfinished for the duration of
 	// the test. This will populate the first two addresses with many active
 	// RPCs.
