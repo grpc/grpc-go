@@ -1574,7 +1574,7 @@ type LoadBalancerStatsResponse_RpcMetadata struct {
 
 	// metadata values for each rpc for the keys specified in
 	// LoadBalancerStatsRequest.metadata_keys.
-	// metadata keys and values are returned exactly as was recieved
+	// metadata keys and values are returned exactly as was received
 	// from the server.
 	Metadata []*LoadBalancerStatsResponse_MetadataEntry `protobuf:"bytes,1,rep,name=metadata,proto3" json:"metadata,omitempty"`
 }
