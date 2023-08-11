@@ -381,7 +381,7 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 
 	var sc serviceconfig.LoadBalancingConfig
 	if sc, err = b.crParser.ParseConfig(crLBCfgJSON); err != nil {
-		b.logger.Errorf("cds_balancer: cluster_resolver config generated %v is invalid: %v", crLBCfgJSON, err)
+		b.logger.Errorf("cds_balancer: cluster_resolver config generated %v is invalid: %v", string(crLBCfgJSON), err)
 		return
 	}
 
