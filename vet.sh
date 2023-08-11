@@ -85,7 +85,7 @@ not git grep -l 'x/net/context' -- "*.go"
 git grep -l '"math/rand"' -- "*.go" 2>&1 | not grep -v '^examples\|^stress\|grpcrand\|^benchmark\|wrr_test'
 
 # - Do not use "interface{}"; use "any" instead.
-git grep -l 'interface{}' -- "*.go" 2>&1 | not grep -v 'pb\.go$'
+git grep -l 'interface{}' -- "*.go" 2>&1 | not grep -v 'pb\.go$\|protoc-gen-go-grpc'
 
 # - Do not call grpclog directly. Use grpclog.Component instead.
 git grep -l -e 'grpclog.I' --or -e 'grpclog.W' --or -e 'grpclog.E' --or -e 'grpclog.F' --or -e 'grpclog.V' -- "*.go" | not grep -v '^grpclog/component.go\|^internal/grpctest/tlogger_test.go'
