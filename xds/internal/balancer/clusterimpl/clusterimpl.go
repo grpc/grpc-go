@@ -279,7 +279,7 @@ func (b *clusterImplBalancer) ResolverError(err error) {
 	b.child.ResolverError(err)
 }
 
-func (b *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
+func (b *clusterImplBalancer) updateSubConnState(sc balancer.SubConn, s balancer.SubConnState, cb func(balancer.SubConnState)) {
 	if b.closed.HasFired() {
 		b.logger.Warningf("xds: received subconn state change {%+v, %+v} after clusterImplBalancer was closed", sc, s)
 		return
@@ -305,7 +305,15 @@ func (b *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer
 		}
 	}
 	b.scWrappersMu.Unlock()
-	b.child.UpdateSubConnState(sc, s)
+	if cb != nil {
+		cb(s)
+	} else {
+		b.child.UpdateSubConnState(sc, s)
+	}
+}
+
+func (b *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
+	b.updateSubConnState(sc, s, nil)
 }
 
 func (b *clusterImplBalancer) Close() {
@@ -378,6 +386,9 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 		newAddrs[i] = internal.SetXDSHandshakeClusterName(addr, clusterName)
 		lID = xdsinternal.GetLocalityID(newAddrs[i])
 	}
+	var sc balancer.SubConn
+	oldListener := opts.StateListener
+	opts.StateListener = func(state balancer.SubConnState) { b.updateSubConnState(sc, state, oldListener) }
 	sc, err := b.ClientConn.NewSubConn(newAddrs, opts)
 	if err != nil {
 		return nil, err
@@ -392,19 +403,7 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 }
 
 func (b *clusterImplBalancer) RemoveSubConn(sc balancer.SubConn) {
-	scw, ok := sc.(*scWrapper)
-	if !ok {
-		b.ClientConn.RemoveSubConn(sc)
-		return
-	}
-	// Remove the original SubConn from the parent ClientConn.
-	//
-	// Note that we don't remove this SubConn from the scWrappers map. We will
-	// need it to forward the final SubConn state Shutdown to the child policy.
-	//
-	// This entry is kept in the map until it's state is changes to Shutdown,
-	// and will be deleted in UpdateSubConnState().
-	b.ClientConn.RemoveSubConn(scw.SubConn)
+	b.logger.Errorf("RemoveSubConn(%v) called unexpectedly", sc)
 }
 
 func (b *clusterImplBalancer) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {

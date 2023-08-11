@@ -104,6 +104,9 @@ type Address struct {
 	// BalancerAttributes contains arbitrary data about this address intended
 	// for consumption by the LB policy.  These attributes do not affect SubConn
 	// creation, connection establishment, handshaking, etc.
+	//
+	// Deprecated: when an Address is inside an Endpoint, this field should not
+	// be used, and it will eventually be removed entirely.
 	BalancerAttributes *attributes.Attributes
 
 	// Metadata is the information associated with Addr, which may be used
@@ -167,10 +170,36 @@ type BuildOptions struct {
 	Dialer func(context.Context, string) (net.Conn, error)
 }
 
+// An Endpoint is one network endpoint, or server, which may have multiple
+// addresses with which it can be accessed.
+type Endpoint struct {
+	// Addresses contains a list of addresses used to access this endpoint.
+	Addresses []Address
+
+	// Attributes contains arbitrary data about this endpoint intended for
+	// consumption by the LB policy.
+	Attributes *attributes.Attributes
+}
+
 // State contains the current Resolver state relevant to the ClientConn.
 type State struct {
 	// Addresses is the latest set of resolved addresses for the target.
+	//
+	// If a resolver sets Addresses but does not set Endpoints, one Endpoint
+	// will be created for each Address before the State is passed to the LB
+	// policy.  The BalancerAttributes of each entry in Addresses will be set
+	// in Endpoints.Attributes, and be cleared in the Endpoint's Address's
+	// BalancerAttributes.
+	//
+	// Soon, Addresses will be deprecated and replaced fully by Endpoints.
 	Addresses []Address
+
+	// Endpoints is the latest set of resolved endpoints for the target.
+	//
+	// If a resolver produces a State containing Endpoints but not Addresses,
+	// it must take care to ensure the LB policies it selects will support
+	// Endpoints.
+	Endpoints []Endpoint
 
 	// ServiceConfig contains the result from parsing the latest service
 	// config.  If it is nil, it indicates no service config is present or the
@@ -293,11 +322,4 @@ type Resolver interface {
 	ResolveNow(ResolveNowOptions)
 	// Close closes the resolver.
 	Close()
-}
-
-// UnregisterForTesting removes the resolver builder with the given scheme from the
-// resolver map.
-// This function is for testing only.
-func UnregisterForTesting(scheme string) {
-	delete(m, scheme)
 }

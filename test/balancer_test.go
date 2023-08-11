@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/balancerload"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -196,14 +197,10 @@ func testPickExtraMetadata(t *testing.T, e env) {
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
-	// Set resolver to xds to trigger the extra metadata code path.
-	r := manual.NewBuilderWithScheme("xds")
-	resolver.Register(r)
-	defer func() {
-		resolver.UnregisterForTesting("xds")
-	}()
-	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
-	te.resolverScheme = "xds"
+	// Trigger the extra-metadata-adding code path.
+	defer func(old string) { internal.GRPCResolverSchemeExtraMetadata = old }(internal.GRPCResolverSchemeExtraMetadata)
+	internal.GRPCResolverSchemeExtraMetadata = "passthrough"
+
 	cc := te.clientConn()
 	tc := testgrpc.NewTestServiceClient(cc)
 
@@ -1062,5 +1059,80 @@ func (s) TestBalancerProducerHonorsContext(t *testing.T) {
 	// Receive the error from the producer's RPC, which should be canceled.
 	if err := <-rpcErrChan; status.Code(err) != codes.Canceled {
 		t.Fatalf("RPC error: %v; want status.Code(err)=%v", err, codes.Canceled)
+	}
+}
+
+// TestSubConnShutdown confirms that the Shutdown method on subconns and
+// RemoveSubConn method on ClientConn properly initiates subconn shutdown.
+func (s) TestSubConnShutdown(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	testCases := []struct {
+		name     string
+		shutdown func(cc balancer.ClientConn, sc balancer.SubConn)
+	}{{
+		name: "ClientConn.RemoveSubConn",
+		shutdown: func(cc balancer.ClientConn, sc balancer.SubConn) {
+			cc.RemoveSubConn(sc)
+		},
+	}, {
+		name: "SubConn.Shutdown",
+		shutdown: func(_ balancer.ClientConn, sc balancer.SubConn) {
+			sc.Shutdown()
+		},
+	}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotShutdown := grpcsync.NewEvent()
+
+			bf := stub.BalancerFuncs{
+				UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+					var sc balancer.SubConn
+					opts := balancer.NewSubConnOptions{
+						StateListener: func(scs balancer.SubConnState) {
+							switch scs.ConnectivityState {
+							case connectivity.Connecting:
+								// Ignored.
+							case connectivity.Ready:
+								tc.shutdown(bd.ClientConn, sc)
+							case connectivity.Shutdown:
+								gotShutdown.Fire()
+							default:
+								t.Errorf("got unexpected state %q in listener", scs.ConnectivityState)
+							}
+						},
+					}
+					sc, err := bd.ClientConn.NewSubConn(ccs.ResolverState.Addresses, opts)
+					if err != nil {
+						return err
+					}
+					sc.Connect()
+					// Report the state as READY to unblock ss.Start(), which waits for ready.
+					bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.Ready})
+					return nil
+				},
+			}
+
+			testBalName := "shutdown-test-balancer-" + tc.name
+			stub.Register(testBalName, bf)
+			t.Logf("Registered balancer %s...", testBalName)
+
+			ss := &stubserver.StubServer{}
+			if err := ss.Start(nil, grpc.WithDefaultServiceConfig(
+				fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, testBalName),
+			)); err != nil {
+				t.Fatalf("Error starting endpoint server: %v", err)
+			}
+			defer ss.Stop()
+
+			select {
+			case <-gotShutdown.Done():
+				// Success
+			case <-ctx.Done():
+				t.Fatalf("Timed out waiting for gotShutdown to be fired.")
+			}
+		})
 	}
 }

@@ -117,9 +117,9 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		// The resolver reported an empty address list. Treat it like an error by
 		// calling b.ResolverError.
 		if b.subConn != nil {
-			// Remove the old subConn. All addresses were removed, so it is no longer
-			// valid.
-			b.cc.RemoveSubConn(b.subConn)
+			// Shut down the old subConn. All addresses were removed, so it is
+			// no longer valid.
+			b.subConn.Shutdown()
 			b.subConn = nil
 		}
 		b.ResolverError(errors.New("produced zero addresses"))
@@ -146,7 +146,12 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		return nil
 	}
 
-	subConn, err := b.cc.NewSubConn(addrs, balancer.NewSubConnOptions{})
+	var subConn balancer.SubConn
+	subConn, err := b.cc.NewSubConn(addrs, balancer.NewSubConnOptions{
+		StateListener: func(state balancer.SubConnState) {
+			b.updateSubConnState(subConn, state)
+		},
+	})
 	if err != nil {
 		if b.logger.V(2) {
 			b.logger.Infof("Failed to create new SubConn: %v", err)
@@ -168,7 +173,13 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 	return nil
 }
 
+// UpdateSubConnState is unused as a StateListener is always registered when
+// creating SubConns.
 func (b *pickfirstBalancer) UpdateSubConnState(subConn balancer.SubConn, state balancer.SubConnState) {
+	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", subConn, state)
+}
+
+func (b *pickfirstBalancer) updateSubConnState(subConn balancer.SubConn, state balancer.SubConnState) {
 	if b.logger.V(2) {
 		b.logger.Infof("Received SubConn state update: %p, %+v", subConn, state)
 	}

@@ -187,7 +187,7 @@ func (b *wrrBalancer) updateAddresses(addrs []resolver.Address) {
 		// addr was removed by resolver.  Remove.
 		wsci, _ := b.subConns.Get(addr)
 		wsc := wsci.(*weightedSubConn)
-		b.cc.RemoveSubConn(wsc.SubConn)
+		wsc.SubConn.Shutdown()
 		b.subConns.Delete(addr)
 	}
 }

@@ -26,35 +26,35 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 )
-
-// TestSubConnsCount is the number of TestSubConns initialized as part of
-// package init.
-const TestSubConnsCount = 16
 
 // testingLogger wraps the logging methods from testing.T.
 type testingLogger interface {
 	Log(args ...interface{})
 	Logf(format string, args ...interface{})
-}
-
-// TestSubConns contains a list of SubConns to be used in tests.
-var TestSubConns []*TestSubConn
-
-func init() {
-	for i := 0; i < TestSubConnsCount; i++ {
-		TestSubConns = append(TestSubConns, &TestSubConn{
-			id:        fmt.Sprintf("sc%d", i),
-			ConnectCh: make(chan struct{}, 1),
-		})
-	}
+	Errorf(format string, args ...interface{})
 }
 
 // TestSubConn implements the SubConn interface, to be used in tests.
 type TestSubConn struct {
-	id        string
-	ConnectCh chan struct{}
+	tcc           *TestClientConn // the CC that owns this SubConn
+	id            string
+	ConnectCh     chan struct{}
+	stateListener func(balancer.SubConnState)
+	connectCalled *grpcsync.Event
+}
+
+// NewTestSubConn returns a newly initialized SubConn.  Typically, subconns
+// should be created via TestClientConn.NewSubConn instead, but can be useful
+// for some tests.
+func NewTestSubConn(id string) *TestSubConn {
+	return &TestSubConn{
+		ConnectCh:     make(chan struct{}, 1),
+		connectCalled: grpcsync.NewEvent(),
+		id:            id,
+	}
 }
 
 // UpdateAddresses is a no-op.
@@ -62,6 +62,7 @@ func (tsc *TestSubConn) UpdateAddresses([]resolver.Address) {}
 
 // Connect is a no-op.
 func (tsc *TestSubConn) Connect() {
+	tsc.connectCalled.Fire()
 	select {
 	case tsc.ConnectCh <- struct{}{}:
 	default:
@@ -71,6 +72,25 @@ func (tsc *TestSubConn) Connect() {
 // GetOrBuildProducer is a no-op.
 func (tsc *TestSubConn) GetOrBuildProducer(balancer.ProducerBuilder) (balancer.Producer, func()) {
 	return nil, nil
+}
+
+// UpdateState pushes the state to the listener, if one is registered.
+func (tsc *TestSubConn) UpdateState(state balancer.SubConnState) {
+	<-tsc.connectCalled.Done()
+	if tsc.stateListener != nil {
+		tsc.stateListener(state)
+		return
+	}
+}
+
+// Shutdown pushes the SubConn to the ShutdownSubConn channel in the parent
+// TestClientConn.
+func (tsc *TestSubConn) Shutdown() {
+	tsc.tcc.logger.Logf("SubConn %s: Shutdown", tsc)
+	select {
+	case tsc.tcc.ShutdownSubConnCh <- tsc:
+	default:
+	}
 }
 
 // String implements stringer to print human friendly error message.
@@ -83,8 +103,8 @@ type TestClientConn struct {
 	logger testingLogger
 
 	NewSubConnAddrsCh      chan []resolver.Address // the last 10 []Address to create subconn.
-	NewSubConnCh           chan balancer.SubConn   // the last 10 subconn created.
-	RemoveSubConnCh        chan balancer.SubConn   // the last 10 subconn removed.
+	NewSubConnCh           chan *TestSubConn       // the last 10 subconn created.
+	ShutdownSubConnCh      chan *TestSubConn       // the last 10 subconn removed.
 	UpdateAddressesAddrsCh chan []resolver.Address // last updated address via UpdateAddresses().
 
 	NewPickerCh  chan balancer.Picker            // the last picker updated.
@@ -100,8 +120,8 @@ func NewTestClientConn(t *testing.T) *TestClientConn {
 		logger: t,
 
 		NewSubConnAddrsCh:      make(chan []resolver.Address, 10),
-		NewSubConnCh:           make(chan balancer.SubConn, 10),
-		RemoveSubConnCh:        make(chan balancer.SubConn, 10),
+		NewSubConnCh:           make(chan *TestSubConn, 10),
+		ShutdownSubConnCh:      make(chan *TestSubConn, 10),
 		UpdateAddressesAddrsCh: make(chan []resolver.Address, 1),
 
 		NewPickerCh:  make(chan balancer.Picker, 1),
@@ -112,9 +132,14 @@ func NewTestClientConn(t *testing.T) *TestClientConn {
 
 // NewSubConn creates a new SubConn.
 func (tcc *TestClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	sc := TestSubConns[tcc.subConnIdx]
+	sc := &TestSubConn{
+		tcc:           tcc,
+		id:            fmt.Sprintf("sc%d", tcc.subConnIdx),
+		ConnectCh:     make(chan struct{}, 1),
+		stateListener: o.StateListener,
+		connectCalled: grpcsync.NewEvent(),
+	}
 	tcc.subConnIdx++
-
 	tcc.logger.Logf("testClientConn: NewSubConn(%v, %+v) => %s", a, o, sc)
 	select {
 	case tcc.NewSubConnAddrsCh <- a:
@@ -129,13 +154,10 @@ func (tcc *TestClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubCon
 	return sc, nil
 }
 
-// RemoveSubConn removes the SubConn.
+// RemoveSubConn is a nop; tests should all be updated to use sc.Shutdown()
+// instead.
 func (tcc *TestClientConn) RemoveSubConn(sc balancer.SubConn) {
-	tcc.logger.Logf("testClientConn: RemoveSubConn(%s)", sc)
-	select {
-	case tcc.RemoveSubConnCh <- sc:
-	default:
-	}
+	tcc.logger.Errorf("RemoveSubConn(%v) called unexpectedly", sc)
 }
 
 // UpdateAddresses updates the addresses on the SubConn.

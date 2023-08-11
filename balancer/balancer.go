@@ -105,8 +105,8 @@ type SubConn interface {
 	//
 	// This will trigger a state transition for the SubConn.
 	//
-	// Deprecated: This method is now part of the ClientConn interface and will
-	// eventually be removed from here.
+	// Deprecated: this method will be removed.  Create new SubConns for new
+	// addresses instead.
 	UpdateAddresses([]resolver.Address)
 	// Connect starts the connecting for this SubConn.
 	Connect()
@@ -115,6 +115,13 @@ type SubConn interface {
 	// creates a new one and returns it.  Returns a close function which must
 	// be called when the Producer is no longer needed.
 	GetOrBuildProducer(ProducerBuilder) (p Producer, close func())
+	// Shutdown shuts down the SubConn gracefully.  Any started RPCs will be
+	// allowed to complete.  No future calls should be made on the SubConn.
+	// One final state update will be delivered to the StateListener (or
+	// UpdateSubConnState; deprecated) with ConnectivityState of Shutdown to
+	// indicate the shutdown operation.  This may be delivered before
+	// in-progress RPCs are complete and the actual connection is closed.
+	Shutdown()
 }
 
 // NewSubConnOptions contains options to create new SubConn.
@@ -129,6 +136,11 @@ type NewSubConnOptions struct {
 	// HealthCheckEnabled indicates whether health check service should be
 	// enabled on this SubConn
 	HealthCheckEnabled bool
+	// StateListener is called when the state of the subconn changes.  If nil,
+	// Balancer.UpdateSubConnState will be called instead.  Will never be
+	// invoked until after Connect() is called on the SubConn created with
+	// these options.
+	StateListener func(SubConnState)
 }
 
 // State contains the balancer's state relevant to the gRPC ClientConn.
@@ -150,16 +162,24 @@ type ClientConn interface {
 	// NewSubConn is called by balancer to create a new SubConn.
 	// It doesn't block and wait for the connections to be established.
 	// Behaviors of the SubConn can be controlled by options.
+	//
+	// Deprecated: please be aware that in a future version, SubConns will only
+	// support one address per SubConn.
 	NewSubConn([]resolver.Address, NewSubConnOptions) (SubConn, error)
 	// RemoveSubConn removes the SubConn from ClientConn.
 	// The SubConn will be shutdown.
+	//
+	// Deprecated: use SubConn.Shutdown instead.
 	RemoveSubConn(SubConn)
 	// UpdateAddresses updates the addresses used in the passed in SubConn.
 	// gRPC checks if the currently connected address is still in the new list.
 	// If so, the connection will be kept. Else, the connection will be
 	// gracefully closed, and a new connection will be created.
 	//
-	// This will trigger a state transition for the SubConn.
+	// This may trigger a state transition for the SubConn.
+	//
+	// Deprecated: this method will be removed.  Create new SubConns for new
+	// addresses instead.
 	UpdateAddresses(SubConn, []resolver.Address)
 
 	// UpdateState notifies gRPC that the balancer's internal state has
@@ -343,9 +363,13 @@ type Balancer interface {
 	ResolverError(error)
 	// UpdateSubConnState is called by gRPC when the state of a SubConn
 	// changes.
+	//
+	// Deprecated: Use NewSubConnOptions.StateListener when creating the
+	// SubConn instead.
 	UpdateSubConnState(SubConn, SubConnState)
-	// Close closes the balancer. The balancer is not required to call
-	// ClientConn.RemoveSubConn for its existing SubConns.
+	// Close closes the balancer. The balancer is not currently required to
+	// call SubConn.Shutdown for its existing SubConns; however, this will be
+	// required in a future release, so it is recommended.
 	Close()
 }
 

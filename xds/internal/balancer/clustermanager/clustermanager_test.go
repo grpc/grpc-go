@@ -120,7 +120,7 @@ func testPick(t *testing.T, p balancer.Picker, info balancer.PickInfo, wantSC ba
 		if fmt.Sprint(err) != fmt.Sprint(wantErr) {
 			t.Fatalf("picker.Pick(%+v), got error %v, want %v", info, err, wantErr)
 		}
-		if !cmp.Equal(gotSCSt.SubConn, wantSC, cmp.AllowUnexported(testutils.TestSubConn{})) {
+		if gotSCSt.SubConn != wantSC {
 			t.Fatalf("picker.Pick(%+v), got %v, want SubConn=%v", info, gotSCSt, wantSC)
 		}
 	}
@@ -169,8 +169,8 @@ func TestClusterPicks(t *testing.T) {
 		// Clear the attributes before adding to map.
 		addrs[0].BalancerAttributes = nil
 		m1[addrs[0]] = sc
-		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
 
 	p1 := <-cc.NewPickerCh
@@ -247,8 +247,8 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 		// Clear the attributes before adding to map.
 		addrs[0].BalancerAttributes = nil
 		m1[addrs[0]] = sc
-		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
 
 	p1 := <-cc.NewPickerCh
@@ -313,8 +313,8 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	// Clear the attributes before adding to map.
 	addrs[0].BalancerAttributes = nil
 	m1[addrs[0]] = sc
-	rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Should have no more newSubConn.
 	select {
@@ -404,8 +404,8 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		// Clear the attributes before adding to map.
 		addrs[0].BalancerAttributes = nil
 		m1[addrs[0]] = sc
-		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
 
 	p1 := <-cc.NewPickerCh
@@ -453,7 +453,7 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		select {
 		case <-time.After(time.Millisecond * 500):
 			t.Fatalf("timeout waiting for remove subconn")
-		case <-cc.RemoveSubConnCh:
+		case <-cc.ShutdownSubConnCh:
 		}
 	}
 
@@ -488,8 +488,8 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		// Clear the attributes before adding to map.
 		addrs[0].BalancerAttributes = nil
 		m2[addrs[0]] = sc
-		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
 
 	p3 := <-cc.NewPickerCh
@@ -582,7 +582,11 @@ var errTestInitIdle = fmt.Errorf("init Idle balancer error 0")
 func init() {
 	stub.Register(initIdleBalancerName, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, opts balancer.ClientConnState) error {
-			bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{})
+			sc, err := bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{})
+			if err != nil {
+				return err
+			}
+			sc.Connect()
 			return nil
 		},
 		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
@@ -632,7 +636,7 @@ func TestInitialIdle(t *testing.T) {
 	// in the address is cleared.
 	for range wantAddrs {
 		sc := <-cc.NewSubConnCh
-		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Idle})
+		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
 	}
 
 	if state1 := <-cc.NewStateCh; state1 != connectivity.Idle {
@@ -673,8 +677,8 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	}
 
 	sc1 := <-cc.NewSubConnCh
-	rtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	rtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p1 := <-cc.NewPickerCh
 	pi := balancer.PickInfo{
 		Ctx: SetPickedCluster(context.Background(), "csp:cluster"),
@@ -703,7 +707,7 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	// Update the pick first balancers SubConn as CONNECTING. This will cause
 	// the pick first balancer to UpdateState() with CONNECTING, which shouldn't send
 	// a Picker update back, as the Graceful Switch process is not complete.
-	rtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer cancel()
 	select {
@@ -716,7 +720,7 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	// the pick first balancer to UpdateState() with READY, which should send a
 	// Picker update back, as the Graceful Switch process is complete. This
 	// Picker should always pick the pick first's created SubConn.
-	rtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p2 := <-cc.NewPickerCh
 	testPick(t, p2, pi, sc2, nil)
 	// The Graceful Switch process completing for the child should cause the
@@ -725,12 +729,12 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	defer cancel()
 	select {
 	case <-ctx.Done():
-		t.Fatalf("error waiting for RemoveSubConn()")
-	case rsc := <-cc.RemoveSubConnCh:
+		t.Fatalf("error waiting for sc.Shutdown()")
+	case rsc := <-cc.ShutdownSubConnCh:
 		// The SubConn removed should have been the created SubConn
 		// from the child before switching.
 		if rsc != sc1 {
-			t.Fatalf("RemoveSubConn() got: %v, want %v", rsc, sc1)
+			t.Fatalf("Shutdown() got: %v, want %v", rsc, sc1)
 		}
 	}
 }

@@ -852,7 +852,7 @@ func (s) TestUpdateAddresses(t *testing.T) {
 }
 
 func scwsEqual(gotSCWS subConnWithState, wantSCWS subConnWithState) error {
-	if !cmp.Equal(gotSCWS, wantSCWS, cmp.AllowUnexported(subConnWithState{}, testutils.TestSubConn{}, subConnWrapper{}, addressInfo{}), cmpopts.IgnoreFields(subConnWrapper{}, "scUpdateCh")) {
+	if gotSCWS.sc != wantSCWS.sc || !cmp.Equal(gotSCWS.state, wantSCWS.state, cmp.AllowUnexported(subConnWrapper{}, addressInfo{}), cmpopts.IgnoreFields(subConnWrapper{}, "scUpdateCh")) {
 		return fmt.Errorf("received SubConnState: %+v, want %+v", gotSCWS, wantSCWS)
 	}
 	return nil
@@ -1085,7 +1085,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 
 		// Since no addresses are ejected, a SubConn update should forward down
 		// to the child.
-		od.UpdateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
+		od.updateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
 			ConnectivityState: connectivity.Connecting,
 		})
 
@@ -1147,7 +1147,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 		// that address should not be forwarded downward. These SubConn updates
 		// will be cached to update the child sometime in the future when the
 		// address gets unejected.
-		od.UpdateSubConnState(pi.SubConn, balancer.SubConnState{
+		od.updateSubConnState(pi.SubConn, balancer.SubConnState{
 			ConnectivityState: connectivity.Connecting,
 		})
 		sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -1538,7 +1538,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		od.RemoveSubConn(scw1)
+		scw1.Shutdown()
 	}()
 
 	wg.Add(1)
@@ -1564,7 +1564,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 
 	// Call balancer.Balancers synchronously in this goroutine, upholding the
 	// balancer.Balancer API guarantee.
-	od.UpdateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
+	od.updateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
 		ConnectivityState: connectivity.Connecting,
 	})
 	od.ResolverError(errors.New("some error"))

@@ -225,8 +225,8 @@ func (s) TestRoundRobin_AllServersDown(t *testing.T) {
 
 	// Failfast RPCs should fail with Unavailable.
 	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(context.Background(), &testpb.Empty{}); status.Code(err) == codes.Unavailable {
-		return
+	if _, err := client.EmptyCall(context.Background(), &testpb.Empty{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("EmptyCall got err: %v; want Unavailable", err)
 	}
 }
 

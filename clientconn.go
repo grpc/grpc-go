@@ -1353,12 +1353,14 @@ func (ac *addrConn) resetTransport() {
 
 	if err := ac.tryAllAddrs(acCtx, addrs, connectDeadline); err != nil {
 		ac.cc.resolveNow(resolver.ResolveNowOptions{})
-		// After exhausting all addresses, the addrConn enters
-		// TRANSIENT_FAILURE.
+		ac.mu.Lock()
 		if acCtx.Err() != nil {
+			// addrConn was torn down.
+			ac.mu.Unlock()
 			return
 		}
-		ac.mu.Lock()
+		// After exhausting all addresses, the addrConn enters
+		// TRANSIENT_FAILURE.
 		ac.updateConnectivityState(connectivity.TransientFailure, err)
 
 		// Backoff.
