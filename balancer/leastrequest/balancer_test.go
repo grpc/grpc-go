@@ -453,19 +453,36 @@ func (s) TestLeastRequestPersistsCounts(t *testing.T) {
 		}
 	}
 
-	// The next two unary RPC should be created with the first index in the
-	// slice (created from non deterministic map iterations), since in the case
-	// of equal numbers of RPC's, the least request picker picks the first one.
-	// Thus, make sure the backend is equal.
-	var p1 peer.Peer
-	if _, err := testServiceClient.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p1)); err != nil {
-		t.Fatalf("testServiceClient.EmptyCall failed: %v", err)
+	// Now 25 RPC's are active on each address, the next three RPC's should
+	// round robin, since choiceCount is three and the injected random indexes
+	// cause it to search all three addresses for fewest outstanding requests on
+	// each iteration.
+	wantAddrCount := map[string]int{
+		addresses[0]: 1,
+		addresses[1]: 1,
+		addresses[2]: 1,
 	}
-	var p2 peer.Peer
-	if _, err := testServiceClient.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p2)); err != nil {
-		t.Fatalf("testServiceClient.EmptyCall failed: %v", err)
+	gotAddrCount := make(map[string]int)
+	for i := 0; i < len(addresses); i++ {
+		stream, err := testServiceClient.FullDuplexCall(ctx)
+		if err != nil {
+			t.Fatalf("testServiceClient.FullDuplexCall failed: %v", err)
+		}
+		defer func() {
+			stream.CloseSend()
+			if _, err = stream.Recv(); err != io.EOF {
+				t.Fatalf("unexpected error: %v, expected an EOF error", err)
+			}
+		}()
+		p, ok := peer.FromContext(stream.Context())
+		if !ok {
+			t.Fatalf("testServiceClient.FullDuplexCall has no Peer")
+		}
+		if p.Addr != nil {
+			gotAddrCount[p.Addr.String()]++
+		}
 	}
-	if p1.Addr.String() != p2.Addr.String() {
-		t.Fatalf("Peer1: %v != Peer2: %v", p1.Addr.String(), p2.Addr.String())
+	if diff := cmp.Diff(gotAddrCount, wantAddrCount); diff != "" {
+		t.Fatalf("addr count got: %v, want (round robin): %v", gotAddrCount, wantAddrCount)
 	}
 }
