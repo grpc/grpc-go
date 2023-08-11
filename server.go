@@ -117,7 +117,6 @@ type serviceInfo struct {
 
 type serverWorkerData struct {
 	st     transport.ServerTransport
-	wg     *sync.WaitGroup
 	stream *transport.Stream
 }
 
@@ -616,7 +615,6 @@ func (s *Server) serverWorker() {
 }
 
 func (s *Server) handleSingleStream(data *serverWorkerData) {
-	defer data.wg.Done()
 	s.handleStream(data.st, data.stream, s.traceInfo(data.st, data.stream))
 }
 
@@ -981,12 +979,10 @@ func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 
 func (s *Server) serveStreams(st transport.ServerTransport) {
 	defer st.Close(errors.New("finished serving streams for the server transport"))
-	var wg sync.WaitGroup
 
 	st.HandleStreams(func(stream *transport.Stream) {
-		wg.Add(1)
 		if s.opts.numServerWorkers > 0 {
-			data := &serverWorkerData{st: st, wg: &wg, stream: stream}
+			data := &serverWorkerData{st: st, stream: stream}
 			select {
 			case s.serverWorkerChannel <- data:
 				return
@@ -995,7 +991,6 @@ func (s *Server) serveStreams(st transport.ServerTransport) {
 			}
 		}
 		go func() {
-			defer wg.Done()
 			s.handleStream(st, stream, s.traceInfo(st, stream))
 		}()
 	}, func(ctx context.Context, method string) context.Context {
@@ -1005,7 +1000,6 @@ func (s *Server) serveStreams(st transport.ServerTransport) {
 		tr := trace.New("grpc.Recv."+methodFamily(method), method)
 		return trace.NewContext(ctx, tr)
 	})
-	wg.Wait()
 }
 
 var _ http.Handler = (*Server)(nil)
