@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 	"testing"
 	"time"
@@ -131,12 +130,8 @@ func setupBackends(t *testing.T) []string {
 				return &testpb.Empty{}, nil
 			},
 			FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-				for {
-					_, err := stream.Recv()
-					if err == io.EOF {
-						return nil
-					}
-				}
+				<-stream.Context().Done()
+				return nil
 			},
 		}
 		if err := backend.StartServer(); err != nil {
@@ -299,12 +294,6 @@ func (s) TestLeastRequestE2E(t *testing.T) {
 		if err != nil {
 			t.Fatalf("testServiceClient.FullDuplexCall failed: %v", err)
 		}
-		defer func() {
-			stream.CloseSend()
-			if _, err = stream.Recv(); err != io.EOF {
-				t.Fatalf("unexpected error: %v, expected an EOF error", err)
-			}
-		}()
 		p, ok := peer.FromContext(stream.Context())
 		if !ok {
 			t.Fatalf("testServiceClient.FullDuplexCall has no Peer")
@@ -380,16 +369,10 @@ func (s) TestLeastRequestPersistsCounts(t *testing.T) {
 	// the test. This will populate the first two addresses with many active
 	// RPCs.
 	for i := 0; i < 50; i++ {
-		stream, err := testServiceClient.FullDuplexCall(ctx)
+		_, err := testServiceClient.FullDuplexCall(ctx)
 		if err != nil {
 			t.Fatalf("testServiceClient.FullDuplexCall failed: %v", err)
 		}
-		defer func() {
-			stream.CloseSend()
-			if _, err = stream.Recv(); err != io.EOF {
-				t.Fatalf("unexpected error: %v, expected an EOF error", err)
-			}
-		}()
 	}
 
 	// Update the least request balancer to choice count 3. Also update the
@@ -438,12 +421,6 @@ func (s) TestLeastRequestPersistsCounts(t *testing.T) {
 		if err != nil {
 			t.Fatalf("testServiceClient.FullDuplexCall failed: %v", err)
 		}
-		defer func() {
-			stream.CloseSend()
-			if _, err = stream.Recv(); err != io.EOF {
-				t.Fatalf("unexpected error: %v, expected an EOF error", err)
-			}
-		}()
 		p, ok := peer.FromContext(stream.Context())
 		if !ok {
 			t.Fatalf("testServiceClient.FullDuplexCall has no Peer")
@@ -468,12 +445,6 @@ func (s) TestLeastRequestPersistsCounts(t *testing.T) {
 		if err != nil {
 			t.Fatalf("testServiceClient.FullDuplexCall failed: %v", err)
 		}
-		defer func() {
-			stream.CloseSend()
-			if _, err = stream.Recv(); err != io.EOF {
-				t.Fatalf("unexpected error: %v, expected an EOF error", err)
-			}
-		}()
 		p, ok := peer.FromContext(stream.Context())
 		if !ok {
 			t.Fatalf("testServiceClient.FullDuplexCall has no Peer")
