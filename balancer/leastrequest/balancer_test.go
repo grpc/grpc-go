@@ -165,9 +165,7 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 			for c := 0; c < len(addrs); c++ {
 				var peer peer.Peer
 				client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer))
-				if peer.Addr != nil {
-					iteration[c] = peer.Addr.String()
-				}
+				iteration[c] = peer.Addr.String()
 			}
 			iterations = append(iterations, iteration)
 		}
@@ -175,7 +173,7 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 		for _, addr := range iterations[0] {
 			gotAddrCount[addr]++
 		}
-		if diff := cmp.Diff(gotAddrCount, wantAddrCount); diff != "" {
+		if !cmp.Equal(gotAddrCount, wantAddrCount) {
 			continue
 		}
 		// Ensure all three iterations contain the same addresses.
@@ -454,6 +452,6 @@ func (s) TestLeastRequestPersistsCounts(t *testing.T) {
 		}
 	}
 	if diff := cmp.Diff(gotAddrCount, wantAddrCount); diff != "" {
-		t.Fatalf("addr count got: %v, want (round robin): %v", gotAddrCount, wantAddrCount)
+		t.Fatalf("addr count (-got:, +want): %v", diff)
 	}
 }
