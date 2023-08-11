@@ -34,8 +34,8 @@ import (
 // key/value pairs.  Keys must be hashable, and users should define their own
 // types for keys.  Values should not be modified after they are added to an
 // Attributes or if they were received from one.  If values implement 'Equal(o
-// interface{}) bool', it will be called by (*Attributes).Equal to determine
-// whether two values with the same key should be considered equal.
+// any) bool', it will be called by (*Attributes).Equal to determine whether
+// two values with the same key should be considered equal.
 type Attributes struct {
 	m map[any]any
 }
@@ -70,13 +70,12 @@ func (a *Attributes) Value(key any) any {
 	return a.m[key]
 }
 
-// Equal returns whether a and o are equivalent.  If 'Equal(o interface{})
-// bool' is implemented for a value in the attributes, it is called to
-// determine if the value matches the one stored in the other attributes.  If
-// Equal is not implemented, standard equality is used to determine if the two
-// values are equal. Note that some types (e.g. maps) aren't comparable by
-// default, so they must be wrapped in a struct, or in an alias type, with Equal
-// defined.
+// Equal returns whether a and o are equivalent.  If 'Equal(o any) bool' is
+// implemented for a value in the attributes, it is called to determine if the
+// value matches the one stored in the other attributes.  If Equal is not
+// implemented, standard equality is used to determine if the two values are
+// equal. Note that some types (e.g. maps) aren't comparable by default, so
+// they must be wrapped in a struct, or in an alias type, with Equal defined.
 func (a *Attributes) Equal(o *Attributes) bool {
 	if a == nil && o == nil {
 		return true

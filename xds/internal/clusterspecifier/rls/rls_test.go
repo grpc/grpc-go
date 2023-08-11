@@ -80,8 +80,8 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 		if test.wantErr { // Successfully received an error.
 			return
 		}
-		// Marshal and then unmarshal into interface{} to get rid of
-		// nondeterministic protojson Marshaling.
+		// Marshal and then unmarshal into any to get rid of nondeterministic
+		// protojson Marshaling.
 		lbCfgJSON, err := json.Marshal(lbCfg)
 		if err != nil {
 			t.Fatalf("json.Marshal(%+v) returned err %v", lbCfg, err)

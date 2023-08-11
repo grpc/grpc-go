@@ -414,9 +414,9 @@ var ErrBadResolverState = errors.New("bad resolver state")
 type ProducerBuilder interface {
 	// Build creates a Producer.  The first parameter is always a
 	// grpc.ClientConnInterface (a type to allow creating RPCs/streams on the
-	// associated SubConn), but is declared as interface{} to avoid a
-	// dependency cycle.  Should also return a close function that will be
-	// called when all references to the Producer have been given up.
+	// associated SubConn), but is declared as any to avoid a dependency cycle.
+	// Should also return a close function that will be called when all
+	// references to the Producer have been given up.
 	Build(grpcClientConnInterface any) (p Producer, close func())
 }
 

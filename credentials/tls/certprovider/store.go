@@ -31,8 +31,8 @@ var provStore = &store{
 // storeKey acts as the key to the map of providers maintained by the store. A
 // combination of provider name and configuration is used to uniquely identify
 // every provider instance in the store. Go maps need to be indexed by
-// comparable types, so the provider configuration is converted from
-// `interface{}` to string using the ParseConfig method while creating this key.
+// comparable types, so the provider configuration is converted from `any` to
+// `string` using the ParseConfig method while creating this key.
 type storeKey struct {
 	// name of the certificate provider.
 	name string
