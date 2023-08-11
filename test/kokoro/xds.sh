@@ -9,8 +9,9 @@ export GOPATH="${HOME}/gopath"
 pushd grpc-go/interop/xds/client
 # Install a version of Go supported by gRPC for the new features, e.g.
 # errors.Is()
-curl --retry 3 -O -L https://go.dev/dl/go1.17.3.linux-amd64.tar.gz
-sudo tar -C /usr/local -xf go1.17.3.linux-amd64.tar.gz
+gofilename=go1.21.0.linux-amd64.tar.gz
+curl --retry 3 -O -L "https://go.dev/dl/${gofilename}"
+sudo tar -C /usr/local -xf "${gofilename}"
 sudo ln -s /usr/local/go/bin/go /usr/bin/go
 # Retry go build on errors (e.g. go get connection errors), for at most 3 times
 for i in 1 2 3; do go build && break || sleep 5; done
