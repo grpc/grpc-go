@@ -318,7 +318,7 @@ func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 		func(ctx context.Context, method string) context.Context { return ctx },
 	)
 	wantHeader := http.Header{
-		"Date":          {},
+		"Date":          nil,
 		"Content-Type":  {"application/grpc"},
 		"Trailer":       {"Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
 		"Custom-Header": {"Custom header value", "Another custom header value"},
@@ -352,7 +352,7 @@ func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) 
 		func(ctx context.Context, method string) context.Context { return ctx },
 	)
 	wantHeader := http.Header{
-		"Date":         {},
+		"Date":         nil,
 		"Content-Type": {"application/grpc"},
 		"Trailer":      {"Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
 	}
@@ -402,7 +402,7 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		func(ctx context.Context, method string) context.Context { return ctx },
 	)
 	wantHeader := http.Header{
-		"Date":         {},
+		"Date":         nil,
 		"Content-Type": {"application/grpc"},
 		"Trailer":      {"Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
 	}
@@ -489,7 +489,7 @@ func (s) TestHandlerTransport_HandleStreams_ErrDetails(t *testing.T) {
 		func(ctx context.Context, method string) context.Context { return ctx },
 	)
 	wantHeader := http.Header{
-		"Date":         {},
+		"Date":         nil,
 		"Content-Type": {"application/grpc"},
 		"Trailer":      {"Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
 	}
@@ -515,7 +515,7 @@ func (s) TestHandlerTransport_Drain(t *testing.T) {
 func checkHeaderAndTrailer(t *testing.T, rw testHandlerResponseWriter, wantHeader, wantTrailer http.Header) {
 	// For trailer-only responses, the trailer values might be reported as part of the Header. They will however
 	// be present in Trailer in either case. Hence, normalize the header by removing all trailer values.
-	actualHeader := cloneHeader(rw.Result().Header)
+	actualHeader := rw.Result().Header.Clone()
 	for _, trailerKey := range actualHeader["Trailer"] {
 		actualHeader.Del(trailerKey)
 	}
@@ -526,22 +526,4 @@ func checkHeaderAndTrailer(t *testing.T, rw testHandlerResponseWriter, wantHeade
 	if actualTrailer := rw.Result().Trailer; !reflect.DeepEqual(actualTrailer, wantTrailer) {
 		t.Errorf("Trailer mismatch.\n got: %#v\n want: %#v", actualTrailer, wantTrailer)
 	}
-}
-
-// cloneHeader performs a deep clone of an http.Header, since the (http.Header).Clone() method was only added in
-// Go 1.13.
-func cloneHeader(hdr http.Header) http.Header {
-	if hdr == nil {
-		return nil
-	}
-
-	hdrClone := make(http.Header, len(hdr))
-
-	for k, vv := range hdr {
-		vvClone := make([]string, len(vv))
-		copy(vvClone, vv)
-		hdrClone[k] = vvClone
-	}
-
-	return hdrClone
 }
