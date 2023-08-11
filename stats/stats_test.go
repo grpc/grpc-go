@@ -424,7 +424,7 @@ type expectedData struct {
 type gotData struct {
 	ctx    context.Context
 	client bool
-	s      interface{} // This could be RPCStats or ConnStats.
+	s      any // This could be RPCStats or ConnStats.
 }
 
 const (

@@ -491,7 +491,7 @@ func chainUnaryClientInterceptors(cc *ClientConn) {
 	} else if len(interceptors) == 1 {
 		chainedInt = interceptors[0]
 	} else {
-		chainedInt = func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+		chainedInt = func(ctx context.Context, method string, req, reply any, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
 			return interceptors[0](ctx, method, req, reply, cc, getChainUnaryInvoker(interceptors, 0, invoker), opts...)
 		}
 	}
@@ -503,7 +503,7 @@ func getChainUnaryInvoker(interceptors []UnaryClientInterceptor, curr int, final
 	if curr == len(interceptors)-1 {
 		return finalInvoker
 	}
-	return func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, opts ...CallOption) error {
+	return func(ctx context.Context, method string, req, reply any, cc *ClientConn, opts ...CallOption) error {
 		return interceptors[curr+1](ctx, method, req, reply, cc, getChainUnaryInvoker(interceptors, curr+1, finalInvoker), opts...)
 	}
 }
@@ -606,7 +606,7 @@ func (csm *connectivityStateManager) getNotifyChan() <-chan struct{} {
 type ClientConnInterface interface {
 	// Invoke performs a unary RPC and returns after the response is received
 	// into reply.
-	Invoke(ctx context.Context, method string, args interface{}, reply interface{}, opts ...CallOption) error
+	Invoke(ctx context.Context, method string, args any, reply any, opts ...CallOption) error
 	// NewStream begins a streaming RPC.
 	NewStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (ClientStream, error)
 }
@@ -1580,7 +1580,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 
 	// Set up the health check helper functions.
 	currentTr := ac.transport
-	newStream := func(method string) (interface{}, error) {
+	newStream := func(method string) (any, error) {
 		ac.mu.Lock()
 		if ac.transport != currentTr {
 			ac.mu.Unlock()

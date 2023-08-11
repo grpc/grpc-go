@@ -52,7 +52,7 @@ type endpointsResolver interface {
 	// The second return result indicates whether the resolver was able to
 	// successfully resolve the resource name to endpoints. If set to false, the
 	// first return result is invalid and must not be used.
-	lastUpdate() (interface{}, bool)
+	lastUpdate() (any, bool)
 
 	// resolverNow triggers re-resolution of the resource.
 	resolveNow()

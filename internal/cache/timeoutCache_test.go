@@ -38,7 +38,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func (c *TimeoutCache) getForTesting(key interface{}) (*cacheEntry, bool) {
+func (c *TimeoutCache) getForTesting(key any) (*cacheEntry, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	r, ok := c.cache[key]

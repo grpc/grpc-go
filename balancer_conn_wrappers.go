@@ -406,7 +406,7 @@ func (acbw *acBalancerWrapper) NewStream(ctx context.Context, desc *StreamDesc, 
 
 // Invoke performs a unary RPC.  If the addrConn is not ready, returns
 // errSubConnNotReady.
-func (acbw *acBalancerWrapper) Invoke(ctx context.Context, method string, args interface{}, reply interface{}, opts ...CallOption) error {
+func (acbw *acBalancerWrapper) Invoke(ctx context.Context, method string, args any, reply any, opts ...CallOption) error {
 	cs, err := acbw.NewStream(ctx, unaryStreamDesc, method, opts...)
 	if err != nil {
 		return err

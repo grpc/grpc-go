@@ -377,7 +377,7 @@ func (s) TestStatus_WithDetails_Fail(t *testing.T) {
 func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 	tests := []struct {
 		s *Status
-		i []interface{}
+		i []any
 	}{
 		{
 			nil,
@@ -389,7 +389,7 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 		},
 		{
 			New(codes.OK, ""),
-			[]interface{}{},
+			[]any{},
 		},
 		{
 			FromProto(&spb.Status{
@@ -406,7 +406,7 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 					}),
 				},
 			}),
-			[]interface{}{
+			[]any{
 				errors.New(`message type url "" is invalid`),
 				&epb.ResourceInfo{
 					ResourceType: "book",

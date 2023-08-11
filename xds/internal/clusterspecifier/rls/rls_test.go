@@ -86,7 +86,7 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("json.Marshal(%+v) returned err %v", lbCfg, err)
 		}
-		var got interface{}
+		var got any
 		err = json.Unmarshal(lbCfgJSON, got)
 		if err != nil {
 			t.Fatalf("json.Unmarshal(%+v) returned err %v", lbCfgJSON, err)
@@ -95,7 +95,7 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("json.Marshal(%+v) returned err %v", test.wantConfig, err)
 		}
-		var want interface{}
+		var want any
 		err = json.Unmarshal(wantCfgJSON, want)
 		if err != nil {
 			t.Fatalf("json.Unmarshal(%+v) returned err %v", lbCfgJSON, err)

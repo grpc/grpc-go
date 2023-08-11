@@ -37,23 +37,23 @@ import (
 // interface{}) bool', it will be called by (*Attributes).Equal to determine
 // whether two values with the same key should be considered equal.
 type Attributes struct {
-	m map[interface{}]interface{}
+	m map[any]any
 }
 
 // New returns a new Attributes containing the key/value pair.
-func New(key, value interface{}) *Attributes {
-	return &Attributes{m: map[interface{}]interface{}{key: value}}
+func New(key, value any) *Attributes {
+	return &Attributes{m: map[any]any{key: value}}
 }
 
 // WithValue returns a new Attributes containing the previous keys and values
 // and the new key/value pair.  If the same key appears multiple times, the
 // last value overwrites all previous values for that key.  To remove an
 // existing key, use a nil value.  value should not be modified later.
-func (a *Attributes) WithValue(key, value interface{}) *Attributes {
+func (a *Attributes) WithValue(key, value any) *Attributes {
 	if a == nil {
 		return New(key, value)
 	}
-	n := &Attributes{m: make(map[interface{}]interface{}, len(a.m)+1)}
+	n := &Attributes{m: make(map[any]any, len(a.m)+1)}
 	for k, v := range a.m {
 		n.m[k] = v
 	}
@@ -63,7 +63,7 @@ func (a *Attributes) WithValue(key, value interface{}) *Attributes {
 
 // Value returns the value associated with these attributes for key, or nil if
 // no value is associated with key.  The returned value should not be modified.
-func (a *Attributes) Value(key interface{}) interface{} {
+func (a *Attributes) Value(key any) any {
 	if a == nil {
 		return nil
 	}
@@ -93,7 +93,7 @@ func (a *Attributes) Equal(o *Attributes) bool {
 			// o missing element of a
 			return false
 		}
-		if eq, ok := v.(interface{ Equal(o interface{}) bool }); ok {
+		if eq, ok := v.(interface{ Equal(o any) bool }); ok {
 			if !eq.Equal(ov) {
 				return false
 			}
@@ -122,7 +122,7 @@ func (a *Attributes) String() string {
 	return sb.String()
 }
 
-func str(x interface{}) string {
+func str(x any) string {
 	if v, ok := x.(fmt.Stringer); ok {
 		return v.String()
 	} else if v, ok := x.(string); ok {

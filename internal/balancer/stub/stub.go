@@ -50,7 +50,7 @@ type BalancerData struct {
 	// BuildOptions is set by the builder.
 	BuildOptions balancer.BuildOptions
 	// Data may be used to store arbitrary user data.
-	Data interface{}
+	Data any
 }
 
 type bal struct {

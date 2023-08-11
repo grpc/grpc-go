@@ -1545,11 +1545,11 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 			}
 			// got and want must be unmarshalled since JSON strings shouldn't
 			// generally be directly compared.
-			var got map[string]interface{}
+			var got map[string]any
 			if err := json.Unmarshal(update.OutlierDetection, &got); err != nil {
 				t.Fatalf("Error unmarshalling update.OutlierDetection (%q): %v", update.OutlierDetection, err)
 			}
-			var want map[string]interface{}
+			var want map[string]any
 			if err := json.Unmarshal(json.RawMessage(test.wantODCfg), &want); err != nil {
 				t.Fatalf("Error unmarshalling wantODCfg (%q): %v", test.wantODCfg, err)
 			}

@@ -53,10 +53,10 @@ type serviceConfig struct {
 	LoadBalancingConfig balancerConfig `json:"loadBalancingConfig"`
 }
 
-type balancerConfig []map[string]interface{}
+type balancerConfig []map[string]any
 
-func newBalancerConfig(name string, config interface{}) balancerConfig {
-	return []map[string]interface{}{{name: config}}
+func newBalancerConfig(name string, config any) balancerConfig {
+	return []map[string]any{{name: config}}
 }
 
 type cdsBalancerConfig struct {

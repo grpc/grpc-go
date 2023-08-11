@@ -29,7 +29,7 @@ import (
 type Subscriber interface {
 	// OnMessage is invoked when a new message is published. Implementations
 	// must not block in this method.
-	OnMessage(msg interface{})
+	OnMessage(msg any)
 }
 
 // PubSub is a simple one-to-many publish-subscribe system that supports
@@ -48,7 +48,7 @@ type PubSub struct {
 
 	// Access to the below fields are guarded by this mutex.
 	mu          sync.Mutex
-	msg         interface{}
+	msg         any
 	subscribers map[Subscriber]bool
 }
 
@@ -96,7 +96,7 @@ func (ps *PubSub) Subscribe(sub Subscriber) (cancel func()) {
 
 // Publish publishes the provided message to the PubSub, and invokes
 // callbacks registered by subscribers asynchronously.
-func (ps *PubSub) Publish(msg interface{}) {
+func (ps *PubSub) Publish(msg any) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 

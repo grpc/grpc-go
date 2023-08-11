@@ -30,19 +30,19 @@ var logger = grpclog.Component("xds-e2e")
 // envoyproxy/go-control-plane/pkg/log. This is passed to the Snapshot cache.
 type serverLogger struct{}
 
-func (l serverLogger) Debugf(format string, args ...interface{}) {
+func (l serverLogger) Debugf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	logger.InfoDepth(1, msg)
 }
-func (l serverLogger) Infof(format string, args ...interface{}) {
+func (l serverLogger) Infof(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	logger.InfoDepth(1, msg)
 }
-func (l serverLogger) Warnf(format string, args ...interface{}) {
+func (l serverLogger) Warnf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	logger.WarningDepth(1, msg)
 }
-func (l serverLogger) Errorf(format string, args ...interface{}) {
+func (l serverLogger) Errorf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	logger.ErrorDepth(1, msg)
 }

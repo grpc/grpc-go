@@ -72,11 +72,11 @@ func (s) TestStdoutLogger_Log(t *testing.T) {
 
 			auditLogger.Log(test.event)
 
-			var container map[string]interface{}
+			var container map[string]any
 			if err := json.Unmarshal(buf.Bytes(), &container); err != nil {
 				t.Fatalf("Failed to unmarshal audit log event: %v", err)
 			}
-			innerEvent := extractEvent(container["grpc_audit_log"].(map[string]interface{}))
+			innerEvent := extractEvent(container["grpc_audit_log"].(map[string]any))
 			if innerEvent.Timestamp == "" {
 				t.Fatalf("Resulted event has no timestamp: %v", innerEvent)
 			}
@@ -116,7 +116,7 @@ func (s) TestStdoutLoggerBuilder_Registration(t *testing.T) {
 
 // extractEvent extracts an stdout.event from a map
 // unmarshalled from a logged json message.
-func extractEvent(container map[string]interface{}) event {
+func extractEvent(container map[string]any) event {
 	return event{
 		FullMethodName: container["rpc_method"].(string),
 		Principal:      container["principal"].(string),

@@ -212,13 +212,13 @@ type fakeORCAService struct {
 	v3orcaservicegrpc.UnimplementedOpenRcaServiceServer
 
 	reqCh  chan *v3orcaservicepb.OrcaLoadReportRequest
-	respCh chan interface{} // either *v3orcapb.OrcaLoadReport or error
+	respCh chan any // either *v3orcapb.OrcaLoadReport or error
 }
 
 func newFakeORCAService() *fakeORCAService {
 	return &fakeORCAService{
 		reqCh:  make(chan *v3orcaservicepb.OrcaLoadReportRequest),
-		respCh: make(chan interface{}),
+		respCh: make(chan any),
 	}
 }
 

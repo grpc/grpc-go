@@ -307,11 +307,11 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 			}
 			// got and want must be unmarshalled since JSON strings shouldn't
 			// generally be directly compared.
-			var got []map[string]interface{}
+			var got []map[string]any
 			if err := json.Unmarshal(rawJSON, &got); err != nil {
 				t.Fatalf("Error unmarshalling rawJSON (%q): %v", rawJSON, err)
 			}
-			var want []map[string]interface{}
+			var want []map[string]any
 			if err := json.Unmarshal(json.RawMessage(test.wantConfig), &want); err != nil {
 				t.Fatalf("Error unmarshalling wantConfig (%q): %v", test.wantConfig, err)
 			}
@@ -322,7 +322,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 	}
 }
 
-func jsonMarshal(t *testing.T, x interface{}) string {
+func jsonMarshal(t *testing.T, x any) string {
 	t.Helper()
 	js, err := json.Marshal(x)
 	if err != nil {

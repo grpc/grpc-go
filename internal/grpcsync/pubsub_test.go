@@ -33,7 +33,7 @@ func newTestSubscriber(chSize int) *testSubscriber {
 	return &testSubscriber{onMsgCh: make(chan int, chSize)}
 }
 
-func (ts *testSubscriber) OnMessage(msg interface{}) {
+func (ts *testSubscriber) OnMessage(msg any) {
 	select {
 	case ts.onMsgCh <- msg.(int):
 	default:
