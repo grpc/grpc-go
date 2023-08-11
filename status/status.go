@@ -99,25 +99,27 @@ func FromError(err error) (s *Status, ok bool) {
 	}
 	type grpcstatus interface{ GRPCStatus() *Status }
 	if gs, ok := err.(grpcstatus); ok {
-		if gs.GRPCStatus() == nil {
+		grpcStatus := gs.GRPCStatus()
+		if grpcStatus == nil {
 			// Error has status nil, which maps to codes.OK. There
 			// is no sensible behavior for this, so we turn it into
 			// an error with codes.Unknown and discard the existing
 			// status.
 			return New(codes.Unknown, err.Error()), false
 		}
-		return gs.GRPCStatus(), true
+		return grpcStatus, true
 	}
 	var gs grpcstatus
 	if errors.As(err, &gs) {
-		if gs.GRPCStatus() == nil {
+		grpcStatus := gs.GRPCStatus()
+		if grpcStatus == nil {
 			// Error wraps an error that has status nil, which maps
 			// to codes.OK.  There is no sensible behavior for this,
 			// so we turn it into an error with codes.Unknown and
 			// discard the existing status.
 			return New(codes.Unknown, err.Error()), false
 		}
-		p := gs.GRPCStatus().Proto()
+		p := grpcStatus.Proto()
 		p.Message = err.Error()
 		return status.FromProto(p), true
 	}
