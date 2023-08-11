@@ -192,11 +192,11 @@ func convertLeastRequestProtoToServiceConfig(rawProto []byte, _ int) (json.RawMe
 	// "The configuration for the Least Request LB policy is the
 	// least_request_lb_config field. The field is optional; if not present,
 	// defaults will be assumed for all of its values." - A48
-	var choiceCountSize uint32 = defaultLeastRequestChoiceCount
-	if choiceCount := lrProto.GetChoiceCount(); choiceCount != nil {
-		choiceCountSize = choiceCount.GetValue()
+	var choiceCount uint32 = defaultLeastRequestChoiceCount
+	if cc := lrProto.GetChoiceCount(); cc != nil {
+		choiceCount = cc.GetValue()
 	}
-	lrCfg := &leastrequest.LBConfig{ChoiceCount: choiceCountSize}
+	lrCfg := &leastrequest.LBConfig{ChoiceCount: choiceCount}
 	js, err := json.Marshal(lrCfg)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", lrCfg, err)

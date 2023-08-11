@@ -15,7 +15,8 @@
  * limitations under the License.
  */
 
-// Package leastrequest implements a least request load balancer.
+// Package leastrequest implements the least request load balancing policy as
+// described in A48.
 package leastrequest
 
 import (
@@ -39,7 +40,7 @@ type LBConfig struct {
 
 	// ChoiceCount is the number of random SubConns to sample to try and find
 	// the one with the Least Request. If unset, defaults to 2. If set to < 2,
-	// will become 2, and if set to > 10, will become 10.
+	// the config will be rejected, and if set to > 10, will become 10.
 	ChoiceCount uint32 `json:"choiceCount,omitempty"`
 }
 

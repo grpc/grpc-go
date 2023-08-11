@@ -347,14 +347,9 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					ServiceName: serviceName,
 				},
 				LbPolicy: v3clusterpb.Cluster_LEAST_REQUEST,
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
-					},
-				},
 			},
 			wantUpdate: xdsresource.ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf,
+				ClusterName: clusterName, EDSServiceName: serviceName,
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "least_request_experimental",
@@ -419,14 +414,9 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 						ChoiceCount: wrapperspb.UInt32(3),
 					},
 				},
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
-					},
-				},
 			},
 			wantUpdate: xdsresource.ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf,
+				ClusterName: clusterName, EDSServiceName: serviceName,
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "least_request_experimental",

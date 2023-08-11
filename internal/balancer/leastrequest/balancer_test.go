@@ -45,25 +45,19 @@ func (s) TestParseConfig(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:  "happy-case-default",
-			input: `{}`,
-			wantCfg: &LBConfig{
-				ChoiceCount: 2,
-			},
+			name:    "happy-case-default",
+			input:   `{}`,
+			wantCfg: &LBConfig{ChoiceCount: 2},
 		},
 		{
-			name:  "happy-case-choice-count-set",
-			input: `{"choiceCount": 3}`,
-			wantCfg: &LBConfig{
-				ChoiceCount: 3,
-			},
+			name:    "happy-case-choice-count-set",
+			input:   `{"choiceCount": 3}`,
+			wantCfg: &LBConfig{ChoiceCount: 3},
 		},
 		{
-			name:  "happy-case-choice-count-greater-than-ten",
-			input: `{"choiceCount": 11}`,
-			wantCfg: &LBConfig{
-				ChoiceCount: 10,
-			},
+			name:    "happy-case-choice-count-greater-than-ten",
+			input:   `{"choiceCount": 11}`,
+			wantCfg: &LBConfig{ChoiceCount: 10},
 		},
 		{
 			name:    "choice-count-less-than-2",
