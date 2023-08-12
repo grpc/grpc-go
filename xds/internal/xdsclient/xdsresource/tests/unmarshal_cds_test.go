@@ -25,8 +25,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/balancer/leastrequest"
 	_ "google.golang.org/grpc/balancer/roundrobin" // To register round_robin load balancer.
-	"google.golang.org/grpc/internal/balancer/leastrequest"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
