@@ -260,15 +260,6 @@ type ClientConn interface {
 // target does not contain a scheme or if the parsed scheme is not registered
 // (i.e. no corresponding resolver available to resolve the endpoint), we will
 // apply the default scheme, and will attempt to reparse it.
-//
-// Examples:
-//
-//   - "dns://some_authority/foo.bar"
-//     Target{Scheme: "dns", Authority: "some_authority", Endpoint: "foo.bar"}
-//   - "foo.bar"
-//     Target{Scheme: resolver.GetDefaultScheme(), Endpoint: "foo.bar"}
-//   - "unknown_scheme://authority/endpoint"
-//     Target{Scheme: resolver.GetDefaultScheme(), Endpoint: "unknown_scheme://authority/endpoint"}
 type Target struct {
 	// URL contains the parsed dial target with an optional default scheme added
 	// to it if the original dial target contained no scheme or contained an
