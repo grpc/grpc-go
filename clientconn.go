@@ -399,6 +399,7 @@ func (cc *ClientConn) enterIdleMode() error {
 	}
 	if cc.idlenessState != ccIdlenessStateActive {
 		channelz.Errorf(logger, cc.channelzID, "ClientConn asked to enter idle mode, current mode is %v", cc.idlenessState)
+		cc.mu.Unlock()
 		return nil
 	}
 
