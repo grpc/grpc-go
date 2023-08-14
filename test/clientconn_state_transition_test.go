@@ -555,7 +555,7 @@ type funcConnectivityStateSubscriber struct {
 	onMsg func(connectivity.State)
 }
 
-func (f *funcConnectivityStateSubscriber) OnMessage(msg interface{}) {
+func (f *funcConnectivityStateSubscriber) OnMessage(msg any) {
 	f.onMsg(msg.(connectivity.State))
 }
 

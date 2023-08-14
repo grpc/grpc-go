@@ -121,7 +121,7 @@ func (s *testHealthServer) SetServingStatus(service string, status healthpb.Heal
 func setupHealthCheckWrapper() (hcEnterChan chan struct{}, hcExitChan chan struct{}, wrapper internal.HealthChecker) {
 	hcEnterChan = make(chan struct{})
 	hcExitChan = make(chan struct{})
-	wrapper = func(ctx context.Context, newStream func(string) (interface{}, error), update func(connectivity.State, error), service string) error {
+	wrapper = func(ctx context.Context, newStream func(string) (any, error), update func(connectivity.State, error), service string) error {
 		close(hcEnterChan)
 		defer close(hcExitChan)
 		return testHealthCheckFunc(ctx, newStream, update, service)
@@ -1122,7 +1122,7 @@ func (s) TestUnknownHandler(t *testing.T) {
 	// An example unknownHandler that returns a different code and a different
 	// method, making sure that we do not expose what methods are implemented to
 	// a client that is not authenticated.
-	unknownHandler := func(srv interface{}, stream grpc.ServerStream) error {
+	unknownHandler := func(srv any, stream grpc.ServerStream) error {
 		return status.Error(codes.Unauthenticated, "user unauthenticated")
 	}
 	for _, e := range listTestEnv() {

@@ -98,7 +98,7 @@ type fakeProviderBuilder struct {
 	name string
 }
 
-func (b *fakeProviderBuilder) ParseConfig(config interface{}) (*certprovider.BuildableConfig, error) {
+func (b *fakeProviderBuilder) ParseConfig(config any) (*certprovider.BuildableConfig, error) {
 	s, ok := config.(string)
 	if !ok {
 		return nil, fmt.Errorf("providerBuilder %s received config of type %T, want string", b.name, config)

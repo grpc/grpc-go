@@ -237,7 +237,7 @@ func (s *ManagementServer) Stop() {
 
 // resourceSlice accepts a slice of any type of proto messages and returns a
 // slice of types.Resource.  Will panic if there is an input type mismatch.
-func resourceSlice(i interface{}) []types.Resource {
+func resourceSlice(i any) []types.Resource {
 	v := reflect.ValueOf(i)
 	rs := make([]types.Resource, v.Len())
 	for i := 0; i < v.Len(); i++ {

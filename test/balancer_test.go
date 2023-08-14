@@ -284,7 +284,7 @@ const loadMDKey = "X-Endpoint-Load-Metrics-Bin"
 
 type testLoadParser struct{}
 
-func (*testLoadParser) Parse(md metadata.MD) interface{} {
+func (*testLoadParser) Parse(md metadata.MD) any {
 	vs := md.Get(loadMDKey)
 	if len(vs) == 0 {
 		return nil
@@ -975,7 +975,7 @@ type testProducerBuilder struct {
 	ctxChan    chan context.Context
 }
 
-func (b *testProducerBuilder) Build(cci interface{}) (balancer.Producer, func()) {
+func (b *testProducerBuilder) Build(cci any) (balancer.Producer, func()) {
 	c := testgrpc.NewTestServiceClient(cci.(grpc.ClientConnInterface))
 	// Perform the RPC in a goroutine instead of during build because the
 	// subchannel's mutex is held here.

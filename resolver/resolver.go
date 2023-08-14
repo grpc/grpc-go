@@ -113,7 +113,7 @@ type Address struct {
 	// to make load balancing decision.
 	//
 	// Deprecated: use Attributes instead.
-	Metadata interface{}
+	Metadata any
 }
 
 // Equal returns whether a and o are identical.  Metadata is compared directly,

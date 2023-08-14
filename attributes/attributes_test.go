@@ -29,7 +29,7 @@ type stringVal struct {
 	s string
 }
 
-func (s stringVal) Equal(o interface{}) bool {
+func (s stringVal) Equal(o any) bool {
 	os, ok := o.(stringVal)
 	return ok && s.s == os.s
 }

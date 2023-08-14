@@ -855,7 +855,7 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 		}
 		return nil
 	})
-	t.controlBuf.executeAndPut(func(interface{}) bool {
+	t.controlBuf.executeAndPut(func(any) bool {
 		for _, f := range updateFuncs {
 			f()
 		}
@@ -939,7 +939,7 @@ func appendHeaderFieldsFromMD(headerFields []hpack.HeaderField, md metadata.MD) 
 	return headerFields
 }
 
-func (t *http2Server) checkForHeaderListSize(it interface{}) bool {
+func (t *http2Server) checkForHeaderListSize(it any) bool {
 	if t.maxSendHeaderListSize == nil {
 		return true
 	}

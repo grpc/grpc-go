@@ -270,7 +270,7 @@ type DoneInfo struct {
 	// trailing metadata.
 	//
 	// The only supported type now is *orca_v3.LoadReport.
-	ServerLoad interface{}
+	ServerLoad any
 }
 
 var (
@@ -414,15 +414,14 @@ var ErrBadResolverState = errors.New("bad resolver state")
 type ProducerBuilder interface {
 	// Build creates a Producer.  The first parameter is always a
 	// grpc.ClientConnInterface (a type to allow creating RPCs/streams on the
-	// associated SubConn), but is declared as interface{} to avoid a
-	// dependency cycle.  Should also return a close function that will be
-	// called when all references to the Producer have been given up.
-	Build(grpcClientConnInterface interface{}) (p Producer, close func())
+	// associated SubConn), but is declared as `any` to avoid a dependency
+	// cycle.  Should also return a close function that will be called when all
+	// references to the Producer have been given up.
+	Build(grpcClientConnInterface any) (p Producer, close func())
 }
 
 // A Producer is a type shared among potentially many consumers.  It is
 // associated with a SubConn, and an implementation will typically contain
 // other methods to provide additional functionality, e.g. configuration or
 // subscription registration.
-type Producer interface {
-}
+type Producer any

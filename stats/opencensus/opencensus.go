@@ -116,7 +116,7 @@ func perCallTracesAndMetrics(err error, span *trace.Span, startTime time.Time, m
 // unaryInterceptor handles per RPC context management. It also handles per RPC
 // tracing and stats by creating a top level call span and recording the latency
 // for the full RPC call.
-func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	startTime := time.Now()
 	ctx, span := csh.createCallSpan(ctx, method)
 	err := invoker(ctx, method, req, reply, cc, opts...)

@@ -34,7 +34,7 @@ type errorer struct {
 	t *testing.T
 }
 
-func (e errorer) Errorf(format string, args ...interface{}) {
+func (e errorer) Errorf(format string, args ...any) {
 	atomic.StoreUint32(&lcFailed, 1)
 	e.t.Errorf(format, args...)
 }
@@ -85,7 +85,7 @@ func getTestFunc(t *testing.T, xv reflect.Value, name string) func(*testing.T) {
 // To run a specific test/subtest:
 //
 //	$ go test -v -run 'TestExample/^Something$' .
-func RunSubTests(t *testing.T, x interface{}) {
+func RunSubTests(t *testing.T, x any) {
 	xt := reflect.TypeOf(x)
 	xv := reflect.ValueOf(x)
 

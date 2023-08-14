@@ -3698,7 +3698,7 @@ func (s) TestUnaryClientInterceptor(t *testing.T) {
 	}
 }
 
-func failOkayRPC(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+func failOkayRPC(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	err := invoker(ctx, method, req, reply, cc, opts...)
 	if err == nil {
 		return status.Error(codes.NotFound, "")
@@ -3769,7 +3769,7 @@ func (s) TestUnaryServerInterceptor(t *testing.T) {
 	}
 }
 
-func errInjector(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func errInjector(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	return nil, status.Error(codes.PermissionDenied, "")
 }
 
@@ -3797,7 +3797,7 @@ func (s) TestStreamServerInterceptor(t *testing.T) {
 	}
 }
 
-func fullDuplexOnly(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func fullDuplexOnly(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	if info.FullMethod == "/grpc.testing.TestService/FullDuplexCall" {
 		return handler(srv, ss)
 	}
@@ -4877,14 +4877,14 @@ type errCodec struct {
 	noError bool
 }
 
-func (c *errCodec) Marshal(v interface{}) ([]byte, error) {
+func (c *errCodec) Marshal(v any) ([]byte, error) {
 	if c.noError {
 		return []byte{}, nil
 	}
 	return nil, fmt.Errorf("3987^12 + 4365^12 = 4472^12")
 }
 
-func (c *errCodec) Unmarshal(data []byte, v interface{}) error {
+func (c *errCodec) Unmarshal(data []byte, v any) error {
 	return nil
 }
 
@@ -4897,7 +4897,7 @@ type countingProtoCodec struct {
 	unmarshalCount int32
 }
 
-func (p *countingProtoCodec) Marshal(v interface{}) ([]byte, error) {
+func (p *countingProtoCodec) Marshal(v any) ([]byte, error) {
 	atomic.AddInt32(&p.marshalCount, 1)
 	vv, ok := v.(proto.Message)
 	if !ok {
@@ -4906,7 +4906,7 @@ func (p *countingProtoCodec) Marshal(v interface{}) ([]byte, error) {
 	return proto.Marshal(vv)
 }
 
-func (p *countingProtoCodec) Unmarshal(data []byte, v interface{}) error {
+func (p *countingProtoCodec) Unmarshal(data []byte, v any) error {
 	atomic.AddInt32(&p.unmarshalCount, 1)
 	vv, ok := v.(proto.Message)
 	if !ok {
@@ -5028,7 +5028,7 @@ func (s) TestMethodFromServerStream(t *testing.T) {
 	te := newTest(t, e)
 	var method string
 	var ok bool
-	te.unknownHandler = func(srv interface{}, stream grpc.ServerStream) error {
+	te.unknownHandler = func(srv any, stream grpc.ServerStream) error {
 		method, ok = grpc.MethodFromServerStream(stream)
 		return nil
 	}
@@ -5086,7 +5086,7 @@ func (s) TestInterceptorCanAccessCallOptions(t *testing.T) {
 		}
 	}
 
-	te.unaryClientInt = func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	te.unaryClientInt = func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		populateOpts(opts)
 		return nil
 	}
@@ -5973,7 +5973,7 @@ func (s) TestClientSettingsFloodCloseConn(t *testing.T) {
 	timer.Stop()
 }
 
-func unaryInterceptorVerifyConn(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func unaryInterceptorVerifyConn(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	conn := transport.GetConnection(ctx)
 	if conn == nil {
 		return nil, status.Error(codes.NotFound, "connection was not in context")
@@ -5998,7 +5998,7 @@ func (s) TestUnaryServerInterceptorGetsConnection(t *testing.T) {
 	}
 }
 
-func streamingInterceptorVerifyConn(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func streamingInterceptorVerifyConn(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	conn := transport.GetConnection(ss.Context())
 	if conn == nil {
 		return status.Error(codes.NotFound, "connection was not in context")
@@ -6030,7 +6030,7 @@ func (s) TestStreamingServerInterceptorGetsConnection(t *testing.T) {
 // unaryInterceptorVerifyAuthority verifies there is an unambiguous :authority
 // once the request gets to an interceptor. An unambiguous :authority is defined
 // as at most a single :authority header, and no host header according to A41.
-func unaryInterceptorVerifyAuthority(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func unaryInterceptorVerifyAuthority(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.NotFound, "metadata was not in context")

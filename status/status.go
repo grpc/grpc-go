@@ -50,7 +50,7 @@ func New(c codes.Code, msg string) *Status {
 }
 
 // Newf returns New(c, fmt.Sprintf(format, a...)).
-func Newf(c codes.Code, format string, a ...interface{}) *Status {
+func Newf(c codes.Code, format string, a ...any) *Status {
 	return New(c, fmt.Sprintf(format, a...))
 }
 
@@ -60,7 +60,7 @@ func Error(c codes.Code, msg string) error {
 }
 
 // Errorf returns Error(c, fmt.Sprintf(format, a...)).
-func Errorf(c codes.Code, format string, a ...interface{}) error {
+func Errorf(c codes.Code, format string, a ...any) error {
 	return Error(c, fmt.Sprintf(format, a...))
 }
 

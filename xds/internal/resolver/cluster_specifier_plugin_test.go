@@ -96,15 +96,15 @@ func (testClusterSpecifierPlugin) ParseClusterSpecifierConfig(cfg proto.Message)
 	if cfg == nil {
 		return nil, fmt.Errorf("testClusterSpecifierPlugin: nil configuration message provided")
 	}
-	any, ok := cfg.(*anypb.Any)
+	anyp, ok := cfg.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("testClusterSpecifierPlugin: error parsing config %v: got type %T, want *anypb.Any", cfg, cfg)
 	}
 	lbCfg := new(wrapperspb.StringValue)
-	if err := ptypes.UnmarshalAny(any, lbCfg); err != nil {
+	if err := ptypes.UnmarshalAny(anyp, lbCfg); err != nil {
 		return nil, fmt.Errorf("testClusterSpecifierPlugin: error parsing config %v: %v", cfg, err)
 	}
-	return []map[string]interface{}{{"csp_experimental": cspBalancerConfig{ArbitraryField: lbCfg.GetValue()}}}, nil
+	return []map[string]any{{"csp_experimental": cspBalancerConfig{ArbitraryField: lbCfg.GetValue()}}}, nil
 }
 
 // TestResolverClusterSpecifierPlugin tests the case where a route configuration

@@ -46,7 +46,7 @@ type handshakeAttrKey struct{}
 // Equal reports whether the handshake info structs are identical (have the
 // same pointer).  This is sufficient as all subconns from one CDS balancer use
 // the same one.
-func (hi *HandshakeInfo) Equal(o interface{}) bool {
+func (hi *HandshakeInfo) Equal(o any) bool {
 	oh, ok := o.(*HandshakeInfo)
 	return ok && oh == hi
 }

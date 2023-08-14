@@ -96,7 +96,7 @@ func newDNSResolver(target string, topLevelResolver topLevelResolver, logger *gr
 	return ret
 }
 
-func (dr *dnsDiscoveryMechanism) lastUpdate() (interface{}, bool) {
+func (dr *dnsDiscoveryMechanism) lastUpdate() (any, bool) {
 	dr.mu.Lock()
 	defer dr.mu.Unlock()
 
