@@ -204,6 +204,26 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 			pfDisabled: true,
 		},
 		{
+			name: "pick_first_enabled_pf_rr_use_pick_first",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3pickfirstpb.PickFirst{
+								ShuffleAddressList: true,
+							}),
+						},
+					},
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3roundrobinpb.RoundRobin{}),
+						},
+					},
+				},
+			},
+			wantConfig: `[{"pick_first": { "shuffleAddressList": true }}]`,
+		},
+		{
 			name: "custom_lb_type_v3_struct",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
@@ -297,9 +317,9 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				defer func(old bool) { envconfig.XDSRingHash = old }(envconfig.XDSRingHash)
 				envconfig.XDSRingHash = false
 			}
-			if !test.pfDisabled {
+			if test.pfDisabled {
 				defer func(old bool) { envconfig.PickFirstLBConfig = old }(envconfig.PickFirstLBConfig)
-				envconfig.PickFirstLBConfig = true
+				envconfig.PickFirstLBConfig = false
 			}
 			rawJSON, err := xdslbregistry.ConvertToServiceConfig(test.policy, 0)
 			if err != nil {
