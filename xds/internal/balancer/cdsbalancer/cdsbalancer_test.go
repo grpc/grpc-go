@@ -359,7 +359,7 @@ func (s) TestConfigurationUpdate_Success(t *testing.T) {
 			return nil
 		},
 	})
-	defer cleanup()
+	t.Cleanup(cleanup)
 
 	// Create an xDS client to be sent to the CDS LB policy as part of its
 	// configuration.
@@ -367,7 +367,7 @@ func (s) TestConfigurationUpdate_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer xdsClose()
+	t.Cleanup(xdsClose)
 
 	// Create a manual resolver that configures the CDS LB policy as the
 	// top-level LB policy on the channel.
@@ -388,7 +388,7 @@ func (s) TestConfigurationUpdate_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to dial: %v", err)
 	}
-	defer cc.Close()
+	t.Cleanup(func() { cc.Close() })
 
 	// Verify that the specified cluster resource is requested.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -435,12 +435,12 @@ func (s) TestConfigurationUpdate_EmptyCluster(t *testing.T) {
 	// Setup a management server and an xDS client to talk to it.
 	// resources for the test to inspect.
 	_, _, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
+	t.Cleanup(cleanup)
 	xdsClient, xdsClose, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer xdsClose()
+	t.Cleanup(xdsClose)
 
 	// Create a manual resolver that configures the CDS LB policy as the
 	// top-level LB policy on the channel, and pushes a configuration with an
@@ -465,7 +465,7 @@ func (s) TestConfigurationUpdate_EmptyCluster(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to dial: %v", err)
 	}
-	defer cc.Close()
+	t.Cleanup(func() { cc.Close() })
 
 	select {
 	case <-time.After(defaultTestTimeout):
@@ -502,7 +502,7 @@ func (s) TestConfigurationUpdate_MissingXdsClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to dial: %v", err)
 	}
-	defer cc.Close()
+	t.Cleanup(func() { cc.Close() })
 
 	select {
 	case <-time.After(defaultTestTimeout):
@@ -992,7 +992,7 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
-	defer server.Stop()
+	t.Cleanup(server.Stop)
 
 	// Configure cluster and endpoints resources in the management server.
 	resources = e2e.UpdateOptions{
@@ -1090,14 +1090,11 @@ func (s) TestResolverError(t *testing.T) {
 	// policy) for the duration of this test that makes the resolver error
 	// pushed to it available to the test.
 	clusterresolverBuilder := balancer.Get(clusterresolver.Name)
-	t.Logf("easwars: clusterresolverBuilder is %p, %T", &clusterresolverBuilder, clusterresolverBuilder)
 	internal.BalancerUnregister(clusterresolverBuilder.Name())
 	resolverErrCh := make(chan error, 1)
 	stub.Register(clusterresolver.Name, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			t.Logf("easwars: building child policy")
 			bd.Data = clusterresolverBuilder.Build(bd.ClientConn, bd.BuildOptions)
-			t.Logf("easwars: bal is %p, %T", bd.Data, bd.Data)
 		},
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			return clusterresolverBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
@@ -1107,15 +1104,7 @@ func (s) TestResolverError(t *testing.T) {
 			return bal.UpdateClientConnState(ccs)
 		},
 		ResolverError: func(bd *stub.BalancerData, err error) {
-			/*
-				select {
-				case resolverErrCh <- err:
-				default:
-				}
-			*/
-			t.Logf("easwars: in wrapped child policy ResolverError")
 			bal := bd.Data.(balancer.Balancer)
-			t.Logf("easwars: bal is %p", bal)
 			bal.ResolverError(err)
 			resolverErrCh <- err
 		},
@@ -1234,7 +1223,7 @@ func (s) TestResolverError(t *testing.T) {
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
-	defer server.Stop()
+	t.Cleanup(server.Stop)
 
 	// Configure cluster and endpoints resources in the management server.
 	resources := e2e.UpdateOptions{
@@ -1404,7 +1393,7 @@ func (s) TestClose(t *testing.T) {
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
-	defer server.Stop()
+	t.Cleanup(server.Stop)
 
 	// Configure cluster and endpoints resources in the management server.
 	resources := e2e.UpdateOptions{
@@ -1542,7 +1531,7 @@ func (s) TestExitIdle(t *testing.T) {
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
-	defer server.Stop()
+	t.Cleanup(server.Stop)
 
 	// Configure cluster and endpoints resources in the management server.
 	resources := e2e.UpdateOptions{
