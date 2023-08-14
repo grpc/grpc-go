@@ -222,7 +222,6 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				},
 			},
 			wantConfig: `[{"pick_first": { "shuffleAddressList": true }}]`,
-			pfDisabled: false,
 		},
 		{
 			name: "custom_lb_type_v3_struct",
