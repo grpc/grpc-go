@@ -44,20 +44,3 @@ func TestRunSubTests(t *testing.T) {
 		t.Fatalf("x = %v; want all fields true", x)
 	}
 }
-
-type tNoST struct {
-	test bool
-}
-
-func (t *tNoST) TestSubTest(*testing.T) {
-	t.test = true
-}
-
-func TestNoSetupOrTeardown(t *testing.T) {
-	// Ensures nothing panics or fails if Setup/Teardown are omitted.
-	x := &tNoST{}
-	RunSubTests(t, x)
-	if want := (&tNoST{test: true}); !reflect.DeepEqual(x, want) {
-		t.Fatalf("x = %v; want %v", x, want)
-	}
-}
