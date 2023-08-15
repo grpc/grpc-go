@@ -62,6 +62,7 @@ func (Tester) Teardown(t *testing.T) {
 	TLogger.EndTest(t)
 }
 
+// Interface defines Tester's methods for use in this package.
 type Interface interface {
 	Setup(*testing.T)
 	Teardown(*testing.T)
