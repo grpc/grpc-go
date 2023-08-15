@@ -202,7 +202,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 			rhDisabled: true,
 		},
 		{
-			name: "pick_first_disabled_pf_rr_use_first_supported",
+			name: "pick_first_enabled_pf_rr_use_pick_first",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -219,8 +219,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 					},
 				},
 			},
-			wantConfig: `[{"round_robin": {}}]`,
-			pfDisabled: true,
+			wantConfig: `[{"pick_first": { "shuffleAddressList": true }}]`,
 		},
 		{
 			name: "least_request_disabled_pf_rr_use_first_supported",
@@ -341,7 +340,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
 				envconfig.LeastRequestLB = false
 			}
-			if !test.pfDisabled {
+			if test.pfDisabled {
 				defer func(old bool) { envconfig.PickFirstLBConfig = old }(envconfig.PickFirstLBConfig)
 				envconfig.PickFirstLBConfig = false
 			}
