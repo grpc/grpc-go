@@ -864,17 +864,6 @@ func doServerSideInitiatedFailedStreamWithGoAway(ctx context.Context, tc testgrp
 	}
 }
 
-func doIdleCallToInvokeKeepAlive(tc testgrpc.TestServiceClient, t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	_, err := tc.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
-	}
-	// Allow for at least 2 keepalives (1s per ping interval)
-	time.Sleep(4 * time.Second)
-	cancel()
-}
-
 func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -1290,45 +1279,46 @@ func (s) TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 }
 
 func (s) TestCZServerSocketMetricsKeepAlive(t *testing.T) {
+	defer func(t time.Duration) { internal.KeepaliveMinServerPingTime = t }(internal.KeepaliveMinServerPingTime)
+	internal.KeepaliveMinServerPingTime = 50 * time.Millisecond
+
 	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	// We setup the server keepalive parameters to send one keepalive every
-	// second, and verify that the actual number of keepalives is very close to
-	// the number of seconds elapsed in the test.  We had a bug wherein the
-	// server was sending one keepalive every [Time+Timeout] instead of every
-	// [Time] period, and since Timeout is configured to a low value here, we
-	// should be able to verify that the fix works with the above mentioned
-	// logic.
+	// 50ms, and verify that the actual number of keepalives is very close to
+	// Time/50ms.  We had a bug wherein the server was sending one keepalive
+	// every [Time+Timeout] instead of every [Time] period, and since Timeout
+	// is configured to a high value here, we should be able to verify that the
+	// fix works with the above mentioned logic.
 	kpOption := grpc.KeepaliveParams(keepalive.ServerParameters{
-		Time:    time.Second,
-		Timeout: 100 * time.Millisecond,
+		Time:    50 * time.Millisecond,
+		Timeout: 5 * time.Second,
 	})
 	te.customServerOptions = append(te.customServerOptions, kpOption)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	cc := te.clientConn()
-	tc := testgrpc.NewTestServiceClient(cc)
-	start := time.Now()
-	doIdleCallToInvokeKeepAlive(tc, t)
 
-	if err := verifyResultWithDelay(func() (bool, error) {
-		ss, _ := channelz.GetServers(0, 0)
-		if len(ss) != 1 {
-			return false, fmt.Errorf("there should be one server, not %d", len(ss))
-		}
-		ns, _ := channelz.GetServerSockets(ss[0].ID, 0, 0)
-		if len(ns) != 1 {
-			return false, fmt.Errorf("there should be one server normal socket, not %d", len(ns))
-		}
-		wantKeepalivesCount := int64(time.Since(start).Seconds()) - 1
-		if gotKeepalivesCount := ns[0].SocketData.KeepAlivesSent; gotKeepalivesCount != wantKeepalivesCount {
-			return false, fmt.Errorf("got keepalivesCount: %v, want keepalivesCount: %v", gotKeepalivesCount, wantKeepalivesCount)
-		}
-		return true, nil
-	}); err != nil {
-		t.Fatal(err)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	awaitState(ctx, t, cc, connectivity.Ready)
+
+	// Allow about 5 pings to happen (250ms/50ms).
+	time.Sleep(255 * time.Millisecond)
+
+	ss, _ := channelz.GetServers(0, 0)
+	if len(ss) != 1 {
+		t.Fatalf("there should be one server, not %d", len(ss))
+	}
+	ns, _ := channelz.GetServerSockets(ss[0].ID, 0, 0)
+	if len(ns) != 1 {
+		t.Fatalf("there should be one server normal socket, not %d", len(ns))
+	}
+	const wantMin, wantMax = 3, 7
+	if got := ns[0].SocketData.KeepAlivesSent; got < wantMin || got > wantMax {
+		t.Fatalf("got keepalivesCount: %v, want keepalivesCount: [%v,%v]", got, wantMin, wantMax)
 	}
 }
 
