@@ -322,7 +322,7 @@ func (ri *racyIdlenessEnforcer) enterIdleMode() error {
 // mode.
 func (s) TestIdlenessManager_IdleTimeoutRacesWithOnCallBegin(t *testing.T) {
 	// Run multiple iterations to simulate different possibilities.
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		t.Run(fmt.Sprintf("iteration=%d", i), func(t *testing.T) {
 			var idlenessState racyIdlenessState
 			enforcer := &racyIdlenessEnforcer{state: &idlenessState}
@@ -337,7 +337,7 @@ func (s) TestIdlenessManager_IdleTimeoutRacesWithOnCallBegin(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				m := mgr.(interface{ handleIdleTimeout() })
-				<-time.After(defaultTestIdleTimeout)
+				<-time.After(defaultTestIdleTimeout / 10)
 				m.handleIdleTimeout()
 			}()
 			for j := 0; j < 100; j++ {
@@ -346,7 +346,7 @@ func (s) TestIdlenessManager_IdleTimeoutRacesWithOnCallBegin(t *testing.T) {
 					defer wg.Done()
 					// Wait for the configured idle timeout and simulate an RPC to
 					// race with the idle timeout timer callback.
-					<-time.After(defaultTestIdleTimeout)
+					<-time.After(defaultTestIdleTimeout / 10)
 					if err := mgr.onCallBegin(); err != nil {
 						t.Errorf("onCallBegin() failed: %v", err)
 					}
