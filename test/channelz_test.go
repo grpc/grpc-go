@@ -1165,25 +1165,32 @@ func (s) TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 }
 
 func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
+	const keepaliveRate = 50 * time.Millisecond
 	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer czCleanupWrapper(czCleanup, t)
 	defer func(t time.Duration) { internal.KeepaliveMinPingTime = t }(internal.KeepaliveMinPingTime)
-	internal.KeepaliveMinPingTime = time.Second
+	internal.KeepaliveMinPingTime = keepaliveRate
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.customDialOptions = append(te.customDialOptions, grpc.WithKeepaliveParams(
 		keepalive.ClientParameters{
-			Time:                time.Second,
+			Time:                keepaliveRate,
 			Timeout:             500 * time.Millisecond,
 			PermitWithoutStream: true,
 		}))
 	te.customServerOptions = append(te.customServerOptions, grpc.KeepaliveEnforcementPolicy(
 		keepalive.EnforcementPolicy{
-			MinTime:             500 * time.Millisecond,
+			MinTime:             keepaliveRate,
 			PermitWithoutStream: true,
 		}))
 	te.startServer(&testServer{security: e.security})
-	te.clientConn() // Dial the server
+	cc := te.clientConn() // Dial the server
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	awaitState(ctx, t, cc, connectivity.Ready)
+	start := time.Now()
+	// Wait for at least two keepalives to be able to occur.
+	time.Sleep(2 * keepaliveRate)
 	defer te.tearDown()
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tchan, _ := channelz.GetTopChannels(0, 0)
@@ -1208,8 +1215,9 @@ func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 			break
 		}
 		skt := channelz.GetSocket(id)
-		if skt.SocketData.KeepAlivesSent != 2 {
-			return false, fmt.Errorf("there should be 2 KeepAlives sent, not %d", skt.SocketData.KeepAlivesSent)
+		want := int64(time.Since(start) / keepaliveRate)
+		if skt.SocketData.KeepAlivesSent != want {
+			return false, fmt.Errorf("there should be %v KeepAlives sent, not %d", want, skt.SocketData.KeepAlivesSent)
 		}
 		return true, nil
 	}); err != nil {

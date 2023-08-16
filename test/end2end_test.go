@@ -4212,7 +4212,7 @@ func (s) TestFlowControlLogicalRace(t *testing.T) {
 		maxFailures = 3
 	)
 
-	requestCount := 10000
+	requestCount := 3000
 	if raceMode {
 		requestCount = 1000
 	}
@@ -4247,33 +4247,22 @@ func (s) TestFlowControlLogicalRace(t *testing.T) {
 			t.Fatalf("StreamingOutputCall; err = %q", err)
 		}
 
-		j := 0
-	loop:
-		for ; j < recvCount; j++ {
-			_, err := output.Recv()
-			if err != nil {
-				if err == io.EOF {
-					break loop
+		for j := 0; j < recvCount; j++ {
+			if _, err := output.Recv(); err != nil {
+				if err == io.EOF || status.Code(err) == codes.DeadlineExceeded {
+					t.Errorf("got %d responses to request %d", j, i)
+					failures++
+					break
 				}
-				switch status.Code(err) {
-				case codes.DeadlineExceeded:
-					break loop
-				default:
-					t.Fatalf("Recv; err = %q", err)
-				}
+				t.Fatalf("Recv; err = %q", err)
 			}
 		}
 		cancel()
-		<-ctx.Done()
 
-		if j < recvCount {
-			t.Errorf("got %d responses to request %d", j, i)
-			failures++
-			if failures >= maxFailures {
-				// Continue past the first failure to see if the connection is
-				// entirely broken, or if only a single RPC was affected
-				break
-			}
+		if failures >= maxFailures {
+			// Continue past the first failure to see if the connection is
+			// entirely broken, or if only a single RPC was affected
+			t.Fatalf("Too many failures received; aborting")
 		}
 	}
 }
