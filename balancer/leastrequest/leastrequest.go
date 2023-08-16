@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-// Global to stub out in tests.
+// grpcranduint32 is a global to stub out in tests.
 var grpcranduint32 = grpcrand.Uint32
 
 // Name is the name of the least request balancer.

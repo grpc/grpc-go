@@ -69,6 +69,9 @@ func wrrLocalityBalancerConfig(childPolicy *internalserviceconfig.BalancerConfig
 }
 
 func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
+	defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
+	envconfig.LeastRequestLB = false
+
 	const customLBPolicyName = "myorg.MyCustomLeastRequestPolicy"
 	stub.Register(customLBPolicyName, stub.BalancerFuncs{})
 
@@ -78,6 +81,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 		wantConfig string // JSON config
 		rhDisabled bool
 		pfDisabled bool
+		lrEnabled  bool
 	}{
 		{
 			name: "ring_hash",
@@ -95,6 +99,22 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				},
 			},
 			wantConfig: `[{"ring_hash_experimental": { "minRingSize": 10, "maxRingSize": 100 }}]`,
+		},
+		{
+			name: "least_request",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3leastrequestpb.LeastRequest{
+								ChoiceCount: wrapperspb.UInt32(3),
+							}),
+						},
+					},
+				},
+			},
+			wantConfig: `[{"least_request_experimental": { "choiceCount": 3 }}]`,
+			lrEnabled:  true,
 		},
 		{
 			name: "pick_first_shuffle",
@@ -183,27 +203,6 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 			rhDisabled: true,
 		},
 		{
-			name: "pick_first_disabled_pf_rr_use_first_supported",
-			policy: &v3clusterpb.LoadBalancingPolicy{
-				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(&v3pickfirstpb.PickFirst{
-								ShuffleAddressList: true,
-							}),
-						},
-					},
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(&v3roundrobinpb.RoundRobin{}),
-						},
-					},
-				},
-			},
-			wantConfig: `[{"round_robin": {}}]`,
-			pfDisabled: true,
-		},
-		{
 			name: "pick_first_enabled_pf_rr_use_pick_first",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
@@ -222,6 +221,26 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				},
 			},
 			wantConfig: `[{"pick_first": { "shuffleAddressList": true }}]`,
+		},
+		{
+			name: "least_request_disabled_pf_rr_use_first_supported",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3leastrequestpb.LeastRequest{
+								ChoiceCount: wrapperspb.UInt32(32),
+							}),
+						},
+					},
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3roundrobinpb.RoundRobin{}),
+						},
+					},
+				},
+			},
+			wantConfig: `[{"round_robin": {}}]`,
 		},
 		{
 			name: "custom_lb_type_v3_struct",
@@ -316,6 +335,10 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 			if test.rhDisabled {
 				defer func(old bool) { envconfig.XDSRingHash = old }(envconfig.XDSRingHash)
 				envconfig.XDSRingHash = false
+			}
+			if test.lrEnabled {
+				defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
+				envconfig.LeastRequestLB = true
 			}
 			if test.pfDisabled {
 				defer func(old bool) { envconfig.PickFirstLBConfig = old }(envconfig.PickFirstLBConfig)

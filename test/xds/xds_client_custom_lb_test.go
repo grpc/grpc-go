@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	_ "google.golang.org/grpc/balancer/leastrequest"       // To register least_request
 	_ "google.golang.org/grpc/balancer/weightedroundrobin" // To register weighted_round_robin
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
@@ -41,6 +42,7 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3clientsideweightedroundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/client_side_weighted_round_robin/v3"
+	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
 	v3roundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/round_robin/v3"
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
 	"github.com/golang/protobuf/proto"
@@ -95,6 +97,11 @@ func (s) TestWrrLocality(t *testing.T) {
 	envconfig.XDSCustomLBPolicy = true
 	defer func() {
 		envconfig.XDSCustomLBPolicy = oldCustomLBSupport
+	}()
+	oldLeastRequestLBSupport := envconfig.LeastRequestLB
+	envconfig.LeastRequestLB = true
+	defer func() {
+		envconfig.LeastRequestLB = oldLeastRequestLBSupport
 	}()
 
 	backend1 := stubserver.StartTestService(t, nil)
@@ -194,12 +201,33 @@ func (s) TestWrrLocality(t *testing.T) {
 				{addr: backend5.Address, count: 8},
 			},
 		},
+		{
+			name: "custom_lb_least_request",
+			wrrLocalityConfiguration: wrrLocality(&v3leastrequestpb.LeastRequest{
+				ChoiceCount: wrapperspb.UInt32(2),
+			}),
+			// The test performs a Unary RPC, and blocks until the RPC returns,
+			// and then makes the next Unary RPC. Thus, over iterations, no RPC
+			// counts are present. This causes least request's randomness of
+			// indexes to sample to converge onto a round robin distribution per
+			// locality. Thus, expect the same distribution as round robin
+			// above.
+			addressDistributionWant: []struct {
+				addr  string
+				count int
+			}{
+				{addr: backend1.Address, count: 6},
+				{addr: backend2.Address, count: 6},
+				{addr: backend3.Address, count: 8},
+				{addr: backend4.Address, count: 8},
+				{addr: backend5.Address, count: 8},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			managementServer, nodeID, _, r, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 			defer cleanup()
-
 			routeConfigName := "route-" + serviceName
 			clusterName := "cluster-" + serviceName
 			endpointsName := "endpoints-" + serviceName

@@ -162,6 +162,19 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 			wantErr:    true,
 		},
 		{
+			name: "least-request-choice-count-less-than-two",
+			cluster: &v3clusterpb.Cluster{
+				LbPolicy: v3clusterpb.Cluster_RING_HASH,
+				LbConfig: &v3clusterpb.Cluster_LeastRequestLbConfig_{
+					LeastRequestLbConfig: &v3clusterpb.Cluster_LeastRequestLbConfig{
+						ChoiceCount: wrapperspb.UInt32(1),
+					},
+				},
+			},
+			wantUpdate: emptyUpdate,
+			wantErr:    true,
+		},
+		{
 			name: "ring-hash-max-bound-greater-than-upper-bound",
 			cluster: &v3clusterpb.Cluster{
 				LbPolicy: v3clusterpb.Cluster_RING_HASH,
@@ -205,7 +218,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 			wantErr:    true,
 		},
 		{
-			name: "least-request-unsupported-in-converter",
+			name: "least-request-unsupported-in-converter-since-env-var-unset",
 			cluster: &v3clusterpb.Cluster{
 				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
