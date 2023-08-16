@@ -290,9 +290,9 @@ func InitialConnWindowSize(s int32) ServerOption {
 
 // KeepaliveParams returns a ServerOption that sets keepalive and max-age parameters for the server.
 func KeepaliveParams(kp keepalive.ServerParameters) ServerOption {
-	if kp.Time > 0 && kp.Time < time.Second {
+	if kp.Time > 0 && kp.Time < internal.KeepaliveMinServerPingTime {
 		logger.Warning("Adjusting keepalive ping interval to minimum period of 1s")
-		kp.Time = time.Second
+		kp.Time = internal.KeepaliveMinServerPingTime
 	}
 
 	return newFuncServerOption(func(o *serverOptions) {

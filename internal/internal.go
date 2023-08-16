@@ -38,6 +38,10 @@ var (
 	// KeepaliveMinPingTime is the minimum ping interval.  This must be 10s by
 	// default, but tests may wish to set it lower for convenience.
 	KeepaliveMinPingTime = 10 * time.Second
+	// KeepaliveMinServerPingTime is the minimum ping interval for servers.
+	// This must be 1s by default, but tests may wish to set it lower for
+	// convenience.
+	KeepaliveMinServerPingTime = time.Second
 	// ParseServiceConfig parses a JSON representation of the service config.
 	ParseServiceConfig any // func(string) *serviceconfig.ParseResult
 	// EqualServiceConfigForTesting is for testing service config generation and
