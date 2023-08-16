@@ -70,7 +70,7 @@ func wrrLocalityBalancerConfig(childPolicy *internalserviceconfig.BalancerConfig
 
 func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 	defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
-	envconfig.LeastRequestLB = true
+	envconfig.LeastRequestLB = false
 
 	const customLBPolicyName = "myorg.MyCustomLeastRequestPolicy"
 	stub.Register(customLBPolicyName, stub.BalancerFuncs{})
@@ -81,7 +81,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 		wantConfig string // JSON config
 		rhDisabled bool
 		pfDisabled bool
-		lrDisabled bool
+		lrEnabled  bool
 	}{
 		{
 			name: "ring_hash",
@@ -114,6 +114,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				},
 			},
 			wantConfig: `[{"least_request_experimental": { "choiceCount": 3 }}]`,
+			lrEnabled:  true,
 		},
 		{
 			name: "pick_first_shuffle",
@@ -240,7 +241,6 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				},
 			},
 			wantConfig: `[{"round_robin": {}}]`,
-			lrDisabled: true,
 		},
 		{
 			name: "custom_lb_type_v3_struct",
@@ -336,9 +336,9 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				defer func(old bool) { envconfig.XDSRingHash = old }(envconfig.XDSRingHash)
 				envconfig.XDSRingHash = false
 			}
-			if test.lrDisabled {
+			if test.lrEnabled {
 				defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
-				envconfig.LeastRequestLB = false
+				envconfig.LeastRequestLB = true
 			}
 			if test.pfDisabled {
 				defer func(old bool) { envconfig.PickFirstLBConfig = old }(envconfig.PickFirstLBConfig)

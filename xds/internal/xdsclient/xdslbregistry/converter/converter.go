@@ -192,7 +192,7 @@ func convertLeastRequestProtoToServiceConfig(rawProto []byte, _ int) (json.RawMe
 	// "The configuration for the Least Request LB policy is the
 	// least_request_lb_config field. The field is optional; if not present,
 	// defaults will be assumed for all of its values." - A48
-	var choiceCount uint32 = defaultLeastRequestChoiceCount
+	choiceCount := uint32(defaultLeastRequestChoiceCount)
 	if cc := lrProto.GetChoiceCount(); cc != nil {
 		choiceCount = cc.GetValue()
 	}

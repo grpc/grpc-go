@@ -119,7 +119,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		if cc := lr.GetChoiceCount(); cc != nil {
 			choiceCount = cc.GetValue()
 		}
-		// nack if it's < 2, and also add test for it
+		// "If choice_count < 2, the config will be rejected." - A48
 		if choiceCount < 2 {
 			return ClusterUpdate{}, fmt.Errorf("Cluster_LeastRequestLbConfig.ChoiceCount must be >= 2, got: %v", choiceCount)
 		}

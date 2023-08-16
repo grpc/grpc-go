@@ -206,10 +206,12 @@ func (s) TestWrrLocality(t *testing.T) {
 			wrrLocalityConfiguration: wrrLocality(&v3leastrequestpb.LeastRequest{
 				ChoiceCount: wrapperspb.UInt32(2),
 			}),
-			// Least request's randomness of indexes to sample (unary RPCs which
-			// don't persist so never any actual RPC counts over iterations)
-			// converges onto a round robin distribution per locality. Thus,
-			// expect the same distribution as round robin above.
+			// The test performs a Unary RPC, and blocks until the RPC returns,
+			// and then makes the next Unary RPC. Thus, over iterations, no RPC
+			// counts are present. This causes least request's randomness of
+			// indexes to sample to converge onto a round robin distribution per
+			// locality. Thus, expect the same distribution as round robin
+			// above.
 			addressDistributionWant: []struct {
 				addr  string
 				count int
