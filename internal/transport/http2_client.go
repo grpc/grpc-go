@@ -1505,11 +1505,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 
-	isHeader := false
-
 	if !endStream {
-		// HEADERS frame block carries a Response-Headers.
-		isHeader = true
 		// If headerChan hasn't been closed yet (expected, given we checked it
 		// above, but something else could have potentially closed the whole
 		// stream).
@@ -1527,7 +1523,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 
 	for _, sh := range t.statsHandlers {
-		if isHeader {
+		if !endStream {
 			inHeader := &stats.InHeader{
 				Client:      true,
 				WireLength:  int(frame.Header().Length),
