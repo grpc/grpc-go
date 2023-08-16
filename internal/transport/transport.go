@@ -43,10 +43,6 @@ import (
 	"google.golang.org/grpc/tap"
 )
 
-// ErrNoHeaders is used as a signal that a trailers only response was received,
-// and is not a real error.
-var ErrNoHeaders = errors.New("stream has no headers")
-
 const logLevel = 2
 
 type bufferPool struct {
@@ -390,12 +386,8 @@ func (s *Stream) Header() (metadata.MD, error) {
 	}
 	s.waitOnHeader()
 
-	if !s.headerValid {
+	if !s.headerValid || s.noHeaders {
 		return nil, s.status.Err()
-	}
-
-	if s.noHeaders {
-		return nil, ErrNoHeaders
 	}
 
 	return s.header.Copy(), nil

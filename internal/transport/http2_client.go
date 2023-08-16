@@ -1524,7 +1524,12 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			// HEADERS frame block carries a Trailers-Only.
 			s.noHeaders = true
 		}
-		close(s.headerChan)
+		// In the case where it is a trailers-only response, we don't want to
+		// close headerChan until after s.status is set in closeStream, because
+		// Header(), which blocks on headerChan, reads s.status.  It would be
+		// safe to close immediately in the case of !endStream, but deferring
+		// is okay too.
+		defer close(s.headerChan)
 	}
 
 	for _, sh := range t.statsHandlers {
