@@ -989,16 +989,15 @@ func (cs *clientStream) finish(err error) {
 	cs.mu.Unlock()
 	// Only one of cancel or trailer needs to be logged.
 	if len(cs.binlogs) != 0 {
-		if err == errContextCanceled ||
-			err == errContextDeadline ||
-			err == ErrClientConnClosing {
+		switch err {
+		case errContextCanceled, errContextDeadline, ErrClientConnClosing:
 			c := &binarylog.Cancel{
 				OnClientSide: true,
 			}
 			for _, binlog := range cs.binlogs {
 				binlog.Log(cs.ctx, c)
 			}
-		} else {
+		default:
 			logEntry := &binarylog.ServerTrailer{
 				OnClientSide: true,
 				Trailer:      cs.Trailer(),
