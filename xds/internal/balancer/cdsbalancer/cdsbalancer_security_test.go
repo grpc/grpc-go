@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -34,28 +33,22 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/channelz"
 	xdscredsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	xdsbootstrap "google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/testdata"
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
-	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -66,148 +59,6 @@ import (
 
 	_ "google.golang.org/grpc/credentials/tls/certprovider/pemfile" // Register the file watcher certificate provider plugin.
 )
-
-const (
-	fakeProvider1Name = "fake-certificate-provider-1"
-	fakeProvider2Name = "fake-certificate-provider-2"
-	fakeConfig        = "my fake config"
-	testSAN           = "test-san"
-)
-
-var (
-	testSANMatchers = []matcher.StringMatcher{
-		matcher.StringMatcherForTesting(newStringP(testSAN), nil, nil, nil, nil, true),
-		matcher.StringMatcherForTesting(nil, newStringP(testSAN), nil, nil, nil, false),
-		matcher.StringMatcherForTesting(nil, nil, newStringP(testSAN), nil, nil, false),
-		matcher.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(testSAN), false),
-		matcher.StringMatcherForTesting(nil, nil, nil, newStringP(testSAN), nil, false),
-	}
-	fpb1, fpb2                   *fakeProviderBuilder
-	bootstrapConfig              *bootstrap.Config
-	cdsUpdateWithGoodSecurityCfg = xdsresource.ClusterUpdate{
-		ClusterName: serviceName,
-		SecurityCfg: &xdsresource.SecurityConfig{
-			RootInstanceName:       "default1",
-			IdentityInstanceName:   "default2",
-			SubjectAltNameMatchers: testSANMatchers,
-		},
-		LBPolicy: wrrLocalityLBConfigJSON,
-	}
-	cdsUpdateWithMissingSecurityCfg = xdsresource.ClusterUpdate{
-		ClusterName: serviceName,
-		SecurityCfg: &xdsresource.SecurityConfig{
-			RootInstanceName: "not-default",
-		},
-	}
-)
-
-func newStringP(s string) *string {
-	return &s
-}
-
-func init() {
-	channelz.TurnOn()
-
-	fpb1 = &fakeProviderBuilder{name: fakeProvider1Name}
-	fpb2 = &fakeProviderBuilder{name: fakeProvider2Name}
-	cfg1, _ := fpb1.ParseConfig(fakeConfig + "1111")
-	cfg2, _ := fpb2.ParseConfig(fakeConfig + "2222")
-	bootstrapConfig = &bootstrap.Config{
-		CertProviderConfigs: map[string]*certprovider.BuildableConfig{
-			"default1": cfg1,
-			"default2": cfg2,
-		},
-	}
-	certprovider.Register(fpb1)
-	certprovider.Register(fpb2)
-}
-
-// fakeProviderBuilder builds new instances of fakeProvider and interprets the
-// config provided to it as a string.
-type fakeProviderBuilder struct {
-	name string
-}
-
-func (b *fakeProviderBuilder) ParseConfig(config any) (*certprovider.BuildableConfig, error) {
-	s, ok := config.(string)
-	if !ok {
-		return nil, fmt.Errorf("providerBuilder %s received config of type %T, want string", b.name, config)
-	}
-	return certprovider.NewBuildableConfig(b.name, []byte(s), func(certprovider.BuildOptions) certprovider.Provider {
-		return &fakeProvider{
-			Distributor: certprovider.NewDistributor(),
-			config:      s,
-		}
-	}), nil
-}
-
-func (b *fakeProviderBuilder) Name() string {
-	return b.name
-}
-
-// fakeProvider is an implementation of the Provider interface which provides a
-// method for tests to invoke to push new key materials.
-type fakeProvider struct {
-	*certprovider.Distributor
-	config string
-}
-
-// Close helps implement the Provider interface.
-func (p *fakeProvider) Close() {
-	p.Distributor.Stop()
-}
-
-// setupWithXDSCreds performs all the setup steps required for tests which use
-// xDSCredentials.
-func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *testutils.TestClientConn, func()) {
-	t.Helper()
-	xdsC := fakeclient.NewClient()
-	builder := balancer.Get(cdsName)
-	if builder == nil {
-		t.Fatalf("balancer.Get(%q) returned nil", cdsName)
-	}
-	// Create and pass xdsCredentials while building the CDS balancer.
-	creds, err := xds.NewClientCredentials(xds.ClientOptions{
-		FallbackCreds: local.NewCredentials(), // Placeholder fallback credentials.
-	})
-	if err != nil {
-		t.Fatalf("Failed to create xDS client creds: %v", err)
-	}
-	// Create a new CDS balancer and pass it a fake balancer.ClientConn which we
-	// can use to inspect the different calls made by the balancer.
-	tcc := testutils.NewTestClientConn(t)
-	cdsB := builder.Build(tcc, balancer.BuildOptions{DialCreds: creds})
-
-	// Override the creation of the EDS balancer to return a fake EDS balancer
-	// implementation.
-	edsB := newTestEDSBalancer()
-	oldEDSBalancerBuilder := newChildBalancer
-	newChildBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, error) {
-		edsB.parentCC = cc
-		return edsB, nil
-	}
-
-	// Push a ClientConnState update to the CDS balancer with a cluster name.
-	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != nil {
-		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
-	}
-
-	// Make sure the CDS balancer registers a Cluster watch with the xDS client
-	// passed via attributes in the above update.
-	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
-	gotCluster, err := xdsC.WaitForWatchCluster(ctx)
-	if err != nil {
-		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
-	}
-	if gotCluster != clusterName {
-		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, clusterName)
-	}
-
-	return xdsC, cdsB.(*cdsBalancer), edsB, tcc, func() {
-		newChildBalancer = oldEDSBalancerBuilder
-	}
-}
 
 // testCCWrapper wraps a balancer.ClientConn and intercepts NewSubConn and
 // returns the xDS handshake info back to the test for inspection.
