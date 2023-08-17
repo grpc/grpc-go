@@ -1249,7 +1249,7 @@ func (s) TestExitIdle(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Retrieve the cds LB policy policy and call ExitIdle() on it.
+	// Retrieve the cds LB policy and call ExitIdle() on it.
 	var cdsBal balancer.Balancer
 	select {
 	case cdsBal = <-cdsBalancerCh:
