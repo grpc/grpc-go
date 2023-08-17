@@ -19,11 +19,13 @@
 package clusterresolver
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"sync"
 
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -43,8 +45,13 @@ var (
 type dnsDiscoveryMechanism struct {
 	target           string
 	topLevelResolver topLevelResolver
-	dnsR             resolver.Resolver
 	logger           *grpclog.PrefixLogger
+
+	// All accesses to dnsR must be made within serializer callbacks, thereby
+	// guaranteeing mutual exclusion.
+	serializer       *grpcsync.CallbackSerializer
+	serializerCancel context.CancelFunc
+	dnsR             resolver.Resolver
 
 	mu             sync.Mutex
 	addrs          []string
@@ -83,16 +90,33 @@ func newDNSResolver(target string, topLevelResolver topLevelResolver, logger *gr
 		return ret
 	}
 
-	r, err := newDNS(resolver.Target{URL: *u}, ret, resolver.BuildOptions{})
-	if err != nil {
+	// Create the serializer and schedule a callback to create the actual DNS
+	// resolver. This needs to happen asynchornously to avoid the following
+	// deadlock:
+	// - this method is called from rr.updateMechanisms which holds `rr.mu`
+	// - dns resolver Build() can report state or error inline, which is handled
+	//   in UpdateState or ReportError, both of which call
+	//   topLevelResolver.onUpdate, which tries to grab `rr.mu`, and hence
+	//   deadlocks
+	ctx, cancel := context.WithCancel(context.Background())
+	ret.serializer = grpcsync.NewCallbackSerializer(ctx)
+	ret.serializerCancel = cancel
+	ret.serializer.Schedule(func(context.Context) {
+		r, err := newDNS(resolver.Target{URL: *u}, ret, resolver.BuildOptions{})
+		if err == nil {
+			ret.dnsR = r
+			return
+		}
+
 		if ret.logger.V(2) {
 			ret.logger.Infof("Failed to build DNS resolver for target %q: %v", target, err)
 		}
+		ret.mu.Lock()
 		ret.updateReceived = true
+		ret.mu.Unlock()
 		ret.topLevelResolver.onUpdate()
-		return ret
-	}
-	ret.dnsR = r
+	})
+
 	return ret
 }
 
@@ -107,9 +131,11 @@ func (dr *dnsDiscoveryMechanism) lastUpdate() (any, bool) {
 }
 
 func (dr *dnsDiscoveryMechanism) resolveNow() {
-	if dr.dnsR != nil {
-		dr.dnsR.ResolveNow(resolver.ResolveNowOptions{})
-	}
+	dr.serializer.Schedule(func(context.Context) {
+		if dr.dnsR != nil {
+			dr.dnsR.ResolveNow(resolver.ResolveNowOptions{})
+		}
+	})
 }
 
 // The definition of stop() mentions that implementations must not invoke any
@@ -119,9 +145,15 @@ func (dr *dnsDiscoveryMechanism) resolveNow() {
 // after its `Close()` returns. Therefore, we can guarantee that no methods of
 // the topLevelResolver are invoked after we return from this method.
 func (dr *dnsDiscoveryMechanism) stop() {
-	if dr.dnsR != nil {
-		dr.dnsR.Close()
-	}
+	dr.serializerCancel()
+	done := make(chan struct{})
+	dr.serializer.Schedule(func(context.Context) {
+		if dr.dnsR != nil {
+			dr.dnsR.Close()
+		}
+		close(done)
+	})
+	<-done
 }
 
 // dnsDiscoveryMechanism needs to implement resolver.ClientConn interface to receive
