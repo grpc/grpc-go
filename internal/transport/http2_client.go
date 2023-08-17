@@ -1505,6 +1505,9 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 
+	// For headers, set them in s.header and close headerChan.  For trailers or
+	// trailers-only, closeStream will set the trailers and close headerChan as
+	// needed.
 	if !endStream {
 		// If headerChan hasn't been closed yet (expected, given we checked it
 		// above, but something else could have potentially closed the whole

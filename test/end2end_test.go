@@ -6343,7 +6343,7 @@ func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
 			if err == io.EOF {
 				return nil
 			}
-			return status.Errorf(codes.Unknown, "expected client to CloseSend")
+			return status.Errorf(codes.Unknown, "expected client to call CloseSend")
 		},
 	}
 

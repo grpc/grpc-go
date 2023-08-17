@@ -867,15 +867,18 @@ func Errorf(c codes.Code, format string, a ...any) error {
 	return status.Errorf(c, format, a...)
 }
 
+var errContextCanceled = status.Error(codes.Canceled, context.Canceled.Error())
+var errContextDeadline = status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())
+
 // toRPCErr converts an error into an error from the status package.
 func toRPCErr(err error) error {
 	switch err {
 	case nil, io.EOF:
 		return err
 	case context.DeadlineExceeded:
-		return status.Error(codes.DeadlineExceeded, err.Error())
+		return errContextDeadline
 	case context.Canceled:
-		return status.Error(codes.Canceled, err.Error())
+		return errContextCanceled
 	case io.ErrUnexpectedEOF:
 		return status.Error(codes.Internal, err.Error())
 	}

@@ -987,13 +987,11 @@ func (cs *clientStream) finish(err error) {
 	}
 
 	cs.mu.Unlock()
-	// For binary logging. only log cancel in finish (could be caused by RPC ctx
-	// canceled or ClientConn closed).
-	//
-	// Only one of cancel or trailer needs to be logged. In the cases where
-	// users don't call RecvMsg, users must have already canceled the RPC.
+	// Only one of cancel or trailer needs to be logged.
 	if len(cs.binlogs) != 0 {
-		if status.Code(err) == codes.Canceled {
+		if err == errContextCanceled ||
+			err == errContextDeadline ||
+			err == ErrClientConnClosing {
 			c := &binarylog.Cancel{
 				OnClientSide: true,
 			}

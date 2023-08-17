@@ -31,10 +31,12 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/binarylog"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	iblog "google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
@@ -1057,5 +1059,41 @@ func (s) TestServerBinaryLogFullDuplexError(t *testing.T) {
 	count := 5
 	if err := testServerBinaryLog(t, &rpcConfig{count: count, success: false, callType: fullDuplexStreamRPC}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestCanceledStatus ensures a server that responds with a Canceled status has
+// its trailers logged appropriately and is not treated as a canceled RPC.
+func (s) TestCanceledStatus(t *testing.T) {
+	defer testSink.clear()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	const statusMsgWant = "server returned Canceled"
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			grpc.SetTrailer(ctx, metadata.Pairs("key", "value"))
+			return nil, status.Error(codes.Canceled, statusMsgWant)
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.Canceled {
+		t.Fatalf("Received unexpected error from UnaryCall: %v; want Canceled", err)
+	}
+
+	got := testSink.logEntries(true)
+	last := got[len(got)-1]
+	if last.Type != binlogpb.GrpcLogEntry_EVENT_TYPE_SERVER_TRAILER ||
+		last.GetTrailer().GetStatusCode() != uint32(codes.Canceled) ||
+		last.GetTrailer().GetStatusMessage() != statusMsgWant ||
+		len(last.GetTrailer().GetMetadata().GetEntry()) != 1 ||
+		last.GetTrailer().GetMetadata().GetEntry()[0].GetKey() != "key" ||
+		string(last.GetTrailer().GetMetadata().GetEntry()[0].GetValue()) != "value" {
+		t.Fatalf("Got binary log: %+v; want last entry is server trailing with status Canceled", got)
 	}
 }
