@@ -21,26 +21,47 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
-	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
+
+	_ "google.golang.org/grpc/xds/internal/balancer/ringhash" // Register the ring_hash LB policy
 )
 
 const (
@@ -59,20 +80,15 @@ var (
 	}
 	noopODLBCfg         = outlierdetection.LBConfig{}
 	noopODLBCfgJSON, _  = json.Marshal(noopODLBCfg)
-	wrrLocalityLBConfig = &internalserviceconfig.BalancerConfig{
+	wrrLocalityLBConfig = &iserviceconfig.BalancerConfig{
 		Name: wrrlocality.Name,
 		Config: &wrrlocality.LBConfig{
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name: "round_robin",
 			},
 		},
 	}
 	wrrLocalityLBConfigJSON, _ = json.Marshal(wrrLocalityLBConfig)
-	ringHashLBConfig           = &internalserviceconfig.BalancerConfig{
-		Name:   ringhash.Name,
-		Config: &ringhash.LBConfig{MinRingSize: 10, MaxRingSize: 100},
-	}
-	ringHashLBConfigJSON, _ = json.Marshal(ringHashLBConfig)
 )
 
 type s struct {
@@ -183,15 +199,6 @@ func (tb *testEDSBalancer) waitForResolverError(ctx context.Context, wantErr err
 	}
 	if gotErr != wantErr {
 		return fmt.Errorf("received resolver error: %v, want %v", gotErr, wantErr)
-	}
-	return nil
-}
-
-// waitForClose verifies that the edsBalancer is closed before the context
-// expires.
-func (tb *testEDSBalancer) waitForClose(ctx context.Context) error {
-	if _, err := tb.closeCh.Receive(ctx); err != nil {
-		return err
 	}
 	return nil
 }
@@ -315,507 +322,948 @@ func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBal
 	return xdsC, cdsB, edsB, tcc, cancel
 }
 
-// TestUpdateClientConnState invokes the UpdateClientConnState method on the
-// cdsBalancer with different inputs and verifies that the CDS watch API on the
-// provided xdsClient is invoked appropriately.
-func (s) TestUpdateClientConnState(t *testing.T) {
-	xdsC := fakeclient.NewClient()
-
-	tests := []struct {
-		name        string
-		ccs         balancer.ClientConnState
-		wantErr     error
-		wantCluster string
-	}{
-		{
-			name:    "bad-lbCfg-type",
-			ccs:     balancer.ClientConnState{BalancerConfig: nil},
-			wantErr: balancer.ErrBadResolverState,
-		},
-		{
-			name:    "empty-cluster-in-lbCfg",
-			ccs:     balancer.ClientConnState{BalancerConfig: &lbConfig{ClusterName: ""}},
-			wantErr: balancer.ErrBadResolverState,
-		},
-		{
-			name:        "happy-good-case",
-			ccs:         cdsCCS(clusterName, xdsC),
-			wantCluster: clusterName,
-		},
+func waitForResourceNames(ctx context.Context, resourceNamesCh chan []string, wantNames []string) error {
+	for ctx.Err() == nil {
+		select {
+		case <-ctx.Done():
+		case gotNames := <-resourceNamesCh:
+			if cmp.Equal(gotNames, wantNames) {
+				return nil
+			}
+		}
 	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			_, cdsB, _, _, cancel := setup(t)
-			defer func() {
-				cancel()
-				cdsB.Close()
-			}()
-
-			if err := cdsB.UpdateClientConnState(test.ccs); err != test.wantErr {
-				t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
-			}
-			if test.wantErr != nil {
-				// When we wanted an error and got it, we should return early.
-				return
-			}
-			ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer ctxCancel()
-			gotCluster, err := xdsC.WaitForWatchCluster(ctx)
-			if err != nil {
-				t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
-			}
-			if gotCluster != test.wantCluster {
-				t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, test.wantCluster)
-			}
-		})
+	if ctx.Err() != nil {
+		return fmt.Errorf("Timeout when waiting for appropriate Cluster resources to be requested")
 	}
+	return nil
 }
 
-// TestUpdateClientConnStateWithSameState verifies that a ClientConnState
-// update with the same cluster and xdsClient does not cause the cdsBalancer to
-// create a new watch.
-func (s) TestUpdateClientConnStateWithSameState(t *testing.T) {
-	xdsC, cdsB, _, _, cancel := setupWithWatch(t)
-	defer func() {
-		cancel()
-		cdsB.Close()
-	}()
+// Registers a wrapped cluster_resolver LB policy (child policy of the cds LB
+// policy) for the duration of this test that retains all the functionality of
+// the former, but makes certain events available for inspection by the test.
+//
+// Returns the following:
+// - a channel to read received load balancing configuration
+// - a channel to read received resolver error
+// - a channel that is closed when ExitIdle() is called
+// - a channel that is closed when the balancer is closed
+func registerWrappedClusterResolverPolicy(t *testing.T) (chan serviceconfig.LoadBalancingConfig, chan error, chan struct{}, chan struct{}) {
+	clusterresolverBuilder := balancer.Get(clusterresolver.Name)
+	internal.BalancerUnregister(clusterresolverBuilder.Name())
 
-	// This is the same clientConn update sent in setupWithWatch().
-	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != nil {
-		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
-	}
-	// The above update should not result in a new watch being registered.
-	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer ctxCancel()
-	if _, err := xdsC.WaitForWatchCluster(ctx); err != context.DeadlineExceeded {
-		t.Fatalf("waiting for WatchCluster() should have timed out, but returned error: %v", err)
-	}
-}
+	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
+	resolverErrCh := make(chan error, 1)
+	exitIdleCh := make(chan struct{})
+	closeCh := make(chan struct{})
 
-// TestHandleClusterUpdate invokes the registered CDS watch callback with
-// different updates and verifies that the expect ClientConnState is propagated
-// to the edsBalancer.
-func (s) TestHandleClusterUpdate(t *testing.T) {
-	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
-	xdsC.SetBootstrapConfig(&bootstrap.Config{
-		XDSServer: defaultTestAuthorityServerConfig,
+	stub.Register(clusterresolver.Name, stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			bd.Data = clusterresolverBuilder.Build(bd.ClientConn, bd.BuildOptions)
+		},
+		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			return clusterresolverBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			select {
+			case lbCfgCh <- ccs.BalancerConfig:
+			default:
+			}
+			bal := bd.Data.(balancer.Balancer)
+			return bal.UpdateClientConnState(ccs)
+		},
+		ResolverError: func(bd *stub.BalancerData, err error) {
+			select {
+			case resolverErrCh <- err:
+			default:
+			}
+			bal := bd.Data.(balancer.Balancer)
+			bal.ResolverError(err)
+		},
+		ExitIdle: func(bd *stub.BalancerData) {
+			bal := bd.Data.(balancer.Balancer)
+			bal.(balancer.ExitIdler).ExitIdle()
+			close(exitIdleCh)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bal := bd.Data.(balancer.Balancer)
+			bal.Close()
+			close(closeCh)
+		},
 	})
-	defer func() {
-		cancel()
-		cdsB.Close()
-	}()
+	t.Cleanup(func() { balancer.Register(clusterresolverBuilder) })
 
+	return lbCfgCh, resolverErrCh, exitIdleCh, closeCh
+}
+
+// Registers a wrapped cds LB policy for the duration of this test that retains
+// all the functionality of the original cds LB policy, but makes the newly
+// built policy available to the test to directly invoke any balancer methods.
+//
+// Returns a channel on which the newly built cds LB policy is written to.
+func registerWrappedCDSPolicy(t *testing.T) chan balancer.Balancer {
+	cdsBuilder := balancer.Get(cdsName)
+	internal.BalancerUnregister(cdsBuilder.Name())
+	cdsBalancerCh := make(chan balancer.Balancer, 1)
+	stub.Register(cdsBuilder.Name(), stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			bal := cdsBuilder.Build(bd.ClientConn, bd.BuildOptions)
+			bd.Data = bal
+			cdsBalancerCh <- bal
+		},
+		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			return cdsBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			bal := bd.Data.(balancer.Balancer)
+			return bal.UpdateClientConnState(ccs)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bal := bd.Data.(balancer.Balancer)
+			bal.Close()
+		},
+	})
+	t.Cleanup(func() { balancer.Register(cdsBuilder) })
+
+	return cdsBalancerCh
+}
+
+// Performs the following setup required for tests:
+//   - Spins up an xDS management server
+//   - Creates an xDS client talking to this management server
+//   - Creates a manual resolver that configures the cds LB policy as the
+//     top-level policy, and pushes an initial configuration to it
+//   - Creates a gRPC channel with the above manual resolver
+//
+// Returns the following:
+//   - the xDS management server
+//   - the nodeID expected by the management server
+//   - the grpc channel to the test backend service
+//   - the manual resolver configured on the channel
+//   - the xDS cient used the grpc channel
+//   - a channel on which requested cluster resource names are sent
+//   - a channel used to signal that previously requested cluster resources are
+//     no longer requested
+func setupWithManagementServer(t *testing.T) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient, chan []string, chan struct{}) {
+	t.Helper()
+
+	cdsResourceRequestedCh := make(chan []string, 1)
+	cdsResourceCanceledCh := make(chan struct{}, 1)
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() == version.V3ClusterURL {
+				switch len(req.GetResourceNames()) {
+				case 0:
+					select {
+					case cdsResourceCanceledCh <- struct{}{}:
+					default:
+					}
+				default:
+					select {
+					case cdsResourceRequestedCh <- req.GetResourceNames():
+					default:
+					}
+				}
+			}
+			return nil
+		},
+	})
+	t.Cleanup(cleanup)
+
+	xdsC, xdsClose, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	t.Cleanup(xdsClose)
+
+	r := manual.NewBuilderWithScheme("whatever")
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": "%s"
+				}
+			}]
+		}`, clusterName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsC))
+
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	t.Cleanup(func() { cc.Close() })
+
+	return mgmtServer, nodeID, cc, r, xdsC, cdsResourceRequestedCh, cdsResourceCanceledCh
+}
+
+// Helper function to compare the load balancing configuration received on the
+// channel with the expected one. Both configs are marshalled to JSON and then
+// compared.
+//
+// Returns an error if marshalling to JSON fails, or if the load balancing
+// configurations don't match, or if the context deadline expires before reading
+// a child policy configuration off of the lbCfgCh.
+func compareLoadBalancingConfig(ctx context.Context, lbCfgCh chan serviceconfig.LoadBalancingConfig, wantChildCfg serviceconfig.LoadBalancingConfig) error {
+	wantJSON, err := json.Marshal(wantChildCfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal expected child config to JSON: %v", err)
+	}
+	select {
+	case lbCfg := <-lbCfgCh:
+		gotJSON, err := json.Marshal(lbCfg)
+		if err != nil {
+			return fmt.Errorf("failed to marshal received LB config into JSON: %v", err)
+		}
+		if diff := cmp.Diff(wantJSON, gotJSON); diff != "" {
+			return fmt.Errorf("child policy received unexpected diff in config (-want +got):\n%s", diff)
+		}
+	case <-ctx.Done():
+		return fmt.Errorf("timeout when waiting for child policy to receive its configuration")
+	}
+	return nil
+}
+
+// Tests the functionality that handles LB policy configuration. Verifies that
+// the appropriate xDS resource is requested corresponding to the provided LB
+// policy configuration. Also verifies that when the LB policy receives the same
+// configuration again, it does not send out a new request, and when the
+// configuration changes, it stops requesting the old cluster resource and
+// starts requesting the new one.
+func (s) TestConfigurationUpdate_Success(t *testing.T) {
+	_, _, _, r, xdsClient, cdsResourceRequestedCh, _ := setupWithManagementServer(t)
+
+	// Verify that the specified cluster resource is requested.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	wantNames := []string{clusterName}
+	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
+		t.Fatal(err)
+	}
+
+	// Push the same configuration again.
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": "%s"
+				}
+			}]
+		}`, clusterName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.UpdateState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+	// Verify that a new CDS request is not sent.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-sCtx.Done():
+	case gotNames := <-cdsResourceRequestedCh:
+		t.Fatalf("CDS resources %v requested when none expected", gotNames)
+	}
+
+	// Push an updated configuration with a different cluster name.
+	newClusterName := clusterName + "-new"
+	jsonSC = fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": "%s"
+				}
+			}]
+		}`, newClusterName)
+	scpr = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.UpdateState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+	// Verify that the new cluster name is requested and the old one is no
+	// longer requested.
+	wantNames = []string{newClusterName}
+	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Tests the case where a configuration with an empty cluster name is pushed to
+// the CDS LB policy. Verifies that ErrBadResolverState is returned.
+func (s) TestConfigurationUpdate_EmptyCluster(t *testing.T) {
+	// Setup a management server and an xDS client to talk to it.
+	_, _, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+	t.Cleanup(cleanup)
+	xdsClient, xdsClose, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	t.Cleanup(xdsClose)
+
+	// Create a manual resolver that configures the CDS LB policy as the
+	// top-level LB policy on the channel, and pushes a configuration with an
+	// empty cluster name. Also, register a callback with the manual resolver to
+	// receive the error returned by the balancer when a configuration with an
+	// empty cluster name is pushed.
+	r := manual.NewBuilderWithScheme("whatever")
+	updateStateErrCh := make(chan error, 1)
+	r.UpdateStateCallback = func(err error) { updateStateErrCh <- err }
+	jsonSC := `{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": ""
+				}
+			}]
+		}`
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+	// Create a ClientConn with the above manual resolver.
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	t.Cleanup(func() { cc.Close() })
+
+	select {
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out waiting for error from the LB policy")
+	case err := <-updateStateErrCh:
+		if err != balancer.ErrBadResolverState {
+			t.Fatalf("For a configuration update with an empty cluster name, got error %v from the LB policy, want %v", err, balancer.ErrBadResolverState)
+		}
+	}
+}
+
+// Tests the case where a configuration with a missing xDS client is pushed to
+// the CDS LB policy. Verifies that ErrBadResolverState is returned.
+func (s) TestConfigurationUpdate_MissingXdsClient(t *testing.T) {
+	// Create a manual resolver that configures the CDS LB policy as the
+	// top-level LB policy on the channel, and pushes a configuration that is
+	// missing the xDS client.  Also, register a callback with the manual
+	// resolver to receive the error returned by the balancer.
+	r := manual.NewBuilderWithScheme("whatever")
+	updateStateErrCh := make(chan error, 1)
+	r.UpdateStateCallback = func(err error) { updateStateErrCh <- err }
+	jsonSC := `{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": "foo"
+				}
+			}]
+		}`
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(resolver.State{ServiceConfig: scpr})
+
+	// Create a ClientConn with the above manual resolver.
+	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	t.Cleanup(func() { cc.Close() })
+
+	select {
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out waiting for error from the LB policy")
+	case err := <-updateStateErrCh:
+		if err != balancer.ErrBadResolverState {
+			t.Fatalf("For a configuration update missing the xDS client, got error %v from the LB policy, want %v", err, balancer.ErrBadResolverState)
+		}
+	}
+}
+
+// Tests success scenarios where the cds LB policy receives a cluster resource
+// from the management server. Verifies that the load balancing configuration
+// pushed to the child is as expected.
+func (s) TestClusterUpdate_Success(t *testing.T) {
 	tests := []struct {
-		name      string
-		cdsUpdate xdsresource.ClusterUpdate
-		updateErr error
-		wantCCS   balancer.ClientConnState
+		name            string
+		clusterResource *v3clusterpb.Cluster
+		wantChildCfg    serviceconfig.LoadBalancingConfig
 	}{
 		{
-			name: "happy-case-with-lrs",
-			cdsUpdate: xdsresource.ClusterUpdate{
-				ClusterName:     serviceName,
-				LRSServerConfig: xdsresource.ClusterLRSServerSelf,
-				LBPolicy:        wrrLocalityLBConfigJSON,
+			name: "happy-case-with-circuit-breakers",
+			clusterResource: func() *v3clusterpb.Cluster {
+				c := e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)
+				c.CircuitBreakers = &v3clusterpb.CircuitBreakers{
+					Thresholds: []*v3clusterpb.CircuitBreakers_Thresholds{
+						{
+							Priority:    v3corepb.RoutingPriority_DEFAULT,
+							MaxRequests: wrapperspb.UInt32(512),
+						},
+						{
+							Priority:    v3corepb.RoutingPriority_HIGH,
+							MaxRequests: nil,
+						},
+					},
+				}
+				return c
+			}(),
+			wantChildCfg: &clusterresolver.LBConfig{
+				DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
+					Cluster:               clusterName,
+					Type:                  clusterresolver.DiscoveryMechanismTypeEDS,
+					EDSServiceName:        serviceName,
+					MaxConcurrentRequests: newUint32(512),
+					OutlierDetection:      json.RawMessage(`{}`),
+				}},
+				XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 			},
-			wantCCS: edsCCS(serviceName, nil, true, wrrLocalityLBConfigJSON, noopODLBCfgJSON),
-		},
-		{
-			name: "happy-case-without-lrs",
-			cdsUpdate: xdsresource.ClusterUpdate{
-				ClusterName: serviceName,
-				LBPolicy:    wrrLocalityLBConfigJSON,
-			},
-			wantCCS: edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON),
 		},
 		{
 			name: "happy-case-with-ring-hash-lb-policy",
-			cdsUpdate: xdsresource.ClusterUpdate{
-				ClusterName: serviceName,
-				LBPolicy:    ringHashLBConfigJSON,
+			clusterResource: func() *v3clusterpb.Cluster {
+				c := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+					ClusterName:   clusterName,
+					ServiceName:   serviceName,
+					SecurityLevel: e2e.SecurityLevelNone,
+					Policy:        e2e.LoadBalancingPolicyRingHash,
+				})
+				c.LbConfig = &v3clusterpb.Cluster_RingHashLbConfig_{
+					RingHashLbConfig: &v3clusterpb.Cluster_RingHashLbConfig{
+						MinimumRingSize: &wrapperspb.UInt64Value{Value: 100},
+						MaximumRingSize: &wrapperspb.UInt64Value{Value: 1000},
+					},
+				}
+				return c
+			}(),
+			wantChildCfg: &clusterresolver.LBConfig{
+				DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
+					Cluster:          clusterName,
+					Type:             clusterresolver.DiscoveryMechanismTypeEDS,
+					EDSServiceName:   serviceName,
+					OutlierDetection: json.RawMessage(`{}`),
+				}},
+				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":100, "maxRingSize":1000}}]`),
 			},
-			wantCCS: edsCCS(serviceName, nil, false, ringHashLBConfigJSON, noopODLBCfgJSON),
 		},
 		{
-			name: "happy-case-outlier-detection-xds-defaults",
-			// i.e. od proto set but no proto fields set
-			cdsUpdate: xdsresource.ClusterUpdate{
-				ClusterName: serviceName,
-				OutlierDetection: json.RawMessage(`{
-				"successRateEjection": {}
-			}`),
-				LBPolicy: wrrLocalityLBConfigJSON,
+			name: "happy-case-outlier-detection-xds-defaults", // OD proto set but no proto fields set
+			clusterResource: func() *v3clusterpb.Cluster {
+				c := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+					ClusterName:   clusterName,
+					ServiceName:   serviceName,
+					SecurityLevel: e2e.SecurityLevelNone,
+					Policy:        e2e.LoadBalancingPolicyRingHash,
+				})
+				c.OutlierDetection = &v3clusterpb.OutlierDetection{}
+				return c
+			}(),
+			wantChildCfg: &clusterresolver.LBConfig{
+				DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
+					Cluster:          clusterName,
+					Type:             clusterresolver.DiscoveryMechanismTypeEDS,
+					EDSServiceName:   serviceName,
+					OutlierDetection: json.RawMessage(`{"successRateEjection":{}}`),
+				}},
+				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":1024, "maxRingSize":8388608}}]`),
 			},
-			wantCCS: edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, json.RawMessage(`{
-				"successRateEjection": {}
-			}`)),
 		},
 		{
 			name: "happy-case-outlier-detection-all-fields-set",
-			cdsUpdate: xdsresource.ClusterUpdate{
-				ClusterName: serviceName,
-				OutlierDetection: json.RawMessage(`{
-				"interval": "10s",
-				"baseEjectionTime": "30s",
-				"maxEjectionTime": "300s",
-				"maxEjectionPercent": 10,
-				"successRateEjection": {
-					"stdevFactor": 1900,
-					"enforcementPercentage": 100,
-					"minimumHosts": 5,
-					"requestVolume": 100
-				},
-				"failurePercentageEjection": {
-					"threshold": 85,
-					"enforcementPercentage": 5,
-					"minimumHosts": 5,
-					"requestVolume": 50
+			clusterResource: func() *v3clusterpb.Cluster {
+				c := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+					ClusterName:   clusterName,
+					ServiceName:   serviceName,
+					SecurityLevel: e2e.SecurityLevelNone,
+					Policy:        e2e.LoadBalancingPolicyRingHash,
+				})
+				c.OutlierDetection = &v3clusterpb.OutlierDetection{
+					Interval:                       durationpb.New(10 * time.Second),
+					BaseEjectionTime:               durationpb.New(30 * time.Second),
+					MaxEjectionTime:                durationpb.New(300 * time.Second),
+					MaxEjectionPercent:             wrapperspb.UInt32(10),
+					SuccessRateStdevFactor:         wrapperspb.UInt32(1900),
+					EnforcingSuccessRate:           wrapperspb.UInt32(100),
+					SuccessRateMinimumHosts:        wrapperspb.UInt32(5),
+					SuccessRateRequestVolume:       wrapperspb.UInt32(100),
+					FailurePercentageThreshold:     wrapperspb.UInt32(85),
+					EnforcingFailurePercentage:     wrapperspb.UInt32(5),
+					FailurePercentageMinimumHosts:  wrapperspb.UInt32(5),
+					FailurePercentageRequestVolume: wrapperspb.UInt32(50),
 				}
-			}`),
-				LBPolicy: wrrLocalityLBConfigJSON,
+				return c
+			}(),
+			wantChildCfg: &clusterresolver.LBConfig{
+				DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
+					Cluster:        clusterName,
+					Type:           clusterresolver.DiscoveryMechanismTypeEDS,
+					EDSServiceName: serviceName,
+					OutlierDetection: json.RawMessage(`{
+						"interval": "10s",
+						"baseEjectionTime": "30s",
+						"maxEjectionTime": "300s",
+						"maxEjectionPercent": 10,
+						"successRateEjection": {
+							"stdevFactor": 1900,
+							"enforcementPercentage": 100,
+							"minimumHosts": 5,
+							"requestVolume": 100
+						},
+						"failurePercentageEjection": {
+							"threshold": 85,
+							"enforcementPercentage": 5,
+							"minimumHosts": 5,
+							"requestVolume": 50
+						}
+					}`),
+				}},
+				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":1024, "maxRingSize":8388608}}]`),
 			},
-			wantCCS: edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, json.RawMessage(`{
-				"interval": "10s",
-				"baseEjectionTime": "30s",
-				"maxEjectionTime": "300s",
-				"maxEjectionPercent": 10,
-				"successRateEjection": {
-					"stdevFactor": 1900,
-					"enforcementPercentage": 100,
-					"minimumHosts": 5,
-					"requestVolume": 100
-				},
-				"failurePercentageEjection": {
-					"threshold": 85,
-					"enforcementPercentage": 5,
-					"minimumHosts": 5,
-					"requestVolume": 50
-				}
-			}`)),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer ctxCancel()
-			if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{test.cdsUpdate, test.updateErr}, test.wantCCS, edsB); err != nil {
+			lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
+			mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
+				NodeID:         nodeID,
+				Clusters:       []*v3clusterpb.Cluster{test.clusterResource},
+				SkipValidation: true,
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := compareLoadBalancingConfig(ctx, lbCfgCh, test.wantChildCfg); err != nil {
 				t.Fatal(err)
 			}
 		})
 	}
 }
 
-// TestHandleClusterUpdateError covers the cases that an error is returned from
-// the watcher.
-func (s) TestHandleClusterUpdateError(t *testing.T) {
-	// This creates a CDS balancer, pushes a ClientConnState update with a fake
-	// xdsClient, and makes sure that the CDS balancer registers a watch on the
-	// provided xdsClient.
-	xdsC, cdsB, edsB, tcc, cancel := setupWithWatch(t)
-	defer func() {
-		cancel()
-		cdsB.Close()
-	}()
+// Tests a single success scenario where the cds LB policy receives a cluster
+// resource from the management server with LRS enabled. Verifies that the load
+// balancing configuration pushed to the child is as expected.
+func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
+	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
+	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
 
-	// A watch was registered above, but the watch callback has not been invoked
-	// yet. This means that the watch handler on the CDS balancer has not been
-	// invoked yet, and therefore no EDS balancer has been built so far. A
-	// resolver error at this point should result in the CDS balancer returning
-	// an error picker.
-	watcherErr := errors.New("cdsBalancer watcher error")
-	xdsC.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{}, watcherErr)
-
-	// Since the error being pushed here is not a resource-not-found-error, the
-	// registered watch should not be cancelled.
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
-		t.Fatal("cluster watch cancelled for a non-resource-not-found-error")
-	}
-	// The CDS balancer has not yet created an EDS balancer. So, this resolver
-	// error should not be forwarded to our fake EDS balancer.
-	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if err := edsB.waitForResolverError(sCtx, watcherErr); err != context.DeadlineExceeded {
-		t.Fatal("eds balancer shouldn't get error (shouldn't be built yet)")
-	}
-
-	// Make sure the CDS balancer reports an error picker.
-	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
-	select {
-	case <-ctx.Done():
-		t.Fatalf("timeout when waiting for an error picker")
-	case picker := <-tcc.NewPickerCh:
-		if _, perr := picker.Pick(balancer.PickInfo{}); perr == nil {
-			t.Fatalf("CDS balancer returned a picker which is not an error picker")
-		}
-	}
-
-	// Here we invoke the watch callback registered on the fake xdsClient. This
-	// will trigger the watch handler on the CDS balancer, which will attempt to
-	// create a new EDS balancer. The fake EDS balancer created above will be
-	// returned to the CDS balancer, because we have overridden the
-	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsresource.ClusterUpdate{
-		ClusterName: serviceName,
-		LBPolicy:    wrrLocalityLBConfigJSON,
-	}
-	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
-	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
-		t.Fatal(err)
-	}
-
-	// Again push a non-resource-not-found-error through the watcher callback.
-	xdsC.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{}, watcherErr)
-	// Make sure the registered watch is not cancelled.
-	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
-		t.Fatal("cluster watch cancelled for a non-resource-not-found-error")
-	}
-	// Make sure the error is forwarded to the EDS balancer.
-	if err := edsB.waitForResolverError(ctx, watcherErr); err != nil {
-		t.Fatalf("Watch callback error is not forwarded to EDS balancer")
-	}
-
-	// Push a resource-not-found-error this time around.
-	resourceErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
-	xdsC.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{}, resourceErr)
-	// Make sure that the watch is not cancelled. This error indicates that the
-	// request cluster resource is not found. We should continue to watch it.
-	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
-		t.Fatal("cluster watch cancelled for a resource-not-found-error")
-	}
-	// Make sure the error is forwarded to the EDS balancer.
-	if err := edsB.waitForResolverError(ctx, resourceErr); err != nil {
-		t.Fatalf("Watch callback error is not forwarded to EDS balancer")
-	}
-}
-
-// TestResolverError verifies the ResolverError() method in the CDS balancer.
-func (s) TestResolverError(t *testing.T) {
-	// This creates a CDS balancer, pushes a ClientConnState update with a fake
-	// xdsClient, and makes sure that the CDS balancer registers a watch on the
-	// provided xdsClient.
-	xdsC, cdsB, edsB, tcc, cancel := setupWithWatch(t)
-	defer func() {
-		cancel()
-		cdsB.Close()
-	}()
-
-	// A watch was registered above, but the watch callback has not been invoked
-	// yet. This means that the watch handler on the CDS balancer has not been
-	// invoked yet, and therefore no EDS balancer has been built so far. A
-	// resolver error at this point should result in the CDS balancer returning
-	// an error picker.
-	resolverErr := errors.New("cdsBalancer resolver error")
-	cdsB.ResolverError(resolverErr)
-
-	// Since the error being pushed here is not a resource-not-found-error, the
-	// registered watch should not be cancelled.
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
-		t.Fatal("cluster watch cancelled for a non-resource-not-found-error")
-	}
-	// The CDS balancer has not yet created an EDS balancer. So, this resolver
-	// error should not be forwarded to our fake EDS balancer.
-	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if err := edsB.waitForResolverError(sCtx, resolverErr); err != context.DeadlineExceeded {
-		t.Fatal("eds balancer shouldn't get error (shouldn't be built yet)")
-	}
-	// Make sure the CDS balancer reports an error picker.
-	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
-	select {
-	case <-ctx.Done():
-		t.Fatalf("timeout when waiting for an error picker")
-	case picker := <-tcc.NewPickerCh:
-		if _, perr := picker.Pick(balancer.PickInfo{}); perr == nil {
-			t.Fatalf("CDS balancer returned a picker which is not an error picker")
-		}
-	}
-
-	// Here we invoke the watch callback registered on the fake xdsClient. This
-	// will trigger the watch handler on the CDS balancer, which will attempt to
-	// create a new EDS balancer. The fake EDS balancer created above will be
-	// returned to the CDS balancer, because we have overridden the
-	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsresource.ClusterUpdate{
-		ClusterName: serviceName,
-		LBPolicy:    wrrLocalityLBConfigJSON,
-	}
-	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
-	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
-		t.Fatal(err)
-	}
-
-	// Again push a non-resource-not-found-error.
-	cdsB.ResolverError(resolverErr)
-	// Make sure the registered watch is not cancelled.
-	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
-		t.Fatal("cluster watch cancelled for a non-resource-not-found-error")
-	}
-	// Make sure the error is forwarded to the EDS balancer.
-	if err := edsB.waitForResolverError(ctx, resolverErr); err != nil {
-		t.Fatalf("ResolverError() not forwarded to EDS balancer")
-	}
-
-	// Push a resource-not-found-error this time around.
-	resourceErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
-	cdsB.ResolverError(resourceErr)
-	// Make sure the registered watch is cancelled.
-	if _, err := xdsC.WaitForCancelClusterWatch(ctx); err != nil {
-		t.Fatalf("want watch to be canceled, watchForCancel failed: %v", err)
-	}
-	// Make sure the error is forwarded to the EDS balancer.
-	if err := edsB.waitForResolverError(ctx, resourceErr); err != nil {
-		t.Fatalf("eds balancer should get resource-not-found error, waitForError failed: %v", err)
-	}
-}
-
-// TestCircuitBreaking verifies that the CDS balancer correctly updates a
-// service's counter on watch updates.
-func (s) TestCircuitBreaking(t *testing.T) {
-	// This creates a CDS balancer, pushes a ClientConnState update with a fake
-	// xdsClient, and makes sure that the CDS balancer registers a watch on the
-	// provided xdsClient.
-	xdsC, cdsB, edsB, _, cancel := setupWithXDSCreds(t)
-	defer func() {
-		cancel()
-		cdsB.Close()
-	}()
-	// Here we invoke the watch callback registered on the fake xdsClient. This
-	// will trigger the watch handler on the CDS balancer, which will update
-	// the service's counter with the new max requests.
-	var maxRequests uint32 = 1
-	cdsUpdate := xdsresource.ClusterUpdate{
+	clusterResource := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
-		MaxRequests: &maxRequests,
-		LBPolicy:    wrrLocalityLBConfigJSON,
-	}
-	wantCCS := edsCCS(clusterName, &maxRequests, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
-	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
-	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
-		t.Fatal(err)
+		ServiceName: serviceName,
+		EnableLRS:   true,
+	})
+	wantChildCfg := &clusterresolver.LBConfig{
+		DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
+			Cluster:        clusterName,
+			Type:           clusterresolver.DiscoveryMechanismTypeEDS,
+			EDSServiceName: serviceName,
+			LoadReportingServer: &bootstrap.ServerConfig{
+				ServerURI: mgmtServer.Address,
+				Creds:     bootstrap.ChannelCreds{Type: "insecure"},
+			},
+			OutlierDetection: json.RawMessage(`{}`),
+		}},
+		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 	}
 
-	// Since the counter's max requests was set to 1, the first request should
-	// succeed and the second should fail.
-	counter := xdsclient.GetClusterRequestsCounter(clusterName, "")
-	if err := counter.StartRequest(maxRequests); err != nil {
-		t.Fatal(err)
-	}
-	if err := counter.StartRequest(maxRequests); err == nil {
-		t.Fatal("unexpected success on start request over max")
-	}
-	counter.EndRequest()
-}
-
-// TestClose verifies the Close() method in the CDS balancer.
-func (s) TestClose(t *testing.T) {
-	grpctest.TLogger.ExpectError("cds-lb.*Received balancer config after close")
-
-	// This creates a CDS balancer, pushes a ClientConnState update with a fake
-	// xdsClient, and makes sure that the CDS balancer registers a watch on the
-	// provided xdsClient.
-	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	// Here we invoke the watch callback registered on the fake xdsClient. This
-	// will trigger the watch handler on the CDS balancer, which will attempt to
-	// create a new EDS balancer. The fake EDS balancer created above will be
-	// returned to the CDS balancer, because we have overridden the
-	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsresource.ClusterUpdate{
-		ClusterName: serviceName,
-		LBPolicy:    wrrLocalityLBConfigJSON,
-	}
-	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
-	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
-	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
+	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{clusterResource},
+		SkipValidation: true,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
-	// Close the CDS balancer.
-	cdsB.Close()
-
-	// Make sure that the cluster watch registered by the CDS balancer is
-	// cancelled.
-	if _, err := xdsC.WaitForCancelClusterWatch(ctx); err != nil {
+	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
-	}
-
-	// Make sure that a cluster update is not acted upon.
-	xdsC.InvokeWatchClusterCallback(cdsUpdate, nil)
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if err := edsB.waitForClientConnUpdate(sCtx, balancer.ClientConnState{}); err != context.DeadlineExceeded {
-		t.Fatalf("ClusterUpdate after close forwaded to EDS balancer")
-	}
-
-	// Make sure that the underlying EDS balancer is closed.
-	if err := edsB.waitForClose(ctx); err != nil {
-		t.Fatal(err)
-	}
-
-	// Make sure that the UpdateClientConnState() method on the CDS balancer
-	// returns error.
-	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != errBalancerClosed {
-		t.Fatalf("UpdateClientConnState() after close returned %v, want %v", err, errBalancerClosed)
-	}
-
-	// Make sure that the ResolverErr() method on the CDS balancer does not
-	// forward the update to the EDS balancer.
-	rErr := errors.New("cdsBalancer resolver error")
-	cdsB.ResolverError(rErr)
-	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if err := edsB.waitForResolverError(sCtx, rErr); err != context.DeadlineExceeded {
-		t.Fatal("ResolverError() forwarded to EDS balancer after Close()")
 	}
 }
 
-func (s) TestExitIdle(t *testing.T) {
-	// This creates a CDS balancer, pushes a ClientConnState update with a fake
-	// xdsClient, and makes sure that the CDS balancer registers a watch on the
-	// provided xdsClient.
-	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
-	defer func() {
-		cancel()
-		cdsB.Close()
-	}()
+// Tests scenarios for a bad cluster update received from the management server.
+//
+//   - when a bad cluster resource update is received without any previous good
+//     update from the management server, the cds LB policy is expected to put
+//     the channel in TRANSIENT_FAILURE.
+//   - when a bad cluster resource update is received after a previous good
+//     update from the management server, the cds LB policy is expected to
+//     continue using the previous good update.
+//   - when the cluster resource is removed after a previous good
+//     update from the management server, the cds LB policy is expected to put
+//     the channel in TRANSIENT_FAILURE.
+func (s) TestClusterUpdate_Failure(t *testing.T) {
+	_, resolverErrCh, _, _ := registerWrappedClusterResolverPolicy(t)
+	mgmtServer, nodeID, cc, _, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServer(t)
 
-	// Here we invoke the watch callback registered on the fake xdsClient. This
-	// will trigger the watch handler on the CDS balancer, which will attempt to
-	// create a new EDS balancer. The fake EDS balancer created above will be
-	// returned to the CDS balancer, because we have overridden the
-	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsresource.ClusterUpdate{
-		ClusterName: serviceName,
-		LBPolicy:    wrrLocalityLBConfigJSON,
-	}
-	wantCCS := edsCCS(serviceName, nil, false, wrrLocalityLBConfigJSON, noopODLBCfgJSON)
-	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
-	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
+	// Verify that the specified cluster resource is requested.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	wantNames := []string{clusterName}
+	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
 		t.Fatal(err)
 	}
 
-	// Call ExitIdle on the CDS balancer.
-	cdsB.ExitIdle()
+	// Configure the management server to return a cluster resource that
+	// contains a config_source_specifier for the `lrs_server` field which is not
+	// set to `self`, and hence is expected to be NACKed by the client.
+	cluster := e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)
+	cluster.LrsServer = &v3corepb.ConfigSource{ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{}}
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{cluster},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
 
-	edsB.exitIdleCh.Receive(ctx)
+	// Verify that the watch for the cluster resource is not cancelled.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-sCtx.Done():
+	case <-cdsResourceCanceledCh:
+		t.Fatal("Watch for cluster resource is cancelled when not expected to")
+	}
+
+	// Ensure that the ClientConn moves to TransientFailure.
+	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
+		if !cc.WaitForStateChange(ctx, state) {
+			t.Fatalf("Timed out waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
+		}
+	}
+
+	// Ensure that the NACK error is propagated to the RPC caller.
+	const wantClusterNACKErr = "unsupported config_source_specifier"
+	client := testgrpc.NewTestServiceClient(cc)
+	_, err := client.EmptyCall(ctx, &testpb.Empty{})
+	if code := status.Code(err); code != codes.Unavailable {
+		t.Fatalf("EmptyCall() failed with code: %v, want %v", code, codes.Unavailable)
+	}
+	if err != nil && !strings.Contains(err.Error(), wantClusterNACKErr) {
+		t.Fatalf("EmptyCall() failed with err: %v, want err containing: %v", err, wantClusterNACKErr)
+	}
+
+	// Start a test service backend.
+	server := stubserver.StartTestService(t, nil)
+	t.Cleanup(server.Stop)
+
+	// Configure cluster and endpoints resources in the management server.
+	resources = e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that a successful RPC can be made.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Send the bad cluster resource again.
+	resources = e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{cluster},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that the watch for the cluster resource is not cancelled.
+	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-sCtx.Done():
+	case <-cdsResourceCanceledCh:
+		t.Fatal("Watch for cluster resource is cancelled when not expected to")
+	}
+
+	// Verify that a successful RPC can be made, using the previously received
+	// good configuration.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Verify that the resolver error is pushed to the child policy.
+	select {
+	case err := <-resolverErrCh:
+		if !strings.Contains(err.Error(), wantClusterNACKErr) {
+			t.Fatalf("Error pushed to child policy is %v, want %v", err, wantClusterNACKErr)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for resolver error to be pushed to the child policy")
+	}
+
+	// Remove the cluster resource from the management server, triggering a
+	// resource-not-found error.
+	resources = e2e.UpdateOptions{
+		NodeID:         nodeID,
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that the watch for the cluster resource is not cancelled.
+	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-sCtx.Done():
+	case <-cdsResourceCanceledCh:
+		t.Fatal("Watch for cluster resource is cancelled when not expected to")
+	}
+
+	// Ensure that the ClientConn moves to TransientFailure.
+	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
+		if !cc.WaitForStateChange(ctx, state) {
+			t.Fatalf("Timed out waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
+		}
+	}
+	// Ensure RPC fails with Unavailable. The actual error message depends on
+	// the picker returned from the priority LB policy, and therefore not
+	// checking for it here.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("EmptyCall() failed with code: %v, want %v", status.Code(err), codes.Unavailable)
+	}
+}
+
+// Tests the following scenarios for resolver errors:
+//   - when a resolver error is received without any previous good update from the
+//     management server, the cds LB policy is expected to put the channel in
+//     TRANSIENT_FAILURE.
+//   - when a resolver error is received (one that is not a resource-not-found
+//     error), with a previous good update from the management server, the cds LB
+//     policy is expected to push the error down the child policy, but is expected
+//     to continue to use the previously received good configuration.
+//   - when a resolver error is received (one that is a resource-not-found
+//     error, which is usually the case when the LDS resource is removed),
+//     with a previous good update from the management server, the cds LB policy
+//     is expected to push the error down the child policy and put the channel in
+//     TRANSIENT_FAILURE. It is also expected to cancel the CDS watch.
+func (s) TestResolverError(t *testing.T) {
+	_, resolverErrCh, _, _ := registerWrappedClusterResolverPolicy(t)
+	mgmtServer, nodeID, cc, r, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServer(t)
+
+	// Verify that the specified cluster resource is requested.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	wantNames := []string{clusterName}
+	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
+		t.Fatal(err)
+	}
+
+	// Push a resolver error that is not a resource-not-found error.
+	resolverErr := errors.New("resolver-error-not-a-resource-not-found-error")
+	r.ReportError(resolverErr)
+
+	// Ensure that the ClientConn moves to TransientFailure.
+	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
+		if !cc.WaitForStateChange(ctx, state) {
+			t.Fatalf("Timed out waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
+		}
+	}
+
+	// Drain the resolver error channel.
+	select {
+	case <-resolverErrCh:
+	default:
+	}
+
+	// Ensure that the resolver error is propagated to the RPC caller.
+	client := testgrpc.NewTestServiceClient(cc)
+	_, err := client.EmptyCall(ctx, &testpb.Empty{})
+	if code := status.Code(err); code != codes.Unavailable {
+		t.Fatalf("EmptyCall() failed with code: %v, want %v", code, codes.Unavailable)
+	}
+	if err != nil && !strings.Contains(err.Error(), resolverErr.Error()) {
+		t.Fatalf("EmptyCall() failed with err: %v, want %v", err, resolverErr)
+	}
+
+	// Also verify that the watch for the cluster resource is not cancelled.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-sCtx.Done():
+	case <-cdsResourceCanceledCh:
+		t.Fatal("Watch for cluster resource is cancelled when not expected to")
+	}
+
+	// Start a test service backend.
+	server := stubserver.StartTestService(t, nil)
+	t.Cleanup(server.Stop)
+
+	// Configure good cluster and endpoints resources in the management server.
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that a successful RPC can be made.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Again push a resolver error that is not a resource-not-found error.
+	r.ReportError(resolverErr)
+
+	// And again verify that the watch for the cluster resource is not
+	// cancelled.
+	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-sCtx.Done():
+	case <-cdsResourceCanceledCh:
+		t.Fatal("Watch for cluster resource is cancelled when not expected to")
+	}
+
+	// Verify that a successful RPC can be made, using the previously received
+	// good configuration.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Verify that the resolver error is pushed to the child policy.
+	select {
+	case err := <-resolverErrCh:
+		if err != resolverErr {
+			t.Fatalf("Error pushed to child policy is %v, want %v", err, resolverErr)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for resolver error to be pushed to the child policy")
+	}
+
+	// Push a resource-not-found-error this time around.
+	resolverErr = xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds resource not found error")
+	r.ReportError(resolverErr)
+
+	// Wait for the CDS resource to be not requested anymore.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for CDS resource to be not requested")
+	case <-cdsResourceCanceledCh:
+	}
+
+	// Verify that the resolver error is pushed to the child policy.
+	select {
+	case err := <-resolverErrCh:
+		if err != resolverErr {
+			t.Fatalf("Error pushed to child policy is %v, want %v", err, resolverErr)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for resolver error to be pushed to the child policy")
+	}
+
+	// Ensure that the ClientConn moves to TransientFailure.
+	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
+		if !cc.WaitForStateChange(ctx, state) {
+			t.Fatalf("Timed out waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
+		}
+	}
+
+	// Ensure RPC fails with Unavailable. The actual error message depends on
+	// the picker returned from the priority LB policy, and therefore not
+	// checking for it here.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("EmptyCall() failed with code: %v, want %v", status.Code(err), codes.Unavailable)
+	}
+}
+
+// Tests that closing the cds LB policy results in the cluster resource watch
+// being cancelled and the child policy being closed.
+func (s) TestClose(t *testing.T) {
+	cdsBalancerCh := registerWrappedCDSPolicy(t)
+	_, _, _, childPolicyCloseCh := registerWrappedClusterResolverPolicy(t)
+	mgmtServer, nodeID, cc, _, _, _, cdsResourceCanceledCh := setupWithManagementServer(t)
+
+	// Start a test service backend.
+	server := stubserver.StartTestService(t, nil)
+	t.Cleanup(server.Stop)
+
+	// Configure cluster and endpoints resources in the management server.
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that a successful RPC can be made.
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Retrieve the cds LB policy and close it.
+	var cdsBal balancer.Balancer
+	select {
+	case cdsBal = <-cdsBalancerCh:
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for cds LB policy to be created")
+	}
+	cdsBal.Close()
+
+	// Wait for the CDS resource to be not requested anymore.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for CDS resource to be not requested")
+	case <-cdsResourceCanceledCh:
+	}
+	// Wait for the child policy to be closed.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for the child policy to be closed")
+	case <-childPolicyCloseCh:
+	}
+}
+
+// Tests that calling ExitIdle on the cds LB policy results in the call being
+// propagated to the child policy.
+func (s) TestExitIdle(t *testing.T) {
+	cdsBalancerCh := registerWrappedCDSPolicy(t)
+	_, _, exitIdleCh, _ := registerWrappedClusterResolverPolicy(t)
+	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
+
+	// Start a test service backend.
+	server := stubserver.StartTestService(t, nil)
+	t.Cleanup(server.Stop)
+
+	// Configure cluster and endpoints resources in the management server.
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that a successful RPC can be made.
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Retrieve the cds LB policy and call ExitIdle() on it.
+	var cdsBal balancer.Balancer
+	select {
+	case cdsBal = <-cdsBalancerCh:
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for cds LB policy to be created")
+	}
+	cdsBal.(balancer.ExitIdler).ExitIdle()
+
+	// Wait for ExitIdle to be called on the child policy.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for the child policy to be closed")
+	case <-exitIdleCh:
+	}
 }
 
 // TestParseConfig verifies the ParseConfig() method in the CDS balancer.
@@ -871,4 +1319,8 @@ func (s) TestParseConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newUint32(i uint32) *uint32 {
+	return &i
 }

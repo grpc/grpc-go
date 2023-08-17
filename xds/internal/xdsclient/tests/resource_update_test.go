@@ -588,24 +588,11 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 		resourceName1 = "resource-name-1"
 		resourceName2 = "resource-name-2"
 	)
-	resource1 := &v3clusterpb.Cluster{
-		Name:                 resourceName1,
-		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-		EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-			EdsConfig: &v3corepb.ConfigSource{
-				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-					Ads: &v3corepb.AggregatedConfigSource{},
-				},
-			},
-			ServiceName: "eds-service-name",
-		},
-		LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-		LrsServer: &v3corepb.ConfigSource{
-			ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-				Self: &v3corepb.SelfConfigSource{},
-			},
-		},
-	}
+	resource1 := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: resourceName1,
+		ServiceName: "eds-service-name",
+		EnableLRS:   true,
+	})
 	resource2 := proto.Clone(resource1).(*v3clusterpb.Cluster)
 	resource2.Name = resourceName2
 

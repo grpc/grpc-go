@@ -460,6 +460,9 @@ type ClusterOptions struct {
 	Policy LoadBalancingPolicy
 	// SecurityLevel determines the security configuration for the Cluster.
 	SecurityLevel SecurityLevel
+	// EnableLRS adds a load reporting configuration with a config source
+	// pointing to self.
+	EnableLRS bool
 }
 
 // ClusterResourceWithOptions returns an xDS Cluster resource configured with
@@ -518,6 +521,13 @@ func ClusterResourceWithOptions(opts ClusterOptions) *v3clusterpb.Cluster {
 			Name: "envoy.transport_sockets.tls",
 			ConfigType: &v3corepb.TransportSocket_TypedConfig{
 				TypedConfig: testutils.MarshalAny(tlsContext),
+			},
+		}
+	}
+	if opts.EnableLRS {
+		cluster.LrsServer = &v3corepb.ConfigSource{
+			ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+				Self: &v3corepb.SelfConfigSource{},
 			},
 		}
 	}
