@@ -390,7 +390,7 @@ func (s) TestAggregateCluster_WithOneDNSCluster_HostnameChange(t *testing.T) {
 	defer cleanup1()
 
 	// Start two test backends and extract their host and port. The first
-	// backend is used intially for the LOGICAL_DNS cluster and an update
+	// backend is used initially for the LOGICAL_DNS cluster and an update
 	// switches the cluster to use the second backend.
 	servers, cleanup2 := startTestServiceBackends(t, 2)
 	defer cleanup2()
