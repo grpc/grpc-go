@@ -1505,14 +1505,15 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 
-	isHeader := false
-
-	// If headerChan hasn't been closed yet
-	if atomic.CompareAndSwapUint32(&s.headerChanClosed, 0, 1) {
-		s.headerValid = true
-		if !endStream {
-			// HEADERS frame block carries a Response-Headers.
-			isHeader = true
+	// For headers, set them in s.header and close headerChan.  For trailers or
+	// trailers-only, closeStream will set the trailers and close headerChan as
+	// needed.
+	if !endStream {
+		// If headerChan hasn't been closed yet (expected, given we checked it
+		// above, but something else could have potentially closed the whole
+		// stream).
+		if atomic.CompareAndSwapUint32(&s.headerChanClosed, 0, 1) {
+			s.headerValid = true
 			// These values can be set without any synchronization because
 			// stream goroutine will read it only after seeing a closed
 			// headerChan which we'll close after setting this.
@@ -1520,15 +1521,12 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			if len(mdata) > 0 {
 				s.header = mdata
 			}
-		} else {
-			// HEADERS frame block carries a Trailers-Only.
-			s.noHeaders = true
+			close(s.headerChan)
 		}
-		close(s.headerChan)
 	}
 
 	for _, sh := range t.statsHandlers {
-		if isHeader {
+		if !endStream {
 			inHeader := &stats.InHeader{
 				Client:      true,
 				WireLength:  int(frame.Header().Length),
@@ -1554,9 +1552,10 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		statusGen = status.New(rawStatusCode, grpcMessage)
 	}
 
-	// if client received END_STREAM from server while stream was still active, send RST_STREAM
-	rst := s.getState() == streamActive
-	t.closeStream(s, io.EOF, rst, http2.ErrCodeNo, statusGen, mdata, true)
+	// If client received END_STREAM from server while stream was still active,
+	// send RST_STREAM.
+	rstStream := s.getState() == streamActive
+	t.closeStream(s, io.EOF, rstStream, http2.ErrCodeNo, statusGen, mdata, true)
 }
 
 // readServerPreface reads and handles the initial settings frame from the

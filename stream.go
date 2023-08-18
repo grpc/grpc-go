@@ -789,23 +789,23 @@ func (cs *clientStream) withRetry(op func(a *csAttempt) error, onSuccess func())
 
 func (cs *clientStream) Header() (metadata.MD, error) {
 	var m metadata.MD
-	noHeader := false
 	err := cs.withRetry(func(a *csAttempt) error {
 		var err error
 		m, err = a.s.Header()
-		if err == transport.ErrNoHeaders {
-			noHeader = true
-			return nil
-		}
 		return toRPCErr(err)
 	}, cs.commitAttemptLocked)
+
+	if m == nil && err == nil {
+		// The stream ended with success.  Finish the clientStream.
+		err = io.EOF
+	}
 
 	if err != nil {
 		cs.finish(err)
 		return nil, err
 	}
 
-	if len(cs.binlogs) != 0 && !cs.serverHeaderBinlogged && !noHeader {
+	if len(cs.binlogs) != 0 && !cs.serverHeaderBinlogged && m != nil {
 		// Only log if binary log is on and header has not been logged, and
 		// there is actually headers to log.
 		logEntry := &binarylog.ServerHeader{
@@ -821,6 +821,7 @@ func (cs *clientStream) Header() (metadata.MD, error) {
 			binlog.Log(cs.ctx, logEntry)
 		}
 	}
+
 	return m, nil
 }
 
@@ -929,24 +930,6 @@ func (cs *clientStream) RecvMsg(m any) error {
 	if err != nil || !cs.desc.ServerStreams {
 		// err != nil or non-server-streaming indicates end of stream.
 		cs.finish(err)
-
-		if len(cs.binlogs) != 0 {
-			// finish will not log Trailer. Log Trailer here.
-			logEntry := &binarylog.ServerTrailer{
-				OnClientSide: true,
-				Trailer:      cs.Trailer(),
-				Err:          err,
-			}
-			if logEntry.Err == io.EOF {
-				logEntry.Err = nil
-			}
-			if peer, ok := peer.FromContext(cs.Context()); ok {
-				logEntry.PeerAddr = peer.Addr
-			}
-			for _, binlog := range cs.binlogs {
-				binlog.Log(cs.ctx, logEntry)
-			}
-		}
 	}
 	return err
 }
@@ -1002,18 +985,30 @@ func (cs *clientStream) finish(err error) {
 			}
 		}
 	}
+
 	cs.mu.Unlock()
-	// For binary logging. only log cancel in finish (could be caused by RPC ctx
-	// canceled or ClientConn closed). Trailer will be logged in RecvMsg.
-	//
-	// Only one of cancel or trailer needs to be logged. In the cases where
-	// users don't call RecvMsg, users must have already canceled the RPC.
-	if len(cs.binlogs) != 0 && status.Code(err) == codes.Canceled {
-		c := &binarylog.Cancel{
-			OnClientSide: true,
-		}
-		for _, binlog := range cs.binlogs {
-			binlog.Log(cs.ctx, c)
+	// Only one of cancel or trailer needs to be logged.
+	if len(cs.binlogs) != 0 {
+		switch err {
+		case errContextCanceled, errContextDeadline, ErrClientConnClosing:
+			c := &binarylog.Cancel{
+				OnClientSide: true,
+			}
+			for _, binlog := range cs.binlogs {
+				binlog.Log(cs.ctx, c)
+			}
+		default:
+			logEntry := &binarylog.ServerTrailer{
+				OnClientSide: true,
+				Trailer:      cs.Trailer(),
+				Err:          err,
+			}
+			if peer, ok := peer.FromContext(cs.Context()); ok {
+				logEntry.PeerAddr = peer.Addr
+			}
+			for _, binlog := range cs.binlogs {
+				binlog.Log(cs.ctx, logEntry)
+			}
 		}
 	}
 	if err == nil {

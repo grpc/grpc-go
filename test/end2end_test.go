@@ -6328,12 +6328,11 @@ func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			for {
-				_, err := stream.Recv()
-				if err == io.EOF {
-					return nil
-				}
+			_, err := stream.Recv()
+			if err == io.EOF {
+				return nil
 			}
+			return status.Errorf(codes.Unknown, "expected client to call CloseSend")
 		},
 	}
 
