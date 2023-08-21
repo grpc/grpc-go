@@ -259,7 +259,7 @@ func (s) TestPickFirst_NewAddressWhileBlocking(t *testing.T) {
 	// Send a resolver update with no addresses. This should push the channel into
 	// TransientFailure.
 	r.UpdateState(resolver.State{})
-	awaitState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	doneCh := make(chan struct{})
 	client := testgrpc.NewTestServiceClient(cc)
@@ -355,7 +355,7 @@ func (s) TestPickFirst_StickyTransientFailure(t *testing.T) {
 	}
 	t.Cleanup(func() { cc.Close() })
 
-	awaitState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Spawn a goroutine to ensure that the channel stays in TransientFailure.
 	// The call to cc.WaitForStateChange will return false when the main
@@ -423,7 +423,7 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 	// Send a resolver update with no addresses. This should push the channel
 	// into TransientFailure.
 	r.UpdateState(resolver.State{})
-	awaitState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Send the same config as last time with shuffling enabled.  Since we are
 	// not connected to backend 0, we should connect to backend 1.
@@ -803,7 +803,7 @@ func (s) TestPickFirst_ResolverError_NoPreviousUpdate(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	client := testgrpc.NewTestServiceClient(cc)
 	_, err := client.EmptyCall(ctx, &testpb.Empty{})
@@ -888,7 +888,7 @@ func (s) TestPickFirst_ResolverError_WithPreviousUpdate_Connecting(t *testing.T)
 
 	addrs := []resolver.Address{{Addr: lis.Addr().String()}}
 	r.UpdateState(resolver.State{Addresses: addrs})
-	awaitState(ctx, t, cc, connectivity.Connecting)
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
 	nrErr := errors.New("error from name resolver")
 	r.ReportError(nrErr)
@@ -905,7 +905,7 @@ func (s) TestPickFirst_ResolverError_WithPreviousUpdate_Connecting(t *testing.T)
 	// Closing this channel leads to closing of the connection by our listener.
 	// gRPC should see this as a connection error.
 	close(waitForConnecting)
-	awaitState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 	checkForConnectionError(ctx, t, cc)
 }
 
@@ -945,7 +945,7 @@ func (s) TestPickFirst_ResolverError_WithPreviousUpdate_TransientFailure(t *test
 	r.UpdateState(resolver.State{Addresses: addrs})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 	checkForConnectionError(ctx, t, cc)
 
 	// An error from the name resolver should result in RPCs failing with that

@@ -16,7 +16,7 @@
  *
  */
 
-package grpc
+package idle
 
 import (
 	"fmt"
@@ -24,6 +24,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"google.golang.org/grpc/grpclog"
 )
 
 // For overriding in unit tests.
@@ -31,26 +33,26 @@ var timeAfterFunc = func(d time.Duration, f func()) *time.Timer {
 	return time.AfterFunc(d, f)
 }
 
-// idlenessEnforcer is the functionality provided by grpc.ClientConn to enter
+// IdlenessEnforcer is the functionality provided by grpc.ClientConn to enter
 // and exit from idle mode.
-type idlenessEnforcer interface {
-	exitIdleMode() error
-	enterIdleMode() error
+type IdlenessEnforcer interface {
+	ExitIdleMode() error
+	EnterIdleMode() error
 }
 
-// idlenessManager defines the functionality required to track RPC activity on a
+// IdlenessManager defines the functionality required to track RPC activity on a
 // channel.
-type idlenessManager interface {
-	onCallBegin() error
-	onCallEnd()
-	close()
+type IdlenessManager interface {
+	OnCallBegin() error
+	OnCallEnd()
+	Close()
 }
 
 type noopIdlenessManager struct{}
 
-func (noopIdlenessManager) onCallBegin() error { return nil }
-func (noopIdlenessManager) onCallEnd()         {}
-func (noopIdlenessManager) close()             {}
+func (noopIdlenessManager) OnCallBegin() error { return nil }
+func (noopIdlenessManager) OnCallEnd()         {}
+func (noopIdlenessManager) Close()             {}
 
 // idlenessManagerImpl implements the idlenessManager interface. It uses atomic
 // operations to synchronize access to shared state and a mutex to guarantee
@@ -64,14 +66,15 @@ type idlenessManagerImpl struct {
 
 	// Can be accessed without atomics or mutex since these are set at creation
 	// time and read-only after that.
-	enforcer idlenessEnforcer // Functionality provided by grpc.ClientConn.
+	enforcer IdlenessEnforcer // Functionality provided by grpc.ClientConn.
 	timeout  int64            // Idle timeout duration nanos stored as an int64.
+	logger   grpclog.LoggerV2
 
 	// idleMu is used to guarantee mutual exclusion in two scenarios:
 	// - Opposing intentions:
 	//   - a: Idle timeout has fired and handleIdleTimeout() is trying to put
 	//     the channel in idle mode because the channel has been inactive.
-	//   - b: At the same time an RPC is made on the channel, and onCallBegin()
+	//   - b: At the same time an RPC is made on the channel, and OnCallBegin()
 	//     is trying to prevent the channel from going idle.
 	// - Competing intentions:
 	//   - The channel is in idle mode and there are multiple RPCs starting at
@@ -83,18 +86,27 @@ type idlenessManagerImpl struct {
 	timer        *time.Timer
 }
 
-// newIdlenessManager creates a new idleness manager implementation for the
+// IdlenessManagerOptions is a collection of options used by
+// NewIdlenessManager.
+type IdlenessManagerOptions struct {
+	Enforcer IdlenessEnforcer
+	Timeout  time.Duration
+	Logger   grpclog.LoggerV2
+}
+
+// NewIdlenessManager creates a new idleness manager implementation for the
 // given idle timeout.
-func newIdlenessManager(enforcer idlenessEnforcer, idleTimeout time.Duration) idlenessManager {
-	if idleTimeout == 0 {
+func NewIdlenessManager(opts IdlenessManagerOptions) IdlenessManager {
+	if opts.Timeout == 0 {
 		return noopIdlenessManager{}
 	}
 
 	i := &idlenessManagerImpl{
-		enforcer: enforcer,
-		timeout:  int64(idleTimeout),
+		enforcer: opts.Enforcer,
+		timeout:  int64(opts.Timeout),
+		logger:   opts.Logger,
 	}
-	i.timer = timeAfterFunc(idleTimeout, i.handleIdleTimeout)
+	i.timer = timeAfterFunc(opts.Timeout, i.handleIdleTimeout)
 	return i
 }
 
@@ -140,7 +152,7 @@ func (i *idlenessManagerImpl) handleIdleTimeout() {
 
 	// This CAS operation is extremely likely to succeed given that there has
 	// been no activity since the last time we were here.  Setting the
-	// activeCallsCount to -math.MaxInt32 indicates to onCallBegin() that the
+	// activeCallsCount to -math.MaxInt32 indicates to OnCallBegin() that the
 	// channel is either in idle mode or is trying to get there.
 	if !atomic.CompareAndSwapInt32(&i.activeCallsCount, 0, -math.MaxInt32) {
 		// This CAS operation can fail if an RPC started after we checked for
@@ -170,7 +182,7 @@ func (i *idlenessManagerImpl) handleIdleTimeout() {
 //
 // Return value indicates whether or not the channel moved to idle mode.
 //
-// Holds idleMu which ensures mutual exclusion with exitIdleMode.
+// Holds idleMu which ensures mutual exclusion with ExitIdleMode.
 func (i *idlenessManagerImpl) tryEnterIdleMode() bool {
 	i.idleMu.Lock()
 	defer i.idleMu.Unlock()
@@ -189,8 +201,8 @@ func (i *idlenessManagerImpl) tryEnterIdleMode() bool {
 	// No new RPCs have come in since we last set the active calls count value
 	// -math.MaxInt32 in the timer callback. And since we have the lock, it is
 	// safe to enter idle mode now.
-	if err := i.enforcer.enterIdleMode(); err != nil {
-		logger.Errorf("Failed to enter idle mode: %v", err)
+	if err := i.enforcer.EnterIdleMode(); err != nil {
+		i.logger.Errorf("Failed to enter idle mode: %v", err)
 		return false
 	}
 
@@ -199,8 +211,8 @@ func (i *idlenessManagerImpl) tryEnterIdleMode() bool {
 	return true
 }
 
-// onCallBegin is invoked at the start of every RPC.
-func (i *idlenessManagerImpl) onCallBegin() error {
+// OnCallBegin is invoked at the start of every RPC.
+func (i *idlenessManagerImpl) OnCallBegin() error {
 	if i.isClosed() {
 		return nil
 	}
@@ -213,7 +225,7 @@ func (i *idlenessManagerImpl) onCallBegin() error {
 
 	// Channel is either in idle mode or is in the process of moving to idle
 	// mode. Attempt to exit idle mode to allow this RPC.
-	if err := i.exitIdleMode(); err != nil {
+	if err := i.ExitIdleMode(); err != nil {
 		// Undo the increment to calls count, and return an error causing the
 		// RPC to fail.
 		atomic.AddInt32(&i.activeCallsCount, -1)
@@ -224,10 +236,10 @@ func (i *idlenessManagerImpl) onCallBegin() error {
 	return nil
 }
 
-// exitIdleMode instructs the channel to exit idle mode.
+// ExitIdleMode instructs the channel to exit idle mode.
 //
 // Holds idleMu which ensures mutual exclusion with tryEnterIdleMode.
-func (i *idlenessManagerImpl) exitIdleMode() error {
+func (i *idlenessManagerImpl) ExitIdleMode() error {
 	i.idleMu.Lock()
 	defer i.idleMu.Unlock()
 
@@ -235,16 +247,16 @@ func (i *idlenessManagerImpl) exitIdleMode() error {
 		// This can happen in two scenarios:
 		// - handleIdleTimeout() set the calls count to -math.MaxInt32 and called
 		//   tryEnterIdleMode(). But before the latter could grab the lock, an RPC
-		//   came in and onCallBegin() noticed that the calls count is negative.
+		//   came in and OnCallBegin() noticed that the calls count is negative.
 		// - Channel is in idle mode, and multiple new RPCs come in at the same
-		//   time, all of them notice a negative calls count in onCallBegin and get
+		//   time, all of them notice a negative calls count in OnCallBegin and get
 		//   here. The first one to get the lock would got the channel to exit idle.
 		//
 		// Either way, nothing to do here.
 		return nil
 	}
 
-	if err := i.enforcer.exitIdleMode(); err != nil {
+	if err := i.enforcer.ExitIdleMode(); err != nil {
 		return fmt.Errorf("channel failed to exit idle mode: %v", err)
 	}
 
@@ -257,8 +269,8 @@ func (i *idlenessManagerImpl) exitIdleMode() error {
 	return nil
 }
 
-// onCallEnd is invoked at the end of every RPC.
-func (i *idlenessManagerImpl) onCallEnd() {
+// OnCallEnd is invoked at the end of every RPC.
+func (i *idlenessManagerImpl) OnCallEnd() {
 	if i.isClosed() {
 		return
 	}
@@ -277,7 +289,7 @@ func (i *idlenessManagerImpl) isClosed() bool {
 	return atomic.LoadInt32(&i.closed) == 1
 }
 
-func (i *idlenessManagerImpl) close() {
+func (i *idlenessManagerImpl) Close() {
 	atomic.StoreInt32(&i.closed, 1)
 
 	i.idleMu.Lock()

@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 )
@@ -115,7 +116,7 @@ func (s) TestSubConnEmpty(t *testing.T) {
 
 	t.Log("Removing addresses from resolver and SubConn")
 	ss.R.UpdateState(resolver.State{Addresses: []resolver.Address{}})
-	awaitState(ctx, t, ss.CC, connectivity.TransientFailure)
+	testutils.AwaitState(ctx, t, ss.CC, connectivity.TransientFailure)
 
 	t.Log("Re-adding addresses to resolver and SubConn")
 	ss.R.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})

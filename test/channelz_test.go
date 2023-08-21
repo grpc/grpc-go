@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -1187,7 +1188,7 @@ func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 	cc := te.clientConn() // Dial the server
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 	start := time.Now()
 	// Wait for at least two keepalives to be able to occur.
 	time.Sleep(2 * keepaliveRate)
@@ -1311,7 +1312,7 @@ func (s) TestCZServerSocketMetricsKeepAlive(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	// Allow about 5 pings to happen (250ms/50ms).
 	time.Sleep(255 * time.Millisecond)
@@ -1543,9 +1544,9 @@ func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, te.cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, te.cc, connectivity.Ready)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}})
-	awaitNotState(ctx, t, te.cc, connectivity.Ready)
+	testutils.AwaitNotState(ctx, t, te.cc, connectivity.Ready)
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0, 0)
@@ -2017,9 +2018,9 @@ func (s) TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, te.cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, te.cc, connectivity.Ready)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}})
-	awaitNotState(ctx, t, te.cc, connectivity.Ready)
+	testutils.AwaitNotState(ctx, t, te.cc, connectivity.Ready)
 
 	// verify that the subchannel no longer exist due to trace referencing it got overwritten.
 	if err := verifyResultWithDelay(func() (bool, error) {

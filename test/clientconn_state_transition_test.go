@@ -175,7 +175,7 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	go stayConnected(ctx, client)
+	go testutils.StayConnected(ctx, client)
 
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 	for i := 0; i < len(want); i++ {
@@ -242,7 +242,7 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	go stayConnected(ctx, client)
+	go testutils.StayConnected(ctx, client)
 
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 
@@ -417,7 +417,7 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	go stayConnected(ctx, client)
+	go testutils.StayConnected(ctx, client)
 
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 	want := []connectivity.State{
@@ -506,48 +506,6 @@ func (ccw *stateRecordingCCWrapper) NewSubConn(addrs []resolver.Address, opts ba
 func keepReading(conn net.Conn) {
 	buf := make([]byte, 1024)
 	for _, err := conn.Read(buf); err == nil; _, err = conn.Read(buf) {
-	}
-}
-
-// stayConnected makes cc stay connected by repeatedly calling cc.Connect()
-// until the state becomes Shutdown or until ithe context expires.
-func stayConnected(ctx context.Context, cc *grpc.ClientConn) {
-	for {
-		state := cc.GetState()
-		switch state {
-		case connectivity.Idle:
-			cc.Connect()
-		case connectivity.Shutdown:
-			return
-		}
-		if !cc.WaitForStateChange(ctx, state) {
-			return
-		}
-	}
-}
-
-func awaitState(ctx context.Context, t *testing.T, cc *grpc.ClientConn, stateWant connectivity.State) {
-	t.Helper()
-	for state := cc.GetState(); state != stateWant; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("timed out waiting for state change.  got %v; want %v", state, stateWant)
-		}
-	}
-}
-
-func awaitNotState(ctx context.Context, t *testing.T, cc *grpc.ClientConn, stateDoNotWant connectivity.State) {
-	t.Helper()
-	for state := cc.GetState(); state == stateDoNotWant; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("timed out waiting for state change.  got %v; want NOT %v", state, stateDoNotWant)
-		}
-	}
-}
-
-func awaitNoStateChange(ctx context.Context, t *testing.T, cc *grpc.ClientConn, currState connectivity.State) {
-	t.Helper()
-	if cc.WaitForStateChange(ctx, currState) {
-		t.Fatalf("State changed from %q to %q when no state change was expected", currState, cc.GetState())
 	}
 }
 

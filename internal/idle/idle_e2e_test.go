@@ -16,7 +16,7 @@
  *
  */
 
-package test
+package idle_test
 
 import (
 	"context"
@@ -31,7 +31,9 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
@@ -40,7 +42,23 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-const defaultTestShortIdleTimeout = 500 * time.Millisecond
+func init() {
+	channelz.TurnOn()
+}
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+const (
+	defaultTestTimeout          = 10 * time.Second
+	defaultTestShortTimeout     = 100 * time.Millisecond
+	defaultTestShortIdleTimeout = 500 * time.Millisecond
+)
 
 // channelzTraceEventFound looks up the top-channels in channelz (expects a
 // single one), and checks if there is a trace event on the channel matching the
@@ -86,7 +104,7 @@ func channelzTraceEventNotFound(ctx context.Context, wantDesc string) error {
 func (s) TestChannelIdleness_Disabled_NoActivity(t *testing.T) {
 	// Setup channelz for testing.
 	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(func() { czCleanupWrapper(czCleanup, t) })
+	t.Cleanup(testutils.ErrCloseWrapper(t, czCleanup))
 
 	// Create a ClientConn with idle_timeout set to 0.
 	r := manual.NewBuilderWithScheme("whatever")
@@ -110,12 +128,12 @@ func (s) TestChannelIdleness_Disabled_NoActivity(t *testing.T) {
 	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	// Verify that the ClientConn stay in READY.
 	sCtx, sCancel := context.WithTimeout(ctx, 3*defaultTestShortIdleTimeout)
 	defer sCancel()
-	awaitNoStateChange(sCtx, t, cc, connectivity.Ready)
+	testutils.AwaitNoStateChange(sCtx, t, cc, connectivity.Ready)
 
 	// Verify that there are no idleness related channelz events.
 	if err := channelzTraceEventNotFound(ctx, "entering idle mode"); err != nil {
@@ -131,7 +149,7 @@ func (s) TestChannelIdleness_Disabled_NoActivity(t *testing.T) {
 func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 	// Setup channelz for testing.
 	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(func() { czCleanupWrapper(czCleanup, t) })
+	t.Cleanup(testutils.ErrCloseWrapper(t, czCleanup))
 
 	// Create a ClientConn with a short idle_timeout.
 	r := manual.NewBuilderWithScheme("whatever")
@@ -155,10 +173,10 @@ func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	// Verify that the ClientConn moves to IDLE as there is no activity.
-	awaitState(ctx, t, cc, connectivity.Idle)
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// Verify idleness related channelz events.
 	if err := channelzTraceEventFound(ctx, "entering idle mode"); err != nil {
@@ -171,7 +189,7 @@ func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 	// Setup channelz for testing.
 	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(func() { czCleanupWrapper(czCleanup, t) })
+	t.Cleanup(testutils.ErrCloseWrapper(t, czCleanup))
 
 	// Create a ClientConn with a short idle_timeout.
 	r := manual.NewBuilderWithScheme("whatever")
@@ -206,17 +224,18 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	// Spawn a goroutine which checks expected state transitions and idleness
 	// channelz trace events. It eventually closes `blockCh`, thereby unblocking
 	// the server RPC handler and the unary call below.
 	errCh := make(chan error, 1)
 	go func() {
-		// Verify that the ClientConn stay in READY.
+		defer close(blockCh)
+		// Verify that the ClientConn stays in READY.
 		sCtx, sCancel := context.WithTimeout(ctx, 3*defaultTestShortIdleTimeout)
 		defer sCancel()
-		awaitNoStateChange(sCtx, t, cc, connectivity.Ready)
+		testutils.AwaitNoStateChange(sCtx, t, cc, connectivity.Ready)
 
 		// Verify that there are no idleness related channelz events.
 		if err := channelzTraceEventNotFound(ctx, "entering idle mode"); err != nil {
@@ -229,7 +248,6 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 		}
 
 		// Unblock the unary RPC on the server.
-		close(blockCh)
 		errCh <- nil
 	}()
 
@@ -256,7 +274,7 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 func (s) TestChannelIdleness_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	// Setup channelz for testing.
 	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(func() { czCleanupWrapper(czCleanup, t) })
+	t.Cleanup(testutils.ErrCloseWrapper(t, czCleanup))
 
 	// Create a ClientConn with a short idle_timeout.
 	r := manual.NewBuilderWithScheme("whatever")
@@ -280,7 +298,7 @@ func (s) TestChannelIdleness_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	// For a duration of three times the configured idle timeout, making RPCs
 	// every now and then and ensure that the channel does not move out of
@@ -303,7 +321,7 @@ func (s) TestChannelIdleness_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	}()
 
 	// Verify that the ClientConn stay in READY.
-	awaitNoStateChange(sCtx, t, cc, connectivity.Ready)
+	testutils.AwaitNoStateChange(sCtx, t, cc, connectivity.Ready)
 
 	// Verify that there are no idleness related channelz events.
 	if err := channelzTraceEventNotFound(ctx, "entering idle mode"); err != nil {
@@ -320,7 +338,7 @@ func (s) TestChannelIdleness_Enabled_ActiveSinceLastCheck(t *testing.T) {
 func (s) TestChannelIdleness_Enabled_ExitIdleOnRPC(t *testing.T) {
 	// Setup channelz for testing.
 	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(func() { czCleanupWrapper(czCleanup, t) })
+	t.Cleanup(testutils.ErrCloseWrapper(t, czCleanup))
 
 	// Start a test backend and set the bootstrap state of the resolver to
 	// include this address. This will ensure that when the resolver is
@@ -346,10 +364,10 @@ func (s) TestChannelIdleness_Enabled_ExitIdleOnRPC(t *testing.T) {
 	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	// Verify that the ClientConn moves to IDLE as there is no activity.
-	awaitState(ctx, t, cc, connectivity.Idle)
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// Verify idleness related channelz events.
 	if err := channelzTraceEventFound(ctx, "entering idle mode"); err != nil {
@@ -362,7 +380,7 @@ func (s) TestChannelIdleness_Enabled_ExitIdleOnRPC(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall RPC failed: %v", err)
 	}
-	awaitState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 	if err := channelzTraceEventFound(ctx, "exiting idle mode"); err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +400,7 @@ func (s) TestChannelIdleness_Enabled_ExitIdleOnRPC(t *testing.T) {
 func (s) TestChannelIdleness_Enabled_IdleTimeoutRacesWithRPCs(t *testing.T) {
 	// Setup channelz for testing.
 	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(func() { czCleanupWrapper(czCleanup, t) })
+	t.Cleanup(testutils.ErrCloseWrapper(t, czCleanup))
 
 	// Start a test backend and set the bootstrap state of the resolver to
 	// include this address. This will ensure that when the resolver is
@@ -452,11 +470,11 @@ func (s) TestChannelIdleness_Connect(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	awaitState(ctx, t, cc, connectivity.Idle)
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// Connect should exit channel idleness.
 	cc.Connect()
 
 	// Verify that the ClientConn moves back to READY.
-	awaitState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 }

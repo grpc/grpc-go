@@ -388,11 +388,7 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatal("Timed out waiting for channel to enter TRANSIENT_FAILURE")
-		}
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 }
 
 // A ceritificate provider builder that returns a nil Provider from the starter
@@ -456,11 +452,7 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatal("Timed out waiting for channel to enter TRANSIENT_FAILURE")
-		}
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 }
 
 // Tests the case where the cds LB policy receives security configuration as
@@ -545,11 +537,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatal("Timed out waiting for channel to enter TRANSIENT_FAILURE")
-		}
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Update the management server with a Cluster resource that contains a
 	// certificate provider instance that is present in the bootstrap

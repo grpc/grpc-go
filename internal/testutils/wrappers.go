@@ -72,3 +72,13 @@ func NewListenerWrapper(t *testing.T, lis net.Listener) *ListenerWrapper {
 		NewConnCh: NewChannel(),
 	}
 }
+
+// ErrCloseWrapper wraps closer with a function that does not return an error,
+// but calls t.Error if it does, instead.
+func ErrCloseWrapper(t *testing.T, closer func() error) func() {
+	return func() {
+		if err := closer(); err != nil {
+			t.Error(err)
+		}
+	}
+}

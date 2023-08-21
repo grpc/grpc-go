@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	rrutil "google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -119,7 +120,7 @@ func (s) TestRoundRobin_AddressesRemoved(t *testing.T) {
 	// Send a resolver update with no addresses. This should push the channel into
 	// TransientFailure.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
-	awaitState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	const msgWant = "produced zero addresses"
 	client := testgrpc.NewTestServiceClient(cc)
@@ -141,7 +142,7 @@ func (s) TestRoundRobin_NewAddressWhileBlocking(t *testing.T) {
 	// Send a resolver update with no addresses. This should push the channel into
 	// TransientFailure.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
-	awaitState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	client := testgrpc.NewTestServiceClient(cc)
 	doneCh := make(chan struct{})
@@ -221,7 +222,7 @@ func (s) TestRoundRobin_AllServersDown(t *testing.T) {
 		b.Stop()
 	}
 
-	awaitState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Failfast RPCs should fail with Unavailable.
 	client := testgrpc.NewTestServiceClient(cc)

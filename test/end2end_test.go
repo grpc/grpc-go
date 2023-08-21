@@ -984,9 +984,9 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 	}
 	// Wait for the client to report READY, stop the server, then wait for the
 	// client to notice the connection is gone.
-	awaitState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 	te.srv.Stop()
-	awaitNotState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Ready)
 	ctx, cancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); status.Code(err) != codes.DeadlineExceeded {
@@ -4855,7 +4855,7 @@ func testWaitForReadyConnection(t *testing.T, e env) {
 	tc := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 	// Make a fail-fast RPC.
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_,_) = _, %v, want _, nil", err)

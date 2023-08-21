@@ -595,7 +595,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 
 	t.Log("Waiting for the ClientConn to enter READY state.")
-	awaitState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	// We make a streaming RPC and do an one-message-round-trip to make sure
 	// it's created on connection 1.
@@ -618,7 +618,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	go s1.GracefulStop()
 
 	t.Log("Waiting for the ClientConn to enter IDLE state.")
-	awaitState(ctx, t, cc, connectivity.Idle)
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	t.Log("Performing another RPC to create a connection to server 2.")
 	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
