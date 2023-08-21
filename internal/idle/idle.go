@@ -16,6 +16,8 @@
  *
  */
 
+// Package idle contains a component for managing idleness (entering and exiting)
+// based on RPC activity.
 package idle
 
 import (
