@@ -29,6 +29,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
@@ -376,6 +377,44 @@ func (s) TestAggregateCluster_WithOneDNSCluster(t *testing.T) {
 	}
 	if peer.Addr.String() != server.Address {
 		t.Fatalf("EmptyCall() routed to backend %q, want %q", peer.Addr, server.Address)
+	}
+}
+
+// Tests the case where the top-level cluster resource is an aggregate cluster
+// that resolves to a single LOGICAL_DNS cluster. The specified dns hostname is
+// expected to fail url parsing. The test verifies that the channel moves to
+// TRANSIENT_FAILURE.
+func (s) TestAggregateCluster_WithOneDNSCluster_ParseFailure(t *testing.T) {
+	// Start an xDS management server.
+	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer cleanup2()
+
+	// Configure an aggregate cluster pointing to a single LOGICAL_DNS cluster.
+	const dnsClusterName = clusterName + "-dns"
+	resources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterName, []string{dnsClusterName}),
+			makeLogicalDNSClusterResource(dnsClusterName, "%gh&%ij", uint32(8080)),
+		},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
+
+	// Ensure that the ClientConn moves to TransientFailure.
+	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
+		if !cc.WaitForStateChange(ctx, state) {
+			t.Fatalf("Timed out waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
+		}
 	}
 }
 
