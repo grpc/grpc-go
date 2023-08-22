@@ -95,7 +95,6 @@ func (s) TestCZServerRegistrationAndDeletion(t *testing.T) {
 		te.tearDown()
 		ss, end = channelz.GetServers(c.start, c.max)
 		if len(ss) != 0 || !end {
-			panic("die")
 			t.Fatalf("%d: GetServers(0) = %+v (len of which: %d), end: %+v, want len(GetServers(0)) = 0, end: true", i, ss, len(ss), end)
 		}
 	}
