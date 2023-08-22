@@ -47,9 +47,6 @@ const rrServiceConfig = `{"loadBalancingConfig": [{"round_robin":{}}]}`
 func testRoundRobinBasic(ctx context.Context, t *testing.T, opts ...grpc.DialOption) (*grpc.ClientConn, *manual.Resolver, []*stubserver.StubServer) {
 	t.Helper()
 
-	// Initialize channelz. Used to determine pending RPC count.
-	channelz.NewChannelzStorageForTesting()
-
 	r := manual.NewBuilderWithScheme("whatever")
 
 	const backendCount = 5

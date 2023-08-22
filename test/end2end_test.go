@@ -34,6 +34,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -573,6 +574,7 @@ func newTest(t *testing.T, e env) *test {
 
 func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(network, address string) (net.Listener, error)) net.Listener {
 	te.t.Helper()
+	debug.PrintStack()
 	te.t.Logf("Running test in %s environment...", te.e.name)
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(te.maxStream)}
 	if te.maxServerMsgSize != nil {

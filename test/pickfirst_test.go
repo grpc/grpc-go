@@ -55,9 +55,6 @@ const pickFirstServiceConfig = `{"loadBalancingConfig": [{"pick_first":{}}]}`
 func setupPickFirst(t *testing.T, backendCount int, opts ...grpc.DialOption) (*grpc.ClientConn, *manual.Resolver, []*stubserver.StubServer) {
 	t.Helper()
 
-	// Initialize channelz. Used to determine pending RPC count.
-	channelz.NewChannelzStorageForTesting()
-
 	r := manual.NewBuilderWithScheme("whatever")
 
 	backends := make([]*stubserver.StubServer, backendCount)
@@ -576,9 +573,6 @@ func (s) TestPickFirst_ParseConfig_Failure(t *testing.T) {
 // a wrapped listener that the test can use to track accepted connections.
 func setupPickFirstWithListenerWrapper(t *testing.T, backendCount int, opts ...grpc.DialOption) (*grpc.ClientConn, *manual.Resolver, []*stubserver.StubServer, []*testutils.ListenerWrapper) {
 	t.Helper()
-
-	// Initialize channelz. Used to determine pending RPC count.
-	channelz.NewChannelzStorageForTesting()
 
 	backends := make([]*stubserver.StubServer, backendCount)
 	addrs := make([]resolver.Address, backendCount)

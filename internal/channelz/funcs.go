@@ -38,8 +38,11 @@ const (
 )
 
 var (
-	db    dbWrapper
-	idGen idGenerator
+	// IDGen is the global channelz entity ID generator.  It should not be used
+	// outside this package except by tests.
+	IDGen IDGenerator
+
+	db dbWrapper
 	// EntryPerPage defines the number of channelz entries to be shown on a web page.
 	EntryPerPage  = int64(50)
 	curState      int32
@@ -50,14 +53,14 @@ var (
 func TurnOn() {
 	if !IsOn() {
 		db.set(newChannelMap())
-		idGen.reset()
+		IDGen.Reset()
 		atomic.StoreInt32(&curState, 1)
 	}
 }
 
 // IsOn returns whether channelz data collection is on.
 func IsOn() bool {
-	return atomic.CompareAndSwapInt32(&curState, 1, 1)
+	return atomic.LoadInt32(&curState) == 1
 }
 
 // SetMaxTraceEntry sets maximum number of trace entry per entity (i.e. channel/subchannel).
@@ -93,13 +96,6 @@ func (d *dbWrapper) get() *channelMap {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.DB
-}
-
-// NewChannelzStorageForTesting initializes channelz data storage and id
-// generator for testing purposes.
-func NewChannelzStorageForTesting() {
-	db.set(newChannelMap())
-	idGen.reset()
 }
 
 // GetTopChannels returns a slice of top channel's ChannelMetric, along with a
@@ -161,7 +157,7 @@ func GetServer(id int64) *ServerMetric {
 //
 // If channelz is not turned ON, the channelz database is not mutated.
 func RegisterChannel(c Channel, pid *Identifier, ref string) *Identifier {
-	id := idGen.genID()
+	id := IDGen.genID()
 	var parent int64
 	isTopChannel := true
 	if pid != nil {
@@ -197,7 +193,7 @@ func RegisterSubChannel(c Channel, pid *Identifier, ref string) (*Identifier, er
 	if pid == nil {
 		return nil, errors.New("a SubChannel's parent id cannot be nil")
 	}
-	id := idGen.genID()
+	id := IDGen.genID()
 	if !IsOn() {
 		return newIdentifer(RefSubChannel, id, pid), nil
 	}
@@ -219,7 +215,7 @@ func RegisterSubChannel(c Channel, pid *Identifier, ref string) (*Identifier, er
 //
 // If channelz is not turned ON, the channelz database is not mutated.
 func RegisterServer(s Server, ref string) *Identifier {
-	id := idGen.genID()
+	id := IDGen.genID()
 	if !IsOn() {
 		return newIdentifer(RefServer, id, nil)
 	}
@@ -245,7 +241,7 @@ func RegisterListenSocket(s Socket, pid *Identifier, ref string) (*Identifier, e
 	if pid == nil {
 		return nil, errors.New("a ListenSocket's parent id cannot be 0")
 	}
-	id := idGen.genID()
+	id := IDGen.genID()
 	if !IsOn() {
 		return newIdentifer(RefListenSocket, id, pid), nil
 	}
@@ -265,7 +261,7 @@ func RegisterNormalSocket(s Socket, pid *Identifier, ref string) (*Identifier, e
 	if pid == nil {
 		return nil, errors.New("a NormalSocket's parent id cannot be 0")
 	}
-	id := idGen.genID()
+	id := IDGen.genID()
 	if !IsOn() {
 		return newIdentifer(RefNormalSocket, id, pid), nil
 	}
@@ -744,14 +740,17 @@ func (c *channelMap) GetServer(id int64) *ServerMetric {
 	return sm
 }
 
-type idGenerator struct {
+// IDGenerator is an incrementing atomic that tracks IDs for channelz entities.
+type IDGenerator struct {
 	id int64
 }
 
-func (i *idGenerator) reset() {
+// Reset resets the generated ID back to zero.  Should only be used at
+// initialization or by tests sensitive to the ID number.
+func (i *IDGenerator) Reset() {
 	atomic.StoreInt64(&i.id, 0)
 }
 
-func (i *idGenerator) genID() int64 {
+func (i *IDGenerator) genID() int64 {
 	return atomic.AddInt64(&i.id, 1)
 }
