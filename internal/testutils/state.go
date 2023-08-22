@@ -59,18 +59,18 @@ func AwaitState(ctx context.Context, t *testing.T, sc StateChanger, stateWant co
 	t.Helper()
 	for state := sc.GetState(); state != stateWant; state = sc.GetState() {
 		if !sc.WaitForStateChange(ctx, state) {
-			t.Fatalf("timed out waiting for state change.  got %v; want %v", state, stateWant)
+			t.Fatalf("Timed out waiting for state change.  got %v; want %v", state, stateWant)
 		}
 	}
 }
 
-// AwaitNotState waits for sc to leave stateWant or fatal errors if it doesn't
-// happen before ctx expires.
+// AwaitNotState waits for sc to leave stateDoNotWant or fatal errors if it
+// doesn't happen before ctx expires.
 func AwaitNotState(ctx context.Context, t *testing.T, sc StateChanger, stateDoNotWant connectivity.State) {
 	t.Helper()
 	for state := sc.GetState(); state == stateDoNotWant; state = sc.GetState() {
 		if !sc.WaitForStateChange(ctx, state) {
-			t.Fatalf("timed out waiting for state change.  got %v; want NOT %v", state, stateDoNotWant)
+			t.Fatalf("Timed out waiting for state change.  got %v; want NOT %v", state, stateDoNotWant)
 		}
 	}
 }

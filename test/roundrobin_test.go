@@ -48,8 +48,7 @@ func testRoundRobinBasic(ctx context.Context, t *testing.T, opts ...grpc.DialOpt
 	t.Helper()
 
 	// Initialize channelz. Used to determine pending RPC count.
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(func() { czCleanupWrapper(czCleanup, t) })
+	channelz.NewChannelzStorageForTesting()
 
 	r := manual.NewBuilderWithScheme("whatever")
 

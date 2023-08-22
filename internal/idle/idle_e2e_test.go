@@ -103,8 +103,7 @@ func channelzTraceEventNotFound(ctx context.Context, wantDesc string) error {
 // of 0. Verifies that a READY channel with no RPCs does not move to IDLE.
 func (s) TestChannelIdleness_Disabled_NoActivity(t *testing.T) {
 	// Setup channelz for testing.
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(testutils.ErrCloseWrapper(t, czCleanup))
+	channelz.NewChannelzStorageForTesting()
 
 	// Create a ClientConn with idle_timeout set to 0.
 	r := manual.NewBuilderWithScheme("whatever")
@@ -148,8 +147,7 @@ func (s) TestChannelIdleness_Disabled_NoActivity(t *testing.T) {
 // idle_timeout. Verifies that a READY channel with no RPCs moves to IDLE.
 func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 	// Setup channelz for testing.
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(testutils.ErrCloseWrapper(t, czCleanup))
+	channelz.NewChannelzStorageForTesting()
 
 	// Create a ClientConn with a short idle_timeout.
 	r := manual.NewBuilderWithScheme("whatever")
@@ -188,8 +186,7 @@ func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 // idle_timeout. Verifies that a READY channel with an ongoing RPC stays READY.
 func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 	// Setup channelz for testing.
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(testutils.ErrCloseWrapper(t, czCleanup))
+	channelz.NewChannelzStorageForTesting()
 
 	// Create a ClientConn with a short idle_timeout.
 	r := manual.NewBuilderWithScheme("whatever")
@@ -273,8 +270,7 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 // RPCs) keeps it from moving to IDLE.
 func (s) TestChannelIdleness_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	// Setup channelz for testing.
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(testutils.ErrCloseWrapper(t, czCleanup))
+	channelz.NewChannelzStorageForTesting()
 
 	// Create a ClientConn with a short idle_timeout.
 	r := manual.NewBuilderWithScheme("whatever")
@@ -337,8 +333,7 @@ func (s) TestChannelIdleness_Enabled_ActiveSinceLastCheck(t *testing.T) {
 // verifies that a subsequent RPC on the IDLE channel kicks it out of IDLE.
 func (s) TestChannelIdleness_Enabled_ExitIdleOnRPC(t *testing.T) {
 	// Setup channelz for testing.
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(testutils.ErrCloseWrapper(t, czCleanup))
+	channelz.NewChannelzStorageForTesting()
 
 	// Start a test backend and set the bootstrap state of the resolver to
 	// include this address. This will ensure that when the resolver is
@@ -399,8 +394,7 @@ func (s) TestChannelIdleness_Enabled_ExitIdleOnRPC(t *testing.T) {
 // In either of these cases, all RPCs must succeed.
 func (s) TestChannelIdleness_Enabled_IdleTimeoutRacesWithRPCs(t *testing.T) {
 	// Setup channelz for testing.
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(testutils.ErrCloseWrapper(t, czCleanup))
+	channelz.NewChannelzStorageForTesting()
 
 	// Start a test backend and set the bootstrap state of the resolver to
 	// include this address. This will ensure that when the resolver is

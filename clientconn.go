@@ -267,7 +267,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	// Configure idleness support with configured idle timeout or default idle
 	// timeout duration. Idleness can be explicitly disabled by the user, by
 	// setting the dial option to 0.
-	cc.idlenessMgr = idle.NewIdlenessManager(idle.IdlenessManagerOptions{Enforcer: (*idler)(cc), Timeout: cc.dopts.idleTimeout, Logger: logger})
+	cc.idlenessMgr = idle.NewManager(idle.ManagerOptions{Enforcer: (*idler)(cc), Timeout: cc.dopts.idleTimeout, Logger: logger})
 
 	// Return early for non-blocking dials.
 	if !cc.dopts.block {
@@ -650,7 +650,7 @@ type ClientConn struct {
 	channelzID      *channelz.Identifier // Channelz identifier for the channel.
 	resolverBuilder resolver.Builder     // See parseTargetAndFindResolver().
 	balancerWrapper *ccBalancerWrapper   // Uses gracefulswitch.balancer underneath.
-	idlenessMgr     idle.IdlenessManager
+	idlenessMgr     idle.Manager
 
 	// The following provide their own synchronization, and therefore don't
 	// require cc.mu to be held to access them.

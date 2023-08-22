@@ -128,8 +128,8 @@ func protoToSocketOption(skopts []*channelzpb.SocketOption) *channelz.SocketOpti
 }
 
 func (s) TestGetSocketOptions(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer cleanupWrapper(czCleanup, t)
+	channelz.NewChannelzStorageForTesting()
+
 	ss := []*dummySocket{
 		{
 			socketOptions: &channelz.SocketOptionData{

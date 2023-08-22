@@ -63,7 +63,7 @@ const (
 //
 // Returns a cleanup function to be invoked by the caller.
 func setupBackendsAndFakeGRPCLB(t *testing.T) ([]*stubserver.StubServer, *fakegrpclb.Server, func()) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
+	channelz.NewChannelzStorageForTesting()
 	backends, backendsCleanup := startBackendsForBalancerSwitch(t)
 
 	lbServer, err := fakegrpclb.NewServer(fakegrpclb.ServerParams{
@@ -83,7 +83,6 @@ func setupBackendsAndFakeGRPCLB(t *testing.T) ([]*stubserver.StubServer, *fakegr
 	return backends, lbServer, func() {
 		backendsCleanup()
 		lbServer.Stop()
-		czCleanupWrapper(czCleanup, t)
 	}
 }
 

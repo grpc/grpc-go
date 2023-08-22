@@ -24,9 +24,7 @@
 package channelz
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -99,39 +97,9 @@ func (d *dbWrapper) get() *channelMap {
 
 // NewChannelzStorageForTesting initializes channelz data storage and id
 // generator for testing purposes.
-//
-// Returns a cleanup function to be invoked by the test, which waits for up to
-// 10s for all channelz state to be reset by the grpc goroutines when those
-// entities get closed. This cleanup function helps with ensuring that tests
-// don't mess up each other.
-func NewChannelzStorageForTesting() (cleanup func() error) {
+func NewChannelzStorageForTesting() {
 	db.set(newChannelMap())
 	idGen.reset()
-
-	return func() error {
-		cm := db.get()
-		if cm == nil {
-			return nil
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		ticker := time.NewTicker(10 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			cm.mu.RLock()
-			topLevelChannels, servers, channels, subChannels, listenSockets, normalSockets := len(cm.topLevelChannels), len(cm.servers), len(cm.channels), len(cm.subChannels), len(cm.listenSockets), len(cm.normalSockets)
-			cm.mu.RUnlock()
-
-			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("after 10s the channelz map has not been cleaned up yet, topchannels: %d, servers: %d, channels: %d, subchannels: %d, listen sockets: %d, normal sockets: %d", topLevelChannels, servers, channels, subChannels, listenSockets, normalSockets)
-			}
-			if topLevelChannels == 0 && servers == 0 && channels == 0 && subChannels == 0 && listenSockets == 0 && normalSockets == 0 {
-				return nil
-			}
-			<-ticker.C
-		}
-	}
 }
 
 // GetTopChannels returns a slice of top channel's ChannelMetric, along with a

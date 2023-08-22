@@ -56,8 +56,7 @@ func setupPickFirst(t *testing.T, backendCount int, opts ...grpc.DialOption) (*g
 	t.Helper()
 
 	// Initialize channelz. Used to determine pending RPC count.
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(func() { czCleanupWrapper(czCleanup, t) })
+	channelz.NewChannelzStorageForTesting()
 
 	r := manual.NewBuilderWithScheme("whatever")
 
@@ -579,8 +578,7 @@ func setupPickFirstWithListenerWrapper(t *testing.T, backendCount int, opts ...g
 	t.Helper()
 
 	// Initialize channelz. Used to determine pending RPC count.
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(func() { czCleanupWrapper(czCleanup, t) })
+	channelz.NewChannelzStorageForTesting()
 
 	backends := make([]*stubserver.StubServer, backendCount)
 	addrs := make([]resolver.Address, backendCount)
