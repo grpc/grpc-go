@@ -696,6 +696,7 @@ func (w wrapHS) GracefulStop() {
 
 func (w wrapHS) Stop() {
 	w.s.Close()
+	w.s.Handler.(*grpc.Server).Stop()
 }
 
 func (te *test) startServerWithConnControl(ts testgrpc.TestServiceServer) *listenerWrapper {
@@ -3031,7 +3032,9 @@ func (s) TestTransparentRetry(t *testing.T) {
 
 func (s) TestCancel(t *testing.T) {
 	for _, e := range listTestEnv() {
-		testCancel(t, e)
+		t.Run(e.name, func(t *testing.T) {
+			testCancel(t, e)
+		})
 	}
 }
 
