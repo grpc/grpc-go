@@ -94,7 +94,6 @@ func newDNSResolver(target string, topLevelResolver topLevelResolver, logger *gr
 	}
 	ret.dnsR = r
 	return ret
-
 }
 
 func (dr *dnsDiscoveryMechanism) lastUpdate() (any, bool) {
