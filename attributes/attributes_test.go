@@ -34,6 +34,14 @@ func (s stringVal) Equal(o any) bool {
 	return ok && s.s == os.s
 }
 
+type stringerVal struct {
+	s string
+}
+
+func (s stringerVal) String() string {
+	return s.s
+}
+
 func ExampleAttributes() {
 	type keyOne struct{}
 	type keyTwo struct{}
@@ -55,6 +63,33 @@ func ExampleAttributes_WithValue() {
 	// Output:
 	// Key one: 1
 	// Key two: {two}
+}
+
+func ExampleAttributes_String() {
+	type key struct{}
+	var typedNil *stringerVal
+	a1 := attributes.New(key{}, typedNil)            // typed nil implements [fmt.Stringer]
+	a2 := attributes.New(key{}, (*stringerVal)(nil)) // typed nil implements [fmt.Stringer]
+	a3 := attributes.New(key{}, (*stringVal)(nil))   // typed nil not implements [fmt.Stringer]
+	a4 := attributes.New(key{}, nil)                 // untyped nil
+	a5 := attributes.New(key{}, 1)
+	a6 := attributes.New(key{}, stringerVal{s: "two"})
+	a7 := attributes.New(key{}, stringVal{s: "two"})
+	fmt.Println("a1:", a1.String())
+	fmt.Println("a2:", a2.String())
+	fmt.Println("a3:", a3.String())
+	fmt.Println("a4:", a4.String())
+	fmt.Println("a5:", a5.String())
+	fmt.Println("a6:", a6.String())
+	fmt.Println("a7:", a7.String())
+	// Output:
+	// a1: {"<%!p(attributes_test.key={})>": "<nil>" }
+	// a2: {"<%!p(attributes_test.key={})>": "<nil>" }
+	// a3: {"<%!p(attributes_test.key={})>": "<0x0>" }
+	// a4: {"<%!p(attributes_test.key={})>": "<nil>" }
+	// a5: {"<%!p(attributes_test.key={})>": "<%!p(int=1)>" }
+	// a6: {"<%!p(attributes_test.key={})>": "two" }
+	// a7: {"<%!p(attributes_test.key={})>": "<%!p(attributes_test.stringVal={two})>" }
 }
 
 // Test that two attributes with the same content are Equal.
