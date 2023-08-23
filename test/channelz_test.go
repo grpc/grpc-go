@@ -68,8 +68,8 @@ func (s) TestCZServerRegistrationAndDeletion(t *testing.T) {
 	testcases := []struct {
 		total  int
 		start  int64
-		max    int64
-		length int64
+		max    int
+		length int
 		end    bool
 	}{
 		{total: int(channelz.EntriesPerPage), start: 0, max: 0, length: channelz.EntriesPerPage, end: true},
@@ -89,7 +89,7 @@ func (s) TestCZServerRegistrationAndDeletion(t *testing.T) {
 		te.startServers(&testServer{security: e.security}, c.total)
 
 		ss, end := channelz.GetServers(c.start, c.max)
-		if int64(len(ss)) != c.length || end != c.end {
+		if len(ss) != c.length || end != c.end {
 			t.Fatalf("%d: GetServers(%d) = %+v (len of which: %d), end: %+v, want len(GetServers(%d)) = %d, end: %+v", i, c.start, ss, len(ss), end, c.start, c.length, c.end)
 		}
 		te.tearDown()
@@ -138,8 +138,8 @@ func (s) TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 	testcases := []struct {
 		total  int
 		start  int64
-		max    int64
-		length int64
+		max    int
+		length int
 		end    bool
 	}{
 		{total: int(channelz.EntriesPerPage), start: 0, max: 0, length: channelz.EntriesPerPage, end: true},
@@ -165,7 +165,7 @@ func (s) TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 			ccs = append(ccs, cc)
 		}
 		if err := verifyResultWithDelay(func() (bool, error) {
-			if tcs, end := channelz.GetTopChannels(c.start, c.max); int64(len(tcs)) != c.length || end != c.end {
+			if tcs, end := channelz.GetTopChannels(c.start, c.max); len(tcs) != c.length || end != c.end {
 				return false, fmt.Errorf("getTopChannels(%d) = %+v (len of which: %d), end: %+v, want len(GetTopChannels(%d)) = %d, end: %+v", c.start, tcs, len(tcs), end, c.start, c.length, c.end)
 			}
 			return true, nil
@@ -319,15 +319,15 @@ func (s) TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 	testcases := []struct {
 		total  int
 		start  int64
-		max    int64
-		length int64
+		max    int
+		length int
 		end    bool
 	}{
 		{total: int(channelz.EntriesPerPage), start: 0, max: 0, length: channelz.EntriesPerPage, end: true},
 		{total: int(channelz.EntriesPerPage) - 1, start: 0, max: 0, length: channelz.EntriesPerPage - 1, end: true},
 		{total: int(channelz.EntriesPerPage) + 1, start: 0, max: 0, length: channelz.EntriesPerPage, end: false},
 		{total: int(channelz.EntriesPerPage), start: 1, max: 0, length: channelz.EntriesPerPage - 1, end: true},
-		{total: int(channelz.EntriesPerPage) + 1, start: channelz.EntriesPerPage + 1, max: 0, length: 0, end: true},
+		{total: int(channelz.EntriesPerPage) + 1, start: int64(channelz.EntriesPerPage) + 1, max: 0, length: 0, end: true},
 		{total: int(channelz.EntriesPerPage), start: 0, max: 1, length: 1, end: false},
 		{total: int(channelz.EntriesPerPage), start: 0, max: channelz.EntriesPerPage - 1, length: channelz.EntriesPerPage - 1, end: false},
 	}
@@ -358,7 +358,7 @@ func (s) TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 
 			startID := c.start
 			if startID != 0 {
-				ns, _ := channelz.GetServerSockets(ss[0].ID, 0, int64(c.total))
+				ns, _ := channelz.GetServerSockets(ss[0].ID, 0, c.total)
 				if int64(len(ns)) < c.start {
 					return false, fmt.Errorf("there should more than %d sockets, not %d", len(ns), c.start)
 				}
@@ -366,7 +366,7 @@ func (s) TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 			}
 
 			ns, end := channelz.GetServerSockets(ss[0].ID, startID, c.max)
-			if int64(len(ns)) != c.length || end != c.end {
+			if len(ns) != c.length || end != c.end {
 				return false, fmt.Errorf("GetServerSockets(%d) = %+v (len of which: %d), end: %+v, want len(GetServerSockets(%d)) = %d, end: %+v", c.start, ns, len(ns), end, c.start, c.length, c.end)
 			}
 
@@ -429,12 +429,6 @@ func (s) TestCZServerListenSocketDeletion(t *testing.T) {
 	s.Stop()
 }
 
-type dummyChannel struct{}
-
-func (d *dummyChannel) ChannelzMetric() *channelz.ChannelInternalMetric {
-	return &channelz.ChannelInternalMetric{}
-}
-
 type dummySocket struct{}
 
 func (d *dummySocket) ChannelzMetric() *channelz.SocketInternalMetric {
@@ -450,9 +444,9 @@ func (s) TestCZRecusivelyDeletionOfEntry(t *testing.T) {
 	//    v             v
 	// Socket1       Socket2
 
-	topChanID := channelz.RegisterChannel(&dummyChannel{}, nil, "")
-	subChanID1, _ := channelz.RegisterSubChannel(&dummyChannel{}, topChanID, "")
-	subChanID2, _ := channelz.RegisterSubChannel(&dummyChannel{}, topChanID, "")
+	topChanID := channelz.RegisterChannel(nil, "").ID()
+	subChanID1 := channelz.RegisterSubChannel(topChanID, "").ID()
+	subChanID2 := channelz.RegisterSubChannel(topChanID, "").ID()
 	sktID1, _ := channelz.RegisterNormalSocket(&dummySocket{}, subChanID1, "")
 	sktID2, _ := channelz.RegisterNormalSocket(&dummySocket{}, subChanID1, "")
 
@@ -552,9 +546,9 @@ func (s) TestCZChannelMetrics(t *testing.T) {
 			if sc == nil {
 				return false, fmt.Errorf("got <nil> subchannel")
 			}
-			cst += sc.ChannelData.CallsStarted
-			csu += sc.ChannelData.CallsSucceeded
-			cf += sc.ChannelData.CallsFailed
+			cst += sc.ChannelData.CallsStarted.Load()
+			csu += sc.ChannelData.CallsSucceeded.Load()
+			cf += sc.ChannelData.CallsFailed.Load()
 		}
 		if cst != 3 {
 			return false, fmt.Errorf("there should be 3 CallsStarted not %d", cst)
@@ -565,13 +559,13 @@ func (s) TestCZChannelMetrics(t *testing.T) {
 		if cf != 1 {
 			return false, fmt.Errorf("there should be 1 CallsFailed not %d", cf)
 		}
-		if tcs[0].ChannelData.CallsStarted != 3 {
+		if tcs[0].ChannelData.CallsStarted.Load() != 3 {
 			return false, fmt.Errorf("there should be 3 CallsStarted not %d", tcs[0].ChannelData.CallsStarted)
 		}
-		if tcs[0].ChannelData.CallsSucceeded != 1 {
+		if tcs[0].ChannelData.CallsSucceeded.Load() != 1 {
 			return false, fmt.Errorf("there should be 1 CallsSucceeded not %d", tcs[0].ChannelData.CallsSucceeded)
 		}
-		if tcs[0].ChannelData.CallsFailed != 1 {
+		if tcs[0].ChannelData.CallsFailed.Load() != 1 {
 			return false, fmt.Errorf("there should be 1 CallsFailed not %d", tcs[0].ChannelData.CallsFailed)
 		}
 		return true, nil

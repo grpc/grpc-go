@@ -42,7 +42,6 @@ type SubChannelMetric struct {
 
 type subChannel struct {
 	refName       string
-	c             Channel
 	closeCalled   bool
 	sockets       map[int64]string
 	id            int64
@@ -50,6 +49,17 @@ type subChannel struct {
 	cm            *channelMap
 	trace         *channelTrace
 	traceRefCount int32
+
+	metrics    *ChannelInternalMetric
+	identifier *Identifier
+}
+
+func (sc *subChannel) Metrics() *ChannelInternalMetric {
+	return sc.metrics
+}
+
+func (sc *subChannel) ID() *Identifier {
+	return sc.identifier
 }
 
 func (sc *subChannel) addChild(id int64, e entry) {
@@ -102,12 +112,7 @@ func (sc *subChannel) deleteSelfFromTree() (deleted bool) {
 //
 // It returns a bool to indicate whether the channel can be safely deleted from map.
 func (sc *subChannel) deleteSelfFromMap() (delete bool) {
-	if sc.getTraceRefCount() != 0 {
-		// free the grpc struct (i.e. addrConn)
-		sc.c = &dummyChannel{}
-		return false
-	}
-	return true
+	return sc.getTraceRefCount() == 0
 }
 
 // deleteSelfIfReady tries to delete the subchannel itself from the channelz database.

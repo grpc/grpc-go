@@ -123,7 +123,6 @@ func newClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 		target: target,
 		conns:  make(map[*addrConn]struct{}),
 		dopts:  defaultDialOptions(),
-		czData: new(channelzData),
 	}
 
 	cc.retryThrottler.Store((*retryThrottler)(nil))
@@ -425,7 +424,8 @@ func (cc *ClientConn) validateTransportCredentials() error {
 //
 // Doesn't grab cc.mu as this method is expected to be called only at Dial time.
 func (cc *ClientConn) channelzRegistration(target string) {
-	cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, cc.dopts.channelzParentID, target)
+	cc.channelz = channelz.RegisterChannel(cc.dopts.channelzParentID, target)
+	cc.channelzID = cc.channelz.ID()
 	cc.addTraceEvent("created")
 }
 
@@ -587,6 +587,7 @@ type ClientConn struct {
 	parsedTarget    resolver.Target      // See parseTargetAndFindResolver().
 	authority       string               // See determineAuthority().
 	dopts           dialOptions          // Default and user specified dial options.
+	channelz        channelz.MetricsID   // Channelz metrics object.
 	channelzID      *channelz.Identifier // Channelz identifier for the channel.
 	resolverBuilder resolver.Builder     // See parseTargetAndFindResolver().
 	idlenessMgr     *idle.Manager
@@ -596,7 +597,6 @@ type ClientConn struct {
 	csMgr              *connectivityStateManager
 	pickerWrapper      *pickerWrapper
 	safeConfigSelector iresolver.SafeConfigSelector
-	czData             *channelzData
 	retryThrottler     atomic.Value // Updated from service config.
 
 	// mu protects the following fields.
@@ -834,17 +834,13 @@ func (cc *ClientConn) newAddrConnLocked(addrs []resolver.Address, opts balancer.
 		addrs:        copyAddressesWithoutBalancerAttributes(addrs),
 		scopts:       opts,
 		dopts:        cc.dopts,
-		czData:       new(channelzData),
+		channelz:     channelz.RegisterSubChannel(cc.channelzID, ""),
 		resetBackoff: make(chan struct{}),
 		stateChan:    make(chan struct{}),
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 
-	var err error
-	ac.channelzID, err = channelz.RegisterSubChannel(ac, cc.channelzID, "")
-	if err != nil {
-		return nil, err
-	}
+	ac.channelzID = ac.channelz.ID()
 	channelz.AddTraceEvent(logger, ac.channelzID, 0, &channelz.TraceEventDesc{
 		Desc:     "Subchannel created",
 		Severity: channelz.CtInfo,
@@ -872,17 +868,6 @@ func (cc *ClientConn) removeAddrConn(ac *addrConn, err error) {
 	ac.tearDown(err)
 }
 
-func (cc *ClientConn) channelzMetric() *channelz.ChannelInternalMetric {
-	return &channelz.ChannelInternalMetric{
-		State:                    cc.GetState(),
-		Target:                   cc.target,
-		CallsStarted:             atomic.LoadInt64(&cc.czData.callsStarted),
-		CallsSucceeded:           atomic.LoadInt64(&cc.czData.callsSucceeded),
-		CallsFailed:              atomic.LoadInt64(&cc.czData.callsFailed),
-		LastCallStartedTimestamp: time.Unix(0, atomic.LoadInt64(&cc.czData.lastCallStartedTime)),
-	}
-}
-
 // Target returns the target string of the ClientConn.
 //
 // # Experimental
@@ -894,16 +879,16 @@ func (cc *ClientConn) Target() string {
 }
 
 func (cc *ClientConn) incrCallsStarted() {
-	atomic.AddInt64(&cc.czData.callsStarted, 1)
-	atomic.StoreInt64(&cc.czData.lastCallStartedTime, time.Now().UnixNano())
+	cc.channelz.Metrics().CallsStarted.Add(1)
+	cc.channelz.Metrics().LastCallStartedTimestamp.Store(time.Now().UnixNano())
 }
 
 func (cc *ClientConn) incrCallsSucceeded() {
-	atomic.AddInt64(&cc.czData.callsSucceeded, 1)
+	cc.channelz.Metrics().CallsSucceeded.Add(1)
 }
 
 func (cc *ClientConn) incrCallsFailed() {
-	atomic.AddInt64(&cc.czData.callsFailed, 1)
+	cc.channelz.Metrics().CallsFailed.Add(1)
 }
 
 // connect starts creating a transport.
@@ -1207,7 +1192,7 @@ type addrConn struct {
 	resetBackoff chan struct{}
 
 	channelzID *channelz.Identifier
-	czData     *channelzData
+	channelz   channelz.MetricsID
 }
 
 // Note: this requires a lock on ac.mu.
@@ -1610,33 +1595,6 @@ func (ac *addrConn) getState() connectivity.State {
 	return ac.state
 }
 
-func (ac *addrConn) ChannelzMetric() *channelz.ChannelInternalMetric {
-	ac.mu.Lock()
-	addr := ac.curAddr.Addr
-	ac.mu.Unlock()
-	return &channelz.ChannelInternalMetric{
-		State:                    ac.getState(),
-		Target:                   addr,
-		CallsStarted:             atomic.LoadInt64(&ac.czData.callsStarted),
-		CallsSucceeded:           atomic.LoadInt64(&ac.czData.callsSucceeded),
-		CallsFailed:              atomic.LoadInt64(&ac.czData.callsFailed),
-		LastCallStartedTimestamp: time.Unix(0, atomic.LoadInt64(&ac.czData.lastCallStartedTime)),
-	}
-}
-
-func (ac *addrConn) incrCallsStarted() {
-	atomic.AddInt64(&ac.czData.callsStarted, 1)
-	atomic.StoreInt64(&ac.czData.lastCallStartedTime, time.Now().UnixNano())
-}
-
-func (ac *addrConn) incrCallsSucceeded() {
-	atomic.AddInt64(&ac.czData.callsSucceeded, 1)
-}
-
-func (ac *addrConn) incrCallsFailed() {
-	atomic.AddInt64(&ac.czData.callsFailed, 1)
-}
-
 type retryThrottler struct {
 	max    float64
 	thresh float64
@@ -1674,12 +1632,45 @@ func (rt *retryThrottler) successfulRPC() {
 	}
 }
 
-type channelzChannel struct {
-	cc *ClientConn
+/*
+func (c *channelzChannel) ChannelzMetric() *channelz.ChannelInternalMetric {
+	cc := c.cc
+	return &channelz.ChannelInternalMetric{
+		State:                    cc.GetState(),
+		Target:                   cc.target,
+		CallsStarted:             atomic.LoadInt64(&cc.czData.callsStarted),
+		CallsSucceeded:           atomic.LoadInt64(&cc.czData.callsSucceeded),
+		CallsFailed:              atomic.LoadInt64(&cc.czData.callsFailed),
+		LastCallStartedTimestamp: time.Unix(0, atomic.LoadInt64(&cc.czData.lastCallStartedTime)),
+	}
 }
 
-func (c *channelzChannel) ChannelzMetric() *channelz.ChannelInternalMetric {
-	return c.cc.channelzMetric()
+func (ac *addrConn) ChannelzMetric() *channelz.ChannelInternalMetric {
+	ac.mu.Lock()
+	addr := ac.curAddr.Addr
+	ac.mu.Unlock()
+	return &channelz.ChannelInternalMetric{
+		State:                    ac.getState(),
+		Target:                   addr,
+		CallsStarted:             atomic.LoadInt64(&ac.czData.callsStarted),
+		CallsSucceeded:           atomic.LoadInt64(&ac.czData.callsSucceeded),
+		CallsFailed:              atomic.LoadInt64(&ac.czData.callsFailed),
+		LastCallStartedTimestamp: time.Unix(0, atomic.LoadInt64(&ac.czData.lastCallStartedTime)),
+	}
+}
+*/
+
+func (ac *addrConn) incrCallsStarted() {
+	ac.channelz.Metrics().CallsStarted.Add(1)
+	ac.channelz.Metrics().LastCallStartedTimestamp.Store(time.Now().UnixNano())
+}
+
+func (ac *addrConn) incrCallsSucceeded() {
+	ac.channelz.Metrics().CallsSucceeded.Add(1)
+}
+
+func (ac *addrConn) incrCallsFailed() {
+	ac.channelz.Metrics().CallsFailed.Add(1)
 }
 
 // ErrClientConnTimeout indicates that the ClientConn cannot establish the

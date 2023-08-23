@@ -36,7 +36,7 @@ var (
 
 	db *channelMap = newChannelMap()
 	// EntriesPerPage defines the number of channelz entries to be shown on a web page.
-	EntriesPerPage = int64(50)
+	EntriesPerPage = 50
 	curState       int32
 )
 
@@ -63,7 +63,7 @@ func IsOn() bool {
 // included in the result. The returned slice is up to a length of the arg
 // maxResults or EntriesPerPage if maxResults is zero, and is sorted in ascending
 // id order.
-func GetTopChannels(id int64, maxResults int64) ([]*ChannelMetric, bool) {
+func GetTopChannels(id int64, maxResults int) ([]*ChannelMetric, bool) {
 	return db.GetTopChannels(id, maxResults)
 }
 
@@ -73,7 +73,7 @@ func GetTopChannels(id int64, maxResults int64) ([]*ChannelMetric, bool) {
 // The arg id specifies that only server with id at or above it will be included
 // in the result. The returned slice is up to a length of the arg maxResults or
 // EntriesPerPage if maxResults is zero, and is sorted in ascending id order.
-func GetServers(id int64, maxResults int64) ([]*ServerMetric, bool) {
+func GetServers(id int64, maxResults int) ([]*ServerMetric, bool) {
 	return db.GetServers(id, maxResults)
 }
 
@@ -84,7 +84,7 @@ func GetServers(id int64, maxResults int64) ([]*ServerMetric, bool) {
 // The arg startID specifies that only sockets with id at or above it will be
 // included in the result. The returned slice is up to a length of the arg maxResults
 // or EntriesPerPage if maxResults is zero, and is sorted in ascending id order.
-func GetServerSockets(id int64, startID int64, maxResults int64) ([]*SocketMetric, bool) {
+func GetServerSockets(id int64, startID int64, maxResults int) ([]*SocketMetric, bool) {
 	return db.GetServerSockets(id, startID, maxResults)
 }
 
@@ -115,7 +115,7 @@ func GetServer(id int64) *ServerMetric {
 // Returns a unique channelz identifier assigned to this channel.
 //
 // If channelz is not turned ON, the channelz database is not mutated.
-func RegisterChannel(c Channel, pid *Identifier, ref string) *Identifier {
+func RegisterChannel(pid *Identifier, ref string) MetricsID {
 	id := IDGen.genID()
 	var parent int64
 	isTopChannel := true
@@ -125,20 +125,26 @@ func RegisterChannel(c Channel, pid *Identifier, ref string) *Identifier {
 	}
 
 	if !IsOn() {
-		return newIdentifer(RefChannel, id, pid)
+		return &channel{metrics: &ChannelInternalMetric{}, identifier: newIdentifer(RefChannel, id, pid)}
 	}
 
 	cn := &channel{
 		refName:     ref,
-		c:           c,
 		subChans:    make(map[int64]string),
 		nestedChans: make(map[int64]string),
 		id:          id,
 		pid:         parent,
 		trace:       &channelTrace{createdTime: time.Now(), events: make([]*TraceEvent, 0, getMaxTraceEntry())},
+		metrics:     &ChannelInternalMetric{},
+		identifier:  newIdentifer(RefChannel, id, pid),
 	}
 	db.addChannel(id, cn, isTopChannel, parent)
-	return newIdentifer(RefChannel, id, pid)
+	return cn
+}
+
+type MetricsID interface {
+	Metrics() *ChannelInternalMetric
+	ID() *Identifier
 }
 
 // RegisterSubChannel registers the given subChannel c in the channelz database
@@ -148,25 +154,23 @@ func RegisterChannel(c Channel, pid *Identifier, ref string) *Identifier {
 // Returns a unique channelz identifier assigned to this subChannel.
 //
 // If channelz is not turned ON, the channelz database is not mutated.
-func RegisterSubChannel(c Channel, pid *Identifier, ref string) (*Identifier, error) {
-	if pid == nil {
-		return nil, errors.New("a SubChannel's parent id cannot be nil")
-	}
+func RegisterSubChannel(pid *Identifier, ref string) MetricsID {
 	id := IDGen.genID()
 	if !IsOn() {
-		return newIdentifer(RefSubChannel, id, pid), nil
+		return &subChannel{metrics: &ChannelInternalMetric{}, identifier: newIdentifer(RefSubChannel, id, pid)}
 	}
 
 	sc := &subChannel{
-		refName: ref,
-		c:       c,
-		sockets: make(map[int64]string),
-		id:      id,
-		pid:     pid.Int(),
-		trace:   &channelTrace{createdTime: time.Now(), events: make([]*TraceEvent, 0, getMaxTraceEntry())},
+		refName:    ref,
+		sockets:    make(map[int64]string),
+		id:         id,
+		pid:        pid.Int(),
+		trace:      &channelTrace{createdTime: time.Now(), events: make([]*TraceEvent, 0, getMaxTraceEntry())},
+		metrics:    &ChannelInternalMetric{},
+		identifier: newIdentifer(RefSubChannel, id, pid),
 	}
 	db.addSubChannel(id, sc, pid.Int())
-	return newIdentifer(RefSubChannel, id, pid), nil
+	return sc
 }
 
 // RegisterServer registers the given server s in channelz database. It returns

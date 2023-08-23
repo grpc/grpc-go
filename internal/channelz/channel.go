@@ -19,8 +19,8 @@
 package channelz
 
 import (
+	"fmt"
 	"sync/atomic"
-	"time"
 
 	"google.golang.org/grpc/connectivity"
 )
@@ -49,34 +49,77 @@ type ChannelMetric struct {
 // ChannelInternalMetric defines a collection of metrics related to a channel.
 type ChannelInternalMetric struct {
 	// current connectivity state of the channel.
-	State connectivity.State
+	State atomic.Pointer[connectivity.State]
 	// The target this channel originally tried to connect to.  May be absent
-	Target string
+	Target atomic.Pointer[string]
 	// The number of calls started on the channel.
-	CallsStarted int64
+	CallsStarted atomic.Int64
 	// The number of calls that have completed with an OK status.
-	CallsSucceeded int64
+	CallsSucceeded atomic.Int64
 	// The number of calls that have a completed with a non-OK status.
-	CallsFailed int64
+	CallsFailed atomic.Int64
 	// The last time a call was started on the channel.
-	LastCallStartedTimestamp time.Time
+	LastCallStartedTimestamp atomic.Int64
 }
 
-// Channel is the interface that should be satisfied in order to be tracked by
-// channelz as Channel or SubChannel.
-type Channel interface {
-	ChannelzMetric() *ChannelInternalMetric
+func (c *ChannelInternalMetric) CopyFrom(o *ChannelInternalMetric) {
+	c.State.Store(o.State.Load())
+	c.Target.Store(o.Target.Load())
+	c.CallsStarted.Store(o.CallsStarted.Load())
+	c.CallsSucceeded.Store(o.CallsSucceeded.Load())
+	c.CallsFailed.Store(o.CallsFailed.Load())
+	c.LastCallStartedTimestamp.Store(o.LastCallStartedTimestamp.Load())
 }
 
-type dummyChannel struct{}
+func (c *ChannelInternalMetric) Equal(o any) bool {
+	oc, ok := o.(*ChannelInternalMetric)
+	if !ok {
+		return false
+	}
+	if (c.State.Load() == nil) != (oc.State.Load() == nil) {
+		return false
+	}
+	if c.State.Load() != nil && *c.State.Load() != *oc.State.Load() {
+		return false
+	}
+	if (c.Target.Load() == nil) != (oc.Target.Load() == nil) {
+		return false
+	}
+	if c.Target.Load() != nil && *c.Target.Load() != *oc.Target.Load() {
+		return false
+	}
+	return c.CallsStarted.Load() == oc.CallsStarted.Load() &&
+		c.CallsFailed.Load() == oc.CallsFailed.Load() &&
+		c.CallsSucceeded.Load() == oc.CallsSucceeded.Load() &&
+		c.LastCallStartedTimestamp.Load() == oc.LastCallStartedTimestamp.Load()
+}
 
-func (d *dummyChannel) ChannelzMetric() *ChannelInternalMetric {
-	return &ChannelInternalMetric{}
+func strFromPointer(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func (c *ChannelInternalMetric) String() string {
+	return fmt.Sprintf("State: %v, Target: %s, CallsStarted: %v, CallsSucceeded: %v, CallsFailed: %v, LastCallStartedTimestamp: %v",
+		c.State.Load(), strFromPointer(c.Target.Load()), c.CallsStarted.Load(), c.CallsSucceeded.Load(), c.CallsFailed.Load(), c.LastCallStartedTimestamp.Load(),
+	)
+}
+
+func NewChannelInternalMetricForTesting(state connectivity.State, target string, started, succeeded, failed, timestamp int64) *ChannelInternalMetric {
+	c := &ChannelInternalMetric{}
+	c.State.Store(&state)
+	c.Target.Store(&target)
+	c.CallsStarted.Store(started)
+	c.CallsSucceeded.Store(succeeded)
+	c.CallsFailed.Store(failed)
+	c.LastCallStartedTimestamp.Store(timestamp)
+	return c
 }
 
 type channel struct {
 	refName     string
-	c           Channel
 	closeCalled bool
 	nestedChans map[int64]string
 	subChans    map[int64]string
@@ -87,6 +130,17 @@ type channel struct {
 	// traceRefCount is the number of trace events that reference this channel.
 	// Non-zero traceRefCount means the trace of this channel cannot be deleted.
 	traceRefCount int32
+
+	metrics    *ChannelInternalMetric
+	identifier *Identifier
+}
+
+func (sc *channel) Metrics() *ChannelInternalMetric {
+	return sc.metrics
+}
+
+func (sc *channel) ID() *Identifier {
+	return sc.identifier
 }
 
 func (c *channel) addChild(id int64, e entry) {
@@ -146,11 +200,7 @@ func (c *channel) deleteSelfFromTree() (deleted bool) {
 //
 // It returns a bool to indicate whether the channel can be safely deleted from map.
 func (c *channel) deleteSelfFromMap() (delete bool) {
-	if c.getTraceRefCount() != 0 {
-		c.c = &dummyChannel{}
-		return false
-	}
-	return true
+	return c.getTraceRefCount() == 0
 }
 
 // deleteSelfIfReady tries to delete the channel itself from the channelz database.

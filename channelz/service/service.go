@@ -22,6 +22,7 @@ package service
 import (
 	"context"
 	"net"
+	"time"
 
 	"github.com/golang/protobuf/ptypes"
 	wrpb "github.com/golang/protobuf/ptypes/wrappers"
@@ -62,8 +63,11 @@ type serverImpl struct {
 	channelzgrpc.UnimplementedChannelzServer
 }
 
-func connectivityStateToProto(s connectivity.State) *channelzpb.ChannelConnectivityState {
-	switch s {
+func connectivityStateToProto(s *connectivity.State) *channelzpb.ChannelConnectivityState {
+	if s == nil {
+		return &channelzpb.ChannelConnectivityState{State: channelzpb.ChannelConnectivityState_UNKNOWN}
+	}
+	switch *s {
 	case connectivity.Idle:
 		return &channelzpb.ChannelConnectivityState{State: channelzpb.ChannelConnectivityState_IDLE}
 	case connectivity.Connecting:
@@ -108,18 +112,25 @@ func channelTraceToProto(ct *channelz.ChannelTrace) *channelzpb.ChannelTrace {
 	return pbt
 }
 
+func strFromPointer(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
 func channelMetricToProto(cm *channelz.ChannelMetric) *channelzpb.Channel {
 	c := &channelzpb.Channel{}
 	c.Ref = &channelzpb.ChannelRef{ChannelId: cm.ID, Name: cm.RefName}
 
 	c.Data = &channelzpb.ChannelData{
-		State:          connectivityStateToProto(cm.ChannelData.State),
-		Target:         cm.ChannelData.Target,
-		CallsStarted:   cm.ChannelData.CallsStarted,
-		CallsSucceeded: cm.ChannelData.CallsSucceeded,
-		CallsFailed:    cm.ChannelData.CallsFailed,
+		State:          connectivityStateToProto(cm.ChannelData.State.Load()),
+		Target:         strFromPointer(cm.ChannelData.Target.Load()),
+		CallsStarted:   cm.ChannelData.CallsStarted.Load(),
+		CallsSucceeded: cm.ChannelData.CallsSucceeded.Load(),
+		CallsFailed:    cm.ChannelData.CallsFailed.Load(),
 	}
-	if ts, err := ptypes.TimestampProto(cm.ChannelData.LastCallStartedTimestamp); err == nil {
+	if ts, err := ptypes.TimestampProto(time.Unix(0, cm.ChannelData.LastCallStartedTimestamp.Load())); err == nil {
 		c.Data.LastCallStartedTimestamp = ts
 	}
 	nestedChans := make([]*channelzpb.ChannelRef, 0, len(cm.NestedChans))
@@ -143,13 +154,13 @@ func subChannelMetricToProto(cm *channelz.SubChannelMetric) *channelzpb.Subchann
 	sc.Ref = &channelzpb.SubchannelRef{SubchannelId: cm.ID, Name: cm.RefName}
 
 	sc.Data = &channelzpb.ChannelData{
-		State:          connectivityStateToProto(cm.ChannelData.State),
-		Target:         cm.ChannelData.Target,
-		CallsStarted:   cm.ChannelData.CallsStarted,
-		CallsSucceeded: cm.ChannelData.CallsSucceeded,
-		CallsFailed:    cm.ChannelData.CallsFailed,
+		State:          connectivityStateToProto(cm.ChannelData.State.Load()),
+		Target:         strFromPointer(cm.ChannelData.Target.Load()),
+		CallsStarted:   cm.ChannelData.CallsStarted.Load(),
+		CallsSucceeded: cm.ChannelData.CallsSucceeded.Load(),
+		CallsFailed:    cm.ChannelData.CallsFailed.Load(),
 	}
-	if ts, err := ptypes.TimestampProto(cm.ChannelData.LastCallStartedTimestamp); err == nil {
+	if ts, err := ptypes.TimestampProto(time.Unix(0, cm.ChannelData.LastCallStartedTimestamp.Load())); err == nil {
 		sc.Data.LastCallStartedTimestamp = ts
 	}
 
@@ -247,7 +258,7 @@ func socketMetricToProto(sm *channelz.SocketMetric) *channelzpb.Socket {
 }
 
 func (s *serverImpl) GetTopChannels(ctx context.Context, req *channelzpb.GetTopChannelsRequest) (*channelzpb.GetTopChannelsResponse, error) {
-	metrics, end := channelz.GetTopChannels(req.GetStartChannelId(), req.GetMaxResults())
+	metrics, end := channelz.GetTopChannels(req.GetStartChannelId(), int(req.GetMaxResults()))
 	resp := &channelzpb.GetTopChannelsResponse{}
 	for _, m := range metrics {
 		resp.Channel = append(resp.Channel, channelMetricToProto(m))
@@ -278,7 +289,7 @@ func serverMetricToProto(sm *channelz.ServerMetric) *channelzpb.Server {
 }
 
 func (s *serverImpl) GetServers(ctx context.Context, req *channelzpb.GetServersRequest) (*channelzpb.GetServersResponse, error) {
-	metrics, end := channelz.GetServers(req.GetStartServerId(), req.GetMaxResults())
+	metrics, end := channelz.GetServers(req.GetStartServerId(), int(req.GetMaxResults()))
 	resp := &channelzpb.GetServersResponse{}
 	for _, m := range metrics {
 		resp.Server = append(resp.Server, serverMetricToProto(m))
@@ -288,7 +299,7 @@ func (s *serverImpl) GetServers(ctx context.Context, req *channelzpb.GetServersR
 }
 
 func (s *serverImpl) GetServerSockets(ctx context.Context, req *channelzpb.GetServerSocketsRequest) (*channelzpb.GetServerSocketsResponse, error) {
-	metrics, end := channelz.GetServerSockets(req.GetServerId(), req.GetStartSocketId(), req.GetMaxResults())
+	metrics, end := channelz.GetServerSockets(req.GetServerId(), req.GetStartSocketId(), int(req.GetMaxResults()))
 	resp := &channelzpb.GetServerSocketsResponse{}
 	for _, m := range metrics {
 		resp.SocketRef = append(resp.SocketRef, &channelzpb.SocketRef{SocketId: m.ID, Name: m.RefName})

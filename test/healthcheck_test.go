@@ -800,7 +800,7 @@ func (s) TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 			return false, errors.New("nil subchannel metric or nil subchannel metric ChannelData returned")
 		}
 		// exponential backoff retry may result in more than one health check call.
-		if scm.ChannelData.CallsStarted > 0 && scm.ChannelData.CallsSucceeded > 0 && scm.ChannelData.CallsFailed == 0 {
+		if scm.ChannelData.CallsStarted.Load() > 0 && scm.ChannelData.CallsSucceeded.Load() > 0 && scm.ChannelData.CallsFailed.Load() == 0 {
 			return true, nil
 		}
 		return false, fmt.Errorf("got %d CallsStarted, %d CallsSucceeded, want >0 >0", scm.ChannelData.CallsStarted, scm.ChannelData.CallsSucceeded)
@@ -847,7 +847,7 @@ func (s) TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 			return false, errors.New("nil subchannel metric or nil subchannel metric ChannelData returned")
 		}
 		// exponential backoff retry may result in more than one health check call.
-		if scm.ChannelData.CallsStarted > 0 && scm.ChannelData.CallsFailed > 0 && scm.ChannelData.CallsSucceeded == 0 {
+		if scm.ChannelData.CallsStarted.Load() > 0 && scm.ChannelData.CallsFailed.Load() > 0 && scm.ChannelData.CallsSucceeded.Load() == 0 {
 			return true, nil
 		}
 		return false, fmt.Errorf("got %d CallsStarted, %d CallsFailed, want >0, >0", scm.ChannelData.CallsStarted, scm.ChannelData.CallsFailed)

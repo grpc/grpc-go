@@ -69,13 +69,14 @@ func newChannelMap() *channelMap {
 
 func (c *channelMap) addServer(id int64, s *server) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	s.cm = c
 	c.servers[id] = s
-	c.mu.Unlock()
 }
 
 func (c *channelMap) addChannel(id int64, cn *channel, isTopChannel bool, pid int64) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	cn.cm = c
 	cn.trace.cm = c
 	c.channels[id] = cn
@@ -84,42 +85,42 @@ func (c *channelMap) addChannel(id int64, cn *channel, isTopChannel bool, pid in
 	} else {
 		c.findEntry(pid).addChild(id, cn)
 	}
-	c.mu.Unlock()
 }
 
 func (c *channelMap) addSubChannel(id int64, sc *subChannel, pid int64) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	sc.cm = c
 	sc.trace.cm = c
 	c.subChannels[id] = sc
 	c.findEntry(pid).addChild(id, sc)
-	c.mu.Unlock()
 }
 
 func (c *channelMap) addListenSocket(id int64, ls *listenSocket, pid int64) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	ls.cm = c
 	c.listenSockets[id] = ls
 	c.findEntry(pid).addChild(id, ls)
-	c.mu.Unlock()
 }
 
 func (c *channelMap) addNormalSocket(id int64, ns *normalSocket, pid int64) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	ns.cm = c
 	c.normalSockets[id] = ns
 	c.findEntry(pid).addChild(id, ns)
-	c.mu.Unlock()
 }
 
-// removeEntry triggers the removal of an entry, which may not indeed delete the entry, if it has to
-// wait on the deletion of its children and until no other entity's channel trace references it.
-// It may lead to a chain of entry deletion. For example, deleting the last socket of a gracefully
-// shutting down server will lead to the server being also deleted.
+// removeEntry triggers the removal of an entry, which may not indeed delete the
+// entry, if it has to wait on the deletion of its children and until no other
+// entity's channel trace references it.  It may lead to a chain of entry
+// deletion. For example, deleting the last socket of a gracefully shutting down
+// server will lead to the server being also deleted.
 func (c *channelMap) removeEntry(id int64) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.findEntry(id).triggerDelete()
-	c.mu.Unlock()
 }
 
 // tracedChannel represents tracing operations which are present on both
@@ -142,52 +143,48 @@ func (c *channelMap) decrTraceRefCount(id int64) {
 
 // c.mu must be held by the caller.
 func (c *channelMap) findEntry(id int64) entry {
-	var v entry
-	var ok bool
-	if v, ok = c.channels[id]; ok {
+	if v, ok := c.channels[id]; ok {
 		return v
 	}
-	if v, ok = c.subChannels[id]; ok {
+	if v, ok := c.subChannels[id]; ok {
 		return v
 	}
-	if v, ok = c.servers[id]; ok {
+	if v, ok := c.servers[id]; ok {
 		return v
 	}
-	if v, ok = c.listenSockets[id]; ok {
+	if v, ok := c.listenSockets[id]; ok {
 		return v
 	}
-	if v, ok = c.normalSockets[id]; ok {
+	if v, ok := c.normalSockets[id]; ok {
 		return v
 	}
 	return &dummyEntry{idNotFound: id}
 }
 
 // c.mu must be held by the caller
-// deleteEntry simply deletes an entry from the channelMap. Before calling this
-// method, caller must check this entry is ready to be deleted, i.e removeEntry()
-// has been called on it, and no children still exist.
-// Conditionals are ordered by the expected frequency of deletion of each entity
-// type, in order to optimize performance.
+//
+// deleteEntry deletes an entry from the channelMap. Before calling this method,
+// caller must check this entry is ready to be deleted, i.e removeEntry() has
+// been called on it, and no children still exist.
 func (c *channelMap) deleteEntry(id int64) {
-	var ok bool
-	if _, ok = c.normalSockets[id]; ok {
+	if _, ok := c.normalSockets[id]; ok {
 		delete(c.normalSockets, id)
 		return
 	}
-	if _, ok = c.subChannels[id]; ok {
+	if _, ok := c.subChannels[id]; ok {
 		delete(c.subChannels, id)
 		return
 	}
-	if _, ok = c.channels[id]; ok {
+	if _, ok := c.channels[id]; ok {
 		delete(c.channels, id)
 		delete(c.topLevelChannels, id)
 		return
 	}
-	if _, ok = c.listenSockets[id]; ok {
+	if _, ok := c.listenSockets[id]; ok {
 		delete(c.listenSockets, id)
 		return
 	}
-	if _, ok = c.servers[id]; ok {
+	if _, ok := c.servers[id]; ok {
 		delete(c.servers, id)
 		return
 	}
@@ -195,10 +192,10 @@ func (c *channelMap) deleteEntry(id int64) {
 
 func (c *channelMap) traceEvent(id int64, desc *TraceEventDesc) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	child := c.findEntry(id)
 	childTC, ok := child.(tracedChannel)
 	if !ok {
-		c.mu.Unlock()
 		return
 	}
 	childTC.getChannelTrace().append(&TraceEvent{Desc: desc.Desc, Severity: desc.Severity, Timestamp: time.Now()})
@@ -223,7 +220,6 @@ func (c *channelMap) traceEvent(id int64, desc *TraceEventDesc) {
 			childTC.incrTraceRefCount()
 		}
 	}
-	c.mu.Unlock()
 }
 
 type int64Slice []int64
@@ -240,217 +236,167 @@ func copyMap(m map[int64]string) map[int64]string {
 	return n
 }
 
-func min(a, b int64) int64 {
+func min(a, b int) int {
 	if a < b {
 		return a
 	}
 	return b
 }
 
-func (c *channelMap) GetTopChannels(id int64, maxResults int64) ([]*ChannelMetric, bool) {
+func (c *channelMap) GetTopChannels(id int64, maxResults int) ([]*ChannelMetric, bool) {
 	if maxResults <= 0 {
 		maxResults = EntriesPerPage
 	}
 	c.mu.RLock()
+	defer c.mu.RUnlock()
 	l := int64(len(c.topLevelChannels))
 	ids := make([]int64, 0, l)
-	cns := make([]*channel, 0, min(l, maxResults))
 
 	for k := range c.topLevelChannels {
 		ids = append(ids, k)
 	}
 	sort.Sort(int64Slice(ids))
 	idx := sort.Search(len(ids), func(i int) bool { return ids[i] >= id })
-	count := int64(0)
-	var end bool
+	end := true
 	var t []*ChannelMetric
-	for i, v := range ids[idx:] {
-		if count == maxResults {
+	for _, v := range ids[idx:] {
+		if len(t) == maxResults {
+			end = false
 			break
 		}
 		if cn, ok := c.channels[v]; ok {
-			cns = append(cns, cn)
 			t = append(t, &ChannelMetric{
 				ID:          cn.id,
 				RefName:     cn.refName,
-				ChannelData: cn.c.ChannelzMetric(),
+				ChannelData: cn.metrics,
 				NestedChans: copyMap(cn.nestedChans),
 				SubChans:    copyMap(cn.subChans),
 				Trace:       cn.trace.dumpData(),
 			})
-			count++
 		}
-		if i == len(ids[idx:])-1 {
-			end = true
-			break
-		}
-	}
-	c.mu.RUnlock()
-	if count == 0 {
-		end = true
 	}
 	return t, end
 }
 
-func (c *channelMap) GetServers(id, maxResults int64) ([]*ServerMetric, bool) {
+func (c *channelMap) GetServers(id int64, maxResults int) ([]*ServerMetric, bool) {
 	if maxResults <= 0 {
 		maxResults = EntriesPerPage
 	}
 	c.mu.RLock()
-	l := int64(len(c.servers))
-	ids := make([]int64, 0, l)
-	ss := make([]*server, 0, min(l, maxResults))
+	defer c.mu.RUnlock()
+	ids := make([]int64, 0, len(c.servers))
 	for k := range c.servers {
 		ids = append(ids, k)
 	}
 	sort.Sort(int64Slice(ids))
 	idx := sort.Search(len(ids), func(i int) bool { return ids[i] >= id })
-	count := int64(0)
-	var end bool
+	end := true
 	var s []*ServerMetric
-	for i, v := range ids[idx:] {
-		if count == maxResults {
+	for _, v := range ids[idx:] {
+		if len(s) == maxResults {
+			end = false
 			break
 		}
 		if svr, ok := c.servers[v]; ok {
-			ss = append(ss, svr)
 			s = append(s, &ServerMetric{
 				ListenSockets: copyMap(svr.listenSockets),
+				ServerData:    svr.s.ChannelzMetric(),
+				ID:            svr.id,
+				RefName:       svr.refName,
 			})
-			count++
 		}
-		if i == len(ids[idx:])-1 {
-			end = true
-			break
-		}
-	}
-	c.mu.RUnlock()
-	if count == 0 {
-		end = true
-	}
-
-	for i, svr := range ss {
-		s[i].ServerData = svr.s.ChannelzMetric()
-		s[i].ID = svr.id
-		s[i].RefName = svr.refName
 	}
 	return s, end
 }
 
-func (c *channelMap) GetServerSockets(id int64, startID int64, maxResults int64) ([]*SocketMetric, bool) {
+func (c *channelMap) GetServerSockets(id int64, startID int64, maxResults int) ([]*SocketMetric, bool) {
 	if maxResults <= 0 {
 		maxResults = EntriesPerPage
 	}
-	var svr *server
-	var ok bool
 	c.mu.RLock()
-	if svr, ok = c.servers[id]; !ok {
+	defer c.mu.RUnlock()
+	svr, ok := c.servers[id]
+	if !ok {
 		// server with id doesn't exist.
-		c.mu.RUnlock()
 		return nil, true
 	}
 	svrskts := svr.sockets
-	l := int64(len(svrskts))
-	ids := make([]int64, 0, l)
-	sks := make([]*normalSocket, 0, min(l, maxResults))
+	ids := make([]int64, 0, len(svrskts))
+	sks := make([]*SocketMetric, 0, min(len(svrskts), maxResults))
 	for k := range svrskts {
 		ids = append(ids, k)
 	}
 	sort.Sort(int64Slice(ids))
 	idx := sort.Search(len(ids), func(i int) bool { return ids[i] >= startID })
-	count := int64(0)
-	var end bool
-	for i, v := range ids[idx:] {
-		if count == maxResults {
+	end := true
+	for _, v := range ids[idx:] {
+		if len(sks) == maxResults {
+			end = false
 			break
 		}
 		if ns, ok := c.normalSockets[v]; ok {
-			sks = append(sks, ns)
-			count++
+			sks = append(sks, &SocketMetric{
+				SocketData: ns.s.ChannelzMetric(),
+				ID:         ns.id,
+				RefName:    ns.refName,
+			})
 		}
-		if i == len(ids[idx:])-1 {
-			end = true
-			break
-		}
 	}
-	c.mu.RUnlock()
-	if count == 0 {
-		end = true
-	}
-	s := make([]*SocketMetric, 0, len(sks))
-	for _, ns := range sks {
-		sm := &SocketMetric{}
-		sm.SocketData = ns.s.ChannelzMetric()
-		sm.ID = ns.id
-		sm.RefName = ns.refName
-		s = append(s, sm)
-	}
-	return s, end
+	return sks, end
 }
 
 func (c *channelMap) GetChannel(id int64) *ChannelMetric {
-	cm := &ChannelMetric{}
-	var cn *channel
-	var ok bool
 	c.mu.RLock()
-	if cn, ok = c.channels[id]; !ok {
+	defer c.mu.RUnlock()
+	cn, ok := c.channels[id]
+	if !ok {
 		// channel with id doesn't exist.
-		c.mu.RUnlock()
 		return nil
 	}
-	cm.NestedChans = copyMap(cn.nestedChans)
-	cm.SubChans = copyMap(cn.subChans)
-	// cn.c can be set to &dummyChannel{} when deleteSelfFromMap is called. Save a copy of cn.c when
-	// holding the lock to prevent potential data race.
-	chanCopy := cn.c
-	c.mu.RUnlock()
-	cm.ChannelData = chanCopy.ChannelzMetric()
-	cm.ID = cn.id
-	cm.RefName = cn.refName
-	cm.Trace = cn.trace.dumpData()
-	return cm
+	return &ChannelMetric{
+		ID:          cn.id,
+		RefName:     cn.refName,
+		ChannelData: cn.metrics,
+		NestedChans: copyMap(cn.nestedChans),
+		SubChans:    copyMap(cn.subChans),
+		Trace:       cn.trace.dumpData(),
+	}
 }
 
 func (c *channelMap) GetSubChannel(id int64) *SubChannelMetric {
-	cm := &SubChannelMetric{}
-	var sc *subChannel
-	var ok bool
 	c.mu.RLock()
-	if sc, ok = c.subChannels[id]; !ok {
+	defer c.mu.RUnlock()
+	sc, ok := c.subChannels[id]
+	if !ok {
 		// subchannel with id doesn't exist.
-		c.mu.RUnlock()
 		return nil
 	}
-	cm.Sockets = copyMap(sc.sockets)
-	// sc.c can be set to &dummyChannel{} when deleteSelfFromMap is called. Save a copy of sc.c when
-	// holding the lock to prevent potential data race.
-	chanCopy := sc.c
-	c.mu.RUnlock()
-	cm.ChannelData = chanCopy.ChannelzMetric()
-	cm.ID = sc.id
-	cm.RefName = sc.refName
-	cm.Trace = sc.trace.dumpData()
-	return cm
+	return &SubChannelMetric{
+		Sockets:     copyMap(sc.sockets),
+		ChannelData: sc.metrics,
+		ID:          sc.id,
+		RefName:     sc.refName,
+		Trace:       sc.trace.dumpData(),
+	}
 }
 
 func (c *channelMap) GetSocket(id int64) *SocketMetric {
-	sm := &SocketMetric{}
 	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if ls, ok := c.listenSockets[id]; ok {
-		c.mu.RUnlock()
-		sm.SocketData = ls.s.ChannelzMetric()
-		sm.ID = ls.id
-		sm.RefName = ls.refName
-		return sm
+		return &SocketMetric{
+			SocketData: ls.s.ChannelzMetric(),
+			ID:         ls.id,
+			RefName:    ls.refName,
+		}
 	}
 	if ns, ok := c.normalSockets[id]; ok {
-		c.mu.RUnlock()
-		sm.SocketData = ns.s.ChannelzMetric()
-		sm.ID = ns.id
-		sm.RefName = ns.refName
-		return sm
+		return &SocketMetric{
+			SocketData: ns.s.ChannelzMetric(),
+			ID:         ns.id,
+			RefName:    ns.refName,
+		}
 	}
-	c.mu.RUnlock()
 	return nil
 }
 
@@ -459,20 +405,19 @@ func (c *channelMap) GetServer(id int64) *ServerMetric {
 	var svr *server
 	var ok bool
 	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if svr, ok = c.servers[id]; !ok {
-		c.mu.RUnlock()
 		return nil
 	}
 	sm.ListenSockets = copyMap(svr.listenSockets)
-	c.mu.RUnlock()
 	sm.ID = svr.id
 	sm.RefName = svr.refName
 	sm.ServerData = svr.s.ChannelzMetric()
 	return sm
 }
 
-// dummyEntry is a fake entry to handle entry not found case.
 type dummyEntry struct {
+	// dummyEntry is a fake entry to handle entry not found case.
 	idNotFound int64
 }
 
