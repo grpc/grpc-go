@@ -83,8 +83,17 @@ func (s *testServiceImpl) EmptyCall(ctx context.Context, _ *testpb.Empty) (*test
 }
 
 func (s *testServiceImpl) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	response := &testpb.SimpleResponse{ServerId: s.serverID}
+
+	for headerValue := range getRPCBehaviorMetadata(ctx) {
+		if rpcStatus := getStatusForRPCBehaviorMetadata(headerValue); rpcStatus != nil {
+			return response, status.Err(rpcStatus.Code(), rpcStatus.Message())
+		}
+	}
+
+	response.Hostname = s.hostname
 	grpc.SetHeader(ctx, metadata.Pairs("hostname", s.hostname))
-	return &testpb.SimpleResponse{ServerId: s.serverID, Hostname: s.hostname}, nil
+	return response, status.Err(codes.OK, "")
 }
 
 func getRPCBehaviorMetadata(ctx context.Context) map[string]bool {
@@ -96,7 +105,7 @@ func getRPCBehaviorMetadata(ctx context.Context) map[string]bool {
 		mdRPCBehavior = md.Get(xdsinterop.RPCBehaviorMetadataKey)
 	}
 
-	var rpcBehaviorMetadata map[string]bool
+	rpcBehaviorMetadata := make(map[string]bool)
 	for _, val := range mdRPCBehavior {
 		splitVals := strings.Split(val, ",")
 
@@ -113,7 +122,7 @@ func getStatusForRPCBehaviorMetadata(headerValue string) *status.Status {
 	} else if errCode, err := strconv.Atoi(headerValue[len(xdsinterop.ErrorCodePrefix):]); err != nil {
 		return status.New(codes.InvalidArgument, "Invalid format for rpc-behavior header: "+headerValue)
 	} else {
-		return status.New(codes.Code(errCode), "RPC failed as per the rpc-behavior header value: "+headerValue)
+		return status.New(codes.Code(errCode), "Rpc failed as per the rpc-behavior header value: "+headerValue)
 	}
 }
 
