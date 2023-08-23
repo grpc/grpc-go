@@ -61,10 +61,11 @@ func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clus
 	})
 }
 
-// Tests the case where the cluster resource requested by the cds LB policy is
-// a leaf cluster. Subsequently the management server pushes an update to the
-// same leaf cluster. Verifies that the load balancing configuration pushed to
-// the cluster_resolver LB policy is as expected.
+// Tests the case where the cluster resource requested by the cds LB policy is a
+// leaf cluster. The management server sends two updates for the same leaf
+// cluster resource. The test verifies that the load balancing configuration
+// pushed to the cluster_resolver LB policy is contains the expected discovery
+// mechanism corresponding to the leaf cluster, on both occassions.
 func (s) TestClusterHandlerSuccess_LeafNode(t *testing.T) {
 	tests := []struct {
 		name                  string
@@ -159,9 +160,11 @@ func (s) TestClusterHandlerSuccess_LeafNode(t *testing.T) {
 // an aggregate cluster root pointing to two child clusters, one of type EDS and
 // the other of type LogicalDNS. Verifies that the load balancing configuration
 // pushed to the cluster_resolver LB policy is as expected. The test then
-// updates the aggregate cluster to point to a different set of child clusters
-// and verifies that the load balancing configuration pushed to the
-// cluster_resolver LB policy is as expected.
+// updates the aggregate cluster to point to two child clusters, the same leaf
+// cluster of type EDS and a different leaf cluster of type LogicalDNS and
+// verifies that the load balancing configuration pushed to the cluster_resolver
+// LB policy contains the expected discovery mechanisms corresponding to the
+// child clusters.
 func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
@@ -243,11 +246,12 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 
 // Tests the case where the cluster resource requested by the cds LB policy is
 // an aggregate cluster root pointing to two child clusters, one of type EDS and
-// the other of type LogicalDNS. Verifies that the load balancing configuration
-// pushed to the cluster_resolver LB policy is as expected. The test then
-// updates the root cluster resource requested by the cds LB policy to a leaf
-// cluster of type EDS and verifies the load balancing configuration pushed to
-// the cluster_resolver LB policy.
+// the other of type LogicalDNS. The test verifies that the load balancing
+// configuration pushed to the cluster_resolver LB policy contains the discovery
+// mechanisms for both child clusters. The test then updates the root cluster
+// resource requested by the cds LB policy to a leaf cluster of type EDS and
+// verifies the load balancing configuration pushed to the cluster_resolver LB
+// policy contains a single discovery mechanism.
 func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
@@ -316,9 +320,10 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 }
 
 // Tests the case where a requested cluster resource switches between being a
-// leaf and an aggregate cluster. In each of these cases, the test verifies that
-// the appropriate load balancing configuration is pushed to the
-// cluster_resolver LB policy.
+// leaf and an aggregate cluster pointing to an EDS and LogicalDNS child
+// cluster. In each of these cases, the test verifies that the load balancing
+// configuration pushed to the cluster_resolver LB policy contains the expected
+// discovery mechanisms.
 func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
@@ -408,8 +413,8 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 // Tests the scenario where an aggregate cluster exceeds the maximum depth,
 // which is 16. Verfies that the channel moves to TRANSIENT_FAILURE, and the
 // error is propagated to RPC callers. The test then modifies the graph to no
-// longer exceed maximum depth, and verifies that an RPC can be made
-// successfully.
+// longer exceed maximum depth, but be at the maximum allowed depth, and
+// verifies that an RPC can be made successfully.
 func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
 	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
 
@@ -462,7 +467,8 @@ func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
 	server := stubserver.StartTestService(t, nil)
 	t.Cleanup(server.Stop)
 
-	// Update the aggregate cluster resource to no longer exceed max depth.
+	// Update the aggregate cluster resource to no longer exceed max depth, and
+	// be at the maximum depth allowed.
 	resources = e2e.UpdateOptions{
 		NodeID: nodeID,
 		Clusters: []*v3clusterpb.Cluster{
@@ -543,7 +549,9 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 
 // Tests the case where the aggregate cluster graph contains duplicates (A->[B,
 // C]; B->[C, D]). Verifies that the load balancing configuration pushed to the
-// cluster_resolver LB policy does not contain duplicates.
+// cluster_resolver LB policy does not contain duplicates, and that the
+// discovery mechanism corresponding to cluster C is of higher priority than the
+// discovery mechanism for cluser D.
 func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
