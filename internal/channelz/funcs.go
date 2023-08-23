@@ -66,13 +66,14 @@ func IsOn() bool {
 	return atomic.LoadInt32(&curState) == 1
 }
 
-// SetMaxTraceEntry sets maximum number of trace entry per entity (i.e. channel/subchannel).
-// Setting it to 0 will disable channel tracing.
+// SetMaxTraceEntry sets maximum number of trace entry per entity
+// (i.e. channel/subchannel).  Setting it to 0 will disable channel tracing.
 func SetMaxTraceEntry(i int32) {
 	atomic.StoreInt32(&maxTraceEntry, i)
 }
 
-// ResetMaxTraceEntryToDefault resets the maximum number of trace entry per entity to default.
+// ResetMaxTraceEntryToDefault resets the maximum number of trace entry per
+// entity to default.
 func ResetMaxTraceEntryToDefault() {
 	atomic.StoreInt32(&maxTraceEntry, defaultMaxTraceEntry)
 }
@@ -85,9 +86,10 @@ func getMaxTraceEntry() int {
 // GetTopChannels returns a slice of top channel's ChannelMetric, along with a
 // boolean indicating whether there's more top channels to be queried for.
 //
-// The arg id specifies that only top channel with id at or above it will be included
-// in the result. The returned slice is up to a length of the arg maxResults or
-// EntryPerPage if maxResults is zero, and is sorted in ascending id order.
+// The arg id specifies that only top channel with id at or above it will be
+// included in the result. The returned slice is up to a length of the arg
+// maxResults or EntryPerPage if maxResults is zero, and is sorted in ascending
+// id order.
 func GetTopChannels(id int64, maxResults int64) ([]*ChannelMetric, bool) {
 	return db.GetTopChannels(id, maxResults)
 }

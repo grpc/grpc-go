@@ -29,11 +29,6 @@ type Identifier struct {
 	pid *Identifier
 }
 
-// Type returns the entity type corresponding to id.
-func (id *Identifier) Type() RefChannelType {
-	return id.typ
-}
-
 // Int returns the integer identifier corresponding to id.
 func (id *Identifier) Int() int64 {
 	return id.id
