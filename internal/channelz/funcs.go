@@ -43,7 +43,7 @@ var (
 	// outside this package except by tests.
 	IDGen IDGenerator
 
-	db dbWrapper
+	db *channelMap = newChannelMap()
 	// EntryPerPage defines the number of channelz entries to be shown on a web page.
 	EntryPerPage  = int64(50)
 	curState      int32
@@ -52,11 +52,7 @@ var (
 
 // TurnOn turns on channelz data collection.
 func TurnOn() {
-	if !IsOn() {
-		db.set(newChannelMap())
-		IDGen.Reset()
-		atomic.StoreInt32(&curState, 1)
-	}
+	atomic.StoreInt32(&curState, 1)
 }
 
 func init() {
@@ -86,25 +82,6 @@ func getMaxTraceEntry() int {
 	return int(i)
 }
 
-// dbWarpper wraps around a reference to internal channelz data storage, and
-// provide synchronized functionality to set and get the reference.
-type dbWrapper struct {
-	mu sync.RWMutex
-	DB *channelMap
-}
-
-func (d *dbWrapper) set(db *channelMap) {
-	d.mu.Lock()
-	d.DB = db
-	d.mu.Unlock()
-}
-
-func (d *dbWrapper) get() *channelMap {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	return d.DB
-}
-
 // GetTopChannels returns a slice of top channel's ChannelMetric, along with a
 // boolean indicating whether there's more top channels to be queried for.
 //
@@ -112,7 +89,7 @@ func (d *dbWrapper) get() *channelMap {
 // in the result. The returned slice is up to a length of the arg maxResults or
 // EntryPerPage if maxResults is zero, and is sorted in ascending id order.
 func GetTopChannels(id int64, maxResults int64) ([]*ChannelMetric, bool) {
-	return db.get().GetTopChannels(id, maxResults)
+	return db.GetTopChannels(id, maxResults)
 }
 
 // GetServers returns a slice of server's ServerMetric, along with a
@@ -122,7 +99,7 @@ func GetTopChannels(id int64, maxResults int64) ([]*ChannelMetric, bool) {
 // in the result. The returned slice is up to a length of the arg maxResults or
 // EntryPerPage if maxResults is zero, and is sorted in ascending id order.
 func GetServers(id int64, maxResults int64) ([]*ServerMetric, bool) {
-	return db.get().GetServers(id, maxResults)
+	return db.GetServers(id, maxResults)
 }
 
 // GetServerSockets returns a slice of server's (identified by id) normal socket's
@@ -133,27 +110,27 @@ func GetServers(id int64, maxResults int64) ([]*ServerMetric, bool) {
 // included in the result. The returned slice is up to a length of the arg maxResults
 // or EntryPerPage if maxResults is zero, and is sorted in ascending id order.
 func GetServerSockets(id int64, startID int64, maxResults int64) ([]*SocketMetric, bool) {
-	return db.get().GetServerSockets(id, startID, maxResults)
+	return db.GetServerSockets(id, startID, maxResults)
 }
 
 // GetChannel returns the ChannelMetric for the channel (identified by id).
 func GetChannel(id int64) *ChannelMetric {
-	return db.get().GetChannel(id)
+	return db.GetChannel(id)
 }
 
 // GetSubChannel returns the SubChannelMetric for the subchannel (identified by id).
 func GetSubChannel(id int64) *SubChannelMetric {
-	return db.get().GetSubChannel(id)
+	return db.GetSubChannel(id)
 }
 
 // GetSocket returns the SocketInternalMetric for the socket (identified by id).
 func GetSocket(id int64) *SocketMetric {
-	return db.get().GetSocket(id)
+	return db.GetSocket(id)
 }
 
 // GetServer returns the ServerMetric for the server (identified by id).
 func GetServer(id int64) *ServerMetric {
-	return db.get().GetServer(id)
+	return db.GetServer(id)
 }
 
 // RegisterChannel registers the given channel c in the channelz database with
@@ -185,7 +162,7 @@ func RegisterChannel(c Channel, pid *Identifier, ref string) *Identifier {
 		pid:         parent,
 		trace:       &channelTrace{createdTime: time.Now(), events: make([]*TraceEvent, 0, getMaxTraceEntry())},
 	}
-	db.get().addChannel(id, cn, isTopChannel, parent)
+	db.addChannel(id, cn, isTopChannel, parent)
 	return newIdentifer(RefChannel, id, pid)
 }
 
@@ -213,7 +190,7 @@ func RegisterSubChannel(c Channel, pid *Identifier, ref string) (*Identifier, er
 		pid:     pid.Int(),
 		trace:   &channelTrace{createdTime: time.Now(), events: make([]*TraceEvent, 0, getMaxTraceEntry())},
 	}
-	db.get().addSubChannel(id, sc, pid.Int())
+	db.addSubChannel(id, sc, pid.Int())
 	return newIdentifer(RefSubChannel, id, pid), nil
 }
 
@@ -234,7 +211,7 @@ func RegisterServer(s Server, ref string) *Identifier {
 		listenSockets: make(map[int64]string),
 		id:            id,
 	}
-	db.get().addServer(id, svr)
+	db.addServer(id, svr)
 	return newIdentifer(RefServer, id, nil)
 }
 
@@ -254,7 +231,7 @@ func RegisterListenSocket(s Socket, pid *Identifier, ref string) (*Identifier, e
 	}
 
 	ls := &listenSocket{refName: ref, s: s, id: id, pid: pid.Int()}
-	db.get().addListenSocket(id, ls, pid.Int())
+	db.addListenSocket(id, ls, pid.Int())
 	return newIdentifer(RefListenSocket, id, pid), nil
 }
 
@@ -274,7 +251,7 @@ func RegisterNormalSocket(s Socket, pid *Identifier, ref string) (*Identifier, e
 	}
 
 	ns := &normalSocket{refName: ref, s: s, id: id, pid: pid.Int()}
-	db.get().addNormalSocket(id, ns, pid.Int())
+	db.addNormalSocket(id, ns, pid.Int())
 	return newIdentifer(RefNormalSocket, id, pid), nil
 }
 
@@ -286,7 +263,7 @@ func RemoveEntry(id *Identifier) {
 	if !IsOn() {
 		return
 	}
-	db.get().removeEntry(id.Int())
+	db.removeEntry(id.Int())
 }
 
 // TraceEventDesc is what the caller of AddTraceEvent should provide to describe
@@ -319,7 +296,7 @@ func AddTraceEvent(l grpclog.DepthLoggerV2, id *Identifier, depth int, desc *Tra
 		return
 	}
 	if IsOn() {
-		db.get().traceEvent(id.Int(), desc)
+		db.traceEvent(id.Int(), desc)
 	}
 }
 
