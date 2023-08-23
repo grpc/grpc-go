@@ -184,7 +184,7 @@ func (m *manager) handleIdleTimeout() {
 //
 // Return value indicates whether or not the channel moved to idle mode.
 //
-// Holds idleMu which ensures mutual exclusion with ExitIdleMode.
+// Holds idleMu which ensures mutual exclusion with exitIdleMode.
 func (m *manager) tryEnterIdleMode() bool {
 	m.idleMu.Lock()
 	defer m.idleMu.Unlock()
@@ -227,7 +227,7 @@ func (m *manager) OnCallBegin() error {
 
 	// Channel is either in idle mode or is in the process of moving to idle
 	// mode. Attempt to exit idle mode to allow this RPC.
-	if err := m.ExitIdleMode(); err != nil {
+	if err := m.exitIdleMode(); err != nil {
 		// Undo the increment to calls count, and return an error causing the
 		// RPC to fail.
 		atomic.AddInt32(&m.activeCallsCount, -1)
@@ -238,10 +238,10 @@ func (m *manager) OnCallBegin() error {
 	return nil
 }
 
-// ExitIdleMode instructs the channel to exit idle mode.
+// exitIdleMode instructs the channel to exit idle mode.
 //
 // Holds idleMu which ensures mutual exclusion with tryEnterIdleMode.
-func (m *manager) ExitIdleMode() error {
+func (m *manager) exitIdleMode() error {
 	m.idleMu.Lock()
 	defer m.idleMu.Unlock()
 

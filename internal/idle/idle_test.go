@@ -45,26 +45,26 @@ func Test(t *testing.T) {
 }
 
 type testEnforcer struct {
-	ExitIdleCh  chan struct{}
-	EnterIdleCh chan struct{}
+	exitIdleCh  chan struct{}
+	enterIdleCh chan struct{}
 }
 
 func (ti *testEnforcer) ExitIdleMode() error {
-	ti.ExitIdleCh <- struct{}{}
+	ti.exitIdleCh <- struct{}{}
 	return nil
 
 }
 
 func (ti *testEnforcer) EnterIdleMode() error {
-	ti.EnterIdleCh <- struct{}{}
+	ti.enterIdleCh <- struct{}{}
 	return nil
 
 }
 
 func newTestEnforcer() *testEnforcer {
 	return &testEnforcer{
-		ExitIdleCh:  make(chan struct{}, 1),
-		EnterIdleCh: make(chan struct{}, 1),
+		exitIdleCh:  make(chan struct{}, 1),
+		enterIdleCh: make(chan struct{}, 1),
 	}
 }
 
@@ -113,7 +113,7 @@ func (s) TestManager_Disabled(t *testing.T) {
 	// ExitIdleMode() on the enforcer, unless the idleness manager is disabled.
 	mgr.OnCallBegin()
 	select {
-	case <-enforcer.ExitIdleCh:
+	case <-enforcer.exitIdleCh:
 		t.Fatalf("ExitIdleMode() called on enforcer when manager is disabled")
 	case <-time.After(defaultTestShortTimeout):
 	}
@@ -149,7 +149,7 @@ func (s) TestManager_Enabled_TimerFires(t *testing.T) {
 
 	// Ensure that the channel moves to idle mode eventually.
 	select {
-	case <-enforcer.EnterIdleCh:
+	case <-enforcer.enterIdleCh:
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Timeout waiting for channel to move to idle")
 	}
@@ -185,7 +185,7 @@ func (s) TestManager_Enabled_OngoingCall(t *testing.T) {
 	// The invocation of the timer callback should not put the channel in idle
 	// mode since we had an ongoing RPC.
 	select {
-	case <-enforcer.EnterIdleCh:
+	case <-enforcer.enterIdleCh:
 		t.Fatalf("EnterIdleMode() called on enforcer when active RPC exists")
 	case <-time.After(defaultTestShortTimeout):
 	}
@@ -193,7 +193,7 @@ func (s) TestManager_Enabled_OngoingCall(t *testing.T) {
 	// Since we terminated the ongoing RPC and we have no other active RPCs, the
 	// channel must move to idle eventually.
 	select {
-	case <-enforcer.EnterIdleCh:
+	case <-enforcer.enterIdleCh:
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Timeout waiting for channel to move to idle")
 	}
@@ -236,7 +236,7 @@ func (s) TestManager_Enabled_ActiveSinceLastCheck(t *testing.T) {
 		t.Fatal("Timeout waiting for idle timer callback to fire")
 	}
 	select {
-	case <-enforcer.EnterIdleCh:
+	case <-enforcer.enterIdleCh:
 		t.Fatalf("EnterIdleMode() called on enforcer when one RPC completed in the last period")
 	case <-time.After(defaultTestShortTimeout):
 	}
@@ -244,7 +244,7 @@ func (s) TestManager_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	// Since the unrary RPC terminated and we have no other active RPCs, the
 	// channel must move to idle eventually.
 	select {
-	case <-enforcer.EnterIdleCh:
+	case <-enforcer.enterIdleCh:
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Timeout waiting for channel to move to idle")
 	}
@@ -262,7 +262,7 @@ func (s) TestManager_Enabled_ExitIdleOnRPC(t *testing.T) {
 
 	// Ensure that the channel moves to idle since there are no RPCs.
 	select {
-	case <-enforcer.EnterIdleCh:
+	case <-enforcer.enterIdleCh:
 	case <-time.After(2 * defaultTestIdleTimeout):
 		t.Fatal("Timeout waiting for channel to move to idle mode")
 	}
@@ -279,7 +279,7 @@ func (s) TestManager_Enabled_ExitIdleOnRPC(t *testing.T) {
 
 	// Ensure that the channel moves out of idle as a result of the above RPC.
 	select {
-	case <-enforcer.ExitIdleCh:
+	case <-enforcer.exitIdleCh:
 	case <-time.After(2 * defaultTestIdleTimeout):
 		t.Fatal("Timeout waiting for channel to move out of idle mode")
 	}
@@ -288,7 +288,7 @@ func (s) TestManager_Enabled_ExitIdleOnRPC(t *testing.T) {
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
 	select {
-	case <-enforcer.ExitIdleCh:
+	case <-enforcer.exitIdleCh:
 		t.Fatal("More than one call to exit idle mode on the ClientConn; only one expected")
 	case <-sCtx.Done():
 	}
