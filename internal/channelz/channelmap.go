@@ -271,8 +271,12 @@ func (c *channelMap) GetTopChannels(id int64, maxResults int64) ([]*ChannelMetri
 		if cn, ok := c.channels[v]; ok {
 			cns = append(cns, cn)
 			t = append(t, &ChannelMetric{
+				ID:          cn.id,
+				RefName:     cn.refName,
+				ChannelData: cn.c.ChannelzMetric(),
 				NestedChans: copyMap(cn.nestedChans),
 				SubChans:    copyMap(cn.subChans),
+				Trace:       cn.trace.dumpData(),
 			})
 			count++
 		}
@@ -284,13 +288,6 @@ func (c *channelMap) GetTopChannels(id int64, maxResults int64) ([]*ChannelMetri
 	c.mu.RUnlock()
 	if count == 0 {
 		end = true
-	}
-
-	for i, cn := range cns {
-		t[i].ChannelData = cn.c.ChannelzMetric()
-		t[i].ID = cn.id
-		t[i].RefName = cn.refName
-		t[i].Trace = cn.trace.dumpData()
 	}
 	return t, end
 }

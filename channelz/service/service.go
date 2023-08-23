@@ -134,11 +134,6 @@ func channelMetricToProto(cm *channelz.ChannelMetric) *channelzpb.Channel {
 	}
 	c.SubchannelRef = subChans
 
-	sockets := make([]*channelzpb.SocketRef, 0, len(cm.Sockets))
-	for id, ref := range cm.Sockets {
-		sockets = append(sockets, &channelzpb.SocketRef{SocketId: id, Name: ref})
-	}
-	c.SocketRef = sockets
 	c.Data.Trace = channelTraceToProto(cm.Trace)
 	return c
 }
@@ -157,17 +152,6 @@ func subChannelMetricToProto(cm *channelz.SubChannelMetric) *channelzpb.Subchann
 	if ts, err := ptypes.TimestampProto(cm.ChannelData.LastCallStartedTimestamp); err == nil {
 		sc.Data.LastCallStartedTimestamp = ts
 	}
-	nestedChans := make([]*channelzpb.ChannelRef, 0, len(cm.NestedChans))
-	for id, ref := range cm.NestedChans {
-		nestedChans = append(nestedChans, &channelzpb.ChannelRef{ChannelId: id, Name: ref})
-	}
-	sc.ChannelRef = nestedChans
-
-	subChans := make([]*channelzpb.SubchannelRef, 0, len(cm.SubChans))
-	for id, ref := range cm.SubChans {
-		subChans = append(subChans, &channelzpb.SubchannelRef{SubchannelId: id, Name: ref})
-	}
-	sc.SubchannelRef = subChans
 
 	sockets := make([]*channelzpb.SocketRef, 0, len(cm.Sockets))
 	for id, ref := range cm.Sockets {

@@ -33,16 +33,6 @@ type SubChannelMetric struct {
 	// ChannelData contains subchannel internal metric reported by the subchannel
 	// through ChannelzMetric().
 	ChannelData *ChannelInternalMetric
-	// NestedChans tracks the nested channel type children of this subchannel in the format of
-	// a map from nested channel channelz id to corresponding reference string.
-	// Note current grpc implementation doesn't allow subchannel to have nested channels
-	// as children, therefore, this field is unused.
-	NestedChans map[int64]string
-	// SubChans tracks the subchannel type children of this subchannel in the format of a
-	// map from subchannel channelz id to corresponding reference string.
-	// Note current grpc implementation doesn't allow subchannel to have subchannels
-	// as children, therefore, this field is unused.
-	SubChans map[int64]string
 	// Sockets tracks the socket type children of this subchannel in the format of a map
 	// from socket channelz id to corresponding reference string.
 	Sockets map[int64]string

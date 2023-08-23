@@ -42,11 +42,6 @@ type ChannelMetric struct {
 	// SubChans tracks the subchannel type children of this channel in the format of a
 	// map from subchannel channelz id to corresponding reference string.
 	SubChans map[int64]string
-	// Sockets tracks the socket type children of this channel in the format of a map
-	// from socket channelz id to corresponding reference string.
-	// Note current grpc implementation doesn't allow channel having sockets directly,
-	// therefore, this is field is unused.
-	Sockets map[int64]string
 	// Trace contains the most recent traced events.
 	Trace *ChannelTrace
 }
