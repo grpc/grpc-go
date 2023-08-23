@@ -110,20 +110,14 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	// which will lead to the channel eventually moving to IDLE. The ring_hash
 	// LB policy is not expected to reconnect by itself at this point.
 	lis.Stop()
-	for state := cc.GetState(); state != connectivity.Idle && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
-	}
-	if err := ctx.Err(); err != nil {
-		t.Fatalf("Timeout waiting for channel to reach %q after server shutdown: %v", connectivity.Idle, err)
-	}
+
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// Make an RPC to get the ring_hash LB policy to reconnect and thereby move
 	// to TRANSIENT_FAILURE upon connection failure.
 	client.EmptyCall(ctx, &testpb.Empty{})
-	for state := cc.GetState(); state != connectivity.TransientFailure && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
-	}
-	if err := ctx.Err(); err != nil {
-		t.Fatalf("Timeout waiting for channel to reach %q after server shutdown: %v", connectivity.TransientFailure, err)
-	}
+
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// An RPC at this point is expected to fail.
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
