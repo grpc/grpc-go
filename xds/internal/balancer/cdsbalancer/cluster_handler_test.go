@@ -463,11 +463,7 @@ func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("Timed out waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
-		}
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	const wantErr = "aggregate cluster graph exceeds max depth"
 	client := testgrpc.NewTestServiceClient(cc)
