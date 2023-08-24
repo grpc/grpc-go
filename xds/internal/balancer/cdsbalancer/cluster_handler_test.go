@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -170,18 +171,33 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
 
 	// Configure the management server with the aggregate cluster resource
-	// pointing to two child clusters.
+	// pointing to two child clusters. But don't include resource corresponding
+	// to the LogicalDNS cluster yet.
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
 			e2e.DefaultCluster(edsClusterName, serviceName, e2e.SecurityLevelNone),
-			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
 		},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that no configuration is pushed to the child policy yet, because
+	// not all clusters making up the aggregate cluster have been resolved yet.
+	select {
+	case cfg := <-lbCfgCh:
+		t.Fatalf("Child policy received configuration when not expected to: %s", pretty.ToJSON(cfg))
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Now configure the LogicalDNS cluster in the management server. This
+	// should result in configuration being pushed down to the child policy.
+	resources.Clusters = append(resources.Clusters, makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort))
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -510,7 +526,9 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
 
 	// Configure the management server with an aggregate cluster resource having
-	// a diamond dependency pattern.
+	// a diamond dependency pattern. Don't configure the resource for cluster C
+	// yet. This will help us verify that no configuration is pushed to the
+	// child policy until the whole cluster graph is resolved.
 	const (
 		clusterNameA = clusterName // cluster name in cds LB policy config
 		clusterNameB = clusterName + "-B"
@@ -522,13 +540,28 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterNameA, []string{clusterNameB, clusterNameC}),
 			makeAggregateClusterResource(clusterNameB, []string{clusterNameD}),
-			makeAggregateClusterResource(clusterNameC, []string{clusterNameD}),
 			e2e.DefaultCluster(clusterNameD, serviceName, e2e.SecurityLevelNone),
 		},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that no configuration is pushed to the child policy yet, because
+	// not all clusters making up the aggregate cluster have been resolved yet.
+	select {
+	case cfg := <-lbCfgCh:
+		t.Fatalf("Child policy received configuration when not expected to: %s", pretty.ToJSON(cfg))
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Now configure the resource for cluster C in the management server,
+	// thereby completing the cluster graph. This should result in configuration
+	// being pushed down to the child policy.
+	resources.Clusters = append(resources.Clusters, makeAggregateClusterResource(clusterNameC, []string{clusterNameD}))
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -557,7 +590,9 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
 
 	// Configure the management server with an aggregate cluster resource that
-	// has duplicates in the graph.
+	// has duplicates in the graph. Don't configure the resource for cluster C
+	// yet. This will help us verify that no configuration is pushed to the
+	// child policy until the whole cluster graph is resolved.
 	const (
 		clusterNameA = clusterName // cluster name in cds LB policy config
 		clusterNameB = clusterName + "-B"
@@ -569,13 +604,28 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterNameA, []string{clusterNameB, clusterNameC}),
 			makeAggregateClusterResource(clusterNameB, []string{clusterNameC, clusterNameD}),
-			e2e.DefaultCluster(clusterNameC, serviceName, e2e.SecurityLevelNone),
 			e2e.DefaultCluster(clusterNameD, serviceName, e2e.SecurityLevelNone),
 		},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that no configuration is pushed to the child policy yet, because
+	// not all clusters making up the aggregate cluster have been resolved yet.
+	select {
+	case cfg := <-lbCfgCh:
+		t.Fatalf("Child policy received configuration when not expected to: %s", pretty.ToJSON(cfg))
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Now configure the resource for cluster C in the management server,
+	// thereby completing the cluster graph. This should result in configuration
+	// being pushed down to the child policy.
+	resources.Clusters = append(resources.Clusters, e2e.DefaultCluster(clusterNameC, serviceName, e2e.SecurityLevelNone))
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -631,7 +681,7 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 
 	select {
 	case cfg := <-lbCfgCh:
-		t.Fatalf("Unexpected configuration pushed to child policy: %v", cfg)
+		t.Fatalf("Child policy received configuration when not expected to: %s", pretty.ToJSON(cfg))
 	case <-time.After(defaultTestShortTimeout):
 	}
 
