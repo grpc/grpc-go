@@ -785,7 +785,7 @@ func (mockClusterSpecifierPlugin) TypeURLs() []string {
 }
 
 func (mockClusterSpecifierPlugin) ParseClusterSpecifierConfig(proto.Message) (clusterspecifier.BalancerConfig, error) {
-	return []map[string]interface{}{}, nil
+	return []map[string]any{}, nil
 }
 
 type errorClusterSpecifierPlugin struct{}

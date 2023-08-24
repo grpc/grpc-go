@@ -162,6 +162,19 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 			wantErr:    true,
 		},
 		{
+			name: "least-request-choice-count-less-than-two",
+			cluster: &v3clusterpb.Cluster{
+				LbPolicy: v3clusterpb.Cluster_RING_HASH,
+				LbConfig: &v3clusterpb.Cluster_LeastRequestLbConfig_{
+					LeastRequestLbConfig: &v3clusterpb.Cluster_LeastRequestLbConfig{
+						ChoiceCount: wrapperspb.UInt32(1),
+					},
+				},
+			},
+			wantUpdate: emptyUpdate,
+			wantErr:    true,
+		},
+		{
 			name: "ring-hash-max-bound-greater-than-upper-bound",
 			cluster: &v3clusterpb.Cluster{
 				LbPolicy: v3clusterpb.Cluster_RING_HASH,
@@ -205,7 +218,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 			wantErr:    true,
 		},
 		{
-			name: "least-request-unsupported-in-converter",
+			name: "least-request-unsupported-in-converter-since-env-var-unset",
 			cluster: &v3clusterpb.Cluster{
 				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -1545,11 +1558,11 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 			}
 			// got and want must be unmarshalled since JSON strings shouldn't
 			// generally be directly compared.
-			var got map[string]interface{}
+			var got map[string]any
 			if err := json.Unmarshal(update.OutlierDetection, &got); err != nil {
 				t.Fatalf("Error unmarshalling update.OutlierDetection (%q): %v", update.OutlierDetection, err)
 			}
-			var want map[string]interface{}
+			var want map[string]any
 			if err := json.Unmarshal(json.RawMessage(test.wantODCfg), &want); err != nil {
 				t.Fatalf("Error unmarshalling wantODCfg (%q): %v", test.wantODCfg, err)
 			}

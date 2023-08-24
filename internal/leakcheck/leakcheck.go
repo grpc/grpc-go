@@ -97,7 +97,7 @@ func interestingGoroutines() (gs []string) {
 // Errorfer is the interface that wraps the Errorf method. It's a subset of
 // testing.TB to make it easy to use Check.
 type Errorfer interface {
-	Errorf(format string, args ...interface{})
+	Errorf(format string, args ...any)
 }
 
 func check(efer Errorfer, timeout time.Duration) {

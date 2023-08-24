@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
 	"google.golang.org/grpc/internal/testutils"
@@ -159,7 +158,6 @@ func init() {
 	wtbBuilder = balancer.Get(Name)
 	wtbParser = wtbBuilder.(balancer.ConfigParser)
 
-	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond
 	NewRandomWRR = testutils.NewTestWRR
 }
 
@@ -199,15 +197,15 @@ func (s) TestWeightedTarget(t *testing.T) {
 
 	// Send subconn state change.
 	sc1 := <-cc.NewSubConnCh
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p := <-cc.NewPickerCh
 
 	// Test pick with one backend.
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+		if gotSCSt.SubConn != sc1 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
@@ -241,23 +239,23 @@ func (s) TestWeightedTarget(t *testing.T) {
 	// attribute set to the config that was passed to it.
 	verifyAddressInNewSubConn(t, cc, setConfigKey(addr2, "cluster_2"))
 
-	// The subconn for cluster_1 should be removed.
-	scRemoved := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scRemoved, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scRemoved)
+	// The subconn for cluster_1 should be shut down.
+	scShutdown := <-cc.ShutdownSubConnCh
+	if scShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scShutdown)
 	}
-	wtb.UpdateSubConnState(scRemoved, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
+	scShutdown.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 
 	sc2 := <-cc.NewSubConnCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p = <-cc.NewPickerCh
 
 	// Test pick with one backend.
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
+		if gotSCSt.SubConn != sc2 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
 		}
 	}
@@ -286,24 +284,24 @@ func (s) TestWeightedTarget(t *testing.T) {
 	}
 	verifyAddressInNewSubConn(t, cc, addr3)
 
-	// The subconn from the test_config_balancer should be removed.
-	scRemoved = <-cc.RemoveSubConnCh
-	if !cmp.Equal(scRemoved, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scRemoved)
+	// The subconn from the test_config_balancer should be shut down.
+	scShutdown = <-cc.ShutdownSubConnCh
+	if scShutdown != sc2 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scShutdown)
 	}
-	wtb.UpdateSubConnState(scRemoved, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
+	scShutdown.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 
 	// Send subconn state change.
 	sc3 := <-cc.NewSubConnCh
-	wtb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p = <-cc.NewPickerCh
 
 	// Test pick with one backend.
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc3, cmp.AllowUnexported(testutils.TestSubConn{})) {
+		if gotSCSt.SubConn != sc3 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc3)
 		}
 	}
@@ -361,15 +359,15 @@ func (s) TestWeightedTarget_OneSubBalancer_AddRemoveBackend(t *testing.T) {
 
 	// Expect one SubConn, and move it to READY.
 	sc1 := <-cc.NewSubConnCh
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p := <-cc.NewPickerCh
 
 	// Test pick with one backend.
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+		if gotSCSt.SubConn != sc1 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
@@ -390,9 +388,9 @@ func (s) TestWeightedTarget_OneSubBalancer_AddRemoveBackend(t *testing.T) {
 	// Expect one new SubConn, and move it to READY.
 	sc2 := <-cc.NewSubConnCh
 	// Update the SubConn to become READY.
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p = <-cc.NewPickerCh
 
 	// Test round robin pick.
@@ -409,18 +407,18 @@ func (s) TestWeightedTarget_OneSubBalancer_AddRemoveBackend(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// Expect one SubConn to be removed.
-	scRemoved := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scRemoved, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scRemoved)
+	// Expect one SubConn to be shut down.
+	scShutdown := <-cc.ShutdownSubConnCh
+	if scShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scShutdown)
 	}
-	wtb.UpdateSubConnState(scRemoved, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
+	scShutdown.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 	p = <-cc.NewPickerCh
 
 	// Test pick with only the second SubConn.
 	for i := 0; i < 5; i++ {
 		gotSC, _ := p.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSC.SubConn, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
+		if gotSC.SubConn != sc2 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSC, sc2)
 		}
 	}
@@ -471,17 +469,17 @@ func (s) TestWeightedTarget_TwoSubBalancers_OneBackend(t *testing.T) {
 	})
 
 	// We expect a single subConn on each subBalancer.
-	sc1 := scs["cluster_1"][0].sc
-	sc2 := scs["cluster_2"][0].sc
+	sc1 := scs["cluster_1"][0].sc.(*testutils.TestSubConn)
+	sc2 := scs["cluster_2"][0].sc.(*testutils.TestSubConn)
 
 	// Send state changes for both SubConns, and wait for the picker.
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p := <-cc.NewPickerCh
 
 	// Test roundrobin on the last picker.
@@ -541,27 +539,27 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	})
 
 	// We expect two subConns on each subBalancer.
-	sc1 := scs["cluster_1"][0].sc
-	sc2 := scs["cluster_1"][1].sc
-	sc3 := scs["cluster_2"][0].sc
-	sc4 := scs["cluster_2"][1].sc
+	sc1 := scs["cluster_1"][0].sc.(*testutils.TestSubConn)
+	sc2 := scs["cluster_1"][1].sc.(*testutils.TestSubConn)
+	sc3 := scs["cluster_2"][0].sc.(*testutils.TestSubConn)
+	sc4 := scs["cluster_2"][1].sc.(*testutils.TestSubConn)
 
 	// Send state changes for all SubConns, and wait for the picker.
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc4.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc4.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p := <-cc.NewPickerCh
 
 	// Test roundrobin on the last picker. RPCs should be sent equally to all
@@ -572,14 +570,14 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	}
 
 	// Turn sc2's connection down, should be RR between balancers.
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	p = <-cc.NewPickerCh
 	want = []balancer.SubConn{sc1, sc1, sc3, sc4}
 	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
-	// Remove subConn corresponding to addr3.
+	// Shut down subConn corresponding to addr3.
 	if err := wtb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(addr1, []string{"cluster_1"}),
@@ -590,11 +588,11 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
-	scRemoved := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scRemoved, sc3, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc3, scRemoved)
+	scShutdown := <-cc.ShutdownSubConnCh
+	if scShutdown != sc3 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc3, scShutdown)
 	}
-	wtb.UpdateSubConnState(scRemoved, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
+	scShutdown.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 	p = <-cc.NewPickerCh
 	want = []balancer.SubConn{sc1, sc4}
 	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
@@ -603,7 +601,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 
 	// Turn sc1's connection down.
 	wantSubConnErr := errors.New("subConn connection error")
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{
+	sc1.UpdateState(balancer.SubConnState{
 		ConnectivityState: connectivity.TransientFailure,
 		ConnectionError:   wantSubConnErr,
 	})
@@ -614,7 +612,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	}
 
 	// Turn last connection to connecting.
-	wtb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc4.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	p = <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
 		if _, err := p.Pick(balancer.PickInfo{}); err != balancer.ErrNoSubConnAvailable {
@@ -623,7 +621,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	}
 
 	// Turn all connections down.
-	wtb.UpdateSubConnState(sc4, balancer.SubConnState{
+	sc4.UpdateState(balancer.SubConnState{
 		ConnectivityState: connectivity.TransientFailure,
 		ConnectionError:   wantSubConnErr,
 	})
@@ -685,27 +683,27 @@ func (s) TestWeightedTarget_TwoSubBalancers_DifferentWeight_MoreBackends(t *test
 	})
 
 	// We expect two subConns on each subBalancer.
-	sc1 := scs["cluster_1"][0].sc
-	sc2 := scs["cluster_1"][1].sc
-	sc3 := scs["cluster_2"][0].sc
-	sc4 := scs["cluster_2"][1].sc
+	sc1 := scs["cluster_1"][0].sc.(*testutils.TestSubConn)
+	sc2 := scs["cluster_1"][1].sc.(*testutils.TestSubConn)
+	sc3 := scs["cluster_2"][0].sc.(*testutils.TestSubConn)
+	sc4 := scs["cluster_2"][1].sc.(*testutils.TestSubConn)
 
 	// Send state changes for all SubConns, and wait for the picker.
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc4.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc4.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p := <-cc.NewPickerCh
 
 	// Test roundrobin on the last picker. Twice the number of RPCs should be
@@ -769,22 +767,22 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 	})
 
 	// We expect one subConn on each subBalancer.
-	sc1 := scs["cluster_1"][0].sc
-	sc2 := scs["cluster_2"][0].sc
-	sc3 := scs["cluster_3"][0].sc
+	sc1 := scs["cluster_1"][0].sc.(*testutils.TestSubConn)
+	sc2 := scs["cluster_2"][0].sc.(*testutils.TestSubConn)
+	sc3 := scs["cluster_3"][0].sc.(*testutils.TestSubConn)
 
 	// Send state changes for all SubConns, and wait for the picker.
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p := <-cc.NewPickerCh
 
 	want := []balancer.SubConn{sc1, sc2, sc3}
@@ -823,9 +821,9 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 	// picker which ensures that the removed subBalancer is not picked for RPCs.
 	p = <-cc.NewPickerCh
 
-	scRemoved := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scRemoved, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scRemoved)
+	scShutdown := <-cc.ShutdownSubConnCh
+	if scShutdown != sc2 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc2, scShutdown)
 	}
 	want = []balancer.SubConn{sc1, sc3}
 	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
@@ -834,7 +832,7 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 
 	// Move balancer 3 into transient failure.
 	wantSubConnErr := errors.New("subConn connection error")
-	wtb.UpdateSubConnState(sc3, balancer.SubConnState{
+	sc3.UpdateState(balancer.SubConnState{
 		ConnectivityState: connectivity.TransientFailure,
 		ConnectionError:   wantSubConnErr,
 	})
@@ -865,9 +863,9 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 	// Removing a subBalancer causes the weighted target LB policy to push a new
 	// picker which ensures that the removed subBalancer is not picked for RPCs.
 
-	scRemoved = <-cc.RemoveSubConnCh
-	if !cmp.Equal(scRemoved, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scRemoved)
+	scShutdown = <-cc.ShutdownSubConnCh
+	if scShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scShutdown)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -927,27 +925,27 @@ func (s) TestWeightedTarget_TwoSubBalancers_ChangeWeight_MoreBackends(t *testing
 	})
 
 	// We expect two subConns on each subBalancer.
-	sc1 := scs["cluster_1"][0].sc
-	sc2 := scs["cluster_1"][1].sc
-	sc3 := scs["cluster_2"][0].sc
-	sc4 := scs["cluster_2"][1].sc
+	sc1 := scs["cluster_1"][0].sc.(*testutils.TestSubConn)
+	sc2 := scs["cluster_1"][1].sc.(*testutils.TestSubConn)
+	sc3 := scs["cluster_2"][0].sc.(*testutils.TestSubConn)
+	sc4 := scs["cluster_2"][1].sc.(*testutils.TestSubConn)
 
 	// Send state changes for all SubConns, and wait for the picker.
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc4.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc4.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p := <-cc.NewPickerCh
 
 	// Test roundrobin on the last picker. Twice the number of RPCs should be
@@ -1041,12 +1039,12 @@ func (s) TestWeightedTarget_InitOneSubBalancerTransientFailure(t *testing.T) {
 	})
 
 	// We expect a single subConn on each subBalancer.
-	sc1 := scs["cluster_1"][0].sc
+	sc1 := scs["cluster_1"][0].sc.(*testutils.TestSubConn)
 	_ = scs["cluster_2"][0].sc
 
 	// Set one subconn to TransientFailure, this will trigger one sub-balancer
 	// to report transient failure.
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
 	p := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
@@ -1103,18 +1101,18 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 	})
 
 	// We expect a single subConn on each subBalancer.
-	sc1 := scs["cluster_1"][0].sc
-	sc2 := scs["cluster_2"][0].sc
+	sc1 := scs["cluster_1"][0].sc.(*testutils.TestSubConn)
+	sc2 := scs["cluster_2"][0].sc.(*testutils.TestSubConn)
 
 	// Set both subconn to TransientFailure, this will put both sub-balancers in
 	// transient failure.
 	wantSubConnErr := errors.New("subConn connection error")
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{
+	sc1.UpdateState(balancer.SubConnState{
 		ConnectivityState: connectivity.TransientFailure,
 		ConnectionError:   wantSubConnErr,
 	})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{
+	sc2.UpdateState(balancer.SubConnState{
 		ConnectivityState: connectivity.TransientFailure,
 		ConnectionError:   wantSubConnErr,
 	})
@@ -1127,7 +1125,7 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 	}
 
 	// Set one subconn to Connecting, it shouldn't change the overall state.
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	select {
 	case <-time.After(100 * time.Millisecond):
 	case <-cc.NewPickerCh:
@@ -1211,18 +1209,23 @@ var errTestInitIdle = fmt.Errorf("init Idle balancer error 0")
 func init() {
 	stub.Register(initIdleBalancerName, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, opts balancer.ClientConnState) error {
-			bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{})
-			return nil
-		},
-		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-			err := fmt.Errorf("wrong picker error")
-			if state.ConnectivityState == connectivity.Idle {
-				err = errTestInitIdle
-			}
-			bd.ClientConn.UpdateState(balancer.State{
-				ConnectivityState: state.ConnectivityState,
-				Picker:            &testutils.TestConstPicker{Err: err},
+			sc, err := bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) {
+					err := fmt.Errorf("wrong picker error")
+					if state.ConnectivityState == connectivity.Idle {
+						err = errTestInitIdle
+					}
+					bd.ClientConn.UpdateState(balancer.State{
+						ConnectivityState: state.ConnectivityState,
+						Picker:            &testutils.TestConstPicker{Err: err},
+					})
+				},
 			})
+			if err != nil {
+				return err
+			}
+			sc.Connect()
+			return nil
 		},
 	})
 }
@@ -1260,7 +1263,7 @@ func (s) TestInitialIdle(t *testing.T) {
 	// in the address is cleared.
 	for range addrs {
 		sc := <-cc.NewSubConnCh
-		wtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Idle})
+		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
 	}
 
 	if state := <-cc.NewStateCh; state != connectivity.Idle {
@@ -1299,8 +1302,8 @@ func (s) TestIgnoreSubBalancerStateTransitions(t *testing.T) {
 	}
 
 	sc := <-cc.NewSubConnCh
-	wtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
-	wtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 
 	// Verify that the SubConnState update from TF to Connecting is ignored.
 	if len(cc.states) != 2 || cc.states[0].ConnectivityState != connectivity.Connecting || cc.states[1].ConnectivityState != connectivity.TransientFailure {

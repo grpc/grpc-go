@@ -53,12 +53,12 @@ var intAttributeMap = map[string]func(*AuthorizationArgs) (int, error){
 // activationImpl is an implementation of interpreter.Activation.
 // An Activation is the primary mechanism by which a caller supplies input into a CEL program.
 type activationImpl struct {
-	dict map[string]interface{}
+	dict map[string]any
 }
 
 // ResolveName returns a value from the activation by qualified name, or false if the name
 // could not be found.
-func (activation activationImpl) ResolveName(name string) (interface{}, bool) {
+func (activation activationImpl) ResolveName(name string) (any, bool) {
 	result, ok := activation.dict[name]
 	return result, ok
 }
@@ -79,7 +79,7 @@ type AuthorizationArgs struct {
 // newActivation converts AuthorizationArgs into the activation for CEL.
 func newActivation(args *AuthorizationArgs) interpreter.Activation {
 	// Fill out evaluation map, only adding the attributes that can be extracted.
-	evalMap := make(map[string]interface{})
+	evalMap := make(map[string]any)
 	for key, function := range stringAttributeMap {
 		val, err := function(args)
 		if err == nil {

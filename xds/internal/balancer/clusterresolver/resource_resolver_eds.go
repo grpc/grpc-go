@@ -37,7 +37,7 @@ type edsDiscoveryMechanism struct {
 	update *xdsresource.EndpointsUpdate // Nil indicates no update received so far.
 }
 
-func (er *edsDiscoveryMechanism) lastUpdate() (interface{}, bool) {
+func (er *edsDiscoveryMechanism) lastUpdate() (any, bool) {
 	er.mu.Lock()
 	defer er.mu.Unlock()
 

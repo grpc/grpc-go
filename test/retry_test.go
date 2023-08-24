@@ -90,7 +90,7 @@ func (s) TestRetryUnary(t *testing.T) {
 	}
 	for num, tc := range testCases {
 		t.Log("Case", num)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
 		if status.Code(err) != tc.code {
@@ -154,7 +154,7 @@ func (s) TestRetryThrottling(t *testing.T) {
 		{codes.Unavailable, 17}, // tokens = 4.5
 	}
 	for _, tc := range testCases {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
 		if status.Code(err) != tc.code {
@@ -211,6 +211,11 @@ func (s) TestRetryStreaming(t *testing.T) {
 			return nil
 		}
 	}
+	sHdr := func() serverOp {
+		return func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			return stream.SendHeader(metadata.Pairs("test_header", "test_value"))
+		}
+	}
 	sRes := func(b byte) serverOp {
 		return func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			msg := res(b)
@@ -222,7 +227,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 	}
 	sErr := func(c codes.Code) serverOp {
 		return func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			return status.New(c, "").Err()
+			return status.New(c, "this is a test error").Err()
 		}
 	}
 	sCloseSend := func() serverOp {
@@ -270,7 +275,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 	}
 	cErr := func(c codes.Code) clientOp {
 		return func(stream testgrpc.TestService_FullDuplexCallClient) error {
-			want := status.New(c, "").Err()
+			want := status.New(c, "this is a test error").Err()
 			if c == codes.OK {
 				want = io.EOF
 			}
@@ -309,6 +314,11 @@ func (s) TestRetryStreaming(t *testing.T) {
 	cHdr := func() clientOp {
 		return func(stream testgrpc.TestService_FullDuplexCallClient) error {
 			_, err := stream.Header()
+			if err == io.EOF {
+				// The stream ended successfully; convert to nil to avoid
+				// erroring the test case.
+				err = nil
+			}
 			return err
 		}
 	}
@@ -363,8 +373,12 @@ func (s) TestRetryStreaming(t *testing.T) {
 		},
 		clientOps: []clientOp{cReq(1), cRes(3), cErr(codes.Unavailable)},
 	}, {
+		desc:      "Retry via ClientStream.Header()",
+		serverOps: []serverOp{sReq(1), sErr(codes.Unavailable), sReq(1), sAttempts(1)},
+		clientOps: []clientOp{cReq(1), cHdr() /* this should cause a retry */, cErr(codes.OK)},
+	}, {
 		desc:      "No retry after header",
-		serverOps: []serverOp{sReq(1), sErr(codes.Unavailable)},
+		serverOps: []serverOp{sReq(1), sHdr(), sErr(codes.Unavailable)},
 		clientOps: []clientOp{cReq(1), cHdr(), cErr(codes.Unavailable)},
 	}, {
 		desc:      "No retry after context",
@@ -429,7 +443,8 @@ func (s) TestRetryStreaming(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for {
 		if ctx.Err() != nil {
 			t.Fatalf("Timed out waiting for service config update")
@@ -439,15 +454,12 @@ func (s) TestRetryStreaming(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	cancel()
 
 	for _, tc := range testCases {
 		func() {
 			serverOpIter = 0
 			serverOps = tc.serverOps
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
 			stream, err := ss.Client.FullDuplexCall(ctx)
 			if err != nil {
 				t.Fatalf("%v: Error while creating stream: %v", tc.desc, err)

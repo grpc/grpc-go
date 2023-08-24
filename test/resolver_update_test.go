@@ -177,10 +177,6 @@ func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
 			ccs.BalancerConfig = nil
 			return bal.UpdateClientConnState(ccs)
 		},
-		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-			bal := bd.Data.(balancer.Balancer)
-			bal.UpdateSubConnState(sc, state)
-		},
 	})
 
 	// Start a backend exposing the test service.

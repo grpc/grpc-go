@@ -216,7 +216,7 @@ func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
 // StartTestService spins up a stub server exposing the TestService on a local
 // port. If the passed in server is nil, a stub server that implements only the
 // EmptyCall and UnaryCall RPCs is started.
-func StartTestService(t *testing.T, server *StubServer) *StubServer {
+func StartTestService(t *testing.T, server *StubServer, sopts ...grpc.ServerOption) *StubServer {
 	if server == nil {
 		server = &StubServer{
 			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
@@ -225,7 +225,7 @@ func StartTestService(t *testing.T, server *StubServer) *StubServer {
 			},
 		}
 	}
-	server.StartServer()
+	server.StartServer(sopts...)
 
 	t.Logf("Started test service backend at %q", server.Address)
 	return server

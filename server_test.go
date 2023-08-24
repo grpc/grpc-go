@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type emptyServiceServer interface{}
+type emptyServiceServer any
 
 type testServer struct{}
 
@@ -133,24 +133,24 @@ func (s) TestGetServiceInfo(t *testing.T) {
 
 func (s) TestRetryChainedInterceptor(t *testing.T) {
 	var records []int
-	i1 := func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error) {
+	i1 := func(ctx context.Context, req any, info *UnaryServerInfo, handler UnaryHandler) (resp any, err error) {
 		records = append(records, 1)
 		// call handler twice to simulate a retry here.
 		handler(ctx, req)
 		return handler(ctx, req)
 	}
-	i2 := func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error) {
+	i2 := func(ctx context.Context, req any, info *UnaryServerInfo, handler UnaryHandler) (resp any, err error) {
 		records = append(records, 2)
 		return handler(ctx, req)
 	}
-	i3 := func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error) {
+	i3 := func(ctx context.Context, req any, info *UnaryServerInfo, handler UnaryHandler) (resp any, err error) {
 		records = append(records, 3)
 		return handler(ctx, req)
 	}
 
 	ii := chainUnaryInterceptors([]UnaryServerInterceptor{i1, i2, i3})
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return nil, nil
 	}
 	ii(context.Background(), nil, nil, handler)
@@ -176,8 +176,8 @@ func BenchmarkChainUnaryInterceptor(b *testing.B) {
 			interceptors := make([]UnaryServerInterceptor, 0, n)
 			for i := 0; i < n; i++ {
 				interceptors = append(interceptors, func(
-					ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler,
-				) (interface{}, error) {
+					ctx context.Context, req any, info *UnaryServerInfo, handler UnaryHandler,
+				) (any, error) {
 					return handler(ctx, req)
 				})
 			}
@@ -187,7 +187,7 @@ func BenchmarkChainUnaryInterceptor(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				if _, err := s.opts.unaryInt(context.Background(), nil, nil,
-					func(ctx context.Context, req interface{}) (interface{}, error) {
+					func(ctx context.Context, req any) (any, error) {
 						return nil, nil
 					},
 				); err != nil {
@@ -205,7 +205,7 @@ func BenchmarkChainStreamInterceptor(b *testing.B) {
 			interceptors := make([]StreamServerInterceptor, 0, n)
 			for i := 0; i < n; i++ {
 				interceptors = append(interceptors, func(
-					srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler,
+					srv any, ss ServerStream, info *StreamServerInfo, handler StreamHandler,
 				) error {
 					return handler(srv, ss)
 				})
@@ -215,7 +215,7 @@ func BenchmarkChainStreamInterceptor(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				if err := s.opts.streamInt(nil, nil, nil, func(srv interface{}, stream ServerStream) error {
+				if err := s.opts.streamInt(nil, nil, nil, func(srv any, stream ServerStream) error {
 					return nil
 				}); err != nil {
 					b.Fatal(err)

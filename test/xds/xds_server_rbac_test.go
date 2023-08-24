@@ -446,7 +446,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 							{
 								AuditLogger: &v3corepb.TypedExtensionConfig{
 									Name:        "stat_logger",
-									TypedConfig: createXDSTypedStruct(t, map[string]interface{}{}, "stat_logger"),
+									TypedConfig: createXDSTypedStruct(t, map[string]any{}, "stat_logger"),
 								},
 								IsOptional: false,
 							},
@@ -975,7 +975,7 @@ func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerCon
 const typeURLPrefix = "grpc.authz.audit_logging/"
 
 // Builds custom configs for audit logger RBAC protos.
-func createXDSTypedStruct(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
+func createXDSTypedStruct(t *testing.T, in map[string]any, name string) *anypb.Any {
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
 	if err != nil {

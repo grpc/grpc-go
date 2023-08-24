@@ -367,7 +367,7 @@ func BenchmarkInterfaceTypeAssertion(b *testing.B) {
 	runInterfaceTypeAssertion(b, myFooer{})
 }
 
-func runInterfaceTypeAssertion(b *testing.B, fer interface{}) {
+func runInterfaceTypeAssertion(b *testing.B, fer any) {
 	x := 0
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -386,7 +386,7 @@ func BenchmarkStructTypeAssertion(b *testing.B) {
 	runStructTypeAssertion(b, myFooer{})
 }
 
-func runStructTypeAssertion(b *testing.B, fer interface{}) {
+func runStructTypeAssertion(b *testing.B, fer any) {
 	x := 0
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

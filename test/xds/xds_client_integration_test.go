@@ -44,7 +44,7 @@ func Test(t *testing.T) {
 }
 
 const (
-	defaultTestTimeout      = 5 * time.Second
+	defaultTestTimeout      = 10 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
 )
 

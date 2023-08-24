@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
@@ -121,7 +122,7 @@ func (s *testHealthServer) SetServingStatus(service string, status healthpb.Heal
 func setupHealthCheckWrapper() (hcEnterChan chan struct{}, hcExitChan chan struct{}, wrapper internal.HealthChecker) {
 	hcEnterChan = make(chan struct{})
 	hcExitChan = make(chan struct{})
-	wrapper = func(ctx context.Context, newStream func(string) (interface{}, error), update func(connectivity.State, error), service string) error {
+	wrapper = func(ctx context.Context, newStream func(string) (any, error), update func(connectivity.State, error), service string) error {
 		close(hcEnterChan)
 		defer close(hcExitChan)
 		return testHealthCheckFunc(ctx, newStream, update, service)
@@ -212,33 +213,33 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitNotState(ctx, t, cc, connectivity.Idle)
-	awaitNotState(ctx, t, cc, connectivity.Connecting)
-	awaitState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Idle)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Connecting)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
-	awaitNotState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
-	awaitNotState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Ready)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
-	awaitNotState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_UNKNOWN)
-	awaitNotState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Ready)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
@@ -267,8 +268,8 @@ func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitNotState(ctx, t, cc, connectivity.Idle)
-	awaitNotState(ctx, t, cc, connectivity.Connecting)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Idle)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Connecting)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
@@ -890,7 +891,7 @@ func verifyHealthCheckErrCode(t *testing.T, d time.Duration, cc *grpc.ClientConn
 // RPC, and returns the stream.
 func newHealthCheckStream(t *testing.T, cc *grpc.ClientConn, service string) (healthgrpc.Health_WatchClient, context.CancelFunc) {
 	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	hc := healthgrpc.NewHealthClient(cc)
 	stream, err := hc.Watch(ctx, &healthpb.HealthCheckRequest{Service: service})
 	if err != nil {
@@ -1122,7 +1123,7 @@ func (s) TestUnknownHandler(t *testing.T) {
 	// An example unknownHandler that returns a different code and a different
 	// method, making sure that we do not expose what methods are implemented to
 	// a client that is not authenticated.
-	unknownHandler := func(srv interface{}, stream grpc.ServerStream) error {
+	unknownHandler := func(srv any, stream grpc.ServerStream) error {
 		return status.Error(codes.Unauthenticated, "user unauthenticated")
 	}
 	for _, e := range listTestEnv() {

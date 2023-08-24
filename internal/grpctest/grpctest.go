@@ -34,7 +34,7 @@ type errorer struct {
 	t *testing.T
 }
 
-func (e errorer) Errorf(format string, args ...interface{}) {
+func (e errorer) Errorf(format string, args ...any) {
 	atomic.StoreUint32(&lcFailed, 1)
 	e.t.Errorf(format, args...)
 }
@@ -62,6 +62,12 @@ func (Tester) Teardown(t *testing.T) {
 	TLogger.EndTest(t)
 }
 
+// Interface defines Tester's methods for use in this package.
+type Interface interface {
+	Setup(*testing.T)
+	Teardown(*testing.T)
+}
+
 func getTestFunc(t *testing.T, xv reflect.Value, name string) func(*testing.T) {
 	if m := xv.MethodByName(name); m.IsValid() {
 		if f, ok := m.Interface().(func(*testing.T)); ok {
@@ -74,9 +80,8 @@ func getTestFunc(t *testing.T, xv reflect.Value, name string) func(*testing.T) {
 }
 
 // RunSubTests runs all "Test___" functions that are methods of x as subtests
-// of the current test.  If x contains methods "Setup(*testing.T)" or
-// "Teardown(*testing.T)", those are run before or after each of the test
-// functions, respectively.
+// of the current test.  Setup is run before the test function and Teardown is
+// run after.
 //
 // For example usage, see example_test.go.  Run it using:
 //
@@ -85,12 +90,9 @@ func getTestFunc(t *testing.T, xv reflect.Value, name string) func(*testing.T) {
 // To run a specific test/subtest:
 //
 //	$ go test -v -run 'TestExample/^Something$' .
-func RunSubTests(t *testing.T, x interface{}) {
+func RunSubTests(t *testing.T, x Interface) {
 	xt := reflect.TypeOf(x)
 	xv := reflect.ValueOf(x)
-
-	setup := getTestFunc(t, xv, "Setup")
-	teardown := getTestFunc(t, xv, "Teardown")
 
 	for i := 0; i < xt.NumMethod(); i++ {
 		methodName := xt.Method(i).Name
@@ -104,8 +106,8 @@ func RunSubTests(t *testing.T, x interface{}) {
 			//
 			// Note that a defer would run before t.Cleanup, so if a goroutine
 			// is closed by a test's t.Cleanup, a deferred leakcheck would fail.
-			t.Cleanup(func() { teardown(t) })
-			setup(t)
+			t.Cleanup(func() { x.Teardown(t) })
+			x.Setup(t)
 			tfunc(t)
 		})
 	}

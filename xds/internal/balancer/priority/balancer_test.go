@@ -24,12 +24,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -69,7 +67,9 @@ func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
 		testBackendAddrStrs = append(testBackendAddrStrs, fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i))
 	}
-	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond
+	// Disable sub-balancer caching for all but the tests which exercise the
+	// caching behavior.
+	DefaultSubBalancerCloseTimeout = time.Duration(0)
 	balancer.Register(&anotherRR{Builder: balancer.Get(roundrobin.Name)})
 }
 
@@ -112,8 +112,8 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 
 	// p0 is ready.
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
@@ -144,8 +144,8 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 	select {
 	case sc := <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn: %s", sc)
-	case sc := <-cc.RemoveSubConnCh:
-		t.Fatalf("got unexpected remove SubConn: %v", sc)
+	case sc := <-cc.ShutdownSubConnCh:
+		t.Fatalf("got unexpected shutdown SubConn: %v", sc)
 	case <-time.After(time.Millisecond * 100):
 	}
 
@@ -176,8 +176,8 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 	select {
 	case <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn")
-	case <-cc.RemoveSubConnCh:
-		t.Fatalf("got unexpected remove SubConn")
+	case <-cc.ShutdownSubConnCh:
+		t.Fatalf("got unexpected shutdown SubConn")
 	case <-time.After(time.Millisecond * 100):
 	}
 
@@ -226,8 +226,8 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	t.Log("Make p0 ready.")
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
@@ -235,7 +235,7 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	}
 
 	t.Log("Turn down 0, will start and use 1.")
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
 	// will retry.
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
@@ -248,8 +248,8 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 1.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
@@ -280,13 +280,13 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	select {
 	case sc := <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn, %s", sc)
-	case <-cc.RemoveSubConnCh:
-		t.Fatalf("got unexpected remove SubConn")
+	case <-cc.ShutdownSubConnCh:
+		t.Fatalf("got unexpected shutdown SubConn")
 	case <-time.After(time.Millisecond * 100):
 	}
 
 	t.Log("Turn down 1, use 2.")
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
 	// Before 2 gets READY, picker should return NoSubConnAvailable, so RPCs
 	// will retry.
@@ -299,8 +299,8 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc2 := <-cc.NewSubConnCh
-	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 2.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
@@ -326,10 +326,10 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// p2 SubConns are removed.
-	scToRemove := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove)
+	// p2 SubConns are shut down.
+	scToShutdown := <-cc.ShutdownSubConnCh
+	if scToShutdown != sc2 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc2, scToShutdown)
 	}
 
 	// Should get an update with 1's old transient failure picker, to override
@@ -339,10 +339,10 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	}
 	<-cc.NewStateCh // Drain to match picker
 
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	// Does not change the aggregate state, because round robin does not leave
 	// TRANIENT_FAILURE if a subconn goes CONNECTING.
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
 		t.Fatal(err.Error())
@@ -389,8 +389,8 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// p0 is ready.
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
@@ -398,7 +398,7 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 	}
 
 	// Turn 0 to TransientFailure, will start and use 1.
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
 	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
 	// will retry.
@@ -412,8 +412,8 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 1.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
@@ -421,13 +421,13 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 	}
 
 	// Turn 0 back to Ready.
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
-	// p1 subconn should be removed.
-	scToRemove := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc0, scToRemove)
+	// p1 subconn should be shut down.
+	scToShutdown := <-cc.ShutdownSubConnCh
+	if scToShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
 	}
 
 	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
@@ -473,7 +473,7 @@ func (s) TestPriority_HigherDownWhileAddingLower(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	t.Log("Turn down 0, 1 is used.")
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
 	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
 	// will retry.
@@ -488,7 +488,7 @@ func (s) TestPriority_HigherDownWhileAddingLower(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 
 	t.Log("Turn down 1, pick should error.")
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
 	// Test pick failure.
 	if err := cc.WaitForErrPicker(ctx); err != nil {
@@ -527,8 +527,8 @@ func (s) TestPriority_HigherDownWhileAddingLower(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc2 := <-cc.NewSubConnCh
-	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 2.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
@@ -576,7 +576,7 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// Turn down 0, 1 is used.
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
 	// will retry.
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
@@ -590,7 +590,7 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 
 	// Turn down 1, 2 is used.
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	// Before 2 gets READY, picker should return NoSubConnAvailable, so RPCs
 	// will retry.
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
@@ -602,8 +602,8 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc2 := <-cc.NewSubConnCh
-	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 2.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
@@ -611,18 +611,15 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 	}
 
 	// When 0 becomes ready, 0 should be used, 1 and 2 should all be closed.
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
-	// sc1 and sc2 should be removed.
+	// sc1 and sc2 should be shut down.
 	//
 	// With localities caching, the lower priorities are closed after a timeout,
 	// in goroutines. The order is no longer guaranteed.
-	scToRemove := []balancer.SubConn{<-cc.RemoveSubConnCh, <-cc.RemoveSubConnCh}
-	if !(cmp.Equal(scToRemove[0], sc1, cmp.AllowUnexported(testutils.TestSubConn{})) &&
-		cmp.Equal(scToRemove[1], sc2, cmp.AllowUnexported(testutils.TestSubConn{}))) &&
-		!(cmp.Equal(scToRemove[0], sc2, cmp.AllowUnexported(testutils.TestSubConn{})) &&
-			cmp.Equal(scToRemove[1], sc1, cmp.AllowUnexported(testutils.TestSubConn{}))) {
-		t.Errorf("RemoveSubConn, want [%v, %v], got %v", sc1, sc2, scToRemove)
+	scToShutdown := []balancer.SubConn{<-cc.ShutdownSubConnCh, <-cc.ShutdownSubConnCh}
+	if !(scToShutdown[0] == sc1 && scToShutdown[1] == sc2) && !(scToShutdown[0] == sc2 && scToShutdown[1] == sc1) {
+		t.Errorf("ShutdownSubConn, want [%v, %v], got %v", sc1, sc2, scToShutdown)
 	}
 
 	// Test pick with 0.
@@ -679,7 +676,7 @@ func (s) TestPriority_InitTimeout(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// Keep 0 in connecting, 1 will be used after init timeout.
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 
 	// Make sure new SubConn is created before timeout.
 	select {
@@ -696,8 +693,8 @@ func (s) TestPriority_InitTimeout(t *testing.T) {
 
 	// After the init timer of p0, when switching to p1, a connecting picker
 	// will be sent to the parent. Clear it here.
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 1.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
@@ -748,8 +745,8 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc0 := <-cc.NewSubConnCh
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
@@ -769,10 +766,10 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// p0 subconn should be removed.
-	scToRemove := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove, sc0, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc0, scToRemove)
+	// p0 subconn should be shut down.
+	scToShutdown := <-cc.ShutdownSubConnCh
+	if scToShutdown != sc0 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
 	}
 
 	// Test pick return TransientFailure.
@@ -815,8 +812,8 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc11 := <-cc.NewSubConnCh
-	pb.UpdateSubConnState(sc11, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc11, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc11.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc11.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc11); err != nil {
@@ -840,10 +837,10 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// p1 subconn should be removed.
-	scToRemove1 := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove1, sc11, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc11, scToRemove1)
+	// p1 subconn should be shut down.
+	scToShutdown1 := <-cc.ShutdownSubConnCh
+	if scToShutdown1 != sc11 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc11, scToShutdown1)
 	}
 
 	// Test pick return NoSubConn.
@@ -853,8 +850,8 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 
 	// Send an ready update for the p0 sc that was received when re-adding
 	// priorities.
-	pb.UpdateSubConnState(sc01, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc01, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc01.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc01.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc01); err != nil {
@@ -866,8 +863,8 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 		t.Fatalf("got unexpected new picker")
 	case <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn")
-	case <-cc.RemoveSubConnCh:
-		t.Fatalf("got unexpected remove SubConn")
+	case <-cc.ShutdownSubConnCh:
+		t.Fatalf("got unexpected shutdown SubConn")
 	case <-time.After(time.Millisecond * 100):
 	}
 }
@@ -909,8 +906,8 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 
 	// p0 is ready.
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
@@ -935,10 +932,10 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// p0 will remove the subconn, and ClientConn will send a sc update to
+	// p0 will shutdown the subconn, and ClientConn will send a sc update to
 	// shutdown.
-	scToRemove := <-cc.RemoveSubConnCh
-	pb.UpdateSubConnState(scToRemove, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
+	scToShutdown := <-cc.ShutdownSubConnCh
+	scToShutdown.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 
 	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testBackendAddrStrs[1]; got != want {
@@ -953,8 +950,8 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 	}
 
 	// p1 is ready.
-	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
@@ -1047,8 +1044,8 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 
 	// p0 is ready.
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
@@ -1083,10 +1080,10 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	// Old subconn should be removed.
-	scToRemove := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
+	// Old subconn should be shut down.
+	scToShutdown := <-cc.ShutdownSubConnCh
+	if scToShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scToShutdown)
 	}
 
 	addrs2 := <-cc.NewSubConnAddrsCh
@@ -1096,8 +1093,8 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 	sc2 := <-cc.NewSubConnCh
 
 	// New p0 child is ready.
-	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only new subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
@@ -1144,7 +1141,7 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// p0 is down.
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
 	// will retry.
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
@@ -1156,8 +1153,8 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
@@ -1185,9 +1182,9 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 	}
 
 	// Old subconn from child-0 should be removed.
-	scToRemove := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove, sc0, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc0, scToRemove)
+	scToShutdown := <-cc.ShutdownSubConnCh
+	if scToShutdown != sc0 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
 	}
 
 	// Because this was a ready child moved to a higher priority, no new subconn
@@ -1195,8 +1192,8 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 	select {
 	case <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn")
-	case <-cc.RemoveSubConnCh:
-		t.Fatalf("got unexpected remove SubConn")
+	case <-cc.ShutdownSubConnCh:
+		t.Fatalf("got unexpected shutdown SubConn")
 	case <-time.After(time.Millisecond * 100):
 	}
 }
@@ -1240,7 +1237,7 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// p0 is down.
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
 	// will retry.
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
@@ -1252,8 +1249,8 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
@@ -1277,10 +1274,10 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// Old subconn from child-1 should be removed.
-	scToRemove := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
+	// Old subconn from child-1 should be shut down.
+	scToShutdown := <-cc.ShutdownSubConnCh
+	if scToShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scToShutdown)
 	}
 
 	if err := cc.WaitForErrPicker(ctx); err != nil {
@@ -1306,10 +1303,10 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 
 	const testChildCacheTimeout = time.Second
 	defer func() func() {
-		old := balancergroup.DefaultSubBalancerCloseTimeout
-		balancergroup.DefaultSubBalancerCloseTimeout = testChildCacheTimeout
+		old := DefaultSubBalancerCloseTimeout
+		DefaultSubBalancerCloseTimeout = testChildCacheTimeout
 		return func() {
-			balancergroup.DefaultSubBalancerCloseTimeout = old
+			DefaultSubBalancerCloseTimeout = old
 		}
 	}()()
 
@@ -1342,8 +1339,8 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 
 	// p0 is ready.
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
@@ -1367,8 +1364,8 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 	select {
 	case sc := <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn: %s", sc)
-	case sc := <-cc.RemoveSubConnCh:
-		t.Fatalf("got unexpected remove SubConn: %v", sc)
+	case sc := <-cc.ShutdownSubConnCh:
+		t.Fatalf("got unexpected shutdown SubConn: %v", sc)
 	case <-time.After(time.Millisecond * 100):
 	}
 
@@ -1399,8 +1396,8 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 	select {
 	case sc := <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn: %s", sc)
-	case sc := <-cc.RemoveSubConnCh:
-		t.Fatalf("got unexpected remove SubConn: %v", sc)
+	case sc := <-cc.ShutdownSubConnCh:
+		t.Fatalf("got unexpected shutdown SubConn: %v", sc)
 	case <-time.After(time.Millisecond * 100):
 	}
 }
@@ -1441,8 +1438,8 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 
 	// p0 is ready.
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
@@ -1467,10 +1464,10 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// Old subconn should be removed.
-	scToRemove := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
+	// Old subconn should be shut down.
+	scToShutdown := <-cc.ShutdownSubConnCh
+	if scToShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scToShutdown)
 	}
 
 	// A new subconn should be created.
@@ -1479,8 +1476,8 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc2 := <-cc.NewSubConnCh
-	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pickfirst with the new subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
@@ -1630,25 +1627,6 @@ func (s) TestPriority_IgnoreReresolutionRequest(t *testing.T) {
 
 }
 
-type wrappedRoundRobinBalancerBuilder struct {
-	name string
-	ccCh *testutils.Channel
-}
-
-func (w *wrappedRoundRobinBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	w.ccCh.Send(cc)
-	rrBuilder := balancer.Get(roundrobin.Name)
-	return &wrappedRoundRobinBalancer{Balancer: rrBuilder.Build(cc, opts)}
-}
-
-func (w *wrappedRoundRobinBalancerBuilder) Name() string {
-	return w.name
-}
-
-type wrappedRoundRobinBalancer struct {
-	balancer.Balancer
-}
-
 // TestPriority_IgnoreReresolutionRequestTwoChildren tests the case where the
 // priority policy has two child policies, one of them has the
 // IgnoreReresolutionRequests field set to true while the other one has it set
@@ -1656,12 +1634,21 @@ type wrappedRoundRobinBalancer struct {
 // set to ignore reresolution requests are ignored, while calls from the other
 // child are processed.
 func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
-	// Register a wrapping balancer to act the child policy of the priority
-	// policy. The wrapping balancer builder's Build() method pushes the
-	// balancer.ClientConn on a channel for this test to use.
+	// Register a stub balancer to act the child policy of the priority policy.
+	// Provide an init function to the stub balancer to capture the ClientConn
+	// passed to the child policy.
 	ccCh := testutils.NewChannel()
 	childPolicyName := t.Name()
-	balancer.Register(&wrappedRoundRobinBalancerBuilder{name: childPolicyName, ccCh: ccCh})
+	stub.Register(childPolicyName, stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			ccCh.Send(bd.ClientConn)
+			bd.Data = balancer.Get(roundrobin.Name).Build(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			bal := bd.Data.(balancer.Balancer)
+			return bal.UpdateClientConnState(ccs)
+		},
+	})
 
 	cc := testutils.NewTestClientConn(t)
 	bb := balancer.Get(Name)
@@ -1708,7 +1695,7 @@ func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc0 := <-cc.NewSubConnCh
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
 	// Retrieve the ClientConn passed to the child policy from p1.
 	val, err = ccCh.Receive(ctx)
@@ -1750,22 +1737,27 @@ func init() {
 		ii := i
 		stub.Register(fmt.Sprintf("%s-%d", initIdleBalancerName, ii), stub.BalancerFuncs{
 			UpdateClientConnState: func(bd *stub.BalancerData, opts balancer.ClientConnState) error {
-				bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{})
+				lis := func(state balancer.SubConnState) {
+					err := fmt.Errorf("wrong picker error")
+					if state.ConnectivityState == connectivity.Idle {
+						err = errsTestInitIdle[ii]
+					}
+					bd.ClientConn.UpdateState(balancer.State{
+						ConnectivityState: state.ConnectivityState,
+						Picker:            &testutils.TestConstPicker{Err: err},
+					})
+				}
+
+				sc, err := bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{StateListener: lis})
+				if err != nil {
+					return err
+				}
+				sc.Connect()
 				bd.ClientConn.UpdateState(balancer.State{
 					ConnectivityState: connectivity.Connecting,
 					Picker:            &testutils.TestConstPicker{Err: balancer.ErrNoSubConnAvailable},
 				})
 				return nil
-			},
-			UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-				err := fmt.Errorf("wrong picker error")
-				if state.ConnectivityState == connectivity.Idle {
-					err = errsTestInitIdle[ii]
-				}
-				bd.ClientConn.UpdateState(balancer.State{
-					ConnectivityState: state.ConnectivityState,
-					Picker:            &testutils.TestConstPicker{Err: err},
-				})
 			},
 		})
 	}
@@ -1811,13 +1803,13 @@ func (s) TestPriority_HighPriorityInitIdle(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// Send an Idle state update to trigger an Idle picker update.
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
 	if err := cc.WaitForPickerWithErr(ctx, errsTestInitIdle[0]); err != nil {
 		t.Fatal(err.Error())
 	}
 
 	// Turn p0 down, to start p1.
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
 	// will retry.
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
@@ -1830,7 +1822,7 @@ func (s) TestPriority_HighPriorityInitIdle(t *testing.T) {
 	}
 	sc1 := <-cc.NewSubConnCh
 	// Idle picker from p1 should also be forwarded.
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
 	if err := cc.WaitForPickerWithErr(ctx, errsTestInitIdle[1]); err != nil {
 		t.Fatal(err.Error())
 	}
@@ -1875,7 +1867,7 @@ func (s) TestPriority_AddLowPriorityWhenHighIsInIdle(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// Send an Idle state update to trigger an Idle picker update.
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
 	if err := cc.WaitForPickerWithErr(ctx, errsTestInitIdle[0]); err != nil {
 		t.Fatal(err.Error())
 	}
@@ -1958,8 +1950,8 @@ func (s) TestPriority_HighPriorityUpdatesWhenLowInUse(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	t.Log("Make p0 fail.")
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
 	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
 	// will retry.
@@ -1973,18 +1965,18 @@ func (s) TestPriority_HighPriorityUpdatesWhenLowInUse(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 1.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
 		t.Fatal(err.Error())
 	}
 
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	// Does not change the aggregate state, because round robin does not leave
 	// TRANIENT_FAILURE if a subconn goes CONNECTING.
-	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
 		t.Fatal(err.Error())
@@ -2025,8 +2017,8 @@ func (s) TestPriority_HighPriorityUpdatesWhenLowInUse(t *testing.T) {
 		default:
 			t.Fatalf("sc is created with addr %v, want %v or %v", addr[0].Addr, testBackendAddrStrs[2], testBackendAddrStrs[3])
 		}
-		pb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-		pb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
 	if sc2 == nil {
 		t.Fatalf("sc not created with addr %v", testBackendAddrStrs[2])

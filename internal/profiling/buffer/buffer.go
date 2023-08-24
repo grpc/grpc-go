@@ -170,7 +170,7 @@ func NewCircularBuffer(size uint32) (*CircularBuffer, error) {
 // a finite number of steps (also lock-free). Does not guarantee that push
 // order will be retained. Does not guarantee that the operation will succeed
 // if a Drain operation concurrently begins execution.
-func (cb *CircularBuffer) Push(x interface{}) {
+func (cb *CircularBuffer) Push(x any) {
 	n := atomic.AddUint32(&cb.qpn, 1) & cb.qpMask
 	qptr := atomic.LoadPointer(&cb.qp[n].q)
 	q := (*queue)(qptr)
@@ -221,10 +221,10 @@ func (cb *CircularBuffer) Push(x interface{}) {
 // arr that are copied is [from, to). Assumes that the result slice is already
 // allocated and is large enough to hold all the elements that might be copied.
 // Also assumes mutual exclusion on the array of pointers.
-func dereferenceAppend(result []interface{}, arr []unsafe.Pointer, from, to uint32) []interface{} {
+func dereferenceAppend(result []any, arr []unsafe.Pointer, from, to uint32) []any {
 	for i := from; i < to; i++ {
 		// We have mutual exclusion on arr, there's no need for atomics.
-		x := (*interface{})(arr[i])
+		x := (*any)(arr[i])
 		if x != nil {
 			result = append(result, *x)
 		}
@@ -235,7 +235,7 @@ func dereferenceAppend(result []interface{}, arr []unsafe.Pointer, from, to uint
 // Drain allocates and returns an array of things Pushed in to the circular
 // buffer. Push order is not maintained; that is, if B was Pushed after A,
 // drain may return B at a lower index than A in the returned array.
-func (cb *CircularBuffer) Drain() []interface{} {
+func (cb *CircularBuffer) Drain() []any {
 	cb.drainMutex.Lock()
 
 	qs := make([]*queue, len(cb.qp))
@@ -253,7 +253,7 @@ func (cb *CircularBuffer) Drain() []interface{} {
 	}
 	wg.Wait()
 
-	result := make([]interface{}, 0)
+	result := make([]any, 0)
 	for i := 0; i < len(qs); i++ {
 		if acquired := atomic.LoadUint32(&qs[i].acquired); acquired < qs[i].size {
 			result = dereferenceAppend(result, qs[i].arr, 0, acquired)

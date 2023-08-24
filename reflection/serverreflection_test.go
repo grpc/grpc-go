@@ -604,7 +604,7 @@ func testListServices(t *testing.T, stream v1reflectiongrpc.ServerReflection_Ser
 }
 
 func registerDynamicProto(srv *grpc.Server, fdp *descriptorpb.FileDescriptorProto, fd protoreflect.FileDescriptor) {
-	type emptyInterface interface{}
+	type emptyInterface any
 
 	for i := 0; i < fd.Services().Len(); i++ {
 		s := fd.Services().Get(i)

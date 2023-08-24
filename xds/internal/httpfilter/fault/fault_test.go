@@ -53,8 +53,9 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
-	_ "google.golang.org/grpc/xds/internal/balancer" // Register the balancers.
-	_ "google.golang.org/grpc/xds/internal/resolver" // Register the xds_resolver.
+	_ "google.golang.org/grpc/xds/internal/balancer"          // Register the balancers.
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
+	_ "google.golang.org/grpc/xds/internal/resolver"          // Register the xds_resolver.
 )
 
 const defaultTestTimeout = 10 * time.Second

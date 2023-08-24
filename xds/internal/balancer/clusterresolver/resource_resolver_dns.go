@@ -75,20 +75,28 @@ func newDNSResolver(target string, topLevelResolver topLevelResolver, logger *gr
 	}
 	u, err := url.Parse("dns:///" + target)
 	if err != nil {
-		topLevelResolver.onError(fmt.Errorf("failed to parse dns hostname %q in clusterresolver LB policy", target))
+		if ret.logger.V(2) {
+			ret.logger.Infof("Failed to parse dns hostname %q in clusterresolver LB policy", target)
+		}
+		ret.updateReceived = true
+		ret.topLevelResolver.onUpdate()
 		return ret
 	}
 
 	r, err := newDNS(resolver.Target{URL: *u}, ret, resolver.BuildOptions{})
 	if err != nil {
-		topLevelResolver.onError(fmt.Errorf("failed to build DNS resolver for target %q: %v", target, err))
+		if ret.logger.V(2) {
+			ret.logger.Infof("Failed to build DNS resolver for target %q: %v", target, err)
+		}
+		ret.updateReceived = true
+		ret.topLevelResolver.onUpdate()
 		return ret
 	}
 	ret.dnsR = r
 	return ret
 }
 
-func (dr *dnsDiscoveryMechanism) lastUpdate() (interface{}, bool) {
+func (dr *dnsDiscoveryMechanism) lastUpdate() (any, bool) {
 	dr.mu.Lock()
 	defer dr.mu.Unlock()
 
@@ -125,9 +133,21 @@ func (dr *dnsDiscoveryMechanism) UpdateState(state resolver.State) error {
 	}
 
 	dr.mu.Lock()
-	addrs := make([]string, len(state.Addresses))
-	for i, a := range state.Addresses {
-		addrs[i] = a.Addr
+	var addrs []string
+	if len(state.Endpoints) > 0 {
+		// Assume 1 address per endpoint, which is how DNS is expected to
+		// behave.  The slice will grow as needed, however.
+		addrs = make([]string, 0, len(state.Endpoints))
+		for _, e := range state.Endpoints {
+			for _, a := range e.Addresses {
+				addrs = append(addrs, a.Addr)
+			}
+		}
+	} else {
+		addrs = make([]string, len(state.Addresses))
+		for i, a := range state.Addresses {
+			addrs[i] = a.Addr
+		}
 	}
 	dr.addrs = addrs
 	dr.updateReceived = true
@@ -142,7 +162,21 @@ func (dr *dnsDiscoveryMechanism) ReportError(err error) {
 		dr.logger.Infof("DNS discovery mechanism for resource %q reported error: %v", dr.target, err)
 	}
 
-	dr.topLevelResolver.onError(err)
+	dr.mu.Lock()
+	// If a previous good update was received, suppress the error and continue
+	// using the previous update. If RPCs were succeeding prior to this, they
+	// will continue to do so. Also suppress errors if we previously received an
+	// error, since there will be no downstream effects of propagating this
+	// error.
+	if dr.updateReceived {
+		dr.mu.Unlock()
+		return
+	}
+	dr.addrs = nil
+	dr.updateReceived = true
+	dr.mu.Unlock()
+
+	dr.topLevelResolver.onUpdate()
 }
 
 func (dr *dnsDiscoveryMechanism) NewAddress(addresses []resolver.Address) {
