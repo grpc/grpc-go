@@ -159,20 +159,22 @@ func (s) TestClusterHandlerSuccess_LeafNode(t *testing.T) {
 
 // Tests the case where the cluster resource requested by the cds LB policy is
 // an aggregate cluster root pointing to two child clusters, one of type EDS and
-// the other of type LogicalDNS. Verifies that the load balancing configuration
-// pushed to the cluster_resolver LB policy is as expected. The test then
-// updates the aggregate cluster to point to two child clusters, the same leaf
-// cluster of type EDS and a different leaf cluster of type LogicalDNS and
-// verifies that the load balancing configuration pushed to the cluster_resolver
-// LB policy contains the expected discovery mechanisms corresponding to the
-// child clusters.
+// the other of type LogicalDNS. The test verifies that load balancing
+// configuration is pushed to the cluster_resolver LB policy only when all child
+// clusters are resolved and it also verifies that the pushed configuration
+// contains the expected discovery mechanisms. The test then updates the
+// aggregate cluster to point to two child clusters, the same leaf cluster of
+// type EDS and a different leaf cluster of type LogicalDNS and verifies that
+// the load balancing configuration pushed to the cluster_resolver LB policy
+// contains the expected discovery mechanisms.
 func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
 
 	// Configure the management server with the aggregate cluster resource
-	// pointing to two child clusters. But don't include resource corresponding
-	// to the LogicalDNS cluster yet.
+	// pointing to two child clusters, one EDS and one LogicalDNS. Include the
+	// resource corresponding to the EDS cluster here, but don't include
+	// resource corresponding to the LogicalDNS cluster yet.
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Clusters: []*v3clusterpb.Cluster{
@@ -516,15 +518,17 @@ func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
 
 // Tests a diamond shaped aggregate cluster (A->[B,C]; B->D; C->D). Verifies
 // that the load balancing configuration pushed to the cluster_resolver LB
-// policy specifies cluster D only once.
+// policy specifies cluster D only once. Also verifies that configuration is
+// pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
 
 	// Configure the management server with an aggregate cluster resource having
-	// a diamond dependency pattern. Don't configure the resource for cluster C
-	// yet. This will help us verify that no configuration is pushed to the
-	// child policy until the whole cluster graph is resolved.
+	// a diamond dependency pattern, (A->[B,C]; B->D; C->D). Includes resources
+	// for cluster A, B and D, but don't include the resource for cluster C yet.
+	// This will help us verify that no configuration is pushed to the child
+	// policy until the whole cluster graph is resolved.
 	const (
 		clusterNameA = clusterName // cluster name in cds LB policy config
 		clusterNameB = clusterName + "-B"
@@ -580,13 +584,15 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 // C]; B->[C, D]). Verifies that the load balancing configuration pushed to the
 // cluster_resolver LB policy does not contain duplicates, and that the
 // discovery mechanism corresponding to cluster C is of higher priority than the
-// discovery mechanism for cluser D.
+// discovery mechanism for cluser D. Also verifies that the configuration is
+// pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
 
 	// Configure the management server with an aggregate cluster resource that
-	// has duplicates in the graph. Don't configure the resource for cluster C
+	// has duplicates in the graph, (A->[B, C]; B->[C, D]). Include resources
+	// for clusters A, B and D, but don't configure the resource for cluster C
 	// yet. This will help us verify that no configuration is pushed to the
 	// child policy until the whole cluster graph is resolved.
 	const (
