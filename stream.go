@@ -802,7 +802,8 @@ func (cs *clientStream) Header() (metadata.MD, error) {
 
 	if err != nil {
 		cs.finish(err)
-		return nil, err
+		// Do not return the error.  The user should get it by calling Recv().
+		return nil, nil
 	}
 
 	if len(cs.binlogs) != 0 && !cs.serverHeaderBinlogged && m != nil {
