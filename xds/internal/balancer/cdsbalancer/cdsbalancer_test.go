@@ -61,7 +61,11 @@ import (
 
 const (
 	clusterName             = "cluster1"
+	edsClusterName          = clusterName + "-eds"
+	dnsClusterName          = clusterName + "-dns"
 	serviceName             = "service1"
+	dnsHostName             = "dns_host"
+	dnsPort                 = uint32(8080)
 	defaultTestTimeout      = 5 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
 )
@@ -218,6 +222,9 @@ func setupWithManagementServer(t *testing.T) (*e2e.ManagementServer, string, *gr
 			}
 			return nil
 		},
+		// Required for aggregate clusters as all resources cannot be requested
+		// at once.
+		AllowResourceSubset: true,
 	})
 	t.Cleanup(cleanup)
 

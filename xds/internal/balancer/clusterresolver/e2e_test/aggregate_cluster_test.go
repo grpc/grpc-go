@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/peer"
@@ -50,7 +49,6 @@ import (
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
-	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -59,48 +57,22 @@ import (
 // makeAggregateClusterResource returns an aggregate cluster resource with the
 // given name and list of child names.
 func makeAggregateClusterResource(name string, childNames []string) *v3clusterpb.Cluster {
-	return &v3clusterpb.Cluster{
-		Name: name,
-		ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
-			ClusterType: &v3clusterpb.Cluster_CustomClusterType{
-				Name: "envoy.clusters.aggregate",
-				TypedConfig: testutils.MarshalAny(&v3aggregateclusterpb.ClusterConfig{
-					Clusters: childNames,
-				}),
-			},
-		},
-		LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-	}
+	return e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: name,
+		Type:        e2e.ClusterTypeAggregate,
+		ChildNames:  childNames,
+	})
 }
 
 // makeLogicalDNSClusterResource returns a LOGICAL_DNS cluster resource with the
 // given name and given DNS host and port.
 func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clusterpb.Cluster {
-	return &v3clusterpb.Cluster{
-		Name:                 name,
-		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_LOGICAL_DNS},
-		LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
-		LoadAssignment: &v3endpointpb.ClusterLoadAssignment{
-			Endpoints: []*v3endpointpb.LocalityLbEndpoints{{
-				LbEndpoints: []*v3endpointpb.LbEndpoint{{
-					HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{
-						Endpoint: &v3endpointpb.Endpoint{
-							Address: &v3corepb.Address{
-								Address: &v3corepb.Address_SocketAddress{
-									SocketAddress: &v3corepb.SocketAddress{
-										Address: dnsHost,
-										PortSpecifier: &v3corepb.SocketAddress_PortValue{
-											PortValue: dnsPort,
-										},
-									},
-								},
-							},
-						},
-					},
-				}},
-			}},
-		},
-	}
+	return e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: name,
+		Type:        e2e.ClusterTypeLogicalDNS,
+		DNSHostName: dnsHost,
+		DNSPort:     dnsPort,
+	})
 }
 
 // setupDNS unregisters the DNS resolver and registers a manual resolver for the
