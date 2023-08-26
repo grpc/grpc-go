@@ -45,7 +45,6 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-	xdsinterop "google.golang.org/grpc/interop/xds"
 )
 
 var (
@@ -56,6 +55,11 @@ var (
 	hostNameOverride = flag.String("host_name_override", "", "If set, use this as the hostname instead of the real hostname")
 
 	logger = grpclog.Component("interop")
+)
+
+const (
+	rpcBehaviorMetadataKey = "rpc-behavior"
+	errorCodePrefix        = "error-code-"
 )
 
 func getHostname() string {
@@ -85,9 +89,9 @@ func (s *testServiceImpl) EmptyCall(ctx context.Context, _ *testpb.Empty) (*test
 func (s *testServiceImpl) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	response := &testpb.SimpleResponse{ServerId: s.serverID}
 
-	for headerValue := range getRPCBehaviorMetadata(ctx) {
-		if rpcStatus := getStatusForRPCBehaviorMetadata(headerValue); rpcStatus != nil {
-			return response, status.Err(rpcStatus.Code(), rpcStatus.Message())
+	for _, val := range getRPCBehaviorMetadata(ctx) {
+		if st := getStatusForRPCBehaviorMetadata(val); st != nil {
+			return response, status.Err(st.Code(), st.Message())
 		}
 	}
 
@@ -96,34 +100,35 @@ func (s *testServiceImpl) UnaryCall(ctx context.Context, in *testpb.SimpleReques
 	return response, status.Err(codes.OK, "")
 }
 
-func getRPCBehaviorMetadata(ctx context.Context) map[string]bool {
-	var mdRPCBehavior []string
-	if md, ok := metadata.FromIncomingContext(ctx); !ok {
+func getRPCBehaviorMetadata(ctx context.Context) []string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
 		logger.Error("failed to receive metadata")
 		return nil
-	} else {
-		mdRPCBehavior = md.Get(xdsinterop.RPCBehaviorMetadataKey)
 	}
 
-	rpcBehaviorMetadata := make(map[string]bool)
+	mdRPCBehavior := md.Get(rpcBehaviorMetadataKey)
+
+	rpcBehaviorMetadata := make([]string, 0)
 	for _, val := range mdRPCBehavior {
 		splitVals := strings.Split(val, ",")
-
-		for _, behavior := range splitVals {
-			rpcBehaviorMetadata[strings.TrimSpace(behavior)] = true
-		}
+		rpcBehaviorMetadata = append(rpcBehaviorMetadata, splitVals...)
 	}
+
 	return rpcBehaviorMetadata
 }
 
 func getStatusForRPCBehaviorMetadata(headerValue string) *status.Status {
-	if !strings.HasPrefix(headerValue, xdsinterop.ErrorCodePrefix) {
+	if !strings.HasPrefix(headerValue, errorCodePrefix) {
 		return nil
-	} else if errCode, err := strconv.Atoi(headerValue[len(xdsinterop.ErrorCodePrefix):]); err != nil {
-		return status.New(codes.InvalidArgument, "Invalid format for rpc-behavior header: "+headerValue)
-	} else {
-		return status.New(codes.Code(errCode), "Rpc failed as per the rpc-behavior header value: "+headerValue)
 	}
+
+	errCode, err := strconv.Atoi(headerValue[len(errorCodePrefix):])
+	if err != nil {
+		return status.Newf(codes.InvalidArgument, "Invalid format for rpc-behavior header: %v", headerValue)
+	}
+
+	return status.Newf(codes.Code(errCode), "Rpc failed as per the rpc-behavior header value: %v", headerValue)
 }
 
 // xdsUpdateHealthServiceImpl provides an implementation of the

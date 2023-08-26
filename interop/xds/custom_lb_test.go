@@ -64,14 +64,14 @@ func (s) TestCustomLB(t *testing.T) {
 				errCh.Send(errors.New("failed to receive metadata"))
 				return &testpb.SimpleResponse{}, nil
 			}
-			rpcBMD := md.Get(RPCBehaviorMetadataKey)
+			rpcBMD := md.Get("rpc-behavior")
 			if len(rpcBMD) != 1 {
-				errCh.Send(fmt.Errorf("received %d values for metadata key %v, want 1", len(rpcBMD), RPCBehaviorMetadataKey))
+				errCh.Send(fmt.Errorf("received %d values for metadata key \"rpc-behavior\", want 1", len(rpcBMD)))
 				return &testpb.SimpleResponse{}, nil
 			}
 			wantVal := "error-code-0"
 			if rpcBMD[0] != wantVal {
-				errCh.Send(fmt.Errorf("metadata val for key \"%v\": got val %v, want val %v", RPCBehaviorMetadataKey, rpcBMD[0], wantVal))
+				errCh.Send(fmt.Errorf("metadata val for key \"%v\": got val %v, want val %v", "rpc-behavior", rpcBMD[0], wantVal))
 				return &testpb.SimpleResponse{}, nil
 			}
 			// Success.
