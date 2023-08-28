@@ -129,13 +129,12 @@ type Server struct {
 	// conns contains all active server transports. It is a map keyed on a
 	// listener address with the value being the set of active transports
 	// belonging to that listener.
-	conns             map[string]map[transport.ServerTransport]bool
-	serve             bool
-	drain             bool
-	abortGracefulStop atomic.Bool
-	cv                *sync.Cond              // signaled when connections close for GracefulStop
-	services          map[string]*serviceInfo // service name -> service info
-	events            trace.EventLog
+	conns    map[string]map[transport.ServerTransport]bool
+	serve    bool
+	drain    bool
+	cv       *sync.Cond              // signaled when connections close for GracefulStop
+	services map[string]*serviceInfo // service name -> service info
+	events   trace.EventLog
 
 	quit               *grpcsync.Event
 	done               *grpcsync.Event
@@ -1835,7 +1834,6 @@ func (s *Server) Stop() {
 	defer s.done.Fire()
 
 	s.channelzRemoveOnce.Do(func() { channelz.RemoveEntry(s.channelzID) })
-	s.abortGracefulStop.Store(true)
 
 	// interrupt GracefulStop if Stop and GracefulStop are called concurrently.
 	s.cv.Broadcast()
@@ -1882,10 +1880,6 @@ func (s *Server) GracefulStop() {
 
 	s.channelzRemoveOnce.Do(func() { channelz.RemoveEntry(s.channelzID) })
 	s.mu.Lock()
-	if s.conns == nil || s.abortGracefulStop.Load() {
-		s.mu.Unlock()
-		return
-	}
 
 	for lis := range s.lis {
 		lis.Close()
@@ -1908,9 +1902,6 @@ func (s *Server) GracefulStop() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for {
-		if s.abortGracefulStop.Load() {
-			return
-		}
 		if len(s.conns) == 0 {
 			break
 		}
