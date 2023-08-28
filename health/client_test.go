@@ -39,7 +39,7 @@ func (s) TestClientHealthCheckBackoff(t *testing.T) {
 	}
 
 	var got []time.Duration
-	newStream := func(string) (interface{}, error) {
+	newStream := func(string) (any, error) {
 		if len(got) < maxRetries {
 			return nil, errors.New("backoff")
 		}

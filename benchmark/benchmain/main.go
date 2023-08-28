@@ -425,7 +425,7 @@ func makeFuncStream(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 		if bf.RespPayloadCurve != nil {
 			respSizeBytes = bf.RespPayloadCurve.ChooseRandom()
 		}
-		var req interface{}
+		var req any
 		if bf.EnablePreloader {
 			req = preparedMsg[cn][pos]
 		} else {
@@ -519,7 +519,7 @@ func unaryCaller(client testgrpc.BenchmarkServiceClient, reqSize, respSize int) 
 	}
 }
 
-func streamCaller(stream testgrpc.BenchmarkService_StreamingCallClient, req interface{}) {
+func streamCaller(stream testgrpc.BenchmarkService_StreamingCallClient, req any) {
 	if err := bm.DoStreamingRoundTripPreloaded(stream, req); err != nil {
 		logger.Fatalf("DoStreamingRoundTrip failed: %v", err)
 	}

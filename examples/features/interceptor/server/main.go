@@ -47,7 +47,7 @@ var (
 )
 
 // logger is to mock a sophisticated logging system. To simplify the example, we just print out the content.
-func logger(format string, a ...interface{}) {
+func logger(format string, a ...any) {
 	fmt.Printf("LOG:\t"+format+"\n", a...)
 }
 
@@ -87,7 +87,7 @@ func valid(authorization []string) bool {
 	return token == "some-secret-token"
 }
 
-func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func unaryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	// authentication (token verification)
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -109,12 +109,12 @@ type wrappedStream struct {
 	grpc.ServerStream
 }
 
-func (w *wrappedStream) RecvMsg(m interface{}) error {
+func (w *wrappedStream) RecvMsg(m any) error {
 	logger("Receive a message (Type: %T) at %s", m, time.Now().Format(time.RFC3339))
 	return w.ServerStream.RecvMsg(m)
 }
 
-func (w *wrappedStream) SendMsg(m interface{}) error {
+func (w *wrappedStream) SendMsg(m any) error {
 	logger("Send a message (Type: %T) at %v", m, time.Now().Format(time.RFC3339))
 	return w.ServerStream.SendMsg(m)
 }
@@ -123,7 +123,7 @@ func newWrappedStream(s grpc.ServerStream) grpc.ServerStream {
 	return &wrappedStream{s}
 }
 
-func streamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func streamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	// authentication (token verification)
 	md, ok := metadata.FromIncomingContext(ss.Context())
 	if !ok {

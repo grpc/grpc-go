@@ -209,7 +209,7 @@ func (ccb *ccBalancerWrapper) closeBalancer(m ccbMode) {
 	}
 
 	ccb.mode = m
-	done := ccb.serializer.Done
+	done := ccb.serializer.Done()
 	b := ccb.balancer
 	ok := ccb.serializer.Schedule(func(_ context.Context) {
 		// Close the serializer to ensure that no more calls from gRPC are sent
@@ -406,7 +406,7 @@ func (acbw *acBalancerWrapper) NewStream(ctx context.Context, desc *StreamDesc, 
 
 // Invoke performs a unary RPC.  If the addrConn is not ready, returns
 // errSubConnNotReady.
-func (acbw *acBalancerWrapper) Invoke(ctx context.Context, method string, args interface{}, reply interface{}, opts ...CallOption) error {
+func (acbw *acBalancerWrapper) Invoke(ctx context.Context, method string, args any, reply any, opts ...CallOption) error {
 	cs, err := acbw.NewStream(ctx, unaryStreamDesc, method, opts...)
 	if err != nil {
 		return err

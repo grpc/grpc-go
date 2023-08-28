@@ -158,7 +158,7 @@ func (s) TestPick_DataCacheMiss_PendingEntryExists(t *testing.T) {
 			// also lead to creation of a pending entry, and further RPCs by the
 			// client should not result in RLS requests being sent out.
 			rlsReqCh := make(chan struct{}, 1)
-			interceptor := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+			interceptor := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 				rlsReqCh <- struct{}{}
 				<-ctx.Done()
 				return nil, ctx.Err()
@@ -633,7 +633,7 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_StaleEntry(t *testing.T) {
 			// expired entry and a pending entry in the cache.
 			rlsReqCh := make(chan struct{}, 1)
 			firstRPCDone := grpcsync.NewEvent()
-			interceptor := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+			interceptor := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 				select {
 				case rlsReqCh <- struct{}{}:
 				default:
@@ -733,7 +733,7 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_ExpiredEntry(t *testing.T) {
 			// expired entry and a pending entry in the cache.
 			rlsReqCh := make(chan struct{}, 1)
 			firstRPCDone := grpcsync.NewEvent()
-			interceptor := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+			interceptor := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 				select {
 				case rlsReqCh <- struct{}{}:
 				default:

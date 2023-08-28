@@ -32,9 +32,9 @@ import (
 
 // testingLogger wraps the logging methods from testing.T.
 type testingLogger interface {
-	Log(args ...interface{})
-	Logf(format string, args ...interface{})
-	Errorf(format string, args ...interface{})
+	Log(args ...any)
+	Logf(format string, args ...any)
+	Errorf(format string, args ...any)
 }
 
 // TestSubConn implements the SubConn interface, to be used in tests.

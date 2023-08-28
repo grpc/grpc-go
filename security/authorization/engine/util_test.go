@@ -43,44 +43,44 @@ func (s) TestStringConvert(t *testing.T) {
 		wantParsingError bool
 		wantEvalError    bool
 		expr             string
-		authzArgs        map[string]interface{}
+		authzArgs        map[string]any
 	}{
 		{
 			desc:            "single primitive match",
 			wantEvalOutcome: true,
 			expr:            "request.url_path.startsWith('/pkg.service/test')",
-			authzArgs:       map[string]interface{}{"request.url_path": "/pkg.service/test"},
+			authzArgs:       map[string]any{"request.url_path": "/pkg.service/test"},
 		},
 		{
 			desc:            "single compare match",
 			wantEvalOutcome: true,
 			expr:            "connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'",
-			authzArgs:       map[string]interface{}{"connection.uri_san_peer_certificate": "cluster/ns/default/sa/admin"},
+			authzArgs:       map[string]any{"connection.uri_san_peer_certificate": "cluster/ns/default/sa/admin"},
 		},
 		{
 			desc:            "single primitive no match",
 			wantEvalOutcome: false,
 			expr:            "request.url_path.startsWith('/pkg.service/test')",
-			authzArgs:       map[string]interface{}{"request.url_path": "/source/pkg.service/test"},
+			authzArgs:       map[string]any{"request.url_path": "/source/pkg.service/test"},
 		},
 		{
 			desc:            "primitive and compare match",
 			wantEvalOutcome: true,
 			expr:            "request.url_path == '/pkg.service/test' && connection.uri_san_peer_certificate == 'cluster/ns/default/sa/admin'",
-			authzArgs: map[string]interface{}{"request.url_path": "/pkg.service/test",
+			authzArgs: map[string]any{"request.url_path": "/pkg.service/test",
 				"connection.uri_san_peer_certificate": "cluster/ns/default/sa/admin"},
 		},
 		{
 			desc:             "parse error field not present in environment",
 			wantParsingError: true,
 			expr:             "request.source_path.startsWith('/pkg.service/test')",
-			authzArgs:        map[string]interface{}{"request.url_path": "/pkg.service/test"},
+			authzArgs:        map[string]any{"request.url_path": "/pkg.service/test"},
 		},
 		{
 			desc:          "eval error argument not included in environment",
 			wantEvalError: true,
 			expr:          "request.url_path.startsWith('/pkg.service/test')",
-			authzArgs:     map[string]interface{}{"request.source_path": "/pkg.service/test"},
+			authzArgs:     map[string]any{"request.source_path": "/pkg.service/test"},
 		},
 	} {
 		test := test

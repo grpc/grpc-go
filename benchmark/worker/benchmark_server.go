@@ -80,7 +80,10 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	}
 	runtime.GOMAXPROCS(numOfCores)
 
-	var opts []grpc.ServerOption
+	opts := []grpc.ServerOption{
+		grpc.WriteBufferSize(128 * 1024),
+		grpc.ReadBufferSize(128 * 1024),
+	}
 
 	// Sanity check for server type.
 	switch config.ServerType {

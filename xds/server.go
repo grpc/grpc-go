@@ -63,7 +63,7 @@ var (
 // grpcServer contains methods from grpc.Server which are used by the
 // GRPCServer type here. This is useful for overriding in unit tests.
 type grpcServer interface {
-	RegisterService(*grpc.ServiceDesc, interface{})
+	RegisterService(*grpc.ServiceDesc, any)
 	Serve(net.Listener) error
 	Stop()
 	GracefulStop()
@@ -191,7 +191,7 @@ func (s *GRPCServer) loggingServerModeChangeCallback(addr net.Addr, args Serving
 // RegisterService registers a service and its implementation to the underlying
 // gRPC server. It is called from the IDL generated code. This must be called
 // before invoking Serve.
-func (s *GRPCServer) RegisterService(sd *grpc.ServiceDesc, ss interface{}) {
+func (s *GRPCServer) RegisterService(sd *grpc.ServiceDesc, ss any) {
 	s.gs.RegisterService(sd, ss)
 }
 
@@ -394,7 +394,7 @@ func routeAndProcess(ctx context.Context) error {
 
 // xdsUnaryInterceptor is the unary interceptor added to the gRPC server to
 // perform any xDS specific functionality on unary RPCs.
-func xdsUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+func xdsUnaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 	if envconfig.XDSRBAC {
 		if err := routeAndProcess(ctx); err != nil {
 			return nil, err
@@ -405,7 +405,7 @@ func xdsUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServ
 
 // xdsStreamInterceptor is the stream interceptor added to the gRPC server to
 // perform any xDS specific functionality on streaming RPCs.
-func xdsStreamInterceptor(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func xdsStreamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	if envconfig.XDSRBAC {
 		if err := routeAndProcess(ss.Context()); err != nil {
 			return err

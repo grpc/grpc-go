@@ -33,6 +33,7 @@ import (
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
@@ -450,16 +451,44 @@ const (
 	LoadBalancingPolicyRingHash
 )
 
+// ClusterType specifies the type of the Cluster resource.
+type ClusterType int
+
+const (
+	// ClusterTypeEDS specifies a Cluster that uses EDS to resolve endpoints.
+	ClusterTypeEDS ClusterType = iota
+	// ClusterTypeLogicalDNS specifies a Cluster that uses DNS to resolve
+	// endpoints.
+	ClusterTypeLogicalDNS
+	// ClusterTypeAggregate specifies a Cluster that is made up of child
+	// clusters.
+	ClusterTypeAggregate
+)
+
 // ClusterOptions contains options to configure a Cluster resource.
 type ClusterOptions struct {
+	Type ClusterType
 	// ClusterName is the name of the Cluster resource.
 	ClusterName string
-	// ServiceName is the EDS service name of the Cluster.
+	// ServiceName is the EDS service name of the Cluster. Applicable only when
+	// cluster type is EDS.
 	ServiceName string
+	// ChildNames is the list of child Cluster names. Applicable only when
+	// cluster type is Aggregate.
+	ChildNames []string
+	// DNSHostName is the dns host name of the Cluster. Applicable only when the
+	// cluster type is DNS.
+	DNSHostName string
+	// DNSPort is the port number of the Cluster. Applicable only when the
+	// cluster type is DNS.
+	DNSPort uint32
 	// Policy is the LB policy to be used.
 	Policy LoadBalancingPolicy
 	// SecurityLevel determines the security configuration for the Cluster.
 	SecurityLevel SecurityLevel
+	// EnableLRS adds a load reporting configuration with a config source
+	// pointing to self.
+	EnableLRS bool
 }
 
 // ClusterResourceWithOptions returns an xDS Cluster resource configured with
@@ -501,23 +530,64 @@ func ClusterResourceWithOptions(opts ClusterOptions) *v3clusterpb.Cluster {
 		lbPolicy = v3clusterpb.Cluster_RING_HASH
 	}
 	cluster := &v3clusterpb.Cluster{
-		Name:                 opts.ClusterName,
-		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-		EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+		Name:     opts.ClusterName,
+		LbPolicy: lbPolicy,
+	}
+	switch opts.Type {
+	case ClusterTypeEDS:
+		cluster.ClusterDiscoveryType = &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS}
+		cluster.EdsClusterConfig = &v3clusterpb.Cluster_EdsClusterConfig{
 			EdsConfig: &v3corepb.ConfigSource{
 				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
 					Ads: &v3corepb.AggregatedConfigSource{},
 				},
 			},
 			ServiceName: opts.ServiceName,
-		},
-		LbPolicy: lbPolicy,
+		}
+	case ClusterTypeLogicalDNS:
+		cluster.ClusterDiscoveryType = &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_LOGICAL_DNS}
+		cluster.LoadAssignment = &v3endpointpb.ClusterLoadAssignment{
+			Endpoints: []*v3endpointpb.LocalityLbEndpoints{{
+				LbEndpoints: []*v3endpointpb.LbEndpoint{{
+					HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{
+						Endpoint: &v3endpointpb.Endpoint{
+							Address: &v3corepb.Address{
+								Address: &v3corepb.Address_SocketAddress{
+									SocketAddress: &v3corepb.SocketAddress{
+										Address: opts.DNSHostName,
+										PortSpecifier: &v3corepb.SocketAddress_PortValue{
+											PortValue: opts.DNSPort,
+										},
+									},
+								},
+							},
+						},
+					},
+				}},
+			}},
+		}
+	case ClusterTypeAggregate:
+		cluster.ClusterDiscoveryType = &v3clusterpb.Cluster_ClusterType{
+			ClusterType: &v3clusterpb.Cluster_CustomClusterType{
+				Name: "envoy.clusters.aggregate",
+				TypedConfig: testutils.MarshalAny(&v3aggregateclusterpb.ClusterConfig{
+					Clusters: opts.ChildNames,
+				}),
+			},
+		}
 	}
 	if tlsContext != nil {
 		cluster.TransportSocket = &v3corepb.TransportSocket{
 			Name: "envoy.transport_sockets.tls",
 			ConfigType: &v3corepb.TransportSocket_TypedConfig{
 				TypedConfig: testutils.MarshalAny(tlsContext),
+			},
+		}
+	}
+	if opts.EnableLRS {
+		cluster.LrsServer = &v3corepb.ConfigSource{
+			ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+				Self: &v3corepb.SelfConfigSource{},
 			},
 		}
 	}

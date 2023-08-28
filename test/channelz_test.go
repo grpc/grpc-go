@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -50,12 +51,6 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
-
-func czCleanupWrapper(cleanup func() error, t *testing.T) {
-	if err := cleanup(); err != nil {
-		t.Error(err)
-	}
-}
 
 func verifyResultWithDelay(f func() (bool, error)) error {
 	var ok bool
@@ -85,28 +80,27 @@ func (s) TestCZServerRegistrationAndDeletion(t *testing.T) {
 		{total: int(channelz.EntryPerPage), start: 0, max: channelz.EntryPerPage - 1, length: channelz.EntryPerPage - 1, end: false},
 	}
 
-	for _, c := range testcases {
-		czCleanup := channelz.NewChannelzStorageForTesting()
-		defer czCleanupWrapper(czCleanup, t)
+	for i, c := range testcases {
+		// Reset channelz IDs so `start` is valid.
+		channelz.IDGen.Reset()
+
 		e := tcpClearRREnv
 		te := newTest(t, e)
 		te.startServers(&testServer{security: e.security}, c.total)
 
 		ss, end := channelz.GetServers(c.start, c.max)
 		if int64(len(ss)) != c.length || end != c.end {
-			t.Fatalf("GetServers(%d) = %+v (len of which: %d), end: %+v, want len(GetServers(%d)) = %d, end: %+v", c.start, ss, len(ss), end, c.start, c.length, c.end)
+			t.Fatalf("%d: GetServers(%d) = %+v (len of which: %d), end: %+v, want len(GetServers(%d)) = %d, end: %+v", i, c.start, ss, len(ss), end, c.start, c.length, c.end)
 		}
 		te.tearDown()
 		ss, end = channelz.GetServers(c.start, c.max)
 		if len(ss) != 0 || !end {
-			t.Fatalf("GetServers(0) = %+v (len of which: %d), end: %+v, want len(GetServers(0)) = 0, end: true", ss, len(ss), end)
+			t.Fatalf("%d: GetServers(0) = %+v (len of which: %d), end: %+v, want len(GetServers(0)) = 0, end: true", i, ss, len(ss), end)
 		}
 	}
 }
 
 func (s) TestCZGetServer(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
@@ -157,8 +151,9 @@ func (s) TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 	}
 
 	for _, c := range testcases {
-		czCleanup := channelz.NewChannelzStorageForTesting()
-		defer czCleanupWrapper(czCleanup, t)
+		// Reset channelz IDs so `start` is valid.
+		channelz.IDGen.Reset()
+
 		e := tcpClearRREnv
 		te := newTest(t, e)
 		var ccs []*grpc.ClientConn
@@ -195,8 +190,6 @@ func (s) TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 }
 
 func (s) TestCZTopChannelRegistrationAndDeletionWhenDialFail(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	// Make dial fails (due to no transport security specified)
 	_, err := grpc.Dial("fake.addr")
 	if err == nil {
@@ -208,8 +201,6 @@ func (s) TestCZTopChannelRegistrationAndDeletionWhenDialFail(t *testing.T) {
 }
 
 func (s) TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
 	e.balancer = ""
@@ -256,8 +247,6 @@ func (s) TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 }
 
 func (s) TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	num := 3 // number of backends
 	te := newTest(t, e)
@@ -344,8 +333,9 @@ func (s) TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 	}
 
 	for _, c := range testcases {
-		czCleanup := channelz.NewChannelzStorageForTesting()
-		defer czCleanupWrapper(czCleanup, t)
+		// Reset channelz IDs so `start` is valid.
+		channelz.IDGen.Reset()
+
 		e := tcpClearRREnv
 		te := newTest(t, e)
 		te.startServer(&testServer{security: e.security})
@@ -404,8 +394,6 @@ func (s) TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 }
 
 func (s) TestCZServerListenSocketDeletion(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -461,8 +449,7 @@ func (s) TestCZRecusivelyDeletionOfEntry(t *testing.T) {
 	//    |             |
 	//    v             v
 	// Socket1       Socket2
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
+
 	topChanID := channelz.RegisterChannel(&dummyChannel{}, nil, "")
 	subChanID1, _ := channelz.RegisterSubChannel(&dummyChannel{}, topChanID, "")
 	subChanID2, _ := channelz.RegisterSubChannel(&dummyChannel{}, topChanID, "")
@@ -506,8 +493,6 @@ func (s) TestCZRecusivelyDeletionOfEntry(t *testing.T) {
 }
 
 func (s) TestCZChannelMetrics(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	num := 3 // number of backends
 	te := newTest(t, e)
@@ -523,7 +508,9 @@ func (s) TestCZChannelMetrics(t *testing.T) {
 	cc := te.clientConn(grpc.WithResolvers(r))
 	defer te.tearDown()
 	tc := testgrpc.NewTestServiceClient(cc)
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 
@@ -540,11 +527,11 @@ func (s) TestCZChannelMetrics(t *testing.T) {
 		Payload:      largePayload,
 	}
 
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || status.Code(err) != codes.ResourceExhausted {
+	if _, err := tc.UnaryCall(ctx, req); err == nil || status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
-	stream, err := tc.FullDuplexCall(context.Background())
+	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
@@ -594,8 +581,6 @@ func (s) TestCZChannelMetrics(t *testing.T) {
 }
 
 func (s) TestCZServerMetrics(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.maxServerReceiveMsgSize = newInt(8)
@@ -603,7 +588,9 @@ func (s) TestCZServerMetrics(t *testing.T) {
 	defer te.tearDown()
 	cc := te.clientConn()
 	tc := testgrpc.NewTestServiceClient(cc)
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 
@@ -619,11 +606,11 @@ func (s) TestCZServerMetrics(t *testing.T) {
 		ResponseSize: int32(smallSize),
 		Payload:      largePayload,
 	}
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || status.Code(err) != codes.ResourceExhausted {
+	if _, err := tc.UnaryCall(ctx, req); err == nil || status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
-	stream, err := tc.FullDuplexCall(context.Background())
+	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
@@ -746,7 +733,7 @@ func doServerSideFailedUnaryCall(tc testgrpc.TestServiceClient, t *testing.T) {
 }
 
 func doClientSideInitiatedFailedStream(tc testgrpc.TestServiceClient, t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
@@ -779,7 +766,9 @@ func doClientSideInitiatedFailedStream(tc testgrpc.TestServiceClient, t *testing
 
 // This func is to be used to test client side counting of failed streams.
 func doServerSideInitiatedFailedStreamWithRSTStream(tc testgrpc.TestServiceClient, t *testing.T, l *listenerWrapper) {
-	stream, err := tc.FullDuplexCall(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
 	}
@@ -816,10 +805,10 @@ func doServerSideInitiatedFailedStreamWithRSTStream(tc testgrpc.TestServiceClien
 }
 
 // this func is to be used to test client side counting of failed streams.
-func doServerSideInitiatedFailedStreamWithGoAway(tc testgrpc.TestServiceClient, t *testing.T, l *listenerWrapper) {
+func doServerSideInitiatedFailedStreamWithGoAway(ctx context.Context, tc testgrpc.TestServiceClient, t *testing.T, l *listenerWrapper) {
 	// This call is just to keep the transport from shutting down (socket will be deleted
 	// in this case, and we will not be able to get metrics).
-	s, err := tc.FullDuplexCall(context.Background())
+	s, err := tc.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
 	}
@@ -834,7 +823,7 @@ func doServerSideInitiatedFailedStreamWithGoAway(tc testgrpc.TestServiceClient, 
 		t.Fatalf("s.Recv() failed with error: %v", err)
 	}
 
-	s, err = tc.FullDuplexCall(context.Background())
+	s, err = tc.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
 	}
@@ -858,20 +847,10 @@ func doServerSideInitiatedFailedStreamWithGoAway(tc testgrpc.TestServiceClient, 
 	}
 }
 
-func doIdleCallToInvokeKeepAlive(tc testgrpc.TestServiceClient, t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	_, err := tc.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
-	}
-	// Allow for at least 2 keepalives (1s per ping interval)
-	time.Sleep(4 * time.Second)
-	cancel()
-}
-
 func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.maxServerReceiveMsgSize = newInt(20)
@@ -951,7 +930,7 @@ func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	doServerSideInitiatedFailedStreamWithGoAway(tc, t, rcw)
+	doServerSideInitiatedFailedStreamWithGoAway(ctx, tc, t, rcw)
 	if err := verifyResultWithDelay(func() (bool, error) {
 		skt := channelz.GetSocket(skID)
 		sktData := skt.SocketData
@@ -970,8 +949,6 @@ func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 // It is separated from other cases due to setup incompatibly, i.e. max receive
 // size violation will mask flow control violation.
 func (s) TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.serverInitialWindowSize = 65536
@@ -988,7 +965,7 @@ func (s) TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *t
 	cc, dw := te.clientConnWithConnControl()
 	tc := &testServiceClientWrapper{TestServiceClient: testgrpc.NewTestServiceClient(cc)}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
@@ -1054,8 +1031,6 @@ func (s) TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *t
 }
 
 func (s) TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	// disable BDP
@@ -1167,25 +1142,30 @@ func (s) TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 }
 
 func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
+	const keepaliveRate = 50 * time.Millisecond
 	defer func(t time.Duration) { internal.KeepaliveMinPingTime = t }(internal.KeepaliveMinPingTime)
-	internal.KeepaliveMinPingTime = time.Second
+	internal.KeepaliveMinPingTime = keepaliveRate
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.customDialOptions = append(te.customDialOptions, grpc.WithKeepaliveParams(
 		keepalive.ClientParameters{
-			Time:                time.Second,
+			Time:                keepaliveRate,
 			Timeout:             500 * time.Millisecond,
 			PermitWithoutStream: true,
 		}))
 	te.customServerOptions = append(te.customServerOptions, grpc.KeepaliveEnforcementPolicy(
 		keepalive.EnforcementPolicy{
-			MinTime:             500 * time.Millisecond,
+			MinTime:             keepaliveRate,
 			PermitWithoutStream: true,
 		}))
 	te.startServer(&testServer{security: e.security})
-	te.clientConn() // Dial the server
+	cc := te.clientConn() // Dial the server
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+	start := time.Now()
+	// Wait for at least two keepalives to be able to occur.
+	time.Sleep(2 * keepaliveRate)
 	defer te.tearDown()
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tchan, _ := channelz.GetTopChannels(0, 0)
@@ -1210,8 +1190,9 @@ func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 			break
 		}
 		skt := channelz.GetSocket(id)
-		if skt.SocketData.KeepAlivesSent != 2 {
-			return false, fmt.Errorf("there should be 2 KeepAlives sent, not %d", skt.SocketData.KeepAlivesSent)
+		want := int64(time.Since(start) / keepaliveRate)
+		if skt.SocketData.KeepAlivesSent != want {
+			return false, fmt.Errorf("there should be %v KeepAlives sent, not %d", want, skt.SocketData.KeepAlivesSent)
 		}
 		return true, nil
 	}); err != nil {
@@ -1220,8 +1201,6 @@ func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 }
 
 func (s) TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.maxServerReceiveMsgSize = newInt(20)
@@ -1281,45 +1260,44 @@ func (s) TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 }
 
 func (s) TestCZServerSocketMetricsKeepAlive(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
+	defer func(t time.Duration) { internal.KeepaliveMinServerPingTime = t }(internal.KeepaliveMinServerPingTime)
+	internal.KeepaliveMinServerPingTime = 50 * time.Millisecond
+
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	// We setup the server keepalive parameters to send one keepalive every
-	// second, and verify that the actual number of keepalives is very close to
-	// the number of seconds elapsed in the test.  We had a bug wherein the
-	// server was sending one keepalive every [Time+Timeout] instead of every
-	// [Time] period, and since Timeout is configured to a low value here, we
-	// should be able to verify that the fix works with the above mentioned
-	// logic.
+	// 50ms, and verify that the actual number of keepalives is very close to
+	// Time/50ms.  We had a bug wherein the server was sending one keepalive
+	// every [Time+Timeout] instead of every [Time] period, and since Timeout
+	// is configured to a high value here, we should be able to verify that the
+	// fix works with the above mentioned logic.
 	kpOption := grpc.KeepaliveParams(keepalive.ServerParameters{
-		Time:    time.Second,
-		Timeout: 100 * time.Millisecond,
+		Time:    50 * time.Millisecond,
+		Timeout: 5 * time.Second,
 	})
 	te.customServerOptions = append(te.customServerOptions, kpOption)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	cc := te.clientConn()
-	tc := testgrpc.NewTestServiceClient(cc)
-	start := time.Now()
-	doIdleCallToInvokeKeepAlive(tc, t)
 
-	if err := verifyResultWithDelay(func() (bool, error) {
-		ss, _ := channelz.GetServers(0, 0)
-		if len(ss) != 1 {
-			return false, fmt.Errorf("there should be one server, not %d", len(ss))
-		}
-		ns, _ := channelz.GetServerSockets(ss[0].ID, 0, 0)
-		if len(ns) != 1 {
-			return false, fmt.Errorf("there should be one server normal socket, not %d", len(ns))
-		}
-		wantKeepalivesCount := int64(time.Since(start).Seconds()) - 1
-		if gotKeepalivesCount := ns[0].SocketData.KeepAlivesSent; gotKeepalivesCount != wantKeepalivesCount {
-			return false, fmt.Errorf("got keepalivesCount: %v, want keepalivesCount: %v", gotKeepalivesCount, wantKeepalivesCount)
-		}
-		return true, nil
-	}); err != nil {
-		t.Fatal(err)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+
+	// Allow about 5 pings to happen (250ms/50ms).
+	time.Sleep(255 * time.Millisecond)
+
+	ss, _ := channelz.GetServers(0, 0)
+	if len(ss) != 1 {
+		t.Fatalf("there should be one server, not %d", len(ss))
+	}
+	ns, _ := channelz.GetServerSockets(ss[0].ID, 0, 0)
+	if len(ns) != 1 {
+		t.Fatalf("there should be one server normal socket, not %d", len(ns))
+	}
+	const wantMin, wantMax = 3, 7
+	if got := ns[0].SocketData.KeepAlivesSent; got < wantMin || got > wantMax {
+		t.Fatalf("got keepalivesCount: %v, want keepalivesCount: [%v,%v]", got, wantMin, wantMax)
 	}
 }
 
@@ -1353,8 +1331,6 @@ var cipherSuites = []string{
 }
 
 func (s) TestCZSocketGetSecurityValueTLS(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpTLSRREnv
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
@@ -1403,9 +1379,6 @@ func (s) TestCZSocketGetSecurityValueTLS(t *testing.T) {
 }
 
 func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
-
 	e := tcpClearRREnv
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
 	e.balancer = ""
@@ -1486,8 +1459,6 @@ func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
 }
 
 func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
@@ -1534,11 +1505,11 @@ func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, te.cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, te.cc, connectivity.Ready)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}})
-	awaitNotState(ctx, t, te.cc, connectivity.Ready)
+	testutils.AwaitNotState(ctx, t, te.cc, connectivity.Ready)
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0, 0)
@@ -1571,8 +1542,6 @@ func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 }
 
 func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	e.balancer = ""
 	te := newTest(t, e)
@@ -1677,8 +1646,6 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 }
 
 func (s) TestCZSubChannelPickedNewAddress(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	e.balancer = ""
 	te := newTest(t, e)
@@ -1694,7 +1661,7 @@ func (s) TestCZSubChannelPickedNewAddress(t *testing.T) {
 	defer te.tearDown()
 	tc := testgrpc.NewTestServiceClient(cc)
 	// make sure the connection is up
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
@@ -1707,9 +1674,7 @@ func (s) TestCZSubChannelPickedNewAddress(t *testing.T) {
 	defer close(done)
 	go func() {
 		for {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			tc.EmptyCall(ctx, &testpb.Empty{})
-			cancel()
 			select {
 			case <-time.After(10 * time.Millisecond):
 			case <-done:
@@ -1751,8 +1716,6 @@ func (s) TestCZSubChannelPickedNewAddress(t *testing.T) {
 }
 
 func (s) TestCZSubChannelConnectivityState(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
@@ -1763,7 +1726,7 @@ func (s) TestCZSubChannelConnectivityState(t *testing.T) {
 	defer te.tearDown()
 	tc := testgrpc.NewTestServiceClient(cc)
 	// make sure the connection is up
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
@@ -1850,8 +1813,6 @@ func (s) TestCZSubChannelConnectivityState(t *testing.T) {
 }
 
 func (s) TestCZChannelConnectivityState(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
@@ -1862,7 +1823,7 @@ func (s) TestCZChannelConnectivityState(t *testing.T) {
 	defer te.tearDown()
 	tc := testgrpc.NewTestServiceClient(cc)
 	// make sure the connection is up
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
@@ -1909,8 +1870,6 @@ func (s) TestCZChannelConnectivityState(t *testing.T) {
 }
 
 func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	e.balancer = ""
 	te := newTest(t, e)
@@ -1979,8 +1938,6 @@ func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 }
 
 func (s) TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	channelz.SetMaxTraceEntry(1)
@@ -2010,11 +1967,11 @@ func (s) TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitState(ctx, t, te.cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, te.cc, connectivity.Ready)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "fake address"}}})
-	awaitNotState(ctx, t, te.cc, connectivity.Ready)
+	testutils.AwaitNotState(ctx, t, te.cc, connectivity.Ready)
 
 	// verify that the subchannel no longer exist due to trace referencing it got overwritten.
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -2029,8 +1986,6 @@ func (s) TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 }
 
 func (s) TestCZTraceTopChannelDeletionTraceClear(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})

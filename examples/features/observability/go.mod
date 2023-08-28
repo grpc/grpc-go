@@ -1,6 +1,6 @@
 module google.golang.org/grpc/examples/features/observability
 
-go 1.17
+go 1.19
 
 require (
 	google.golang.org/grpc v1.54.0

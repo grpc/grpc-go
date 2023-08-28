@@ -23,7 +23,6 @@ import (
 	"context"
 	"io"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/stubserver"
@@ -57,7 +56,7 @@ func (s) TestRecvBufferPool(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	stream, err := ss.Client.FullDuplexCall(ctx)

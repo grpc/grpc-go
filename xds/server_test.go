@@ -71,7 +71,7 @@ type fakeGRPCServer struct {
 	serveCh           *testutils.Channel
 }
 
-func (f *fakeGRPCServer) RegisterService(*grpc.ServiceDesc, interface{}) {
+func (f *fakeGRPCServer) RegisterService(*grpc.ServiceDesc, any) {
 	f.registerServiceCh.Send(nil)
 }
 
@@ -312,7 +312,7 @@ type fakeProviderBuilder struct {
 	buildCh *testutils.Channel
 }
 
-func (b *fakeProviderBuilder) ParseConfig(cfg interface{}) (*certprovider.BuildableConfig, error) {
+func (b *fakeProviderBuilder) ParseConfig(cfg any) (*certprovider.BuildableConfig, error) {
 	var config string
 	if err := json.Unmarshal(cfg.(json.RawMessage), &config); err != nil {
 		return nil, fmt.Errorf("providerBuilder %s failed to unmarshal config: %v", b.name, cfg)

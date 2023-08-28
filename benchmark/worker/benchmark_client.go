@@ -116,7 +116,10 @@ func setupClientEnv(config *testpb.ClientConfig) {
 // It returns the connections and corresponding function to close them.
 // It returns non-nil error if there is anything wrong.
 func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error) {
-	var opts []grpc.DialOption
+	opts := []grpc.DialOption{
+		grpc.WithWriteBufferSize(128 * 1024),
+		grpc.WithReadBufferSize(128 * 1024),
+	}
 
 	// Sanity check for client type.
 	switch config.ClientType {

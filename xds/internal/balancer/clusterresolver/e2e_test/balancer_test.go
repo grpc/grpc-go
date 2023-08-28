@@ -18,6 +18,7 @@ package e2e_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -31,7 +32,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/buffer"
+	"google.golang.org/grpc/internal/balancer/stub"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -276,12 +277,7 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 		t.Fatalf("RPCs did not fail after removal of Cluster resource")
 	}
 
-	// Ensure that the ClientConn moves to TransientFailure.
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("Timed out waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
-		}
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Configure cluster and endpoints resources in the management server.
 	resources = e2e.UpdateOptions{
@@ -316,141 +312,6 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	}
 }
 
-// wrappedPriorityBuilder implements the balancer.Builder interface and builds
-// an LB policy which is a thin wrapper around the priority LB policy. The built
-// LB policy and makes certain events available to the test (SubConn state
-// changes and LB config updates).
-type wrappedPriorityBuilder struct {
-	balancer.Builder
-	balancer.ConfigParser
-	// We use an unbounded buffer instead of a vanilla channel to ensure that no
-	// state updates are lost *and* pushing to the channel is non-blocking (to
-	// ensure that the sending goroutine does not block if the test is not
-	// reading from the channel).
-	scStateCh *buffer.Unbounded
-	lbCfgCh   chan serviceconfig.LoadBalancingConfig
-}
-
-// wpbCCWrapper wraps a ClientConn and intercepts NewSubConn calls so the
-// wrapped priority balancer can intercept SubConn state updates.
-type wpbCCWrapper struct {
-	balancer.ClientConn
-	b *wrappedPriorityBalancer
-}
-
-func (c *wpbCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (sc balancer.SubConn, err error) {
-	oldListener := opts.StateListener
-	opts.StateListener = func(state balancer.SubConnState) { c.b.updateSubConnState(sc, state, oldListener) }
-	return c.ClientConn.NewSubConn(addrs, opts)
-}
-
-func newWrappedPriorityBuilder(b balancer.Builder) *wrappedPriorityBuilder {
-	return &wrappedPriorityBuilder{
-		scStateCh:    buffer.NewUnbounded(),
-		lbCfgCh:      make(chan serviceconfig.LoadBalancingConfig, 1),
-		Builder:      b,
-		ConfigParser: b.(balancer.ConfigParser),
-	}
-}
-
-func (b *wrappedPriorityBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	wpb := &wrappedPriorityBalancer{
-		scStateCh: b.scStateCh,
-		lbCfgCh:   b.lbCfgCh,
-	}
-	priorityLB := b.Builder.Build(&wpbCCWrapper{cc, wpb}, opts)
-	wpb.Balancer = priorityLB
-	return wpb
-}
-
-type wrappedPriorityBalancer struct {
-	balancer.Balancer
-	scStateCh *buffer.Unbounded
-	lbCfgCh   chan serviceconfig.LoadBalancingConfig
-}
-
-// UpdateSubConnState does nothing, as we ensure all SubConns created by this
-// balancer have a StateListener set.
-func (b *wrappedPriorityBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-}
-
-func (b *wrappedPriorityBalancer) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState, cb func(balancer.SubConnState)) {
-	b.scStateCh.Put(state)
-	if cb != nil {
-		cb(state)
-	} else {
-		b.Balancer.UpdateSubConnState(sc, state)
-	}
-}
-
-func (b *wrappedPriorityBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
-	select {
-	case b.lbCfgCh <- ccs.BalancerConfig:
-	default:
-	}
-	return b.Balancer.UpdateClientConnState(ccs)
-}
-
-func (b *wrappedPriorityBalancer) Close() {
-	b.scStateCh.Close()
-	b.Balancer.Close()
-}
-
-// Test verifies that SubConn state changes are propagated to the child policy
-// by the cluster resolver LB policy.
-func (s) TestSubConnStateChangePropagationToChildPolicy(t *testing.T) {
-	// Unregister the priority balancer builder for the duration of this test,
-	// and register a policy under the same name that makes SubConn state
-	// changes pushed to it available to the test.
-	priorityBuilder := balancer.Get(priority.Name)
-	internal.BalancerUnregister(priorityBuilder.Name())
-	testChildPolicy := newWrappedPriorityBuilder(priorityBuilder)
-	balancer.Register(testChildPolicy)
-	defer balancer.Register(priorityBuilder)
-
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
-
-	server := stubserver.StartTestService(t, nil)
-	defer server.Stop()
-
-	// Configure cluster and endpoints resources in the management server.
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
-		SkipValidation: true,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
-	cc, cleanup := setupAndDial(t, bootstrapContents)
-	defer cleanup()
-
-	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("EmptyCall() failed: %v", err)
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			t.Fatal("Timeout when waiting for child policy to see a READY SubConn")
-		case s := <-testChildPolicy.scStateCh.Get():
-			testChildPolicy.scStateCh.Load()
-			state := s.(balancer.SubConnState)
-			if state.ConnectivityState == connectivity.Ready {
-				return
-			}
-		}
-	}
-}
-
 // Test verifies that when the received Cluster resource contains outlier
 // detection configuration, the LB config pushed to the child policy contains
 // the appropriate configuration for the outlier detection LB policy.
@@ -460,8 +321,27 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 	// pushed to it available to the test.
 	priorityBuilder := balancer.Get(priority.Name)
 	internal.BalancerUnregister(priorityBuilder.Name())
-	testChildPolicy := newWrappedPriorityBuilder(priorityBuilder)
-	balancer.Register(testChildPolicy)
+	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
+	stub.Register(priority.Name, stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			bd.Data = priorityBuilder.Build(bd.ClientConn, bd.BuildOptions)
+		},
+		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			return priorityBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			select {
+			case lbCfgCh <- ccs.BalancerConfig:
+			default:
+			}
+			bal := bd.Data.(balancer.Balancer)
+			return bal.UpdateClientConnState(ccs)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bal := bd.Data.(balancer.Balancer)
+			bal.Close()
+		},
+	})
 	defer balancer.Register(priorityBuilder)
 
 	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
@@ -541,7 +421,7 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 	}
 
 	select {
-	case lbCfg := <-testChildPolicy.lbCfgCh:
+	case lbCfg := <-lbCfgCh:
 		gotCfg := lbCfg.(*priority.LBConfig)
 		if diff := cmp.Diff(wantCfg, gotCfg); diff != "" {
 			t.Fatalf("Child policy received unexpected diff in config (-want +got):\n%s", diff)

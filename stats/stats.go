@@ -74,7 +74,7 @@ type InPayload struct {
 	// Client is true if this InPayload is from client side.
 	Client bool
 	// Payload is the payload with original type.
-	Payload interface{}
+	Payload any
 	// Data is the serialized message payload.
 	Data []byte
 
@@ -144,7 +144,7 @@ type OutPayload struct {
 	// Client is true if this OutPayload is from client side.
 	Client bool
 	// Payload is the payload with original type.
-	Payload interface{}
+	Payload any
 	// Data is the serialized message payload.
 	Data []byte
 	// Length is the size of the uncompressed payload data. Does not include any

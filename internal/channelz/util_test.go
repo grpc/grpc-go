@@ -19,10 +19,6 @@
  *
  */
 
-// The test in this file should be run in an environment that has go1.10 or later,
-// as the function SyscallConn() (required to get socket option) was introduced
-// to net.TCPListener in go1.10.
-
 package channelz_test
 
 import (

@@ -69,6 +69,9 @@ func wrrLocalityBalancerConfig(childPolicy *internalserviceconfig.BalancerConfig
 }
 
 func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
+	defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
+	envconfig.LeastRequestLB = false
+
 	const customLBPolicyName = "myorg.MyCustomLeastRequestPolicy"
 	stub.Register(customLBPolicyName, stub.BalancerFuncs{})
 
@@ -78,6 +81,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 		wantConfig string // JSON config
 		rhDisabled bool
 		pfDisabled bool
+		lrEnabled  bool
 	}{
 		{
 			name: "ring_hash",
@@ -95,6 +99,22 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				},
 			},
 			wantConfig: `[{"ring_hash_experimental": { "minRingSize": 10, "maxRingSize": 100 }}]`,
+		},
+		{
+			name: "least_request",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3leastrequestpb.LeastRequest{
+								ChoiceCount: wrapperspb.UInt32(3),
+							}),
+						},
+					},
+				},
+			},
+			wantConfig: `[{"least_request_experimental": { "choiceCount": 3 }}]`,
+			lrEnabled:  true,
 		},
 		{
 			name: "pick_first_shuffle",
@@ -183,7 +203,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 			rhDisabled: true,
 		},
 		{
-			name: "pick_first_disabled_pf_rr_use_first_supported",
+			name: "pick_first_enabled_pf_rr_use_pick_first",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -200,8 +220,27 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 					},
 				},
 			},
+			wantConfig: `[{"pick_first": { "shuffleAddressList": true }}]`,
+		},
+		{
+			name: "least_request_disabled_pf_rr_use_first_supported",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3leastrequestpb.LeastRequest{
+								ChoiceCount: wrapperspb.UInt32(32),
+							}),
+						},
+					},
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(&v3roundrobinpb.RoundRobin{}),
+						},
+					},
+				},
+			},
 			wantConfig: `[{"round_robin": {}}]`,
-			pfDisabled: true,
 		},
 		{
 			name: "custom_lb_type_v3_struct",
@@ -297,9 +336,13 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				defer func(old bool) { envconfig.XDSRingHash = old }(envconfig.XDSRingHash)
 				envconfig.XDSRingHash = false
 			}
-			if !test.pfDisabled {
+			if test.lrEnabled {
+				defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
+				envconfig.LeastRequestLB = true
+			}
+			if test.pfDisabled {
 				defer func(old bool) { envconfig.PickFirstLBConfig = old }(envconfig.PickFirstLBConfig)
-				envconfig.PickFirstLBConfig = true
+				envconfig.PickFirstLBConfig = false
 			}
 			rawJSON, err := xdslbregistry.ConvertToServiceConfig(test.policy, 0)
 			if err != nil {
@@ -307,11 +350,11 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 			}
 			// got and want must be unmarshalled since JSON strings shouldn't
 			// generally be directly compared.
-			var got []map[string]interface{}
+			var got []map[string]any
 			if err := json.Unmarshal(rawJSON, &got); err != nil {
 				t.Fatalf("Error unmarshalling rawJSON (%q): %v", rawJSON, err)
 			}
-			var want []map[string]interface{}
+			var want []map[string]any
 			if err := json.Unmarshal(json.RawMessage(test.wantConfig), &want); err != nil {
 				t.Fatalf("Error unmarshalling wantConfig (%q): %v", test.wantConfig, err)
 			}
@@ -322,7 +365,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 	}
 }
 
-func jsonMarshal(t *testing.T, x interface{}) string {
+func jsonMarshal(t *testing.T, x any) string {
 	t.Helper()
 	js, err := json.Marshal(x)
 	if err != nil {

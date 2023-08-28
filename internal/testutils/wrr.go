@@ -33,7 +33,7 @@ import (
 // With {a: 2, b: 3}, the Next() results will be {a, a, b, b, b}.
 type testWRR struct {
 	itemsWithWeight []struct {
-		item   interface{}
+		item   any
 		weight int64
 	}
 	length int
@@ -48,15 +48,15 @@ func NewTestWRR() wrr.WRR {
 	return &testWRR{}
 }
 
-func (twrr *testWRR) Add(item interface{}, weight int64) {
+func (twrr *testWRR) Add(item any, weight int64) {
 	twrr.itemsWithWeight = append(twrr.itemsWithWeight, struct {
-		item   interface{}
+		item   any
 		weight int64
 	}{item: item, weight: weight})
 	twrr.length++
 }
 
-func (twrr *testWRR) Next() interface{} {
+func (twrr *testWRR) Next() any {
 	twrr.mu.Lock()
 	iww := twrr.itemsWithWeight[twrr.idx]
 	twrr.count++

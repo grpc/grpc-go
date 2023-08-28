@@ -17,7 +17,7 @@
  */
 
 // Package clusterresolver contains the implementation of the
-// xds_cluster_resolver_experimental LB policy which resolves endpoint addresses
+// cluster_resolver_experimental LB policy which resolves endpoint addresses
 // using a list of one or more discovery mechanisms.
 package clusterresolver
 
@@ -150,13 +150,6 @@ type ccUpdate struct {
 	err   error
 }
 
-// scUpdate wraps a subConn update received from gRPC. This is directly passed
-// on to the child policy.
-type scUpdate struct {
-	subConn balancer.SubConn
-	state   balancer.SubConnState
-}
-
 type exitIdle struct{}
 
 // clusterResolverBalancer resolves endpoint addresses using a list of one or
@@ -287,7 +280,7 @@ func (b *clusterResolverBalancer) handleErrorFromUpdate(err error, fromParent bo
 	// EDS resource was removed. No action needs to be taken for this, and we
 	// should continue watching the same EDS resource.
 	if fromParent && xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
-		b.resourceWatcher.stop()
+		b.resourceWatcher.stop(false)
 	}
 
 	if b.child != nil {
@@ -314,14 +307,6 @@ func (b *clusterResolverBalancer) run() {
 			switch update := u.(type) {
 			case *ccUpdate:
 				b.handleClientConnUpdate(update)
-			case *scUpdate:
-				// SubConn updates are simply handed over to the underlying
-				// child balancer.
-				if b.child == nil {
-					b.logger.Errorf("Received a SubConn update {%+v} with no child policy", update)
-					break
-				}
-				b.child.UpdateSubConnState(update.subConn, update.state)
 			case exitIdle:
 				if b.child == nil {
 					b.logger.Errorf("xds: received ExitIdle with no child balancer")
@@ -341,7 +326,7 @@ func (b *clusterResolverBalancer) run() {
 		// Close results in stopping the endpoint resolvers and closing the
 		// underlying child policy and is the only way to exit this goroutine.
 		case <-b.closed.Done():
-			b.resourceWatcher.stop()
+			b.resourceWatcher.stop(true)
 
 			if b.child != nil {
 				b.child.Close()
@@ -388,11 +373,7 @@ func (b *clusterResolverBalancer) ResolverError(err error) {
 
 // UpdateSubConnState handles subConn updates from gRPC.
 func (b *clusterResolverBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	if b.closed.HasFired() {
-		b.logger.Warningf("Received subConn update {%v, %v} after close", sc, state)
-		return
-	}
-	b.updateCh.Put(&scUpdate{subConn: sc, state: state})
+	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
 // Close closes the cdsBalancer and the underlying child balancer.
@@ -418,14 +399,4 @@ type ccWrapper struct {
 
 func (c *ccWrapper) ResolveNow(resolver.ResolveNowOptions) {
 	c.resourceWatcher.resolveNow()
-}
-
-func (c *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (sc balancer.SubConn, err error) {
-	if opts.StateListener == nil {
-		// If already set, just allow updates to be sent directly to the
-		// child's listener.  Otherwise, we are responsible for forwarding the
-		// update we'll receive to the proper child.
-		opts.StateListener = func(state balancer.SubConnState) { c.b.UpdateSubConnState(sc, state) }
-	}
-	return c.ClientConn.NewSubConn(addrs, opts)
 }

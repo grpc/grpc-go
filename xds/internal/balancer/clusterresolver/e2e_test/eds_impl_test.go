@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -55,6 +54,7 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
 	_ "google.golang.org/grpc/xds/internal/balancer/clusterresolver" // Register the "cluster_resolver_experimental" LB policy.
+	"google.golang.org/grpc/xds/internal/balancer/priority"
 )
 
 const (
@@ -489,9 +489,9 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	defer cleanup2()
 	addrs, ports := backendAddressesAndPorts(t, servers)
 
-	oldCacheTimeout := balancergroup.DefaultSubBalancerCloseTimeout
-	balancergroup.DefaultSubBalancerCloseTimeout = 100 * time.Microsecond
-	defer func() { balancergroup.DefaultSubBalancerCloseTimeout = oldCacheTimeout }()
+	oldCacheTimeout := priority.DefaultSubBalancerCloseTimeout
+	priority.DefaultSubBalancerCloseTimeout = 100 * time.Microsecond
+	defer func() { priority.DefaultSubBalancerCloseTimeout = oldCacheTimeout }()
 
 	// Create xDS resources for consumption by the test. The first update is an
 	// empty update. This should put the channel in TRANSIENT_FAILURE.

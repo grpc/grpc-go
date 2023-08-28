@@ -21,6 +21,7 @@ package stub
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/serviceconfig"
@@ -38,7 +39,6 @@ type BalancerFuncs struct {
 
 	UpdateClientConnState func(*BalancerData, balancer.ClientConnState) error
 	ResolverError         func(*BalancerData, error)
-	UpdateSubConnState    func(*BalancerData, balancer.SubConn, balancer.SubConnState)
 	Close                 func(*BalancerData)
 	ExitIdle              func(*BalancerData)
 }
@@ -50,7 +50,7 @@ type BalancerData struct {
 	// BuildOptions is set by the builder.
 	BuildOptions balancer.BuildOptions
 	// Data may be used to store arbitrary user data.
-	Data interface{}
+	Data any
 }
 
 type bal struct {
@@ -72,9 +72,7 @@ func (b *bal) ResolverError(e error) {
 }
 
 func (b *bal) UpdateSubConnState(sc balancer.SubConn, scs balancer.SubConnState) {
-	if b.bf.UpdateSubConnState != nil {
-		b.bf.UpdateSubConnState(b.bd, sc, scs)
-	}
+	panic(fmt.Sprintf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, scs))
 }
 
 func (b *bal) Close() {

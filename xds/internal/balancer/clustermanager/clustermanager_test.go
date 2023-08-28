@@ -27,12 +27,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
@@ -52,65 +50,15 @@ func Test(t *testing.T) {
 const (
 	defaultTestTimeout      = 5 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
+	testBackendAddrsCount   = 12
 )
 
-var (
-	rtBuilder           balancer.Builder
-	rtParser            balancer.ConfigParser
-	testBackendAddrStrs []string
-)
-
-const ignoreAttrsRRName = "ignore_attrs_round_robin"
-
-type ignoreAttrsRRBuilder struct {
-	balancer.Builder
-}
-
-func (trrb *ignoreAttrsRRBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &ignoreAttrsRRBalancer{trrb.Builder.Build(cc, opts)}
-}
-
-func (*ignoreAttrsRRBuilder) Name() string {
-	return ignoreAttrsRRName
-}
-
-// ignoreAttrsRRBalancer clears attributes from all addresses.
-//
-// It's necessary in this tests because hierarchy modifies address.Attributes.
-// Even if rr gets addresses with empty hierarchy, the attributes fields are
-// different. This is a temporary walkaround for the tests to ignore attributes.
-// Eventually, we need a way for roundrobin to know that two addresses with
-// empty attributes are equal.
-//
-// TODO: delete this when the issue is resolved:
-// https://github.com/grpc/grpc-go/issues/3611.
-type ignoreAttrsRRBalancer struct {
-	balancer.Balancer
-}
-
-func (trrb *ignoreAttrsRRBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	var newAddrs []resolver.Address
-	for _, a := range s.ResolverState.Addresses {
-		a.BalancerAttributes = nil
-		newAddrs = append(newAddrs, a)
-	}
-	s.ResolverState.Addresses = newAddrs
-	return trrb.Balancer.UpdateClientConnState(s)
-}
-
-const testBackendAddrsCount = 12
+var testBackendAddrStrs []string
 
 func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
 		testBackendAddrStrs = append(testBackendAddrStrs, fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i))
 	}
-	rtBuilder = balancer.Get(balancerName)
-	rtParser = rtBuilder.(balancer.ConfigParser)
-
-	balancer.Register(&ignoreAttrsRRBuilder{balancer.Get(roundrobin.Name)})
-	balancer.Register(wrappedPickFirstBalancerBuilder{})
-
-	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond
 }
 
 func testPick(t *testing.T, p balancer.Picker, info balancer.PickInfo, wantSC balancer.SubConn, wantErr error) {
@@ -128,16 +76,17 @@ func testPick(t *testing.T, p balancer.Picker, info balancer.PickInfo, wantSC ba
 
 func TestClusterPicks(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	rtb := rtBuilder.Build(cc, balancer.BuildOptions{})
+	builder := balancer.Get(balancerName)
+	parser := builder.(balancer.ConfigParser)
+	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
 "children": {
-	"cds:cluster_1":{ "childPolicy": [{"ignore_attrs_round_robin":""}] },
-	"cds:cluster_2":{ "childPolicy": [{"ignore_attrs_round_robin":""}] }
+	"cds:cluster_1":{ "childPolicy": [{"round_robin":""}] },
+	"cds:cluster_2":{ "childPolicy": [{"round_robin":""}] }
 }
 }`
-
-	config1, err := rtParser.ParseConfig([]byte(configJSON1))
+	config1, err := parser.ParseConfig([]byte(configJSON1))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
@@ -147,7 +96,7 @@ func TestClusterPicks(t *testing.T) {
 		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
 		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
-	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
+	if err := bal.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
 			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
@@ -206,16 +155,17 @@ func TestClusterPicks(t *testing.T) {
 // update with extra clusters.
 func TestConfigUpdateAddCluster(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	rtb := rtBuilder.Build(cc, balancer.BuildOptions{})
+	builder := balancer.Get(balancerName)
+	parser := builder.(balancer.ConfigParser)
+	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
 "children": {
-	"cds:cluster_1":{ "childPolicy": [{"ignore_attrs_round_robin":""}] },
-	"cds:cluster_2":{ "childPolicy": [{"ignore_attrs_round_robin":""}] }
+	"cds:cluster_1":{ "childPolicy": [{"round_robin":""}] },
+	"cds:cluster_2":{ "childPolicy": [{"round_robin":""}] }
 }
 }`
-
-	config1, err := rtParser.ParseConfig([]byte(configJSON1))
+	config1, err := parser.ParseConfig([]byte(configJSON1))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
@@ -225,7 +175,7 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
 		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
-	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
+	if err := bal.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
 			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
@@ -283,17 +233,17 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	// new subconn and a picker update.
 	configJSON2 := `{
 "children": {
-	"cds:cluster_1":{ "childPolicy": [{"ignore_attrs_round_robin":""}] },
-	"cds:cluster_2":{ "childPolicy": [{"ignore_attrs_round_robin":""}] },
-	"cds:cluster_3":{ "childPolicy": [{"ignore_attrs_round_robin":""}] }
+	"cds:cluster_1":{ "childPolicy": [{"round_robin":""}] },
+	"cds:cluster_2":{ "childPolicy": [{"round_robin":""}] },
+	"cds:cluster_3":{ "childPolicy": [{"round_robin":""}] }
 }
 }`
-	config2, err := rtParser.ParseConfig([]byte(configJSON2))
+	config2, err := parser.ParseConfig([]byte(configJSON2))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
 	wantAddrs = append(wantAddrs, resolver.Address{Addr: testBackendAddrStrs[2], BalancerAttributes: nil})
-	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
+	if err := bal.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
 			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
@@ -363,16 +313,17 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 // config update with no clusters. Pick should fail with details in error.
 func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	rtb := rtBuilder.Build(cc, balancer.BuildOptions{})
+	builder := balancer.Get(balancerName)
+	parser := builder.(balancer.ConfigParser)
+	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
 "children": {
-	"cds:cluster_1":{ "childPolicy": [{"ignore_attrs_round_robin":""}] },
-	"cds:cluster_2":{ "childPolicy": [{"ignore_attrs_round_robin":""}] }
+	"cds:cluster_1":{ "childPolicy": [{"round_robin":""}] },
+	"cds:cluster_2":{ "childPolicy": [{"round_robin":""}] }
 }
 }`
-
-	config1, err := rtParser.ParseConfig([]byte(configJSON1))
+	config1, err := parser.ParseConfig([]byte(configJSON1))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
@@ -382,7 +333,7 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
 		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
-	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
+	if err := bal.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
 			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
@@ -438,11 +389,11 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 
 	// A config update with no clusters.
 	configJSON2 := `{}`
-	config2, err := rtParser.ParseConfig([]byte(configJSON2))
+	config2, err := parser.ParseConfig([]byte(configJSON2))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
-	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
+	if err := bal.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: config2,
 	}); err != nil {
 		t.Fatalf("failed to update ClientConn state: %v", err)
@@ -466,7 +417,7 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	}
 
 	// Resend the previous config with clusters
-	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
+	if err := bal.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
 			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
@@ -523,7 +474,6 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 
 func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	const (
-		balancerName       = "stubBalancer-TestClusterManagerForwardsBalancerBuildOptions"
 		userAgent          = "ua"
 		defaultTestTimeout = 1 * time.Second
 	)
@@ -536,7 +486,7 @@ func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefChannel, 1234, nil),
 		CustomUserAgent:  userAgent,
 	}
-	stub.Register(balancerName, stub.BalancerFuncs{
+	stub.Register(t.Name(), stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
 			if !cmp.Equal(bd.BuildOptions, bOpts) {
 				err := fmt.Errorf("buildOptions in child balancer: %v, want %v", bd, bOpts)
@@ -549,19 +499,21 @@ func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	})
 
 	cc := testutils.NewTestClientConn(t)
-	rtb := rtBuilder.Build(cc, bOpts)
+	builder := balancer.Get(balancerName)
+	parser := builder.(balancer.ConfigParser)
+	bal := builder.Build(cc, bOpts)
 
 	configJSON1 := fmt.Sprintf(`{
 "children": {
 	"cds:cluster_1":{ "childPolicy": [{"%s":""}] }
 }
-}`, balancerName)
-	config1, err := rtParser.ParseConfig([]byte(configJSON1))
+}`, t.Name())
+	config1, err := parser.ParseConfig([]byte(configJSON1))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
 
-	if err := rtb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: config1}); err != nil {
+	if err := bal.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: config1}); err != nil {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -582,22 +534,23 @@ var errTestInitIdle = fmt.Errorf("init Idle balancer error 0")
 func init() {
 	stub.Register(initIdleBalancerName, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, opts balancer.ClientConnState) error {
-			sc, err := bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{})
+			sc, err := bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) {
+					err := fmt.Errorf("wrong picker error")
+					if state.ConnectivityState == connectivity.Idle {
+						err = errTestInitIdle
+					}
+					bd.ClientConn.UpdateState(balancer.State{
+						ConnectivityState: state.ConnectivityState,
+						Picker:            &testutils.TestConstPicker{Err: err},
+					})
+				},
+			})
 			if err != nil {
 				return err
 			}
 			sc.Connect()
 			return nil
-		},
-		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-			err := fmt.Errorf("wrong picker error")
-			if state.ConnectivityState == connectivity.Idle {
-				err = errTestInitIdle
-			}
-			bd.ClientConn.UpdateState(balancer.State{
-				ConnectivityState: state.ConnectivityState,
-				Picker:            &testutils.TestConstPicker{Err: err},
-			})
 		},
 	})
 }
@@ -606,15 +559,16 @@ func init() {
 // state will be Idle.
 func TestInitialIdle(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	rtb := rtBuilder.Build(cc, balancer.BuildOptions{})
+	builder := balancer.Get(balancerName)
+	parser := builder.(balancer.ConfigParser)
+	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
 "children": {
 	"cds:cluster_1":{ "childPolicy": [{"test-init-Idle-balancer":""}] }
 }
 }`
-
-	config1, err := rtParser.ParseConfig([]byte(configJSON1))
+	config1, err := parser.ParseConfig([]byte(configJSON1))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
@@ -623,7 +577,7 @@ func TestInitialIdle(t *testing.T) {
 	wantAddrs := []resolver.Address{
 		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
 	}
-	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
+	if err := bal.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
 		}},
@@ -652,14 +606,16 @@ func TestInitialIdle(t *testing.T) {
 // reflect this change.
 func TestClusterGracefulSwitch(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	rtb := rtBuilder.Build(cc, balancer.BuildOptions{})
+	builder := balancer.Get(balancerName)
+	parser := builder.(balancer.ConfigParser)
+	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
 "children": {
-	"csp:cluster":{ "childPolicy": [{"ignore_attrs_round_robin":""}] }
+	"csp:cluster":{ "childPolicy": [{"round_robin":""}] }
 }
 }`
-	config1, err := rtParser.ParseConfig([]byte(configJSON1))
+	config1, err := parser.ParseConfig([]byte(configJSON1))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
@@ -667,7 +623,7 @@ func TestClusterGracefulSwitch(t *testing.T) {
 		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
 		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
-	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
+	if err := bal.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(wantAddrs[0], []string{"csp:cluster"}),
 		}},
@@ -685,17 +641,27 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	}
 	testPick(t, p1, pi, sc1, nil)
 
+	childPolicyName := t.Name()
+	stub.Register(childPolicyName, stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			bd.Data = balancer.Get(grpc.PickFirstBalancerName).Build(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			bal := bd.Data.(balancer.Balancer)
+			return bal.UpdateClientConnState(ccs)
+		},
+	})
 	// Same cluster, different balancer type.
-	configJSON2 := `{
+	configJSON2 := fmt.Sprintf(`{
 "children": {
-	"csp:cluster":{ "childPolicy": [{"wrappedPickFirstBalancer":""}] }
+	"csp:cluster":{ "childPolicy": [{"%s":""}] }
 }
-}`
-	config2, err := rtParser.ParseConfig([]byte(configJSON2))
+}`, childPolicyName)
+	config2, err := parser.ParseConfig([]byte(configJSON2))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
-	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
+	if err := bal.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(wantAddrs[1], []string{"csp:cluster"}),
 		}},
@@ -739,35 +705,6 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	}
 }
 
-type wrappedPickFirstBalancerBuilder struct{}
-
-func (wrappedPickFirstBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	builder := balancer.Get(grpc.PickFirstBalancerName)
-	wpfb := &wrappedPickFirstBalancer{
-		ClientConn: cc,
-	}
-	pf := builder.Build(wpfb, opts)
-	wpfb.Balancer = pf
-	return wpfb
-}
-
-func (wrappedPickFirstBalancerBuilder) Name() string {
-	return "wrappedPickFirstBalancer"
-}
-
-type wrappedPickFirstBalancer struct {
-	balancer.Balancer
-	balancer.ClientConn
-}
-
-func (wb *wrappedPickFirstBalancer) UpdateState(state balancer.State) {
-	// Eat it if IDLE - allows it to switch over only on a READY SubConn.
-	if state.ConnectivityState == connectivity.Idle {
-		return
-	}
-	wb.ClientConn.UpdateState(state)
-}
-
 // tcc wraps a testutils.TestClientConn but stores all state transitions in a
 // slice.
 type tcc struct {
@@ -792,15 +729,16 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	}
 	stub.Register("update_state_balancer", balFuncs)
 
-	rtb := rtBuilder.Build(cc, balancer.BuildOptions{})
+	builder := balancer.Get(balancerName)
+	parser := builder.(balancer.ConfigParser)
+	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
 "children": {
 	"cds:cluster_1":{ "childPolicy": [{"update_state_balancer":""}] }
 }
 }`
-
-	config1, err := rtParser.ParseConfig([]byte(configJSON1))
+	config1, err := parser.ParseConfig([]byte(configJSON1))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
@@ -809,7 +747,7 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	wantAddrs := []resolver.Address{
 		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
 	}
-	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
+	if err := bal.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
 		}},

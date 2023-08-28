@@ -374,23 +374,24 @@ func (s) TestPickerUpdateAfterClose(t *testing.T) {
 	stub.Register(childPolicyName, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			// Create a subConn which will be used later on to test the race
-			// between UpdateSubConnState() and Close().
-			sc, err := bd.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{})
+			// between StateListener() and Close().
+			sc, err := bd.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{
+				StateListener: func(balancer.SubConnState) {
+					go func() {
+						// Wait for Close() to be called on the parent policy before
+						// sending the picker update.
+						<-closeCh
+						bd.ClientConn.UpdateState(balancer.State{
+							Picker: base.NewErrPicker(errors.New("dummy error picker")),
+						})
+					}()
+				},
+			})
 			if err != nil {
 				return err
 			}
 			sc.Connect()
 			return nil
-		},
-		UpdateSubConnState: func(bd *stub.BalancerData, _ balancer.SubConn, _ balancer.SubConnState) {
-			go func() {
-				// Wait for Close() to be called on the parent policy before
-				// sending the picker update.
-				<-closeCh
-				bd.ClientConn.UpdateState(balancer.State{
-					Picker: base.NewErrPicker(errors.New("dummy error picker")),
-				})
-			}()
 		},
 	})
 

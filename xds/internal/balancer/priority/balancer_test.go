@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -68,7 +67,9 @@ func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
 		testBackendAddrStrs = append(testBackendAddrStrs, fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i))
 	}
-	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond
+	// Disable sub-balancer caching for all but the tests which exercise the
+	// caching behavior.
+	DefaultSubBalancerCloseTimeout = time.Duration(0)
 	balancer.Register(&anotherRR{Builder: balancer.Get(roundrobin.Name)})
 }
 
@@ -1302,10 +1303,10 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 
 	const testChildCacheTimeout = time.Second
 	defer func() func() {
-		old := balancergroup.DefaultSubBalancerCloseTimeout
-		balancergroup.DefaultSubBalancerCloseTimeout = testChildCacheTimeout
+		old := DefaultSubBalancerCloseTimeout
+		DefaultSubBalancerCloseTimeout = testChildCacheTimeout
 		return func() {
-			balancergroup.DefaultSubBalancerCloseTimeout = old
+			DefaultSubBalancerCloseTimeout = old
 		}
 	}()()
 
@@ -1626,25 +1627,6 @@ func (s) TestPriority_IgnoreReresolutionRequest(t *testing.T) {
 
 }
 
-type wrappedRoundRobinBalancerBuilder struct {
-	name string
-	ccCh *testutils.Channel
-}
-
-func (w *wrappedRoundRobinBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	w.ccCh.Send(cc)
-	rrBuilder := balancer.Get(roundrobin.Name)
-	return &wrappedRoundRobinBalancer{Balancer: rrBuilder.Build(cc, opts)}
-}
-
-func (w *wrappedRoundRobinBalancerBuilder) Name() string {
-	return w.name
-}
-
-type wrappedRoundRobinBalancer struct {
-	balancer.Balancer
-}
-
 // TestPriority_IgnoreReresolutionRequestTwoChildren tests the case where the
 // priority policy has two child policies, one of them has the
 // IgnoreReresolutionRequests field set to true while the other one has it set
@@ -1652,12 +1634,21 @@ type wrappedRoundRobinBalancer struct {
 // set to ignore reresolution requests are ignored, while calls from the other
 // child are processed.
 func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
-	// Register a wrapping balancer to act the child policy of the priority
-	// policy. The wrapping balancer builder's Build() method pushes the
-	// balancer.ClientConn on a channel for this test to use.
+	// Register a stub balancer to act the child policy of the priority policy.
+	// Provide an init function to the stub balancer to capture the ClientConn
+	// passed to the child policy.
 	ccCh := testutils.NewChannel()
 	childPolicyName := t.Name()
-	balancer.Register(&wrappedRoundRobinBalancerBuilder{name: childPolicyName, ccCh: ccCh})
+	stub.Register(childPolicyName, stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			ccCh.Send(bd.ClientConn)
+			bd.Data = balancer.Get(roundrobin.Name).Build(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			bal := bd.Data.(balancer.Balancer)
+			return bal.UpdateClientConnState(ccs)
+		},
+	})
 
 	cc := testutils.NewTestClientConn(t)
 	bb := balancer.Get(Name)
@@ -1746,7 +1737,18 @@ func init() {
 		ii := i
 		stub.Register(fmt.Sprintf("%s-%d", initIdleBalancerName, ii), stub.BalancerFuncs{
 			UpdateClientConnState: func(bd *stub.BalancerData, opts balancer.ClientConnState) error {
-				sc, err := bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{})
+				lis := func(state balancer.SubConnState) {
+					err := fmt.Errorf("wrong picker error")
+					if state.ConnectivityState == connectivity.Idle {
+						err = errsTestInitIdle[ii]
+					}
+					bd.ClientConn.UpdateState(balancer.State{
+						ConnectivityState: state.ConnectivityState,
+						Picker:            &testutils.TestConstPicker{Err: err},
+					})
+				}
+
+				sc, err := bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{StateListener: lis})
 				if err != nil {
 					return err
 				}
@@ -1756,16 +1758,6 @@ func init() {
 					Picker:            &testutils.TestConstPicker{Err: balancer.ErrNoSubConnAvailable},
 				})
 				return nil
-			},
-			UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-				err := fmt.Errorf("wrong picker error")
-				if state.ConnectivityState == connectivity.Idle {
-					err = errsTestInitIdle[ii]
-				}
-				bd.ClientConn.UpdateState(balancer.State{
-					ConnectivityState: state.ConnectivityState,
-					Picker:            &testutils.TestConstPicker{Err: err},
-				})
 			},
 		})
 	}

@@ -248,7 +248,7 @@ type ServerInfo struct {
 	// Metadata is an optional configuration.
 	// For "protobuf", it's ignored.
 	// For "bytebuf", it should be an int representing response size.
-	Metadata interface{}
+	Metadata any
 
 	// Listener is the network listener for the server to use
 	Listener net.Listener
@@ -302,7 +302,7 @@ func DoStreamingRoundTrip(stream testgrpc.BenchmarkService_StreamingCallClient, 
 }
 
 // DoStreamingRoundTripPreloaded performs a round trip for a single streaming rpc with preloaded payload.
-func DoStreamingRoundTripPreloaded(stream testgrpc.BenchmarkService_StreamingCallClient, req interface{}) error {
+func DoStreamingRoundTripPreloaded(stream testgrpc.BenchmarkService_StreamingCallClient, req any) error {
 	// req could be either *testpb.SimpleRequest or *grpc.PreparedMsg
 	if err := stream.SendMsg(req); err != nil {
 		return fmt.Errorf("/BenchmarkService/StreamingCall.Send(_) = %v, want <nil>", err)

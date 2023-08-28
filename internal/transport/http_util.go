@@ -441,7 +441,7 @@ func getWriteBufferPool(writeBufferSize int) *sync.Pool {
 		return pool
 	}
 	pool = &sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			b := make([]byte, size)
 			return &b
 		},

@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
 	"google.golang.org/grpc/internal/testutils"
@@ -159,7 +158,6 @@ func init() {
 	wtbBuilder = balancer.Get(Name)
 	wtbParser = wtbBuilder.(balancer.ConfigParser)
 
-	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond
 	NewRandomWRR = testutils.NewTestWRR
 }
 
@@ -1211,22 +1209,23 @@ var errTestInitIdle = fmt.Errorf("init Idle balancer error 0")
 func init() {
 	stub.Register(initIdleBalancerName, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, opts balancer.ClientConnState) error {
-			sc, err := bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{})
+			sc, err := bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) {
+					err := fmt.Errorf("wrong picker error")
+					if state.ConnectivityState == connectivity.Idle {
+						err = errTestInitIdle
+					}
+					bd.ClientConn.UpdateState(balancer.State{
+						ConnectivityState: state.ConnectivityState,
+						Picker:            &testutils.TestConstPicker{Err: err},
+					})
+				},
+			})
 			if err != nil {
 				return err
 			}
 			sc.Connect()
 			return nil
-		},
-		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-			err := fmt.Errorf("wrong picker error")
-			if state.ConnectivityState == connectivity.Idle {
-				err = errTestInitIdle
-			}
-			bd.ClientConn.UpdateState(balancer.State{
-				ConnectivityState: state.ConnectivityState,
-				Picker:            &testutils.TestConstPicker{Err: err},
-			})
 		},
 	})
 }
