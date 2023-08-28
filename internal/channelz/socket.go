@@ -19,53 +19,47 @@
 package channelz
 
 import (
+	"fmt"
 	"net"
-	"time"
+	"sync/atomic"
 
 	"google.golang.org/grpc/credentials"
 )
 
-// SocketMetric defines the info channelz provides for a specific Socket, which
-// includes SocketInternalMetric and channelz-specific data, such as channelz id, etc.
-type SocketMetric struct {
-	// ID is the channelz id of this socket.
-	ID int64
-	// RefName is the human readable reference string of this socket.
-	RefName string
-	// SocketData contains socket internal metric reported by the socket through
-	// ChannelzMetric().
-	SocketData *SocketInternalMetric
-}
-
-// SocketInternalMetric defines the struct that the implementor of Socket interface
+// SocketMetrics defines the struct that the implementor of Socket interface
 // should return from ChannelzMetric().
-type SocketInternalMetric struct {
+type SocketMetrics struct {
 	// The number of streams that have been started.
-	StreamsStarted int64
+	StreamsStarted atomic.Int64
 	// The number of streams that have ended successfully:
 	// On client side, receiving frame with eos bit set.
 	// On server side, sending frame with eos bit set.
-	StreamsSucceeded int64
+	StreamsSucceeded atomic.Int64
 	// The number of streams that have ended unsuccessfully:
 	// On client side, termination without receiving frame with eos bit set.
 	// On server side, termination without sending frame with eos bit set.
-	StreamsFailed int64
+	StreamsFailed atomic.Int64
 	// The number of messages successfully sent on this socket.
-	MessagesSent     int64
-	MessagesReceived int64
+	MessagesSent     atomic.Int64
+	MessagesReceived atomic.Int64
 	// The number of keep alives sent.  This is typically implemented with HTTP/2
 	// ping messages.
-	KeepAlivesSent int64
+	KeepAlivesSent atomic.Int64
 	// The last time a stream was created by this endpoint.  Usually unset for
 	// servers.
-	LastLocalStreamCreatedTimestamp time.Time
+	LastLocalStreamCreatedTimestamp atomic.Int64
 	// The last time a stream was created by the remote endpoint.  Usually unset
 	// for clients.
-	LastRemoteStreamCreatedTimestamp time.Time
+	LastRemoteStreamCreatedTimestamp atomic.Int64
 	// The last time a message was sent by this endpoint.
-	LastMessageSentTimestamp time.Time
+	LastMessageSentTimestamp atomic.Int64
 	// The last time a message was received by this endpoint.
-	LastMessageReceivedTimestamp time.Time
+	LastMessageReceivedTimestamp atomic.Int64
+}
+
+// EphemeralSocketMetrics are metrics that change rapidly and are tracked
+// outside of channelz.
+type EphemeralSocketMetrics struct {
 	// The amount of window, granted to the local endpoint by the remote endpoint.
 	// This may be slightly out of date due to network latency.  This does NOT
 	// include stream level or TCP level flow control info.
@@ -74,77 +68,63 @@ type SocketInternalMetric struct {
 	// This may be slightly out of date due to network latency.  This does NOT
 	// include stream level or TCP level flow control info.
 	RemoteFlowControlWindow int64
-	// The locally bound address.
+}
+
+type SocketType string
+
+const (
+	SocketTypeNormal = "NormalSocket"
+	SocketTypeListen = "ListenSocket"
+)
+
+type Socket struct {
+	Entity
+	SocketType       SocketType
+	ID               int64
+	Parent           Entity
+	cm               *channelMap
+	SocketMetrics    SocketMetrics
+	EphemeralMetrics func() *EphemeralSocketMetrics
+
+	RefName string
+	// The locally bound address.  Immutable.
 	LocalAddr net.Addr
-	// The remote bound address.  May be absent.
+	// The remote bound address.  May be absent.  Immutable.
 	RemoteAddr net.Addr
 	// Optional, represents the name of the remote endpoint, if different than
-	// the original target name.
-	RemoteName    string
+	// the original target name.  Immutable.
+	RemoteName string
+	// Immutable.
 	SocketOptions *SocketOptionData
-	Security      credentials.ChannelzSecurityValue
+	// Immutable.
+	Security credentials.ChannelzSecurityValue
 }
 
-// Socket is the interface that should be satisfied in order to be tracked by
-// channelz as Socket.
-type Socket interface {
-	ChannelzMetric() *SocketInternalMetric
+func (ls *Socket) String() string {
+	return fmt.Sprintf("%s %s #%d", ls.Parent, ls.SocketType, ls.ID)
 }
 
-type listenSocket struct {
-	refName string
-	s       Socket
-	id      int64
-	pid     int64
-	cm      *channelMap
+func (ls *Socket) id() int64 {
+	return ls.ID
 }
 
-func (ls *listenSocket) addChild(id int64, e entry) {
+func (ls *Socket) addChild(id int64, e entry) {
 	logger.Errorf("cannot add a child (id = %d) of type %T to a listen socket", id, e)
 }
 
-func (ls *listenSocket) deleteChild(id int64) {
+func (ls *Socket) deleteChild(id int64) {
 	logger.Errorf("cannot delete a child (id = %d) from a listen socket", id)
 }
 
-func (ls *listenSocket) triggerDelete() {
-	ls.cm.deleteEntry(ls.id)
-	ls.cm.findEntry(ls.pid).deleteChild(ls.id)
+func (ls *Socket) triggerDelete() {
+	ls.cm.deleteEntry(ls.ID)
+	ls.Parent.(entry).deleteChild(ls.ID)
 }
 
-func (ls *listenSocket) deleteSelfIfReady() {
+func (ls *Socket) deleteSelfIfReady() {
 	logger.Errorf("cannot call deleteSelfIfReady on a listen socket")
 }
 
-func (ls *listenSocket) getParentID() int64 {
-	return ls.pid
-}
-
-type normalSocket struct {
-	refName string
-	s       Socket
-	id      int64
-	pid     int64
-	cm      *channelMap
-}
-
-func (ns *normalSocket) addChild(id int64, e entry) {
-	logger.Errorf("cannot add a child (id = %d) of type %T to a normal socket", id, e)
-}
-
-func (ns *normalSocket) deleteChild(id int64) {
-	logger.Errorf("cannot delete a child (id = %d) from a normal socket", id)
-}
-
-func (ns *normalSocket) triggerDelete() {
-	ns.cm.deleteEntry(ns.id)
-	ns.cm.findEntry(ns.pid).deleteChild(ns.id)
-}
-
-func (ns *normalSocket) deleteSelfIfReady() {
-	logger.Errorf("cannot call deleteSelfIfReady on a normal socket")
-}
-
-func (ns *normalSocket) getParentID() int64 {
-	return ns.pid
+func (ls *Socket) getParentID() int64 {
+	return ls.Parent.id()
 }

@@ -19,69 +19,66 @@
 package channelz
 
 import (
+	"fmt"
 	"sync/atomic"
 )
 
-// SubChannelMetric defines the info channelz provides for a specific SubChannel,
-// which includes ChannelInternalMetric and channelz-specific data, such as
-// channelz id, child list, etc.
-type SubChannelMetric struct {
+// SubChannel is the channelz representation of a subchannel.
+type SubChannel struct {
+	Entity
 	// ID is the channelz id of this subchannel.
 	ID int64
 	// RefName is the human readable reference string of this subchannel.
-	RefName string
-	// ChannelData contains subchannel internal metric reported by the subchannel
-	// through ChannelzMetric().
-	ChannelData *ChannelInternalMetric
-	// Sockets tracks the socket type children of this subchannel in the format of a map
-	// from socket channelz id to corresponding reference string.
-	Sockets map[int64]string
-	// Trace contains the most recent traced events.
-	Trace *ChannelTrace
-}
-
-type subChannel struct {
-	refName       string
+	RefName       string
 	closeCalled   bool
 	sockets       map[int64]string
-	id            int64
-	pid           int64
-	cm            *channelMap
-	trace         *channelTrace
+	parent        *Channel
+	trace         *ChannelTrace
 	traceRefCount int32
 
-	metrics    *ChannelInternalMetric
-	identifier *Identifier
+	ChannelMetrics ChannelMetrics
 }
 
-func (sc *subChannel) Metrics() *ChannelInternalMetric {
-	return sc.metrics
+func (sc *SubChannel) String() string {
+	return fmt.Sprintf("%s SubChannel #%d", sc.parent, sc.ID)
 }
 
-func (sc *subChannel) ID() *Identifier {
-	return sc.identifier
+func (sc *SubChannel) id() int64 {
+	return sc.ID
 }
 
-func (sc *subChannel) addChild(id int64, e entry) {
-	if v, ok := e.(*normalSocket); ok {
-		sc.sockets[id] = v.refName
+func (sc *SubChannel) Sockets() map[int64]string {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	return copyMap(sc.sockets)
+}
+
+func (sc *SubChannel) Trace() *ChannelTrace {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	return sc.trace.copy()
+}
+
+func (sc *SubChannel) addChild(id int64, e entry) {
+	if v, ok := e.(*Socket); ok && v.SocketType == SocketTypeNormal {
+		sc.sockets[id] = v.RefName
 	} else {
 		logger.Errorf("cannot add a child (id = %d) of type %T to a subChannel", id, e)
 	}
 }
 
-func (sc *subChannel) deleteChild(id int64) {
+func (sc *SubChannel) deleteChild(id int64) {
 	delete(sc.sockets, id)
 	sc.deleteSelfIfReady()
 }
 
-func (sc *subChannel) triggerDelete() {
+func (sc *SubChannel) triggerDelete() {
 	sc.closeCalled = true
 	sc.deleteSelfIfReady()
 }
 
-func (sc *subChannel) getParentID() int64 {
-	return sc.pid
+func (sc *SubChannel) getParentID() int64 {
+	return sc.parent.ID
 }
 
 // deleteSelfFromTree tries to delete the subchannel from the channelz entry relation tree, which
@@ -91,11 +88,11 @@ func (sc *subChannel) getParentID() int64 {
 // the corresponding grpc object has been invoked, and the subchannel does not have any children left.
 //
 // The returned boolean value indicates whether the channel has been successfully deleted from tree.
-func (sc *subChannel) deleteSelfFromTree() (deleted bool) {
+func (sc *SubChannel) deleteSelfFromTree() (deleted bool) {
 	if !sc.closeCalled || len(sc.sockets) != 0 {
 		return false
 	}
-	sc.cm.findEntry(sc.pid).deleteChild(sc.id)
+	sc.parent.deleteChild(sc.ID)
 	return true
 }
 
@@ -111,7 +108,7 @@ func (sc *subChannel) deleteSelfFromTree() (deleted bool) {
 // deleteSelfFromMap must be called after deleteSelfFromTree returns true.
 //
 // It returns a bool to indicate whether the channel can be safely deleted from map.
-func (sc *subChannel) deleteSelfFromMap() (delete bool) {
+func (sc *SubChannel) deleteSelfFromMap() (delete bool) {
 	return sc.getTraceRefCount() == 0
 }
 
@@ -121,34 +118,34 @@ func (sc *subChannel) deleteSelfFromMap() (delete bool) {
 //     its parent's child list.
 //  2. delete the subchannel from the map, i.e. delete the subchannel entirely from channelz. Lookup
 //     by id will return entry not found error.
-func (sc *subChannel) deleteSelfIfReady() {
+func (sc *SubChannel) deleteSelfIfReady() {
 	if !sc.deleteSelfFromTree() {
 		return
 	}
 	if !sc.deleteSelfFromMap() {
 		return
 	}
-	sc.cm.deleteEntry(sc.id)
+	db.deleteEntry(sc.ID)
 	sc.trace.clear()
 }
 
-func (sc *subChannel) getChannelTrace() *channelTrace {
+func (sc *SubChannel) getChannelTrace() *ChannelTrace {
 	return sc.trace
 }
 
-func (sc *subChannel) incrTraceRefCount() {
+func (sc *SubChannel) incrTraceRefCount() {
 	atomic.AddInt32(&sc.traceRefCount, 1)
 }
 
-func (sc *subChannel) decrTraceRefCount() {
+func (sc *SubChannel) decrTraceRefCount() {
 	atomic.AddInt32(&sc.traceRefCount, -1)
 }
 
-func (sc *subChannel) getTraceRefCount() int {
+func (sc *SubChannel) getTraceRefCount() int {
 	i := atomic.LoadInt32(&sc.traceRefCount)
 	return int(i)
 }
 
-func (sc *subChannel) getRefName() string {
-	return sc.refName
+func (sc *SubChannel) getRefName() string {
+	return sc.RefName
 }

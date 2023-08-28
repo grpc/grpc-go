@@ -25,30 +25,61 @@ import (
 	"google.golang.org/grpc/connectivity"
 )
 
-// ChannelMetric defines the info channelz provides for a specific Channel, which
-// includes ChannelInternalMetric and channelz-specific data, such as channelz id,
-// child list, etc.
-type ChannelMetric struct {
+// Channel represents a channel within channelz, which includes metrics and
+// internal channelz data, such as channelz id, child list, etc.
+type Channel struct {
+	Entity
 	// ID is the channelz id of this channel.
 	ID int64
 	// RefName is the human readable reference string of this channel.
 	RefName string
-	// ChannelData contains channel internal metric reported by the channel through
-	// ChannelzMetric().
-	ChannelData *ChannelInternalMetric
-	// NestedChans tracks the nested channel type children of this channel in the format of
-	// a map from nested channel channelz id to corresponding reference string.
-	NestedChans map[int64]string
-	// SubChans tracks the subchannel type children of this channel in the format of a
-	// map from subchannel channelz id to corresponding reference string.
-	SubChans map[int64]string
-	// Trace contains the most recent traced events.
-	Trace *ChannelTrace
+
+	closeCalled bool
+	nestedChans map[int64]string
+	subChans    map[int64]string
+	Parent      *Channel
+	trace       *ChannelTrace
+	// traceRefCount is the number of trace events that reference this channel.
+	// Non-zero traceRefCount means the trace of this channel cannot be deleted.
+	traceRefCount int32
+
+	ChannelMetrics ChannelMetrics
 }
 
-// ChannelInternalMetric defines a collection of metrics related to a channel.
-type ChannelInternalMetric struct {
-	// current connectivity state of the channel.
+func (c *Channel) String() string {
+	if c.Parent == nil {
+		return fmt.Sprintf("Channel #%d", c.ID)
+	}
+	return fmt.Sprintf("%s Channel #%d", c.Parent, c.ID)
+}
+
+func (c *Channel) id() int64 {
+	return c.ID
+}
+
+func (c *Channel) SubChans() map[int64]string {
+	//////////// TODO
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	return copyMap(c.subChans)
+}
+
+func (c *Channel) NestedChans() map[int64]string {
+	//////////// TODO
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	return copyMap(c.nestedChans)
+}
+
+func (c *Channel) Trace() *ChannelTrace {
+	///////////// TODO
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	return c.trace.copy()
+}
+
+type ChannelMetrics struct {
+	// The current connectivity state of the channel.
 	State atomic.Pointer[connectivity.State]
 	// The target this channel originally tried to connect to.  May be absent
 	Target atomic.Pointer[string]
@@ -62,7 +93,8 @@ type ChannelInternalMetric struct {
 	LastCallStartedTimestamp atomic.Int64
 }
 
-func (c *ChannelInternalMetric) CopyFrom(o *ChannelInternalMetric) {
+// CopyFrom copies the metrics in o to c.  For testing only.
+func (c *ChannelMetrics) CopyFrom(o *ChannelMetrics) {
 	c.State.Store(o.State.Load())
 	c.Target.Store(o.Target.Load())
 	c.CallsStarted.Store(o.CallsStarted.Load())
@@ -71,8 +103,10 @@ func (c *ChannelInternalMetric) CopyFrom(o *ChannelInternalMetric) {
 	c.LastCallStartedTimestamp.Store(o.LastCallStartedTimestamp.Load())
 }
 
-func (c *ChannelInternalMetric) Equal(o any) bool {
-	oc, ok := o.(*ChannelInternalMetric)
+// Equal returns true iff the metrics of c are the same as the metrics of o.
+// For testing only.
+func (c *ChannelMetrics) Equal(o any) bool {
+	oc, ok := o.(*ChannelMetrics)
 	if !ok {
 		return false
 	}
@@ -101,14 +135,14 @@ func strFromPointer(s *string) string {
 	return *s
 }
 
-func (c *ChannelInternalMetric) String() string {
+func (c *ChannelMetrics) String() string {
 	return fmt.Sprintf("State: %v, Target: %s, CallsStarted: %v, CallsSucceeded: %v, CallsFailed: %v, LastCallStartedTimestamp: %v",
 		c.State.Load(), strFromPointer(c.Target.Load()), c.CallsStarted.Load(), c.CallsSucceeded.Load(), c.CallsFailed.Load(), c.LastCallStartedTimestamp.Load(),
 	)
 }
 
-func NewChannelInternalMetricForTesting(state connectivity.State, target string, started, succeeded, failed, timestamp int64) *ChannelInternalMetric {
-	c := &ChannelInternalMetric{}
+func NewChannelMetricForTesting(state connectivity.State, target string, started, succeeded, failed, timestamp int64) *ChannelMetrics {
+	c := &ChannelMetrics{}
 	c.State.Store(&state)
 	c.Target.Store(&target)
 	c.CallsStarted.Store(started)
@@ -118,55 +152,33 @@ func NewChannelInternalMetricForTesting(state connectivity.State, target string,
 	return c
 }
 
-type channel struct {
-	refName     string
-	closeCalled bool
-	nestedChans map[int64]string
-	subChans    map[int64]string
-	id          int64
-	pid         int64
-	cm          *channelMap
-	trace       *channelTrace
-	// traceRefCount is the number of trace events that reference this channel.
-	// Non-zero traceRefCount means the trace of this channel cannot be deleted.
-	traceRefCount int32
-
-	metrics    *ChannelInternalMetric
-	identifier *Identifier
-}
-
-func (sc *channel) Metrics() *ChannelInternalMetric {
-	return sc.metrics
-}
-
-func (sc *channel) ID() *Identifier {
-	return sc.identifier
-}
-
-func (c *channel) addChild(id int64, e entry) {
+func (c *Channel) addChild(id int64, e entry) {
 	switch v := e.(type) {
-	case *subChannel:
-		c.subChans[id] = v.refName
-	case *channel:
-		c.nestedChans[id] = v.refName
+	case *SubChannel:
+		c.subChans[id] = v.RefName
+	case *Channel:
+		c.nestedChans[id] = v.RefName
 	default:
 		logger.Errorf("cannot add a child (id = %d) of type %T to a channel", id, e)
 	}
 }
 
-func (c *channel) deleteChild(id int64) {
+func (c *Channel) deleteChild(id int64) {
 	delete(c.subChans, id)
 	delete(c.nestedChans, id)
 	c.deleteSelfIfReady()
 }
 
-func (c *channel) triggerDelete() {
+func (c *Channel) triggerDelete() {
 	c.closeCalled = true
 	c.deleteSelfIfReady()
 }
 
-func (c *channel) getParentID() int64 {
-	return c.pid
+func (c *Channel) getParentID() int64 {
+	if c.Parent == nil {
+		return -1
+	}
+	return c.Parent.ID
 }
 
 // deleteSelfFromTree tries to delete the channel from the channelz entry relation tree, which means
@@ -176,13 +188,13 @@ func (c *channel) getParentID() int64 {
 // corresponding grpc object has been invoked, and the channel does not have any children left.
 //
 // The returned boolean value indicates whether the channel has been successfully deleted from tree.
-func (c *channel) deleteSelfFromTree() (deleted bool) {
+func (c *Channel) deleteSelfFromTree() (deleted bool) {
 	if !c.closeCalled || len(c.subChans)+len(c.nestedChans) != 0 {
 		return false
 	}
 	// not top channel
-	if c.pid != 0 {
-		c.cm.findEntry(c.pid).deleteChild(c.id)
+	if c.Parent != nil {
+		c.Parent.deleteChild(c.ID)
 	}
 	return true
 }
@@ -199,7 +211,7 @@ func (c *channel) deleteSelfFromTree() (deleted bool) {
 // deleteSelfFromMap must be called after deleteSelfFromTree returns true.
 //
 // It returns a bool to indicate whether the channel can be safely deleted from map.
-func (c *channel) deleteSelfFromMap() (delete bool) {
+func (c *Channel) deleteSelfFromMap() (delete bool) {
 	return c.getTraceRefCount() == 0
 }
 
@@ -209,34 +221,34 @@ func (c *channel) deleteSelfFromMap() (delete bool) {
 //     parent's child list.
 //  2. delete the channel from the map, i.e. delete the channel entirely from channelz. Lookup by id
 //     will return entry not found error.
-func (c *channel) deleteSelfIfReady() {
+func (c *Channel) deleteSelfIfReady() {
 	if !c.deleteSelfFromTree() {
 		return
 	}
 	if !c.deleteSelfFromMap() {
 		return
 	}
-	c.cm.deleteEntry(c.id)
+	db.deleteEntry(c.ID)
 	c.trace.clear()
 }
 
-func (c *channel) getChannelTrace() *channelTrace {
+func (c *Channel) getChannelTrace() *ChannelTrace {
 	return c.trace
 }
 
-func (c *channel) incrTraceRefCount() {
+func (c *Channel) incrTraceRefCount() {
 	atomic.AddInt32(&c.traceRefCount, 1)
 }
 
-func (c *channel) decrTraceRefCount() {
+func (c *Channel) decrTraceRefCount() {
 	atomic.AddInt32(&c.traceRefCount, -1)
 }
 
-func (c *channel) getTraceRefCount() int {
+func (c *Channel) getTraceRefCount() int {
 	i := atomic.LoadInt32(&c.traceRefCount)
 	return int(i)
 }
 
-func (c *channel) getRefName() string {
-	return c.refName
+func (c *Channel) getRefName() string {
+	return c.RefName
 }

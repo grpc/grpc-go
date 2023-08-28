@@ -27,11 +27,11 @@ import (
 	"net"
 	"strings"
 
-	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -232,8 +232,8 @@ type BuildOptions struct {
 	// implementations which do not communicate with a remote load balancer
 	// server can ignore this field.
 	Authority string
-	// ChannelzParentID is the parent ClientConn's channelz ID.
-	ChannelzParentID *channelz.Identifier
+	// ChannelzParent is the parent ClientConn's channelz channel.
+	ChannelzParent *channelz.Channel
 	// CustomUserAgent is the custom user agent set on the parent ClientConn.
 	// The balancer should set the same custom user agent if it creates a
 	// ClientConn.

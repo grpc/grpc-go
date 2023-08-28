@@ -22,7 +22,6 @@
 package channelz
 
 import (
-	"errors"
 	"sync/atomic"
 	"time"
 
@@ -63,8 +62,8 @@ func IsOn() bool {
 // included in the result. The returned slice is up to a length of the arg
 // maxResults or EntriesPerPage if maxResults is zero, and is sorted in ascending
 // id order.
-func GetTopChannels(id int64, maxResults int) ([]*ChannelMetric, bool) {
-	return db.GetTopChannels(id, maxResults)
+func GetTopChannels(id int64, maxResults int) ([]*Channel, bool) {
+	return db.getTopChannels(id, maxResults)
 }
 
 // GetServers returns a slice of server's ServerMetric, along with a
@@ -73,78 +72,67 @@ func GetTopChannels(id int64, maxResults int) ([]*ChannelMetric, bool) {
 // The arg id specifies that only server with id at or above it will be included
 // in the result. The returned slice is up to a length of the arg maxResults or
 // EntriesPerPage if maxResults is zero, and is sorted in ascending id order.
-func GetServers(id int64, maxResults int) ([]*ServerMetric, bool) {
-	return db.GetServers(id, maxResults)
+func GetServers(id int64, maxResults int) ([]*Server, bool) {
+	return db.getServers(id, maxResults)
 }
 
 // GetServerSockets returns a slice of server's (identified by id) normal socket's
-// SocketMetric, along with a boolean indicating whether there's more sockets to
+// SocketMetrics, along with a boolean indicating whether there's more sockets to
 // be queried for.
 //
 // The arg startID specifies that only sockets with id at or above it will be
 // included in the result. The returned slice is up to a length of the arg maxResults
 // or EntriesPerPage if maxResults is zero, and is sorted in ascending id order.
-func GetServerSockets(id int64, startID int64, maxResults int) ([]*SocketMetric, bool) {
-	return db.GetServerSockets(id, startID, maxResults)
+func GetServerSockets(id int64, startID int64, maxResults int) ([]*Socket, bool) {
+	return db.getServerSockets(id, startID, maxResults)
 }
 
-// GetChannel returns the ChannelMetric for the channel (identified by id).
-func GetChannel(id int64) *ChannelMetric {
-	return db.GetChannel(id)
+// GetChannel returns the Channel for the channel (identified by id).
+func GetChannel(id int64) *Channel {
+	return db.getChannel(id)
 }
 
-// GetSubChannel returns the SubChannelMetric for the subchannel (identified by id).
-func GetSubChannel(id int64) *SubChannelMetric {
-	return db.GetSubChannel(id)
+// GetSubChannel returns the SubChannel for the subchannel (identified by id).
+func GetSubChannel(id int64) *SubChannel {
+	return db.getSubChannel(id)
 }
 
-// GetSocket returns the SocketInternalMetric for the socket (identified by id).
-func GetSocket(id int64) *SocketMetric {
-	return db.GetSocket(id)
+// GetSocket returns the Socket for the socket (identified by id).
+func GetSocket(id int64) *Socket {
+	return db.getSocket(id)
 }
 
 // GetServer returns the ServerMetric for the server (identified by id).
-func GetServer(id int64) *ServerMetric {
-	return db.GetServer(id)
+func GetServer(id int64) *Server {
+	return db.getServer(id)
 }
 
 // RegisterChannel registers the given channel c in the channelz database with
-// ref as its reference name, and adds it to the child list of its parent
-// (identified by pid). pid == nil means no parent.
+// ref as its reference name, and adds it to the child list of its parent.
+// parent == nil means no parent.
 //
 // Returns a unique channelz identifier assigned to this channel.
 //
 // If channelz is not turned ON, the channelz database is not mutated.
-func RegisterChannel(pid *Identifier, ref string) MetricsID {
+func RegisterChannel(parent *Channel, ref string) *Channel {
 	id := IDGen.genID()
-	var parent int64
-	isTopChannel := true
-	if pid != nil {
-		isTopChannel = false
-		parent = pid.Int()
-	}
 
 	if !IsOn() {
-		return &channel{metrics: &ChannelInternalMetric{}, identifier: newIdentifer(RefChannel, id, pid)}
+		return &Channel{ID: id}
 	}
 
-	cn := &channel{
-		refName:     ref,
-		subChans:    make(map[int64]string),
+	isTopChannel := parent == nil
+
+	cn := &Channel{
+		ID:          id,
+		RefName:     ref,
 		nestedChans: make(map[int64]string),
-		id:          id,
-		pid:         parent,
-		trace:       &channelTrace{createdTime: time.Now(), events: make([]*TraceEvent, 0, getMaxTraceEntry())},
-		metrics:     &ChannelInternalMetric{},
-		identifier:  newIdentifer(RefChannel, id, pid),
+		subChans:    make(map[int64]string),
+		Parent:      parent,
+		trace:       &ChannelTrace{CreationTime: time.Now(), Events: make([]*TraceEvent, 0, getMaxTraceEntry())},
 	}
-	db.addChannel(id, cn, isTopChannel, parent)
+	db.addChannel(id, cn, isTopChannel, cn.getParentID())
 	return cn
-}
-
-type MetricsID interface {
-	Metrics() *ChannelInternalMetric
-	ID() *Identifier
 }
 
 // RegisterSubChannel registers the given subChannel c in the channelz database
@@ -154,22 +142,20 @@ type MetricsID interface {
 // Returns a unique channelz identifier assigned to this subChannel.
 //
 // If channelz is not turned ON, the channelz database is not mutated.
-func RegisterSubChannel(pid *Identifier, ref string) MetricsID {
+func RegisterSubChannel(pid int64, ref string) *SubChannel {
 	id := IDGen.genID()
 	if !IsOn() {
-		return &subChannel{metrics: &ChannelInternalMetric{}, identifier: newIdentifer(RefSubChannel, id, pid)}
+		return &SubChannel{ID: id}
 	}
 
-	sc := &subChannel{
-		refName:    ref,
-		sockets:    make(map[int64]string),
-		id:         id,
-		pid:        pid.Int(),
-		trace:      &channelTrace{createdTime: time.Now(), events: make([]*TraceEvent, 0, getMaxTraceEntry())},
-		metrics:    &ChannelInternalMetric{},
-		identifier: newIdentifer(RefSubChannel, id, pid),
+	sc := &SubChannel{
+		RefName: ref,
+		ID:      id,
+		sockets: make(map[int64]string),
+		parent:  db.channels[pid],
+		trace:   &ChannelTrace{CreationTime: time.Now(), Events: make([]*TraceEvent, 0, getMaxTraceEntry())},
 	}
-	db.addSubChannel(id, sc, pid.Int())
+	db.addSubChannel(id, sc, pid)
 	return sc
 }
 
@@ -177,21 +163,20 @@ func RegisterSubChannel(pid *Identifier, ref string) MetricsID {
 // the unique channelz tracking id assigned to this server.
 //
 // If channelz is not turned ON, the channelz database is not mutated.
-func RegisterServer(s Server, ref string) *Identifier {
+func RegisterServer(ref string) *Server {
 	id := IDGen.genID()
 	if !IsOn() {
-		return newIdentifer(RefServer, id, nil)
+		return &Server{ID: id}
 	}
 
-	svr := &server{
-		refName:       ref,
-		s:             s,
+	svr := &Server{
+		RefName:       ref,
 		sockets:       make(map[int64]string),
 		listenSockets: make(map[int64]string),
-		id:            id,
+		ID:            id,
 	}
 	db.addServer(id, svr)
-	return newIdentifer(RefServer, id, nil)
+	return svr
 }
 
 // RegisterListenSocket registers the given listen socket s in channelz database
@@ -200,18 +185,20 @@ func RegisterServer(s Server, ref string) *Identifier {
 // this listen socket.
 //
 // If channelz is not turned ON, the channelz database is not mutated.
-func RegisterListenSocket(s Socket, pid *Identifier, ref string) (*Identifier, error) {
-	if pid == nil {
-		return nil, errors.New("a ListenSocket's parent id cannot be 0")
-	}
+func RegisterListenSocket(parent *Server, refName string, lis any) *Socket {
 	id := IDGen.genID()
-	if !IsOn() {
-		return newIdentifer(RefListenSocket, id, pid), nil
-	}
 
-	ls := &listenSocket{refName: ref, s: s, id: id, pid: pid.Int()}
-	db.addListenSocket(id, ls, pid.Int())
-	return newIdentifer(RefListenSocket, id, pid), nil
+	ls := &Socket{
+		SocketType:    SocketTypeListen,
+		ID:            id,
+		RefName:       refName,
+		Parent:        parent,
+		SocketOptions: GetSocketOption(lis),
+	}
+	if IsOn() {
+		db.addListenSocket(id, ls, ls.getParentID())
+	}
+	return ls
 }
 
 // RegisterNormalSocket registers the given normal socket s in channelz database
@@ -220,29 +207,24 @@ func RegisterListenSocket(s Socket, pid *Identifier, ref string) (*Identifier, e
 // this normal socket.
 //
 // If channelz is not turned ON, the channelz database is not mutated.
-func RegisterNormalSocket(s Socket, pid *Identifier, ref string) (*Identifier, error) {
-	if pid == nil {
-		return nil, errors.New("a NormalSocket's parent id cannot be 0")
+func RegisterNormalSocket(skt *Socket) *Socket {
+	skt.ID = IDGen.genID()
+	skt.SocketType = SocketTypeNormal
+	if IsOn() {
+		db.addNormalSocket(skt.ID, skt, skt.Parent)
 	}
-	id := IDGen.genID()
-	if !IsOn() {
-		return newIdentifer(RefNormalSocket, id, pid), nil
-	}
-
-	ns := &normalSocket{refName: ref, s: s, id: id, pid: pid.Int()}
-	db.addNormalSocket(id, ns, pid.Int())
-	return newIdentifer(RefNormalSocket, id, pid), nil
+	return skt
 }
 
 // RemoveEntry removes an entry with unique channelz tracking id to be id from
 // channelz database.
 //
 // If channelz is not turned ON, this function is a no-op.
-func RemoveEntry(id *Identifier) {
+func RemoveEntry(id int64) {
 	if !IsOn() {
 		return
 	}
-	db.removeEntry(id.Int())
+	db.removeEntry(id)
 }
 
 // IDGenerator is an incrementing atomic that tracks IDs for channelz entities.

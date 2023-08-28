@@ -71,8 +71,8 @@ func (s) TestClientConnClose_WithPendingRPC(t *testing.T) {
 		if len(tcs) != 1 {
 			t.Fatalf("there should only be one top channel, not %d", len(tcs))
 		}
-		started := tcs[0].ChannelData.CallsStarted.Load()
-		completed := tcs[0].ChannelData.CallsSucceeded.Load() + tcs[0].ChannelData.CallsFailed.Load()
+		started := tcs[0].ChannelMetrics.CallsStarted.Load()
+		completed := tcs[0].ChannelMetrics.CallsSucceeded.Load() + tcs[0].ChannelMetrics.CallsFailed.Load()
 		if (started - completed) == 1 {
 			break
 		}

@@ -19,6 +19,7 @@
 package channelz
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,13 +33,13 @@ const (
 
 var maxTraceEntry = defaultMaxTraceEntry
 
-// SetMaxTraceEntry sets maximum number of trace entry per entity
-// (i.e. channel/subchannel).  Setting it to 0 will disable channel tracing.
+// SetMaxTraceEntry sets maximum number of trace entries per entity (i.e.
+// channel/subchannel).  Setting it to 0 will disable channel tracing.
 func SetMaxTraceEntry(i int32) {
 	atomic.StoreInt32(&maxTraceEntry, i)
 }
 
-// ResetMaxTraceEntryToDefault resets the maximum number of trace entry per
+// ResetMaxTraceEntryToDefault resets the maximum number of trace entries per
 // entity to default.
 func ResetMaxTraceEntryToDefault() {
 	atomic.StoreInt32(&maxTraceEntry, defaultMaxTraceEntry)
@@ -47,17 +48,6 @@ func ResetMaxTraceEntryToDefault() {
 func getMaxTraceEntry() int {
 	i := atomic.LoadInt32(&maxTraceEntry)
 	return int(i)
-}
-
-// ChannelTrace stores traced events on a channel/subchannel and related info.
-type ChannelTrace struct {
-	// EventNum is the number of events that ever got traced (i.e. including those that have been deleted)
-	EventNum int64
-	// CreationTime is the creation time of the trace.
-	CreationTime time.Time
-	// Events stores the most recent trace events (up to $maxTraceEntry, newer event will overwrite the
-	// oldest one)
-	Events []*TraceEvent
 }
 
 // TraceEvent represent a single trace event
@@ -78,20 +68,28 @@ type TraceEvent struct {
 	RefType RefChannelType
 }
 
-type channelTrace struct {
-	cm          *channelMap
-	clearCalled bool
-	createdTime time.Time
-	eventCount  int64
-	mu          sync.Mutex
-	events      []*TraceEvent
+type ChannelTrace struct {
+	cm           *channelMap
+	clearCalled  bool
+	CreationTime time.Time
+	EventNum     int64
+	mu           sync.Mutex
+	Events       []*TraceEvent
 }
 
-func (c *channelTrace) append(e *TraceEvent) {
+func (c *ChannelTrace) copy() *ChannelTrace {
+	return &ChannelTrace{
+		CreationTime: c.CreationTime,
+		EventNum:     c.EventNum,
+		Events:       append(([]*TraceEvent)(nil), c.Events...),
+	}
+}
+
+func (c *ChannelTrace) append(e *TraceEvent) {
 	c.mu.Lock()
-	if len(c.events) == getMaxTraceEntry() {
-		del := c.events[0]
-		c.events = c.events[1:]
+	if len(c.Events) == getMaxTraceEntry() {
+		del := c.Events[0]
+		c.Events = c.Events[1:]
 		if del.RefID != 0 {
 			// start recursive cleanup in a goroutine to not block the call originated from grpc.
 			go func() {
@@ -103,18 +101,18 @@ func (c *channelTrace) append(e *TraceEvent) {
 		}
 	}
 	e.Timestamp = time.Now()
-	c.events = append(c.events, e)
-	c.eventCount++
+	c.Events = append(c.Events, e)
+	c.EventNum++
 	c.mu.Unlock()
 }
 
-func (c *channelTrace) clear() {
+func (c *ChannelTrace) clear() {
 	if c.clearCalled {
 		return
 	}
 	c.clearCalled = true
 	c.mu.Lock()
-	for _, e := range c.events {
+	for _, e := range c.Events {
 		if e.RefID != 0 {
 			// caller should have already held the c.cm.mu lock.
 			c.cm.decrTraceRefCount(e.RefID)
@@ -170,14 +168,6 @@ func (r RefChannelType) String() string {
 	return refChannelTypeToString[r]
 }
 
-func (c *channelTrace) dumpData() *ChannelTrace {
-	c.mu.Lock()
-	ct := &ChannelTrace{EventNum: c.eventCount, CreationTime: c.createdTime}
-	ct.Events = c.events[:len(c.events)]
-	c.mu.Unlock()
-	return ct
-}
-
 // TraceEventDesc is what the caller of AddTraceEvent should provide to describe
 // the event to be added to the channel trace.
 //
@@ -193,21 +183,22 @@ type TraceEventDesc struct {
 // provided TraceEventDesc.
 //
 // If channelz is not turned ON, this will simply log the event descriptions.
-func AddTraceEvent(l grpclog.DepthLoggerV2, id *Identifier, depth int, desc *TraceEventDesc) {
+func AddTraceEvent(l grpclog.DepthLoggerV2, e Entity, depth int, desc *TraceEventDesc) {
 	// Log only the trace description associated with the bottom most entity.
+	d := fmt.Sprintf("[%s]%s", e, desc.Desc)
 	switch desc.Severity {
 	case CtUnknown, CtInfo:
-		l.InfoDepth(depth+1, withParens(id)+desc.Desc)
+		l.InfoDepth(depth+1, d)
 	case CtWarning:
-		l.WarningDepth(depth+1, withParens(id)+desc.Desc)
+		l.WarningDepth(depth+1, d)
 	case CtError:
-		l.ErrorDepth(depth+1, withParens(id)+desc.Desc)
+		l.ErrorDepth(depth+1, d)
 	}
 
 	if getMaxTraceEntry() == 0 {
 		return
 	}
 	if IsOn() {
-		db.traceEvent(id.Int(), desc)
+		db.traceEvent(e.id(), desc)
 	}
 }

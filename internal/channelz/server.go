@@ -19,83 +19,108 @@
 package channelz
 
 import (
-	"time"
+	"fmt"
+	"sync/atomic"
 )
 
-// ServerMetric defines the info channelz provides for a specific Server, which
-// includes ServerInternalMetric and channelz-specific data, such as channelz id,
-// child list, etc.
-type ServerMetric struct {
-	// ID is the channelz id of this server.
-	ID int64
-	// RefName is the human readable reference string of this server.
+// Server is the channelz representation of a server.
+type Server struct {
+	Entity
+	ID      int64
 	RefName string
-	// ServerData contains server internal metric reported by the server through
-	// ChannelzMetric().
-	ServerData *ServerInternalMetric
-	// ListenSockets tracks the listener socket type children of this server in the
-	// format of a map from socket channelz id to corresponding reference string.
-	ListenSockets map[int64]string
-}
 
-// ServerInternalMetric defines the struct that the implementor of Server interface
-// should return from ChannelzMetric().
-type ServerInternalMetric struct {
-	// The number of incoming calls started on the server.
-	CallsStarted int64
-	// The number of incoming calls that have completed with an OK status.
-	CallsSucceeded int64
-	// The number of incoming calls that have a completed with a non-OK status.
-	CallsFailed int64
-	// The last time a call was started on the server.
-	LastCallStartedTimestamp time.Time
-}
+	ServerMetrics ServerMetrics
 
-// Server is the interface to be satisfied in order to be tracked by channelz as
-// Server.
-type Server interface {
-	ChannelzMetric() *ServerInternalMetric
-}
-
-type server struct {
-	refName       string
-	s             Server
 	closeCalled   bool
 	sockets       map[int64]string
 	listenSockets map[int64]string
-	id            int64
 	cm            *channelMap
 }
 
-func (s *server) addChild(id int64, e entry) {
+// ServerMetrics defines a struct containing metrics for servers.
+type ServerMetrics struct {
+	// The number of incoming calls started on the server.
+	CallsStarted atomic.Int64
+	// The number of incoming calls that have completed with an OK status.
+	CallsSucceeded atomic.Int64
+	// The number of incoming calls that have a completed with a non-OK status.
+	CallsFailed atomic.Int64
+	// The last time a call was started on the server.
+	LastCallStartedTimestamp atomic.Int64
+}
+
+// NewServerMetricsForTesting returns an initialized ServerMetrics.
+func NewServerMetricsForTesting(started, succeeded, failed, timestamp int64) *ServerMetrics {
+	sm := &ServerMetrics{}
+	sm.CallsStarted.Store(started)
+	sm.CallsSucceeded.Store(succeeded)
+	sm.CallsFailed.Store(failed)
+	sm.LastCallStartedTimestamp.Store(timestamp)
+	return sm
+}
+
+func (sm *ServerMetrics) CopyFrom(o *ServerMetrics) {
+	sm.CallsStarted.Store(o.CallsStarted.Load())
+	sm.CallsSucceeded.Store(o.CallsSucceeded.Load())
+	sm.CallsFailed.Store(o.CallsFailed.Load())
+	sm.LastCallStartedTimestamp.Store(o.LastCallStartedTimestamp.Load())
+}
+
+// ListenSockets returns the listening sockets for s.
+func (s *Server) ListenSockets() map[int64]string {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	return copyMap(s.listenSockets)
+}
+
+// NormalSockets returns the connected sockets for s.
+func (s *Server) NormalSockets() map[int64]string {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	return copyMap(s.sockets)
+}
+
+// String returns a printable description of s.
+func (s *Server) String() string {
+	return fmt.Sprintf("Server #%d", s.ID)
+}
+
+func (s *Server) id() int64 {
+	return s.ID
+}
+
+func (s *Server) addChild(id int64, e entry) {
 	switch v := e.(type) {
-	case *normalSocket:
-		s.sockets[id] = v.refName
-	case *listenSocket:
-		s.listenSockets[id] = v.refName
+	case *Socket:
+		switch v.SocketType {
+		case SocketTypeNormal:
+			s.sockets[id] = v.RefName
+		case SocketTypeListen:
+			s.listenSockets[id] = v.RefName
+		}
 	default:
 		logger.Errorf("cannot add a child (id = %d) of type %T to a server", id, e)
 	}
 }
 
-func (s *server) deleteChild(id int64) {
+func (s *Server) deleteChild(id int64) {
 	delete(s.sockets, id)
 	delete(s.listenSockets, id)
 	s.deleteSelfIfReady()
 }
 
-func (s *server) triggerDelete() {
+func (s *Server) triggerDelete() {
 	s.closeCalled = true
 	s.deleteSelfIfReady()
 }
 
-func (s *server) deleteSelfIfReady() {
+func (s *Server) deleteSelfIfReady() {
 	if !s.closeCalled || len(s.sockets)+len(s.listenSockets) != 0 {
 		return
 	}
-	s.cm.deleteEntry(s.id)
+	s.cm.deleteEntry(s.ID)
 }
 
-func (s *server) getParentID() int64 {
+func (s *Server) getParentID() int64 {
 	return 0
 }

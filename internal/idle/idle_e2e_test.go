@@ -74,11 +74,12 @@ func channelzTraceEventFound(ctx context.Context, wantDesc string) error {
 		if l := len(tcs); l != 1 {
 			return fmt.Errorf("when looking for channelz trace event with description %q, found %d top-level channels, want 1", wantDesc, l)
 		}
-		if tcs[0].Trace == nil {
+		trace := tcs[0].Trace()
+		if trace == nil {
 			return fmt.Errorf("when looking for channelz trace event with description %q, no trace events found for top-level channel", wantDesc)
 		}
 
-		for _, e := range tcs[0].Trace.Events {
+		for _, e := range trace.Events {
 			if strings.Contains(e.Desc, wantDesc) {
 				return nil
 			}

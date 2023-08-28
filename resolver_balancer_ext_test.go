@@ -257,8 +257,8 @@ func (s) TestEnterIdleDuringBalancerNewSubConn(t *testing.T) {
 		if len(tcs) != 1 {
 			t.Fatalf("Found channels: %v; expected 1 entry", tcs)
 		}
-		if len(tcs[0].SubChans) != 0 {
-			t.Fatalf("Found subchannels: %v; expected 0 entries", tcs[0].SubChans)
+		if got := tcs[0].SubChans(); len(got) != 0 {
+			t.Fatalf("Found subchannels: %v; expected 0 entries", got)
 		}
 		cc.Connect()
 	}

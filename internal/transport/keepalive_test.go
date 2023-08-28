@@ -257,13 +257,14 @@ func (s) TestKeepaliveServerWithResponsiveClient(t *testing.T) {
 func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
-		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+		ChannelzParent: channelz.RegisterSubChannel(-1, "test subchan"),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:                10 * time.Millisecond,
 			Timeout:             10 * time.Millisecond,
 			PermitWithoutStream: true,
 		},
 	}
+	defer channelz.RemoveEntry(copts.ChannelzParent.ID)
 	client, cancel := setUpWithNoPingServer(t, copts, connCh)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
@@ -287,12 +288,13 @@ func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
-		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+		ChannelzParent: channelz.RegisterSubChannel(-1, "test subchan"),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:    10 * time.Millisecond,
 			Timeout: 10 * time.Millisecond,
 		},
 	}
+	defer channelz.RemoveEntry(copts.ChannelzParent.ID)
 	client, cancel := setUpWithNoPingServer(t, copts, connCh)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
@@ -317,12 +319,13 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
-		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+		ChannelzParent: channelz.RegisterSubChannel(-1, "test subchan"),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:    500 * time.Millisecond,
 			Timeout: 500 * time.Millisecond,
 		},
 	}
+	defer channelz.RemoveEntry(copts.ChannelzParent.ID)
 	// TODO(i/6099): Setup a server which can ping and no-ping based on a flag to
 	// reduce the flakiness in this test.
 	client, cancel := setUpWithNoPingServer(t, copts, connCh)

@@ -24,12 +24,12 @@ import (
 	"time"
 
 	"google.golang.org/grpc/backoff"
-	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/binarylog"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
@@ -68,7 +68,7 @@ type dialOptions struct {
 	binaryLogger                binarylog.Logger
 	copts                       transport.ConnectOptions
 	callOptions                 []CallOption
-	channelzParentID            *channelz.Identifier
+	channelzParent              *channelz.Channel
 	disableServiceConfig        bool
 	disableRetry                bool
 	disableHealthCheck          bool
@@ -547,7 +547,7 @@ func WithAuthority(a string) DialOption {
 	})
 }
 
-// WithChannelzParentID returns a DialOption that specifies the channelz ID of
+// WithChannelzParent returns a DialOption that specifies the channelz ID of
 // current ClientConn's parent. This function is used in nested channel creation
 // (e.g. grpclb dial).
 //
@@ -555,9 +555,9 @@ func WithAuthority(a string) DialOption {
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func WithChannelzParentID(id *channelz.Identifier) DialOption {
+func WithChannelzParent(c *channelz.Channel) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.channelzParentID = id
+		o.channelzParent = c
 	})
 }
 
