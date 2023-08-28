@@ -1835,9 +1835,6 @@ func (s *Server) Stop() {
 
 	s.channelzRemoveOnce.Do(func() { channelz.RemoveEntry(s.channelzID) })
 
-	// interrupt GracefulStop if Stop and GracefulStop are called concurrently.
-	s.cv.Broadcast()
-
 	s.mu.Lock()
 	for lis := range s.lis {
 		lis.Close()
