@@ -1836,10 +1836,7 @@ func (s *Server) Stop() {
 	s.channelzRemoveOnce.Do(func() { channelz.RemoveEntry(s.channelzID) })
 
 	s.mu.Lock()
-	for lis := range s.lis {
-		lis.Close()
-	}
-	s.lis = nil
+	s.closeListeners()
 	s.mu.Unlock()
 
 	// Wait for serving threads to be ready to exit.  Only then can we be sure no
@@ -1848,24 +1845,15 @@ func (s *Server) Stop() {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, cs := range s.conns {
-		for st := range cs {
-			st.Close(errors.New("Server.Stop called"))
-		}
-	}
+
+	s.closeServerTransports()
+
 	if s.opts.numServerWorkers > 0 {
 		s.stopServerWorkers()
 	}
 
-	for len(s.conns) != 0 {
-		s.cv.Wait()
-	}
-	s.conns = nil
-
-	if s.events != nil {
-		s.events.Finish()
-		s.events = nil
-	}
+	s.waitForServerConnRemoval()
+	s.finishEventLog()
 }
 
 // GracefulStop stops the gRPC server gracefully. It stops the server from
@@ -1876,20 +1864,10 @@ func (s *Server) GracefulStop() {
 	defer s.done.Fire()
 
 	s.channelzRemoveOnce.Do(func() { channelz.RemoveEntry(s.channelzID) })
-	s.mu.Lock()
 
-	for lis := range s.lis {
-		lis.Close()
-	}
-	s.lis = nil
-	if !s.drain {
-		for _, conns := range s.conns {
-			for st := range conns {
-				st.Drain("graceful_stop")
-			}
-		}
-		s.drain = true
-	}
+	s.mu.Lock()
+	s.closeListeners()
+	s.drainAllServerTransports()
 	s.mu.Unlock()
 
 	// Wait for serving threads to be ready to exit.  Only then can we be sure no
@@ -1903,15 +1881,54 @@ func (s *Server) GracefulStop() {
 		s.stopServerWorkers()
 	}
 
+	s.waitForServerConnRemoval()
+	s.finishEventLog()
+}
+
+// s.mu must be held by the caller.
+// waitForServerConnRemoval blocks until s.conns is empty.
+func (s *Server) waitForServerConnRemoval() {
 	for len(s.conns) != 0 {
 		s.cv.Wait()
 	}
 	s.conns = nil
+}
 
+// s.mu must be held by the caller.
+func (s *Server) closeServerTransports() {
+	for _, conns := range s.conns {
+		for st := range conns {
+			st.Close(errors.New("Server.Stop called"))
+		}
+	}
+}
+
+// s.mu must be held by the caller.
+func (s *Server) drainAllServerTransports() {
+	if !s.drain {
+		for _, conns := range s.conns {
+			for st := range conns {
+				st.Drain("graceful_stop")
+			}
+		}
+		s.drain = true
+	}
+}
+
+// s.mu must be held by the caller.
+func (s *Server) finishEventLog() {
 	if s.events != nil {
 		s.events.Finish()
 		s.events = nil
 	}
+}
+
+// s.mu must be held by the caller.
+func (s *Server) closeListeners() {
+	for lis := range s.lis {
+		lis.Close()
+	}
+	s.lis = nil
 }
 
 // contentSubtype must be lowercase
