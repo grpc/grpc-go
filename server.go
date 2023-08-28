@@ -1898,10 +1898,7 @@ func (s *Server) GracefulStop() {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for {
-		if len(s.conns) == 0 {
-			break
-		}
+	for len(s.conns) != 0 {
 		s.cv.Wait()
 	}
 	s.conns = nil
