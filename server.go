@@ -1898,6 +1898,11 @@ func (s *Server) GracefulStop() {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.opts.numServerWorkers > 0 {
+		s.stopServerWorkers()
+	}
+
 	for len(s.conns) != 0 {
 		s.cv.Wait()
 	}
