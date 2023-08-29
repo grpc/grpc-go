@@ -315,7 +315,6 @@ func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 	}
 	st.ht.HandleStreams(
 		func(s *Stream) { go handleStream(s) },
-		func(ctx context.Context, method string) context.Context { return ctx },
 	)
 	wantHeader := http.Header{
 		"Date":          nil,
@@ -349,7 +348,6 @@ func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) 
 	}
 	st.ht.HandleStreams(
 		func(s *Stream) { go handleStream(s) },
-		func(ctx context.Context, method string) context.Context { return ctx },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,
@@ -399,7 +397,6 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 	}
 	ht.HandleStreams(
 		func(s *Stream) { go runStream(s) },
-		func(ctx context.Context, method string) context.Context { return ctx },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,
@@ -452,7 +449,6 @@ func testHandlerTransportHandleStreams(t *testing.T, handleStream func(st *handl
 	st := newHandleStreamTest(t)
 	st.ht.HandleStreams(
 		func(s *Stream) { go handleStream(st, s) },
-		func(ctx context.Context, method string) context.Context { return ctx },
 	)
 }
 
@@ -486,7 +482,6 @@ func (s) TestHandlerTransport_HandleStreams_ErrDetails(t *testing.T) {
 	}
 	hst.ht.HandleStreams(
 		func(s *Stream) { go handleStream(s) },
-		func(ctx context.Context, method string) context.Context { return ctx },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,

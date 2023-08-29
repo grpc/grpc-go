@@ -353,32 +353,20 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		s.mu.Unlock()
 		switch ht {
 		case notifyCall:
-			go transport.HandleStreams(h.handleStreamAndNotify,
-				func(ctx context.Context, _ string) context.Context {
-					return ctx
-				})
+			go transport.HandleStreams(h.handleStreamAndNotify)
 		case suspended:
-			go transport.HandleStreams(func(*Stream) {}, // Do nothing to handle the stream.
-				func(ctx context.Context, method string) context.Context {
-					return ctx
-				})
+			go transport.HandleStreams(func(*Stream) {})
 		case misbehaved:
 			go transport.HandleStreams(func(s *Stream) {
 				go h.handleStreamMisbehave(t, s)
-			}, func(ctx context.Context, method string) context.Context {
-				return ctx
 			})
 		case encodingRequiredStatus:
 			go transport.HandleStreams(func(s *Stream) {
 				go h.handleStreamEncodingRequiredStatus(s)
-			}, func(ctx context.Context, method string) context.Context {
-				return ctx
 			})
 		case invalidHeaderField:
 			go transport.HandleStreams(func(s *Stream) {
 				go h.handleStreamInvalidHeaderField(s)
-			}, func(ctx context.Context, method string) context.Context {
-				return ctx
 			})
 		case delayRead:
 			h.notify = make(chan struct{})
@@ -388,20 +376,14 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 			s.mu.Unlock()
 			go transport.HandleStreams(func(s *Stream) {
 				go h.handleStreamDelayRead(t, s)
-			}, func(ctx context.Context, method string) context.Context {
-				return ctx
 			})
 		case pingpong:
 			go transport.HandleStreams(func(s *Stream) {
 				go h.handleStreamPingPong(t, s)
-			}, func(ctx context.Context, method string) context.Context {
-				return ctx
 			})
 		default:
 			go transport.HandleStreams(func(s *Stream) {
 				go h.handleStream(t, s)
-			}, func(ctx context.Context, method string) context.Context {
-				return ctx
 			})
 		}
 	}
