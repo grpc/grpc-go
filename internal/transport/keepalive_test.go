@@ -255,7 +255,6 @@ func (s) TestKeepaliveServerWithResponsiveClient(t *testing.T) {
 // `PermitWithoutStream` parameter to true which ensures that the keepalive
 // logic is running even without any active streams.
 func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
-	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
 		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
 		KeepaliveParams: keepalive.ClientParameters{
@@ -264,16 +263,9 @@ func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 			PermitWithoutStream: true,
 		},
 	}
-	client, cancel := setUpWithNoPingServer(t, copts, connCh)
-	defer cancel()
+	client, server := setUpWithNoPingServer(t, copts)
+	defer server.stop()
 	defer client.Close(fmt.Errorf("closed manually by test"))
-
-	conn, ok := <-connCh
-	if !ok {
-		t.Fatalf("Server didn't return connection object")
-	}
-	defer conn.Close()
-
 	if err := pollForStreamCreationError(client); err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +277,6 @@ func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 // to true which ensures that the keepalive logic is turned off without any
 // active streams, and therefore the transport stays open.
 func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
-	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
 		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
 		KeepaliveParams: keepalive.ClientParameters{
@@ -293,16 +284,9 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 			Timeout: 10 * time.Millisecond,
 		},
 	}
-	client, cancel := setUpWithNoPingServer(t, copts, connCh)
-	defer cancel()
+	client, server := setUpWithNoPingServer(t, copts)
+	defer server.stop()
 	defer client.Close(fmt.Errorf("closed manually by test"))
-
-	conn, ok := <-connCh
-	if !ok {
-		t.Fatalf("Server didn't return connection object")
-	}
-	defer conn.Close()
-
 	// Give keepalive some time.
 	time.Sleep(500 * time.Millisecond)
 
@@ -315,7 +299,6 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 // respond to keepalive pings, and makes sure that the client closes the
 // transport even when there is an active stream.
 func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
-	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
 		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
 		KeepaliveParams: keepalive.ClientParameters{
@@ -323,18 +306,9 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 			Timeout: 10 * time.Millisecond,
 		},
 	}
-	respModeCh := make(chan bool, 1)
-	defer close(respModeCh)
-	client, cancel := setUpWithNoPingServerWithOptions(t, copts, connCh, respModeCh)
-	defer cancel()
+	client, server := setUpWithNoPingServerWithOptions(t, copts, true)
+	defer server.stop()
 	defer client.Close(fmt.Errorf("closed manually by test"))
-
-	conn, ok := <-connCh
-	if !ok {
-		t.Fatalf("Server didn't return connection object")
-	}
-	defer conn.Close()
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	// Create a stream, but send no data on it.
@@ -342,7 +316,7 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 		t.Fatalf("Stream creation failed: %v", err)
 	}
 	// Toggle server from responsive to non-responsive
-	respModeCh <- false
+	server.setPingMode(false)
 	if err := pollForStreamCreationError(client); err != nil {
 		t.Fatal(err)
 	}

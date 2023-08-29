@@ -461,82 +461,151 @@ func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts 
 	return server, ct.(*http2Client), cancel
 }
 
-func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.Conn) (*http2Client, func()) {
-	return setUpWithNoPingServerWithOptions(t, copts, connCh, nil)
+// A server which can be switched from responsive to non-responsive by writing a toggle boolean to the respModeCh channel
+// if a respModeCh channel is created.
+type pingModeServer struct {
+	respModeCh chan bool
+	error      chan error
+	ready      bool
+	cancel     context.CancelFunc
+	conn       net.Conn
+	lis        net.Listener
+}
+
+func (s *pingModeServer) start(t *testing.T) {
+	conn, err := s.lis.Accept()
+	if err != nil {
+		s.stop()
+		s.error <- fmt.Errorf("Error at server-side while accepting: %v", err)
+		return
+	}
+	s.conn = conn
+	if _, err := io.ReadFull(conn, make([]byte, len(clientPreface))); err != nil {
+		s.stop()
+		s.error <- fmt.Errorf("Error while reading client preface: %v", err)
+		return
+	}
+
+	framer := http2.NewFramer(conn, conn)
+	if err := framer.WriteSettings(); err != nil {
+		s.stop()
+		s.error <- fmt.Errorf("Error at server-side while writing settings: %v", framer.ErrorDetail())
+		return
+	}
+	if err := framer.WriteSettingsAck(); err != nil {
+		s.stop()
+		s.error <- fmt.Errorf("Error while writing settings: %v", err)
+		return
+	}
+	close(s.error)
+	s.ready = true
+	if s.respModeCh != nil {
+		respondToPing := true
+		for {
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				t.Logf("PingModeServer respondMode err %v", err)
+				return
+			}
+			select {
+			case mode, ok := <-s.respModeCh:
+				if !ok {
+					t.Log("PingModeServer respondMode channel closed")
+					return
+				}
+				respondToPing = mode
+			default:
+			}
+			// ack the ping if in responsive mode.
+			if respondToPing {
+				if f, ok := frame.(*http2.PingFrame); ok {
+					framer.WritePing(true, f.Data)
+				}
+			}
+		}
+	}
+}
+
+func (s *pingModeServer) address() string {
+	if s.lis == nil {
+		return ""
+	}
+	return s.lis.Addr().String()
+}
+
+func (s *pingModeServer) stop() {
+	s.cancel()
+	if s.respModeCh != nil {
+		close(s.respModeCh)
+	}
+	if s.conn != nil {
+		s.conn.Close()
+	}
+	if s.lis == nil {
+		s.lis.Close()
+	}
+}
+
+func (s *pingModeServer) waitForReady(t *testing.T, timeout time.Duration) {
+	select {
+	case err := <-s.error:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(timeout):
+		if !s.ready {
+			t.Fatalf("Timed out after %v waiting for server to be ready", timeout)
+		}
+	}
+}
+
+// setPingMode toggles the server between responding to ping acks and not responding based on the writes
+// to the respModeCh channel.
+//
+// * If `true` is written to respModeCh, the server will respond to ping acks. (default)
+// * If `false` is written to respModeCh, the server will not respond to ping acks.
+func (s *pingModeServer) setPingMode(respondToPing bool) {
+	if s.respModeCh != nil {
+		s.respModeCh <- respondToPing
+	}
+}
+
+// setUpWithNoPingServer sets up a server which does not respond to ping acks.
+func setUpWithNoPingServer(t *testing.T, copts ConnectOptions) (*http2Client, *pingModeServer) {
+	return setUpWithNoPingServerWithOptions(t, copts, false)
 }
 
 // setUpWithNoPingServerWithOptions sets up a server that can be toggled between
 // responding to ping acks and not responding based on the writes to the respModeCh
 // channel.
 //
-// * If `true` is written to respModeCh, the server will respond to ping acks. (default)
-// * If `false` is written to respModeCh, the server will not respond to ping acks.
-func setUpWithNoPingServerWithOptions(t *testing.T, copts ConnectOptions, connCh chan net.Conn, respModeCh chan bool) (*http2Client, func()) {
+// If `switchable` is `true`, then the created server will be able to respond to ping acks or not. Otherwise, the
+// created server ignores ping acks.
+func setUpWithNoPingServerWithOptions(t *testing.T, copts ConnectOptions, switchable bool) (*http2Client, *pingModeServer) {
+	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+	//create and start server
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	// Launch a server which can be switched from responsive to non-responsive by writing a toggle boolean to the respModeCh channel.
-	go func() {
-		defer lis.Close()
-		conn, err := lis.Accept()
-		if err != nil {
-			t.Errorf("Error at server-side while accepting: %v", err)
-			close(connCh)
-			return
-		}
-		framer := http2.NewFramer(conn, conn)
-		if err := framer.WriteSettings(); err != nil {
-			t.Errorf("Error at server-side while writing settings: %v", err)
-			close(connCh)
-			return
-		}
-		if respModeCh != nil {
-			if err := framer.WriteSettingsAck(); err != nil {
-				t.Errorf("Error while writing settings: %v", err)
-				return
-			}
-			go func() {
-				respondToPing := true
-				var lock sync.Mutex
-				for {
-					frame, err := framer.ReadFrame()
-					if err != nil {
-						return
-					}
-					select {
-					case mode, ok := <-respModeCh:
-						if !ok {
-							return
-						}
-						respondToPing = mode
-					default:
-					}
-					// ack the ping if in responsive mode.
-					if respondToPing {
-						if f, ok := frame.(*http2.PingFrame); ok {
-							lock.Lock()
-							framer.WritePing(true, f.Data)
-							lock.Unlock()
-						}
-					}
-				}
-			}()
-		}
-		connCh <- conn
-	}()
-	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	tr, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	server := &pingModeServer{
+		lis:    lis,
+		cancel: cancel,
+		error:  make(chan error, 1),
+	}
+	if switchable {
+		server.respModeCh = make(chan bool, 1)
+	}
+	go server.start(t)
+
+	tr, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: server.address()}, copts, func(GoAwayReason) {})
 	if err != nil {
-		cancel() // Do not cancel in success path.
 		// Server clean-up.
-		lis.Close()
-		if conn, ok := <-connCh; ok {
-			conn.Close()
-		}
+		server.stop()
 		t.Fatalf("Failed to dial: %v", err)
 	}
-	return tr.(*http2Client), cancel
+	server.waitForReady(t, 2*time.Second)
+	return tr.(*http2Client), server
 }
 
 // TestInflightStreamClosing ensures that closing in-flight stream
