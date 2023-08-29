@@ -22,10 +22,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
