@@ -26,8 +26,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/status"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const defaultTestTimeout = 10 * time.Second
@@ -42,7 +43,7 @@ func Test(t *testing.T) {
 
 func (s) TestStream_Header_TrailersOnly(t *testing.T) {
 	ss := stubserver.StubServer{
-		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			return status.Errorf(codes.NotFound, "a test error")
 		},
 	}
