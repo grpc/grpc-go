@@ -122,6 +122,8 @@ func (a *Attributes) String() string {
 	return sb.String()
 }
 
+const nilAngleString = "<nil>"
+
 func str(x any) (s string) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -131,7 +133,7 @@ func str(x any) (s string) {
 			//
 			// Adapted from the code in fmt/print.go.
 			if v := reflect.ValueOf(x); v.Kind() == reflect.Pointer && v.IsNil() {
-				s = "<nil>"
+				s = nilAngleString
 				return
 			}
 
@@ -140,13 +142,58 @@ func str(x any) (s string) {
 		}
 	}()
 	if x == nil { // NOTE: typed nils will not be caught by this check
-		return "<nil>"
+		return nilAngleString
 	} else if v, ok := x.(fmt.Stringer); ok {
 		return v.String()
 	} else if v, ok := x.(string); ok {
 		return v
 	}
-	return fmt.Sprintf("<%p>", x)
+	value := reflect.ValueOf(x)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		return fmt.Sprintf("<%p>", x)
+	default:
+		// This will call badVerb to print as "<%p>", but without leading "%!(" and tailing ")"
+		return badVerb(x, value)
+	}
+}
+
+// badVerb is like fmt.Sprintf("%p", arg), but with
+// leading "%!verb(" replaced by "<" and tailing ")" replaced by ">".
+// If an invalid argument is given for a '%p', such as providing
+// an int to %p, the generated string will contain a
+// description of the problem, as in these examples:
+//
+// # our style
+//
+//	Wrong type or unknown verb: <type=value>
+//		Printf("%p", 1):        <int=1>
+//
+// # fmt style as `fmt.Sprintf("%p", arg)`
+//
+//	Wrong type or unknown verb: %!verb(type=value)
+//		Printf("%p", 1):        %!d(int=1)
+//
+// Adapted from the code in fmt/print.go.
+func badVerb(arg any, value reflect.Value) string {
+	var buf strings.Builder
+	switch {
+	case arg != nil:
+		buf.WriteByte('<')
+		buf.WriteString(reflect.TypeOf(arg).String())
+		buf.WriteByte('=')
+		_, _ = fmt.Fprintf(&buf, "%v", arg)
+		buf.WriteByte('>')
+	case value.IsValid():
+		buf.WriteByte('<')
+		buf.WriteString(value.Type().String())
+		buf.WriteByte('=')
+		_, _ = fmt.Fprintf(&buf, "%v", 0)
+		buf.WriteByte('>')
+	default:
+		buf.WriteString(nilAngleString)
+	}
+	return buf.String()
 }
 
 // MarshalJSON helps implement the json.Marshaler interface, thereby rendering
