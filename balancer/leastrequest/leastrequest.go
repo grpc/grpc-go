@@ -154,6 +154,8 @@ type picker struct {
 }
 
 func (p *picker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
+	// There is some degree of raciness in Pick, this is allowed: "it may be argued that
+	// it's better to accept some degree of raciness in the picker instead." - A48
 	var pickedSC *scWithRPCCount
 	for i := 0; i < int(p.choiceCount); i++ {
 		index := grpcranduint32() % uint32(len(p.subConns))
