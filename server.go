@@ -1693,8 +1693,10 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	ctx := stream.Context()
 	var ti *traceInfo
 	if EnableTracing {
+		tr := trace.New("grpc.Recv."+methodFamily(stream.Method()), stream.Method())
+		ctx = trace.NewContext(ctx, tr)
 		ti = &traceInfo{
-			tr: trace.New("grpc.Recv."+methodFamily(stream.Method()), stream.Method()),
+			tr: tr,
 			firstLine: firstLine{
 				client:     false,
 				remoteAddr: t.RemoteAddr(),
