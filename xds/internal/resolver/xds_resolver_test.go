@@ -997,7 +997,7 @@ func (s) TestResolverWRR(t *testing.T) {
 	// Read the update pushed by the resolver to the ClientConn.
 	cs := verifyUpdateFromResolver(ctx, t, stateCh, "")
 
-	// Make RPCs are verify WRR behavior in the cluster specifier.
+	// Make RPCs to verify WRR behavior in the cluster specifier.
 	picks := map[string]int{}
 	for i := 0; i < 100; i++ {
 		res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
