@@ -408,7 +408,7 @@ func (bg *BalancerGroup) Remove(id string) {
 
 	sbToRemove, ok := bg.idToBalancerConfig[id]
 	if !ok {
-		bg.logger.Warningf("Child policy for locality %q does not exist in the balancer group", id)
+		bg.logger.Errorf("Child policy for locality %q does not exist in the balancer group", id)
 		bg.outgoingMu.Unlock()
 		return
 	}
