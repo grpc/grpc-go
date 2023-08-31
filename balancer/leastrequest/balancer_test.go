@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -454,4 +455,56 @@ func (s) TestLeastRequestPersistsCounts(t *testing.T) {
 	if diff := cmp.Diff(gotAddrCount, wantAddrCount); diff != "" {
 		t.Fatalf("addr count (-got:, +want): %v", diff)
 	}
+}
+
+// TestConcurrentRPCs tests concurrent RPCs on the least request balancer. It
+// configures a channel with a least request balancer as the top level balancer,
+// and makes 100 RPCs asynchronously. This makes sure no race conditions happen
+// in this scenario.
+func (s) TestConcurrentRPCs(t *testing.T) {
+	addresses := setupBackends(t)
+
+	mr := manual.NewBuilderWithScheme("lr-e2e")
+	defer mr.Close()
+
+	// Configure least request as top level balancer of channel.
+	lrscJSON := `
+{
+  "loadBalancingConfig": [
+    {
+      "least_request_experimental": {
+        "choiceCount": 2
+      }
+    }
+  ]
+}`
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(lrscJSON)
+	firstTwoAddresses := []resolver.Address{
+		{Addr: addresses[0]},
+		{Addr: addresses[1]},
+	}
+	mr.InitialState(resolver.State{
+		Addresses:     firstTwoAddresses,
+		ServiceConfig: sc,
+	})
+
+	cc, err := grpc.Dial(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.Dial() failed: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	testServiceClient := testgrpc.NewTestServiceClient(cc)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			testServiceClient.EmptyCall(ctx, &testpb.Empty{})
+		}()
+	}
+	wg.Wait()
+
 }
