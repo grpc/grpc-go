@@ -164,9 +164,10 @@ func (p *picker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 			pickedSCNumRPCs = pickedSC.numRPCs.Load()
 			continue
 		}
-		if sc.numRPCs.Load() < pickedSCNumRPCs {
+		scNumRPCs := sc.numRPCs.Load()
+		if scNumRPCs < pickedSCNumRPCs {
 			pickedSC = &sc
-			pickedSCNumRPCs = pickedSC.numRPCs.Load()
+			pickedSCNumRPCs = scNumRPCs
 		}
 	}
 	// "The counter for a subchannel should be atomically incremented by one
