@@ -71,7 +71,7 @@ func (s) TestCustomLB(t *testing.T) {
 			}
 			wantVal := "error-code-0"
 			if rpcBMD[0] != wantVal {
-				errCh.Send(fmt.Errorf("metadata val for key \"%v\": got val %v, want val %v", "rpc-behavior", rpcBMD[0], wantVal))
+				errCh.Send(fmt.Errorf("metadata val for key \"rpc-behavior\": got val %v, want val %v", rpcBMD[0], wantVal))
 				return &testpb.SimpleResponse{}, nil
 			}
 			// Success.

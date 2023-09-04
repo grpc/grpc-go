@@ -87,7 +87,7 @@ func (s *testServiceImpl) EmptyCall(ctx context.Context, _ *testpb.Empty) (*test
 }
 
 func (s *testServiceImpl) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	response := &testpb.SimpleResponse{ServerId: s.serverID}
+	response := &testpb.SimpleResponse{ServerId: s.serverID, Hostname: s.hostname}
 
 	for _, val := range getRPCBehaviorMetadata(ctx) {
 		if st := getStatusForRPCBehaviorMetadata(val); st != nil {
@@ -95,7 +95,6 @@ func (s *testServiceImpl) UnaryCall(ctx context.Context, in *testpb.SimpleReques
 		}
 	}
 
-	response.Hostname = s.hostname
 	grpc.SetHeader(ctx, metadata.Pairs("hostname", s.hostname))
 	return response, status.Err(codes.OK, "")
 }
@@ -103,13 +102,12 @@ func (s *testServiceImpl) UnaryCall(ctx context.Context, in *testpb.SimpleReques
 func getRPCBehaviorMetadata(ctx context.Context) []string {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		logger.Error("failed to receive metadata")
+		logger.Error("Failed to retrieve metadata from incoming RPC context")
 		return nil
 	}
 
 	mdRPCBehavior := md.Get(rpcBehaviorMetadataKey)
-
-	rpcBehaviorMetadata := make([]string, 0)
+	var rpcBehaviorMetadata []string
 	for _, val := range mdRPCBehavior {
 		splitVals := strings.Split(val, ",")
 		rpcBehaviorMetadata = append(rpcBehaviorMetadata, splitVals...)
@@ -125,10 +123,10 @@ func getStatusForRPCBehaviorMetadata(headerValue string) *status.Status {
 
 	errCode, err := strconv.Atoi(headerValue[len(errorCodePrefix):])
 	if err != nil {
-		return status.Newf(codes.InvalidArgument, "Invalid format for rpc-behavior header: %v", headerValue)
+		return status.Newf(codes.InvalidArgument, "invalid format for rpc-behavior header: %v", headerValue)
 	}
 
-	return status.Newf(codes.Code(errCode), "Rpc failed as per the rpc-behavior header value: %v", headerValue)
+	return status.Newf(codes.Code(errCode), "rpc failed as per the rpc-behavior header value: %v", headerValue)
 }
 
 // xdsUpdateHealthServiceImpl provides an implementation of the
