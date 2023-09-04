@@ -28,6 +28,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/admin"
@@ -58,8 +59,13 @@ var (
 )
 
 const (
-	rpcBehaviorMetadataKey = "rpc-behavior"
-	errorCodePrefix        = "error-code-"
+	rpcBehaviorMdKey  = "rpc-behavior"
+	rpcAttemptsMdKey  = "grpc-previous-rpc-attempts"
+	sleepPfx          = "sleep-"
+	keepOpenVal       = "keep-open"
+	errorCodePfx      = "error-code-"
+	successOnRetryPfx = "success-on-retry-attempt-"
+	hostnamePfx       = "hostname="
 )
 
 func getHostname() string {
@@ -89,9 +95,48 @@ func (s *testServiceImpl) EmptyCall(ctx context.Context, _ *testpb.Empty) (*test
 func (s *testServiceImpl) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	response := &testpb.SimpleResponse{ServerId: s.serverID, Hostname: s.hostname}
 
-	for _, val := range getRPCBehaviorMetadata(ctx) {
-		if st := getStatusForRPCBehaviorMetadata(val); st != nil {
-			return response, status.Err(st.Code(), st.Message())
+	for _, headerVal := range getRPCBehaviorMetadata(ctx) {
+		if strings.HasPrefix(headerVal, sleepPfx) {
+			sleep, err := strconv.Atoi(headerVal[len(sleepPfx):])
+			if err != nil {
+				return response, status.Errorf(codes.InvalidArgument, "invalid format for rpc-behavior header: %v", headerVal)
+			}
+
+			time.Sleep(time.Duration(sleep) * time.Second)
+
+		} else if strings.HasPrefix(headerVal, keepOpenVal) {
+			return nil, nil
+
+		} else if strings.HasPrefix(headerVal, errorCodePfx) {
+			errCd, err := strconv.Atoi(headerVal[len(errorCodePfx):])
+			if err != nil {
+				return response, status.Errorf(codes.InvalidArgument, "invalid format for rpc-behavior header: %v", headerVal)
+			}
+
+			return response, status.Errorf(codes.Code(errCd), "rpc failed as per the rpc-behavior header value: %v", headerVal)
+
+		} else if strings.HasPrefix(headerVal, successOnRetryPfx) {
+			attempt, err := strconv.Atoi(headerVal[len(successOnRetryPfx):])
+			if err != nil {
+				return response, status.Errorf(codes.InvalidArgument, "invalid format for rpc-behavior header: %v", headerVal)
+			}
+
+			mdRetry := getMetadataValues(ctx, rpcAttemptsMdKey)
+			retry, err := strconv.Atoi(mdRetry[0])
+			if err != nil {
+				return response, status.Errorf(codes.InvalidArgument, "invalid format for grpc-previous-rpc-attempts header: %v", mdRetry[0])
+			}
+
+			if retry == attempt {
+				break
+			}
+
+		} else if strings.HasPrefix(headerVal, hostnamePfx) {
+			headerHostname := strings.TrimSpace(headerVal[len(hostnamePfx):])
+
+			if headerHostname != s.hostname {
+				break
+			}
 		}
 	}
 
@@ -100,13 +145,7 @@ func (s *testServiceImpl) UnaryCall(ctx context.Context, in *testpb.SimpleReques
 }
 
 func getRPCBehaviorMetadata(ctx context.Context) []string {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		logger.Error("Failed to retrieve metadata from incoming RPC context")
-		return nil
-	}
-
-	mdRPCBehavior := md.Get(rpcBehaviorMetadataKey)
+	mdRPCBehavior := getMetadataValues(ctx, rpcBehaviorMdKey)
 	var rpcBehaviorMetadata []string
 	for _, val := range mdRPCBehavior {
 		splitVals := strings.Split(val, ",")
@@ -116,17 +155,14 @@ func getRPCBehaviorMetadata(ctx context.Context) []string {
 	return rpcBehaviorMetadata
 }
 
-func getStatusForRPCBehaviorMetadata(headerValue string) *status.Status {
-	if !strings.HasPrefix(headerValue, errorCodePrefix) {
+func getMetadataValues(ctx context.Context, metadataKey string) []string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		logger.Error("Failed to retrieve metadata from incoming RPC context")
 		return nil
 	}
 
-	errCode, err := strconv.Atoi(headerValue[len(errorCodePrefix):])
-	if err != nil {
-		return status.Newf(codes.InvalidArgument, "invalid format for rpc-behavior header: %v", headerValue)
-	}
-
-	return status.Newf(codes.Code(errCode), "rpc failed as per the rpc-behavior header value: %v", headerValue)
+	return md.Get(metadataKey)
 }
 
 // xdsUpdateHealthServiceImpl provides an implementation of the
