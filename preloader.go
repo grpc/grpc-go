@@ -53,15 +53,22 @@ func (p *PreparedMsg) Encode(s Stream, msg any) error {
 	}
 
 	// prepare the msg
-	data, err := encode(rpcInfo.preloaderInfo.codec, msg)
+	data, err := encode(rpcInfo.preloaderInfo.codec, msg, nil)
 	if err != nil {
 		return err
 	}
 	p.encodedData = data
-	compData, err := compress(data, rpcInfo.preloaderInfo.cp, rpcInfo.preloaderInfo.comp)
-	if err != nil {
-		return err
+
+	var compData []byte
+	if shouldCompress(rpcInfo.preloaderInfo.cp, rpcInfo.preloaderInfo.comp) {
+		compData, err = compress(data, rpcInfo.preloaderInfo.cp, rpcInfo.preloaderInfo.comp, nil)
+		if err != nil {
+			return err
+		}
+	} else {
+		compData = data
 	}
+
 	p.hdr, p.payload = msgHeader(data, compData)
 	return nil
 }

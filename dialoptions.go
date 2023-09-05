@@ -79,6 +79,7 @@ type dialOptions struct {
 	resolvers                   []resolver.Builder
 	idleTimeout                 time.Duration
 	recvBufferPool              SharedBufferPool
+	sendBufferPool              SendBufferPool
 }
 
 // DialOption configures how we set up the connection.
@@ -644,6 +645,7 @@ func defaultDialOptions() dialOptions {
 			UseProxy:        true,
 		},
 		recvBufferPool: nopBufferPool{},
+		sendBufferPool: NewSendBufferPool(),
 		idleTimeout:    30 * time.Minute,
 	}
 }
@@ -712,5 +714,11 @@ func WithIdleTimeout(d time.Duration) DialOption {
 func WithRecvBufferPool(bufferPool SharedBufferPool) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.recvBufferPool = bufferPool
+	})
+}
+
+func WithSendBufferPool(bufferPool SendBufferPool) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.sendBufferPool = bufferPool
 	})
 }

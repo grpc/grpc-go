@@ -25,6 +25,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/encoding"
+	protoV2 "google.golang.org/protobuf/proto"
 )
 
 // Name is the name registered for the proto compressor.
@@ -43,6 +44,19 @@ func (codec) Marshal(v any) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal, message is %T, want proto.Message", v)
 	}
 	return proto.Marshal(vv)
+}
+
+func (c codec) MarshalAppend(buf []byte, v any) ([]byte, error) {
+	vv, ok := v.(proto.Message)
+	if !ok {
+		return nil, fmt.Errorf("failed to marshal, message is %T, want proto.Message", v)
+	}
+
+	nbuf, err := protoV2.MarshalOptions{}.MarshalAppend(buf, proto.MessageV2(vv))
+	if err != nil {
+		return buf, err
+	}
+	return nbuf, nil
 }
 
 func (codec) Unmarshal(data []byte, v any) error {

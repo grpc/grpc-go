@@ -1114,6 +1114,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		h:           hdr,
 		d:           data,
 		onEachWrite: t.setResetPingStrikes,
+		onSent:      opts.OnSent,
 	}
 	if err := s.wq.get(int32(len(hdr) + len(data))); err != nil {
 		return t.streamContextErr(s)

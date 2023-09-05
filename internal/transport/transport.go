@@ -607,6 +607,10 @@ type Options struct {
 	// Last indicates whether this write is the last piece for
 	// this stream.
 	Last bool
+	// OnSent is invoked once the underlying message has successfully been
+	// sent. Note that this is not invoked if the message was not sent
+	// successfully.
+	OnSent func()
 }
 
 // CallHdr carries the information of a particular RPC.

@@ -99,6 +99,14 @@ type Codec interface {
 	Name() string
 }
 
+// AppendCodec is an extension of the Codec interface which allows marshaling
+// to a given buffer instead of allocating a new one.
+type AppendCodec interface {
+	Codec
+	// MarshalAppend writes the wire format of v to the given buffer.
+	MarshalAppend(buf []byte, v interface{}) ([]byte, error)
+}
+
 var registeredCodecs = make(map[string]Codec)
 
 // RegisterCodec registers the provided Codec for use with all gRPC clients and

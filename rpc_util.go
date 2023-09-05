@@ -626,11 +626,17 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 // encode serializes msg and returns a buffer containing the message, or an
 // error if it is too large to be transmitted by grpc.  If msg is nil, it
 // generates an empty message.
-func encode(c baseCodec, msg any) ([]byte, error) {
+func encode(c baseCodec, msg any, buf []byte) ([]byte, error) {
 	if msg == nil { // NOTE: typed nils will not be caught by this check
 		return nil, nil
 	}
-	b, err := c.Marshal(msg)
+	var b []byte
+	var err error
+	if abc, ok := c.(appendCodec); ok {
+		b, err = abc.MarshalAppend(buf, msg)
+	} else {
+		b, err = c.Marshal(msg)
+	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
 	}
@@ -640,18 +646,16 @@ func encode(c baseCodec, msg any) ([]byte, error) {
 	return b, nil
 }
 
-// compress returns the input bytes compressed by compressor or cp.  If both
-// compressors are nil, returns nil.
-//
-// TODO(dfawley): eliminate cp parameter by wrapping Compressor in an encoding.Compressor.
-func compress(in []byte, cp Compressor, compressor encoding.Compressor) ([]byte, error) {
-	if compressor == nil && cp == nil {
-		return nil, nil
-	}
+func shouldCompress(cp Compressor, compressor encoding.Compressor) bool {
+	return !(compressor == nil && cp == nil)
+}
+
+// compress returns the input bytes compressed by compressor.
+func compress(in []byte, cp Compressor, compressor encoding.Compressor, buf []byte) ([]byte, error) {
 	wrapErr := func(err error) error {
 		return status.Errorf(codes.Internal, "grpc: error while compressing: %v", err.Error())
 	}
-	cbuf := &bytes.Buffer{}
+	cbuf := bytes.NewBuffer(buf)
 	if compressor != nil {
 		z, err := compressor.Compress(cbuf)
 		if err != nil {

@@ -884,7 +884,8 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, payload, data, err := prepareMsg(m, cs.codec, cs.cp, cs.comp)
+	// TODO(pchesnai): Figure out a sane way to wire through a SendBufferPool
+	hdr, payload, data, _, err := prepareMsg(m, cs.codec, cs.cp, cs.comp, nopSendBufferPool{})
 	if err != nil {
 		return err
 	}
@@ -1261,6 +1262,7 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 		cp:       cp,
 		comp:     comp,
 		t:        t,
+		pool:     ac.dopts.sendBufferPool,
 	}
 
 	s, err := as.t.NewStream(as.ctx, as.callHdr)
@@ -1314,6 +1316,7 @@ type addrConnStream struct {
 	p         *parser
 	mu        sync.Mutex
 	finished  bool
+	pool      SendBufferPool
 }
 
 func (as *addrConnStream) Header() (metadata.MD, error) {
@@ -1366,17 +1369,24 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, payld, _, err := prepareMsg(m, as.codec, as.cp, as.comp)
+	hdr, payld, _, release, err := prepareMsg(m, as.codec, as.cp, as.comp, as.pool)
 	if err != nil {
 		return err
 	}
 
 	// TODO(dfawley): should we be checking len(data) instead?
 	if len(payld) > *as.callInfo.maxSendMessageSize {
+		release()
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payld), *as.callInfo.maxSendMessageSize)
 	}
 
-	if err := as.t.Write(as.s, hdr, payld, &transport.Options{Last: !as.desc.ClientStreams}); err != nil {
+	opts := &transport.Options{
+		Last:   !as.desc.ClientStreams,
+		OnSent: release,
+	}
+
+	if err := as.t.Write(as.s, hdr, payld, opts); err != nil {
+		release()
 		if !as.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
 			// because the generated code requires it.  finish is not called; RecvMsg()
@@ -1530,6 +1540,7 @@ type serverStream struct {
 	s     *transport.Stream
 	p     *parser
 	codec baseCodec
+	pool  SendBufferPool
 
 	cp     Compressor
 	dc     Decompressor
@@ -1638,16 +1649,23 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, payload, data, err := prepareMsg(m, ss.codec, ss.cp, ss.comp)
+	hdr, payload, data, release, err := prepareMsg(m, ss.codec, ss.cp, ss.comp, ss.pool)
 	if err != nil {
 		return err
 	}
 
 	// TODO(dfawley): should we be checking len(data) instead?
 	if len(payload) > ss.maxSendMessageSize {
+		release()
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), ss.maxSendMessageSize)
 	}
-	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false}); err != nil {
+
+	opts := &transport.Options{
+		Last:   false,
+		OnSent: release,
+	}
+	if err := ss.t.Write(ss.s, hdr, payload, opts); err != nil {
+		release()
 		return toRPCErr(err)
 	}
 	if len(ss.binlogs) != 0 {
@@ -1756,20 +1774,38 @@ func MethodFromServerStream(stream ServerStream) (string, bool) {
 // prepareMsg returns the hdr, payload and data
 // using the compressors passed or using the
 // passed preparedmsg
-func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor) (hdr, payload, data []byte, err error) {
+func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor, pool SendBufferPool) (hdr, payload, data []byte, releaseBuffers func(), err error) {
 	if preparedMsg, ok := m.(*PreparedMsg); ok {
-		return preparedMsg.hdr, preparedMsg.payload, preparedMsg.encodedData, nil
+		return preparedMsg.hdr, preparedMsg.payload, preparedMsg.encodedData, func() {}, nil
 	}
 	// The input interface is not a prepared msg.
 	// Marshal and Compress the data at this point
-	data, err = encode(codec, m)
-	if err != nil {
-		return nil, nil, nil, err
+	var dataBuf []byte
+	if _, ok := codec.(appendCodec); ok {
+		dataBuf = pool.Get()
 	}
-	compData, err := compress(data, cp, comp)
+	data, err = encode(codec, m, dataBuf)
 	if err != nil {
-		return nil, nil, nil, err
+		pool.Put(dataBuf)
+		return nil, nil, nil, nil, err
+	}
+
+	var compData []byte
+	if shouldCompress(cp, comp) {
+		compBuf := pool.Get()
+		compData, err = compress(data, cp, comp, compBuf)
+		if err != nil {
+			pool.Put(compBuf)
+			return nil, nil, nil, nil, err
+		}
 	}
 	hdr, payload = msgHeader(data, compData)
-	return hdr, payload, data, nil
+	return hdr, payload, data, func() {
+		if dataBuf != nil {
+			pool.Put(data)
+		}
+		if compData != nil {
+			pool.Put(compData)
+		}
+	}, nil
 }

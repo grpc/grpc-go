@@ -152,6 +152,8 @@ type dataFrame struct {
 	// onEachWrite is called every time
 	// a part of d is written out.
 	onEachWrite func()
+	// onSent is called once all the bt
+	onSent func()
 }
 
 func (*dataFrame) isTransportResponseFrame() bool { return false }
@@ -913,6 +915,9 @@ func (l *loopyWriter) processData() (bool, error) {
 			return false, err
 		}
 		str.itl.dequeue() // remove the empty data item from stream
+		if dataItem.onSent != nil {
+			dataItem.onSent()
+		}
 		if str.itl.isEmpty() {
 			str.state = empty
 		} else if trailer, ok := str.itl.peek().(*headerFrame); ok { // the next item is trailers.
@@ -981,6 +986,9 @@ func (l *loopyWriter) processData() (bool, error) {
 
 	if len(dataItem.h) == 0 && len(dataItem.d) == 0 { // All the data from that message was written out.
 		str.itl.dequeue()
+		if dataItem.onSent != nil {
+			dataItem.onSent()
+		}
 	}
 	if str.itl.isEmpty() {
 		str.state = empty

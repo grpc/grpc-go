@@ -176,6 +176,7 @@ type serverOptions struct {
 	headerTableSize       *uint32
 	numServerWorkers      uint32
 	recvBufferPool        SharedBufferPool
+	sendBufferPool        SendBufferPool
 }
 
 var defaultServerOptions = serverOptions{
@@ -185,6 +186,7 @@ var defaultServerOptions = serverOptions{
 	writeBufferSize:       defaultWriteBufSize,
 	readBufferSize:        defaultReadBufSize,
 	recvBufferPool:        nopBufferPool{},
+	sendBufferPool:        nopSendBufferPool{},
 }
 var globalServerOptions []ServerOption
 
@@ -587,6 +589,24 @@ func NumStreamWorkers(numServerWorkers uint32) ServerOption {
 func RecvBufferPool(bufferPool SharedBufferPool) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.recvBufferPool = bufferPool
+	})
+}
+
+// ServerSendBufferPool returns a ServerOption that configures the server
+// to use a shared buffer pool for serializing outgoing messages. Depending
+// on the application's workload, this could result in reduced memory allocation.
+// Note that if the default codec has been overridden, via
+// [encoding.RegisterCodec] or any of the override options such as ForceServerCodec,
+// the new codecs must implement [encoding.AppendCodec], otherwise this feature
+// will be disabled.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func ServerSendBufferPool(bufferPool SendBufferPool) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.sendBufferPool = NewSendBufferPool()
 	})
 }
 
@@ -1106,20 +1126,43 @@ func (s *Server) incrCallsFailed() {
 }
 
 func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, stream *transport.Stream, msg any, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
-	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
+	codec := s.getCodec(stream.ContentSubtype())
+
+	var dataBuf []byte
+	if _, ok := codec.(appendCodec); ok {
+		dataBuf = s.opts.sendBufferPool.Get()
+	}
+	data, err := encode(codec, msg, dataBuf)
 	if err != nil {
 		channelz.Error(logger, s.channelzID, "grpc: server failed to encode response: ", err)
+		s.opts.sendBufferPool.Put(dataBuf)
 		return err
 	}
-	compData, err := compress(data, cp, comp)
-	if err != nil {
-		channelz.Error(logger, s.channelzID, "grpc: server failed to compress response: ", err)
-		return err
+
+	var compData []byte
+	if shouldCompress(cp, comp) {
+		compBuf := s.opts.sendBufferPool.Get()
+		compData, err = compress(data, cp, comp, compBuf)
+		if err != nil {
+			channelz.Error(logger, s.channelzID, "grpc: server failed to compress response: ", err)
+			s.opts.sendBufferPool.Put(compBuf)
+			return err
+		}
 	}
 	hdr, payload := msgHeader(data, compData)
 	// TODO(dfawley): should we be checking len(data) instead?
 	if len(payload) > s.opts.maxSendMessageSize {
+		s.opts.sendBufferPool.Put(dataBuf)
+		if shouldCompress(cp, comp) {
+			s.opts.sendBufferPool.Put(compData)
+		}
 		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(payload), s.opts.maxSendMessageSize)
+	}
+	opts.OnSent = func() {
+		s.opts.sendBufferPool.Put(dataBuf)
+		if shouldCompress(cp, comp) {
+			s.opts.sendBufferPool.Put(compData)
+		}
 	}
 	err = t.Write(stream, hdr, payload, opts)
 	if err == nil {
@@ -1516,6 +1559,7 @@ func (s *Server) processStreamingRPC(ctx context.Context, t transport.ServerTran
 		s:                     stream,
 		p:                     &parser{r: stream, recvBufferPool: s.opts.recvBufferPool},
 		codec:                 s.getCodec(stream.ContentSubtype()),
+		pool:                  s.opts.sendBufferPool,
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
 		maxSendMessageSize:    s.opts.maxSendMessageSize,
 		trInfo:                trInfo,
