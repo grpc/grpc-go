@@ -502,7 +502,9 @@ func (s) TestConcurrentRPCs(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			testServiceClient.EmptyCall(ctx, &testpb.Empty{})
+			for j := 0; j < 5; j++ {
+				testServiceClient.EmptyCall(ctx, &testpb.Empty{})
+			}
 		}()
 	}
 	wg.Wait()
