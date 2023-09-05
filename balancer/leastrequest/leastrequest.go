@@ -155,15 +155,14 @@ type picker struct {
 
 func (p *picker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	var pickedSC *scWithRPCCount
+	var pickedSCNumRPCs int32
 	for i := 0; i < int(p.choiceCount); i++ {
 		index := grpcranduint32() % uint32(len(p.subConns))
 		sc := p.subConns[index]
-		if pickedSC == nil {
+		n := sc.numRPCs.Load()
+		if pickedSC == nil || n < pickedSCNumRPCs {
 			pickedSC = &sc
-			continue
-		}
-		if sc.numRPCs.Load() < pickedSC.numRPCs.Load() {
-			pickedSC = &sc
+			pickedSCNumRPCs = n
 		}
 	}
 	// "The counter for a subchannel should be atomically incremented by one
