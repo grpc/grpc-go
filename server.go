@@ -1311,6 +1311,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 		}
 		return err
 	}
+
 	defer s.opts.recvBufferPool.Put(&d)
 
 	if channelz.IsOn() {
