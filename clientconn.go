@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/idle"
 	"google.golang.org/grpc/internal/pretty"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/transport"
@@ -266,7 +267,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	// Configure idleness support with configured idle timeout or default idle
 	// timeout duration. Idleness can be explicitly disabled by the user, by
 	// setting the dial option to 0.
-	cc.idlenessMgr = newIdlenessManager(cc, cc.dopts.idleTimeout)
+	cc.idlenessMgr = idle.NewManager(idle.ManagerOptions{Enforcer: (*idler)(cc), Timeout: cc.dopts.idleTimeout, Logger: logger})
 
 	// Return early for non-blocking dials.
 	if !cc.dopts.block {
@@ -315,6 +316,16 @@ func (cc *ClientConn) addTraceEvent(msg string) {
 		}
 	}
 	channelz.AddTraceEvent(logger, cc.channelzID, 0, ted)
+}
+
+type idler ClientConn
+
+func (i *idler) EnterIdleMode() error {
+	return (*ClientConn)(i).enterIdleMode()
+}
+
+func (i *idler) ExitIdleMode() error {
+	return (*ClientConn)(i).exitIdleMode()
 }
 
 // exitIdleMode moves the channel out of idle mode by recreating the name
@@ -639,7 +650,7 @@ type ClientConn struct {
 	channelzID      *channelz.Identifier // Channelz identifier for the channel.
 	resolverBuilder resolver.Builder     // See parseTargetAndFindResolver().
 	balancerWrapper *ccBalancerWrapper   // Uses gracefulswitch.balancer underneath.
-	idlenessMgr     idlenessManager
+	idlenessMgr     idle.Manager
 
 	// The following provide their own synchronization, and therefore don't
 	// require cc.mu to be held to access them.
@@ -1268,7 +1279,7 @@ func (cc *ClientConn) Close() error {
 		rWrapper.close()
 	}
 	if idlenessMgr != nil {
-		idlenessMgr.close()
+		idlenessMgr.Close()
 	}
 
 	for ac := range conns {

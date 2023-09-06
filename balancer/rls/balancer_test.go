@@ -1030,11 +1030,7 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	//    the test would fail. Waiting for the channel to become READY here
 	//    ensures that the test does not flake because of this rare sequence of
 	//    events.
-	for s := cc.GetState(); s != connectivity.Ready; s = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, s) {
-			t.Fatal("Timeout when waiting for connectivity state to reach READY")
-		}
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	// Cache the state changes seen up to this point.
 	states0 := ccWrapper.getStates()

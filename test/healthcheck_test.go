@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
@@ -212,33 +213,33 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitNotState(ctx, t, cc, connectivity.Idle)
-	awaitNotState(ctx, t, cc, connectivity.Connecting)
-	awaitState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Idle)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Connecting)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
-	awaitNotState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
-	awaitNotState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Ready)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
-	awaitNotState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_UNKNOWN)
-	awaitNotState(ctx, t, cc, connectivity.Ready)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Ready)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
@@ -267,8 +268,8 @@ func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	awaitNotState(ctx, t, cc, connectivity.Idle)
-	awaitNotState(ctx, t, cc, connectivity.Connecting)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Idle)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Connecting)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}

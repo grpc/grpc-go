@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	rrutil "google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -45,10 +46,6 @@ const rrServiceConfig = `{"loadBalancingConfig": [{"round_robin":{}}]}`
 
 func testRoundRobinBasic(ctx context.Context, t *testing.T, opts ...grpc.DialOption) (*grpc.ClientConn, *manual.Resolver, []*stubserver.StubServer) {
 	t.Helper()
-
-	// Initialize channelz. Used to determine pending RPC count.
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(func() { czCleanupWrapper(czCleanup, t) })
 
 	r := manual.NewBuilderWithScheme("whatever")
 
@@ -119,7 +116,7 @@ func (s) TestRoundRobin_AddressesRemoved(t *testing.T) {
 	// Send a resolver update with no addresses. This should push the channel into
 	// TransientFailure.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
-	awaitState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	const msgWant = "produced zero addresses"
 	client := testgrpc.NewTestServiceClient(cc)
@@ -141,7 +138,7 @@ func (s) TestRoundRobin_NewAddressWhileBlocking(t *testing.T) {
 	// Send a resolver update with no addresses. This should push the channel into
 	// TransientFailure.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
-	awaitState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	client := testgrpc.NewTestServiceClient(cc)
 	doneCh := make(chan struct{})
@@ -221,7 +218,7 @@ func (s) TestRoundRobin_AllServersDown(t *testing.T) {
 		b.Stop()
 	}
 
-	awaitState(ctx, t, cc, connectivity.TransientFailure)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Failfast RPCs should fail with Unavailable.
 	client := testgrpc.NewTestServiceClient(cc)

@@ -277,12 +277,7 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 		t.Fatalf("RPCs did not fail after removal of Cluster resource")
 	}
 
-	// Ensure that the ClientConn moves to TransientFailure.
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("Timed out waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
-		}
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Configure cluster and endpoints resources in the management server.
 	resources = e2e.UpdateOptions{

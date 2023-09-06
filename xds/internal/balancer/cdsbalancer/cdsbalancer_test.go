@@ -665,12 +665,7 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 		t.Fatal("Watch for cluster resource is cancelled when not expected to")
 	}
 
-	// Ensure that the ClientConn moves to TransientFailure.
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("Timed out waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
-		}
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Ensure that the NACK error is propagated to the RPC caller.
 	const wantClusterNACKErr = "unsupported config_source_specifier"
@@ -758,12 +753,8 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 		t.Fatal("Watch for cluster resource is cancelled when not expected to")
 	}
 
-	// Ensure that the ClientConn moves to TransientFailure.
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("Timed out waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
-		}
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
 	// Ensure RPC fails with Unavailable. The actual error message depends on
 	// the picker returned from the priority LB policy, and therefore not
 	// checking for it here.
@@ -801,12 +792,7 @@ func (s) TestResolverError(t *testing.T) {
 	resolverErr := errors.New("resolver-error-not-a-resource-not-found-error")
 	r.ReportError(resolverErr)
 
-	// Ensure that the ClientConn moves to TransientFailure.
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("Timed out waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
-		}
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Drain the resolver error channel.
 	select {
@@ -903,12 +889,7 @@ func (s) TestResolverError(t *testing.T) {
 		t.Fatal("Timeout when waiting for resolver error to be pushed to the child policy")
 	}
 
-	// Ensure that the ClientConn moves to TransientFailure.
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("Timed out waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
-		}
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Ensure RPC fails with Unavailable. The actual error message depends on
 	// the picker returned from the priority LB policy, and therefore not

@@ -91,7 +91,9 @@ type Stream interface {
 // status package.
 type ClientStream interface {
 	// Header returns the header metadata received from the server if there
-	// is any. It blocks if the metadata is not ready to read.
+	// is any. It blocks if the metadata is not ready to read.  If the metadata
+	// is nil and the error is also nil, then the stream was terminated without
+	// headers, and the status can be discovered by calling RecvMsg.
 	Header() (metadata.MD, error)
 	// Trailer returns the trailer metadata from the server, if there is any.
 	// It must only be called after stream.CloseAndRecv has returned, or
@@ -156,10 +158,10 @@ type ClientStream interface {
 // If none of the above happen, a goroutine and a context will be leaked, and grpc
 // will not call the optionally-configured stats handler with a stats.End message.
 func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (ClientStream, error) {
-	if err := cc.idlenessMgr.onCallBegin(); err != nil {
+	if err := cc.idlenessMgr.OnCallBegin(); err != nil {
 		return nil, err
 	}
-	defer cc.idlenessMgr.onCallEnd()
+	defer cc.idlenessMgr.OnCallEnd()
 
 	// allow interceptor to see all applicable call options, which means those
 	// configured as defaults from dial option as well as per-call options
@@ -802,7 +804,8 @@ func (cs *clientStream) Header() (metadata.MD, error) {
 
 	if err != nil {
 		cs.finish(err)
-		return nil, err
+		// Do not return the error.  The user should get it by calling Recv().
+		return nil, nil
 	}
 
 	if len(cs.binlogs) != 0 && !cs.serverHeaderBinlogged && m != nil {

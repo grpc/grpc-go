@@ -35,8 +35,6 @@ func (s) TestCZSocketMetricsSocketOption(t *testing.T) {
 }
 
 func testCZSocketMetricsSocketOption(t *testing.T, e env) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()

@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/fakegrpclb"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
@@ -63,7 +62,6 @@ const (
 //
 // Returns a cleanup function to be invoked by the caller.
 func setupBackendsAndFakeGRPCLB(t *testing.T) ([]*stubserver.StubServer, *fakegrpclb.Server, func()) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
 	backends, backendsCleanup := startBackendsForBalancerSwitch(t)
 
 	lbServer, err := fakegrpclb.NewServer(fakegrpclb.ServerParams{
@@ -83,7 +81,6 @@ func setupBackendsAndFakeGRPCLB(t *testing.T) ([]*stubserver.StubServer, *fakegr
 	return backends, lbServer, func() {
 		backendsCleanup()
 		lbServer.Stop()
-		czCleanupWrapper(czCleanup, t)
 	}
 }
 
