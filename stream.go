@@ -161,11 +161,16 @@ func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method st
 	if err := cc.idlenessMgr.OnCallBegin(); err != nil {
 		return nil, err
 	}
-	defer cc.idlenessMgr.OnCallEnd()
 
 	// allow interceptor to see all applicable call options, which means those
 	// configured as defaults from dial option as well as per-call options
 	opts = combine(cc.dopts.callOptions, opts)
+
+	// Add a calloption, to decrement the count of active RPCs, that gets
+	// executed when the RPC completes.
+	opts = append(opts, OnFinish(func(error) {
+		cc.idlenessMgr.OnCallEnd()
+	}))
 
 	if cc.dopts.streamInt != nil {
 		return cc.dopts.streamInt(ctx, desc, cc, method, newClientStream, opts...)
