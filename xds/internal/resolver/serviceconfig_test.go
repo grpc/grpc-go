@@ -25,6 +25,7 @@ import (
 
 	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/metadata"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
@@ -104,6 +105,35 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 			rpcInfo: iresolver.RPCInfo{
 				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs(":path", "abc")),
 				Method:  "/some-method",
+			},
+		},
+		// Tests that bin headers are skipped.
+		{
+			name: "skip-bin",
+			hashPolicies: []*xdsresource.HashPolicy{{
+				HashPolicyType: xdsresource.HashPolicyTypeHeader,
+				HeaderName:     "something-bin",
+			}, {
+				HashPolicyType: xdsresource.HashPolicyTypeChannelID,
+			}},
+			requestHashWant: channelID,
+			rpcInfo: iresolver.RPCInfo{
+				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("something-bin", "xyz")),
+			},
+		},
+		// Tests that extra metadata is used first.
+		{
+			name: "extra-metadata",
+			hashPolicies: []*xdsresource.HashPolicy{{
+				HashPolicyType: xdsresource.HashPolicyTypeHeader,
+				HeaderName:     "content-type",
+			}},
+			requestHashWant: xxhash.Sum64String("grpc value"),
+			rpcInfo: iresolver.RPCInfo{
+				Context: grpcutil.WithExtraMetadata(
+					metadata.NewOutgoingContext(context.Background(), metadata.Pairs("content-type", "user value")),
+					metadata.Pairs("content-type", "grpc value"),
+				),
 			},
 		},
 	}
