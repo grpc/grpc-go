@@ -95,47 +95,60 @@ func (s *testServiceImpl) EmptyCall(ctx context.Context, _ *testpb.Empty) (*test
 func (s *testServiceImpl) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	response := &testpb.SimpleResponse{ServerId: s.serverID, Hostname: s.hostname}
 
+behavior:
 	for _, headerVal := range getRPCBehaviorMetadata(ctx) {
-		if strings.HasPrefix(headerVal, sleepPfx) {
-			sleep, err := strconv.Atoi(headerVal[len(sleepPfx):])
-			if err != nil {
-				return response, status.Errorf(codes.InvalidArgument, "invalid format for rpc-behavior header: %v", headerVal)
+		switch {
+		//If the value matches "sleep-<int>", the server should wait the specified number of seconds before resuming behavior matching and RPC processing.
+		case strings.HasPrefix(headerVal, sleepPfx):
+			{
+				sleep, err := strconv.Atoi(headerVal[len(sleepPfx):])
+				if err != nil {
+					return nil, status.Errorf(codes.InvalidArgument, "invalid format for rpc-behavior header %v, must be '%v<int>' instead", headerVal, sleepPfx)
+				}
+
+				time.Sleep(time.Duration(sleep) * time.Second)
 			}
-
-			time.Sleep(time.Duration(sleep) * time.Second)
-
-		} else if strings.HasPrefix(headerVal, keepOpenVal) {
-			return nil, nil
-
-		} else if strings.HasPrefix(headerVal, errorCodePfx) {
-			errCd, err := strconv.Atoi(headerVal[len(errorCodePfx):])
-			if err != nil {
-				return response, status.Errorf(codes.InvalidArgument, "invalid format for rpc-behavior header: %v", headerVal)
+		// If the value matches "keep-open", the server should never respond to the request and behavior matching ends.
+		case strings.HasPrefix(headerVal, keepOpenVal):
+			{
+				<-ctx.Done()
 			}
+		// If the value matches "error-code-<int>", the server should respond with the specified status code and behavior matching ends.
+		case strings.HasPrefix(headerVal, errorCodePfx):
+			{
+				code, err := strconv.Atoi(headerVal[len(errorCodePfx):])
+				if err != nil {
+					return nil, status.Errorf(codes.InvalidArgument, "invalid format for rpc-behavior header %v, must be '%v<int>' instead", headerVal, errorCodePfx)
+				}
 
-			return response, status.Errorf(codes.Code(errCd), "rpc failed as per the rpc-behavior header value: %v", headerVal)
-
-		} else if strings.HasPrefix(headerVal, successOnRetryPfx) {
-			attempt, err := strconv.Atoi(headerVal[len(successOnRetryPfx):])
-			if err != nil {
-				return response, status.Errorf(codes.InvalidArgument, "invalid format for rpc-behavior header: %v", headerVal)
+				return nil, status.Errorf(codes.Code(code), "rpc failed as per the rpc-behavior header value: %v", headerVal)
 			}
+		// If the value matches "success-on-retry-attempt-<int>", and the value of the "grpc-previous-rpc-attempts" metadata field is equal
+		// to the specified number, the normal RPC processing should resume and behavior matching ends.
+		case strings.HasPrefix(headerVal, successOnRetryPfx):
+			{
+				wantRetry, err := strconv.Atoi(headerVal[len(successOnRetryPfx):])
+				if err != nil {
+					return nil, status.Errorf(codes.InvalidArgument, "invalid format for rpc-behavior header %v, must be '%v<int>' instead", headerVal, successOnRetryPfx)
+				}
 
-			mdRetry := getMetadataValues(ctx, rpcAttemptsMdKey)
-			retry, err := strconv.Atoi(mdRetry[0])
-			if err != nil {
-				return response, status.Errorf(codes.InvalidArgument, "invalid format for grpc-previous-rpc-attempts header: %v", mdRetry[0])
+				mdRetry := getMetadataValues(ctx, rpcAttemptsMdKey)
+				curRetry, err := strconv.Atoi(mdRetry[0])
+				if err != nil {
+					return nil, status.Errorf(codes.InvalidArgument, "invalid format for grpc-previous-rpc-attempts header: %v", mdRetry[0])
+				}
+
+				if curRetry == wantRetry {
+					break behavior
+				}
 			}
-
-			if retry == attempt {
-				break
-			}
-
-		} else if strings.HasPrefix(headerVal, hostnamePfx) {
-			headerHostname := strings.TrimSpace(headerVal[len(hostnamePfx):])
-
-			if headerHostname != s.hostname {
-				break
+		// A value can have a prefix "hostname=<string>" followed by a space. In that case, the rest of the value should only be applied
+		// if the specified hostname matches the server's hostname.
+		case strings.HasPrefix(headerVal, hostnamePfx):
+			{
+				if s.hostname != strings.TrimSpace(headerVal[len(hostnamePfx):]) {
+					break behavior
+				}
 			}
 		}
 	}
