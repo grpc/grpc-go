@@ -247,7 +247,8 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 			}
 			values := emd.Get(policy.HeaderName)
 			if len(values) == 0 {
-				// Extra metadata takes precedence over the user's metadata.
+				// Extra metadata (e.g. the "content-type" header) takes
+				// precedence over the user's metadata.
 				values = md.Get(policy.HeaderName)
 				if len(values) == 0 {
 					// If the header isn't present at all, this policy is a no-op.

@@ -121,7 +121,7 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("something-bin", "xyz")),
 			},
 		},
-		// Tests that extra metadata is used first.
+		// Tests that extra metadata takes precedence over the user's metadata.
 		{
 			name: "extra-metadata",
 			hashPolicies: []*xdsresource.HashPolicy{{
