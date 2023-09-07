@@ -66,7 +66,7 @@ func (s) TestCustomLB(t *testing.T) {
 			}
 			rpcBMD := md.Get("rpc-behavior")
 			if len(rpcBMD) != 1 {
-				errCh.Send(errors.New("only one value received for metadata key rpc-behavior"))
+				errCh.Send(errors.New("only one value should be received for metadata key rpc-behavior"))
 				return &testpb.SimpleResponse{}, nil
 			}
 			wantVal := "error-code-0"
