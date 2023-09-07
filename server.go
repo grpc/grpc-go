@@ -1312,12 +1312,11 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 		return err
 	}
 
-	defer s.opts.recvBufferPool.Put(&d)
-
 	if channelz.IsOn() {
 		t.IncrMsgRecv()
 	}
 	df := func(v any) error {
+		defer s.opts.recvBufferPool.Put(&d)
 		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
