@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -195,8 +196,12 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 		{
 			name: "streaming",
 			makeRPC: func(ctx context.Context, client testgrpc.TestServiceClient) error {
-				if _, err := client.FullDuplexCall(ctx); err != nil {
+				stream, err := client.FullDuplexCall(ctx)
+				if err != nil {
 					t.Fatalf("FullDuplexCall RPC failed: %v", err)
+				}
+				if _, err := stream.Recv(); err != nil && err != io.EOF {
+					t.Fatalf("stream.Recv() failed: %v", err)
 				}
 				return nil
 			},
@@ -259,15 +264,14 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 				}
 
 				// Verify that there are no idleness related channelz events.
+				//
+				// TODO: Improve the checks here. If these log strings are
+				// changed in the code , these checks will continue to pass.
 				if err := channelzTraceEventNotFound(ctx, "entering idle mode"); err != nil {
 					errCh <- err
 					return
 				}
-				if err := channelzTraceEventNotFound(ctx, "exiting idle mode"); err != nil {
-					errCh <- err
-					return
-				}
-				errCh <- nil
+				errCh <- channelzTraceEventNotFound(ctx, "exiting idle mode")
 			}()
 
 			if err := test.makeRPC(ctx, testgrpc.NewTestServiceClient(cc)); err != nil {
