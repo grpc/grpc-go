@@ -460,7 +460,7 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 		// an update to it.
 		childCfg := &clusterresolver.LBConfig{
 			DiscoveryMechanisms: dms,
-			// The LB policy is configured by the aggregate cluster.
+			// The LB policy is configured by the root cluster.
 			XDSLBPolicy: b.watchers[b.lbCfg.ClusterName].lastUpdate.LBPolicy,
 		}
 		cfgJSON, err := json.Marshal(childCfg)
