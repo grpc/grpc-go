@@ -182,7 +182,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	// Add a calloption, to decrement the active call count, that gets executed
 	// when the RPC completes.
-	opts = append(opts, OnFinish(func(error) { cc.idlenessMgr.OnCallEnd() }))
+	opts = append([]CallOption{OnFinish(func(error) { cc.idlenessMgr.OnCallEnd() })}, opts...)
 
 	if md, added, ok := metadata.FromOutgoingContextRaw(ctx); ok {
 		// validate md
