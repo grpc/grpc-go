@@ -47,7 +47,7 @@ const (
 
 var (
 	errBalancerClosed  = fmt.Errorf("cds_experimental LB policy is closed")
-	errExceedsMaxDepth = fmt.Errorf("aggregate cluster graph exceeds max depth")
+	errExceedsMaxDepth = fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth)
 
 	// newChildBalancer is a helper function to build a new cluster_resolver
 	// balancer and will be overridden in unittests.
