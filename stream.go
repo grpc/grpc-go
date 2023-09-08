@@ -158,19 +158,9 @@ type ClientStream interface {
 // If none of the above happen, a goroutine and a context will be leaked, and grpc
 // will not call the optionally-configured stats handler with a stats.End message.
 func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (ClientStream, error) {
-	if err := cc.idlenessMgr.OnCallBegin(); err != nil {
-		return nil, err
-	}
-
 	// allow interceptor to see all applicable call options, which means those
 	// configured as defaults from dial option as well as per-call options
 	opts = combine(cc.dopts.callOptions, opts)
-
-	// Add a calloption, to decrement the count of active RPCs, that gets
-	// executed when the RPC completes.
-	opts = append(opts, OnFinish(func(error) {
-		cc.idlenessMgr.OnCallEnd()
-	}))
 
 	if cc.dopts.streamInt != nil {
 		return cc.dopts.streamInt(ctx, desc, cc, method, newClientStream, opts...)
@@ -184,6 +174,16 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 }
 
 func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
+	// Start tracking the RPC for idleness purposes. This is where a stream is
+	// created for both streaming and unary RPCs, and hence is a good place to
+	// track active RPC count.
+	if err := cc.idlenessMgr.OnCallBegin(); err != nil {
+		return nil, err
+	}
+	// Add a calloption, to decrement the active call count, that gets executed
+	// when the RPC completes.
+	opts = append(opts, OnFinish(func(error) { cc.idlenessMgr.OnCallEnd() }))
+
 	if md, added, ok := metadata.FromOutgoingContextRaw(ctx); ok {
 		// validate md
 		if err := imetadata.Validate(md); err != nil {
