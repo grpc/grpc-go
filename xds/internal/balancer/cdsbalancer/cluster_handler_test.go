@@ -658,10 +658,10 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 // child node of itself. The case for this is A -> A, and since there is no base
 // cluster (EDS or Logical DNS), no configuration should be pushed to the child
 // policy.  The channel is expected to move to TRANSIENT_FAILURE and RPCs are
-// expected to fail with code UNAVAILABLE and an appropriate error message.
-// Then the test updates A -> B, where B is a leaf EDS cluster. Verifies that
-// configuration is pushed to the child policy and that an RPC can be
-// successfully made.
+// expected to fail with code UNAVAILABLE and an error message specifying that
+// the aggregate cluster grpah no leaf clusters.  Then the test updates A -> B,
+// where B is a leaf EDS cluster. Verifies that configuration is pushed to the
+// child policy and that an RPC can be successfully made.
 func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
@@ -744,7 +744,8 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 // contains no leaf clusters. The case used here is [A -> B, B -> A]. As there
 // are no leaf clusters in this graph, no configuration should be pushed to the
 // child policy. The channel is expected to move to TRANSIENT_FAILURE and RPCs
-// are expected to fail with code UNAVAILABLE and an appropriate error message.
+// are expected to fail with code UNAVAILABLE and an error message specifying
+// that the aggregate cluster graph has no leaf clusters.
 func (s) TestAggregatedCluster_CycleWithNoLeafNode(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)

@@ -264,6 +264,21 @@ func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanc
 	return provider, nil
 }
 
+// A convenience method to create a watcher for cluster `name`. It also
+// registers the watch with the xDS client, and adds the newly created watcher
+// to the list of watchers maintained by the LB policy.
+func (b *cdsBalancer) createAndAddWatcherForCluster(name string) {
+	w := &clusterWatcher{
+		name:   name,
+		parent: b,
+	}
+	ws := &watcherState{
+		watcher:     w,
+		cancelWatch: xdsresource.WatchCluster(b.xdsClient, name, w),
+	}
+	b.watchers[name] = ws
+}
+
 // UpdateClientConnState receives the serviceConfig (which contains the
 // clusterName to watch for in CDS) and the xdsClient object from the
 // xdsResolver.
@@ -307,15 +322,7 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 		// Create a new watcher for the top-level cluster. Upon resolution, it
 		// could end up creating more watchers if turns out to be an aggregate
 		// cluster.
-		w := &clusterWatcher{
-			name:   lbCfg.ClusterName,
-			parent: b,
-		}
-		ws := &watcherState{
-			watcher:     w,
-			cancelWatch: xdsresource.WatchCluster(b.xdsClient, lbCfg.ClusterName, w),
-		}
-		b.watchers[lbCfg.ClusterName] = ws
+		b.createAndAddWatcherForCluster(lbCfg.ClusterName)
 		close(done)
 	})
 	if !ok {
@@ -540,7 +547,8 @@ func (b *cdsBalancer) onClusterResourceNotFound(name string) {
 }
 
 // Generates discovery mechanisms corresponding to the clusters in the aggregate
-// cluster graph.
+// cluster graph. If a new cluster is encountered when traversing the aggregate
+// cluster graph, a watcher is created for it.
 //
 // Inputs:
 // - name: name of the cluster to start from
@@ -570,17 +578,11 @@ func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []cluste
 	state, ok := b.watchers[name]
 	if !ok {
 		// If we have not seen this cluster so far, create a watcher for it, add
-		// it to the map, start the watch and return. And since we just created
-		// the watcher, we know that we haven't resolved the cluster graph yet.
-		w := &clusterWatcher{
-			name:   name,
-			parent: b,
-		}
-		ws := &watcherState{
-			watcher:     w,
-			cancelWatch: xdsresource.WatchCluster(b.xdsClient, name, w),
-		}
-		b.watchers[name] = ws
+		// it to the map, start the watch and return.
+		b.createAndAddWatcherForCluster(name)
+
+		// And since we just created the watcher, we know that we haven't
+		// resolved the cluster graph yet.
 		return dms, false, nil
 	}
 
@@ -593,6 +595,11 @@ func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []cluste
 	cluster := state.lastUpdate
 	switch cluster.ClusterType {
 	case xdsresource.ClusterTypeAggregate:
+		// This boolean is used to track if any of the clusters in the graph is
+		// not yet completely resolved, yet allowing us to traverse as much of
+		// the graph as possible to ensure that clustersSeen contains all
+		// clusters in the graph that we can traverse to.
+		missingCluster := false
 		for _, child := range cluster.PrioritizedClusterNames {
 			var ok bool
 			var err error
@@ -601,10 +608,10 @@ func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []cluste
 				return dms, false, err
 			}
 			if !ok {
-				return dms, false, nil
+				missingCluster = true
 			}
 		}
-		return dms, true, nil
+		return dms, !missingCluster, nil
 	case xdsresource.ClusterTypeEDS:
 		dm = clusterresolver.DiscoveryMechanism{
 			Type:                  clusterresolver.DiscoveryMechanismTypeEDS,
