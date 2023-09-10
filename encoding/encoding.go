@@ -99,6 +99,43 @@ type Codec interface {
 	Name() string
 }
 
+// SharedBufferPool is a pool of buffers that can be shared, resulting in
+// decreased memory allocation.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+type SharedBufferPool interface {
+	// Get returns a buffer with specified length from the pool.
+	//
+	// The returned byte slice may be not zero initialized.
+	//
+	// Should be thread-safe.
+	Get(length int) []byte
+
+	// Put returns a buffer to the pool.
+	//
+	// Should be thread-safe.
+	Put(*[]byte)
+}
+
+// BufferedCodec is an optional interface Codec may implement.
+// It signals the ability of the codec to use pre-existing memory
+// when writing the wire format of messages.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+type BufferedCodec interface {
+	// MarshalWithBuffer returns the wire format of v.
+	//
+	// Implementation may use a buffer from the provided buffer
+	// pool when marshalling. Doing so enables memory reuse.
+	MarshalWithBuffer(v any, pool SharedBufferPool) ([]byte, error)
+}
+
 var registeredCodecs = make(map[string]Codec)
 
 // RegisterCodec registers the provided Codec for use with all gRPC clients and
