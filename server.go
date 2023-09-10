@@ -176,6 +176,7 @@ type serverOptions struct {
 	headerTableSize       *uint32
 	numServerWorkers      uint32
 	recvBufferPool        SharedBufferPool
+	encoderBufferPool     SharedBufferPool
 }
 
 var defaultServerOptions = serverOptions{
@@ -185,6 +186,7 @@ var defaultServerOptions = serverOptions{
 	writeBufferSize:       defaultWriteBufSize,
 	readBufferSize:        defaultReadBufSize,
 	recvBufferPool:        nopBufferPool{},
+	encoderBufferPool:     nil,
 }
 var globalServerOptions []ServerOption
 
@@ -587,6 +589,25 @@ func NumStreamWorkers(numServerWorkers uint32) ServerOption {
 func RecvBufferPool(bufferPool SharedBufferPool) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.recvBufferPool = bufferPool
+	})
+}
+
+// ServerEncoderBufferPool is a ServerOption to provide a SharedBufferPool
+// used for the purpose of encoding messages. Buffers from this pool are
+// used when encoding messages and returned once they have been transmitted
+// over the network to be reused.
+//
+// Note that a compatible encoding.Codec is needed for buffer reuse. See
+// encoding.BufferedCodec for additional details. If a non-compatible codec
+// is used, buffer reuse will not apply.
+//
+// # Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func ServerEncoderBufferPool(bufferPool SharedBufferPool) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.encoderBufferPool = bufferPool
 	})
 }
 
@@ -1520,6 +1541,7 @@ func (s *Server) processStreamingRPC(ctx context.Context, t transport.ServerTran
 		maxSendMessageSize:    s.opts.maxSendMessageSize,
 		trInfo:                trInfo,
 		statsHandler:          shs,
+		encoderBufferPool:     s.opts.encoderBufferPool,
 	}
 
 	if len(shs) != 0 || trInfo != nil || channelz.IsOn() {
