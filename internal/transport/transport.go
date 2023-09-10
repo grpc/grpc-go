@@ -607,6 +607,11 @@ type Options struct {
 	// Last indicates whether this write is the last piece for
 	// this stream.
 	Last bool
+
+	// OnWrittenToTransport is called exactly once after the
+	// data has been fully written to the transport layer.
+	// It is not called if the write fails.
+	OnWrittenToTransport func()
 }
 
 // CallHdr carries the information of a particular RPC.

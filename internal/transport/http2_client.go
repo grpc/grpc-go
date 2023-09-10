@@ -1038,10 +1038,11 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		return errStreamDone
 	}
 	df := &dataFrame{
-		streamID:  s.id,
-		endStream: opts.Last,
-		h:         hdr,
-		d:         data,
+		streamID:     s.id,
+		endStream:    opts.Last,
+		h:            hdr,
+		d:            data,
+		onCompletion: opts.OnWrittenToTransport,
 	}
 	if hdr != nil || data != nil { // If it's not an empty data frame, check quota.
 		if err := s.wq.get(int32(len(hdr) + len(data))); err != nil {

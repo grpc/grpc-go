@@ -2640,3 +2640,92 @@ func (s) TestPeerSetInServerContext(t *testing.T) {
 	}
 	server.mu.Unlock()
 }
+
+func TestOnWrittenToTransport(t *testing.T) {
+	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
+	defer cancel()
+	defer server.stop()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
+
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo.Small",
+	}
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	s1, err1 := ct.NewStream(ctx, callHdr)
+	if err1 != nil {
+		t.Fatalf("failed to open stream: %v", err1)
+	}
+
+	var bufferReturned = make(chan struct{})
+	opts := Options{Last: true, OnWrittenToTransport: func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("buffer was returned twice")
+			}
+		}()
+		close(bufferReturned)
+	}}
+
+	if err := ct.Write(s1, nil, expectedRequest, &opts); err != nil && err != io.EOF {
+		t.Fatalf("failed to send data: %v", err)
+	}
+	p := make([]byte, len(expectedResponse))
+	_, recvErr := s1.Read(p)
+	if recvErr != nil || !bytes.Equal(p, expectedResponse) {
+		t.Fatalf("Error: %v, want <nil>; Result: %v, want %v", recvErr, p, expectedResponse)
+	}
+
+	select {
+	case <-bufferReturned:
+		break
+	case <-ctx.Done():
+		t.Fatalf("timeout: waiting on buffer being returned")
+	}
+}
+
+func (s) TestOnWrittenToTransportLargeMessage(t *testing.T) {
+	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
+	defer cancel()
+	defer server.stop()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
+
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo.Large",
+	}
+
+	var bufferReturned = make(chan struct{})
+	opts := Options{Last: true, OnWrittenToTransport: func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("buffer was returned twice")
+			}
+		}()
+		close(bufferReturned)
+	}}
+
+	// Test with a large message that spans multiple frames
+	s, err := ct.NewStream(ctx, callHdr)
+	if err != nil {
+		t.Errorf("%v.NewStream(_, _) = _, %v, want _, <nil>", ct, err)
+	}
+	if err := ct.Write(s, []byte{}, expectedRequestLarge, &opts); err != nil && err != io.EOF {
+		t.Errorf("%v.Write(_, _, _) = %v, want  <nil>", ct, err)
+	}
+	p := make([]byte, len(expectedResponseLarge))
+	if _, err := s.Read(p); err != nil || !bytes.Equal(p, expectedResponseLarge) {
+		t.Errorf("s.Read(%v) = _, %v, want %v, <nil>", err, p, expectedResponse)
+	}
+
+	select {
+	case <-bufferReturned:
+		break
+	case <-ctx.Done():
+		t.Fatalf("timeout: waiting on buffer being returned")
+	}
+}

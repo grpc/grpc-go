@@ -1110,10 +1110,11 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		}
 	}
 	df := &dataFrame{
-		streamID:    s.id,
-		h:           hdr,
-		d:           data,
-		onEachWrite: t.setResetPingStrikes,
+		streamID:     s.id,
+		h:            hdr,
+		d:            data,
+		onEachWrite:  t.setResetPingStrikes,
+		onCompletion: opts.OnWrittenToTransport,
 	}
 	if err := s.wq.get(int32(len(hdr) + len(data))); err != nil {
 		return t.streamContextErr(s)
