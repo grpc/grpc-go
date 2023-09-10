@@ -312,19 +312,20 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 	}
 
 	cs := &clientStream{
-		callHdr:      callHdr,
-		ctx:          ctx,
-		methodConfig: &mc,
-		opts:         opts,
-		callInfo:     c,
-		cc:           cc,
-		desc:         desc,
-		codec:        c.codec,
-		cp:           cp,
-		comp:         comp,
-		cancel:       cancel,
-		firstAttempt: true,
-		onCommit:     onCommit,
+		callHdr:           callHdr,
+		ctx:               ctx,
+		methodConfig:      &mc,
+		opts:              opts,
+		callInfo:          c,
+		cc:                cc,
+		desc:              desc,
+		codec:             c.codec,
+		cp:                cp,
+		comp:              comp,
+		cancel:            cancel,
+		firstAttempt:      true,
+		onCommit:          onCommit,
+		encoderBufferPool: c.encoderBufferPool,
 	}
 	if !cc.dopts.disableRetry {
 		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)
@@ -559,10 +560,11 @@ type clientStream struct {
 	// place where we need to check if the attempt is nil.
 	attempt *csAttempt
 	// TODO(hedging): hedging will have multiple attempts simultaneously.
-	committed  bool // active attempt committed for retry?
-	onCommit   func()
-	buffer     []func(a *csAttempt) error // operations to replay on retry
-	bufferSize int                        // current size of buffer
+	committed         bool // active attempt committed for retry?
+	onCommit          func()
+	buffer            []func(a *csAttempt) error // operations to replay on retry
+	bufferSize        int                        // current size of buffer
+	encoderBufferPool SharedBufferPool
 }
 
 // csAttempt implements a single transport stream attempt within a
@@ -1250,17 +1252,18 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 
 	// Use a special addrConnStream to avoid retry.
 	as := &addrConnStream{
-		callHdr:  callHdr,
-		ac:       ac,
-		ctx:      ctx,
-		cancel:   cancel,
-		opts:     opts,
-		callInfo: c,
-		desc:     desc,
-		codec:    c.codec,
-		cp:       cp,
-		comp:     comp,
-		t:        t,
+		callHdr:           callHdr,
+		ac:                ac,
+		ctx:               ctx,
+		cancel:            cancel,
+		opts:              opts,
+		callInfo:          c,
+		desc:              desc,
+		codec:             c.codec,
+		cp:                cp,
+		comp:              comp,
+		t:                 t,
+		encoderBufferPool: c.encoderBufferPool,
 	}
 
 	s, err := as.t.NewStream(as.ctx, as.callHdr)
@@ -1295,25 +1298,26 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 }
 
 type addrConnStream struct {
-	s         *transport.Stream
-	ac        *addrConn
-	callHdr   *transport.CallHdr
-	cancel    context.CancelFunc
-	opts      []CallOption
-	callInfo  *callInfo
-	t         transport.ClientTransport
-	ctx       context.Context
-	sentLast  bool
-	desc      *StreamDesc
-	codec     baseCodec
-	cp        Compressor
-	comp      encoding.Compressor
-	decompSet bool
-	dc        Decompressor
-	decomp    encoding.Compressor
-	p         *parser
-	mu        sync.Mutex
-	finished  bool
+	s                 *transport.Stream
+	ac                *addrConn
+	callHdr           *transport.CallHdr
+	cancel            context.CancelFunc
+	opts              []CallOption
+	callInfo          *callInfo
+	t                 transport.ClientTransport
+	ctx               context.Context
+	sentLast          bool
+	desc              *StreamDesc
+	codec             baseCodec
+	cp                Compressor
+	comp              encoding.Compressor
+	decompSet         bool
+	dc                Decompressor
+	decomp            encoding.Compressor
+	p                 *parser
+	mu                sync.Mutex
+	finished          bool
+	encoderBufferPool SharedBufferPool
 }
 
 func (as *addrConnStream) Header() (metadata.MD, error) {

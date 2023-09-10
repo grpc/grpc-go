@@ -160,6 +160,7 @@ type callInfo struct {
 	codec                 baseCodec
 	maxRetryRPCBufferSize int
 	onFinish              []func(err error)
+	encoderBufferPool     SharedBufferPool
 }
 
 func defaultCallInfo() *callInfo {
@@ -558,6 +559,42 @@ func (o MaxRetryRPCBufferSizeCallOption) before(c *callInfo) error {
 	return nil
 }
 func (o MaxRetryRPCBufferSizeCallOption) after(c *callInfo, attempt *csAttempt) {}
+
+// ClientEncoderBufferPool is a CallOption to provide a SharedBufferPool
+// used for the purpose of encoding messages. Buffers from this pool are
+// used when encoding messages and returned once they have been transmitted
+// over the network to be reused.
+//
+// Note that a compatible encoding.Codec is needed for buffer reuse. See
+// encoding.BufferedCodec for additional details. If a non-compatible codec
+// is used, buffer reuse will not apply.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func ClientEncoderBufferPool(bufferPool SharedBufferPool) CallOption {
+	return EncoderBufferPoolCallOption{BufferPool: bufferPool}
+}
+
+// EncoderBufferPoolCallOption is a CallOption providing a SharedBufferPool
+// used for the purpose of encoding messages.Buffers from this pool are
+// used when encoding messages and returned once they have been transmitted
+// over the network to be reused.
+//
+// # Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
+type EncoderBufferPoolCallOption struct {
+	BufferPool SharedBufferPool
+}
+
+func (o EncoderBufferPoolCallOption) before(c *callInfo) error {
+	c.encoderBufferPool = o.BufferPool
+	return nil
+}
+func (o EncoderBufferPoolCallOption) after(c *callInfo, attempt *csAttempt) {}
 
 // The format of the payload: compressed or not?
 type payloadFormat uint8
