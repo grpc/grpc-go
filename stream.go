@@ -1041,7 +1041,16 @@ func (a *csAttempt) sendMsg(m any, hdr, payld, data []byte) error {
 		}
 		a.mu.Unlock()
 	}
-	if err := a.t.Write(a.s, hdr, payld, &transport.Options{Last: !cs.desc.ClientStreams}); err != nil {
+
+	var release func() = nil
+	encoderBufferPool := a.encoderBufferPool
+	if encoderBufferPool != nil {
+		release = func() {
+			encoderBufferPool.Put(&data)
+		}
+	}
+
+	if err := a.t.Write(a.s, hdr, payld, &transport.Options{Last: !cs.desc.ClientStreams, OnWrittenToTransport: release}); err != nil {
 		if !cs.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
 			// because the generated code requires it.  finish is not called; RecvMsg()
@@ -1373,7 +1382,7 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, payld, _, err := prepareMsg(m, as.codec, as.cp, as.comp)
+	hdr, payld, data, err := prepareMsg(m, as.codec, as.cp, as.comp)
 	if err != nil {
 		return err
 	}
@@ -1383,7 +1392,15 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payld), *as.callInfo.maxSendMessageSize)
 	}
 
-	if err := as.t.Write(as.s, hdr, payld, &transport.Options{Last: !as.desc.ClientStreams}); err != nil {
+	var release func() = nil
+	encoderBufferPool := as.encoderBufferPool
+	if encoderBufferPool != nil {
+		release = func() {
+			encoderBufferPool.Put(&data)
+		}
+	}
+
+	if err := as.t.Write(as.s, hdr, payld, &transport.Options{Last: !as.desc.ClientStreams, OnWrittenToTransport: release}); err != nil {
 		if !as.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
 			// because the generated code requires it.  finish is not called; RecvMsg()
@@ -1656,7 +1673,16 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	if len(payload) > ss.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), ss.maxSendMessageSize)
 	}
-	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false}); err != nil {
+
+	var release func() = nil
+	encoderBufferPool := ss.encoderBufferPool
+	if encoderBufferPool != nil {
+		release = func() {
+			encoderBufferPool.Put(&data)
+		}
+	}
+
+	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false, OnWrittenToTransport: release}); err != nil {
 		return toRPCErr(err)
 	}
 	if len(ss.binlogs) != 0 {
