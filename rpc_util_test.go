@@ -103,6 +103,7 @@ func (s) TestMultipleParsing(t *testing.T) {
 }
 
 func (s) TestEncode(t *testing.T) {
+	encoderBufferPool := NewSharedBufferPool()
 	for _, test := range []struct {
 		// input
 		msg proto.Message
@@ -113,13 +114,22 @@ func (s) TestEncode(t *testing.T) {
 	}{
 		{nil, []byte{0, 0, 0, 0, 0}, []byte{}, nil},
 	} {
-		data, err := encode(encoding.GetCodec(protoenc.Name), test.msg)
+		data, err := encode(encoding.GetCodec(protoenc.Name), test.msg, nil)
 		if err != test.err || !bytes.Equal(data, test.data) {
-			t.Errorf("encode(_, %v) = %v, %v; want %v, %v", test.msg, data, err, test.data, test.err)
+			t.Errorf("encode(_, %v, nil) = %v, %v; want %v, %v", test.msg, data, err, test.data, test.err)
 			continue
 		}
 		if hdr, _ := msgHeader(data, nil); !bytes.Equal(hdr, test.hdr) {
-			t.Errorf("msgHeader(%v, false) = %v; want %v", data, hdr, test.hdr)
+			t.Errorf("msgHeader(%v, false, nil) = %v; want %v", data, hdr, test.hdr)
+		}
+
+		data, err = encode(encoding.GetCodec(protoenc.Name), test.msg, encoderBufferPool)
+		if err != test.err || !bytes.Equal(data, test.data) {
+			t.Errorf("encode(_, %v, %z) = %v, %v; want %v, %v", test.msg, encoderBufferPool, data, err, test.data, test.err)
+			continue
+		}
+		if hdr, _ := msgHeader(data, nil); !bytes.Equal(hdr, test.hdr) {
+			t.Errorf("msgHeader(%v, false, %v) = %v; want %v", data, encoderBufferPool, hdr, test.hdr)
 		}
 	}
 }
@@ -193,41 +203,74 @@ func (s) TestToRPCErr(t *testing.T) {
 
 // bmEncode benchmarks encoding a Protocol Buffer message containing mSize
 // bytes.
-func bmEncode(b *testing.B, mSize int) {
+func bmEncode(b *testing.B, mSize int, encoderBufferPool SharedBufferPool) {
 	cdc := encoding.GetCodec(protoenc.Name)
 	msg := &perfpb.Buffer{Body: make([]byte, mSize)}
-	encodeData, _ := encode(cdc, msg)
+	encodeData, _ := encode(cdc, msg, encoderBufferPool)
 	encodedSz := int64(len(encodeData))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		encode(cdc, msg)
+		encodeData, _ = encode(cdc, msg, encoderBufferPool)
+		if encoderBufferPool != nil {
+			encoderBufferPool.Put(&encodeData)
+		}
 	}
 	b.SetBytes(encodedSz)
 }
 
 func BenchmarkEncode1B(b *testing.B) {
-	bmEncode(b, 1)
+	bmEncode(b, 1, nil)
 }
 
 func BenchmarkEncode1KiB(b *testing.B) {
-	bmEncode(b, 1024)
+	bmEncode(b, 1024, nil)
 }
 
 func BenchmarkEncode8KiB(b *testing.B) {
-	bmEncode(b, 8*1024)
+	bmEncode(b, 8*1024, nil)
 }
 
 func BenchmarkEncode64KiB(b *testing.B) {
-	bmEncode(b, 64*1024)
+	bmEncode(b, 64*1024, nil)
 }
 
 func BenchmarkEncode512KiB(b *testing.B) {
-	bmEncode(b, 512*1024)
+	bmEncode(b, 512*1024, nil)
 }
 
 func BenchmarkEncode1MiB(b *testing.B) {
-	bmEncode(b, 1024*1024)
+	bmEncode(b, 1024*1024, nil)
+}
+
+func BenchmarkBufferedEncode1B(b *testing.B) {
+	pool := NewSharedBufferPool()
+	bmEncode(b, 1, pool)
+}
+
+func BenchmarkBufferedEncode1KiB(b *testing.B) {
+	pool := NewSharedBufferPool()
+	bmEncode(b, 1024, pool)
+}
+
+func BenchmarkBufferedEncode8KiB(b *testing.B) {
+	pool := NewSharedBufferPool()
+	bmEncode(b, 8*1024, pool)
+}
+
+func BenchmarkBufferedEncode64KiB(b *testing.B) {
+	pool := NewSharedBufferPool()
+	bmEncode(b, 64*1024, pool)
+}
+
+func BenchmarkBufferedEncode512KiB(b *testing.B) {
+	pool := NewSharedBufferPool()
+	bmEncode(b, 512*1024, pool)
+}
+
+func BenchmarkBufferedEncode1MiB(b *testing.B) {
+	pool := NewSharedBufferPool()
+	bmEncode(b, 1024*1024, pool)
 }
 
 // bmCompressor benchmarks a compressor of a Protocol Buffer message containing

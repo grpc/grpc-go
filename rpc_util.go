@@ -663,11 +663,18 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 // encode serializes msg and returns a buffer containing the message, or an
 // error if it is too large to be transmitted by grpc.  If msg is nil, it
 // generates an empty message.
-func encode(c baseCodec, msg any) ([]byte, error) {
+func encode(c baseCodec, msg any, encoderBufferPool SharedBufferPool) (b []byte, err error) {
 	if msg == nil { // NOTE: typed nils will not be caught by this check
 		return nil, nil
 	}
-	b, err := c.Marshal(msg)
+
+	// Attempt to promote the codec to one that supports reusing buffers
+	if cBuffer, ok := c.(baseBufferedCodec); ok && encoderBufferPool != nil {
+		b, err = cBuffer.MarshalWithBuffer(msg, encoderBufferPool)
+	} else {
+		b, err = c.Marshal(msg)
+	}
+
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
 	}

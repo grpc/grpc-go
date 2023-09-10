@@ -889,7 +889,7 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, payload, data, err := prepareMsg(m, cs.codec, cs.cp, cs.comp)
+	hdr, payload, data, err := prepareMsg(m, cs.codec, cs.cp, cs.comp, cs.encoderBufferPool)
 	if err != nil {
 		return err
 	}
@@ -911,6 +911,7 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 			binlog.Log(cs.ctx, cm)
 		}
 	}
+
 	return err
 }
 
@@ -1382,7 +1383,7 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, payld, data, err := prepareMsg(m, as.codec, as.cp, as.comp)
+	hdr, payld, data, err := prepareMsg(m, as.codec, as.cp, as.comp, as.encoderBufferPool)
 	if err != nil {
 		return err
 	}
@@ -1664,7 +1665,7 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, payload, data, err := prepareMsg(m, ss.codec, ss.cp, ss.comp)
+	hdr, payload, data, err := prepareMsg(m, ss.codec, ss.cp, ss.comp, ss.encoderBufferPool)
 	if err != nil {
 		return err
 	}
@@ -1791,13 +1792,13 @@ func MethodFromServerStream(stream ServerStream) (string, bool) {
 // prepareMsg returns the hdr, payload and data
 // using the compressors passed or using the
 // passed preparedmsg
-func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor) (hdr, payload, data []byte, err error) {
+func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor, encoderBufferPool SharedBufferPool) (hdr, payload, data []byte, err error) {
 	if preparedMsg, ok := m.(*PreparedMsg); ok {
 		return preparedMsg.hdr, preparedMsg.payload, preparedMsg.encodedData, nil
 	}
 	// The input interface is not a prepared msg.
 	// Marshal and Compress the data at this point
-	data, err = encode(codec, m)
+	data, err = encode(codec, m, encoderBufferPool)
 	if err != nil {
 		return nil, nil, nil, err
 	}

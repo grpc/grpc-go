@@ -31,6 +31,10 @@ type baseCodec interface {
 	Unmarshal(data []byte, v any) error
 }
 
+type baseBufferedCodec interface {
+	MarshalWithBuffer(v any, pool encoding.SharedBufferPool) ([]byte, error)
+}
+
 var _ baseCodec = Codec(nil)
 var _ baseCodec = encoding.Codec(nil)
 
