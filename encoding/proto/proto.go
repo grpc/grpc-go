@@ -53,6 +53,21 @@ func (codec) Unmarshal(data []byte, v any) error {
 	return proto.Unmarshal(data, vv)
 }
 
+func (c codec) MarshalWithBuffer(v any, pool encoding.SharedBufferPool) ([]byte, error) {
+	vv, ok := v.(proto.Message)
+	if !ok {
+		return nil, fmt.Errorf("failed to marshal, message is %T, want proto.Message", v)
+	}
+
+	protoSize := proto.Size(vv)
+	buffer := proto.NewBuffer(pool.Get(protoSize)[:0])
+	if err := buffer.Marshal(vv); err != nil {
+		return nil, err
+	}
+
+	return buffer.Unread()[:protoSize], nil
+}
+
 func (codec) Name() string {
 	return Name
 }
