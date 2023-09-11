@@ -51,111 +51,118 @@ const (
 	defaultTestShortTimeout  = 10 * time.Millisecond
 )
 
-var listenerWithRouteConfiguration = &v3listenerpb.Listener{
-	FilterChains: []*v3listenerpb.FilterChain{
-		{
-			FilterChainMatch: &v3listenerpb.FilterChainMatch{
-				PrefixRanges: []*v3corepb.CidrRange{
-					{
-						AddressPrefix: "192.168.0.0",
-						PrefixLen: &wrapperspb.UInt32Value{
-							Value: uint32(16),
-						},
-					},
-				},
-				SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
-				SourcePrefixRanges: []*v3corepb.CidrRange{
-					{
-						AddressPrefix: "192.168.0.0",
-						PrefixLen: &wrapperspb.UInt32Value{
-							Value: uint32(16),
-						},
-					},
-				},
-				SourcePorts: []uint32{80},
-			},
-			Filters: []*v3listenerpb.Filter{
-				{
-					Name: "filter-1",
-					ConfigType: &v3listenerpb.Filter_TypedConfig{
-						TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
-							RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
-								Rds: &v3httppb.Rds{
-									ConfigSource: &v3corepb.ConfigSource{
-										ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
-									},
-									RouteConfigName: "route-1",
-								},
+func listenerWithRouteConfiguration(t *testing.T) *v3listenerpb.Listener {
+
+	return &v3listenerpb.Listener{
+
+		FilterChains: []*v3listenerpb.FilterChain{
+			{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "192.168.0.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(16),
 							},
-							HttpFilters: []*v3httppb.HttpFilter{e2e.RouterHTTPFilter},
-						}),
+						},
+					},
+					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "192.168.0.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(16),
+							},
+						},
+					},
+					SourcePorts: []uint32{80},
+				},
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{
+								RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+									Rds: &v3httppb.Rds{
+										ConfigSource: &v3corepb.ConfigSource{
+											ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+										},
+										RouteConfigName: "route-1",
+									},
+								},
+								HttpFilters: []*v3httppb.HttpFilter{e2e.RouterHTTPFilter},
+							}),
+						},
 					},
 				},
 			},
 		},
-	},
+	}
 }
 
-var listenerWithFilterChains = &v3listenerpb.Listener{
-	FilterChains: []*v3listenerpb.FilterChain{
-		{
-			FilterChainMatch: &v3listenerpb.FilterChainMatch{
-				PrefixRanges: []*v3corepb.CidrRange{
-					{
-						AddressPrefix: "192.168.0.0",
-						PrefixLen: &wrapperspb.UInt32Value{
-							Value: uint32(16),
-						},
-					},
-				},
-				SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
-				SourcePrefixRanges: []*v3corepb.CidrRange{
-					{
-						AddressPrefix: "192.168.0.0",
-						PrefixLen: &wrapperspb.UInt32Value{
-							Value: uint32(16),
-						},
-					},
-				},
-				SourcePorts: []uint32{80},
-			},
-			TransportSocket: &v3corepb.TransportSocket{
-				Name: "envoy.transport_sockets.tls",
-				ConfigType: &v3corepb.TransportSocket_TypedConfig{
-					TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
-						CommonTlsContext: &v3tlspb.CommonTlsContext{
-							TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-								InstanceName:    "identityPluginInstance",
-								CertificateName: "identityCertName",
+func listenerWithFilterChains(t *testing.T) *v3listenerpb.Listener {
+	return &v3listenerpb.Listener{
+		FilterChains: []*v3listenerpb.FilterChain{
+			{
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "192.168.0.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(16),
 							},
 						},
-					}),
-				},
-			},
-			Filters: []*v3listenerpb.Filter{
-				{
-					Name: "filter-1",
-					ConfigType: &v3listenerpb.Filter_TypedConfig{
-						TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
-							RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-								RouteConfig: &v3routepb.RouteConfiguration{
-									Name: "routeName",
-									VirtualHosts: []*v3routepb.VirtualHost{{
-										Domains: []string{"lds.target.good:3333"},
-										Routes: []*v3routepb.Route{{
-											Match: &v3routepb.RouteMatch{
-												PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
-											},
-											Action: &v3routepb.Route_NonForwardingAction{},
-										}}}}},
+					},
+					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "192.168.0.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(16),
 							},
-							HttpFilters: []*v3httppb.HttpFilter{e2e.RouterHTTPFilter},
+						},
+					},
+					SourcePorts: []uint32{80},
+				},
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.DownstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+									InstanceName:    "identityPluginInstance",
+									CertificateName: "identityCertName",
+								},
+							},
 						}),
+					},
+				},
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{
+								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+									RouteConfig: &v3routepb.RouteConfiguration{
+										Name: "routeName",
+										VirtualHosts: []*v3routepb.VirtualHost{{
+											Domains: []string{"lds.target.good:3333"},
+											Routes: []*v3routepb.Route{{
+												Match: &v3routepb.RouteMatch{
+													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+												},
+												Action: &v3routepb.Route_NonForwardingAction{},
+											}}}}},
+								},
+								HttpFilters: []*v3httppb.HttpFilter{e2e.RouterHTTPFilter},
+							}),
+						},
 					},
 				},
 			},
 		},
-	},
+	}
+
 }
 
 type s struct {
@@ -283,7 +290,7 @@ func (s) TestNewListenerWrapper(t *testing.T) {
 		t.Fatalf("ready channel written to after receipt of a bad Listener update")
 	}
 
-	fcm, err := xdsresource.NewFilterChainManager(listenerWithFilterChains)
+	fcm, err := xdsresource.NewFilterChainManager(listenerWithFilterChains(t))
 	if err != nil {
 		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
 	}
@@ -347,7 +354,7 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 	if name != testListenerResourceName {
 		t.Fatalf("listenerWrapper registered a lds watch on %s, want %s", name, testListenerResourceName)
 	}
-	fcm, err := xdsresource.NewFilterChainManager(listenerWithRouteConfiguration)
+	fcm, err := xdsresource.NewFilterChainManager(listenerWithRouteConfiguration(t))
 	if err != nil {
 		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
 	}
@@ -410,7 +417,7 @@ func (s) TestListenerWrapper_Accept(t *testing.T) {
 
 	// Push a good update with a filter chain which accepts local connections on
 	// 192.168.0.0/16 subnet and port 80.
-	fcm, err := xdsresource.NewFilterChainManager(listenerWithFilterChains)
+	fcm, err := xdsresource.NewFilterChainManager(listenerWithFilterChains(t))
 	if err != nil {
 		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
 	}

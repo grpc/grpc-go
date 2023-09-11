@@ -82,8 +82,8 @@ const (
 // badListenerResource returns a listener resource for the given name which does
 // not contain the `RouteSpecifier` field in the HTTPConnectionManager, and
 // hence is expected to be NACKed by the client.
-func badListenerResource(name string) *v3listenerpb.Listener {
-	hcm := testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+func badListenerResource(t *testing.T, name string) *v3listenerpb.Listener {
+	hcm := testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{
 		HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
 	})
 	return &v3listenerpb.Listener{
@@ -819,7 +819,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	// which is expected to be NACKed by the client.
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{badListenerResource(ldsName)},
+		Listeners:      []*v3listenerpb.Listener{badListenerResource(t, ldsName)},
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -877,7 +877,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Listeners: []*v3listenerpb.Listener{
-			badListenerResource(badResourceName),
+			badListenerResource(t, badResourceName),
 			e2e.DefaultClientListener(goodResourceName, rdsName),
 		},
 		SkipValidation: true,

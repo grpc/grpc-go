@@ -95,7 +95,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 		emptyRouterFilter = e2e.RouterHTTPFilter
 		apiListener       = &v3listenerpb.ApiListener{
 			ApiListener: func() *anypb.Any {
-				return testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+				return testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{
 					RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
 						Rds: &v3httppb.Rds{
 							ConfigSource: &v3corepb.ConfigSource{
@@ -160,7 +160,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				VersionInfo: "1",
-				Resources:   []*anypb.Any{testutils.MarshalAny(&v3routepb.RouteConfiguration{})},
+				Resources:   []*anypb.Any{testutils.TestMarshalAny(t, &v3routepb.RouteConfiguration{})},
 			},
 			wantErr: "Listener not found in received response",
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
@@ -173,10 +173,10 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				VersionInfo: "1",
-				Resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Resources: []*anypb.Any{testutils.TestMarshalAny(t, &v3listenerpb.Listener{
 					Name: resourceName1,
 					ApiListener: &v3listenerpb.ApiListener{
-						ApiListener: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+						ApiListener: testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{}),
 					}}),
 				},
 			},
@@ -197,7 +197,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				VersionInfo: "1",
-				Resources:   []*anypb.Any{testutils.MarshalAny(resource1)},
+				Resources:   []*anypb.Any{testutils.TestMarshalAny(t, resource1)},
 			},
 			wantUpdate: xdsresource.ListenerUpdate{
 				RouteConfigName: "route-configuration-name",
@@ -206,7 +206,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
 				"resource-name-1": {
 					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(resource1),
+					Raw: testutils.TestMarshalAny(t, resource1),
 				},
 			},
 		},
@@ -216,7 +216,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				VersionInfo: "1",
-				Resources:   []*anypb.Any{testutils.MarshalAny(resource1), testutils.MarshalAny(resource2)},
+				Resources:   []*anypb.Any{testutils.TestMarshalAny(t, resource1), testutils.TestMarshalAny(t, resource2)},
 			},
 			wantUpdate: xdsresource.ListenerUpdate{
 				RouteConfigName: "route-configuration-name",
@@ -225,7 +225,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
 				"resource-name-1": {
 					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(resource1),
+					Raw: testutils.TestMarshalAny(t, resource1),
 				},
 			},
 		},
@@ -403,7 +403,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
 				VersionInfo: "1",
-				Resources:   []*anypb.Any{testutils.MarshalAny(&v3clusterpb.Cluster{})},
+				Resources:   []*anypb.Any{testutils.TestMarshalAny(t, &v3clusterpb.Cluster{})},
 			},
 			wantErr: "RouteConfiguration not found in received response",
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
@@ -416,7 +416,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
 				VersionInfo: "1",
-				Resources: []*anypb.Any{testutils.MarshalAny(&v3routepb.RouteConfiguration{
+				Resources: []*anypb.Any{testutils.TestMarshalAny(t, &v3routepb.RouteConfiguration{
 					Name: resourceName1,
 					VirtualHosts: []*v3routepb.VirtualHost{{
 						Domains: []string{"lds-resource-name"},
@@ -448,7 +448,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
 				VersionInfo: "1",
-				Resources:   []*anypb.Any{testutils.MarshalAny(resource1)},
+				Resources:   []*anypb.Any{testutils.TestMarshalAny(t, resource1)},
 			},
 			wantUpdate: xdsresource.RouteConfigUpdate{
 				VirtualHosts: []*xdsresource.VirtualHost{
@@ -463,7 +463,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
 				"resource-name-1": {
 					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(resource1),
+					Raw: testutils.TestMarshalAny(t, resource1),
 				},
 			},
 		},
@@ -473,7 +473,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
 				VersionInfo: "1",
-				Resources:   []*anypb.Any{testutils.MarshalAny(resource1), testutils.MarshalAny(resource2)},
+				Resources:   []*anypb.Any{testutils.TestMarshalAny(t, resource1), testutils.TestMarshalAny(t, resource2)},
 			},
 			wantUpdate: xdsresource.RouteConfigUpdate{
 				VirtualHosts: []*xdsresource.VirtualHost{
@@ -488,7 +488,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
 				"resource-name-1": {
 					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(resource1),
+					Raw: testutils.TestMarshalAny(t, resource1),
 				},
 			},
 		},
@@ -638,7 +638,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.cluster.v3.Cluster",
 				VersionInfo: "1",
-				Resources:   []*anypb.Any{testutils.MarshalAny(&v3endpointpb.ClusterLoadAssignment{})},
+				Resources:   []*anypb.Any{testutils.TestMarshalAny(t, &v3endpointpb.ClusterLoadAssignment{})},
 			},
 			wantErr: "Cluster not found in received response",
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
@@ -651,7 +651,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.cluster.v3.Cluster",
 				VersionInfo: "1",
-				Resources: []*anypb.Any{testutils.MarshalAny(&v3clusterpb.Cluster{
+				Resources: []*anypb.Any{testutils.TestMarshalAny(t, &v3clusterpb.Cluster{
 					Name:                 resourceName1,
 					ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 					EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
@@ -682,7 +682,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.cluster.v3.Cluster",
 				VersionInfo: "1",
-				Resources:   []*anypb.Any{testutils.MarshalAny(resource1)},
+				Resources:   []*anypb.Any{testutils.TestMarshalAny(t, resource1)},
 			},
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName:     "resource-name-1",
@@ -692,7 +692,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
 				"resource-name-1": {
 					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(resource1),
+					Raw: testutils.TestMarshalAny(t, resource1),
 				},
 			},
 		},
@@ -702,7 +702,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.cluster.v3.Cluster",
 				VersionInfo: "1",
-				Resources:   []*anypb.Any{testutils.MarshalAny(resource1), testutils.MarshalAny(resource2)},
+				Resources:   []*anypb.Any{testutils.TestMarshalAny(t, resource1), testutils.TestMarshalAny(t, resource2)},
 			},
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName:     "resource-name-1",
@@ -712,7 +712,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
 				"resource-name-1": {
 					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(resource1),
+					Raw: testutils.TestMarshalAny(t, resource1),
 				},
 			},
 		},
@@ -919,7 +919,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
 				VersionInfo: "1",
-				Resources:   []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{})},
+				Resources:   []*anypb.Any{testutils.TestMarshalAny(t, &v3listenerpb.Listener{})},
 			},
 			wantErr: "Endpoints not found in received response",
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
@@ -932,7 +932,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
 				VersionInfo: "1",
-				Resources: []*anypb.Any{testutils.MarshalAny(&v3endpointpb.ClusterLoadAssignment{
+				Resources: []*anypb.Any{testutils.TestMarshalAny(t, &v3endpointpb.ClusterLoadAssignment{
 					ClusterName: resourceName1,
 					Endpoints: []*v3endpointpb.LocalityLbEndpoints{
 						{
@@ -981,7 +981,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
 				VersionInfo: "1",
-				Resources:   []*anypb.Any{testutils.MarshalAny(resource1)},
+				Resources:   []*anypb.Any{testutils.TestMarshalAny(t, resource1)},
 			},
 			wantUpdate: xdsresource.EndpointsUpdate{
 				Localities: []xdsresource.Locality{
@@ -1002,7 +1002,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
 				"resource-name-1": {
 					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(resource1),
+					Raw: testutils.TestMarshalAny(t, resource1),
 				},
 			},
 		},
@@ -1012,7 +1012,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:     "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
 				VersionInfo: "1",
-				Resources:   []*anypb.Any{testutils.MarshalAny(resource1), testutils.MarshalAny(resource2)},
+				Resources:   []*anypb.Any{testutils.TestMarshalAny(t, resource1), testutils.TestMarshalAny(t, resource2)},
 			},
 			wantUpdate: xdsresource.EndpointsUpdate{
 				Localities: []xdsresource.Locality{
@@ -1033,7 +1033,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
 				"resource-name-1": {
 					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(resource1),
+					Raw: testutils.TestMarshalAny(t, resource1),
 				},
 			},
 		},
