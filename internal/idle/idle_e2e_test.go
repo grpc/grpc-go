@@ -266,7 +266,7 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 				// Verify that there are no idleness related channelz events.
 				//
 				// TODO: Improve the checks here. If these log strings are
-				// changed in the code , these checks will continue to pass.
+				// changed in the code, these checks will continue to pass.
 				if err := channelzTraceEventNotFound(ctx, "entering idle mode"); err != nil {
 					errCh <- err
 					return
