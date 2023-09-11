@@ -117,6 +117,7 @@ var (
 	recvBufferPool        = flags.StringWithAllowedValues("recvBufferPool", recvBufferPoolNil, "Configures the shared receive buffer pool. One of: nil, simple, all", allRecvBufferPools)
 	sharedWriteBuffer     = flags.StringWithAllowedValues("sharedWriteBuffer", toggleModeOff,
 		fmt.Sprintf("Configures both client and server to share write buffer - One of: %v", strings.Join(allToggleModes, ", ")), allToggleModes)
+	encoderBufferPool = flags.StringWithAllowedValues("encoderBufferPool", toggleModeOff, fmt.Sprintf("Configures both client and server to share encoder buffers - One of: %v", strings.Join(allToggleModes, ", ")), allToggleModes)
 
 	logger = grpclog.Component("benchmark")
 )
@@ -340,6 +341,11 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 	if bf.SharedWriteBuffer {
 		opts = append(opts, grpc.WithSharedWriteBuffer(true))
 		sopts = append(sopts, grpc.SharedWriteBuffer(true))
+	}
+	if bf.EncoderBufferPool {
+		clientEncoderPool := grpc.NewSharedBufferPool()
+		opts = append(opts, grpc.WithDefaultCallOptions(grpc.ClientEncoderBufferPool(clientEncoderPool)))
+		sopts = append(sopts, grpc.ServerEncoderBufferPool(grpc.NewSharedBufferPool()))
 	}
 	if bf.ServerWriteBufferSize >= 0 {
 		sopts = append(sopts, grpc.WriteBufferSize(bf.ServerWriteBufferSize))
@@ -610,6 +616,7 @@ type featureOpts struct {
 	sleepBetweenRPCs      []time.Duration
 	recvBufferPools       []string
 	sharedWriteBuffer     []bool
+	encoderBufferPool     []bool
 }
 
 // makeFeaturesNum returns a slice of ints of size 'maxFeatureIndex' where each
@@ -660,6 +667,8 @@ func makeFeaturesNum(b *benchOpts) []int {
 			featuresNum[i] = len(b.features.recvBufferPools)
 		case stats.SharedWriteBuffer:
 			featuresNum[i] = len(b.features.sharedWriteBuffer)
+		case stats.EncoderBufferPool:
+			featuresNum[i] = len(b.features.encoderBufferPool)
 		default:
 			log.Fatalf("Unknown feature index %v in generateFeatures. maxFeatureIndex is %v", i, stats.MaxFeatureIndex)
 		}
@@ -730,6 +739,7 @@ func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 			SleepBetweenRPCs:      b.features.sleepBetweenRPCs[curPos[stats.SleepBetweenRPCs]],
 			RecvBufferPool:        b.features.recvBufferPools[curPos[stats.RecvBufferPool]],
 			SharedWriteBuffer:     b.features.sharedWriteBuffer[curPos[stats.SharedWriteBuffer]],
+			EncoderBufferPool:     b.features.encoderBufferPool[curPos[stats.EncoderBufferPool]],
 		}
 		if len(b.features.reqPayloadCurves) == 0 {
 			f.ReqSizeBytes = b.features.reqSizeBytes[curPos[stats.ReqSizeBytesIndex]]
@@ -804,6 +814,7 @@ func processFlags() *benchOpts {
 			sleepBetweenRPCs:      append([]time.Duration(nil), *sleepBetweenRPCs...),
 			recvBufferPools:       setRecvBufferPool(*recvBufferPool),
 			sharedWriteBuffer:     setToggleMode(*sharedWriteBuffer),
+			encoderBufferPool:     setToggleMode(*encoderBufferPool),
 		},
 	}
 
