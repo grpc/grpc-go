@@ -83,7 +83,7 @@ const (
 // not contain the `RouteSpecifier` field in the HTTPConnectionManager, and
 // hence is expected to be NACKed by the client.
 func badListenerResource(t *testing.T, name string) *v3listenerpb.Listener {
-	hcm := testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{
+	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 		HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
 	})
 	return &v3listenerpb.Listener{

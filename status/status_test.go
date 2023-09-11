@@ -22,8 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/protobuf/protoadapt"
-	"google.golang.org/protobuf/types/known/anypb"
+	"github.com/golang/protobuf/ptypes"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -441,9 +440,9 @@ func str(s *Status) string {
 
 // mustMarshalAny converts a protobuf message to an any.
 func mustMarshalAny(msg proto.Message) *apb.Any {
-	any, err := anypb.New(protoadapt.MessageV2Of(msg))
+	any, err := ptypes.MarshalAny(msg)
 	if err != nil {
-		panic(fmt.Sprintf("anypb.New(%+v) failed: %v", msg, err))
+		panic(fmt.Sprintf("ptypes.MarshalAny(%+v) failed: %v", msg, err))
 	}
 	return any
 }

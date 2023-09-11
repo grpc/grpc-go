@@ -605,7 +605,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		},
 		{
 			name: "good-route-config-with-bad-rbac-http-filter-configuration",
-			rc: goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"rbac": testutils.TestMarshalAny(t, &v3rbacpb.RBACPerRoute{Rbac: &v3rbacpb.RBAC{
+			rc: goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"rbac": testutils.MarshalAny(t, &v3rbacpb.RBACPerRoute{Rbac: &v3rbacpb.RBAC{
 				Rules: &rpb.RBAC{
 					Action: rpb.RBAC_ALLOW,
 					Policies: map[string]*rpb.Policy{
@@ -836,7 +836,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 				},
 			},
 		}
-		v3RouteConfig = testutils.TestMarshalAny(t, &v3routepb.RouteConfiguration{
+		v3RouteConfig = testutils.MarshalAny(t, &v3routepb.RouteConfiguration{
 			Name:         v3RouteConfigName,
 			VirtualHosts: v3VirtualHost,
 		})
@@ -886,7 +886,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 		},
 		{
 			name:     "v3 routeConfig resource wrapped",
-			resource: testutils.TestMarshalAny(t, &v3discoverypb.Resource{Resource: v3RouteConfig}),
+			resource: testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3RouteConfig}),
 			wantName: v3RouteConfigName,
 			wantUpdate: RouteConfigUpdate{
 				VirtualHosts: []*VirtualHost{

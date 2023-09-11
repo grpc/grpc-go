@@ -189,7 +189,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
@@ -227,7 +227,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
@@ -317,7 +317,7 @@ func serverListenerWithRBACHTTPFilters(t *testing.T, host string, port uint32, r
 					// This tests override parsing + building when RBAC Filter
 					// passed both normal and override config.
 					TypedPerFilterConfig: map[string]*anypb.Any{
-						"rbac": testutils.TestMarshalAny(t, &rpb.RBACPerRoute{Rbac: rbacCfg}),
+						"rbac": testutils.MarshalAny(t, &rpb.RBACPerRoute{Rbac: rbacCfg}),
 					},
 				}}},
 		},
@@ -364,7 +364,7 @@ func serverListenerWithRBACHTTPFilters(t *testing.T, host string, port uint32, r
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.TestMarshalAny(t, hcm),
+							TypedConfig: testutils.MarshalAny(t, hcm),
 						},
 					},
 				},
@@ -394,7 +394,7 @@ func serverListenerWithRBACHTTPFilters(t *testing.T, host string, port uint32, r
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.TestMarshalAny(t, hcm),
+							TypedConfig: testutils.MarshalAny(t, hcm),
 						},
 					},
 				},
@@ -751,7 +751,7 @@ func serverListenerWithBadRouteConfiguration(t *testing.T, host string, port uin
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
 										Name: "routeName",
@@ -799,7 +799,7 @@ func serverListenerWithBadRouteConfiguration(t *testing.T, host string, port uin
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
 										Name: "routeName",

@@ -83,7 +83,7 @@ var (
 	target = resolver.Target{URL: *testutils.MustParseURL("xds:///" + targetStr)}
 
 	routerHTTPFilter = httpfilter.Get(router.TypeURL)
-	routerConfig, _  = routerHTTPFilter.ParseFilterConfig(testutils.TestMarshalAny(&testing.T{}, &v3routerpb.Router{}))
+	routerConfig, _  = routerHTTPFilter.ParseFilterConfig(testutils.MarshalAny(&testing.T{}, &v3routerpb.Router{}))
 	routerFilter     = xdsresource.HTTPFilter{Name: "rtr", Filter: routerHTTPFilter, Config: routerConfig}
 )
 
@@ -597,7 +597,7 @@ func (s) TestResolverBadServiceUpdate(t *testing.T) {
 
 	// Configure a listener resource that is expected to be NACKed because it
 	// does not contain the `RouteSpecifier` field in the HTTPConnectionManager.
-	hcm := testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{
+	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 		HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
 	})
 	lis := &v3listenerpb.Listener{
@@ -1319,7 +1319,7 @@ func (s) TestResolverMaxStreamDuration(t *testing.T) {
 	// different values of max stream duration.
 	ldsName := serviceName
 	rdsName := "route-" + serviceName
-	hcm := testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{
+	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 		RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{Rds: &v3httppb.Rds{
 			ConfigSource: &v3corepb.ConfigSource{
 				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
@@ -1706,7 +1706,7 @@ func (s) TestResolverMultipleLDSUpdates(t *testing.T) {
 	// the same route configuration resource but has different values for some
 	// other fields. There is still no route configuration resource on the
 	// management server.
-	hcm := testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{
+	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 		RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{Rds: &v3httppb.Rds{
 			ConfigSource: &v3corepb.ConfigSource{
 				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},

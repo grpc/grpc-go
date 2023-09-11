@@ -81,7 +81,7 @@ func listenerWithRouteConfiguration(t *testing.T) *v3listenerpb.Listener {
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
 									Rds: &v3httppb.Rds{
 										ConfigSource: &v3corepb.ConfigSource{
@@ -127,7 +127,7 @@ func listenerWithFilterChains(t *testing.T) *v3listenerpb.Listener {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.DownstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
 									InstanceName:    "identityPluginInstance",
@@ -141,7 +141,7 @@ func listenerWithFilterChains(t *testing.T) *v3listenerpb.Listener {
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.TestMarshalAny(t, &v3httppb.HttpConnectionManager{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
 										Name: "routeName",

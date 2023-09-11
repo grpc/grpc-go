@@ -204,7 +204,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: testutils.TestMarshalAny(t, &v3ringhashpb.RingHash{
+								TypedConfig: testutils.MarshalAny(t, &v3ringhashpb.RingHash{
 									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
 									MinimumRingSize: wrapperspb.UInt64(10),
 									MaximumRingSize: wrapperspb.UInt64(ringHashSizeUpperBound + 1),
@@ -234,7 +234,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: testutils.TestMarshalAny(t, &v3leastrequestpb.LeastRequest{}),
+								TypedConfig: testutils.MarshalAny(t, &v3leastrequestpb.LeastRequest{}),
 							},
 						},
 					},
@@ -250,7 +250,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
 					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
 						Name:        "envoy.clusters.aggregate",
-						TypedConfig: testutils.TestMarshalAny(t, &v3aggregateclusterpb.ClusterConfig{}),
+						TypedConfig: testutils.MarshalAny(t, &v3aggregateclusterpb.ClusterConfig{}),
 					},
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
@@ -265,7 +265,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
 					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
 						Name: "envoy.clusters.aggregate",
-						TypedConfig: testutils.TestMarshalAny(t, &v3aggregateclusterpb.ClusterConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3aggregateclusterpb.ClusterConfig{
 							Clusters: []string{},
 						}),
 					},
@@ -313,7 +313,7 @@ func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
 		TransportSocket: &v3corepb.TransportSocket{
 			Name: "envoy.transport_sockets.tls",
 			ConfigType: &v3corepb.TransportSocket_TypedConfig{
-				TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+				TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 					CommonTlsContext: &v3tlspb.CommonTlsContext{
 						ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
 							ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
@@ -638,7 +638,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								TlsParams: &v3tlspb.TlsParameters{},
 							},
@@ -663,7 +663,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								CustomHandshaker: &v3corepb.TypedExtensionConfig{},
 							},
@@ -688,7 +688,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
 									ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
@@ -717,7 +717,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{},
 						}),
 					},
@@ -740,7 +740,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
 									CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
@@ -777,7 +777,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
 									CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
@@ -814,7 +814,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
 									CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
@@ -851,7 +851,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
 									CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
@@ -888,7 +888,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
 									CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
@@ -927,7 +927,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
 									ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
@@ -967,7 +967,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
 									ValidationContext: &v3tlspb.CertificateValidationContext{
@@ -1009,7 +1009,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
 									InstanceName:    identityPluginInstance,
@@ -1055,7 +1055,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 									InstanceName:    identityPluginInstance,
@@ -1103,7 +1103,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
 									InstanceName:    identityPluginInstance,
@@ -1170,7 +1170,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.TestMarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 									InstanceName:    identityPluginInstance,
@@ -1241,7 +1241,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		v3Service     = "v3Service"
 	)
 	var (
-		v3ClusterAny = testutils.TestMarshalAny(t, &v3clusterpb.Cluster{
+		v3ClusterAny = testutils.MarshalAny(t, &v3clusterpb.Cluster{
 			Name:                 v3ClusterName,
 			ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 			EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
@@ -1260,7 +1260,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			},
 		})
 
-		v3ClusterAnyWithEDSConfigSourceSelf = testutils.TestMarshalAny(t, &v3clusterpb.Cluster{
+		v3ClusterAnyWithEDSConfigSourceSelf = testutils.MarshalAny(t, &v3clusterpb.Cluster{
 			Name:                 v3ClusterName,
 			ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 			EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
@@ -1300,7 +1300,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		},
 		{
 			name: "bad cluster resource",
-			resource: testutils.TestMarshalAny(t, &v3clusterpb.Cluster{
+			resource: testutils.MarshalAny(t, &v3clusterpb.Cluster{
 				Name:                 "test",
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
 			}),
@@ -1309,7 +1309,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		},
 		{
 			name: "cluster resource with non-self lrs_server field",
-			resource: testutils.TestMarshalAny(t, &v3clusterpb.Cluster{
+			resource: testutils.MarshalAny(t, &v3clusterpb.Cluster{
 				Name:                 "test",
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
@@ -1342,7 +1342,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		},
 		{
 			name:     "v3 cluster wrapped",
-			resource: testutils.TestMarshalAny(t, &v3discoverypb.Resource{Resource: v3ClusterAny}),
+			resource: testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3ClusterAny}),
 			wantName: v3ClusterName,
 			wantUpdate: ClusterUpdate{
 				ClusterName:    v3ClusterName,
@@ -1362,7 +1362,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		},
 		{
 			name: "xdstp cluster resource with unset EDS service name",
-			resource: testutils.TestMarshalAny(t, &v3clusterpb.Cluster{
+			resource: testutils.MarshalAny(t, &v3clusterpb.Cluster{
 				Name:                 "xdstp:foo",
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{

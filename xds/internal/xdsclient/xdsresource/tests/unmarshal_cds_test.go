@@ -74,7 +74,7 @@ func wrrLocality(t *testing.T, m proto.Message) *v3wrrlocalitypb.WrrLocality {
 			Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 				{
 					TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-						TypedConfig: testutils.TestMarshalAny(t, m),
+						TypedConfig: testutils.MarshalAny(t, m),
 					},
 				},
 			},
@@ -83,7 +83,7 @@ func wrrLocality(t *testing.T, m proto.Message) *v3wrrlocalitypb.WrrLocality {
 }
 
 func wrrLocalityAny(t *testing.T, m proto.Message) *anypb.Any {
-	return testutils.TestMarshalAny(t, wrrLocality(t, m))
+	return testutils.MarshalAny(t, wrrLocality(t, m))
 }
 
 type customLBConfig struct {
@@ -162,7 +162,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
 					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
 						Name: "envoy.clusters.aggregate",
-						TypedConfig: testutils.TestMarshalAny(t, &v3aggregateclusterpb.ClusterConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3aggregateclusterpb.ClusterConfig{
 							Clusters: []string{"a", "b", "c"},
 						}),
 					},
@@ -385,7 +385,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: testutils.TestMarshalAny(t, &v3ringhashpb.RingHash{
+								TypedConfig: testutils.MarshalAny(t, &v3ringhashpb.RingHash{
 									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
 									MinimumRingSize: wrapperspb.UInt64(10),
 									MaximumRingSize: wrapperspb.UInt64(100),
@@ -507,7 +507,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: testutils.TestMarshalAny(t, &v3ringhashpb.RingHash{
+								TypedConfig: testutils.MarshalAny(t, &v3ringhashpb.RingHash{
 									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
 									MinimumRingSize: wrapperspb.UInt64(10),
 									MaximumRingSize: wrapperspb.UInt64(100),
@@ -554,7 +554,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: testutils.TestMarshalAny(t, &v3ringhashpb.RingHash{
+								TypedConfig: testutils.MarshalAny(t, &v3ringhashpb.RingHash{
 									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
 									MinimumRingSize: wrapperspb.UInt64(10),
 									MaximumRingSize: wrapperspb.UInt64(100),

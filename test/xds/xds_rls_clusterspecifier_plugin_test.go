@@ -58,7 +58,7 @@ func defaultClientResourcesWithRLSCSP(t *testing.T, lb e2e.LoadBalancingPolicy, 
 			ListenerName:               params.DialTarget,
 			ClusterSpecifierType:       e2e.RouteConfigClusterSpecifierTypeClusterSpecifierPlugin,
 			ClusterSpecifierPluginName: "rls-csp",
-			ClusterSpecifierPluginConfig: testutils.TestMarshalAny(t, &rlspb.RouteLookupClusterSpecifier{
+			ClusterSpecifierPluginConfig: testutils.MarshalAny(t, &rlspb.RouteLookupClusterSpecifier{
 				RouteLookupConfig: rlsProto,
 			}),
 		})},

@@ -61,7 +61,7 @@ func wrrLocality(t *testing.T, m proto.Message) *v3wrrlocalitypb.WrrLocality {
 			Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 				{
 					TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-						TypedConfig: testutils.TestMarshalAny(t, m),
+						TypedConfig: testutils.MarshalAny(t, m),
 					},
 				},
 			},
@@ -78,7 +78,7 @@ func clusterWithLBConfiguration(clusterName, edsServiceName string, secLevel e2e
 		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 			{
 				TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-					TypedConfig: testutils.TestMarshalAny(&testing.T{}, m),
+					TypedConfig: testutils.MarshalAny(&testing.T{}, m),
 				},
 			},
 		},

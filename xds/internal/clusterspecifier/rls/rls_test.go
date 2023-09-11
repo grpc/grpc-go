@@ -109,7 +109,7 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 
 // This will error because the required match field is set in grpc key builder.
 func rlsClusterSpecifierConfigError(t *testing.T) *anypb.Any {
-	clusterSpecifierConfigError := testutils.TestMarshalAny(t, &rlspb.RouteLookupClusterSpecifier{
+	clusterSpecifierConfigError := testutils.MarshalAny(t, &rlspb.RouteLookupClusterSpecifier{
 		RouteLookupConfig: &rlspb.RouteLookupConfig{
 			GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
 				{
@@ -137,7 +137,7 @@ func rlsClusterSpecifierConfigError(t *testing.T) *anypb.Any {
 // Corresponds to the rls unit test case in
 // balancer/rls/internal/config_test.go.
 func rlsClusterSpecifierConfigWithoutTransformations(t *testing.T) *anypb.Any {
-	clusterSpecifierConfigWithoutTransformations := testutils.TestMarshalAny(t, &rlspb.RouteLookupClusterSpecifier{
+	clusterSpecifierConfigWithoutTransformations := testutils.MarshalAny(t, &rlspb.RouteLookupClusterSpecifier{
 		RouteLookupConfig: &rlspb.RouteLookupConfig{
 			GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
 				{
