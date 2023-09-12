@@ -219,15 +219,11 @@ func (s) TestFederation_ClusterResourceContextParamOrder(t *testing.T) {
 
 	// Register two watches for cluster resources with the same query string,
 	// but context parameters in different order.
-	updateCh1 := testutils.NewChannel()
-	cdsCancel1 := client.WatchCluster(resourceName1, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw1 := newClusterWatcher()
+	cdsCancel1 := xdsresource.WatchCluster(client, resourceName1, cw1)
 	defer cdsCancel1()
-	updateCh2 := testutils.NewChannel()
-	cdsCancel2 := client.WatchCluster(resourceName2, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw2 := newClusterWatcher()
+	cdsCancel2 := xdsresource.WatchCluster(client, resourceName2, cw2)
 	defer cdsCancel2()
 
 	// Configure the management server for the non-default authority to return a
@@ -250,10 +246,10 @@ func (s) TestFederation_ClusterResourceContextParamOrder(t *testing.T) {
 		},
 	}
 	// Verify the contents of the received update.
-	if err := verifyClusterUpdate(ctx, updateCh1, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, cw1.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyClusterUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, cw2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 }
