@@ -57,6 +57,8 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 		wantErr    bool
 	}{
 		{
+
+			// This will error because the required_match field is set in grpc key builder
 			name: "invalid-rls-cluster-specifier",
 			rlcs: testutils.MarshalAny(t, &rlspb.RouteLookupClusterSpecifier{
 				RouteLookupConfig: &rlspb.RouteLookupConfig{
@@ -150,11 +152,6 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 		}
 	}
 }
-
-// This will error because the required match field is set in grpc key builder.
-
-// Corresponds to the rls unit test case in
-// balancer/rls/internal/config_test.go.
 
 var configWithoutTransformationsWant = clusterspecifier.BalancerConfig{{"rls_experimental": &lbConfigJSON{
 	RouteLookupConfig: []byte(`{"grpcKeybuilders":[{"names":[{"service":"service","method":"method"}],"headers":[{"key":"k1","names":["v1"]}]}],"lookupService":"target","lookupServiceTimeout":"100s","maxAge":"60s","staleAge":"50s","cacheSizeBytes":"1000","defaultTarget":"passthrough:///default"}`),

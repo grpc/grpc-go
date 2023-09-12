@@ -18,14 +18,15 @@
 package testutils
 
 import (
+	"testing"
+
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/protoadapt"
 	"google.golang.org/protobuf/types/known/anypb"
-	"testing"
 )
 
 // MarshalAny is a convenience function to marshal protobuf messages into any
-// protos. It will panic if the marshaling fails.
+// protos. function will fail the test with a fatal error if the marshaling fails.
 func MarshalAny(t *testing.T, m proto.Message) *anypb.Any {
 	t.Helper()
 
