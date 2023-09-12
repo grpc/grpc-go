@@ -405,7 +405,7 @@ func (b *cdsBalancer) ExitIdle() {
 
 // Handles a good Cluster update from the xDS client. Kicks off the discovery
 // mechanism generation process from the top-level cluster and if the cluster
-// graph is resolved, generated child policy config and pushes it down.
+// graph is resolved, generates child policy config and pushes it down.
 //
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpdate) {
@@ -432,8 +432,7 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 			// If the security config is invalid, for example, if the provider
 			// instance is not found in the bootstrap config, we need to put the
 			// channel in transient failure.
-			b.logger.Warningf("Received Cluster resource contains invalid security config: %v", err)
-			b.onClusterError(name, err)
+			b.onClusterError(name, fmt.Errorf("received Cluster resource contains invalid security config: %v", err))
 			return
 		}
 	}
@@ -441,13 +440,11 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 	clustersSeen := make(map[string]bool)
 	dms, ok, err := b.generateDMsForCluster(b.lbCfg.ClusterName, 0, nil, clustersSeen)
 	if err != nil {
-		b.logger.Warningf("Failed to generate discovery mechanisms: %v", err)
-		b.onClusterError(b.lbCfg.ClusterName, err)
+		b.onClusterError(b.lbCfg.ClusterName, fmt.Errorf("failed to generate discovery mechanisms: %v", err))
 		return
 	}
 	if ok {
 		if len(dms) == 0 {
-			b.logger.Warningf("Aggregate cluster graph has no leaf clusters")
 			b.onClusterError(b.lbCfg.ClusterName, fmt.Errorf("aggregate cluster graph has no leaf clusters"))
 			return
 		}
@@ -498,7 +495,6 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 		if ok {
 			continue
 		}
-
 		state.cancelWatch()
 		delete(b.watchers, cluster)
 	}
@@ -546,9 +542,10 @@ func (b *cdsBalancer) onClusterResourceNotFound(name string) {
 	}
 }
 
-// Generates discovery mechanisms corresponding to the clusters in the aggregate
-// cluster graph. If a new cluster is encountered when traversing the aggregate
-// cluster graph, a watcher is created for it.
+// Generates discovery mechanisms for the cluster graph rooted at `name`. This
+// method is called recursively if `name` corresponds to an aggregate cluster,
+// with the base case for recursion being a leaf cluster. If a new cluster is
+// encountered when traversing the graph, a watcher is created for it.
 //
 // Inputs:
 // - name: name of the cluster to start from
@@ -607,7 +604,6 @@ func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []cluste
 			dms, ok, err = b.generateDMsForCluster(child, depth+1, dms, clustersSeen)
 			if err != nil || !ok {
 				missingCluster = true
-
 			}
 		}
 		return dms, !missingCluster, err
