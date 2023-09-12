@@ -337,7 +337,7 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 			return
 		}
 		rawConn := conn
-		transport, err := NewServerTransport(conn, serverConfig)
+		transport, err := NewServerTransport(context.Background(), conn, serverConfig)
 		if err != nil {
 			return
 		}

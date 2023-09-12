@@ -912,9 +912,17 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 		return
 	}
 	rawConn.SetDeadline(time.Now().Add(s.opts.connectionTimeout))
+	ctx := context.Background()
+	for _, sh := range s.opts.statsHandlers {
+		ctx = sh.TagConn(ctx, &stats.ConnTagInfo{
+			RemoteAddr: rawConn.RemoteAddr(),
+			LocalAddr:  rawConn.LocalAddr(),
+		})
+		sh.HandleConn(ctx, &stats.ConnBegin{})
+	}
 
 	// Finish handshaking (HTTP2)
-	st := s.newHTTP2Transport(rawConn)
+	st := s.newHTTP2Transport(ctx, rawConn)
 	rawConn.SetDeadline(time.Time{})
 	if st == nil {
 		return
@@ -940,7 +948,7 @@ func (s *Server) drainServerTransports(addr string) {
 
 // newHTTP2Transport sets up a http/2 transport (using the
 // gRPC http2 server transport in transport/http2_server.go).
-func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
+func (s *Server) newHTTP2Transport(ctx context.Context, c net.Conn) transport.ServerTransport {
 	config := &transport.ServerConfig{
 		MaxStreams:            s.opts.maxConcurrentStreams,
 		ConnectionTimeout:     s.opts.connectionTimeout,
@@ -958,7 +966,7 @@ func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 		MaxHeaderListSize:     s.opts.maxHeaderListSize,
 		HeaderTableSize:       s.opts.headerTableSize,
 	}
-	st, err := transport.NewServerTransport(c, config)
+	st, err := transport.NewServerTransport(ctx, c, config)
 	if err != nil {
 		s.mu.Lock()
 		s.errorf("NewServerTransport(%q) failed: %v", c.RemoteAddr(), err)
@@ -1705,6 +1713,20 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 		if dl, ok := ctx.Deadline(); ok {
 			ti.firstLine.deadline = time.Until(dl)
 		}
+	}
+
+	md, _ := metadata.FromIncomingContext(ctx)
+	for _, sh := range s.opts.statsHandlers {
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: stream.Method()})
+		stream.SetContext(ctx) // To have calls in stream callouts work. Will delete once all stats handler calls come from the gRPC layer.
+		sh.HandleRPC(ctx, &stats.InHeader{
+			FullMethod:  stream.Method(),
+			RemoteAddr:  t.RemoteAddr(),
+			LocalAddr:   t.LocalAddr(),
+			Compression: stream.RecvCompress(),
+			WireLength:  stream.HeaderWireLength(),
+			Header:      md,
+		})
 	}
 
 	sm := stream.Method()

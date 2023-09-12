@@ -287,8 +287,9 @@ type Stream struct {
 	// On server-side it is unused.
 	status *status.Status
 
-	bytesReceived uint32 // indicates whether any bytes have been received on this stream
-	unprocessed   uint32 // set if the server sends a refused stream or GOAWAY including this stream
+	bytesReceived    uint32 // indicates whether any bytes have been received on this stream
+	unprocessed      uint32 // set if the server sends a refused stream or GOAWAY including this stream
+	headerWireLength int
 
 	// contentSubtype is the content-subtype for requests.
 	// this must be lowercase or the behavior is undefined.
@@ -425,6 +426,12 @@ func (s *Stream) Context() context.Context {
 	return s.ctx
 }
 
+// SetContext sets the context of the stream. This will be deleted once the
+// stats handler callouts all move to gRPC layer.
+func (s *Stream) SetContext(ctx context.Context) {
+	s.ctx = ctx
+}
+
 // Method returns the method for the stream.
 func (s *Stream) Method() string {
 	return s.method
@@ -435,6 +442,12 @@ func (s *Stream) Method() string {
 // that is, after Done() is closed.
 func (s *Stream) Status() *status.Status {
 	return s.status
+}
+
+// HeaderWireLength returns the size of theheaders of the stream as received
+// from the wire.
+func (s *Stream) HeaderWireLength() int {
+	return s.headerWireLength
 }
 
 // SetHeader sets the header metadata. This can be called multiple times.
@@ -719,6 +732,9 @@ type ServerTransport interface {
 
 	// RemoteAddr returns the remote network address.
 	RemoteAddr() net.Addr
+
+	// LocalAddr returns the local network address.
+	LocalAddr() net.Addr
 
 	// Drain notifies the client this ServerTransport stops accepting new RPCs.
 	Drain(debugData string)

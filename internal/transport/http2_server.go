@@ -142,7 +142,7 @@ type http2Server struct {
 // returns a nil transport and a non-nil error. For a special case where the
 // underlying conn gets closed before the client preface could be read, it
 // returns a nil transport and a nil error.
-func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
+func NewServerTransport(ctx context.Context, conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
 	var authInfo credentials.AuthInfo
 	rawConn := conn
 	if config.Credentials != nil {
@@ -249,7 +249,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 
 	done := make(chan struct{})
 	t := &http2Server{
-		ctx:               setConnection(context.Background(), rawConn),
+		ctx:               setConnection(ctx, rawConn),
 		done:              done,
 		conn:              conn,
 		remoteAddr:        conn.RemoteAddr(),
@@ -281,14 +281,6 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 			bdp:               initialWindowSize,
 			updateFlowControl: t.updateFlowControl,
 		}
-	}
-	for _, sh := range t.stats {
-		t.ctx = sh.TagConn(t.ctx, &stats.ConnTagInfo{
-			RemoteAddr: t.remoteAddr,
-			LocalAddr:  t.localAddr,
-		})
-		connBegin := &stats.ConnBegin{}
-		sh.HandleConn(t.ctx, connBegin)
 	}
 	t.channelzID, err = channelz.RegisterNormalSocket(t, config.ChannelzParentID, fmt.Sprintf("%s -> %s", t.remoteAddr, t.localAddr))
 	if err != nil {
@@ -374,10 +366,11 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 
 	buf := newRecvBuffer()
 	s := &Stream{
-		id:  streamID,
-		st:  t,
-		buf: buf,
-		fc:  &inFlow{limit: uint32(t.initialWindowSize)},
+		id:               streamID,
+		st:               t,
+		buf:              buf,
+		fc:               &inFlow{limit: uint32(t.initialWindowSize)},
+		headerWireLength: int(frame.Header().Length),
 	}
 	var (
 		// if false, content-type was missing or invalid
@@ -596,18 +589,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	s.requestRead = func(n int) {
 		t.adjustWindow(s, uint32(n))
-	}
-	for _, sh := range t.stats {
-		s.ctx = sh.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
-		inHeader := &stats.InHeader{
-			FullMethod:  s.method,
-			RemoteAddr:  t.remoteAddr,
-			LocalAddr:   t.localAddr,
-			Compression: s.recvCompress,
-			WireLength:  int(frame.Header().Length),
-			Header:      mdata.Copy(),
-		}
-		sh.HandleRPC(s.ctx, inHeader)
 	}
 	s.ctxDone = s.ctx.Done()
 	s.wq = newWriteQuota(defaultWriteQuota, s.ctxDone)
@@ -1315,6 +1296,10 @@ func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, eo
 
 func (t *http2Server) RemoteAddr() net.Addr {
 	return t.remoteAddr
+}
+
+func (t *http2Server) LocalAddr() net.Addr {
+	return t.localAddr
 }
 
 func (t *http2Server) Drain(debugData string) {

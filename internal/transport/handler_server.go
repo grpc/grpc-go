@@ -167,6 +167,8 @@ func (ht *serverHandlerTransport) Close(err error) {
 
 func (ht *serverHandlerTransport) RemoteAddr() net.Addr { return strAddr(ht.req.RemoteAddr) }
 
+func (ht *serverHandlerTransport) LocalAddr() net.Addr { return nil }
+
 // strAddr is a net.Addr backed by either a TCP "ip:port" string, or
 // the empty string if unknown.
 type strAddr string
