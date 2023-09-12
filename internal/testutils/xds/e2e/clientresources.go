@@ -20,9 +20,10 @@ package e2e
 
 import (
 	"fmt"
-	"google.golang.org/protobuf/protoadapt"
 	"net"
 	"strconv"
+
+	"google.golang.org/protobuf/protoadapt"
 
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/golang/protobuf/proto"
