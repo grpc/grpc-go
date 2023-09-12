@@ -142,7 +142,8 @@ func (s) TestChannelIdleness_Disabled_NoActivity(t *testing.T) {
 }
 
 // Tests the case where channel idleness is enabled by passing a small value for
-// idle_timeout. Verifies that a READY channel with no RPCs moves to IDLE.
+// idle_timeout. Verifies that a READY channel with no RPCs moves to IDLE, and
+// the connection to the backend is closed.
 func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 	// Create a ClientConn with a short idle_timeout.
 	r := manual.NewBuilderWithScheme("whatever")
@@ -159,7 +160,8 @@ func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 	t.Cleanup(func() { cc.Close() })
 
 	// Start a test backend and push an address update via the resolver.
-	backend := stubserver.StartTestService(t, nil)
+	lis := testutils.NewListenerWrapper(t, nil)
+	backend := stubserver.StartTestService(t, &stubserver.StubServer{Listener: lis})
 	t.Cleanup(backend.Stop)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
@@ -168,12 +170,24 @@ func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 	defer cancel()
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
+	// Retrieve the wrapped conn from the listener.
+	v, err := lis.NewConnCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Failed to retrieve conn from test listener: %v", err)
+	}
+	conn := v.(*testutils.ConnWrapper)
+
 	// Verify that the ClientConn moves to IDLE as there is no activity.
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// Verify idleness related channelz events.
 	if err := channelzTraceEventFound(ctx, "entering idle mode"); err != nil {
 		t.Fatal(err)
+	}
+
+	// Verify that the previously open connection is closed.
+	if _, err := conn.CloseCh.Receive(ctx); err != nil {
+		t.Fatalf("Failed when waiting for connection to be closed after channel entered IDLE: %v", err)
 	}
 }
 
