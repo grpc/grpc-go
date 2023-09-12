@@ -67,11 +67,11 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		}
 		oldTypedStructFilter = &v3httppb.HttpFilter{
 			Name:       "customFilter",
-			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: wrappedCustomFilterOldTypedStructConfig},
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: testutils.MarshalAny(t, customFilterOldTypedStructConfig)},
 		}
 		newTypedStructFilter = &v3httppb.HttpFilter{
 			Name:       "customFilter",
-			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: wrappedCustomFilterNewTypedStructConfig},
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: testutils.MarshalAny(t, customFilterNewTypedStructConfig)},
 		}
 		customOptionalFilter = &v3httppb.HttpFilter{
 			Name:       "customFilter",
@@ -283,7 +283,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
 				RouteConfigName: v3RouteConfigName,
-				HTTPFilters:     []HTTPFilter{routerFilter},
+				HTTPFilters:     []HTTPFilter{makeRouterFilter(t)},
 				Raw:             v3ListenerWithCDSConfigSourceSelf,
 			},
 		},
@@ -316,7 +316,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: ListenerUpdate{
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 				Raw:               v3LisWithFilters(),
 			},
 		},
@@ -356,7 +356,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						Filter: httpFilter{},
 						Config: filterConfig{Cfg: customFilterConfig},
 					},
-					routerFilter,
+					makeRouterFilter(t),
 				},
 				Raw: v3LisWithFilters(customFilter),
 			},
@@ -373,7 +373,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						Filter: httpFilter{},
 						Config: filterConfig{Cfg: customFilterOldTypedStructConfig},
 					},
-					routerFilter,
+					makeRouterFilter(t),
 				},
 				Raw: v3LisWithFilters(oldTypedStructFilter),
 			},
@@ -390,7 +390,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						Filter: httpFilter{},
 						Config: filterConfig{Cfg: customFilterNewTypedStructConfig},
 					},
-					routerFilter,
+					makeRouterFilter(t),
 				},
 				Raw: v3LisWithFilters(newTypedStructFilter),
 			},
@@ -407,7 +407,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						Filter: httpFilter{},
 						Config: filterConfig{Cfg: customFilterConfig},
 					},
-					routerFilter,
+					makeRouterFilter(t),
 				},
 				Raw: v3LisWithFilters(customOptionalFilter),
 			},
@@ -433,7 +433,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					Filter: httpFilter{},
 					Config: filterConfig{Cfg: customFilterConfig},
 				},
-					routerFilter,
+					makeRouterFilter(t),
 				},
 				Raw: v3LisWithFilters(customFilter, customFilter2),
 			},
@@ -452,7 +452,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
 				Raw:               v3LisWithFilters(serverOnlyOptionalCustomFilter),
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 			},
 		},
 		{
@@ -467,7 +467,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						Filter: clientOnlyHTTPFilter{},
 						Config: filterConfig{Cfg: clientOnlyCustomFilterConfig},
 					},
-					routerFilter},
+					makeRouterFilter(t)},
 				Raw: v3LisWithFilters(clientOnlyCustomFilter),
 			},
 		},
@@ -496,7 +496,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: ListenerUpdate{
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 				Raw:               v3LisWithFilters(unknownOptionalFilter),
 			},
 		},
@@ -507,7 +507,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: ListenerUpdate{
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 				Raw:               v3LisWithFilters(),
 			},
 		},
@@ -518,7 +518,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: ListenerUpdate{
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 				Raw:               v3LisWithFilters(),
 			},
 		},
@@ -533,7 +533,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: ListenerUpdate{
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
-				HTTPFilters:       []HTTPFilter{routerFilter},
+				HTTPFilters:       []HTTPFilter{makeRouterFilter(t)},
 				Raw:               v3LisToTestRBAC(0, nil),
 			},
 		},
@@ -570,7 +570,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					}}},
 				MaxStreamDuration: time.Second,
 				Raw:               v3LisWithInlineRoute,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 			},
 		},
 	}
@@ -1333,7 +1333,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 												srcPortMap: map[int]*FilterChain{
 													0: {
 														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       routerFilterList,
+														HTTPFilters:       makeRouterFilterList(t),
 													},
 												},
 											},
@@ -1418,7 +1418,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 												srcPortMap: map[int]*FilterChain{
 													0: {
 														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       routerFilterList,
+														HTTPFilters:       makeRouterFilterList(t),
 													},
 												},
 											},
@@ -1535,7 +1535,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 															IdentityCertName:     "identityCertName",
 														},
 														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       routerFilterList,
+														HTTPFilters:       makeRouterFilterList(t),
 													},
 												},
 											},
@@ -1550,7 +1550,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 								IdentityCertName:     "defaultIdentityCertName",
 							},
 							InlineRouteConfig: inlineRouteConfig,
-							HTTPFilters:       routerFilterList,
+							HTTPFilters:       makeRouterFilterList(t),
 						},
 					},
 				},
@@ -1579,7 +1579,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 															IdentityCertName:     "identityCertName",
 														},
 														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       routerFilterList,
+														HTTPFilters:       makeRouterFilterList(t),
 													},
 												},
 											},
@@ -1594,7 +1594,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 								IdentityCertName:     "defaultIdentityCertName",
 							},
 							InlineRouteConfig: inlineRouteConfig,
-							HTTPFilters:       routerFilterList,
+							HTTPFilters:       makeRouterFilterList(t),
 						},
 					},
 				},
@@ -1626,7 +1626,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 															RequireClientCert:    true,
 														},
 														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       routerFilterList,
+														HTTPFilters:       makeRouterFilterList(t),
 													},
 												},
 											},
@@ -1644,7 +1644,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 								RequireClientCert:    true,
 							},
 							InlineRouteConfig: inlineRouteConfig,
-							HTTPFilters:       routerFilterList,
+							HTTPFilters:       makeRouterFilterList(t),
 						},
 					},
 				},
@@ -1676,7 +1676,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 															RequireClientCert:    true,
 														},
 														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       routerFilterList,
+														HTTPFilters:       makeRouterFilterList(t),
 													},
 												},
 											},
@@ -1694,7 +1694,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 								RequireClientCert:    true,
 							},
 							InlineRouteConfig: inlineRouteConfig,
-							HTTPFilters:       routerFilterList,
+							HTTPFilters:       makeRouterFilterList(t),
 						},
 					},
 				},
@@ -1838,7 +1838,6 @@ var customFilterOldTypedStructConfig = &v1udpaudpatypepb.TypedStruct{
 		},
 	},
 }
-var wrappedCustomFilterOldTypedStructConfig *anypb.Any
 
 // This custom filter uses the new TypedStruct message from the cncf/xds repo.
 var customFilterNewTypedStructConfig = &v3xdsxdstypepb.TypedStruct{
@@ -1848,13 +1847,6 @@ var customFilterNewTypedStructConfig = &v3xdsxdstypepb.TypedStruct{
 			"foo": {Kind: &spb.Value_StringValue{StringValue: "bar"}},
 		},
 	},
-}
-var wrappedCustomFilterNewTypedStructConfig *anypb.Any
-
-func init() {
-	t := &testing.T{}
-	wrappedCustomFilterOldTypedStructConfig = testutils.MarshalAny(t, customFilterOldTypedStructConfig)
-	wrappedCustomFilterNewTypedStructConfig = testutils.MarshalAny(t, customFilterNewTypedStructConfig)
 }
 
 var unknownFilterConfig = &anypb.Any{

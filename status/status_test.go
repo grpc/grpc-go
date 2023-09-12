@@ -22,10 +22,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/golang/protobuf/ptypes"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
 	apb "github.com/golang/protobuf/ptypes/any"
 	dpb "github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"

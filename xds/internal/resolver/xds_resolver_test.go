@@ -81,11 +81,13 @@ const (
 
 var (
 	target = resolver.Target{URL: *testutils.MustParseURL("xds:///" + targetStr)}
-
-	routerHTTPFilter = httpfilter.Get(router.TypeURL)
-	routerConfig, _  = routerHTTPFilter.ParseFilterConfig(testutils.MarshalAny(&testing.T{}, &v3routerpb.Router{}))
-	routerFilter     = xdsresource.HTTPFilter{Name: "rtr", Filter: routerHTTPFilter, Config: routerConfig}
 )
+
+func makeRouterFilter(t *testing.T) xdsresource.HTTPFilter {
+	f := httpfilter.Get(router.TypeURL)
+	cfg, _ := f.ParseFilterConfig(testutils.MarshalAny(t, &v3routerpb.Router{}))
+	return xdsresource.HTTPFilter{Name: "rtr", Filter: f, Config: cfg}
+}
 
 type s struct {
 	grpctest.Tester
@@ -1871,7 +1873,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 			ldsFilters: []xdsresource.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
 				{Name: "bar", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "bar1", newStreamErr: errors.New("bar newstream err")}},
-				routerFilter,
+				makeRouterFilter(t),
 			},
 			rtCfgUpdate: xdsresource.RouteConfigUpdate{
 				VirtualHosts: []*xdsresource.VirtualHost{
@@ -1900,7 +1902,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 			ldsFilters: []xdsresource.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1", newStreamErr: errors.New("this is overridden to nil")}},
 				{Name: "bar", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "bar1"}},
-				routerFilter,
+				makeRouterFilter(t),
 			},
 			rtCfgUpdate: xdsresource.RouteConfigUpdate{
 				VirtualHosts: []*xdsresource.VirtualHost{

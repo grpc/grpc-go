@@ -27,11 +27,11 @@ import (
 // MarshalAny is a convenience function to marshal protobuf messages into any
 // protos. It will panic if the marshaling fails.
 func MarshalAny(t *testing.T, m proto.Message) *anypb.Any {
-	t.Helper() // Mark this function as a test helper.
+	t.Helper()
 
 	a, err := anypb.New(protoadapt.MessageV2Of(m))
 	if err != nil {
-		t.Fatalf("ptypes.MarshalAny(%+v) failed: %v", m, err) // Use t.Fatalf instead of panic.
+		t.Fatalf("Failed to marshal proto %+v into an Any: %v", m, err)
 	}
 	return a
 }

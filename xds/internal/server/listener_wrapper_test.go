@@ -52,9 +52,7 @@ const (
 )
 
 func listenerWithRouteConfiguration(t *testing.T) *v3listenerpb.Listener {
-
 	return &v3listenerpb.Listener{
-
 		FilterChains: []*v3listenerpb.FilterChain{
 			{
 				FilterChainMatch: &v3listenerpb.FilterChainMatch{

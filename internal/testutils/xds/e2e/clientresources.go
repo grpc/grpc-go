@@ -20,13 +20,12 @@ package e2e
 
 import (
 	"fmt"
+	"google.golang.org/protobuf/protoadapt"
 	"net"
 	"strconv"
-	"testing"
 
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/golang/protobuf/proto"
-	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -107,8 +106,7 @@ var RouterHTTPFilter = HTTPFilter("router", &v3routerpb.Router{})
 // DefaultClientListener returns a basic xds Listener resource to be used on
 // the client side.
 func DefaultClientListener(target, routeName string) *v3listenerpb.Listener {
-
-	hcm := testutils.MarshalAny(&testing.T{}, &v3httppb.HttpConnectionManager{
+	hcm := marshalAny(&v3httppb.HttpConnectionManager{
 		RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{Rds: &v3httppb.Rds{
 			ConfigSource: &v3corepb.ConfigSource{
 				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
@@ -117,7 +115,6 @@ func DefaultClientListener(target, routeName string) *v3listenerpb.Listener {
 		}},
 		HttpFilters: []*v3httppb.HttpFilter{HTTPFilter("router", &v3routerpb.Router{})}, // router fields are unused by grpc
 	})
-
 	return &v3listenerpb.Listener{
 		Name:        target,
 		ApiListener: &v3listenerpb.ApiListener{ApiListener: hcm},
@@ -129,6 +126,14 @@ func DefaultClientListener(target, routeName string) *v3listenerpb.Listener {
 			}},
 		}},
 	}
+}
+
+func marshalAny(m proto.Message) *anypb.Any {
+	a, err := anypb.New(protoadapt.MessageV2Of(m))
+	if err != nil {
+		panic(fmt.Sprintf("anypb.New(%+v) failed: %v", m, err))
+	}
+	return a
 }
 
 // DefaultServerListener returns a basic xds Listener resource to be used on
@@ -162,54 +167,14 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 	}
 
 	var ts *v3corepb.TransportSocket
-
 	if tlsContext != nil {
 		ts = &v3corepb.TransportSocket{
 			Name: "envoy.transport_sockets.tls",
 			ConfigType: &v3corepb.TransportSocket_TypedConfig{
-				TypedConfig: testutils.MarshalAny(&testing.T{}, tlsContext),
+				TypedConfig: marshalAny(tlsContext),
 			},
 		}
 	}
-
-	filterTypedConfig := testutils.MarshalAny(&testing.T{}, &v3httppb.HttpConnectionManager{
-		RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-			RouteConfig: &v3routepb.RouteConfiguration{
-				Name: "routeName",
-				VirtualHosts: []*v3routepb.VirtualHost{{
-					// This "*" string matches on any incoming authority. This is to ensure any
-					// incoming RPC matches to Route_NonForwardingAction and will proceed as
-					// normal.
-					Domains: []string{"*"},
-					Routes: []*v3routepb.Route{{
-						Match: &v3routepb.RouteMatch{
-							PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
-						},
-						Action: &v3routepb.Route_NonForwardingAction{},
-					}}}}},
-		},
-		HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
-	})
-
-	filteredTypedConfig := testutils.MarshalAny(&testing.T{}, &v3httppb.HttpConnectionManager{
-		RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-			RouteConfig: &v3routepb.RouteConfiguration{
-				Name: "routeName",
-				VirtualHosts: []*v3routepb.VirtualHost{{
-					// This "*" string matches on any incoming authority. This is to ensure any
-					// incoming RPC matches to Route_NonForwardingAction and will proceed as
-					// normal.
-					Domains: []string{"*"},
-					Routes: []*v3routepb.Route{{
-						Match: &v3routepb.RouteMatch{
-							PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
-						},
-						Action: &v3routepb.Route_NonForwardingAction{},
-					}}}}},
-		},
-		HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
-	})
-
 	return &v3listenerpb.Listener{
 		Name: fmt.Sprintf(ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port)))),
 		Address: &v3corepb.Address{
@@ -248,7 +213,24 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: filterTypedConfig,
+							TypedConfig: marshalAny(&v3httppb.HttpConnectionManager{
+								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+									RouteConfig: &v3routepb.RouteConfiguration{
+										Name: "routeName",
+										VirtualHosts: []*v3routepb.VirtualHost{{
+											// This "*" string matches on any incoming authority. This is to ensure any
+											// incoming RPC matches to Route_NonForwardingAction and will proceed as
+											// normal.
+											Domains: []string{"*"},
+											Routes: []*v3routepb.Route{{
+												Match: &v3routepb.RouteMatch{
+													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+												},
+												Action: &v3routepb.Route_NonForwardingAction{},
+											}}}}},
+								},
+								HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
+							}),
 						},
 					},
 				},
@@ -279,7 +261,24 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: filteredTypedConfig,
+							TypedConfig: marshalAny(&v3httppb.HttpConnectionManager{
+								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+									RouteConfig: &v3routepb.RouteConfiguration{
+										Name: "routeName",
+										VirtualHosts: []*v3routepb.VirtualHost{{
+											// This "*" string matches on any incoming authority. This is to ensure any
+											// incoming RPC matches to Route_NonForwardingAction and will proceed as
+											// normal.
+											Domains: []string{"*"},
+											Routes: []*v3routepb.Route{{
+												Match: &v3routepb.RouteMatch{
+													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+												},
+												Action: &v3routepb.Route_NonForwardingAction{},
+											}}}}},
+								},
+								HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
+							}),
 						},
 					},
 				},
@@ -291,11 +290,10 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 
 // HTTPFilter constructs an xds HttpFilter with the provided name and config.
 func HTTPFilter(name string, config proto.Message) *v3httppb.HttpFilter {
-
 	return &v3httppb.HttpFilter{
 		Name: name,
 		ConfigType: &v3httppb.HttpFilter_TypedConfig{
-			TypedConfig: testutils.MarshalAny(&testing.T{}, config),
+			TypedConfig: marshalAny(config),
 		},
 	}
 }
@@ -580,18 +578,17 @@ func ClusterResourceWithOptions(opts ClusterOptions) *v3clusterpb.Cluster {
 		cluster.ClusterDiscoveryType = &v3clusterpb.Cluster_ClusterType{
 			ClusterType: &v3clusterpb.Cluster_CustomClusterType{
 				Name: "envoy.clusters.aggregate",
-				TypedConfig: testutils.MarshalAny(&testing.T{}, &v3aggregateclusterpb.ClusterConfig{
+				TypedConfig: marshalAny(&v3aggregateclusterpb.ClusterConfig{
 					Clusters: opts.ChildNames,
 				}),
 			},
 		}
 	}
 	if tlsContext != nil {
-
 		cluster.TransportSocket = &v3corepb.TransportSocket{
 			Name: "envoy.transport_sockets.tls",
 			ConfigType: &v3corepb.TransportSocket_TypedConfig{
-				TypedConfig: testutils.MarshalAny(&testing.T{}, tlsContext),
+				TypedConfig: marshalAny(tlsContext),
 			},
 		}
 	}

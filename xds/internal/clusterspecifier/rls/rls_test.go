@@ -20,7 +20,6 @@ package rls
 
 import (
 	"encoding/json"
-	"google.golang.org/protobuf/types/known/anypb"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -59,12 +58,12 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 	}{
 		{
 			name:    "invalid-rls-cluster-specifier",
-			rlcs:    rlsClusterSpecifierConfigError(t),
+			rlcs:    rlsClusterSpecifierConfigError,
 			wantErr: true,
 		},
 		{
 			name:       "valid-rls-cluster-specifier",
-			rlcs:       rlsClusterSpecifierConfigWithoutTransformations(t),
+			rlcs:       rlsClusterSpecifierConfigWithoutTransformations,
 			wantConfig: configWithoutTransformationsWant,
 		},
 	}
@@ -108,64 +107,56 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 }
 
 // This will error because the required match field is set in grpc key builder.
-func rlsClusterSpecifierConfigError(t *testing.T) *anypb.Any {
-	clusterSpecifierConfigError := testutils.MarshalAny(t, &rlspb.RouteLookupClusterSpecifier{
-		RouteLookupConfig: &rlspb.RouteLookupConfig{
-			GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
-				{
-					Names: []*rlspb.GrpcKeyBuilder_Name{
-						{
-							Service: "service",
-							Method:  "method",
-						},
+var rlsClusterSpecifierConfigError = testutils.MarshalAny(&testing.T{}, &rlspb.RouteLookupClusterSpecifier{
+	RouteLookupConfig: &rlspb.RouteLookupConfig{
+		GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
+			{
+				Names: []*rlspb.GrpcKeyBuilder_Name{
+					{
+						Service: "service",
+						Method:  "method",
 					},
-					Headers: []*rlspb.NameMatcher{
-						{
-							Key:           "k1",
-							RequiredMatch: true,
-							Names:         []string{"v1"},
-						},
+				},
+				Headers: []*rlspb.NameMatcher{
+					{
+						Key:           "k1",
+						RequiredMatch: true,
+						Names:         []string{"v1"},
 					},
 				},
 			},
 		},
-	})
-
-	return clusterSpecifierConfigError
-}
+	},
+})
 
 // Corresponds to the rls unit test case in
 // balancer/rls/internal/config_test.go.
-func rlsClusterSpecifierConfigWithoutTransformations(t *testing.T) *anypb.Any {
-	clusterSpecifierConfigWithoutTransformations := testutils.MarshalAny(t, &rlspb.RouteLookupClusterSpecifier{
-		RouteLookupConfig: &rlspb.RouteLookupConfig{
-			GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
-				{
-					Names: []*rlspb.GrpcKeyBuilder_Name{
-						{
-							Service: "service",
-							Method:  "method",
-						},
+var rlsClusterSpecifierConfigWithoutTransformations = testutils.MarshalAny(&testing.T{}, &rlspb.RouteLookupClusterSpecifier{
+	RouteLookupConfig: &rlspb.RouteLookupConfig{
+		GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
+			{
+				Names: []*rlspb.GrpcKeyBuilder_Name{
+					{
+						Service: "service",
+						Method:  "method",
 					},
-					Headers: []*rlspb.NameMatcher{
-						{
-							Key:   "k1",
-							Names: []string{"v1"},
-						},
+				},
+				Headers: []*rlspb.NameMatcher{
+					{
+						Key:   "k1",
+						Names: []string{"v1"},
 					},
 				},
 			},
-			LookupService:        "target",
-			LookupServiceTimeout: &durationpb.Duration{Seconds: 100},
-			MaxAge:               &durationpb.Duration{Seconds: 60},
-			StaleAge:             &durationpb.Duration{Seconds: 50},
-			CacheSizeBytes:       1000,
-			DefaultTarget:        "passthrough:///default",
 		},
-	})
-
-	return clusterSpecifierConfigWithoutTransformations
-}
+		LookupService:        "target",
+		LookupServiceTimeout: &durationpb.Duration{Seconds: 100},
+		MaxAge:               &durationpb.Duration{Seconds: 60},
+		StaleAge:             &durationpb.Duration{Seconds: 50},
+		CacheSizeBytes:       1000,
+		DefaultTarget:        "passthrough:///default",
+	},
+})
 
 var configWithoutTransformationsWant = clusterspecifier.BalancerConfig{{"rls_experimental": &lbConfigJSON{
 	RouteLookupConfig: []byte(`{"grpcKeybuilders":[{"names":[{"service":"service","method":"method"}],"headers":[{"key":"k1","names":["v1"]}]}],"lookupService":"target","lookupServiceTimeout":"100s","maxAge":"60s","staleAge":"50s","cacheSizeBytes":"1000","defaultTarget":"passthrough:///default"}`),

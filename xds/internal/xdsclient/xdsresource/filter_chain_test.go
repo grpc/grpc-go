@@ -94,11 +94,17 @@ var (
 		ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
 	}
 	emptyRouterFilter = e2e.RouterHTTPFilter
-	routerBuilder     = httpfilter.Get(router.TypeURL)
-	routerConfig, _   = routerBuilder.ParseFilterConfig(testutils.MarshalAny(&testing.T{}, &v3routerpb.Router{}))
-	routerFilter      = HTTPFilter{Name: "router", Filter: routerBuilder, Config: routerConfig}
-	routerFilterList  = []HTTPFilter{routerFilter}
 )
+
+func makeRouterFilter(t *testing.T) HTTPFilter {
+	routerBuilder := httpfilter.Get(router.TypeURL)
+	routerConfig, _ := routerBuilder.ParseFilterConfig(testutils.MarshalAny(t, &v3routerpb.Router{}))
+	return HTTPFilter{Name: "router", Filter: routerBuilder, Config: routerConfig}
+}
+
+func makeRouterFilterList(t *testing.T) []HTTPFilter {
+	return []HTTPFilter{makeRouterFilter(t)}
+}
 
 // TestNewFilterChainImpl_Failure_BadMatchFields verifies cases where we have a
 // single filter chain with match criteria that contains unsupported fields.
@@ -590,7 +596,7 @@ func (s) TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												RouteConfigName: "route-1",
-												HTTPFilters:     routerFilterList,
+												HTTPFilters:     makeRouterFilterList(t),
 											},
 										},
 									},
@@ -601,7 +607,7 @@ func (s) TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 				},
 				def: &FilterChain{
 					RouteConfigName: "route-1",
-					HTTPFilters:     routerFilterList,
+					HTTPFilters:     makeRouterFilterList(t),
 				},
 				RouteConfigNames: map[string]bool{"route-1": true},
 			},
@@ -653,7 +659,7 @@ func (s) TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -664,7 +670,7 @@ func (s) TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 				},
 				def: &FilterChain{
 					InlineRouteConfig: inlineRouteConfig,
-					HTTPFilters:       routerFilterList,
+					HTTPFilters:       makeRouterFilterList(t),
 				},
 			},
 		},
@@ -727,7 +733,7 @@ func (s) TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												RouteConfigName: "route-1",
-												HTTPFilters:     routerFilterList,
+												HTTPFilters:     makeRouterFilterList(t),
 											},
 										},
 									},
@@ -738,7 +744,7 @@ func (s) TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 				},
 				def: &FilterChain{
 					RouteConfigName: "route-2",
-					HTTPFilters:     routerFilterList,
+					HTTPFilters:     makeRouterFilterList(t),
 				},
 				RouteConfigNames: map[string]bool{
 					"route-1": true,
@@ -1042,7 +1048,7 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 													Filter: serverOnlyHTTPFilter{},
 													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
 												},
-												routerFilter,
+												makeRouterFilter(t),
 											},
 												InlineRouteConfig: inlineRouteConfig,
 											},
@@ -1060,7 +1066,7 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 							Filter: serverOnlyHTTPFilter{},
 							Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
 						},
-						routerFilter,
+						makeRouterFilter(t),
 					},
 					InlineRouteConfig: inlineRouteConfig,
 				},
@@ -1130,7 +1136,7 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 													Filter: serverOnlyHTTPFilter{},
 													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
 												},
-												routerFilter,
+												makeRouterFilter(t),
 											},
 												InlineRouteConfig: inlineRouteConfig,
 											},
@@ -1152,7 +1158,7 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 						Filter: serverOnlyHTTPFilter{},
 						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
 					},
-					routerFilter,
+					makeRouterFilter(t),
 				},
 					InlineRouteConfig: inlineRouteConfig,
 				},
@@ -1252,7 +1258,7 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 													Filter: serverOnlyHTTPFilter{},
 													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
 												},
-												routerFilter,
+												makeRouterFilter(t),
 											},
 												InlineRouteConfig: inlineRouteConfig,
 											},
@@ -1274,7 +1280,7 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 						Filter: serverOnlyHTTPFilter{},
 						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
 					},
-					routerFilter,
+					makeRouterFilter(t),
 				},
 					InlineRouteConfig: inlineRouteConfig,
 				},
@@ -1331,7 +1337,7 @@ func (s) TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -1342,7 +1348,7 @@ func (s) TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 				},
 				def: &FilterChain{
 					InlineRouteConfig: inlineRouteConfig,
-					HTTPFilters:       routerFilterList,
+					HTTPFilters:       makeRouterFilterList(t),
 				},
 			},
 		},
@@ -1398,7 +1404,7 @@ func (s) TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 													IdentityCertName:     "identityCertName",
 												},
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -1413,7 +1419,7 @@ func (s) TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 						IdentityCertName:     "defaultIdentityCertName",
 					},
 					InlineRouteConfig: inlineRouteConfig,
-					HTTPFilters:       routerFilterList,
+					HTTPFilters:       makeRouterFilterList(t),
 				},
 			},
 		},
@@ -1487,7 +1493,7 @@ func (s) TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 													RequireClientCert:    true,
 												},
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -1505,7 +1511,7 @@ func (s) TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 						RequireClientCert:    true,
 					},
 					InlineRouteConfig: inlineRouteConfig,
-					HTTPFilters:       routerFilterList,
+					HTTPFilters:       makeRouterFilterList(t),
 				},
 			},
 		},
@@ -1543,7 +1549,7 @@ func (s) TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 						srcPortMap: map[int]*FilterChain{
 							0: {
 								InlineRouteConfig: inlineRouteConfig,
-								HTTPFilters:       routerFilterList,
+								HTTPFilters:       makeRouterFilterList(t),
 							},
 						},
 					},
@@ -1582,7 +1588,7 @@ func (s) TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 				},
 				def: &FilterChain{
 					InlineRouteConfig: inlineRouteConfig,
-					HTTPFilters:       routerFilterList,
+					HTTPFilters:       makeRouterFilterList(t),
 				},
 			},
 		},
@@ -1614,7 +1620,7 @@ func (s) TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 				},
 				def: &FilterChain{
 					InlineRouteConfig: inlineRouteConfig,
-					HTTPFilters:       routerFilterList,
+					HTTPFilters:       makeRouterFilterList(t),
 				},
 			},
 		},
@@ -1646,7 +1652,7 @@ func (s) TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 				},
 				def: &FilterChain{
 					InlineRouteConfig: inlineRouteConfig,
-					HTTPFilters:       routerFilterList,
+					HTTPFilters:       makeRouterFilterList(t),
 				},
 			},
 		},
@@ -1678,7 +1684,7 @@ func (s) TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 				},
 				def: &FilterChain{
 					InlineRouteConfig: inlineRouteConfig,
-					HTTPFilters:       routerFilterList,
+					HTTPFilters:       makeRouterFilterList(t),
 				},
 			},
 		},
@@ -1756,7 +1762,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -1775,7 +1781,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -1794,7 +1800,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -1811,7 +1817,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -1828,7 +1834,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -1839,7 +1845,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 				},
 				def: &FilterChain{
 					InlineRouteConfig: inlineRouteConfig,
-					HTTPFilters:       routerFilterList,
+					HTTPFilters:       makeRouterFilterList(t),
 				},
 			},
 		},
@@ -1872,7 +1878,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -1891,7 +1897,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -1902,7 +1908,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 				},
 				def: &FilterChain{
 					InlineRouteConfig: inlineRouteConfig,
-					HTTPFilters:       routerFilterList,
+					HTTPFilters:       makeRouterFilterList(t),
 				},
 			},
 		},
@@ -1935,7 +1941,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -1953,7 +1959,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -1964,7 +1970,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 				},
 				def: &FilterChain{
 					InlineRouteConfig: inlineRouteConfig,
-					HTTPFilters:       routerFilterList,
+					HTTPFilters:       makeRouterFilterList(t),
 				},
 			},
 		},
@@ -1998,15 +2004,15 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											1: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 											2: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 											3: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -2026,15 +2032,15 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											1: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 											2: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 											3: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -2045,7 +2051,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 				},
 				def: &FilterChain{
 					InlineRouteConfig: inlineRouteConfig,
-					HTTPFilters:       routerFilterList,
+					HTTPFilters:       makeRouterFilterList(t),
 				},
 			},
 		},
@@ -2122,7 +2128,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -2139,7 +2145,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -2156,7 +2162,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
-												HTTPFilters:       routerFilterList,
+												HTTPFilters:       makeRouterFilterList(t),
 											},
 										},
 									},
@@ -2179,7 +2185,7 @@ func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 				},
 				def: &FilterChain{
 					InlineRouteConfig: inlineRouteConfig,
-					HTTPFilters:       routerFilterList,
+					HTTPFilters:       makeRouterFilterList(t),
 				},
 			},
 		},
@@ -2460,7 +2466,7 @@ func (s) TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "default"},
 				InlineRouteConfig: inlineRouteConfig,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 			},
 		},
 		{
@@ -2475,7 +2481,7 @@ func (s) TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "unspecified-dest-and-source-prefix"},
 				InlineRouteConfig: inlineRouteConfig,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 			},
 		},
 		{
@@ -2490,7 +2496,7 @@ func (s) TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "wildcard-prefixes-v4"},
 				InlineRouteConfig: inlineRouteConfig,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 			},
 		},
 		{
@@ -2505,7 +2511,7 @@ func (s) TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "wildcard-source-prefix-v6"},
 				InlineRouteConfig: inlineRouteConfig,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 			},
 		},
 		{
@@ -2520,7 +2526,7 @@ func (s) TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "specific-destination-prefix-unspecified-source-type"},
 				InlineRouteConfig: inlineRouteConfig,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 			},
 		},
 		{
@@ -2535,7 +2541,7 @@ func (s) TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "specific-destination-prefix-specific-source-type"},
 				InlineRouteConfig: inlineRouteConfig,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 			},
 		},
 		{
@@ -2550,7 +2556,7 @@ func (s) TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "specific-destination-prefix-specific-source-type-specific-source-prefix"},
 				InlineRouteConfig: inlineRouteConfig,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 			},
 		},
 		{
@@ -2565,7 +2571,7 @@ func (s) TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "specific-destination-prefix-specific-source-type-specific-source-prefix-specific-source-port"},
 				InlineRouteConfig: inlineRouteConfig,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 			},
 		},
 	}
