@@ -596,22 +596,21 @@ func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []cluste
 	switch cluster.ClusterType {
 	case xdsresource.ClusterTypeAggregate:
 		// This boolean is used to track if any of the clusters in the graph is
-		// not yet completely resolved, yet allowing us to traverse as much of
-		// the graph as possible to ensure that clustersSeen contains all
+		// not yet completely resolved or returns errors, thereby allowing us to
+		// traverse as much of the graph as possible (and start the associated
+		// watches where required) to ensure that clustersSeen contains all
 		// clusters in the graph that we can traverse to.
 		missingCluster := false
+		var err error
 		for _, child := range cluster.PrioritizedClusterNames {
 			var ok bool
-			var err error
 			dms, ok, err = b.generateDMsForCluster(child, depth+1, dms, clustersSeen)
-			if err != nil {
-				return dms, false, err
-			}
-			if !ok {
+			if err != nil || !ok {
 				missingCluster = true
+
 			}
 		}
-		return dms, !missingCluster, nil
+		return dms, !missingCluster, err
 	case xdsresource.ClusterTypeEDS:
 		dm = clusterresolver.DiscoveryMechanism{
 			Type:                  clusterresolver.DiscoveryMechanismTypeEDS,
