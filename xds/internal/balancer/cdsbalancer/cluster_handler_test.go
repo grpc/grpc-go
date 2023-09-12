@@ -67,7 +67,7 @@ func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clus
 // cluster resource. The test verifies that the load balancing configuration
 // pushed to the cluster_resolver LB policy is contains the expected discovery
 // mechanism corresponding to the leaf cluster, on both occasions.
-func (s) TestClusterHandlerSuccess_LeafNode(t *testing.T) {
+func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 	tests := []struct {
 		name                  string
 		firstClusterResource  *v3clusterpb.Cluster
