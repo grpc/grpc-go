@@ -27,11 +27,8 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	timestamppb "github.com/golang/protobuf/ptypes/timestamp"
-	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/backoff"
@@ -39,7 +36,22 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
+
+	timestamppb "github.com/golang/protobuf/ptypes/timestamp"
+	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 )
+
+func serverListEqual(a, b []*lbpb.Server) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !proto.Equal(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
 
 // processServerList updates balancer's internal state, create/remove SubConns
 // and regenerates picker using the received serverList.
@@ -55,7 +67,7 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 	lb.serverListReceived = true
 
 	// If the new server list == old server list, do nothing.
-	if cmp.Equal(lb.fullServerList, l.Servers, cmp.Comparer(proto.Equal)) {
+	if serverListEqual(lb.fullServerList, l.Servers) {
 		if logger.V(2) {
 			logger.Infof("lbBalancer: new serverlist same as the previous one, ignoring")
 		}
