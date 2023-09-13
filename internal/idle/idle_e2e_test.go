@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
@@ -93,8 +92,6 @@ func channelzTraceEventFound(ctx context.Context, wantDesc string) error {
 // Returns a channel that gets pinged when the balancer is closed.
 func registerWrappedRoundRobinPolicy(t *testing.T) chan struct{} {
 	rrBuilder := balancer.Get(roundrobin.Name)
-	internal.BalancerUnregister(rrBuilder.Name())
-
 	closeCh := make(chan struct{}, 1)
 	stub.Register(roundrobin.Name, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
