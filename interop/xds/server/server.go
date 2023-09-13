@@ -59,13 +59,13 @@ var (
 )
 
 const (
-	rpcBehaviorMdKey  = "rpc-behavior"
-	rpcAttemptsMdKey  = "grpc-previous-rpc-attempts"
-	sleepPfx          = "sleep-"
-	keepOpenVal       = "keep-open"
-	errorCodePfx      = "error-code-"
-	successOnRetryPfx = "success-on-retry-attempt-"
-	hostnamePfx       = "hostname="
+	rpcBehaviorMDKey             = "rpc-behavior"
+	grpcPreviousRPCAttemptsMDKey = "grpc-previous-rpc-attempts"
+	sleepPfx                     = "sleep-"
+	keepOpenVal                  = "keep-open"
+	errorCodePfx                 = "error-code-"
+	successOnRetryPfx            = "succeed-on-retry-attempt-"
+	hostnamePfx                  = "hostname="
 )
 
 func getHostname() string {
@@ -125,6 +125,7 @@ forLoop:
 		// never respond to the request and behavior matching ends.
 		case strings.HasPrefix(headerVal, keepOpenVal):
 			<-ctx.Done()
+			return nil, nil
 
 		// If the value matches "error-code-<int>", the server should
 		// respond with the specified status code and behavior matching ends.
@@ -144,7 +145,7 @@ forLoop:
 				return nil, status.Errorf(codes.InvalidArgument, "invalid format for rpc-behavior header %v, must be 'success-on-retry-attempt-<int>' instead", headerVal)
 			}
 
-			mdRetry := getMetadataValues(ctx, rpcAttemptsMdKey)
+			mdRetry := getMetadataValues(ctx, grpcPreviousRPCAttemptsMDKey)
 			curRetry, err := strconv.Atoi(mdRetry[0])
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "invalid format for grpc-previous-rpc-attempts header: %v", mdRetry[0])
@@ -161,7 +162,7 @@ forLoop:
 }
 
 func getRPCBehaviorMetadata(ctx context.Context) []string {
-	mdRPCBehavior := getMetadataValues(ctx, rpcBehaviorMdKey)
+	mdRPCBehavior := getMetadataValues(ctx, rpcBehaviorMDKey)
 	var rpcBehaviorMetadata []string
 	for _, val := range mdRPCBehavior {
 		splitVals := strings.Split(val, ",")
