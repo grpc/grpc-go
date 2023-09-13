@@ -32,6 +32,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/base"
 	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
@@ -145,7 +146,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		manualResolver: r,
 		subConns:       make(map[resolver.Address]balancer.SubConn),
 		scStates:       make(map[balancer.SubConn]connectivity.State),
-		picker:         &errPicker{err: balancer.ErrNoSubConnAvailable},
+		picker:         base.NewErrPicker(balancer.ErrNoSubConnAvailable),
 		clientStats:    newRPCStats(),
 		backoff:        backoff.DefaultExponential, // TODO: make backoff configurable.
 	}
@@ -236,12 +237,12 @@ type lbBalancer struct {
 // Caller must hold lb.mu.
 func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 	if lb.state == connectivity.TransientFailure {
-		lb.picker = &errPicker{err: fmt.Errorf("all SubConns are in TransientFailure, last connection error: %v", lb.connErr)}
+		lb.picker = base.NewErrPicker(fmt.Errorf("all SubConns are in TransientFailure, last connection error: %v", lb.connErr))
 		return
 	}
 
 	if lb.state == connectivity.Connecting {
-		lb.picker = &errPicker{err: balancer.ErrNoSubConnAvailable}
+		lb.picker = base.NewErrPicker(balancer.ErrNoSubConnAvailable)
 		return
 	}
 
@@ -268,7 +269,7 @@ func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 		//
 		// This doesn't seem to be necessary after the connecting check above.
 		// Kept for safety.
-		lb.picker = &errPicker{err: balancer.ErrNoSubConnAvailable}
+		lb.picker = base.NewErrPicker(balancer.ErrNoSubConnAvailable)
 		return
 	}
 	if lb.inFallback {
