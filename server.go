@@ -73,6 +73,10 @@ func init() {
 	internal.DrainServerTransports = func(srv *Server, addr string) {
 		srv.drainServerTransports(addr)
 	}
+	internal.IsRegisteredMethod = func(srv *Server, method string) bool {
+		return srv.isRegisteredMethod(method)
+	}
+	internal.GetServer = getServer
 	internal.AddGlobalServerOptions = func(opt ...ServerOption) {
 		globalServerOptions = append(globalServerOptions, opt...)
 	}
@@ -1697,8 +1701,22 @@ func (s *Server) processStreamingRPC(ctx context.Context, t transport.ServerTran
 	return t.WriteStatus(ss.s, statusOK)
 }
 
+type serverKey struct{}
+
+// getServer gets the Server from the context.
+func getServer(ctx context.Context) *Server {
+	s, _ := ctx.Value(serverKey{}).(*Server)
+	return s
+}
+
+// setServer sets the Server in the context.
+func setServer(ctx context.Context, server *Server) context.Context {
+	return context.WithValue(ctx, serverKey{}, server)
+}
+
 func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Stream) {
 	ctx := stream.Context()
+	ctx = setServer(ctx, s)
 	var ti *traceInfo
 	if EnableTracing {
 		tr := trace.New("grpc.Recv."+methodFamily(stream.Method()), stream.Method())
@@ -1940,6 +1958,24 @@ func (s *Server) getCodec(contentSubtype string) baseCodec {
 		return encoding.GetCodec(proto.Name)
 	}
 	return codec
+}
+
+// isRegisteredMethod returns whether the passed in method is registered as a
+// method on the server.
+func (s *Server) isRegisteredMethod(method string) bool {
+	for _, service := range s.services {
+		for mName := range service.methods {
+			if method == mName {
+				return true
+			}
+		}
+		for mName := range service.streams {
+			if method == mName {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // SetHeader sets the header metadata to be sent from the server to the client.

@@ -73,6 +73,11 @@ var (
 	// xDS-enabled server invokes this method on a grpc.Server when a particular
 	// listener moves to "not-serving" mode.
 	DrainServerTransports any // func(*grpc.Server, string)
+	// IsRegisteredMethod returns whether the passed in method is registered as
+	// a method on the server.
+	IsRegisteredMethod any // func(*grpc.Server, string)
+	// GetServer returns the server from the context.
+	GetServer any // func(context.Context) *Server
 	// AddGlobalServerOptions adds an array of ServerOption that will be
 	// effective globally for newly created servers. The priority will be: 1.
 	// user-provided; 2. this method; 3. default values.

@@ -6539,3 +6539,89 @@ func (s) TestRPCBlockingOnPickerStatsCall(t *testing.T) {
 		t.Fatalf("sh.pickerUpdated count: %v, want: %v", pickerUpdatedCount, 2)
 	}
 }
+
+type statsHandlerServerAssert struct {
+	errorCh *testutils.Channel
+}
+
+func (shsa *statsHandlerServerAssert) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	// OpenTelemetry instrumentation needs the passed in Server to determine if
+	// methods are registered in different handle calls in to record metrics.
+	// This tag RPC call context gets passed into every handle call, so can
+	// assert once here, since it maps to all the handle RPC calls that come
+	// after. These internal calls will be how the OpenTelemetry instrumentation
+	// component accesses this server and the subsequent helper on the server.
+	server := internal.GetServer.(func(context.Context) *grpc.Server)(ctx)
+	if server == nil {
+		shsa.errorCh.Send("stats handler received ctx has no server present")
+	}
+
+	if registeredMethod := internal.IsRegisteredMethod.(func(*grpc.Server, string) bool)(server, "UnaryCall"); !registeredMethod {
+		shsa.errorCh.Send(errors.New("UnaryCall should be a registered method according to server"))
+		return ctx
+	}
+
+	if registeredMethod := internal.IsRegisteredMethod.(func(*grpc.Server, string) bool)(server, "FullDuplexCall"); !registeredMethod {
+		shsa.errorCh.Send(errors.New("FullDuplexCall should be a registered method according to server"))
+		return ctx
+	}
+
+	if registeredMethod := internal.IsRegisteredMethod.(func(*grpc.Server, string) bool)(server, "DoesNotExistCall"); registeredMethod {
+		shsa.errorCh.Send(errors.New("DoesNotExistCall should not be a registered method according to server"))
+		return ctx
+	}
+
+	shsa.errorCh.Send(nil)
+	return ctx
+}
+
+func (shsa *statsHandlerServerAssert) HandleRPC(ctx context.Context, s stats.RPCStats) {}
+
+func (shsa *statsHandlerServerAssert) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+
+func (shsa *statsHandlerServerAssert) HandleConn(context.Context, stats.ConnStats) {}
+
+// TestStatsHandlerCallsServerIsRegisteredMethod tests whether a stats handler
+// gets access to a Server on the server side, and thus the method that the
+// server owns which specifies whether a method is made or not. The test sets up
+// a server with a unary call and full duplex call configured, and makes an RPC.
+// Within the stats handler, asking the server whether unary or duplex method
+// names are registered should return true, and any other query should return
+// false.
+func (s) TestStatsHandlerCallsServerIsRegisteredMethod(t *testing.T) {
+	errorCh := testutils.NewChannel()
+	shsa := &statsHandlerServerAssert{
+		errorCh: errorCh,
+	}
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			for {
+				if _, err := stream.Recv(); err == io.EOF {
+					return nil
+				}
+			}
+		},
+	}
+	if err := ss.Start([]grpc.ServerOption{grpc.StatsHandler(shsa)}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{}}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+	err, errRecv := errorCh.Receive(ctx)
+	if errRecv != nil {
+		t.Fatalf("error receiving from channel: %v", errRecv)
+	}
+	if err != nil {
+		t.Fatalf("error received from error channel: %v", err)
+	}
+}
