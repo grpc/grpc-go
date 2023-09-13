@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -141,7 +142,8 @@ func (s) TestChannelIdleness_Disabled_NoActivity(t *testing.T) {
 }
 
 // Tests the case where channel idleness is enabled by passing a small value for
-// idle_timeout. Verifies that a READY channel with no RPCs moves to IDLE.
+// idle_timeout. Verifies that a READY channel with no RPCs moves to IDLE, and
+// the connection to the backend is closed.
 func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 	// Create a ClientConn with a short idle_timeout.
 	r := manual.NewBuilderWithScheme("whatever")
@@ -158,7 +160,8 @@ func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 	t.Cleanup(func() { cc.Close() })
 
 	// Start a test backend and push an address update via the resolver.
-	backend := stubserver.StartTestService(t, nil)
+	lis := testutils.NewListenerWrapper(t, nil)
+	backend := stubserver.StartTestService(t, &stubserver.StubServer{Listener: lis})
 	t.Cleanup(backend.Stop)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
@@ -166,6 +169,13 @@ func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+
+	// Retrieve the wrapped conn from the listener.
+	v, err := lis.NewConnCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Failed to retrieve conn from test listener: %v", err)
+	}
+	conn := v.(*testutils.ConnWrapper)
 
 	// Verify that the ClientConn moves to IDLE as there is no activity.
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
@@ -174,85 +184,123 @@ func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 	if err := channelzTraceEventFound(ctx, "entering idle mode"); err != nil {
 		t.Fatal(err)
 	}
+
+	// Verify that the previously open connection is closed.
+	if _, err := conn.CloseCh.Receive(ctx); err != nil {
+		t.Fatalf("Failed when waiting for connection to be closed after channel entered IDLE: %v", err)
+	}
 }
 
 // Tests the case where channel idleness is enabled by passing a small value for
 // idle_timeout. Verifies that a READY channel with an ongoing RPC stays READY.
 func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
-	// Create a ClientConn with a short idle_timeout.
-	r := manual.NewBuilderWithScheme("whatever")
-	dopts := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithResolvers(r),
-		grpc.WithIdleTimeout(defaultTestShortIdleTimeout),
-		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
-	}
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
-	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
-	}
-	t.Cleanup(func() { cc.Close() })
-
-	// Start a test backend which keeps a unary RPC call active by blocking on a
-	// channel that is closed by the test later on. Also push an address update
-	// via the resolver.
-	blockCh := make(chan struct{})
-	backend := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			<-blockCh
-			return &testpb.Empty{}, nil
+	tests := []struct {
+		name    string
+		makeRPC func(ctx context.Context, client testgrpc.TestServiceClient) error
+	}{
+		{
+			name: "unary",
+			makeRPC: func(ctx context.Context, client testgrpc.TestServiceClient) error {
+				if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+					return fmt.Errorf("EmptyCall RPC failed: %v", err)
+				}
+				return nil
+			},
+		},
+		{
+			name: "streaming",
+			makeRPC: func(ctx context.Context, client testgrpc.TestServiceClient) error {
+				stream, err := client.FullDuplexCall(ctx)
+				if err != nil {
+					t.Fatalf("FullDuplexCall RPC failed: %v", err)
+				}
+				if _, err := stream.Recv(); err != nil && err != io.EOF {
+					t.Fatalf("stream.Recv() failed: %v", err)
+				}
+				return nil
+			},
 		},
 	}
-	if err := backend.StartServer(); err != nil {
-		t.Fatalf("Failed to start backend: %v", err)
-	}
-	t.Cleanup(backend.Stop)
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
-	// Verify that the ClientConn moves to READY.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Create a ClientConn with a short idle_timeout.
+			r := manual.NewBuilderWithScheme("whatever")
+			dopts := []grpc.DialOption{
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithResolvers(r),
+				grpc.WithIdleTimeout(defaultTestShortIdleTimeout),
+				grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
+			}
+			cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+			if err != nil {
+				t.Fatalf("grpc.Dial() failed: %v", err)
+			}
+			t.Cleanup(func() { cc.Close() })
 
-	// Spawn a goroutine which checks expected state transitions and idleness
-	// channelz trace events. It eventually closes `blockCh`, thereby unblocking
-	// the server RPC handler and the unary call below.
-	errCh := make(chan error, 1)
-	go func() {
-		defer close(blockCh)
-		// Verify that the ClientConn stays in READY.
-		sCtx, sCancel := context.WithTimeout(ctx, 3*defaultTestShortIdleTimeout)
-		defer sCancel()
-		testutils.AwaitNoStateChange(sCtx, t, cc, connectivity.Ready)
+			// Start a test backend which keeps a unary RPC call active by blocking on a
+			// channel that is closed by the test later on. Also push an address update
+			// via the resolver.
+			blockCh := make(chan struct{})
+			backend := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+					<-blockCh
+					return &testpb.Empty{}, nil
+				},
+				FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+					<-blockCh
+					return nil
+				},
+			}
+			if err := backend.StartServer(); err != nil {
+				t.Fatalf("Failed to start backend: %v", err)
+			}
+			t.Cleanup(backend.Stop)
+			r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
-		// Verify that there are no idleness related channelz events.
-		if err := channelzTraceEventNotFound(ctx, "entering idle mode"); err != nil {
-			errCh <- err
-			return
-		}
-		if err := channelzTraceEventNotFound(ctx, "exiting idle mode"); err != nil {
-			errCh <- err
-			return
-		}
+			// Verify that the ClientConn moves to READY.
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
-		// Unblock the unary RPC on the server.
-		errCh <- nil
-	}()
+			// Spawn a goroutine which checks expected state transitions and idleness
+			// channelz trace events.
+			errCh := make(chan error, 1)
+			go func() {
+				defer close(blockCh)
 
-	// Make a unary RPC that blocks on the server, thereby ensuring that the
-	// count of active RPCs on the client is non-zero.
-	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Errorf("EmptyCall RPC failed: %v", err)
-	}
+				// Verify that the ClientConn stays in READY.
+				sCtx, sCancel := context.WithTimeout(ctx, 3*defaultTestShortIdleTimeout)
+				defer sCancel()
+				if cc.WaitForStateChange(sCtx, connectivity.Ready) {
+					errCh <- fmt.Errorf("state changed from %q to %q when no state change was expected", connectivity.Ready, cc.GetState())
+					return
+				}
 
-	select {
-	case err := <-errCh:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-ctx.Done():
-		t.Fatalf("Timeout when trying to verify that an active RPC keeps channel from moving to IDLE")
+				// Verify that there are no idleness related channelz events.
+				//
+				// TODO: Improve the checks here. If these log strings are
+				// changed in the code, these checks will continue to pass.
+				if err := channelzTraceEventNotFound(ctx, "entering idle mode"); err != nil {
+					errCh <- err
+					return
+				}
+				errCh <- channelzTraceEventNotFound(ctx, "exiting idle mode")
+			}()
+
+			if err := test.makeRPC(ctx, testgrpc.NewTestServiceClient(cc)); err != nil {
+				t.Fatalf("%s rpc failed: %v", test.name, err)
+			}
+
+			select {
+			case err := <-errCh:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-ctx.Done():
+				t.Fatalf("Timeout when trying to verify that an active RPC keeps channel from moving to IDLE")
+			}
+		})
 	}
 }
 
