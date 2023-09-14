@@ -64,7 +64,7 @@ const (
 	sleepPfx                     = "sleep-"
 	keepOpenVal                  = "keep-open"
 	errorCodePfx                 = "error-code-"
-	successOnRetryPfx            = "succeed-on-retry-attempt-"
+	succeedOnRetryPfx            = "succeed-on-retry-attempt-"
 	hostnamePfx                  = "hostname="
 )
 
@@ -142,8 +142,8 @@ forLoop:
 		// value of the "grpc-previous-rpc-attempts" metadata field is equal to
 		// the specified number, the normal RPC processing should resume
 		// and behavior matching ends.
-		case strings.HasPrefix(headerVal, successOnRetryPfx):
-			wantRetry, err := strconv.Atoi(headerVal[len(successOnRetryPfx):])
+		case strings.HasPrefix(headerVal, succeedOnRetryPfx):
+			wantRetry, err := strconv.Atoi(headerVal[len(succeedOnRetryPfx):])
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "invalid format for rpc-behavior header %v, must be 'success-on-retry-attempt-<int>' instead", headerVal)
 			}
