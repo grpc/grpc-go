@@ -54,11 +54,15 @@ func (ew *clusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData) {
 }
 
 func (ew *clusterWatcher) OnError(err error) {
-	ew.updateCh.SendOrFail(xdsresource.ClusterUpdateErrTuple{Err: err})
+	// When used with a go-control-plane management server that continuously
+	// resends resources which are NACKed by the xDS client, using a `Replace()`
+	// here and in OnResourceDoesNotExist() simplifies tests which will have
+	// access to the most recently received error.
+	ew.updateCh.Replace(xdsresource.ClusterUpdateErrTuple{Err: err})
 }
 
 func (ew *clusterWatcher) OnResourceDoesNotExist() {
-	ew.updateCh.SendOrFail(xdsresource.ClusterUpdateErrTuple{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response")})
+	ew.updateCh.Replace(xdsresource.ClusterUpdateErrTuple{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response")})
 }
 
 // badClusterResource returns a cluster resource for the given name which

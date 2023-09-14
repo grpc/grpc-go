@@ -70,11 +70,15 @@ func (ew *endpointsWatcher) OnUpdate(update *xdsresource.EndpointsResourceData) 
 }
 
 func (ew *endpointsWatcher) OnError(err error) {
-	ew.updateCh.SendOrFail(endpointsUpdateErrTuple{err: err})
+	// When used with a go-control-plane management server that continuously
+	// resends resources which are NACKed by the xDS client, using a `Replace()`
+	// here and in OnResourceDoesNotExist() simplifies tests which will have
+	// access to the most recently received error.
+	ew.updateCh.Replace(endpointsUpdateErrTuple{err: err})
 }
 
 func (ew *endpointsWatcher) OnResourceDoesNotExist() {
-	ew.updateCh.SendOrFail(endpointsUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Endpoints not found in received response")})
+	ew.updateCh.Replace(endpointsUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Endpoints not found in received response")})
 }
 
 // badEndpointsResource returns a endpoints resource for the given
