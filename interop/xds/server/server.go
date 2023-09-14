@@ -97,8 +97,9 @@ func (s *testServiceImpl) UnaryCall(ctx context.Context, in *testpb.SimpleReques
 
 forLoop:
 	for _, headerVal := range getRPCBehaviorMetadata(ctx) {
-		// A value can have a prefix "hostname=<string>" followed by a space. In that case,
-		// the rest of the value should only be applied if the specified hostname matches the server's hostname.
+		// A value can have a prefix "hostname=<string>" followed by a space.
+		// In that case, the rest of the value should only be applied
+		// if the specified hostname matches the server's hostname.
 		if strings.HasPrefix(headerVal, hostnamePfx) {
 			splitVal := strings.Split(headerVal, " ")
 			if len(splitVal) <= 1 {
@@ -112,8 +113,9 @@ forLoop:
 		}
 
 		switch {
-		// If the value matches "sleep-<int>", the server should wait the specified number of seconds
-		// before resuming behavior matching and RPC processing.
+		// If the value matches "sleep-<int>", the server should wait
+		// the specified number of seconds before resuming
+		// behavior matching and RPC processing.
 		case strings.HasPrefix(headerVal, sleepPfx):
 			sleep, err := strconv.Atoi(headerVal[len(sleepPfx):])
 			if err != nil {
@@ -136,9 +138,10 @@ forLoop:
 			}
 			return nil, status.Errorf(codes.Code(code), "rpc failed as per the rpc-behavior header value: %v", headerVal)
 
-		// If the value matches "success-on-retry-attempt-<int>", and the value of the
-		// "grpc-previous-rpc-attempts" metadata field is equal to the specified number,
-		// the normal RPC processing should resume and behavior matching ends.
+		// If the value matches "success-on-retry-attempt-<int>", and the
+		// value of the "grpc-previous-rpc-attempts" metadata field is equal to
+		// the specified number, the normal RPC processing should resume
+		// and behavior matching ends.
 		case strings.HasPrefix(headerVal, successOnRetryPfx):
 			wantRetry, err := strconv.Atoi(headerVal[len(successOnRetryPfx):])
 			if err != nil {
