@@ -152,7 +152,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		clientStats:    newRPCStats(),
 		backoff:        backoff.DefaultExponential, // TODO: make backoff configurable.
 	}
-	lb.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("grpclb %p] ", lb))
+	lb.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[grpclb %p] ", lb))
 
 	var err error
 	if opt.CredsBundle != nil {
