@@ -62,12 +62,25 @@ import (
 type lbManualResolver struct {
 	scheme string
 	ccr    resolver.ClientConn
+	ccb    balancer.ClientConn
 
-	ccb balancer.ClientConn
+	// Cache the most recently received state update via UpdateState(), and push
+	// the same when Build() is invoked. This ensures that this manual resolver
+	// can handle restarts when channel idleness comes into the picture.
+	stateMu         sync.Mutex
+	lastState       resolver.State
+	stateUpdateRecv bool
 }
 
 func (r *lbManualResolver) Build(_ resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
 	r.ccr = cc
+
+	r.stateMu.Lock()
+	if r.stateUpdateRecv {
+		r.ccr.UpdateState(r.lastState)
+	}
+	r.stateMu.Unlock()
+
 	return r, nil
 }
 
@@ -85,6 +98,11 @@ func (*lbManualResolver) Close() {}
 
 // UpdateState calls cc.UpdateState.
 func (r *lbManualResolver) UpdateState(s resolver.State) {
+	r.stateMu.Lock()
+	r.lastState = s
+	r.stateUpdateRecv = true
+	r.stateMu.Unlock()
+
 	r.ccr.UpdateState(s)
 }
 
