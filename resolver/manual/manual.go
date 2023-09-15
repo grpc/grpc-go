@@ -79,7 +79,7 @@ func (r *Resolver) Build(target resolver.Target, cc resolver.ClientConn, opts re
 	r.CC = cc
 	if r.lastSeenState != nil {
 		err := r.CC.UpdateState(*r.lastSeenState)
-		r.UpdateStateCallback(err)
+		go func(err error) { r.UpdateStateCallback(err) }(err)
 	}
 	r.mu.Unlock()
 	return r, nil
