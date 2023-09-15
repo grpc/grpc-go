@@ -1101,7 +1101,7 @@ func (s) TestDefaultServiceConfig(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			r := manual.NewBuilderWithScheme("whatever")
+			r := manual.NewBuilderWithScheme(test.name)
 			addr := r.Scheme() + ":///non.existent"
 			test.testF(t, r, addr, test.sc)
 		})

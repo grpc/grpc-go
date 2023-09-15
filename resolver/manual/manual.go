@@ -26,7 +26,9 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// NewBuilderWithScheme creates a new manual resolver builder with the given scheme.
+// NewBuilderWithScheme creates a new manual resolver builder with the given
+// scheme. Every instance of the manual resolver may only ever be used with a
+// single grpc.ClientConn. Otherwise, bad things will happen.
 func NewBuilderWithScheme(scheme string) *Resolver {
 	return &Resolver{
 		BuildCallback:       func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {},
@@ -79,7 +81,7 @@ func (r *Resolver) Build(target resolver.Target, cc resolver.ClientConn, opts re
 	r.CC = cc
 	if r.lastSeenState != nil {
 		err := r.CC.UpdateState(*r.lastSeenState)
-		go func(err error) { r.UpdateStateCallback(err) }(err)
+		go r.UpdateStateCallback(err)
 	}
 	r.mu.Unlock()
 	return r, nil
