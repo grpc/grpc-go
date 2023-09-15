@@ -1563,7 +1563,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 func (t *http2Client) readServerPreface() error {
 	frame, err := t.framer.fr.ReadFrame()
 	if err != nil {
-		return connectionErrorf(true, err, "error reading server preface: %v", err)
+		return connectionErrorf(isTemporary(err), err, "error reading server preface: %v", err)
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
