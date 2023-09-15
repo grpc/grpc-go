@@ -25,78 +25,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/resolver/manual"
 )
-
-// The parent ClientConn should re-resolve when grpclb loses connection to the
-// remote balancer. When the ClientConn inside grpclb gets a TransientFailure,
-// it calls lbManualResolver.ResolveNow(), which calls parent ClientConn's
-// ResolveNow, and eventually results in re-resolve happening in parent
-// ClientConn's resolver (DNS for example).
-//
-//                          parent
-//                          ClientConn
-//  +-----------------------------------------------------------------+
-//  |             parent          +---------------------------------+ |
-//  | DNS         ClientConn      |  grpclb                         | |
-//  | resolver    balancerWrapper |                                 | |
-//  | +              +            |    grpclb          grpclb       | |
-//  | |              |            |    ManualResolver  ClientConn   | |
-//  | |              |            |     +              +            | |
-//  | |              |            |     |              | Transient  | |
-//  | |              |            |     |              | Failure    | |
-//  | |              |            |     |  <---------  |            | |
-//  | |              | <--------------- |  ResolveNow  |            | |
-//  | |  <---------  | ResolveNow |     |              |            | |
-//  | |  ResolveNow  |            |     |              |            | |
-//  | |              |            |     |              |            | |
-//  | +              +            |     +              +            | |
-//  |                             +---------------------------------+ |
-//  +-----------------------------------------------------------------+
-
-// lbManualResolver is used by the ClientConn inside grpclb. It's a manual
-// resolver with a special ResolveNow() function.
-//
-// When ResolveNow() is called, it calls ResolveNow() on the parent ClientConn,
-// so when grpclb client lose contact with remote balancers, the parent
-// ClientConn's resolver will re-resolve.
-type lbManualResolver struct {
-	// These fields are setup at creation time and are read-only after that, and
-	// therefore need not be protected with a mutex.
-	resolver.Builder                      // The underlying manual resolver builder.
-	resolver.Resolver                     // The underlying manual resolver.
-	ccb               balancer.ClientConn // ClientConn passed to the parent channel.
-
-	// The resolver.ClientConn is updated everytime the resolver on the channel
-	// is restarted, and this happens when the channel exits IDLE.
-	mu  sync.Mutex
-	ccr resolver.ClientConn
-}
-
-func newManualResolver(scheme string, ccb balancer.ClientConn) *lbManualResolver {
-	mr := manual.NewBuilderWithScheme(scheme)
-	r := &lbManualResolver{
-		Builder:  mr,
-		Resolver: mr,
-		ccb:      ccb,
-	}
-
-	mr.BuildCallback = func(_ resolver.Target, ccr resolver.ClientConn, _ resolver.BuildOptions) {
-		r.mu.Lock()
-		r.ccr = ccr
-		r.mu.Unlock()
-	}
-	mr.ResolveNowCallback = func(o resolver.ResolveNowOptions) {
-		r.ccb.ResolveNow(o)
-	}
-	return r
-}
-
-func (r *lbManualResolver) UpdateState(s resolver.State) {
-	r.mu.Lock()
-	r.ccr.UpdateState(s)
-	r.mu.Unlock()
-}
 
 const subConnCacheTime = time.Second * 10
 
