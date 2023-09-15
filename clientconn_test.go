@@ -1058,9 +1058,8 @@ func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 }
 
 func (s) TestDefaultServiceConfig(t *testing.T) {
-	r := manual.NewBuilderWithScheme("whatever")
-	addr := r.Scheme() + ":///non.existent"
-	js := `{
+	const defaultSC = `
+{
     "methodConfig": [
         {
             "name": [
@@ -1073,10 +1072,40 @@ func (s) TestDefaultServiceConfig(t *testing.T) {
         }
     ]
 }`
-	testInvalidDefaultServiceConfig(t)
-	testDefaultServiceConfigWhenResolverServiceConfigDisabled(t, r, addr, js)
-	testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t, r, addr, js)
-	testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t, r, addr, js)
+	tests := []struct {
+		name  string
+		testF func(t *testing.T, r *manual.Resolver, addr, sc string)
+		sc    string
+	}{
+		{
+			name:  "invalid-service-config",
+			testF: testInvalidDefaultServiceConfig,
+			sc:    "",
+		},
+		{
+			name:  "resolver-service-config-disabled",
+			testF: testDefaultServiceConfigWhenResolverServiceConfigDisabled,
+			sc:    defaultSC,
+		},
+		{
+			name:  "resolver-does-not-return-service-config",
+			testF: testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig,
+			sc:    defaultSC,
+		},
+		{
+			name:  "resolver-returns-invalid-service-config",
+			testF: testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig,
+			sc:    defaultSC,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := manual.NewBuilderWithScheme(test.name)
+			addr := r.Scheme() + ":///non.existent"
+			test.testF(t, r, addr, test.sc)
+		})
+	}
 }
 
 func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
@@ -1091,8 +1120,8 @@ func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
 	return i != 10
 }
 
-func testInvalidDefaultServiceConfig(t *testing.T) {
-	_, err := Dial("fake.com", WithTransportCredentials(insecure.NewCredentials()), WithDefaultServiceConfig(""))
+func testInvalidDefaultServiceConfig(t *testing.T, r *manual.Resolver, addr, sc string) {
+	_, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(sc))
 	if !strings.Contains(err.Error(), invalidDefaultServiceConfigErrPrefix) {
 		t.Fatalf("Dial got err: %v, want err contains: %v", err, invalidDefaultServiceConfigErrPrefix)
 	}
