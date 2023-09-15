@@ -26,3 +26,11 @@ basicConstraints        = critical,CA:FALSE
 subjectKeyIdentifier    = hash
 keyUsage                = critical,nonRepudiation,digitalSignature,keyEncipherment
 extendedKeyUsage        = critical,clientAuth
+
+[test_email_client]
+nsCertType = email
+nsComment = "Local Test Email Certificate"
+basicConstraints        = critical,CA:FALSE
+subjectKeyIdentifier    = hash
+keyUsage                = critical,nonRepudiation,digitalSignature,keyEncipherment
+extendedKeyUsage        = critical,emailProtection

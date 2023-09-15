@@ -106,6 +106,31 @@ openssl x509 -req           \
   -sha256
 openssl verify -verbose -CAfile client_ca_cert.pem  client2_cert.pem
 
+# create a client certificate that is valid only for the email protection
+# and can't be used for client authentication.
+openssl genrsa -out client_bad_key.pem 4096
+openssl req -new                                       \
+  -key client_bad_key.pem                              \
+  -out client_bad.csr                                  \
+  -subj /C=US/ST=CA/L=SVL/O=gRPC/CN=test-client_bad/   \
+  -config ./openssl.cnf                                \
+  -reqexts test_email_client
+
+openssl x509 -req               \
+  -in client_bad.csr            \
+  -CAkey client_ca_key.pem      \
+  -CA client_ca_cert.pem        \
+  -days 3650                    \
+  -set_serial 1000              \
+  -out client_bad.crt           \
+  -extfile ./openssl.cnf        \
+  -extensions test_email_client \
+  -sha256
+
+openssl verify -verbose -CAfile client_ca_cert.pem client_bad.crt
+# cleanup the CSRs
+rm client_bad.csr
+
 # Generate a cert with SPIFFE ID.
 openssl req -x509                                                         \
   -newkey rsa:4096                                                        \

@@ -20,10 +20,15 @@ package grpc
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"math"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -251,6 +256,88 @@ func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 	<-done
 	if numConns < 2 {
 		t.Fatalf("dial attempts: %v; want > 1", numConns)
+	}
+}
+
+func (s) TestDialFailFastInServerPrefaceWhenIncapableTLSUsed(t *testing.T) {
+	// we do setup only an http server since we don't expect reach the gRPC server
+	httpSrv := httptest.NewUnstartedServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+	}))
+
+	httpSrv.EnableHTTP2 = true
+	t.Cleanup(func() {
+		httpSrv.Close()
+	})
+
+	// configuring server TLS and add client's CA certificate
+	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(x509/server1_cert.pem, x509/server1_key.pem) failed: %v", err)
+	}
+	ca, err := os.ReadFile(testdata.Path("x509/client_ca_cert.pem"))
+	if err != nil {
+		t.Fatalf("os.ReadFile(x509/client_ca_cert.pem) failed: %v", err)
+	}
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(ca) {
+		t.Fatal("failed to append clients' CA certificates")
+	}
+
+	httpSrv.TLS = &tls.Config{
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		Certificates: []tls.Certificate{cert},
+		ClientCAs:    certPool,
+	}
+	httpSrv.StartTLS()
+
+	// configuring client TLS and add server's CA certificate
+	// an important part that client_bad.crt is the valid certificate,
+	// but it's limited to use only for email protection
+	cert, err = tls.LoadX509KeyPair(testdata.Path("x509/client_bad.crt"), testdata.Path("x509/client_bad_key.pem"))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(x509/client_bad.crt, x509/client_bad_key.pem) failed: %v", err)
+	}
+	ca, err = os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
+	if err != nil {
+		t.Fatalf("os.ReadFile(x509/server_ca_cert.pem) failed: %v", err)
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(ca) {
+		t.Fatal("failed to append servers' CA certificates")
+	}
+	creds := credentials.NewTLS(&tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      roots,
+		ServerName:   "x.test.example.com",
+	})
+
+	// we use such a big timeout, but we expect to fail fast
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	addr := strings.TrimSpace(httpSrv.Listener.Addr().String())
+
+	client, err := DialContext(
+		ctx,
+		addr,
+		WithTransportCredentials(creds),
+		WithBlock(),
+		FailOnNonTempDialError(true),
+	)
+	if err == nil {
+		client.Close()
+		t.Fatalf("Unexpected success (err=nil) while dialing")
+	}
+
+	expectedErrReadingServerPrefaceMsg := "error reading server preface"
+	expectedBadTLSMsg := "tls: bad certificate"
+	if !strings.Contains(err.Error(), expectedErrReadingServerPrefaceMsg) || !strings.Contains(err.Error(), expectedBadTLSMsg) {
+		t.Fatalf("DialContext(_) = %v; want a message that includes both %q and %q", err, expectedErrReadingServerPrefaceMsg, expectedBadTLSMsg)
+	}
+
+	// we don't expect that we reach context deadline (timeout)
+	if strings.Contains(err.Error(), context.DeadlineExceeded.Error()) {
+		t.Fatalf("DialContext(_) = %v; want a message that doesn't include %q", err, context.DeadlineExceeded.Error())
 	}
 }
 
