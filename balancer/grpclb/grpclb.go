@@ -132,11 +132,6 @@ func (b *lbBuilder) Name() string {
 }
 
 func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
-	// This generates a manual resolver builder with a fixed scheme. This
-	// scheme will be used to dial to remote LB, so we can send filtered
-	// address updates to remote LB ClientConn using this manual resolver.
-	r := &lbManualResolver{scheme: "grpclb-internal", ccb: cc}
-
 	lb := &lbBalancer{
 		cc:              newLBCacheClientConn(cc),
 		dialTarget:      opt.Target.Endpoint(),
@@ -145,7 +140,10 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		fallbackTimeout: b.fallbackTimeout,
 		doneCh:          make(chan struct{}),
 
-		manualResolver: r,
+		// This generates a manual resolver builder with a fixed scheme. This
+		// scheme will be used to dial to remote LB, so we can send filtered
+		// address updates to remote LB ClientConn using this manual resolver.
+		manualResolver: newManualResolver("grpclb-internal", cc),
 		subConns:       make(map[resolver.Address]balancer.SubConn),
 		scStates:       make(map[balancer.SubConn]connectivity.State),
 		picker:         base.NewErrPicker(balancer.ErrNoSubConnAvailable),

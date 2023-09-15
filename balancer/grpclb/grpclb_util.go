@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 )
 
 // The parent ClientConn should re-resolve when grpclb loses connection to the
@@ -60,50 +61,41 @@ import (
 // so when grpclb client lose contact with remote balancers, the parent
 // ClientConn's resolver will re-resolve.
 type lbManualResolver struct {
-	scheme string
-	ccr    resolver.ClientConn
-	ccb    balancer.ClientConn
+	// These fields are setup at creation time and are read-only after that, and
+	// therefore need not be protected with a mutex.
+	resolver.Builder                      // The underlying manual resolver builder.
+	resolver.Resolver                     // The underlying manual resolver.
+	ccb               balancer.ClientConn // ClientConn passed to the parent channel.
 
-	// Cache the most recently received state update via UpdateState(), and push
-	// the same when Build() is invoked. This ensures that this manual resolver
-	// can handle restarts when channel idleness comes into the picture.
-	stateMu         sync.Mutex
-	lastState       resolver.State
-	stateUpdateRecv bool
+	// The resolver.ClientConn is updated everytime the resolver on the channel
+	// is restarted, and this happens when the channel exits IDLE.
+	mu  sync.Mutex
+	ccr resolver.ClientConn
 }
 
-func (r *lbManualResolver) Build(_ resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
-	r.ccr = cc
-
-	r.stateMu.Lock()
-	if r.stateUpdateRecv {
-		r.ccr.UpdateState(r.lastState)
+func newManualResolver(scheme string, ccb balancer.ClientConn) *lbManualResolver {
+	mr := manual.NewBuilderWithScheme(scheme)
+	r := &lbManualResolver{
+		Builder:  mr,
+		Resolver: mr,
+		ccb:      ccb,
 	}
-	r.stateMu.Unlock()
 
-	return r, nil
+	mr.BuildCallback = func(_ resolver.Target, ccr resolver.ClientConn, _ resolver.BuildOptions) {
+		r.mu.Lock()
+		r.ccr = ccr
+		r.mu.Unlock()
+	}
+	mr.ResolveNowCallback = func(o resolver.ResolveNowOptions) {
+		r.ccb.ResolveNow(o)
+	}
+	return r
 }
 
-func (r *lbManualResolver) Scheme() string {
-	return r.scheme
-}
-
-// ResolveNow calls resolveNow on the parent ClientConn.
-func (r *lbManualResolver) ResolveNow(o resolver.ResolveNowOptions) {
-	r.ccb.ResolveNow(o)
-}
-
-// Close is a noop for Resolver.
-func (*lbManualResolver) Close() {}
-
-// UpdateState calls cc.UpdateState.
 func (r *lbManualResolver) UpdateState(s resolver.State) {
-	r.stateMu.Lock()
-	r.lastState = s
-	r.stateUpdateRecv = true
-	r.stateMu.Unlock()
-
+	r.mu.Lock()
 	r.ccr.UpdateState(s)
+	r.mu.Unlock()
 }
 
 const subConnCacheTime = time.Second * 10
