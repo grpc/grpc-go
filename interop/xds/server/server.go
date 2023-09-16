@@ -171,7 +171,6 @@ func getRPCBehaviorMetadata(ctx context.Context) []string {
 		splitVals := strings.Split(val, ",")
 		rpcBehaviorMetadata = append(rpcBehaviorMetadata, splitVals...)
 	}
-
 	return rpcBehaviorMetadata
 }
 
@@ -181,7 +180,6 @@ func getMetadataValues(ctx context.Context, metadataKey string) []string {
 		logger.Error("Failed to retrieve metadata from incoming RPC context")
 		return nil
 	}
-
 	return md.Get(metadataKey)
 }
 
