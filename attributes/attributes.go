@@ -125,26 +125,10 @@ func (a *Attributes) String() string {
 const nilAngleString = "<nil>"
 
 func str(x any) (s string) {
-	defer func() {
-		if r := recover(); r != nil {
-			// If it panics with a nil pointer, just say "<nil>". The likeliest causes are a
-			// [fmt.Stringer] that fails to guard against nil or a nil pointer for a
-			// value receiver, and in either case, "<nil>" is a nice result.
-			//
-			// Adapted from the code in fmt/print.go.
-			if v := reflect.ValueOf(x); v.Kind() == reflect.Pointer && v.IsNil() {
-				s = nilAngleString
-				return
-			}
-
-			// The panic was likely not caused by fmt.Stringer.
-			panic(r)
-		}
-	}()
 	if x == nil { // NOTE: typed nils will not be caught by this check
 		return nilAngleString
 	} else if v, ok := x.(fmt.Stringer); ok {
-		return v.String()
+		return fmt.Sprint(v)
 	} else if v, ok := x.(string); ok {
 		return v
 	}
