@@ -72,13 +72,13 @@ func wrrLocality(t *testing.T, m proto.Message) *v3wrrlocalitypb.WrrLocality {
 // clusterWithLBConfiguration returns a cluster resource with the proto message
 // passed Marshaled to an any and specified through the load_balancing_policy
 // field.
-func clusterWithLBConfiguration(clusterName, edsServiceName string, secLevel e2e.SecurityLevel, m proto.Message) *v3clusterpb.Cluster {
+func clusterWithLBConfiguration(t *testing.T, clusterName, edsServiceName string, secLevel e2e.SecurityLevel, m proto.Message) *v3clusterpb.Cluster {
 	cluster := e2e.DefaultCluster(clusterName, edsServiceName, secLevel)
 	cluster.LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
 		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 			{
 				TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-					TypedConfig: testutils.MarshalAny(&testing.T{}, m),
+					TypedConfig: testutils.MarshalAny(t, m),
 				},
 			},
 		},
@@ -235,7 +235,7 @@ func (s) TestWrrLocality(t *testing.T) {
 				NodeID:    nodeID,
 				Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)},
 				Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName)},
-				Clusters:  []*v3clusterpb.Cluster{clusterWithLBConfiguration(clusterName, endpointsName, e2e.SecurityLevelNone, test.wrrLocalityConfiguration)},
+				Clusters:  []*v3clusterpb.Cluster{clusterWithLBConfiguration(t, clusterName, endpointsName, e2e.SecurityLevelNone, test.wrrLocalityConfiguration)},
 				Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 					ClusterName: endpointsName,
 					Host:        "localhost",
