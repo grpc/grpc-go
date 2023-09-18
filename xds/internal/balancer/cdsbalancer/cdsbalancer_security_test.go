@@ -514,7 +514,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	cluster.TransportSocket = &v3corepb.TransportSocket{
 		Name: "envoy.transport_sockets.tls",
 		ConfigType: &v3corepb.TransportSocket_TypedConfig{
-			TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 				CommonTlsContext: &v3tlspb.CommonTlsContext{
 					ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
 						ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
@@ -681,7 +681,7 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	cluster.TransportSocket = &v3corepb.TransportSocket{
 		Name: "envoy.transport_sockets.tls",
 		ConfigType: &v3corepb.TransportSocket_TypedConfig{
-			TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 				CommonTlsContext: &v3tlspb.CommonTlsContext{
 					ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
 						ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{

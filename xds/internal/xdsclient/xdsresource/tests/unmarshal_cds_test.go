@@ -68,13 +68,13 @@ const (
 
 var emptyUpdate = xdsresource.ClusterUpdate{ClusterName: clusterName, LRSServerConfig: xdsresource.ClusterLRSOff}
 
-func wrrLocality(m proto.Message) *v3wrrlocalitypb.WrrLocality {
+func wrrLocality(t *testing.T, m proto.Message) *v3wrrlocalitypb.WrrLocality {
 	return &v3wrrlocalitypb.WrrLocality{
 		EndpointPickingPolicy: &v3clusterpb.LoadBalancingPolicy{
 			Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 				{
 					TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-						TypedConfig: testutils.MarshalAny(m),
+						TypedConfig: testutils.MarshalAny(t, m),
 					},
 				},
 			},
@@ -82,8 +82,8 @@ func wrrLocality(m proto.Message) *v3wrrlocalitypb.WrrLocality {
 	}
 }
 
-func wrrLocalityAny(m proto.Message) *anypb.Any {
-	return testutils.MarshalAny(wrrLocality(m))
+func wrrLocalityAny(t *testing.T, m proto.Message) *anypb.Any {
+	return testutils.MarshalAny(t, wrrLocality(t, m))
 }
 
 type customLBConfig struct {
@@ -162,7 +162,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
 					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
 						Name: "envoy.clusters.aggregate",
-						TypedConfig: testutils.MarshalAny(&v3aggregateclusterpb.ClusterConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3aggregateclusterpb.ClusterConfig{
 							Clusters: []string{"a", "b", "c"},
 						}),
 					},
@@ -385,7 +385,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
+								TypedConfig: testutils.MarshalAny(t, &v3ringhashpb.RingHash{
 									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
 									MinimumRingSize: wrapperspb.UInt64(10),
 									MaximumRingSize: wrapperspb.UInt64(100),
@@ -424,7 +424,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: wrrLocalityAny(&v3roundrobinpb.RoundRobin{}),
+								TypedConfig: wrrLocalityAny(t, &v3roundrobinpb.RoundRobin{}),
 							},
 						},
 					},
@@ -460,7 +460,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: wrrLocalityAny(&v3xdsxdstypepb.TypedStruct{
+								TypedConfig: wrrLocalityAny(t, &v3xdsxdstypepb.TypedStruct{
 									TypeUrl: "type.googleapis.com/myorg.MyCustomLeastRequestPolicy",
 									Value:   &structpb.Struct{},
 								}),
@@ -507,7 +507,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
+								TypedConfig: testutils.MarshalAny(t, &v3ringhashpb.RingHash{
 									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
 									MinimumRingSize: wrapperspb.UInt64(10),
 									MaximumRingSize: wrapperspb.UInt64(100),
@@ -554,7 +554,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
+								TypedConfig: testutils.MarshalAny(t, &v3ringhashpb.RingHash{
 									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
 									MinimumRingSize: wrapperspb.UInt64(10),
 									MaximumRingSize: wrapperspb.UInt64(100),

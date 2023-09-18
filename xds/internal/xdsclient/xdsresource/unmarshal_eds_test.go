@@ -221,7 +221,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 }
 
 func (s) TestUnmarshalEndpoints(t *testing.T) {
-	var v3EndpointsAny = testutils.MarshalAny(func() *v3endpointpb.ClusterLoadAssignment {
+	var v3EndpointsAny = testutils.MarshalAny(t, func() *v3endpointpb.ClusterLoadAssignment {
 		clab0 := newClaBuilder("test", nil)
 		clab0.addLocality("locality-1", 1, 1, []string{"addr1:314"}, &addLocalityOptions{
 			Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},
@@ -256,7 +256,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 		},
 		{
 			name: "bad endpoints resource",
-			resource: testutils.MarshalAny(func() *v3endpointpb.ClusterLoadAssignment {
+			resource: testutils.MarshalAny(t, func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
 				clab0.addLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
 				clab0.addLocality("locality-2", 1, 2, []string{"addr2:159"}, nil)
@@ -298,7 +298,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 		},
 		{
 			name:     "v3 endpoints wrapped",
-			resource: testutils.MarshalAny(&v3discoverypb.Resource{Resource: v3EndpointsAny}),
+			resource: testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3EndpointsAny}),
 			wantName: "test",
 			wantUpdate: EndpointsUpdate{
 				Drops: nil,

@@ -189,7 +189,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
@@ -227,7 +227,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
@@ -299,7 +299,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 
 // serverListenerWithRBACHTTPFilters returns an xds Listener resource with HTTP Filters defined in the HCM, and a route
 // configuration that always matches to a route and a VH.
-func serverListenerWithRBACHTTPFilters(host string, port uint32, rbacCfg *rpb.RBAC) *v3listenerpb.Listener {
+func serverListenerWithRBACHTTPFilters(t *testing.T, host string, port uint32, rbacCfg *rpb.RBAC) *v3listenerpb.Listener {
 	// Rather than declare typed config inline, take a HCM proto and append the
 	// RBAC Filters to it.
 	hcm := &v3httppb.HttpConnectionManager{
@@ -317,7 +317,7 @@ func serverListenerWithRBACHTTPFilters(host string, port uint32, rbacCfg *rpb.RB
 					// This tests override parsing + building when RBAC Filter
 					// passed both normal and override config.
 					TypedPerFilterConfig: map[string]*anypb.Any{
-						"rbac": testutils.MarshalAny(&rpb.RBACPerRoute{Rbac: rbacCfg}),
+						"rbac": testutils.MarshalAny(t, &rpb.RBACPerRoute{Rbac: rbacCfg}),
 					},
 				}}},
 		},
@@ -364,7 +364,7 @@ func serverListenerWithRBACHTTPFilters(host string, port uint32, rbacCfg *rpb.RB
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(hcm),
+							TypedConfig: testutils.MarshalAny(t, hcm),
 						},
 					},
 				},
@@ -394,7 +394,7 @@ func serverListenerWithRBACHTTPFilters(host string, port uint32, rbacCfg *rpb.RB
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(hcm),
+							TypedConfig: testutils.MarshalAny(t, hcm),
 						},
 					},
 				},
@@ -656,7 +656,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 					Port:       port,
 					SecLevel:   e2e.SecurityLevelNone,
 				})
-				inboundLis := serverListenerWithRBACHTTPFilters(host, port, test.rbacCfg)
+				inboundLis := serverListenerWithRBACHTTPFilters(t, host, port, test.rbacCfg)
 				resources.Listeners = append(resources.Listeners, inboundLis)
 
 				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -712,7 +712,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 // serverListenerWithBadRouteConfiguration returns an xds Listener resource with
 // a Route Configuration that will never successfully match in order to test
 // RBAC Environment variable being toggled on and off.
-func serverListenerWithBadRouteConfiguration(host string, port uint32) *v3listenerpb.Listener {
+func serverListenerWithBadRouteConfiguration(t *testing.T, host string, port uint32) *v3listenerpb.Listener {
 	return &v3listenerpb.Listener{
 		Name: fmt.Sprintf(e2e.ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port)))),
 		Address: &v3corepb.Address{
@@ -751,7 +751,7 @@ func serverListenerWithBadRouteConfiguration(host string, port uint32) *v3listen
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
 										Name: "routeName",
@@ -799,7 +799,7 @@ func serverListenerWithBadRouteConfiguration(host string, port uint32) *v3listen
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
 										Name: "routeName",
@@ -858,7 +858,7 @@ func (s) TestRBACToggledOn_WithBadRouteConfiguration(t *testing.T) {
 	// Since RBAC support is turned ON, all the RPC's should get denied with
 	// status code Unavailable due to not matching to a route of type Non
 	// Forwarding Action (Route Table not configured properly).
-	inboundLis := serverListenerWithBadRouteConfiguration(host, port)
+	inboundLis := serverListenerWithBadRouteConfiguration(t, host, port)
 	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -915,7 +915,7 @@ func (s) TestRBACToggledOff_WithBadRouteConfiguration(t *testing.T) {
 	// This bad route configuration shouldn't affect incoming RPC's from
 	// proceeding as normal, as the configuration shouldn't be parsed due to the
 	// RBAC Environment variable not being set to true.
-	inboundLis := serverListenerWithBadRouteConfiguration(host, port)
+	inboundLis := serverListenerWithBadRouteConfiguration(t, host, port)
 	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

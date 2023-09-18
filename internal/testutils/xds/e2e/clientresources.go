@@ -23,9 +23,10 @@ import (
 	"net"
 	"strconv"
 
+	"google.golang.org/protobuf/protoadapt"
+
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/golang/protobuf/proto"
-	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -106,7 +107,7 @@ var RouterHTTPFilter = HTTPFilter("router", &v3routerpb.Router{})
 // DefaultClientListener returns a basic xds Listener resource to be used on
 // the client side.
 func DefaultClientListener(target, routeName string) *v3listenerpb.Listener {
-	hcm := testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+	hcm := marshalAny(&v3httppb.HttpConnectionManager{
 		RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{Rds: &v3httppb.Rds{
 			ConfigSource: &v3corepb.ConfigSource{
 				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
@@ -126,6 +127,14 @@ func DefaultClientListener(target, routeName string) *v3listenerpb.Listener {
 			}},
 		}},
 	}
+}
+
+func marshalAny(m proto.Message) *anypb.Any {
+	a, err := anypb.New(protoadapt.MessageV2Of(m))
+	if err != nil {
+		panic(fmt.Sprintf("anypb.New(%+v) failed: %v", m, err))
+	}
+	return a
 }
 
 // DefaultServerListener returns a basic xds Listener resource to be used on
@@ -163,7 +172,7 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 		ts = &v3corepb.TransportSocket{
 			Name: "envoy.transport_sockets.tls",
 			ConfigType: &v3corepb.TransportSocket_TypedConfig{
-				TypedConfig: testutils.MarshalAny(tlsContext),
+				TypedConfig: marshalAny(tlsContext),
 			},
 		}
 	}
@@ -205,7 +214,7 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+							TypedConfig: marshalAny(&v3httppb.HttpConnectionManager{
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
 										Name: "routeName",
@@ -253,7 +262,7 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+							TypedConfig: marshalAny(&v3httppb.HttpConnectionManager{
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
 										Name: "routeName",
@@ -285,7 +294,7 @@ func HTTPFilter(name string, config proto.Message) *v3httppb.HttpFilter {
 	return &v3httppb.HttpFilter{
 		Name: name,
 		ConfigType: &v3httppb.HttpFilter_TypedConfig{
-			TypedConfig: testutils.MarshalAny(config),
+			TypedConfig: marshalAny(config),
 		},
 	}
 }
@@ -570,7 +579,7 @@ func ClusterResourceWithOptions(opts ClusterOptions) *v3clusterpb.Cluster {
 		cluster.ClusterDiscoveryType = &v3clusterpb.Cluster_ClusterType{
 			ClusterType: &v3clusterpb.Cluster_CustomClusterType{
 				Name: "envoy.clusters.aggregate",
-				TypedConfig: testutils.MarshalAny(&v3aggregateclusterpb.ClusterConfig{
+				TypedConfig: marshalAny(&v3aggregateclusterpb.ClusterConfig{
 					Clusters: opts.ChildNames,
 				}),
 			},
@@ -580,7 +589,7 @@ func ClusterResourceWithOptions(opts ClusterOptions) *v3clusterpb.Cluster {
 		cluster.TransportSocket = &v3corepb.TransportSocket{
 			Name: "envoy.transport_sockets.tls",
 			ConfigType: &v3corepb.TransportSocket_TypedConfig{
-				TypedConfig: testutils.MarshalAny(tlsContext),
+				TypedConfig: marshalAny(tlsContext),
 			},
 		}
 	}

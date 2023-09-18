@@ -570,17 +570,17 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		},
 		{
 			name:       "good-route-config-with-http-filter-config-in-old-typed-struct",
-			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedCustomFilterOldTypedStructConfig}),
+			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": testutils.MarshalAny(t, customFilterOldTypedStructConfig)}),
 			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterOldTypedStructConfig}}),
 		},
 		{
 			name:       "good-route-config-with-http-filter-config-in-new-typed-struct",
-			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedCustomFilterNewTypedStructConfig}),
+			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": testutils.MarshalAny(t, customFilterNewTypedStructConfig)}),
 			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterNewTypedStructConfig}}),
 		},
 		{
 			name:       "good-route-config-with-optional-http-filter-config",
-			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("custom.filter")}),
+			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter(t, "custom.filter")}),
 			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterConfig}}),
 		},
 		{
@@ -590,7 +590,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		},
 		{
 			name:      "good-route-config-with-http-optional-err-filter-config",
-			rc:        goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("err.custom.filter")}),
+			rc:        goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter(t, "err.custom.filter")}),
 			wantError: true,
 		},
 		{
@@ -600,12 +600,12 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		},
 		{
 			name:       "good-route-config-with-http-optional-unknown-filter-config",
-			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("unknown.custom.filter")}),
+			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter(t, "unknown.custom.filter")}),
 			wantUpdate: goodUpdateWithFilterConfigs(nil),
 		},
 		{
 			name: "good-route-config-with-bad-rbac-http-filter-configuration",
-			rc: goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"rbac": testutils.MarshalAny(&v3rbacpb.RBACPerRoute{Rbac: &v3rbacpb.RBAC{
+			rc: goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"rbac": testutils.MarshalAny(t, &v3rbacpb.RBACPerRoute{Rbac: &v3rbacpb.RBAC{
 				Rules: &rpb.RBAC{
 					Action: rpb.RBAC_ALLOW,
 					Policies: map[string]*rpb.Policy{
@@ -836,7 +836,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 				},
 			},
 		}
-		v3RouteConfig = testutils.MarshalAny(&v3routepb.RouteConfiguration{
+		v3RouteConfig = testutils.MarshalAny(t, &v3routepb.RouteConfiguration{
 			Name:         v3RouteConfigName,
 			VirtualHosts: v3VirtualHost,
 		})
@@ -886,7 +886,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 		},
 		{
 			name:     "v3 routeConfig resource wrapped",
-			resource: testutils.MarshalAny(&v3discoverypb.Resource{Resource: v3RouteConfig}),
+			resource: testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3RouteConfig}),
 			wantName: v3RouteConfigName,
 			wantUpdate: RouteConfigUpdate{
 				VirtualHosts: []*VirtualHost{
@@ -1471,12 +1471,12 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 		},
 		{
 			name:       "with custom HTTP filter config in typed struct",
-			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedCustomFilterOldTypedStructConfig}),
+			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": testutils.MarshalAny(t, customFilterOldTypedStructConfig)}),
 			wantRoutes: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterOldTypedStructConfig}}),
 		},
 		{
 			name:       "with optional custom HTTP filter config",
-			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("custom.filter")}),
+			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter(t, "custom.filter")}),
 			wantRoutes: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterConfig}}),
 		},
 		{
@@ -1486,7 +1486,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 		},
 		{
 			name:    "with optional erroring custom HTTP filter config",
-			routes:  goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("err.custom.filter")}),
+			routes:  goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter(t, "err.custom.filter")}),
 			wantErr: true,
 		},
 		{
@@ -1496,7 +1496,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 		},
 		{
 			name:       "with optional unknown custom HTTP filter config",
-			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("unknown.custom.filter")}),
+			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter(t, "unknown.custom.filter")}),
 			wantRoutes: goodUpdateWithFilterConfigs(nil),
 		},
 	}
