@@ -43,6 +43,7 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/resolver/dns"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 
 	durationpb "github.com/golang/protobuf/ptypes/duration"
 	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
@@ -135,7 +136,11 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 	// This generates a manual resolver builder with a fixed scheme. This
 	// scheme will be used to dial to remote LB, so we can send filtered
 	// address updates to remote LB ClientConn using this manual resolver.
-	r := &lbManualResolver{scheme: "grpclb-internal", ccb: cc}
+	mr := manual.NewBuilderWithScheme("grpclb-internal")
+	// ResolveNow() on this manual resolver is forwarded to the parent
+	// ClientConn, so when grpclb client loses contact with the remote balancer,
+	// the parent ClientConn's resolver will re-resolve.
+	mr.ResolveNowCallback = cc.ResolveNow
 
 	lb := &lbBalancer{
 		cc:              newLBCacheClientConn(cc),
@@ -145,7 +150,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		fallbackTimeout: b.fallbackTimeout,
 		doneCh:          make(chan struct{}),
 
-		manualResolver: r,
+		manualResolver: mr,
 		subConns:       make(map[resolver.Address]balancer.SubConn),
 		scStates:       make(map[balancer.SubConn]connectivity.State),
 		picker:         base.NewErrPicker(balancer.ErrNoSubConnAvailable),
@@ -193,7 +198,7 @@ type lbBalancer struct {
 	// manualResolver is used in the remote LB ClientConn inside grpclb. When
 	// resolved address updates are received by grpclb, filtered updates will be
 	// send to remote LB ClientConn through this resolver.
-	manualResolver *lbManualResolver
+	manualResolver *manual.Resolver
 	// The ClientConn to talk to the remote balancer.
 	ccRemoteLB *remoteBalancerCCWrapper
 	// backoff for calling remote balancer.
