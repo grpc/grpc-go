@@ -125,7 +125,7 @@ func (s) TestDumpResources(t *testing.T) {
 		client.WatchRouteConfig(target, func(xdsresource.RouteConfigUpdate, error) {})
 	}
 	for _, target := range cdsTargets {
-		client.WatchCluster(target, func(xdsresource.ClusterUpdate, error) {})
+		xdsresource.WatchCluster(client, target, noopClusterWatcher{})
 	}
 	for _, target := range edsTargets {
 		xdsresource.WatchEndpoints(client, target, noopEndpointsWatcher{})

@@ -738,18 +738,9 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			defer close()
 			t.Logf("Created xDS client to %s", mgmtServer.Address)
 
-			// A wrapper struct to wrap the update and the associated error, as
-			// received by the resource watch callback.
-			type updateAndErr struct {
-				update xdsresource.ClusterUpdate
-				err    error
-			}
-			updateAndErrCh := testutils.NewChannel()
-
 			// Register a watch, and push the results on to a channel.
-			client.WatchCluster(test.resourceName, func(update xdsresource.ClusterUpdate, err error) {
-				updateAndErrCh.Send(updateAndErr{update: update, err: err})
-			})
+			cw := newClusterWatcher()
+			xdsresource.WatchCluster(client, test.resourceName, cw)
 			t.Logf("Registered a watch for Cluster %q", test.resourceName)
 
 			// Wait for the discovery request to be sent out.
@@ -775,12 +766,12 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 
 			// Wait for an update from the xDS client and compare with expected
 			// update.
-			val, err = updateAndErrCh.Receive(ctx)
+			val, err = cw.updateCh.Receive(ctx)
 			if err != nil {
 				t.Fatalf("Timeout when waiting for watch callback to invoked after response from management server: %v", err)
 			}
-			gotUpdate := val.(updateAndErr).update
-			gotErr := val.(updateAndErr).err
+			gotUpdate := val.(xdsresource.ClusterUpdateErrTuple).Update
+			gotErr := val.(xdsresource.ClusterUpdateErrTuple).Err
 			if (gotErr != nil) != (test.wantErr != "") {
 				t.Fatalf("Got error from handling update: %v, want %v", gotErr, test.wantErr)
 			}
