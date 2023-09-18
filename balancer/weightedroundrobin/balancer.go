@@ -369,6 +369,7 @@ func (p *picker) start(ctx context.Context) {
 	}
 	go func() {
 		ticker := time.NewTicker(time.Duration(p.cfg.WeightUpdatePeriod))
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
