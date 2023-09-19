@@ -40,6 +40,8 @@ import (
 var (
 	// m is a map from name to balancer builder.
 	m = make(map[string]Builder)
+
+	logger = grpclog.Component("balancer")
 )
 
 // Register registers the balancer builder to the balancer map. b.Name
@@ -56,7 +58,7 @@ func Register(b Builder) {
 		// TODO: Skip the use of strings.ToLower() to index the map after v1.59
 		// is released to switch to case insensitive balancer registry. Also,
 		// remove this warning and update the docstrings for Register and Get.
-		grpclog.Warningf("Balancer registered with name %q. grpc-go will be switching to case insensitive balancer registries soon", b.Name())
+		logger.Warningf("Balancer registered with name %q. grpc-go will be switching to case insensitive balancer registries soon", b.Name())
 	}
 	m[strings.ToLower(b.Name())] = b
 }
