@@ -145,16 +145,13 @@ func (s) TestResolverAddressesToEndpoints(t *testing.T) {
 
 // TestResolverAddressesWithTypedNilAttribute ensures no panic if typed-nil attributes within resolver.State.Addresses
 func (s) TestResolverAddressesWithTypedNilAttribute(t *testing.T) {
-	const scheme = "testresolveraddresseswithtypednilattribute"
-	r := manual.NewBuilderWithScheme(scheme)
+	r := manual.NewBuilderWithScheme(t.Name())
 	resolver.Register(r)
 
 	addrAttr := attributes.New("typed_nil", (*stringerVal)(nil))
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: "addr1", Attributes: addrAttr}}})
 
-	cc, err := Dial(r.Scheme()+":///",
-		WithTransportCredentials(insecure.NewCredentials()),
-		WithResolvers(r))
+	cc, err := Dial(r.Scheme()+":///", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Unexpected error dialing: %v", err)
 	}
