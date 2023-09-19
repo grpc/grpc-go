@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -51,6 +52,12 @@ var (
 // an init() function), and is not thread-safe. If multiple Balancers are
 // registered with the same name, the one registered last will take effect.
 func Register(b Builder) {
+	if strings.ToLower(b.Name()) != b.Name() {
+		// TODO: Skip the use of strings.ToLower() to index the map after v1.59
+		// is released to switch to case insensitive balancer registry. Also,
+		// remove this warning and update the docstrings for Register and Get.
+		grpclog.Warningf("Balancer registered with name %q. grpc-go will be switching to case insensitive balancer registries soon", b.Name())
+	}
 	m[strings.ToLower(b.Name())] = b
 }
 
