@@ -76,12 +76,10 @@ var (
 )
 
 func init() {
-	resolver.Register(c2pResolverBuilder{scheme: c2pScheme})
+	resolver.Register(c2pResolverBuilder{})
 }
 
-type c2pResolverBuilder struct {
-	scheme string
-}
+type c2pResolverBuilder struct{}
 
 func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	if t.URL.Host != "" {
@@ -158,7 +156,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 }
 
 func (b c2pResolverBuilder) Scheme() string {
-	return b.scheme
+	return c2pScheme
 }
 
 type c2pResolver struct {
