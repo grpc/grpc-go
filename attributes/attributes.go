@@ -27,7 +27,6 @@ package attributes
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 )
 
@@ -128,54 +127,7 @@ func str(x any) (s string) {
 	} else if v, ok := x.(string); ok {
 		return v
 	}
-	value := reflect.ValueOf(x)
-	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
-		return fmt.Sprintf("<%p>", x)
-	default:
-		// This will call badVerb to print as "<%p>", but without leading "%!(" and tailing ")"
-		return badVerb(x, value)
-	}
-}
-
-const nilAngleString = "<nil>"
-
-// badVerb is like fmt.Sprintf("%p", arg), but with
-// leading "%!verb(" replaced by "<" and tailing ")" replaced by ">".
-// If an invalid argument is given for a '%p', such as providing
-// an int to %p, the generated string will contain a
-// description of the problem, as in these examples:
-//
-// # our style
-//
-//	Wrong type or unknown verb: <type=value>
-//		Printf("%p", 1):        <int=1>
-//
-// # fmt style as `fmt.Sprintf("%p", arg)`
-//
-//	Wrong type or unknown verb: %!verb(type=value)
-//		Printf("%p", 1):        %!d(int=1)
-//
-// Adapted from the code in fmt/print.go.
-func badVerb(arg any, value reflect.Value) string {
-	var buf strings.Builder
-	switch {
-	case arg != nil:
-		buf.WriteByte('<')
-		buf.WriteString(reflect.TypeOf(arg).String())
-		buf.WriteByte('=')
-		_, _ = fmt.Fprintf(&buf, "%v", arg)
-		buf.WriteByte('>')
-	case value.IsValid():
-		buf.WriteByte('<')
-		buf.WriteString(value.Type().String())
-		buf.WriteByte('=')
-		_, _ = fmt.Fprintf(&buf, "%v", 0)
-		buf.WriteByte('>')
-	default:
-		buf.WriteString(nilAngleString)
-	}
-	return buf.String()
+	return fmt.Sprintf("%#v", x)
 }
 
 // MarshalJSON helps implement the json.Marshaler interface, thereby rendering

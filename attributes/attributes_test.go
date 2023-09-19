@@ -85,14 +85,14 @@ func ExampleAttributes_String() {
 	fmt.Println("a7:", a7.String())
 	fmt.Println("a8:", a8.String())
 	// Output:
-	// a1: {"<attributes_test.key={}>": "<nil>" }
-	// a2: {"<attributes_test.key={}>": "<nil>" }
-	// a3: {"<attributes_test.key={}>": "<0x0>" }
-	// a4: {"<attributes_test.key={}>": "<nil>" }
-	// a5: {"<attributes_test.key={}>": "<int=1>" }
-	// a6: {"<attributes_test.key={}>": "two" }
-	// a7: {"<attributes_test.key={}>": "<attributes_test.stringVal={two}>" }
-	// a8: {"<int=1>": "<bool=true>" }
+	// a1: {"attributes_test.key{}": "<nil>" }
+	// a2: {"attributes_test.key{}": "<nil>" }
+	// a3: {"attributes_test.key{}": "(*attributes_test.stringVal)(nil)" }
+	// a4: {"attributes_test.key{}": "<nil>" }
+	// a5: {"attributes_test.key{}": "1" }
+	// a6: {"attributes_test.key{}": "two" }
+	// a7: {"attributes_test.key{}": "attributes_test.stringVal{s:\"two\"}" }
+	// a8: {"1": "true" }
 }
 
 // Test that two attributes with the same content are Equal.
