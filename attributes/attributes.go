@@ -122,12 +122,8 @@ func (a *Attributes) String() string {
 	return sb.String()
 }
 
-const nilAngleString = "<nil>"
-
 func str(x any) (s string) {
-	if x == nil { // NOTE: typed nils will not be caught by this check
-		return nilAngleString
-	} else if v, ok := x.(fmt.Stringer); ok {
+	if v, ok := x.(fmt.Stringer); ok {
 		return fmt.Sprint(v)
 	} else if v, ok := x.(string); ok {
 		return v
@@ -141,6 +137,8 @@ func str(x any) (s string) {
 		return badVerb(x, value)
 	}
 }
+
+const nilAngleString = "<nil>"
 
 // badVerb is like fmt.Sprintf("%p", arg), but with
 // leading "%!verb(" replaced by "<" and tailing ")" replaced by ">".
