@@ -81,3 +81,34 @@ Note that it's possible to see two continues RPC sent to the same backend.
 That's because `round_robin` only picks the connections ready for RPCs. So if
 one of the two connections is not ready for some reason, all RPCs will be sent
 to the ready connection.
+
+# custom_round_robin
+
+```
+this is examples/load_balancing (from :50052)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50052)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50052)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50052)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50052)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50052)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50052)
+this is examples/load_balancing (from :50051)
+```
+
+It is also possible to configure a custom load balancing policy through the
+service config. Specify the balancer type through the service config which you
+register in the registry. In this example, a custom balancer which routes to the
+first SubConn it receives except every n times, where n is configurable, in
+which is chooses the second SubConn it receives.
