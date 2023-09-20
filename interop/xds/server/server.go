@@ -167,9 +167,16 @@ forLoop:
 func getRPCBehaviorMetadata(ctx context.Context) []string {
 	mdRPCBehavior := getMetadataValues(ctx, rpcBehaviorMDKey)
 	var rpcBehaviorMetadata []string
-	for _, val := range mdRPCBehavior {
-		splitVals := strings.Split(val, ",")
-		rpcBehaviorMetadata = append(rpcBehaviorMetadata, splitVals...)
+	for _, mdVal := range mdRPCBehavior {
+		splitVals := strings.Split(mdVal, ",")
+
+		for _, val := range splitVals {
+			headerVal := strings.TrimSpace(val)
+			if headerVal == "" {
+				continue
+			}
+			rpcBehaviorMetadata = append(rpcBehaviorMetadata, headerVal)
+		}
 	}
 	return rpcBehaviorMetadata
 }
