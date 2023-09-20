@@ -87,3 +87,70 @@ func (s) TestRecvBufferPool(t *testing.T) {
 		t.Errorf("Got replies %q; want %q", got, want)
 	}
 }
+
+func (s) TestRecvBufferPoolUnary(t *testing.T) {
+	const largeSize = 1024
+	const bufSize = 1030
+
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, largeSize)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			return &testpb.SimpleResponse{
+				Payload: payload,
+			}, nil
+		},
+	}
+
+	pool := &checkBufferPool{}
+
+	if err := ss.Start(
+		[]grpc.ServerOption{grpc.RecvBufferPool(pool)},
+		grpc.WithRecvBufferPool(pool),
+	); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	const reqCount = 10
+	for i := 0; i < reqCount; i++ {
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, largeSize)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: payload})
+		if err != nil {
+			t.Fatalf("ss.Client.UnaryCall failed: %f", err)
+		}
+	}
+
+	const bufferCount = reqCount * 2 // req + resp
+	if len(pool.puts) != bufferCount {
+		t.Fatalf("Expected 10 buffers to be returned to the pool, got %d", len(pool.puts))
+	}
+
+	for _, bs := range pool.puts {
+		if len(bs) != bufSize {
+			t.Fatalf("Expected buffer size %d, got %d", bufSize, len(bs))
+		}
+	}
+}
+
+type checkBufferPool struct {
+	puts [][]byte
+}
+
+func (p *checkBufferPool) Get(size int) []byte {
+	return make([]byte, size)
+}
+
+func (p *checkBufferPool) Put(bs *[]byte) {
+	p.puts = append(p.puts, *bs)
+}
