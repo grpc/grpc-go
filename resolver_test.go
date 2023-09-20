@@ -143,7 +143,8 @@ func (s) TestResolverAddressesToEndpoints(t *testing.T) {
 	}
 }
 
-// TestResolverAddressesWithTypedNilAttribute ensures no panic if typed-nil attributes within resolver.State.Addresses
+// Test ensures that there is no panic if the attributes within
+// resolver.State.Addresses contains a typed-nil value.
 func (s) TestResolverAddressesWithTypedNilAttribute(t *testing.T) {
 	r := manual.NewBuilderWithScheme(t.Name())
 	resolver.Register(r)
