@@ -44,6 +44,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -74,6 +75,7 @@ import (
 
 	anypb "github.com/golang/protobuf/ptypes/any"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
+
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -2099,6 +2101,10 @@ func (t *myTap) handle(ctx context.Context, info *tap.Info) (context.Context, er
 		switch info.FullMethodName {
 		case "/grpc.testing.TestService/EmptyCall":
 			t.cnt++
+
+			if vals := info.Header.Get("return-error"); len(vals) > 0 && vals[0] == "true" {
+				return nil, status.Errorf(codes.Unknown, "tap error")
+			}
 		case "/grpc.testing.TestService/UnaryCall":
 			return nil, fmt.Errorf("tap error")
 		case "/grpc.testing.TestService/FullDuplexCall":
@@ -2120,11 +2126,26 @@ func testTap(t *testing.T, e env) {
 	tc := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	if ttap.cnt != 1 {
 		t.Fatalf("Get the count in ttap %d, want 1", ttap.cnt)
+	}
+
+	if _, err := tc.EmptyCall(metadata.AppendToOutgoingContext(ctx, "return-error", "false"), &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	if ttap.cnt != 2 {
+		t.Fatalf("Get the count in ttap %d, want 2", ttap.cnt)
+	}
+
+	if _, err := tc.EmptyCall(metadata.AppendToOutgoingContext(ctx, "return-error", "true"), &testpb.Empty{}); status.Code(err) != codes.Unknown {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.Unknown)
+	}
+	if ttap.cnt != 3 {
+		t.Fatalf("Get the count in ttap %d, want 3", ttap.cnt)
 	}
 
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 31)

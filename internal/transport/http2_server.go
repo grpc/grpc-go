@@ -35,6 +35,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/pretty"
@@ -566,7 +567,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	if t.inTapHandle != nil {
 		var err error
-		if s.ctx, err = t.inTapHandle(s.ctx, &tap.Info{FullMethodName: s.method}); err != nil {
+		if s.ctx, err = t.inTapHandle(s.ctx, &tap.Info{FullMethodName: s.method, Header: mdata}); err != nil {
 			t.mu.Unlock()
 			if t.logger.V(logLevel) {
 				t.logger.Infof("Aborting the stream early due to InTapHandle failure: %v", err)
