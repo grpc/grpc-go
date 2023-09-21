@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -110,7 +111,59 @@ func RegisterServiceServerOption(f func(*grpc.Server)) grpc.ServerOption {
 	return &registerServiceServerOption{f: f}
 }
 
+// StartHandlerServer only starts an HTTP server with a gRPC server as the
+// handler. It does not create a client to it.  Cannot be used in a StubServer
+// that also used StartServer.
+func (ss *StubServer) StartHandlerServer(sopts ...grpc.ServerOption) error {
+	if ss.Network == "" {
+		ss.Network = "tcp"
+	}
+	if ss.Address == "" {
+		ss.Address = "localhost:0"
+	}
+	if ss.Target == "" {
+		ss.R = manual.NewBuilderWithScheme("whatever")
+	}
+
+	lis := ss.Listener
+	if lis == nil {
+		var err error
+		lis, err = net.Listen(ss.Network, ss.Address)
+		if err != nil {
+			return fmt.Errorf("net.Listen(%q, %q) = %v", ss.Network, ss.Address, err)
+		}
+	}
+	ss.Address = lis.Addr().String()
+
+	s := grpc.NewServer(sopts...)
+	for _, so := range sopts {
+		switch x := so.(type) {
+		case *registerServiceServerOption:
+			x.f(s)
+		}
+	}
+
+	testgrpc.RegisterTestServiceServer(s, ss)
+
+	go func() {
+		hs := &http2.Server{}
+		opts := &http2.ServeConnOpts{Handler: s}
+		for {
+			conn, err := lis.Accept()
+			if err != nil {
+				return
+			}
+			hs.ServeConn(conn, opts)
+		}
+	}()
+
+	ss.cleanups = append(ss.cleanups, s.Stop, func() { lis.Close() })
+	ss.S = s
+	return nil
+}
+
 // StartServer only starts the server. It does not create a client to it.
+// Cannot be used in a StubServer that also used StartHandlerServer.
 func (ss *StubServer) StartServer(sopts ...grpc.ServerOption) error {
 	if ss.Network == "" {
 		ss.Network = "tcp"
