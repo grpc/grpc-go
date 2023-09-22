@@ -70,10 +70,33 @@ func replaceResolvers() func() {
 	}
 }
 
-// Test that when bootstrap env is set, fallback to DNS.
+type testXDSClient struct {
+	xdsclient.XDSClient
+	closed chan struct{}
+}
+
+func (c *testXDSClient) Close() {
+	c.closed <- struct{}{}
+}
+
+// Test that when bootstrap env is set and we're running on GCE, don't fallback to DNS (because
+// federation is enabled by default).
 func TestBuildWithBootstrapEnvSet(t *testing.T) {
 	defer replaceResolvers()()
 	builder := resolver.Get(c2pScheme)
+
+	// make the test behave the ~same whether it's running on or off GCE
+	oldOnGCE := onGCE
+	onGCE = func() bool { return true }
+	defer func() { onGCE = oldOnGCE }()
+
+	// don't actually read the bootstrap file contents
+	xdsClient := &testXDSClient{closed: make(chan struct{}, 1)}
+	oldNewClient := newClientWithConfig
+	newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
+		return xdsClient, func() { xdsClient.Close() }, nil
+	}
+	defer func() { newClientWithConfig = oldNewClient }()
 
 	for i, envP := range []*string{&envconfig.XDSBootstrapFileName, &envconfig.XDSBootstrapFileContent} {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
@@ -82,13 +105,14 @@ func TestBuildWithBootstrapEnvSet(t *testing.T) {
 			*envP = "does not matter"
 			defer func() { *envP = oldEnv }()
 
-			// Build should return DNS, not xDS.
+			// Build should return xDS, not DNS.
 			r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
 			if err != nil {
 				t.Fatalf("failed to build resolver: %v", err)
 			}
-			if r != testDNSResolver {
-				t.Fatalf("want dns resolver, got %#v", r)
+			rr := r.(*c2pResolver)
+			if rrr := rr.Resolver; rrr != testXDSResolver {
+				t.Fatalf("want xds resolver, got %#v", rrr)
 			}
 		})
 	}
@@ -111,15 +135,6 @@ func TestBuildNotOnGCE(t *testing.T) {
 	if r != testDNSResolver {
 		t.Fatalf("want dns resolver, got %#v", r)
 	}
-}
-
-type testXDSClient struct {
-	xdsclient.XDSClient
-	closed chan struct{}
-}
-
-func (c *testXDSClient) Close() {
-	c.closed <- struct{}{}
 }
 
 // Test that when xDS is built, the client is built with the correct config.
