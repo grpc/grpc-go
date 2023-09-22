@@ -121,13 +121,13 @@ func (a *Attributes) String() string {
 	return sb.String()
 }
 
-func str(x any) string {
+func str(x any) (s string) {
 	if v, ok := x.(fmt.Stringer); ok {
-		return v.String()
+		return fmt.Sprint(v)
 	} else if v, ok := x.(string); ok {
 		return v
 	}
-	return fmt.Sprintf("<%p>", x)
+	return fmt.Sprintf("%#v", x)
 }
 
 // MarshalJSON helps implement the json.Marshaler interface, thereby rendering
