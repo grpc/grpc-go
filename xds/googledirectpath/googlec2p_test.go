@@ -109,10 +109,10 @@ func TestBuildWithBootstrapEnvSet(t *testing.T) {
 	defer func() { onGCE = oldOnGCE }()
 
 	// don't actually read the bootstrap file contents
-	tXDSClient := &testXDSClient{closed: make(chan struct{}, 1)}
+	xdsClient := &testXDSClient{closed: make(chan struct{}, 1)}
 	oldNewClient := newClientWithConfig
 	newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
-		return tXDSClient, func() { tXDSClient.Close() }, nil
+		return xdsClient, func() { xdsClient.Close() }, nil
 	}
 	defer func() { newClientWithConfig = oldNewClient }()
 
