@@ -1915,6 +1915,7 @@ func (s *Server) getCodec(contentSubtype string) baseCodec {
 	}
 	codec := encoding.GetCodec(contentSubtype)
 	if codec == nil {
+		logger.Warningf("Unsupported codec %q. Defaulting to %q for now. This will start to fail in future releases.", contentSubtype, proto.Name)
 		return encoding.GetCodec(proto.Name)
 	}
 	return codec
