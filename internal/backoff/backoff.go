@@ -23,6 +23,7 @@
 package backoff
 
 import (
+	"context"
 	"time"
 
 	grpcbackoff "google.golang.org/grpc/backoff"
@@ -70,4 +71,33 @@ func (bc Exponential) Backoff(retries int) time.Duration {
 		return 0
 	}
 	return time.Duration(backoff)
+}
+
+// RunF provides a convenient way to run a function f with a caller provided
+// backoff. It runs f repeatedly, backing off when f returns false and resetting
+// the backoff state when f returns true, until the context expires or f returns
+// a non-nil error.
+func RunF(ctx context.Context, f func() (bool, error), backoff func(int) time.Duration) {
+	attempt := 0
+	timer := time.NewTimer(0)
+	for ctx.Err() == nil {
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		}
+
+		reset, err := f()
+		if err != nil {
+			return
+		}
+		if reset {
+			timer.Reset(0)
+			attempt = 0
+		} else {
+			timer.Reset(backoff(attempt))
+			attempt++
+		}
+	}
 }

@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/orca/internal"
 	"google.golang.org/grpc/status"
@@ -169,36 +170,20 @@ func (p *producer) updateRunLocked() {
 func (p *producer) run(ctx context.Context, done chan struct{}, interval time.Duration) {
 	defer close(done)
 
-	backoffAttempt := 0
-	backoffTimer := time.NewTimer(0)
-	for ctx.Err() == nil {
-		select {
-		case <-backoffTimer.C:
-		case <-ctx.Done():
-			return
-		}
-
+	runStream := func() (bool, error) {
 		resetBackoff, err := p.runStream(ctx, interval)
-
-		if resetBackoff {
-			backoffTimer.Reset(0)
-			backoffAttempt = 0
-		} else {
-			backoffTimer.Reset(p.backoff(backoffAttempt))
-			backoffAttempt++
-		}
-
 		switch {
 		case err == nil:
 			// No error was encountered; restart the stream.
+			return true, nil
 		case ctx.Err() != nil:
 			// Producer was stopped; exit immediately and without logging an
 			// error.
-			return
+			return false, ctx.Err()
 		case status.Code(err) == codes.Unimplemented:
 			// Unimplemented; do not retry.
 			logger.Error("Server doesn't support ORCA OOB load reporting protocol; not listening for load reports.")
-			return
+			return false, err
 		case status.Code(err) == codes.Unavailable, status.Code(err) == codes.Canceled:
 			// TODO: these codes should ideally log an error, too, but for now
 			// we receive them when shutting down the ClientConn (Unavailable
@@ -206,11 +191,14 @@ func (p *producer) run(ctx context.Context, done chan struct{}, interval time.Du
 			// mid-stream).  Once we can determine the state or ensure the
 			// producer is stopped before the stream ends, we can log an error
 			// when it's not a natural shutdown.
+			return resetBackoff, nil
 		default:
 			// Log all other errors.
 			logger.Error("Received unexpected stream error:", err)
+			return resetBackoff, nil
 		}
 	}
+	backoff.RunF(ctx, runStream, p.backoff)
 }
 
 // runStream runs a single stream on the subchannel and returns the resulting
