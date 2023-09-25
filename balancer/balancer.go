@@ -79,6 +79,12 @@ func init() {
 // Note that the compare is done in a case-insensitive fashion.
 // If no builder is register with the name, nil will be returned.
 func Get(name string) Builder {
+	if strings.ToLower(name) != name {
+		// TODO: Skip the use of strings.ToLower() to index the map after v1.59
+		// is released to switch to case sensitive balancer registry. Also,
+		// remove this warning and update the docstrings for Register and Get.
+		logger.Warningf("Balancer retrieved for name %q. grpc-go will be switching to case sensitive balancer registries soon", name)
+	}
 	if b, ok := m[strings.ToLower(name)]; ok {
 		return b
 	}
