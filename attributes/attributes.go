@@ -127,7 +127,7 @@ func str(x any) (s string) {
 	} else if v, ok := x.(string); ok {
 		return v
 	}
-	return fmt.Sprintf("%#v", x)
+	return fmt.Sprintf("<%p>", x)
 }
 
 // MarshalJSON helps implement the json.Marshaler interface, thereby rendering
