@@ -327,12 +327,12 @@ func (t *Transport) adsRunner(ctx context.Context) {
 
 	// We reset backoff state when we successfully receive at least one
 	// message from the server.
-	runStreamWithBackoff := func() (bool, error) {
+	runStreamWithBackoff := func() error {
 		stream, err := t.newAggregatedDiscoveryServiceStream(ctx, t.cc)
 		if err != nil {
 			t.onErrorHandler(err)
 			t.logger.Warningf("Creating new ADS stream failed: %v", err)
-			return false, nil
+			return nil
 		}
 		t.logger.Infof("ADS stream created")
 
@@ -341,7 +341,11 @@ func (t *Transport) adsRunner(ctx context.Context) {
 		default:
 		}
 		t.adsStreamCh <- stream
-		return t.recv(stream), nil
+		msgReceived := t.recv(stream)
+		if msgReceived {
+			return backoff.ErrResetBackoff
+		}
+		return nil
 	}
 	backoff.RunF(ctx, runStreamWithBackoff, t.backoff)
 }

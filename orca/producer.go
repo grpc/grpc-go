@@ -170,33 +170,30 @@ func (p *producer) updateRunLocked() {
 func (p *producer) run(ctx context.Context, done chan struct{}, interval time.Duration) {
 	defer close(done)
 
-	runStream := func() (bool, error) {
+	runStream := func() error {
 		resetBackoff, err := p.runStream(ctx, interval)
-		switch {
-		case err == nil:
-			// No error was encountered; restart the stream.
-			return true, nil
-		case ctx.Err() != nil:
-			// Producer was stopped; exit immediately and without logging an
-			// error.
-			return false, ctx.Err()
-		case status.Code(err) == codes.Unimplemented:
+		if status.Code(err) == codes.Unimplemented {
 			// Unimplemented; do not retry.
 			logger.Error("Server doesn't support ORCA OOB load reporting protocol; not listening for load reports.")
-			return false, err
-		case status.Code(err) == codes.Unavailable, status.Code(err) == codes.Canceled:
+			return err
+		}
+		// Retry for all other errors.
+		var retErr error
+		if resetBackoff {
+			retErr = backoff.ErrResetBackoff
+		}
+		if code := status.Code(err); code == codes.Unavailable || code == codes.Canceled {
 			// TODO: these codes should ideally log an error, too, but for now
 			// we receive them when shutting down the ClientConn (Unavailable
 			// if the stream hasn't started yet, and Canceled if it happens
 			// mid-stream).  Once we can determine the state or ensure the
 			// producer is stopped before the stream ends, we can log an error
 			// when it's not a natural shutdown.
-			return resetBackoff, nil
-		default:
-			// Log all other errors.
-			logger.Error("Received unexpected stream error:", err)
-			return resetBackoff, nil
+			return retErr
 		}
+		// Log all other errors.
+		logger.Error("Received unexpected stream error:", err)
+		return retErr
 	}
 	backoff.RunF(ctx, runStream, p.backoff)
 }

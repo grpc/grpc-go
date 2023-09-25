@@ -101,7 +101,7 @@ func (t *Transport) lrsRunner(ctx context.Context) {
 	node := proto.Clone(t.nodeProto).(*v3corepb.Node)
 	node.ClientFeatures = append(node.ClientFeatures, "envoy.lrs.supports_send_all_clusters")
 
-	runLoadReportStream := func() (bool, error) {
+	runLoadReportStream := func() error {
 		// streamCtx is created and canceled in case we terminate the stream
 		// early for any reason, to avoid gRPC-Go leaking the RPC's monitoring
 		// goroutine.
@@ -110,25 +110,25 @@ func (t *Transport) lrsRunner(ctx context.Context) {
 		stream, err := v3lrsgrpc.NewLoadReportingServiceClient(t.cc).StreamLoadStats(streamCtx)
 		if err != nil {
 			t.logger.Warningf("Creating LRS stream to server %q failed: %v", t.serverURI, err)
-			return false, nil
+			return nil
 		}
 		t.logger.Infof("Created LRS stream to server %q", t.serverURI)
 
 		if err := t.sendFirstLoadStatsRequest(stream, node); err != nil {
 			t.logger.Warningf("Sending first LRS request failed: %v", err)
-			return false, nil
+			return nil
 		}
 
 		clusters, interval, err := t.recvFirstLoadStatsResponse(stream)
 		if err != nil {
 			t.logger.Warningf("Reading from LRS stream failed: %v", err)
-			return false, nil
+			return nil
 		}
 
 		// We reset backoff state when we successfully receive at least one
 		// message from the server.
 		t.sendLoads(streamCtx, stream, clusters, interval)
-		return true, nil
+		return backoff.ErrResetBackoff
 	}
 	backoff.RunF(ctx, runLoadReportStream, t.backoff)
 }
