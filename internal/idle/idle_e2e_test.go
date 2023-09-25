@@ -586,8 +586,6 @@ func (s) TestChannelIdleness_RaceBetweenEnterAndExitIdleMode(t *testing.T) {
 	}
 	t.Cleanup(func() { cc.Close() })
 
-	var wg sync.WaitGroup
-	wg.Add(4)
 	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn) error)
 	enterIdleFunc := func() {
 		if err := enterIdle(cc); err != nil {
@@ -597,28 +595,30 @@ func (s) TestChannelIdleness_RaceBetweenEnterAndExitIdleMode(t *testing.T) {
 	exitIdle := internal.ExitIdleModeForTesting.(func(*grpc.ClientConn) error)
 	exitIdleFunc := func() {
 		if err := exitIdle(cc); err != nil {
-			t.Errorf("Failed to eixt idle mode: %v", err)
+			t.Errorf("Failed to exit idle mode: %v", err)
 		}
 	}
 	// Spawn goroutines that call methods on the ClientConn to enter and exit
 	// idle mode concurrently for one second.
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
+	var wg sync.WaitGroup
+	wg.Add(4)
 	go func() {
-		defer wg.Done()
 		runFunc(ctx, enterIdleFunc)
+		wg.Done()
 	}()
 	go func() {
-		defer wg.Done()
 		runFunc(ctx, enterIdleFunc)
+		wg.Done()
 	}()
 	go func() {
-		defer wg.Done()
 		runFunc(ctx, exitIdleFunc)
+		wg.Done()
 	}()
 	go func() {
-		defer wg.Done()
 		runFunc(ctx, exitIdleFunc)
+		wg.Done()
 	}()
 	wg.Wait()
 }
