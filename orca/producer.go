@@ -178,22 +178,19 @@ func (p *producer) run(ctx context.Context, done chan struct{}, interval time.Du
 			return err
 		}
 		// Retry for all other errors.
-		var retErr error
+		if code := status.Code(err); code != codes.Unavailable && code != codes.Canceled {
+			// TODO: Unavailable and Canceled should also ideally log an error,
+			// but for now we receive them when shutting down the ClientConn
+			// (Unavailable if the stream hasn't started yet, and Canceled if it
+			// happens mid-stream).  Once we can determine the state or ensure
+			// the producer is stopped before the stream ends, we can log an
+			// error when it's not a natural shutdown.
+			logger.Error("Received unexpected stream error:", err)
+		}
 		if resetBackoff {
-			retErr = backoff.ErrResetBackoff
+			return backoff.ErrResetBackoff
 		}
-		if code := status.Code(err); code == codes.Unavailable || code == codes.Canceled {
-			// TODO: these codes should ideally log an error, too, but for now
-			// we receive them when shutting down the ClientConn (Unavailable
-			// if the stream hasn't started yet, and Canceled if it happens
-			// mid-stream).  Once we can determine the state or ensure the
-			// producer is stopped before the stream ends, we can log an error
-			// when it's not a natural shutdown.
-			return retErr
-		}
-		// Log all other errors.
-		logger.Error("Received unexpected stream error:", err)
-		return retErr
+		return nil
 	}
 	backoff.RunF(ctx, runStream, p.backoff)
 }
