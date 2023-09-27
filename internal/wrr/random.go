@@ -87,5 +87,7 @@ func (rw *randomWRR) Add(item any, weight int64) {
 }
 
 func (rw *randomWRR) String() string {
+	rw.mu.Lock()
+	defer rw.mu.Unlock()
 	return fmt.Sprint(rw.items)
 }
