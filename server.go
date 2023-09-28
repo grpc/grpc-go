@@ -971,10 +971,13 @@ func (s *Server) serveStreams(st transport.ServerTransport) {
 	defer st.Close(errors.New("finished serving streams for the server transport"))
 	var wg sync.WaitGroup
 
+	streamQuota := newHandlerQuota(s.opts.maxConcurrentStreams)
 	st.HandleStreams(func(stream *transport.Stream) {
 		wg.Add(1)
 
+		streamQuota.acquire()
 		f := func() {
+			defer streamQuota.release()
 			defer wg.Done()
 			s.handleStream(st, stream)
 		}
@@ -2067,4 +2070,44 @@ func validateSendCompressor(name, clientCompressors string) error {
 		}
 	}
 	return fmt.Errorf("client does not support compressor %q", name)
+}
+
+type handlerQuota interface {
+	// acquire is called synchronously
+	acquire()
+	// release may be called asynchronously
+	release()
+}
+
+type atomicHandlerQuota struct {
+	n    atomic.Int64
+	wait chan struct{}
+}
+
+func (q *atomicHandlerQuota) acquire() {
+	if q.n.Add(-1) < 0 {
+		// Block until a release happens.
+		<-q.wait
+	}
+}
+
+func (q *atomicHandlerQuota) release() {
+	if q.n.Add(1) == 0 {
+		// An acquire was waiting on us.  Unblock it.
+		q.wait <- struct{}{}
+	}
+}
+
+type noHandlerQuota struct{}
+
+func (noHandlerQuota) acquire() {}
+func (noHandlerQuota) release() {}
+
+func newHandlerQuota(n uint32) handlerQuota {
+	if n == 0 {
+		return noHandlerQuota{}
+	}
+	a := &atomicHandlerQuota{wait: make(chan struct{}, 1)}
+	a.n.Store(int64(n))
+	return a
 }
