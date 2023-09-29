@@ -165,6 +165,7 @@ func (ss *StubServer) StartHandlerServer(sopts ...grpc.ServerOption) error {
 			hs.ServeConn(conn, opts)
 		}
 	}()
+	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
 
 	return nil
 }
