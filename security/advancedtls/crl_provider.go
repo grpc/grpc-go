@@ -19,6 +19,7 @@
 package advancedtls
 
 import (
+	"context"
 	"crypto/x509"
 	"fmt"
 	"os"
@@ -63,23 +64,26 @@ type Options struct {
 
 // NewFileWatcherCRLProvider creates a new FileWatcherCRLProvider.
 type FileWatcherCRLProvider struct {
-	crls map[string]*CRL
-	opts Options
-	done chan bool
+	crls   map[string]*CRL
+	opts   Options
+	cancel context.CancelFunc
 }
 
-func NewFileWatcherCRLProvider(o Options) (*FileWatcherCRLProvider, error) {
+func MakeFileWatcherCRLProvider(o Options) (*FileWatcherCRLProvider, error) {
 	if err := o.validate(); err != nil {
 		return nil, err
 	}
-	return &FileWatcherCRLProvider{
+	ctx, cancel := context.WithCancel(context.Background())
+	provider := &FileWatcherCRLProvider{
 		crls: make(map[string]*CRL),
 		opts: o,
-		done: make(chan bool),
-	}, nil
+	}
+	provider.cancel = cancel
+	go provider.run(ctx)
+	return provider, nil
 }
 
-func (o Options) validate() error {
+func (o *Options) validate() error {
 	// Checks relates to CRLDirectory.
 	if o.CRLDirectory == "" {
 		return fmt.Errorf("advancedtls: CRLDirectory needs to be specified")
@@ -105,32 +109,32 @@ func (o Options) validate() error {
 	}
 	// Checks related to RefreshDuration.
 	if o.RefreshDuration <= 0 || o.RefreshDuration < time.Second {
+		o.RefreshDuration = defaultCRLRefreshDuration
 		grpclogLogger.Warningf("RefreshDuration must larger then 1 second: provided value %v, default value will be used %v", o.RefreshDuration, defaultCRLRefreshDuration)
 	}
 	return nil
 }
 
 // Start starts watching the directory for CRL files and updates the provider accordingly.
-func (p *FileWatcherCRLProvider) Start() {
+func (p *FileWatcherCRLProvider) run(ctx context.Context) {
 	ticker := time.NewTicker(p.opts.RefreshDuration)
 	defer ticker.Stop()
-
-	// Initial CRL load
 	p.scanCRLDirectory()
 
 	for {
 		select {
+		case <-ctx.Done():
+			ticker.Stop()
+			return
 		case <-ticker.C:
 			p.scanCRLDirectory()
-		case <-p.done:
-			return
 		}
 	}
 }
 
 // Stop stops the CRL provider and releases resources.
-func (p *FileWatcherCRLProvider) Stop() {
-	close(p.done)
+func (p *FileWatcherCRLProvider) Close() {
+	p.cancel()
 }
 
 func (p *FileWatcherCRLProvider) scanCRLDirectory() {
@@ -157,7 +161,7 @@ func (p *FileWatcherCRLProvider) scanCRLDirectory() {
 		}
 		successCounter++
 	}
-	grpclogLogger.Infof("Scan of CRLDirectory %v completed, tried %v files, added %v CRLs, %v files failed", len(files), successCounter, failCounter)
+	grpclogLogger.Infof("Scan of CRLDirectory %v completed, %v files tried, %v CRLs added, %v files failed", len(files), successCounter, failCounter)
 }
 
 func (p *FileWatcherCRLProvider) addCRL(filePath string) error {
@@ -171,7 +175,7 @@ func (p *FileWatcherCRLProvider) addCRL(filePath string) error {
 	}
 	var certList *CRL
 	if certList, err = parseCRLExtensions(crl); err != nil {
-		return fmt.Errorf("addCRL: unsupported crl %v: %v", filePath, err)
+		return fmt.Errorf("addCRL: unsupported CRL %v: %v", filePath, err)
 	}
 	rawCRLIssuer, err := extractCRLIssuer(crlBytes)
 	if err != nil {
@@ -186,7 +190,6 @@ func (p *FileWatcherCRLProvider) addCRL(filePath string) error {
 
 // CRL retrieves the CRL associated with the given certificate's issuer DN.
 func (p *FileWatcherCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
-	// TODO handle no CRL found
 	key := cert.Issuer.ToRDNSequence().String()
 	return p.crls[key], nil
 }
