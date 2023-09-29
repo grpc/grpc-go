@@ -21,12 +21,12 @@ package status_test
 import (
 	"context"
 	"errors"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
@@ -188,7 +188,7 @@ func (s) TestStatusDetails(t *testing.T) {
 					trailerGot := metadata.MD{}
 					_, errGot := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.Trailer(&trailerGot))
 					gsdb := trailerGot["grpc-status-details-bin"]
-					if !reflect.DeepEqual(gsdb, tc.trailerWant) {
+					if !cmp.Equal(gsdb, tc.trailerWant) {
 						t.Errorf("Trailer got: %v; want: %v", gsdb, tc.trailerWant)
 					}
 					if tc.errWant != nil && !testutils.StatusErrEqual(errGot, tc.errWant) {

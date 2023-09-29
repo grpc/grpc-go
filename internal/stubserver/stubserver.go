@@ -141,7 +141,7 @@ func (ss *StubServer) setupServer(sopts ...grpc.ServerOption) (net.Listener, err
 	}
 
 	testgrpc.RegisterTestServiceServer(ss.S, ss)
-	ss.cleanups = append(ss.cleanups, ss.S.Stop, func() { lis.Close() })
+	ss.cleanups = append(ss.cleanups, ss.S.Stop)
 	return lis, nil
 }
 
