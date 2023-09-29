@@ -513,7 +513,7 @@ func (s) TestIPResolver(t *testing.T) {
 			defer cancel()
 			verifyUpdateFromResolver(ctx, t, tcc, test.wantAddr, nil, "")
 
-			// Attemp to re-resolve should not result in a state update.
+			// Attempt to re-resolve should not result in a state update.
 			r.ResolveNow(resolver.ResolveNowOptions{})
 			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 			defer sCancel()
