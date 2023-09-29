@@ -113,24 +113,6 @@ func (s) TestStatusDetails(t *testing.T) {
 		},
 	}} {
 		t.Run(serverType.name, func(t *testing.T) {
-			// Start a simple server that returns the trailer and error it receives from
-			// channels.
-			trailerCh := make(chan metadata.MD, 1)
-			errCh := make(chan error, 1)
-			ss := &stubserver.StubServer{
-				UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-					grpc.SetTrailer(ctx, <-trailerCh)
-					return nil, <-errCh
-				},
-			}
-			if err := serverType.startServerFunc(ss); err != nil {
-				t.Fatalf("Error starting endpoint server: %v", err)
-			}
-			if err := ss.StartClient(); err != nil {
-				t.Fatalf("Error starting endpoint client: %v", err)
-			}
-			defer ss.Stop()
-
 			// Convenience function for making a status including details.
 			detailErr := func(c codes.Code, m string) error {
 				s, err := status.New(c, m).WithDetails(&testpb.SimpleRequest{
@@ -187,8 +169,22 @@ func (s) TestStatusDetails(t *testing.T) {
 
 			for _, tc := range testCases {
 				t.Run(tc.name, func(t *testing.T) {
-					trailerCh <- tc.trailerSent
-					errCh <- tc.errSent
+					// Start a simple server that returns the trailer and error it receives from
+					// channels.
+					ss := &stubserver.StubServer{
+						UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+							grpc.SetTrailer(ctx, tc.trailerSent)
+							return nil, tc.errSent
+						},
+					}
+					if err := serverType.startServerFunc(ss); err != nil {
+						t.Fatalf("Error starting endpoint server: %v", err)
+					}
+					if err := ss.StartClient(); err != nil {
+						t.Fatalf("Error starting endpoint client: %v", err)
+					}
+					defer ss.Stop()
+
 					trailerGot := metadata.MD{}
 					_, errGot := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.Trailer(&trailerGot))
 					gsdb := trailerGot["grpc-status-details-bin"]
@@ -228,7 +224,6 @@ func (s) TestStatusCodeCollapse(t *testing.T) {
 		},
 	}} {
 		t.Run(serverType.name, func(t *testing.T) {
-			errWant := status.Errorf(codes.Unknown, "test msg")
 			ss := &stubserver.StubServer{
 				UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 					return nil, status.Errorf(codes.Code(23), "test msg")
@@ -242,6 +237,7 @@ func (s) TestStatusCodeCollapse(t *testing.T) {
 			}
 			defer ss.Stop()
 
+			errWant := status.Errorf(codes.Unknown, "test msg")
 			if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); !testutils.StatusErrEqual(err, errWant) {
 				t.Errorf("Err got: %v; want: %v", err, errWant)
 			}
