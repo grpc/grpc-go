@@ -58,8 +58,9 @@ func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
 }
 
 type Options struct {
-	CRLDirectory    string
-	RefreshDuration time.Duration
+	CRLDirectory               string
+	RefreshDuration            time.Duration
+	cRLReloadingFailedCallback func(err error)
 }
 
 // NewFileWatcherCRLProvider creates a new FileWatcherCRLProvider.
@@ -141,12 +142,18 @@ func (p *FileWatcherCRLProvider) scanCRLDirectory() {
 	dir, err := os.Open(p.opts.CRLDirectory)
 	if err != nil {
 		grpclogLogger.Errorf("Can't open CRLDirectory %v", p.opts.CRLDirectory, err)
+		if p.opts.cRLReloadingFailedCallback != nil {
+			p.opts.cRLReloadingFailedCallback(err)
+		}
 	}
 	defer dir.Close()
 
 	files, err := dir.ReadDir(0)
 	if err != nil {
 		grpclogLogger.Errorf("Can't access files under CRLDirectory %v", p.opts.CRLDirectory, err)
+		if p.opts.cRLReloadingFailedCallback != nil {
+			p.opts.cRLReloadingFailedCallback(err)
+		}
 	}
 
 	successCounter := 0
@@ -157,6 +164,9 @@ func (p *FileWatcherCRLProvider) scanCRLDirectory() {
 		if err != nil {
 			failCounter++
 			grpclogLogger.Warningf("Can't add CRL from file %v under CRLDirectory %v", filePath, p.opts.CRLDirectory, err)
+			if p.opts.cRLReloadingFailedCallback != nil {
+				p.opts.cRLReloadingFailedCallback(err)
+			}
 			continue
 		}
 		successCounter++
