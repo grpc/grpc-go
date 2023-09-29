@@ -28,7 +28,7 @@ import (
 )
 
 func (s) TestIgnoreResolveNowClientConn(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	ignoreCC := newIgnoreResolveNowClientConn(cc, false)
 
 	// Call ResolveNow() on the CC, it should be forwarded.

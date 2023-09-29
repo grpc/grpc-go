@@ -92,7 +92,7 @@ func (s) TestDropByCategory(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
@@ -251,7 +251,7 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
@@ -363,7 +363,7 @@ func (s) TestPickerUpdateAfterClose(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 
 	// Create a stub balancer which waits for the cluster_impl policy to be
@@ -436,7 +436,7 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
@@ -511,7 +511,7 @@ func (s) TestReResolution(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
@@ -578,7 +578,7 @@ func (s) TestLoadReporting(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
@@ -692,7 +692,7 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
