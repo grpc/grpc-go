@@ -134,11 +134,11 @@ func (s) TestChannelIdleness_Disabled_NoActivity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grpc.Dial() failed: %v", err)
 	}
-	t.Cleanup(func() { cc.Close() })
+	defer cc.Close()
 
 	// Start a test backend and push an address update via the resolver.
 	backend := stubserver.StartTestService(t, nil)
-	t.Cleanup(backend.Stop)
+	defer backend.Stop()
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
 	// Verify that the ClientConn moves to READY.
@@ -180,12 +180,12 @@ func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grpc.Dial() failed: %v", err)
 	}
-	t.Cleanup(func() { cc.Close() })
+	defer cc.Close()
 
 	// Start a test backend and push an address update via the resolver.
 	lis := testutils.NewListenerWrapper(t, nil)
 	backend := stubserver.StartTestService(t, &stubserver.StubServer{Listener: lis})
-	t.Cleanup(backend.Stop)
+	defer backend.Stop()
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
 	// Verify that the ClientConn moves to READY.
@@ -268,7 +268,7 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 			if err != nil {
 				t.Fatalf("grpc.Dial() failed: %v", err)
 			}
-			t.Cleanup(func() { cc.Close() })
+			defer cc.Close()
 
 			// Start a test backend that keeps the RPC call active by blocking
 			// on a channel that is closed by the test later on.
@@ -286,7 +286,7 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 			if err := backend.StartServer(); err != nil {
 				t.Fatalf("Failed to start backend: %v", err)
 			}
-			t.Cleanup(backend.Stop)
+			defer backend.Stop()
 
 			// Push an address update containing the address of the above
 			// backend via the manual resolver.
@@ -357,11 +357,11 @@ func (s) TestChannelIdleness_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grpc.Dial() failed: %v", err)
 	}
-	t.Cleanup(func() { cc.Close() })
+	defer cc.Close()
 
 	// Start a test backend and push an address update via the resolver.
 	backend := stubserver.StartTestService(t, nil)
-	t.Cleanup(backend.Stop)
+	defer backend.Stop()
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
 	// Verify that the ClientConn moves to READY.
@@ -412,7 +412,7 @@ func (s) TestChannelIdleness_Enabled_ExitIdleOnRPC(t *testing.T) {
 	// restarted when exiting idle, it will push the same address to grpc again.
 	r := manual.NewBuilderWithScheme("whatever")
 	backend := stubserver.StartTestService(t, nil)
-	t.Cleanup(backend.Stop)
+	defer backend.Stop()
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
 	// Create a ClientConn with a short idle_timeout.
@@ -426,7 +426,7 @@ func (s) TestChannelIdleness_Enabled_ExitIdleOnRPC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grpc.Dial() failed: %v", err)
 	}
-	t.Cleanup(func() { cc.Close() })
+	defer cc.Close()
 
 	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -477,7 +477,7 @@ func (s) TestChannelIdleness_Enabled_IdleTimeoutRacesWithRPCs(t *testing.T) {
 	// restarted when exiting idle, it will push the same address to grpc again.
 	r := manual.NewBuilderWithScheme("whatever")
 	backend := stubserver.StartTestService(t, nil)
-	t.Cleanup(backend.Stop)
+	defer backend.Stop()
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
 	// Create a ClientConn with a short idle_timeout.
@@ -491,7 +491,7 @@ func (s) TestChannelIdleness_Enabled_IdleTimeoutRacesWithRPCs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grpc.Dial() failed: %v", err)
 	}
-	t.Cleanup(func() { cc.Close() })
+	defer cc.Close()
 
 	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -520,7 +520,7 @@ func (s) TestChannelIdleness_Connect(t *testing.T) {
 	// restarted when exiting idle, it will push the same address to grpc again.
 	r := manual.NewBuilderWithScheme("whatever")
 	backend := stubserver.StartTestService(t, nil)
-	t.Cleanup(backend.Stop)
+	defer backend.Stop()
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
 	// Create a ClientConn with a short idle_timeout.
@@ -534,7 +534,7 @@ func (s) TestChannelIdleness_Connect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grpc.Dial() failed: %v", err)
 	}
-	t.Cleanup(func() { cc.Close() })
+	defer cc.Close()
 
 	// Verify that the ClientConn moves to IDLE.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -569,7 +569,7 @@ func (s) TestChannelIdleness_RaceBetweenEnterAndExitIdleMode(t *testing.T) {
 	// restarted when exiting idle, it will push the same address to grpc again.
 	r := manual.NewBuilderWithScheme("whatever")
 	backend := stubserver.StartTestService(t, nil)
-	t.Cleanup(backend.Stop)
+	defer backend.Stop()
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
 	// Create a ClientConn with a long idle_timeout. We will explicitly trigger
@@ -584,7 +584,7 @@ func (s) TestChannelIdleness_RaceBetweenEnterAndExitIdleMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grpc.Dial() failed: %v", err)
 	}
-	t.Cleanup(func() { cc.Close() })
+	defer cc.Close()
 
 	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn) error)
 	enterIdleFunc := func() {
