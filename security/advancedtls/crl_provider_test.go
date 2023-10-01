@@ -107,9 +107,9 @@ func TestFileWatcherCRLProviderConfig(t *testing.T) {
 
 func TestFileWatcherCRLProvider(t *testing.T) {
 	// testdata.Path("crl") contains 5 non-crl files.
-	failedCRlsCounter := 0
+	nonCRLFilesSet := make(map[string]struct{})
 	customCallback := func(err error) {
-		failedCRlsCounter++
+		nonCRLFilesSet[err.Error()] = struct{}{}
 	}
 	p, err := MakeFileWatcherCRLProvider(Options{
 		CRLDirectory:               testdata.Path("crl"),
@@ -157,8 +157,8 @@ func TestFileWatcherCRLProvider(t *testing.T) {
 			}
 		})
 	}
-	if failedCRlsCounter < nonCRLFilesUnderCRLDirectory {
-		t.Fatalf("Number of callback execution is smaller then number of non-CRL files: got %v, want at least %v", failedCRlsCounter, nonCRLFilesUnderCRLDirectory)
+	if len(nonCRLFilesSet) < nonCRLFilesUnderCRLDirectory {
+		t.Fatalf("Number of callback executions: got %v, want %v", len(nonCRLFilesSet), nonCRLFilesUnderCRLDirectory)
 	}
 	p.Close()
 }
