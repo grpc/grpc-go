@@ -28,11 +28,25 @@ import (
 
 const defaultCRLRefreshDuration = 1 * time.Hour
 
+// CRLProvider is the interface to be implemented to enable custom CRL provider
+// behavior.
+//
+// The interface defines how the data is read, but doesn't prescribe a way
+// CRL are loaded and stored. Such implementations can be used in
+// RevocationConfig of advancedtls.ClientOptions and/or
+// advancedtls.ServerOptions .
+//
+// TODO(erm-g): Add link to related gRFC once it's ready.
+// Please refer to https://github.com/grpc/proposal/ for more details.
 type CRLProvider interface {
+	// CRL accepts x509 Cert and returns back related CRL struct. The CRL struct
+	// can be nil, can contain empty or non-empty list of revkoed certificates.
 	// Callers are expected to use the returned value as read-only.
 	CRL(cert *x509.Certificate) (*CRL, error)
 }
 
+// StaticCRLProvider implements CRLProvider interface by accepting CRL structs
+// and storing them in-memory.
 type StaticCRLProvider struct {
 	// TODO CRL is sort of our internal representation - provide an API for
 	// people to read into it, or provide a simpler type in the API then
@@ -40,19 +54,22 @@ type StaticCRLProvider struct {
 	crls map[string]*CRL
 }
 
+// MakeStaticCRLProvider returns a new instance of the StaticCRLProvider.
 func MakeStaticCRLProvider() *StaticCRLProvider {
 	p := StaticCRLProvider{}
 	p.crls = make(map[string]*CRL)
 	return &p
 }
 
+// AddCRL adds/updates provided CRL to in-memory storage.
 func (p *StaticCRLProvider) AddCRL(crl *CRL) {
 	key := crl.CertList.Issuer.ToRDNSequence().String()
 	p.crls[key] = crl
 }
 
+// CRL returns CRL struct if it was previously loaded by calling AddCRL and
+// found in-memory
 func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
-	// TODO handle no CRL found
 	key := cert.Issuer.ToRDNSequence().String()
 	return p.crls[key], nil
 }
