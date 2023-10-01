@@ -176,7 +176,7 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 	if networkType == "tcp" && useProxy {
 		return proxyDial(ctx, address, grpcUA)
 	}
-	return (&net.Dialer{}).DialContext(ctx, networkType, address)
+	return (&net.Dialer{KeepAlive: time.Duration(-1)}).DialContext(ctx, networkType, address)
 }
 
 func isTemporary(err error) bool {
