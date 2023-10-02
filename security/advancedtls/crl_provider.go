@@ -115,9 +115,8 @@ func (o *Options) validate() error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("advancedtls: CRLDirectory %v does not exist", o.CRLDirectory)
-		} else {
-			return err
 		}
+		return err
 	}
 	if !fileInfo.IsDir() {
 		return fmt.Errorf("advancedtls: CRLDirectory %v is not a directory", o.CRLDirectory)
@@ -125,10 +124,9 @@ func (o *Options) validate() error {
 	_, err = os.Open(o.CRLDirectory)
 	if err != nil {
 		if os.IsPermission(err) {
-			return fmt.Errorf("advancedtls: CRLDirectory %v is not readable:", o.CRLDirectory)
-		} else {
-			return err
+			return fmt.Errorf("advancedtls: CRLDirectory %v is not readable", o.CRLDirectory)
 		}
+		return err
 	}
 	// Checks related to RefreshDuration.
 	if o.RefreshDuration <= 0 || o.RefreshDuration < time.Second {

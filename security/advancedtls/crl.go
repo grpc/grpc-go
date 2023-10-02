@@ -99,6 +99,7 @@ type CRL struct {
 	RawIssuer      []byte
 }
 
+// NewCRL constructs new CRL from provided byte array.
 func NewCRL(b []byte) (*CRL, error) {
 	crl, err := parseRevocationList(b)
 	if err != nil {
@@ -115,6 +116,8 @@ func NewCRL(b []byte) (*CRL, error) {
 	return crlExt, nil
 }
 
+// ReadCRLFile reads a file from the provided path, and returns constructed
+// from it.
 func ReadCRLFile(path string) (*CRL, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -299,9 +302,8 @@ func fetchCRL(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revocat
 			return nil, fmt.Errorf("no CRL found for certificate's issuer")
 		}
 		return crl, nil
-	} else {
-		return fetchIssuerCRL(c.RawIssuer, crlVerifyCrt, cfg)
 	}
+	return fetchIssuerCRL(c.RawIssuer, crlVerifyCrt, cfg)
 }
 
 // checkCert checks a single certificate against the CRL defined in the certificate.
