@@ -67,26 +67,31 @@ func (p *StaticCRLProvider) AddCRL(crl *CRL) {
 	p.crls[key] = crl
 }
 
-// CRL returns CRL struct if it was previously loaded by calling AddCRL and
-// found in-memory
+// CRL returns CRL struct if it was previously loaded by calling AddCRL.
 func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
 	key := cert.Issuer.ToRDNSequence().String()
 	return p.crls[key], nil
 }
 
+// Options represents a data structure holding a
+// configuration for FileWatcherCRLProvider.
 type Options struct {
-	CRLDirectory               string
-	RefreshDuration            time.Duration
-	cRLReloadingFailedCallback func(err error)
+	CRLDirectory               string          // Path of the directory containing CRL files
+	RefreshDuration            time.Duration   // Time interval between CRLDirectory scans
+	cRLReloadingFailedCallback func(err error) // Custom callback executed when a CRL file can’t be processed
 }
 
-// NewFileWatcherCRLProvider creates a new FileWatcherCRLProvider.
+// FileWatcherCRLProvider implements the CRLProvider interface by periodically scanning
+// CRLDirectory (see Options) and storing CRL structs in-memory
 type FileWatcherCRLProvider struct {
 	crls   map[string]*CRL
 	opts   Options
 	cancel context.CancelFunc
 }
 
+// MakeFileWatcherCRLProvider returns a new instance of the
+// FileWatcherCRLProvider. It uses Options to validate and apply configuration
+// required for creating a new instance.
 func MakeFileWatcherCRLProvider(o Options) (*FileWatcherCRLProvider, error) {
 	if err := o.validate(); err != nil {
 		return nil, err
@@ -137,7 +142,7 @@ func (o *Options) validate() error {
 func (p *FileWatcherCRLProvider) run(ctx context.Context) {
 	ticker := time.NewTicker(p.opts.RefreshDuration)
 	defer ticker.Stop()
-	p.scanCRLDirectory()
+	p.ScanCRLDirectory()
 
 	for {
 		select {
@@ -145,17 +150,20 @@ func (p *FileWatcherCRLProvider) run(ctx context.Context) {
 			ticker.Stop()
 			return
 		case <-ticker.C:
-			p.scanCRLDirectory()
+			p.ScanCRLDirectory()
 		}
 	}
 }
 
-// Stop stops the CRL provider and releases resources.
+// Close stops the background refresh of CRLDirectory of FileWatcherCRLProvider
 func (p *FileWatcherCRLProvider) Close() {
 	p.cancel()
 }
 
-func (p *FileWatcherCRLProvider) scanCRLDirectory() {
+// ScanCRLDirectory starts the process of scanning Options.CRLDirectory and
+// updating in-memory storage of CRL structs.Please note that the same method is
+// called periodically by run goroutine.
+func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 	dir, err := os.Open(p.opts.CRLDirectory)
 	if err != nil {
 		grpclogLogger.Errorf("Can't open CRLDirectory %v", p.opts.CRLDirectory, err)
@@ -215,7 +223,8 @@ func (p *FileWatcherCRLProvider) addCRL(filePath string) error {
 	return nil
 }
 
-// CRL retrieves the CRL associated with the given certificate's issuer DN.
+// CRL retrieves the CRL associated with the given certificate's issuer DN from
+// in-memory if it was previously loaded during CRLDirectory scan.
 func (p *FileWatcherCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
 	key := cert.Issuer.ToRDNSequence().String()
 	return p.crls[key], nil

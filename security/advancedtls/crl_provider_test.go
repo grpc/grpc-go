@@ -119,7 +119,7 @@ func TestFileWatcherCRLProvider(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unexpected error while creating FileWatcherCRLProvider:", err)
 	}
-	p.scanCRLDirectory()
+	p.ScanCRLDirectory()
 	tests := []struct {
 		desc        string
 		certs       []*x509.Certificate
