@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -111,7 +110,8 @@ func RegisterServiceServerOption(f func(*grpc.Server)) grpc.ServerOption {
 	return &registerServiceServerOption{f: f}
 }
 
-func (ss *StubServer) setupServer(sopts ...grpc.ServerOption) (net.Listener, error) {
+// StartServer only starts the server. It does not create a client to it.
+func (ss *StubServer) StartServer(sopts ...grpc.ServerOption) error {
 	if ss.Network == "" {
 		ss.Network = "tcp"
 	}
@@ -127,59 +127,24 @@ func (ss *StubServer) setupServer(sopts ...grpc.ServerOption) (net.Listener, err
 		var err error
 		lis, err = net.Listen(ss.Network, ss.Address)
 		if err != nil {
-			return nil, fmt.Errorf("net.Listen(%q, %q) = %v", ss.Network, ss.Address, err)
+			return fmt.Errorf("net.Listen(%q, %q) = %v", ss.Network, ss.Address, err)
 		}
 	}
 	ss.Address = lis.Addr().String()
+	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
 
-	ss.S = grpc.NewServer(sopts...)
+	s := grpc.NewServer(sopts...)
 	for _, so := range sopts {
 		switch x := so.(type) {
 		case *registerServiceServerOption:
-			x.f(ss.S)
+			x.f(s)
 		}
 	}
 
-	testgrpc.RegisterTestServiceServer(ss.S, ss)
-	ss.cleanups = append(ss.cleanups, ss.S.Stop)
-	return lis, nil
-}
-
-// StartHandlerServer only starts an HTTP server with a gRPC server as the
-// handler. It does not create a client to it.  Cannot be used in a StubServer
-// that also used StartServer.
-func (ss *StubServer) StartHandlerServer(sopts ...grpc.ServerOption) error {
-	lis, err := ss.setupServer(sopts...)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		hs := &http2.Server{}
-		opts := &http2.ServeConnOpts{Handler: ss.S}
-		for {
-			conn, err := lis.Accept()
-			if err != nil {
-				return
-			}
-			hs.ServeConn(conn, opts)
-		}
-	}()
-	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
-
-	return nil
-}
-
-// StartServer only starts the server. It does not create a client to it.
-// Cannot be used in a StubServer that also used StartHandlerServer.
-func (ss *StubServer) StartServer(sopts ...grpc.ServerOption) error {
-	lis, err := ss.setupServer(sopts...)
-	if err != nil {
-		return err
-	}
-
-	go ss.S.Serve(lis)
-
+	testgrpc.RegisterTestServiceServer(s, ss)
+	go s.Serve(lis)
+	ss.cleanups = append(ss.cleanups, s.Stop)
+	ss.S = s
 	return nil
 }
 

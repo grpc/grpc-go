@@ -43,45 +43,9 @@ type Status struct {
 	s *spb.Status
 }
 
-// NewWithProto returns a new status including details from statusProto.  This
-// is meant to be used by the gRPC library only.
-func NewWithProto(code codes.Code, message string, statusProto []string) *Status {
-	if len(statusProto) != 1 {
-		// No grpc-status-details bin header, or multiple; just ignore.
-		return &Status{s: &spb.Status{Code: normalizeCode(code), Message: message}}
-	}
-	st := &spb.Status{}
-	if err := proto.Unmarshal([]byte(statusProto[0]), st); err != nil {
-		// Probably not a google.rpc.Status proto; do not provide details.
-		return &Status{s: &spb.Status{Code: normalizeCode(code), Message: message}}
-	}
-	if st.Code == int32(code) {
-		// The codes match between the grpc-status header and the
-		// grpc-status-details-bin header; use the full details proto.
-		st.Code = normalizeCode(codes.Code(st.Code))
-		return &Status{s: st}
-	}
-	return &Status{
-		s: &spb.Status{
-			Code: int32(codes.Internal),
-			Message: fmt.Sprintf(
-				"grpc-status-details-bin mismatch: grpc-status=%v, grpc-message=%q, grpc-status-details-bin=%+v",
-				code, message, st,
-			),
-		},
-	}
-}
-
-func normalizeCode(c codes.Code) int32 {
-	if c > 16 {
-		return int32(codes.Unknown)
-	}
-	return int32(c)
-}
-
 // New returns a Status representing c and msg.
 func New(c codes.Code, msg string) *Status {
-	return &Status{s: &spb.Status{Code: normalizeCode(c), Message: msg}}
+	return &Status{s: &spb.Status{Code: int32(c), Message: msg}}
 }
 
 // Newf returns New(c, fmt.Sprintf(format, a...)).
