@@ -173,6 +173,7 @@ type serverOptions struct {
 }
 
 var defaultServerOptions = serverOptions{
+	maxConcurrentStreams:  math.MaxUint32,
 	maxReceiveMessageSize: defaultServerMaxReceiveMessageSize,
 	maxSendMessageSize:    defaultServerMaxSendMessageSize,
 	connectionTimeout:     120 * time.Second,
@@ -398,6 +399,9 @@ func MaxSendMsgSize(m int) ServerOption {
 // MaxConcurrentStreams returns a ServerOption that will apply a limit on the number
 // of concurrent streams to each ServerTransport.
 func MaxConcurrentStreams(n uint32) ServerOption {
+	if n == 0 {
+		n = math.MaxUint32
+	}
 	return newFuncServerOption(func(o *serverOptions) {
 		o.maxConcurrentStreams = n
 	})
@@ -2072,42 +2076,33 @@ func validateSendCompressor(name, clientCompressors string) error {
 	return fmt.Errorf("client does not support compressor %q", name)
 }
 
-type handlerQuota interface {
-	// acquire is called synchronously
-	acquire()
-	// release may be called asynchronously
-	release()
-}
-
-type atomicHandlerQuota struct {
+// atomicSemaphore implements a blocking, counting semaphore. acquire should be
+// called synchronously; release may be called asynchronously.
+type atomicSemaphore struct {
 	n    atomic.Int64
 	wait chan struct{}
 }
 
-func (q *atomicHandlerQuota) acquire() {
+func (q *atomicSemaphore) acquire() {
 	if q.n.Add(-1) < 0 {
-		// Block until a release happens.
+		// We ran out of quota.  Block until a release happens.
 		<-q.wait
 	}
 }
 
-func (q *atomicHandlerQuota) release() {
-	if q.n.Add(1) == 0 {
+func (q *atomicSemaphore) release() {
+	// N.B. the "<= 0" check below should allow for this to work with multiple
+	// concurrent calls to acquire, but also note that with synchronous calls to
+	// acquire, as our system does, n will never be less than -1.  There are
+	// fairness issues (queuing) to consider if this was to be generalized.
+	if q.n.Add(1) <= 0 {
 		// An acquire was waiting on us.  Unblock it.
 		q.wait <- struct{}{}
 	}
 }
 
-type noHandlerQuota struct{}
-
-func (noHandlerQuota) acquire() {}
-func (noHandlerQuota) release() {}
-
-func newHandlerQuota(n uint32) handlerQuota {
-	if n == 0 {
-		return noHandlerQuota{}
-	}
-	a := &atomicHandlerQuota{wait: make(chan struct{}, 1)}
+func newHandlerQuota(n uint32) *atomicSemaphore {
+	a := &atomicSemaphore{wait: make(chan struct{}, 1)}
 	a.n.Store(int64(n))
 	return a
 }
