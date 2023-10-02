@@ -29,13 +29,18 @@ import (
 
 const nonCRLFilesUnderCRLDirectory = 5
 
+// TestStaticCRLProvider tests how StaticCRLProvider handles the major four
+// cases for CRL checks. It loads the CRLs under crl directory, constructs
+// unrevoked, revoked leaf, and revoked intermediate chains, as well as a chain
+// without CRL for issuer, and checks that it’s correctly processed.
 func TestStaticCRLProvider(t *testing.T) {
 	p := MakeStaticCRLProvider()
 	for i := 1; i <= 6; i++ {
 		crl := loadCRL(t, testdata.Path(fmt.Sprintf("crl/%d.crl", i)))
 		p.AddCRL(crl)
 	}
-
+	// Each test data entry contains a description of a certificate chain,
+	// certificate chain itself, and if CRL is not expected to be found.
 	tests := []struct {
 		desc        string
 		certs       []*x509.Certificate
@@ -75,6 +80,9 @@ func TestStaticCRLProvider(t *testing.T) {
 	}
 }
 
+// TestFileWatcherCRLProviderConfig checks creation of FileWatcherCRLProvider,
+// and the validation of Options configuration. The configurations include empty
+// one, non existing CRLDirectory, invalid RefreshDuration, and the correct one.
 func TestFileWatcherCRLProviderConfig(t *testing.T) {
 	if _, err := MakeFileWatcherCRLProvider(Options{}); err == nil {
 		t.Fatalf("Empty Options should not be allowed")
@@ -105,6 +113,12 @@ func TestFileWatcherCRLProviderConfig(t *testing.T) {
 	regularProvider.Close()
 }
 
+// TestFileWatcherCRLProvider tests how FileWatcherCRLProvider handles the major
+// four cases for CRL checks. It scans the CRLs under crl directory to populate
+// the in-memory storage. Then we construct unrevoked, revoked leaf, and revoked
+// intermediate chains, as well as a chain without CRL for issuer, and check
+// that it’s correctly processed. Additionally, we also check if number of
+// invocations of custom callback is correct.
 func TestFileWatcherCRLProvider(t *testing.T) {
 	// testdata.Path("crl") contains 5 non-crl files.
 	nonCRLFilesSet := make(map[string]struct{})
@@ -120,6 +134,9 @@ func TestFileWatcherCRLProvider(t *testing.T) {
 		t.Fatal("Unexpected error while creating FileWatcherCRLProvider:", err)
 	}
 	p.ScanCRLDirectory()
+
+	// Each test data entry contains a description of a certificate chain,
+	// certificate chain itself, and if CRL is not expected to be found.
 	tests := []struct {
 		desc        string
 		certs       []*x509.Certificate
