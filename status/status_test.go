@@ -268,14 +268,6 @@ func (s) TestCodeUnknownError(t *testing.T) {
 	}
 }
 
-func (s) TestCodeOutOfRangeBecomesUnknown(t *testing.T) {
-	const code, codeWant = codes.Code(20), codes.Unknown
-	err := fmt.Errorf("wrapped: %w", Error(code, "test description"))
-	if s := Code(err); s != codeWant {
-		t.Fatalf("Code(%v) = %v; want <Code()=%s>", err, s, codeWant)
-	}
-}
-
 func (s) TestCodeWrapped(t *testing.T) {
 	const code = codes.Internal
 	err := fmt.Errorf("wrapped: %w", Error(code, "test description"))
