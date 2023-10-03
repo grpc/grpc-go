@@ -1,5 +1,6 @@
 coverage:
   status:
+  # https://docs.codecov.com/docs/commit-status#
     patch:
       default:
         target: '80'
@@ -8,4 +9,5 @@ coverage:
         target: auto
         threshold: 1
 comment:
-  layout: "header"
+# https://docs.codecov.com/docs/pull-request-comments
+  layout: "header" 

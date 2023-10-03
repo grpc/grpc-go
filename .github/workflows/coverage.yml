@@ -1,0 +1,27 @@
+name: Codecov
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v4
+      with:
+        go-version: 'stable'
+    - name: Run coverage
+      run: |
+        # See. https://cs.opensource.google/go/x/tools/+/refs/tags/v0.13.0:cover/profile.go;l=55-58;drc=81efdbcac4736176ac97c60577b0069f76414c44
+        append_coverage() {
+          [ -f $1 ] || (echo "mode: set" > ${GITHUB_WORKSPACE}/coverage.out)
+          [ -f $1 ] && (sed '1d' $1 >> ${GITHUB_WORKSPACE}/coverage.out)
+        }
+        go test -coverprofile=cov.out -covermode=set google.golang.org/grpc/...
+        append_coverage cov.out
+        for MOD_FILE in $(find . -name 'go.mod' | grep -Ev '^\./go\.mod'); do
+          pushd "$(dirname ${MOD_FILE})"
+          go test -coverprofile=cov.out -covermode=set ./...
+          append_coverage cov.out
+          popd
+        done
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
