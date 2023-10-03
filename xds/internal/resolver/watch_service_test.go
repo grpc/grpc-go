@@ -97,7 +97,7 @@ func (s) TestServiceWatch_ListenerPointsToNewRouteConfiguration(t *testing.T) {
 // Tests the case where the listener resource changes to contain an inline route
 // configuration and changes back to having a route configuration resource name.
 // Verifies that the expected xDS resource names are requested by the resolver
-// and the update pushed to the channel contais the expected service config.
+// and the update pushed to the channel contains the expected service config.
 func (s) TestServiceWatch_ListenerPointsToInlineRouteConfiguration(t *testing.T) {
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -165,8 +165,4 @@ func (s) TestServiceWatch_ListenerPointsToInlineRouteConfiguration(t *testing.T)
 
 	// Verify that appropriate SC is pushed on the channel.
 	verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
-}
-
-func newStringP(s string) *string {
-	return &s
 }
