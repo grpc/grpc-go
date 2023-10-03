@@ -2046,3 +2046,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 func newDurationP(d time.Duration) *time.Duration {
 	return &d
 }
+
+func newStringP(s string) *string {
+	return &s
+}
