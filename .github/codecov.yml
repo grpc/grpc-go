@@ -1,0 +1,11 @@
+coverage:
+  status:
+    patch:
+      default:
+        target: '80'
+    project:
+      default:
+        target: auto
+        threshold: 1
+comment:
+  layout: "header"
