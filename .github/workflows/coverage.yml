@@ -10,9 +10,9 @@ jobs:
         go-version: 'stable'
     - name: Run coverage
       run: |
-        # See. https://cs.opensource.google/go/x/tools/+/refs/tags/v0.13.0:cover/profile.go;l=55-58;drc=81efdbcac4736176ac97c60577b0069f76414c44
+        # See -coverprofile format here. https://cs.opensource.google/go/x/tools/+/refs/tags/v0.13.0:cover/profile.go;l=55-58;drc=81efdbcac4736176ac97c60577b0069f76414c44
+        echo "mode: set" > ${GITHUB_WORKSPACE}/coverage.out
         append_coverage() {
-          [ -f $1 ] || (echo "mode: set" > ${GITHUB_WORKSPACE}/coverage.out)
           [ -f $1 ] && (sed '1d' $1 >> ${GITHUB_WORKSPACE}/coverage.out)
         }
         go test -coverprofile=cov.out -covermode=set google.golang.org/grpc/...
