@@ -397,7 +397,10 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 
 	// Push an update with both addresses and shuffling disabled.  We should
 	// connect to backend 0.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0], addrs[1]}})
+	r.UpdateState(resolver.State{Endpoints: []resolver.Endpoint{
+		{Addresses: []resolver.Address{addrs[0]}},
+		{Addresses: []resolver.Address{addrs[1]}},
+	}})
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +409,10 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 	// but the channel should still be connected to backend 0.
 	shufState := resolver.State{
 		ServiceConfig: parseServiceConfig(t, r, serviceConfig),
-		Addresses:     []resolver.Address{addrs[0], addrs[1]},
+		Endpoints: []resolver.Endpoint{
+			{Addresses: []resolver.Address{addrs[0]}},
+			{Addresses: []resolver.Address{addrs[1]}},
+		},
 	}
 	r.UpdateState(shufState)
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
@@ -422,6 +428,48 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 	// not connected to backend 0, we should connect to backend 1.
 	r.UpdateState(shufState)
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Tests the PF LB policy with the environment variable support of address list
+// shuffling disabled.
+func (s) TestPickFirst_ShuffleAddressListDisabled(t *testing.T) {
+	defer func(old bool) { envconfig.PickFirstLBConfig = old }(envconfig.PickFirstLBConfig)
+	envconfig.PickFirstLBConfig = false
+	const serviceConfig = `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": true }}]}`
+
+	// Install a shuffler that always reverses two entries.
+	origShuf := grpcrand.Shuffle
+	defer func() { grpcrand.Shuffle = origShuf }()
+	grpcrand.Shuffle = func(n int, f func(int, int)) {
+		if n != 2 {
+			t.Errorf("Shuffle called with n=%v; want 2", n)
+			return
+		}
+		f(0, 1) // reverse the two addresses
+	}
+
+	// Set up our backends.
+	cc, r, backends := setupPickFirst(t, 2)
+	addrs := stubBackendsToResolverAddrs(backends)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Send a config with shuffling enabled.  This will reverse the addresses,
+	// so we should connect to backend 1 if shuffling is supported.  However
+	// with it disabled at the start of the test, we will connect to backend 0
+	// instead.
+	shufState := resolver.State{
+		ServiceConfig: parseServiceConfig(t, r, serviceConfig),
+		Endpoints: []resolver.Endpoint{
+			{Addresses: []resolver.Address{addrs[0]}},
+			{Addresses: []resolver.Address{addrs[1]}},
+		},
+	}
+	r.UpdateState(shufState)
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 }
