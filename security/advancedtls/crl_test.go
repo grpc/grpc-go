@@ -509,11 +509,15 @@ func TestRevokedCert(t *testing.T) {
 	revokedLeafChain := makeChain(t, testdata.Path("crl/revokedLeaf.pem"))
 	validChain := makeChain(t, testdata.Path("crl/unrevoked.pem"))
 	cache, err := lru.New(5)
-	cRLProvider := MakeStaticCRLProvider()
+	rawCRLs := make([][]byte, 6)
 	for i := 1; i <= 6; i++ {
-		crl := loadCRL(t, testdata.Path(fmt.Sprintf("crl/%d.crl", i)))
-		cRLProvider.AddCRL(crl)
+		rawCRL, err := os.ReadFile(testdata.Path(fmt.Sprintf("crl/%d.crl", i)))
+		if err != nil {
+			t.Fatalf("readFile(%v) failed err = %v", fmt.Sprintf("crl/%d.crl", i), err)
+		}
+		rawCRLs = append(rawCRLs, rawCRL)
 	}
+	cRLProvider := MakeStaticCRLProvider(rawCRLs)
 	if err != nil {
 		t.Fatalf("lru.New: err = %v", err)
 	}

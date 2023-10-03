@@ -45,8 +45,8 @@ type CRLProvider interface {
 	CRL(cert *x509.Certificate) (*CRL, error)
 }
 
-// StaticCRLProvider implements CRLProvider interface by accepting CRL structs
-// and storing them in-memory.
+// StaticCRLProvider implements CRLProvider interface by accepting raw content
+// of CRL files at creation time and storing parsed CRL structs  in-memory.
 type StaticCRLProvider struct {
 	// TODO CRL is sort of our internal representation - provide an API for
 	// people to read into it, or provide a simpler type in the API then
@@ -54,15 +54,24 @@ type StaticCRLProvider struct {
 	crls map[string]*CRL
 }
 
-// MakeStaticCRLProvider returns a new instance of the StaticCRLProvider.
-func MakeStaticCRLProvider() *StaticCRLProvider {
+// MakeStaticCRLProvider processes raw content of CRL files, adds parsed CRL
+// structs into in-memory, and returns a new instance of the StaticCRLProvider.
+func MakeStaticCRLProvider(rawCRLs [][]byte) *StaticCRLProvider {
 	p := StaticCRLProvider{}
 	p.crls = make(map[string]*CRL)
+	for idx, rawCRL := range rawCRLs {
+		cRL, err := NewCRL(rawCRL)
+		if err != nil {
+			grpclogLogger.Warningf("Can't parse raw CRL number %v from the slice: %v", idx, err)
+			continue
+		}
+		p.addCRL(cRL)
+	}
 	return &p
 }
 
 // AddCRL adds/updates provided CRL to in-memory storage.
-func (p *StaticCRLProvider) AddCRL(crl *CRL) {
+func (p *StaticCRLProvider) addCRL(crl *CRL) {
 	key := crl.CertList.Issuer.ToRDNSequence().String()
 	p.crls[key] = crl
 }

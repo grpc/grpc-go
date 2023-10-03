@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"testing"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -381,15 +382,20 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	}
 
 	makeStaticCRLProvider := func(containsRevoked bool) *RevocationConfig {
-		cRLProvider := MakeStaticCRLProvider()
-		var crl *CRL
-		if containsRevoked {
-			crl = loadCRL(t, testdata.Path("crl/provider/crl_server_revoked.pem"))
-		} else {
-			crl = loadCRL(t, testdata.Path("crl/provider/crl_empty.pem"))
-		}
-		cRLProvider.AddCRL(crl)
 
+		rawCRLs := make([][]byte, 1)
+		var path string
+		if containsRevoked {
+			path = testdata.Path("crl/provider/crl_server_revoked.pem")
+		} else {
+			path = testdata.Path("crl/provider/crl_empty.pem")
+		}
+		rawCRL, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("readFile(%v) failed err = %v", path, err)
+		}
+		rawCRLs = append(rawCRLs, rawCRL)
+		cRLProvider := MakeStaticCRLProvider(rawCRLs)
 		return &RevocationConfig{
 			AllowUndetermined: true,
 			CRLProvider:       cRLProvider,
@@ -619,14 +625,14 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// server custom check fails
 		{
 			desc:                       "Client sets peer cert, reload root function with verifyFuncGood; Server sets bad custom check; mutualTLS",
-			clientCert:                 []tls.Certificate{cs.ClientCert3},
-			clientGetRoot:              getRootCAsForClientCRL,
+			clientCert:                 []tls.Certificate{cs.ClientCert1},
+			clientGetRoot:              getRootCAsForClient,
 			clientVerifyFunc:           clientVerifyFuncGood,
 			clientVType:                CertVerification,
 			clientExpectHandshakeError: true,
 			serverMutualTLS:            true,
-			serverCert:                 []tls.Certificate{cs.ServerCert3},
-			serverGetRoot:              getRootCAsForServerCRL,
+			serverCert:                 []tls.Certificate{cs.ServerCert1},
+			serverGetRoot:              getRootCAsForServer,
 			serverVerifyFunc:           verifyFuncBad,
 			serverVType:                CertVerification,
 			serverExpectError:          true,
@@ -707,7 +713,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		},
 		// Client: set valid credentials with the revocation config
 		// Server: set valid credentials with the revocation config
-		// Expected Behavior: success, because non of the certificate chains sent in the connection are revoked
+		// Expected Behavior: success, because none of the certificate chains sent in the connection are revoked
 		{
 			desc:             "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; mutualTLS",
 			clientCert:       []tls.Certificate{cs.ClientCert1},

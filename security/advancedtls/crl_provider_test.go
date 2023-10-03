@@ -21,6 +21,7 @@ package advancedtls
 import (
 	"crypto/x509"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -34,11 +35,15 @@ const nonCRLFilesUnderCRLDirectory = 5
 // unrevoked, revoked leaf, and revoked intermediate chains, as well as a chain
 // without CRL for issuer, and checks that it’s correctly processed.
 func TestStaticCRLProvider(t *testing.T) {
-	p := MakeStaticCRLProvider()
+	rawCRLs := make([][]byte, 6)
 	for i := 1; i <= 6; i++ {
-		crl := loadCRL(t, testdata.Path(fmt.Sprintf("crl/%d.crl", i)))
-		p.AddCRL(crl)
+		rawCRL, err := os.ReadFile(testdata.Path(fmt.Sprintf("crl/%d.crl", i)))
+		if err != nil {
+			t.Fatalf("readFile(%v) failed err = %v", fmt.Sprintf("crl/%d.crl", i), err)
+		}
+		rawCRLs = append(rawCRLs, rawCRL)
 	}
+	p := MakeStaticCRLProvider(rawCRLs)
 	// Each test data entry contains a description of a certificate chain,
 	// certificate chain itself, and if CRL is not expected to be found.
 	tests := []struct {
