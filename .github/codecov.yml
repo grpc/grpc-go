@@ -1,13 +1,16 @@
 coverage:
   status:
-  # https://docs.codecov.com/docs/commit-status#
     patch:
       default:
-        target: '80'
+        target: "80"
     project:
       default:
         target: auto
         threshold: 1
+ignore:
+  - "test/"
+  - "benchmark/"
+  - "internal/testutils"
+  - ".*.pb.go"
 comment:
-# https://docs.codecov.com/docs/pull-request-comments
-  layout: "header" 
+  layout: "header"
