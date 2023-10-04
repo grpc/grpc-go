@@ -29,58 +29,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
-	"google.golang.org/protobuf/proto"
 )
-
-func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
-	var (
-		oneExactMatch = &xdsresource.VirtualHost{
-			Domains: []string{"foo.bar.com"},
-		}
-		oneSuffixMatch = &xdsresource.VirtualHost{
-			Domains: []string{"*.bar.com"},
-		}
-		onePrefixMatch = &xdsresource.VirtualHost{
-			Domains: []string{"foo.bar.*"},
-		}
-		oneUniversalMatch = &xdsresource.VirtualHost{
-			Domains: []string{"*"},
-		}
-		longExactMatch = &xdsresource.VirtualHost{
-			Domains: []string{"v2.foo.bar.com"},
-		}
-		multipleMatch = &xdsresource.VirtualHost{
-			Domains: []string{"pi.foo.bar.com", "314.*", "*.159"},
-		}
-		vhs = []*xdsresource.VirtualHost{oneExactMatch, oneSuffixMatch, onePrefixMatch, oneUniversalMatch, longExactMatch, multipleMatch}
-	)
-
-	tests := []struct {
-		name   string
-		host   string
-		vHosts []*xdsresource.VirtualHost
-		want   *xdsresource.VirtualHost
-	}{
-		{name: "exact-match", host: "foo.bar.com", vHosts: vhs, want: oneExactMatch},
-		{name: "suffix-match", host: "123.bar.com", vHosts: vhs, want: oneSuffixMatch},
-		{name: "prefix-match", host: "foo.bar.org", vHosts: vhs, want: onePrefixMatch},
-		{name: "universal-match", host: "abc.123", vHosts: vhs, want: oneUniversalMatch},
-		{name: "long-exact-match", host: "v2.foo.bar.com", vHosts: vhs, want: longExactMatch},
-		// Matches suffix "*.bar.com" and exact "pi.foo.bar.com". Takes exact.
-		{name: "multiple-match-exact", host: "pi.foo.bar.com", vHosts: vhs, want: multipleMatch},
-		// Matches suffix "*.159" and prefix "foo.bar.*". Takes suffix.
-		{name: "multiple-match-suffix", host: "foo.bar.159", vHosts: vhs, want: multipleMatch},
-		// Matches suffix "*.bar.com" and prefix "314.*". Takes suffix.
-		{name: "multiple-match-prefix", host: "314.bar.com", vHosts: vhs, want: oneSuffixMatch},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := xdsresource.FindBestMatchingVirtualHost(tt.host, tt.vHosts); !cmp.Equal(got, tt.want, cmp.Comparer(proto.Equal)) {
-				t.Errorf("findBestMatchingxdsclient.VirtualHost() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
 type serviceUpdateErr struct {
 	u   serviceUpdate
