@@ -381,18 +381,12 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		return &GetRootCAsResults{TrustCerts: cs.ServerTrust3}, nil
 	}
 
-	makeStaticCRLProvider := func(containsRevoked bool) *RevocationConfig {
+	makeStaticCRLProvider := func(crlPath string) *RevocationConfig {
 
-		rawCRLs := make([][]byte, 1)
-		var path string
-		if containsRevoked {
-			path = testdata.Path("crl/provider/crl_server_revoked.pem")
-		} else {
-			path = testdata.Path("crl/provider/crl_empty.pem")
-		}
-		rawCRL, err := os.ReadFile(path)
+		rawCRLs := make([][]byte, 0)
+		rawCRL, err := os.ReadFile(crlPath)
 		if err != nil {
-			t.Fatalf("readFile(%v) failed err = %v", path, err)
+			t.Fatalf("readFile(%v) failed err = %v", crlPath, err)
 		}
 		rawCRLs = append(rawCRLs, rawCRL)
 		cRLProvider := MakeStaticCRLProvider(rawCRLs)
@@ -744,7 +738,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientGetRoot:          getRootCAsForClientCRL,
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVType:            CertVerification,
-			clientRevocationConfig: makeStaticCRLProvider(false),
+			clientRevocationConfig: makeStaticCRLProvider(testdata.Path("crl/provider/crl_empty.pem")),
 			serverMutualTLS:        true,
 			serverCert:             []tls.Certificate{cs.ServerCert3},
 			serverGetRoot:          getRootCAsForServerCRL,
@@ -759,7 +753,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientGetRoot:          getRootCAsForClientCRL,
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVType:            CertVerification,
-			clientRevocationConfig: makeStaticCRLProvider(true),
+			clientRevocationConfig: makeStaticCRLProvider(testdata.Path("crl/provider/crl_server_revoked.pem")),
 			serverMutualTLS:        true,
 			serverCert:             []tls.Certificate{cs.ServerCert3},
 			serverGetRoot:          getRootCAsForServerCRL,
