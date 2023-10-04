@@ -23,6 +23,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -78,8 +79,7 @@ func (p *StaticCRLProvider) addCRL(crl *CRL) {
 
 // CRL returns CRL struct if it was previously loaded by calling AddCRL.
 func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
-	key := cert.Issuer.ToRDNSequence().String()
-	return p.crls[key], nil
+	return p.crls[cert.Issuer.ToRDNSequence().String()], nil
 }
 
 // Options represents a data structure holding a
@@ -95,6 +95,7 @@ type Options struct {
 type FileWatcherCRLProvider struct {
 	crls   map[string]*CRL
 	opts   Options
+	mu     sync.Mutex
 	cancel context.CancelFunc
 }
 
@@ -225,6 +226,8 @@ func (p *FileWatcherCRLProvider) addCRL(filePath string) error {
 	}
 	certList.RawIssuer = rawCRLIssuer
 	key := certList.CertList.Issuer.ToRDNSequence().String()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.crls[key] = certList
 	grpclogLogger.Infof("In-memory CRL storage of FileWatcherCRLProvider for key %v updated", key)
 	return nil
@@ -233,6 +236,7 @@ func (p *FileWatcherCRLProvider) addCRL(filePath string) error {
 // CRL retrieves the CRL associated with the given certificate's issuer DN from
 // in-memory if it was previously loaded during CRLDirectory scan.
 func (p *FileWatcherCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
-	key := cert.Issuer.ToRDNSequence().String()
-	return p.crls[key], nil
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.crls[cert.Issuer.ToRDNSequence().String()], nil
 }
