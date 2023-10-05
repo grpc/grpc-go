@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -106,9 +107,9 @@ func enableSRVLookups(t *testing.T) {
 	t.Cleanup(func() { dns.EnableSRVLookups = origEnableSRVLookups })
 }
 
-// Builds a DNS resolver for target, passing it a testutils.ResolverClientConn
-// that allows the test to be notified when updates are pushed by the resolver.
-func buildResolverWithTestClientConn(t *testing.T, target string) (resolver.Resolver, *testutils.ResolverClientConn) {
+// Builds a DNS resolver for target and returns a couple of channels to read the
+// state and error pushed by the resolver respectively.
+func buildResolverWithTestClientConn(t *testing.T, target string) (resolver.Resolver, chan resolver.State, chan error) {
 	t.Helper()
 
 	b := resolver.Get("dns")
@@ -116,28 +117,45 @@ func buildResolverWithTestClientConn(t *testing.T, target string) (resolver.Reso
 		t.Fatalf("Resolver for dns:/// scheme not registered")
 	}
 
-	tcc := testutils.NewResolverClientConn(t)
+	stateCh := make(chan resolver.State, 1)
+	updateStateF := func(s resolver.State) error {
+		select {
+		case stateCh <- s:
+		default:
+		}
+		return nil
+	}
+
+	errCh := make(chan error, 1)
+	reportErrorF := func(err error) {
+		select {
+		case errCh <- err:
+		default:
+		}
+	}
+
+	tcc := testutils.NewResolverClientConn(t, updateStateF, reportErrorF)
 	r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("dns:///%s", target))}, tcc, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("Failed to build DNS resolver for target %q: %v\n", target, err)
 	}
 	t.Cleanup(func() { r.Close() })
 
-	return r, tcc
+	return r, stateCh, errCh
 }
 
 // Waits for a state update from the DNS resolver and verifies the following:
 // - wantAddrs matches the list of addresses in the update
 // - wantBalancerAddrs matches the list of grpclb addresses in the update
 // - wantSC matches the service config in the update
-func verifyUpdateFromResolver(ctx context.Context, t *testing.T, tcc *testutils.ResolverClientConn, wantAddrs, wantBalancerAddrs []resolver.Address, wantSC string) {
+func verifyUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan resolver.State, wantAddrs, wantBalancerAddrs []resolver.Address, wantSC string) {
 	t.Helper()
 
 	var state resolver.State
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for a state update from the resolver")
-	case state = <-tcc.StateCh:
+	case state = <-stateCh:
 	}
 
 	if !cmp.Equal(state.Addresses, wantAddrs, cmpopts.EquateEmpty()) {
@@ -212,11 +230,11 @@ func (s) TestDNSResolver_Basic(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
 			overrideNetResolver(t, &testNetResolver{})
-			_, tcc := buildResolverWithTestClientConn(t, test.target)
+			_, stateCh, _ := buildResolverWithTestClientConn(t, test.target)
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			verifyUpdateFromResolver(ctx, t, tcc, test.wantAddrs, nil, test.wantSC)
+			verifyUpdateFromResolver(ctx, t, stateCh, test.wantAddrs, nil, test.wantSC)
 		})
 	}
 }
@@ -288,11 +306,11 @@ func (s) TestDNSResolver_WithSRV(t *testing.T) {
 			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
 			overrideNetResolver(t, &testNetResolver{})
 			enableSRVLookups(t)
-			_, tcc := buildResolverWithTestClientConn(t, test.target)
+			_, stateCh, _ := buildResolverWithTestClientConn(t, test.target)
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			verifyUpdateFromResolver(ctx, t, tcc, test.wantAddrs, test.wantBalancerAddrs, test.wantSC)
+			verifyUpdateFromResolver(ctx, t, stateCh, test.wantAddrs, test.wantBalancerAddrs, test.wantSC)
 		})
 	}
 }
@@ -334,8 +352,14 @@ func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 
 			// Set the test clientconn to return error back to the resolver when
 			// it pushes an update on the channel.
-			tcc := testutils.NewResolverClientConn(t)
-			tcc.SetUpdateStateError(balancer.ErrBadResolverState)
+			var returnNilErr atomic.Bool
+			updateStateF := func(s resolver.State) error {
+				if returnNilErr.Load() {
+					return nil
+				}
+				return balancer.ErrBadResolverState
+			}
+			tcc := testutils.NewResolverClientConn(t, updateStateF, nil)
 
 			b := resolver.Get("dns")
 			if b == nil {
@@ -367,11 +391,10 @@ func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 			}
 
 			// Update resolver.ClientConn to not return an error anymore.
-			tcc.SetUpdateStateError(nil)
+			returnNilErr.Store(true)
 
-			// Drain the time channel to ensure that we unblock any previously
-			// attempted backoff, while we set the test clientConn to not return
-			// an error anymore.
+			// Unblock the DNS resolver's backoff, if ongoing, while we set the
+			// test clientConn to not return an error anymore.
 			select {
 			case timeChan <- time.Now():
 			default:
@@ -397,14 +420,14 @@ func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 	overrideNetResolver(t, &testNetResolver{})
 
 	const target = "foo.bar.com"
-	r, tcc := buildResolverWithTestClientConn(t, target)
+	r, stateCh, _ := buildResolverWithTestClientConn(t, target)
 
 	// Verify that the first update pushed by the resolver matches expectations.
 	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
 	wantSC := generateSC("foo.bar.com")
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	verifyUpdateFromResolver(ctx, t, tcc, wantAddrs, nil, wantSC)
+	verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
 
 	// Update state in the fake net.Resolver to return only one address and a
 	// new service config.
@@ -433,7 +456,7 @@ func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 	r.ResolveNow(resolver.ResolveNowOptions{})
 	wantAddrs = []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}}
 	wantSC = `{"loadBalancingPolicy": "grpclb"}`
-	verifyUpdateFromResolver(ctx, t, tcc, wantAddrs, nil, wantSC)
+	verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
 
 	// Update state in the fake resolver to return no addresses and the same
 	// service config as before.
@@ -444,7 +467,7 @@ func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 	// Ask the resolver to re-resolve and verify that the new update matches
 	// expectations.
 	r.ResolveNow(resolver.ResolveNowOptions{})
-	verifyUpdateFromResolver(ctx, t, tcc, nil, nil, wantSC)
+	verifyUpdateFromResolver(ctx, t, stateCh, nil, nil, wantSC)
 }
 
 // Tests the case where the given name is an IP address and verifies that the
@@ -507,11 +530,11 @@ func (s) TestIPResolver(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			overrideResolutionRate(t, 0)
 			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
-			r, tcc := buildResolverWithTestClientConn(t, test.target)
+			r, stateCh, _ := buildResolverWithTestClientConn(t, test.target)
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			verifyUpdateFromResolver(ctx, t, tcc, test.wantAddr, nil, "")
+			verifyUpdateFromResolver(ctx, t, stateCh, test.wantAddr, nil, "")
 
 			// Attempt to re-resolve should not result in a state update.
 			r.ResolveNow(resolver.ResolveNowOptions{})
@@ -519,7 +542,7 @@ func (s) TestIPResolver(t *testing.T) {
 			defer sCancel()
 			select {
 			case <-sCtx.Done():
-			case s := <-tcc.StateCh:
+			case s := <-stateCh:
 				t.Fatalf("Unexpected state update from the resolver: %+v", s)
 			}
 		})
@@ -613,7 +636,7 @@ func (s) TestResolverBuild(t *testing.T) {
 				t.Fatalf("Resolver for dns:/// scheme not registered")
 			}
 
-			tcc := testutils.NewResolverClientConn(t)
+			tcc := testutils.NewResolverClientConn(t, nil, nil)
 			r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("dns:///%s", test.target))}, tcc, resolver.BuildOptions{})
 			if err != nil {
 				if test.wantErr == "" {
@@ -665,7 +688,12 @@ func (s) TestDisableServiceConfig(t *testing.T) {
 				t.Fatalf("Resolver for dns:/// scheme not registered")
 			}
 
-			tcc := testutils.NewResolverClientConn(t)
+			stateCh := make(chan resolver.State, 1)
+			updateStateF := func(s resolver.State) error {
+				stateCh <- s
+				return nil
+			}
+			tcc := testutils.NewResolverClientConn(t, updateStateF, nil)
 			r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("dns:///%s", test.target))}, tcc, resolver.BuildOptions{DisableServiceConfig: test.disableServiceConfig})
 			if err != nil {
 				t.Fatalf("Failed to build DNS resolver for target %q: %v\n", test.target, err)
@@ -675,7 +703,7 @@ func (s) TestDisableServiceConfig(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
-			verifyUpdateFromResolver(ctx, t, tcc, wantAddrs, nil, test.wantSC)
+			verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, test.wantSC)
 		})
 	}
 }
@@ -695,7 +723,7 @@ func (s) TestTXTError(t *testing.T) {
 			// There is no entry for "ipv4.single.fake" in the txtLookupTbl
 			// maintained by the fake net.Resolver. So, a TXT lookup for this
 			// name will return an error.
-			_, tcc := buildResolverWithTestClientConn(t, "ipv4.single.fake")
+			_, stateCh, _ := buildResolverWithTestClientConn(t, "ipv4.single.fake")
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
@@ -703,7 +731,7 @@ func (s) TestTXTError(t *testing.T) {
 			select {
 			case <-ctx.Done():
 				t.Fatal("Timeout when waiting for a state update from the resolver")
-			case state = <-tcc.StateCh:
+			case state = <-stateCh:
 			}
 
 			if ignore {
@@ -812,7 +840,7 @@ func (s) TestCustomAuthority(t *testing.T) {
 				t.Fatalf("Resolver for dns:/// scheme not registered")
 			}
 
-			tcc := testutils.NewResolverClientConn(t)
+			tcc := testutils.NewResolverClientConn(t, nil, nil)
 			endpoint := "foo.bar.com"
 			target := resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("dns://%s/%s", test.authority, endpoint))}
 			r, err := b.Build(target, tcc, resolver.BuildOptions{})
@@ -841,7 +869,7 @@ func (s) TestRateLimitedResolve(t *testing.T) {
 	overrideNetResolver(t, tr)
 
 	const target = "foo.bar.com"
-	r, tcc := buildResolverWithTestClientConn(t, target)
+	r, stateCh, _ := buildResolverWithTestClientConn(t, target)
 
 	// Wait for the first resolution request to be done. This happens as part
 	// of the first iteration of the for loop in watcher().
@@ -906,7 +934,7 @@ func (s) TestRateLimitedResolve(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for a state update from the resolver")
-	case state = <-tcc.StateCh:
+	case state = <-stateCh:
 	}
 	if !cmp.Equal(state.Addresses, wantAddrs, cmpopts.EquateEmpty()) {
 		t.Fatalf("Got addresses: %+v, want: %+v", state.Addresses, wantAddrs)
@@ -920,7 +948,7 @@ func (s) TestReportError(t *testing.T) {
 	overrideNetResolver(t, &testNetResolver{})
 
 	const target = "notfoundaddress"
-	_, tcc := buildResolverWithTestClientConn(t, target)
+	_, _, errorCh := buildResolverWithTestClientConn(t, target)
 
 	// Should receive first error.
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -928,7 +956,7 @@ func (s) TestReportError(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for an error from the resolver")
-	case err := <-tcc.ErrorCh:
+	case err := <-errorCh:
 		if !strings.Contains(err.Error(), "hostLookup error") {
 			t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
 		}
@@ -957,7 +985,7 @@ func (s) TestReportError(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			t.Fatal("Timeout when waiting for an error from the resolver")
-		case err := <-tcc.ErrorCh:
+		case err := <-errorCh:
 			if !strings.Contains(err.Error(), "hostLookup error") {
 				t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
 			}

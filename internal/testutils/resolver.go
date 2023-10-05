@@ -19,7 +19,6 @@
 package testutils
 
 import (
-	"sync"
 	"testing"
 
 	"google.golang.org/grpc/internal"
@@ -31,49 +30,45 @@ import (
 // ResolverClientConn is a fake implemetation of the resolver.ClientConn
 // interface to be used in tests.
 type ResolverClientConn struct {
-	// Embedding the interface to avoid implementing deprecated methods.
-	resolver.ClientConn
+	resolver.ClientConn // Embedding the interface to avoid implementing deprecated methods.
+	logger              testingLogger
 
-	logger  testingLogger
-	StateCh chan resolver.State
-	ErrorCh chan error
-
-	mu             sync.Mutex
-	updateStateErr error
+	// Callbacks specified by the test.
+	updateStateF func(resolver.State) error
+	reportErrorF func(err error)
 }
 
 // NewResolverClientConn creates a ResolverClientConn.
-func NewResolverClientConn(t *testing.T) *ResolverClientConn {
+//
+// updateState and reportError, when non-nil, are callbacks that will be invoked
+// by the ResolverClientConn when the resolver pushes an update or reports an
+// error respectively.
+func NewResolverClientConn(t *testing.T, updateState func(resolver.State) error, reportError func(error)) *ResolverClientConn {
 	return &ResolverClientConn{
-		logger: t,
-
-		StateCh: make(chan resolver.State, 10),
-		ErrorCh: make(chan error, 10),
+		logger:       t,
+		updateStateF: updateState,
+		reportErrorF: reportError,
 	}
 }
 
-// UpdateState pushes the update received from the resolver on to StateCh.
+// UpdateState invokes the test specified callback with the update received from
+// the resolver. If the callback returns a non-nil error, the same will be
+// propagated to the resolver.
 func (t *ResolverClientConn) UpdateState(s resolver.State) error {
 	t.logger.Logf("testutils.ResolverClientConn: UpdateState(%s)", pretty.ToJSON(s))
 
-	select {
-	case t.StateCh <- s:
-	default:
+	if t.updateStateF != nil {
+		return t.updateStateF(s)
 	}
-
-	t.mu.Lock()
-	err := t.updateStateErr
-	t.mu.Unlock()
-	return err
+	return nil
 }
 
 // ReportError pushes the error received from the resolver on to ErrorCh.
 func (t *ResolverClientConn) ReportError(err error) {
 	t.logger.Logf("testutils.ResolverClientConn: ReportError(%v)", err)
 
-	select {
-	case t.ErrorCh <- err:
-	default:
+	if t.reportErrorF != nil {
+		t.reportErrorF(err)
 	}
 }
 
@@ -81,12 +76,4 @@ func (t *ResolverClientConn) ReportError(err error) {
 // implementation in the grpc package.
 func (t *ResolverClientConn) ParseServiceConfig(jsonSC string) *serviceconfig.ParseResult {
 	return internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-}
-
-// SetUpdateStateError sets the error to be returned by the ResolverClientConn
-// when UpdateState is called by the Resolver implementation.
-func (t *ResolverClientConn) SetUpdateStateError(err error) {
-	t.mu.Lock()
-	t.updateStateErr = err
-	t.mu.Unlock()
 }
