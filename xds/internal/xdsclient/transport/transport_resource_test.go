@@ -87,7 +87,7 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 		}
 		apiListener = &v3listenerpb.ApiListener{
 			ApiListener: func() *anypb.Any {
-				return testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+				return testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 					RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
 						Rds: &v3httppb.Rds{
 							ConfigSource: &v3corepb.ConfigSource{
@@ -138,30 +138,30 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 			resourceNamesToRequest: []string{resourceName1},
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:   "type.googleapis.com/envoy.config.listener.v3.Listener",
-				Resources: []*anypb.Any{testutils.MarshalAny(resource1)},
+				Resources: []*anypb.Any{testutils.MarshalAny(t, resource1)},
 			},
 			wantURL:       "type.googleapis.com/envoy.config.listener.v3.Listener",
-			wantResources: []*anypb.Any{testutils.MarshalAny(resource1)},
+			wantResources: []*anypb.Any{testutils.MarshalAny(t, resource1)},
 		},
 		{
 			desc:                   "two good resources",
 			resourceNamesToRequest: []string{resourceName1, resourceName2},
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:   "type.googleapis.com/envoy.config.listener.v3.Listener",
-				Resources: []*anypb.Any{testutils.MarshalAny(resource1), testutils.MarshalAny(resource2)},
+				Resources: []*anypb.Any{testutils.MarshalAny(t, resource1), testutils.MarshalAny(t, resource2)},
 			},
 			wantURL:       "type.googleapis.com/envoy.config.listener.v3.Listener",
-			wantResources: []*anypb.Any{testutils.MarshalAny(resource1), testutils.MarshalAny(resource2)},
+			wantResources: []*anypb.Any{testutils.MarshalAny(t, resource1), testutils.MarshalAny(t, resource2)},
 		},
 		{
 			desc:                   "two resources when we requested one",
 			resourceNamesToRequest: []string{resourceName1},
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				TypeUrl:   "type.googleapis.com/envoy.config.listener.v3.Listener",
-				Resources: []*anypb.Any{testutils.MarshalAny(resource1), testutils.MarshalAny(resource2)},
+				Resources: []*anypb.Any{testutils.MarshalAny(t, resource1), testutils.MarshalAny(t, resource2)},
 			},
 			wantURL:       "type.googleapis.com/envoy.config.listener.v3.Listener",
-			wantResources: []*anypb.Any{testutils.MarshalAny(resource1), testutils.MarshalAny(resource2)},
+			wantResources: []*anypb.Any{testutils.MarshalAny(t, resource1), testutils.MarshalAny(t, resource2)},
 		},
 	}
 

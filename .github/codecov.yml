@@ -1,0 +1,16 @@
+coverage:
+  status:
+    patch:
+      default:
+        target: "80"
+    project:
+      default:
+        target: auto
+        threshold: 1
+ignore:
+  - "test/"
+  - "benchmark/"
+  - "internal/testutils"
+  - ".*.pb.go"
+comment:
+  layout: "header"

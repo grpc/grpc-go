@@ -424,7 +424,7 @@ type expectedData struct {
 type gotData struct {
 	ctx    context.Context
 	client bool
-	s      interface{} // This could be RPCStats or ConnStats.
+	s      any // This could be RPCStats or ConnStats.
 }
 
 const (
@@ -827,16 +827,6 @@ func checkServerStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 			t.Errorf(" - %v, %T", i, g.s)
 		}
 		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
-	}
-
-	var rpcctx context.Context
-	for i := 0; i < len(got); i++ {
-		if _, ok := got[i].s.(stats.RPCStats); ok {
-			if rpcctx != nil && got[i].ctx != rpcctx {
-				t.Fatalf("got different contexts with stats %T", got[i].s)
-			}
-			rpcctx = got[i].ctx
-		}
 	}
 
 	for i, f := range checkFuncs {

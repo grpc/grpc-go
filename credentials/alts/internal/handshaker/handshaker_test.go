@@ -31,6 +31,7 @@ import (
 	core "google.golang.org/grpc/credentials/alts/internal"
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 	"google.golang.org/grpc/credentials/alts/internal/testutil"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 )
 
@@ -134,7 +135,7 @@ func (s) TestClientHandshake(t *testing.T) {
 		numberOfHandshakes int
 	}{
 		{0 * time.Millisecond, 1},
-		{100 * time.Millisecond, 10 * maxPendingHandshakes},
+		{100 * time.Millisecond, 10 * int(envconfig.ALTSMaxConcurrentHandshakes)},
 	} {
 		errc := make(chan error)
 		stat.Reset()
@@ -182,8 +183,8 @@ func (s) TestClientHandshake(t *testing.T) {
 		}
 
 		// Ensure that there are no concurrent calls more than the limit.
-		if stat.MaxConcurrentCalls > maxPendingHandshakes {
-			t.Errorf("Observed %d concurrent handshakes; want <= %d", stat.MaxConcurrentCalls, maxPendingHandshakes)
+		if stat.MaxConcurrentCalls > int(envconfig.ALTSMaxConcurrentHandshakes) {
+			t.Errorf("Observed %d concurrent handshakes; want <= %d", stat.MaxConcurrentCalls, envconfig.ALTSMaxConcurrentHandshakes)
 		}
 	}
 }
@@ -194,7 +195,7 @@ func (s) TestServerHandshake(t *testing.T) {
 		numberOfHandshakes int
 	}{
 		{0 * time.Millisecond, 1},
-		{100 * time.Millisecond, 10 * maxPendingHandshakes},
+		{100 * time.Millisecond, 10 * int(envconfig.ALTSMaxConcurrentHandshakes)},
 	} {
 		errc := make(chan error)
 		stat.Reset()
@@ -239,8 +240,8 @@ func (s) TestServerHandshake(t *testing.T) {
 		}
 
 		// Ensure that there are no concurrent calls more than the limit.
-		if stat.MaxConcurrentCalls > maxPendingHandshakes {
-			t.Errorf("Observed %d concurrent handshakes; want <= %d", stat.MaxConcurrentCalls, maxPendingHandshakes)
+		if stat.MaxConcurrentCalls > int(envconfig.ALTSMaxConcurrentHandshakes) {
+			t.Errorf("Observed %d concurrent handshakes; want <= %d", stat.MaxConcurrentCalls, envconfig.ALTSMaxConcurrentHandshakes)
 		}
 	}
 }

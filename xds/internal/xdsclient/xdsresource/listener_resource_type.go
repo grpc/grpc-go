@@ -35,8 +35,7 @@ const (
 
 var (
 	// Compile time interface checks.
-	_ Type         = listenerResourceType{}
-	_ ResourceData = &ListenerResourceData{}
+	_ Type = listenerResourceType{}
 
 	// Singleton instantiation of the resource type implementation.
 	listenerType = listenerResourceType{

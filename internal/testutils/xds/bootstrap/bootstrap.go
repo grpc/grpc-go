@@ -158,8 +158,8 @@ type server struct {
 }
 
 type creds struct {
-	Type   string      `json:"type,omitempty"`
-	Config interface{} `json:"config,omitempty"`
+	Type   string `json:"type,omitempty"`
+	Config any    `json:"config,omitempty"`
 }
 
 type node struct {

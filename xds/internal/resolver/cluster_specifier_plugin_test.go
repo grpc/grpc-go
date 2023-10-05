@@ -96,15 +96,15 @@ func (testClusterSpecifierPlugin) ParseClusterSpecifierConfig(cfg proto.Message)
 	if cfg == nil {
 		return nil, fmt.Errorf("testClusterSpecifierPlugin: nil configuration message provided")
 	}
-	any, ok := cfg.(*anypb.Any)
+	anyp, ok := cfg.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("testClusterSpecifierPlugin: error parsing config %v: got type %T, want *anypb.Any", cfg, cfg)
 	}
 	lbCfg := new(wrapperspb.StringValue)
-	if err := ptypes.UnmarshalAny(any, lbCfg); err != nil {
+	if err := ptypes.UnmarshalAny(anyp, lbCfg); err != nil {
 		return nil, fmt.Errorf("testClusterSpecifierPlugin: error parsing config %v: %v", cfg, err)
 	}
-	return []map[string]interface{}{{"csp_experimental": cspBalancerConfig{ArbitraryField: lbCfg.GetValue()}}}, nil
+	return []map[string]any{{"csp_experimental": cspBalancerConfig{ArbitraryField: lbCfg.GetValue()}}}, nil
 }
 
 // TestResolverClusterSpecifierPlugin tests the case where a route configuration
@@ -153,7 +153,7 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 			ListenerName:                 serviceName,
 			ClusterSpecifierType:         e2e.RouteConfigClusterSpecifierTypeClusterSpecifierPlugin,
 			ClusterSpecifierPluginName:   "cspA",
-			ClusterSpecifierPluginConfig: testutils.MarshalAny(&wrapperspb.StringValue{Value: "anything"}),
+			ClusterSpecifierPluginConfig: testutils.MarshalAny(t, &wrapperspb.StringValue{Value: "anything"}),
 		})},
 		SkipValidation: true,
 	}
@@ -223,7 +223,7 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 			ListenerName:                 serviceName,
 			ClusterSpecifierType:         e2e.RouteConfigClusterSpecifierTypeClusterSpecifierPlugin,
 			ClusterSpecifierPluginName:   "cspA",
-			ClusterSpecifierPluginConfig: testutils.MarshalAny(&wrapperspb.StringValue{Value: "changed"}),
+			ClusterSpecifierPluginConfig: testutils.MarshalAny(t, &wrapperspb.StringValue{Value: "changed"}),
 		})},
 		SkipValidation: true,
 	}
@@ -306,7 +306,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 			ListenerName:                 serviceName,
 			ClusterSpecifierType:         e2e.RouteConfigClusterSpecifierTypeClusterSpecifierPlugin,
 			ClusterSpecifierPluginName:   "cspA",
-			ClusterSpecifierPluginConfig: testutils.MarshalAny(&wrapperspb.StringValue{Value: "anythingA"}),
+			ClusterSpecifierPluginConfig: testutils.MarshalAny(t, &wrapperspb.StringValue{Value: "anythingA"}),
 		})},
 		SkipValidation: true,
 	}
@@ -379,7 +379,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 			ListenerName:                 serviceName,
 			ClusterSpecifierType:         e2e.RouteConfigClusterSpecifierTypeClusterSpecifierPlugin,
 			ClusterSpecifierPluginName:   "cspB",
-			ClusterSpecifierPluginConfig: testutils.MarshalAny(&wrapperspb.StringValue{Value: "anythingB"}),
+			ClusterSpecifierPluginConfig: testutils.MarshalAny(t, &wrapperspb.StringValue{Value: "anythingB"}),
 		})},
 		SkipValidation: true,
 	}

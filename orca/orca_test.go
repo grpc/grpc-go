@@ -20,9 +20,11 @@ package orca_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/orca/internal"
@@ -30,7 +32,17 @@ import (
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 )
 
-func TestToLoadReport(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+const defaultTestTimeout = 5 * time.Second
+
+func (s) TestToLoadReport(t *testing.T) {
 	goodReport := &v3orcapb.OrcaLoadReport{
 		CpuUtilization: 1.0,
 		MemUtilization: 50.0,

@@ -22,20 +22,11 @@ import (
 	"context"
 	"fmt"
 	"testing"
-
-	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
-	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3roundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/round_robin/v3"
-	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
-	"github.com/golang/protobuf/proto"
-	structpb "github.com/golang/protobuf/ptypes/struct"
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	"time"
 
 	"google.golang.org/grpc"
+	_ "google.golang.org/grpc/balancer/leastrequest"       // To register least_request
+	_ "google.golang.org/grpc/balancer/weightedroundrobin" // To register weighted_round_robin
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
@@ -43,18 +34,34 @@ import (
 	"google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/resolver"
+
+	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
+	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3clientsideweightedroundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/client_side_weighted_round_robin/v3"
+	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
+	v3roundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/round_robin/v3"
+	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
+	"github.com/golang/protobuf/proto"
+	structpb "github.com/golang/protobuf/ptypes/struct"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // wrrLocality is a helper that takes a proto message and returns a
 // WrrLocalityProto with the proto message marshaled into a proto.Any as a
 // child.
-func wrrLocality(m proto.Message) *v3wrrlocalitypb.WrrLocality {
+func wrrLocality(t *testing.T, m proto.Message) *v3wrrlocalitypb.WrrLocality {
 	return &v3wrrlocalitypb.WrrLocality{
 		EndpointPickingPolicy: &v3clusterpb.LoadBalancingPolicy{
 			Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 				{
 					TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-						TypedConfig: testutils.MarshalAny(m),
+						TypedConfig: testutils.MarshalAny(t, m),
 					},
 				},
 			},
@@ -65,13 +72,13 @@ func wrrLocality(m proto.Message) *v3wrrlocalitypb.WrrLocality {
 // clusterWithLBConfiguration returns a cluster resource with the proto message
 // passed Marshaled to an any and specified through the load_balancing_policy
 // field.
-func clusterWithLBConfiguration(clusterName, edsServiceName string, secLevel e2e.SecurityLevel, m proto.Message) *v3clusterpb.Cluster {
+func clusterWithLBConfiguration(t *testing.T, clusterName, edsServiceName string, secLevel e2e.SecurityLevel, m proto.Message) *v3clusterpb.Cluster {
 	cluster := e2e.DefaultCluster(clusterName, edsServiceName, secLevel)
 	cluster.LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
 		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 			{
 				TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-					TypedConfig: testutils.MarshalAny(m),
+					TypedConfig: testutils.MarshalAny(t, m),
 				},
 			},
 		},
@@ -90,6 +97,11 @@ func (s) TestWrrLocality(t *testing.T) {
 	envconfig.XDSCustomLBPolicy = true
 	defer func() {
 		envconfig.XDSCustomLBPolicy = oldCustomLBSupport
+	}()
+	oldLeastRequestLBSupport := envconfig.LeastRequestLB
+	envconfig.LeastRequestLB = true
+	defer func() {
+		envconfig.LeastRequestLB = oldLeastRequestLBSupport
 	}()
 
 	backend1 := stubserver.StartTestService(t, nil)
@@ -113,54 +125,29 @@ func (s) TestWrrLocality(t *testing.T) {
 		name string
 		// Configuration will be specified through load_balancing_policy field.
 		wrrLocalityConfiguration *v3wrrlocalitypb.WrrLocality
-		addressDistributionWant  []resolver.Address
+		addressDistributionWant  []struct {
+			addr  string
+			count int
+		}
 	}{
 		{
 			name:                     "rr_child",
-			wrrLocalityConfiguration: wrrLocality(&v3roundrobinpb.RoundRobin{}),
+			wrrLocalityConfiguration: wrrLocality(t, &v3roundrobinpb.RoundRobin{}),
 			// Each addresses expected probability is locality weight of
 			// locality / total locality weights multiplied by 1 / number of
 			// endpoints in each locality (due to round robin across endpoints
 			// in a locality). Thus, address 1 and address 2 have 1/3 * 1/2
 			// probability, and addresses 3 4 5 have 2/3 * 1/3 probability of
 			// being routed to.
-			addressDistributionWant: []resolver.Address{
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend1.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend2.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend4.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
-				{Addr: backend5.Address},
+			addressDistributionWant: []struct {
+				addr  string
+				count int
+			}{
+				{addr: backend1.Address, count: 6},
+				{addr: backend2.Address, count: 6},
+				{addr: backend3.Address, count: 8},
+				{addr: backend4.Address, count: 8},
+				{addr: backend5.Address, count: 8},
 			},
 		},
 		// This configures custom lb as the child of wrr_locality, which points
@@ -170,14 +157,70 @@ func (s) TestWrrLocality(t *testing.T) {
 		// (e.g. Address 1 for locality 1, and Address 3 for locality 2).
 		{
 			name: "custom_lb_child_pick_first",
-			wrrLocalityConfiguration: wrrLocality(&v3xdsxdstypepb.TypedStruct{
+			wrrLocalityConfiguration: wrrLocality(t, &v3xdsxdstypepb.TypedStruct{
 				TypeUrl: "type.googleapis.com/pick_first",
 				Value:   &structpb.Struct{},
 			}),
-			addressDistributionWant: []resolver.Address{
-				{Addr: backend1.Address},
-				{Addr: backend3.Address},
-				{Addr: backend3.Address},
+			addressDistributionWant: []struct {
+				addr  string
+				count int
+			}{
+				{addr: backend1.Address, count: 1},
+				{addr: backend3.Address, count: 2},
+			},
+		},
+		// Sanity check for weighted round robin. Don't need to test super
+		// specific behaviors, as that is covered in unit tests. Set up weighted
+		// round robin as the endpoint picking policy with per RPC load reports
+		// enabled. Due the server not sending trailers with load reports, the
+		// weighted round robin policy should essentially function as round
+		// robin, and thus should have the same distribution as round robin
+		// above.
+		{
+			name: "custom_lb_child_wrr/",
+			wrrLocalityConfiguration: wrrLocality(t, &v3clientsideweightedroundrobinpb.ClientSideWeightedRoundRobin{
+				EnableOobLoadReport: &wrapperspb.BoolValue{
+					Value: false,
+				},
+				// BlackoutPeriod long enough to cause load report weights to
+				// trigger in the scope of test case, but no load reports
+				// configured anyway.
+				BlackoutPeriod:          durationpb.New(10 * time.Second),
+				WeightExpirationPeriod:  durationpb.New(10 * time.Second),
+				WeightUpdatePeriod:      durationpb.New(time.Second),
+				ErrorUtilizationPenalty: &wrapperspb.FloatValue{Value: 1},
+			}),
+			addressDistributionWant: []struct {
+				addr  string
+				count int
+			}{
+				{addr: backend1.Address, count: 6},
+				{addr: backend2.Address, count: 6},
+				{addr: backend3.Address, count: 8},
+				{addr: backend4.Address, count: 8},
+				{addr: backend5.Address, count: 8},
+			},
+		},
+		{
+			name: "custom_lb_least_request",
+			wrrLocalityConfiguration: wrrLocality(t, &v3leastrequestpb.LeastRequest{
+				ChoiceCount: wrapperspb.UInt32(2),
+			}),
+			// The test performs a Unary RPC, and blocks until the RPC returns,
+			// and then makes the next Unary RPC. Thus, over iterations, no RPC
+			// counts are present. This causes least request's randomness of
+			// indexes to sample to converge onto a round robin distribution per
+			// locality. Thus, expect the same distribution as round robin
+			// above.
+			addressDistributionWant: []struct {
+				addr  string
+				count int
+			}{
+				{addr: backend1.Address, count: 6},
+				{addr: backend2.Address, count: 6},
+				{addr: backend3.Address, count: 8},
+				{addr: backend4.Address, count: 8},
+				{addr: backend5.Address, count: 8},
 			},
 		},
 	}
@@ -185,7 +228,6 @@ func (s) TestWrrLocality(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			managementServer, nodeID, _, r, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 			defer cleanup()
-
 			routeConfigName := "route-" + serviceName
 			clusterName := "cluster-" + serviceName
 			endpointsName := "endpoints-" + serviceName
@@ -193,18 +235,18 @@ func (s) TestWrrLocality(t *testing.T) {
 				NodeID:    nodeID,
 				Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)},
 				Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName)},
-				Clusters:  []*v3clusterpb.Cluster{clusterWithLBConfiguration(clusterName, endpointsName, e2e.SecurityLevelNone, test.wrrLocalityConfiguration)},
+				Clusters:  []*v3clusterpb.Cluster{clusterWithLBConfiguration(t, clusterName, endpointsName, e2e.SecurityLevelNone, test.wrrLocalityConfiguration)},
 				Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 					ClusterName: endpointsName,
 					Host:        "localhost",
 					Localities: []e2e.LocalityOptions{
 						{
-							Ports:  []uint32{port1, port2},
-							Weight: 1,
+							Backends: []e2e.BackendOptions{{Port: port1}, {Port: port2}},
+							Weight:   1,
 						},
 						{
-							Ports:  []uint32{port3, port4, port5},
-							Weight: 2,
+							Backends: []e2e.BackendOptions{{Port: port3}, {Port: port4}, {Port: port5}},
+							Weight:   2,
 						},
 					},
 				})},
@@ -223,7 +265,13 @@ func (s) TestWrrLocality(t *testing.T) {
 			defer cc.Close()
 
 			client := testgrpc.NewTestServiceClient(cc)
-			if err := roundrobin.CheckWeightedRoundRobinRPCs(ctx, client, test.addressDistributionWant); err != nil {
+			var addrDistWant []resolver.Address
+			for _, addrAndCount := range test.addressDistributionWant {
+				for i := 0; i < addrAndCount.count; i++ {
+					addrDistWant = append(addrDistWant, resolver.Address{Addr: addrAndCount.addr})
+				}
+			}
+			if err := roundrobin.CheckWeightedRoundRobinRPCs(ctx, client, addrDistWant); err != nil {
 				t.Fatalf("Error in expected round robin: %v", err)
 			}
 		})

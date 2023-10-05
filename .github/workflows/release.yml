@@ -51,7 +51,7 @@ jobs:
         run: |
           PACKAGE_NAME=protoc-gen-go-grpc.${GITHUB_REF#refs/tags/cmd/protoc-gen-go-grpc/}.${{ matrix.goos }}.${{ matrix.goarch }}.tar.gz
           tar -czvf $PACKAGE_NAME -C build .
-          echo ::set-output name=name::${PACKAGE_NAME}
+          echo "name=${PACKAGE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Upload asset
         uses: actions/upload-release-asset@v1

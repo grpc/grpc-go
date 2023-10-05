@@ -116,8 +116,8 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 			Host:        "localhost",
 			Localities: []e2e.LocalityOptions{
 				{
-					Ports:  []uint32{testutils.ParsePort(t, server.Address)},
-					Weight: 1,
+					Backends: []e2e.BackendOptions{{Port: testutils.ParsePort(t, server.Address)}},
+					Weight:   1,
 				},
 			},
 			DropPercents: map[string]int{"test-drop-everything": 100},

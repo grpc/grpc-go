@@ -106,7 +106,14 @@ func (o *orcaLB) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	}
 
 	// Create one SubConn for the address and connect it.
-	sc, err := o.cc.NewSubConn(addrs, balancer.NewSubConnOptions{})
+	var sc balancer.SubConn
+	sc, err := o.cc.NewSubConn(addrs, balancer.NewSubConnOptions{
+		StateListener: func(scs balancer.SubConnState) {
+			if scs.ConnectivityState == connectivity.Ready {
+				o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &picker{sc}})
+			}
+		},
+	})
 	if err != nil {
 		return fmt.Errorf("orcaLB: error creating SubConn: %v", err)
 	}
@@ -123,11 +130,8 @@ func (o *orcaLB) UpdateClientConnState(ccs balancer.ClientConnState) error {
 
 func (o *orcaLB) ResolverError(error) {}
 
-func (o *orcaLB) UpdateSubConnState(sc balancer.SubConn, scs balancer.SubConnState) {
-	if scs.ConnectivityState == connectivity.Ready {
-		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &picker{sc}})
-	}
-}
+// TODO: unused; remove when no longer required.
+func (o *orcaLB) UpdateSubConnState(sc balancer.SubConn, scs balancer.SubConnState) {}
 
 func (o *orcaLB) Close() {}
 

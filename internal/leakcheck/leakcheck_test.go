@@ -30,7 +30,7 @@ type testErrorfer struct {
 	errors     []string
 }
 
-func (e *testErrorfer) Errorf(format string, args ...interface{}) {
+func (e *testErrorfer) Errorf(format string, args ...any) {
 	e.errors = append(e.errors, fmt.Sprintf(format, args...))
 	e.errorCount++
 }

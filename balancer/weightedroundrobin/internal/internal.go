@@ -31,14 +31,14 @@ var AllowAnyWeightUpdatePeriod bool
 // LBConfig allows tests to produce a JSON form of the config from the struct
 // instead of using a string.
 type LBConfig struct {
-	EnableOOBLoadReport     *bool          `json:"enableOobLoadReport,omitempty"`
-	OOBReportingPeriod      *time.Duration `json:"oobReportingPeriod,omitempty"`
-	BlackoutPeriod          *time.Duration `json:"blackoutPeriod,omitempty"`
-	WeightExpirationPeriod  *time.Duration `json:"weightExpirationPeriod,omitempty"`
-	WeightUpdatePeriod      *time.Duration `json:"weightUpdatePeriod,omitempty"`
-	ErrorUtilizationPenalty *float64       `json:"errorUtilizationPenalty,omitempty"`
+	EnableOOBLoadReport     *bool    `json:"enableOobLoadReport,omitempty"`
+	OOBReportingPeriod      *string  `json:"oobReportingPeriod,omitempty"`
+	BlackoutPeriod          *string  `json:"blackoutPeriod,omitempty"`
+	WeightExpirationPeriod  *string  `json:"weightExpirationPeriod,omitempty"`
+	WeightUpdatePeriod      *string  `json:"weightUpdatePeriod,omitempty"`
+	ErrorUtilizationPenalty *float64 `json:"errorUtilizationPenalty,omitempty"`
 }
 
 // TimeNow can be overridden by tests to return a different value for the
-// current time.
+// current iserviceconfig.
 var TimeNow = time.Now

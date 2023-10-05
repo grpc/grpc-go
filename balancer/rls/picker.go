@@ -166,10 +166,10 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 			if err != nil {
 				return res, err
 			}
-			if res.Metatada == nil {
-				res.Metatada = metadata.Pairs(rlsDataHeaderName, dcEntry.headerData)
+			if res.Metadata == nil {
+				res.Metadata = metadata.Pairs(rlsDataHeaderName, dcEntry.headerData)
 			} else {
-				res.Metatada.Append(rlsDataHeaderName, dcEntry.headerData)
+				res.Metadata.Append(rlsDataHeaderName, dcEntry.headerData)
 			}
 			return res, nil
 		}

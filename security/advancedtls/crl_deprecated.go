@@ -50,9 +50,9 @@ var grpclogLogger = grpclog.Component("advancedtls")
 // A fixed size lru cache from golang-lru is recommended.
 type Cache interface {
 	// Add adds a value to the cache.
-	Add(key, value interface{}) bool
+	Add(key, value any) bool
 	// Get looks up a key's value from the cache.
-	Get(key interface{}) (value interface{}, ok bool)
+	Get(key any) (value any, ok bool)
 }
 
 // RevocationConfig contains options for CRL lookup.

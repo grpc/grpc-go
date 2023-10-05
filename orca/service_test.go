@@ -60,9 +60,10 @@ func (t *testServiceImpl) UnaryCall(context.Context, *testpb.SimpleRequest) (*te
 	t.requests++
 	t.mu.Unlock()
 
-	t.smr.SetNamedUtilization(requestsMetricKey, float64(t.requests))
+	t.smr.SetNamedUtilization(requestsMetricKey, float64(t.requests)*0.01)
 	t.smr.SetCPUUtilization(50.0)
-	t.smr.SetMemoryUtilization(99.0)
+	t.smr.SetMemoryUtilization(0.9)
+	t.smr.SetApplicationUtilization(1.2)
 	return &testpb.SimpleResponse{}, nil
 }
 
@@ -70,6 +71,7 @@ func (t *testServiceImpl) EmptyCall(context.Context, *testpb.Empty) (*testpb.Emp
 	t.smr.DeleteNamedUtilization(requestsMetricKey)
 	t.smr.SetCPUUtilization(0)
 	t.smr.SetMemoryUtilization(0)
+	t.smr.DeleteApplicationUtilization()
 	return &testpb.Empty{}, nil
 }
 
@@ -150,9 +152,10 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		}
 
 		wantProto := &v3orcapb.OrcaLoadReport{
-			CpuUtilization: 50.0,
-			MemUtilization: 99.0,
-			Utilization:    map[string]float64{requestsMetricKey: numRequests},
+			CpuUtilization:         50.0,
+			MemUtilization:         0.9,
+			ApplicationUtilization: 1.2,
+			Utilization:            map[string]float64{requestsMetricKey: numRequests * 0.01},
 		}
 		gotProto, err := stream.Recv()
 		if err != nil {

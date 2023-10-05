@@ -366,7 +366,7 @@ func TestCachedCRL(t *testing.T) {
 
 	tests := []struct {
 		desc string
-		val  interface{}
+		val  any
 		ok   bool
 	}{
 		{

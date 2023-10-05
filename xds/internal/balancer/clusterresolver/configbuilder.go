@@ -100,7 +100,7 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 			retAddrs = append(retAddrs, addrs...)
 			var odCfgs map[string]*outlierdetection.LBConfig
 			if envconfig.XDSOutlierDetection {
-				odCfgs = convertClusterImplMapToOutlierDetection(configs, p.mechanism.OutlierDetection)
+				odCfgs = convertClusterImplMapToOutlierDetection(configs, p.mechanism.outlierDetection)
 				for n, c := range odCfgs {
 					retConfig.Children[n] = &priority.Child{
 						Config: &internalserviceconfig.BalancerConfig{Name: outlierdetection.Name, Config: c},
@@ -124,7 +124,7 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 			retAddrs = append(retAddrs, addrs...)
 			var odCfg *outlierdetection.LBConfig
 			if envconfig.XDSOutlierDetection {
-				odCfg = makeClusterImplOutlierDetectionChild(config, p.mechanism.OutlierDetection)
+				odCfg = makeClusterImplOutlierDetectionChild(config, p.mechanism.outlierDetection)
 				retConfig.Children[name] = &priority.Child{
 					Config: &internalserviceconfig.BalancerConfig{Name: outlierdetection.Name, Config: odCfg},
 					// Not ignore re-resolution from DNS children, they will trigger
@@ -190,7 +190,17 @@ func buildClusterImplConfigForEDS(g *nameGenerator, edsResp xdsresource.Endpoint
 		})
 	}
 
-	priorities := groupLocalitiesByPriority(edsResp.Localities)
+	// Localities of length 0 is triggered by an NACK or resource-not-found
+	// error before update, or a empty localities list in a update. In either
+	// case want to create a priority, and send down empty address list, causing
+	// TF for that priority. "If any discovery mechanism instance experiences an
+	// error retrieving data, and it has not previously reported any results, it
+	// should report a result that is a single priority with no endpoints." -
+	// A37
+	priorities := [][]xdsresource.Locality{{}}
+	if len(edsResp.Localities) != 0 {
+		priorities = groupLocalitiesByPriority(edsResp.Localities)
+	}
 	retNames := g.generate(priorities)
 	retConfigs := make(map[string]*clusterimpl.LBConfig, len(retNames))
 	var retAddrs []resolver.Address

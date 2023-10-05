@@ -23,7 +23,6 @@ package outlierdetection
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -41,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcsync"
+	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -81,19 +81,27 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 }
 
 func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	var lbCfg *LBConfig
-	if err := json.Unmarshal(s, &lbCfg); err != nil { // Validates child config if present as well.
+	lbCfg := &LBConfig{
+		// Default top layer values as documented in A50.
+		Interval:           iserviceconfig.Duration(10 * time.Second),
+		BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+		MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+		MaxEjectionPercent: 10,
+	}
+
+	// This unmarshalling handles underlying layers sre and fpe which have their
+	// own defaults for their fields if either sre or fpe are present.
+	if err := json.Unmarshal(s, lbCfg); err != nil { // Validates child config if present as well.
 		return nil, fmt.Errorf("xds: unable to unmarshal LBconfig: %s, error: %v", string(s), err)
 	}
 
 	// Note: in the xds flow, these validations will never fail. The xdsclient
 	// performs the same validations as here on the xds Outlier Detection
-	// resource before parsing into the internal struct which gets marshaled
-	// into JSON before calling this function. A50 defines two separate places
-	// for these validations to take place, the xdsclient and this ParseConfig
-	// method. "When parsing a config from JSON, if any of these requirements is
-	// violated, that should be treated as a parsing error." - A50
-
+	// resource before parsing resource into JSON which this function gets
+	// called with. A50 defines two separate places for these validations to
+	// take place, the xdsclient and this ParseConfig method. "When parsing a
+	// config from JSON, if any of these requirements is violated, that should
+	// be treated as a parsing error." - A50
 	switch {
 	// "The google.protobuf.Duration fields interval, base_ejection_time, and
 	// max_ejection_time must obey the restrictions in the
@@ -122,10 +130,7 @@ func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 		return nil, fmt.Errorf("OutlierDetectionLoadBalancingConfig.FailurePercentageEjection.threshold = %v; must be <= 100", lbCfg.FailurePercentageEjection.Threshold)
 	case lbCfg.FailurePercentageEjection != nil && lbCfg.FailurePercentageEjection.EnforcementPercentage > 100:
 		return nil, fmt.Errorf("OutlierDetectionLoadBalancingConfig.FailurePercentageEjection.enforcement_percentage = %v; must be <= 100", lbCfg.FailurePercentageEjection.EnforcementPercentage)
-	case lbCfg.ChildPolicy == nil:
-		return nil, errors.New("OutlierDetectionLoadBalancingConfig.child_policy must be present")
 	}
-
 	return lbCfg, nil
 }
 
@@ -225,9 +230,9 @@ func (b *outlierDetectionBalancer) onIntervalConfig() {
 		for _, addrInfo := range b.addrs {
 			addrInfo.callCounter.clear()
 		}
-		interval = b.cfg.Interval
+		interval = time.Duration(b.cfg.Interval)
 	} else {
-		interval = b.cfg.Interval - now().Sub(b.timerStartTime)
+		interval = time.Duration(b.cfg.Interval) - now().Sub(b.timerStartTime)
 		if interval < 0 {
 			interval = 0
 		}
@@ -340,7 +345,7 @@ func (b *outlierDetectionBalancer) ResolverError(err error) {
 	b.child.ResolverError(err)
 }
 
-func (b *outlierDetectionBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+func (b *outlierDetectionBalancer) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	scw, ok := b.scWrappers[sc]
@@ -357,6 +362,10 @@ func (b *outlierDetectionBalancer) UpdateSubConnState(sc balancer.SubConn, state
 		scw:   scw,
 		state: state,
 	})
+}
+
+func (b *outlierDetectionBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
 func (b *outlierDetectionBalancer) Close() {
@@ -412,13 +421,15 @@ func (wp *wrappedPicker) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 		// programming.
 		logger.Errorf("Picked SubConn from child picker is not a SubConnWrapper")
 		return balancer.PickResult{
-			SubConn: pr.SubConn,
-			Done:    done,
+			SubConn:  pr.SubConn,
+			Done:     done,
+			Metadata: pr.Metadata,
 		}, nil
 	}
 	return balancer.PickResult{
-		SubConn: scw.SubConn,
-		Done:    done,
+		SubConn:  scw.SubConn,
+		Done:     done,
+		Metadata: pr.Metadata,
 	}, nil
 }
 
@@ -459,6 +470,9 @@ func (b *outlierDetectionBalancer) UpdateState(s balancer.State) {
 }
 
 func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	var sc balancer.SubConn
+	oldListener := opts.StateListener
+	opts.StateListener = func(state balancer.SubConnState) { b.updateSubConnState(sc, state) }
 	sc, err := b.cc.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err
@@ -467,6 +481,7 @@ func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts bal
 		SubConn:    sc,
 		addresses:  addrs,
 		scUpdateCh: b.scUpdateCh,
+		listener:   oldListener,
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -487,14 +502,7 @@ func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts bal
 }
 
 func (b *outlierDetectionBalancer) RemoveSubConn(sc balancer.SubConn) {
-	scw, ok := sc.(*subConnWrapper)
-	if !ok { // Shouldn't happen
-		return
-	}
-	// Remove the wrapped SubConn from the parent Client Conn. We don't remove
-	// from map entry until we get a Shutdown state for the SubConn, as we need
-	// that data to forward that state down.
-	b.cc.RemoveSubConn(scw.SubConn)
+	b.logger.Errorf("RemoveSubConn(%v) called unexpectedly", sc)
 }
 
 // appendIfPresent appends the scw to the address, if the address is present in
@@ -587,14 +595,14 @@ func (b *outlierDetectionBalancer) Target() string {
 	return b.cc.Target()
 }
 
-func max(x, y int64) int64 {
+func max(x, y time.Duration) time.Duration {
 	if x < y {
 		return y
 	}
 	return x
 }
 
-func min(x, y int64) int64 {
+func min(x, y time.Duration) time.Duration {
 	if x < y {
 		return x
 	}
@@ -607,9 +615,11 @@ func (b *outlierDetectionBalancer) handleSubConnUpdate(u *scUpdate) {
 	scw := u.scw
 	scw.latestState = u.state
 	if !scw.ejected {
-		b.childMu.Lock()
-		b.child.UpdateSubConnState(scw, u.state)
-		b.childMu.Unlock()
+		if scw.listener != nil {
+			b.childMu.Lock()
+			scw.listener(u.state)
+			b.childMu.Unlock()
+		}
 	}
 }
 
@@ -626,9 +636,11 @@ func (b *outlierDetectionBalancer) handleEjectedUpdate(u *ejectionUpdate) {
 			ConnectivityState: connectivity.TransientFailure,
 		}
 	}
-	b.childMu.Lock()
-	b.child.UpdateSubConnState(scw, stateToUpdate)
-	b.childMu.Unlock()
+	if scw.listener != nil {
+		b.childMu.Lock()
+		scw.listener(stateToUpdate)
+		b.childMu.Unlock()
+	}
 }
 
 // handleChildStateUpdate forwards the picker update wrapped in a wrapped picker
@@ -752,10 +764,10 @@ func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 			// to uneject the address below.
 			continue
 		}
-		et := b.cfg.BaseEjectionTime.Nanoseconds() * addrInfo.ejectionTimeMultiplier
-		met := max(b.cfg.BaseEjectionTime.Nanoseconds(), b.cfg.MaxEjectionTime.Nanoseconds())
-		curTimeAfterEt := now().After(addrInfo.latestEjectionTimestamp.Add(time.Duration(min(et, met))))
-		if curTimeAfterEt {
+		et := time.Duration(b.cfg.BaseEjectionTime) * time.Duration(addrInfo.ejectionTimeMultiplier)
+		met := max(time.Duration(b.cfg.BaseEjectionTime), time.Duration(b.cfg.MaxEjectionTime))
+		uet := addrInfo.latestEjectionTimestamp.Add(min(et, met))
+		if now().After(uet) {
 			b.unejectAddress(addrInfo)
 		}
 	}
@@ -765,7 +777,7 @@ func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 	if b.intervalTimer != nil {
 		b.intervalTimer.Stop()
 	}
-	b.intervalTimer = afterFunc(b.cfg.Interval, b.intervalTimerAlgorithm)
+	b.intervalTimer = afterFunc(time.Duration(b.cfg.Interval), b.intervalTimerAlgorithm)
 }
 
 // addrsWithAtLeastRequestVolume returns a slice of address information of all

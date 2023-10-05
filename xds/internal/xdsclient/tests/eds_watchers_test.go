@@ -52,6 +52,35 @@ const (
 	edsPort3 = 3
 )
 
+type endpointsUpdateErrTuple struct {
+	update xdsresource.EndpointsUpdate
+	err    error
+}
+
+type endpointsWatcher struct {
+	updateCh *testutils.Channel
+}
+
+func newEndpointsWatcher() *endpointsWatcher {
+	return &endpointsWatcher{updateCh: testutils.NewChannel()}
+}
+
+func (ew *endpointsWatcher) OnUpdate(update *xdsresource.EndpointsResourceData) {
+	ew.updateCh.Send(endpointsUpdateErrTuple{update: update.Resource})
+}
+
+func (ew *endpointsWatcher) OnError(err error) {
+	// When used with a go-control-plane management server that continuously
+	// resends resources which are NACKed by the xDS client, using a `Replace()`
+	// here and in OnResourceDoesNotExist() simplifies tests which will have
+	// access to the most recently received error.
+	ew.updateCh.Replace(endpointsUpdateErrTuple{err: err})
+}
+
+func (ew *endpointsWatcher) OnResourceDoesNotExist() {
+	ew.updateCh.Replace(endpointsUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Endpoints not found in received response")})
+}
+
 // badEndpointsResource returns a endpoints resource for the given
 // edsServiceName which contains an endpoint with a load_balancing weight of
 // `0`. This is expected to be NACK'ed by the xDS client.
@@ -71,19 +100,19 @@ const wantEndpointsNACKErr = "EDS response contains an endpoint with zero weight
 //
 // Returns an error if no update is received before the context deadline expires
 // or the received update does not match the expected one.
-func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate xdsresource.EndpointsUpdateErrTuple) error {
+func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate endpointsUpdateErrTuple) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for a endpoints resource from the management server: %v", err)
 	}
-	got := u.(xdsresource.EndpointsUpdateErrTuple)
-	if wantUpdate.Err != nil {
-		if gotType, wantType := xdsresource.ErrType(got.Err), xdsresource.ErrType(wantUpdate.Err); gotType != wantType {
+	got := u.(endpointsUpdateErrTuple)
+	if wantUpdate.err != nil {
+		if gotType, wantType := xdsresource.ErrType(got.err), xdsresource.ErrType(wantUpdate.err); gotType != wantType {
 			return fmt.Errorf("received update with error type %v, want %v", gotType, wantType)
 		}
 	}
 	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.EndpointsUpdate{}, "Raw")}
-	if diff := cmp.Diff(wantUpdate.Update, got.Update, cmpOpts...); diff != "" {
+	if diff := cmp.Diff(wantUpdate.update, got.update, cmpOpts...); diff != "" {
 		return fmt.Errorf("received unepected diff in the endpoints resource update: (-want, got):\n%s", diff)
 	}
 	return nil
@@ -121,7 +150,7 @@ func (s) TestEDSWatch(t *testing.T) {
 		watchedResource        *v3endpointpb.ClusterLoadAssignment // The resource being watched.
 		updatedWatchedResource *v3endpointpb.ClusterLoadAssignment // The watched resource after an update.
 		notWatchedResource     *v3endpointpb.ClusterLoadAssignment // A resource which is not being watched.
-		wantUpdate             xdsresource.EndpointsUpdateErrTuple
+		wantUpdate             endpointsUpdateErrTuple
 	}{
 		{
 			desc:                   "old style resource",
@@ -129,8 +158,8 @@ func (s) TestEDSWatch(t *testing.T) {
 			watchedResource:        e2e.DefaultEndpoint(edsName, edsHost1, []uint32{edsPort1}),
 			updatedWatchedResource: e2e.DefaultEndpoint(edsName, edsHost2, []uint32{edsPort2}),
 			notWatchedResource:     e2e.DefaultEndpoint("unsubscribed-eds-resource", edsHost3, []uint32{edsPort3}),
-			wantUpdate: xdsresource.EndpointsUpdateErrTuple{
-				Update: xdsresource.EndpointsUpdate{
+			wantUpdate: endpointsUpdateErrTuple{
+				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
 							Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
@@ -152,8 +181,8 @@ func (s) TestEDSWatch(t *testing.T) {
 			watchedResource:        e2e.DefaultEndpoint(edsNameNewStyle, edsHost1, []uint32{edsPort1}),
 			updatedWatchedResource: e2e.DefaultEndpoint(edsNameNewStyle, edsHost2, []uint32{edsPort2}),
 			notWatchedResource:     e2e.DefaultEndpoint("unsubscribed-eds-resource", edsHost3, []uint32{edsPort3}),
-			wantUpdate: xdsresource.EndpointsUpdateErrTuple{
-				Update: xdsresource.EndpointsUpdate{
+			wantUpdate: endpointsUpdateErrTuple{
+				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
 							Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
@@ -186,10 +215,8 @@ func (s) TestEDSWatch(t *testing.T) {
 
 			// Register a watch for a endpoint resource and have the watch
 			// callback push the received update on to a channel.
-			updateCh := testutils.NewChannel()
-			edsCancel := client.WatchEndpoints(test.resourceName, func(u xdsresource.EndpointsUpdate, err error) {
-				updateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: u, Err: err})
-			})
+			ew := newEndpointsWatcher()
+			edsCancel := xdsresource.WatchEndpoints(client, test.resourceName, ew)
 
 			// Configure the management server to return a single endpoint
 			// resource, corresponding to the one being watched.
@@ -205,7 +232,7 @@ func (s) TestEDSWatch(t *testing.T) {
 			}
 
 			// Verify the contents of the received update.
-			if err := verifyEndpointsUpdate(ctx, updateCh, test.wantUpdate); err != nil {
+			if err := verifyEndpointsUpdate(ctx, ew.updateCh, test.wantUpdate); err != nil {
 				t.Fatal(err)
 			}
 
@@ -219,7 +246,7 @@ func (s) TestEDSWatch(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyNoEndpointsUpdate(ctx, updateCh); err != nil {
+			if err := verifyNoEndpointsUpdate(ctx, ew.updateCh); err != nil {
 				t.Fatal(err)
 			}
 
@@ -234,7 +261,7 @@ func (s) TestEDSWatch(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyNoEndpointsUpdate(ctx, updateCh); err != nil {
+			if err := verifyNoEndpointsUpdate(ctx, ew.updateCh); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -260,16 +287,16 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 		resourceName           string
 		watchedResource        *v3endpointpb.ClusterLoadAssignment // The resource being watched.
 		updatedWatchedResource *v3endpointpb.ClusterLoadAssignment // The watched resource after an update.
-		wantUpdateV1           xdsresource.EndpointsUpdateErrTuple
-		wantUpdateV2           xdsresource.EndpointsUpdateErrTuple
+		wantUpdateV1           endpointsUpdateErrTuple
+		wantUpdateV2           endpointsUpdateErrTuple
 	}{
 		{
 			desc:                   "old style resource",
 			resourceName:           edsName,
 			watchedResource:        e2e.DefaultEndpoint(edsName, edsHost1, []uint32{edsPort1}),
 			updatedWatchedResource: e2e.DefaultEndpoint(edsName, edsHost2, []uint32{edsPort2}),
-			wantUpdateV1: xdsresource.EndpointsUpdateErrTuple{
-				Update: xdsresource.EndpointsUpdate{
+			wantUpdateV1: endpointsUpdateErrTuple{
+				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
 							Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
@@ -284,8 +311,8 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 					},
 				},
 			},
-			wantUpdateV2: xdsresource.EndpointsUpdateErrTuple{
-				Update: xdsresource.EndpointsUpdate{
+			wantUpdateV2: endpointsUpdateErrTuple{
+				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
 							Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost2, edsPort2), Weight: 1}},
@@ -306,8 +333,8 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			resourceName:           edsNameNewStyle,
 			watchedResource:        e2e.DefaultEndpoint(edsNameNewStyle, edsHost1, []uint32{edsPort1}),
 			updatedWatchedResource: e2e.DefaultEndpoint(edsNameNewStyle, edsHost2, []uint32{edsPort2}),
-			wantUpdateV1: xdsresource.EndpointsUpdateErrTuple{
-				Update: xdsresource.EndpointsUpdate{
+			wantUpdateV1: endpointsUpdateErrTuple{
+				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
 							Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
@@ -322,8 +349,8 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 					},
 				},
 			},
-			wantUpdateV2: xdsresource.EndpointsUpdateErrTuple{
-				Update: xdsresource.EndpointsUpdate{
+			wantUpdateV2: endpointsUpdateErrTuple{
+				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
 							Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost2, edsPort2), Weight: 1}},
@@ -356,15 +383,11 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 
 			// Register two watches for the same endpoint resource and have the
 			// callbacks push the received updates on to a channel.
-			updateCh1 := testutils.NewChannel()
-			edsCancel1 := client.WatchEndpoints(test.resourceName, func(u xdsresource.EndpointsUpdate, err error) {
-				updateCh1.Send(xdsresource.EndpointsUpdateErrTuple{Update: u, Err: err})
-			})
+			ew1 := newEndpointsWatcher()
+			edsCancel1 := xdsresource.WatchEndpoints(client, test.resourceName, ew1)
 			defer edsCancel1()
-			updateCh2 := testutils.NewChannel()
-			edsCancel2 := client.WatchEndpoints(test.resourceName, func(u xdsresource.EndpointsUpdate, err error) {
-				updateCh2.Send(xdsresource.EndpointsUpdateErrTuple{Update: u, Err: err})
-			})
+			ew2 := newEndpointsWatcher()
+			edsCancel2 := xdsresource.WatchEndpoints(client, test.resourceName, ew2)
 
 			// Configure the management server to return a single endpoint
 			// resource, corresponding to the one being watched.
@@ -380,10 +403,10 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			}
 
 			// Verify the contents of the received update.
-			if err := verifyEndpointsUpdate(ctx, updateCh1, test.wantUpdateV1); err != nil {
+			if err := verifyEndpointsUpdate(ctx, ew1.updateCh, test.wantUpdateV1); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyEndpointsUpdate(ctx, updateCh2, test.wantUpdateV1); err != nil {
+			if err := verifyEndpointsUpdate(ctx, ew2.updateCh, test.wantUpdateV1); err != nil {
 				t.Fatal(err)
 			}
 
@@ -394,10 +417,10 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyNoEndpointsUpdate(ctx, updateCh1); err != nil {
+			if err := verifyNoEndpointsUpdate(ctx, ew1.updateCh); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyNoEndpointsUpdate(ctx, updateCh2); err != nil {
+			if err := verifyNoEndpointsUpdate(ctx, ew2.updateCh); err != nil {
 				t.Fatal(err)
 			}
 
@@ -411,10 +434,10 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyEndpointsUpdate(ctx, updateCh1, test.wantUpdateV2); err != nil {
+			if err := verifyEndpointsUpdate(ctx, ew1.updateCh, test.wantUpdateV2); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyNoEndpointsUpdate(ctx, updateCh2); err != nil {
+			if err := verifyNoEndpointsUpdate(ctx, ew2.updateCh); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -442,22 +465,16 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 
 	// Register two watches for the same endpoint resource and have the
 	// callbacks push the received updates on to a channel.
-	updateCh1 := testutils.NewChannel()
-	edsCancel1 := client.WatchEndpoints(edsName, func(u xdsresource.EndpointsUpdate, err error) {
-		updateCh1.Send(xdsresource.EndpointsUpdateErrTuple{Update: u, Err: err})
-	})
+	ew1 := newEndpointsWatcher()
+	edsCancel1 := xdsresource.WatchEndpoints(client, edsName, ew1)
 	defer edsCancel1()
-	updateCh2 := testutils.NewChannel()
-	edsCancel2 := client.WatchEndpoints(edsName, func(u xdsresource.EndpointsUpdate, err error) {
-		updateCh2.Send(xdsresource.EndpointsUpdateErrTuple{Update: u, Err: err})
-	})
+	ew2 := newEndpointsWatcher()
+	edsCancel2 := xdsresource.WatchEndpoints(client, edsName, ew2)
 	defer edsCancel2()
 
 	// Register the third watch for a different endpoint resource.
-	updateCh3 := testutils.NewChannel()
-	edsCancel3 := client.WatchEndpoints(edsNameNewStyle, func(u xdsresource.EndpointsUpdate, err error) {
-		updateCh3.Send(xdsresource.EndpointsUpdateErrTuple{Update: u, Err: err})
-	})
+	ew3 := newEndpointsWatcher()
+	edsCancel3 := xdsresource.WatchEndpoints(client, edsNameNewStyle, ew3)
 	defer edsCancel3()
 
 	// Configure the management server to return two endpoint resources,
@@ -479,8 +496,8 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	// Verify the contents of the received update for the all watchers. The two
 	// resources returned differ only in the resource name. Therefore the
 	// expected update is the same for all the watchers.
-	wantUpdate := xdsresource.EndpointsUpdateErrTuple{
-		Update: xdsresource.EndpointsUpdate{
+	wantUpdate := endpointsUpdateErrTuple{
+		update: xdsresource.EndpointsUpdate{
 			Localities: []xdsresource.Locality{
 				{
 					Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
@@ -495,13 +512,13 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 			},
 		},
 	}
-	if err := verifyEndpointsUpdate(ctx, updateCh1, wantUpdate); err != nil {
+	if err := verifyEndpointsUpdate(ctx, ew1.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyEndpointsUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyEndpointsUpdate(ctx, ew2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyEndpointsUpdate(ctx, updateCh3, wantUpdate); err != nil {
+	if err := verifyEndpointsUpdate(ctx, ew3.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -544,10 +561,8 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 
 	// Register a watch for an endpoint resource and have the watch callback
 	// push the received update on to a channel.
-	updateCh1 := testutils.NewChannel()
-	edsCancel1 := client.WatchEndpoints(edsName, func(u xdsresource.EndpointsUpdate, err error) {
-		updateCh1.Send(xdsresource.EndpointsUpdateErrTuple{Update: u, Err: err})
-	})
+	ew1 := newEndpointsWatcher()
+	edsCancel1 := xdsresource.WatchEndpoints(client, edsName, ew1)
 	defer edsCancel1()
 
 	// Configure the management server to return a single endpoint resource,
@@ -564,8 +579,8 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 	}
 
 	// Verify the contents of the received update.
-	wantUpdate := xdsresource.EndpointsUpdateErrTuple{
-		Update: xdsresource.EndpointsUpdate{
+	wantUpdate := endpointsUpdateErrTuple{
+		update: xdsresource.EndpointsUpdate{
 			Localities: []xdsresource.Locality{
 				{
 					Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
@@ -580,7 +595,7 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 			},
 		},
 	}
-	if err := verifyEndpointsUpdate(ctx, updateCh1, wantUpdate); err != nil {
+	if err := verifyEndpointsUpdate(ctx, ew1.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -591,12 +606,10 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 
 	// Register another watch for the same resource. This should get the update
 	// from the cache.
-	updateCh2 := testutils.NewChannel()
-	edsCancel2 := client.WatchEndpoints(edsName, func(u xdsresource.EndpointsUpdate, err error) {
-		updateCh2.Send(xdsresource.EndpointsUpdateErrTuple{Update: u, Err: err})
-	})
+	ew2 := newEndpointsWatcher()
+	edsCancel2 := xdsresource.WatchEndpoints(client, edsName, ew2)
 	defer edsCancel2()
-	if err := verifyEndpointsUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyEndpointsUpdate(ctx, ew2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
@@ -633,10 +646,8 @@ func (s) TestEDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 
 	// Register a watch for a resource which is expected to fail with an error
 	// after the watch expiry timer fires.
-	updateCh := testutils.NewChannel()
-	edsCancel := client.WatchEndpoints(edsName, func(u xdsresource.EndpointsUpdate, err error) {
-		updateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: u, Err: err})
-	})
+	ew := newEndpointsWatcher()
+	edsCancel := xdsresource.WatchEndpoints(client, edsName, ew)
 	defer edsCancel()
 
 	// Wait for the watch expiry timer to fire.
@@ -646,7 +657,7 @@ func (s) TestEDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	wantErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")
-	if err := verifyEndpointsUpdate(ctx, updateCh, xdsresource.EndpointsUpdateErrTuple{Err: wantErr}); err != nil {
+	if err := verifyEndpointsUpdate(ctx, ew.updateCh, endpointsUpdateErrTuple{err: wantErr}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -676,10 +687,8 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 
 	// Register a watch for an endpoint resource and have the watch callback
 	// push the received update on to a channel.
-	updateCh := testutils.NewChannel()
-	edsCancel := client.WatchEndpoints(edsName, func(u xdsresource.EndpointsUpdate, err error) {
-		updateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: u, Err: err})
-	})
+	ew := newEndpointsWatcher()
+	edsCancel := xdsresource.WatchEndpoints(client, edsName, ew)
 	defer edsCancel()
 
 	// Configure the management server to return a single endpoint resource,
@@ -696,8 +705,8 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	}
 
 	// Verify the contents of the received update.
-	wantUpdate := xdsresource.EndpointsUpdateErrTuple{
-		Update: xdsresource.EndpointsUpdate{
+	wantUpdate := endpointsUpdateErrTuple{
+		update: xdsresource.EndpointsUpdate{
 			Localities: []xdsresource.Locality{
 				{
 					Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
@@ -712,14 +721,14 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 			},
 		},
 	}
-	if err := verifyEndpointsUpdate(ctx, updateCh, wantUpdate); err != nil {
+	if err := verifyEndpointsUpdate(ctx, ew.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
 	// Wait for the watch expiry timer to fire, and verify that the callback is
 	// not invoked.
 	<-time.After(defaultTestWatchExpiryTimeout)
-	if err := verifyNoEndpointsUpdate(ctx, updateCh); err != nil {
+	if err := verifyNoEndpointsUpdate(ctx, ew.updateCh); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -741,12 +750,8 @@ func (s) TestEDSWatch_NACKError(t *testing.T) {
 
 	// Register a watch for a route configuration resource and have the watch
 	// callback push the received update on to a channel.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	updateCh := testutils.NewChannel()
-	edsCancel := client.WatchEndpoints(edsName, func(u xdsresource.EndpointsUpdate, err error) {
-		updateCh.SendContext(ctx, xdsresource.EndpointsUpdateErrTuple{Update: u, Err: err})
-	})
+	ew := newEndpointsWatcher()
+	edsCancel := xdsresource.WatchEndpoints(client, edsName, ew)
 	defer edsCancel()
 
 	// Configure the management server to return a single route configuration
@@ -756,16 +761,18 @@ func (s) TestEDSWatch_NACKError(t *testing.T) {
 		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{badEndpointsResource(edsName, edsHost1, []uint32{edsPort1})},
 		SkipValidation: true,
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
 	// Verify that the expected error is propagated to the watcher.
-	u, err := updateCh.Receive(ctx)
+	u, err := ew.updateCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("timeout when waiting for an endpoints resource from the management server: %v", err)
 	}
-	gotErr := u.(xdsresource.EndpointsUpdateErrTuple).Err
+	gotErr := u.(endpointsUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantEndpointsNACKErr) {
 		t.Fatalf("update received with error: %v, want %q", gotErr, wantEndpointsNACKErr)
 	}
@@ -791,19 +798,13 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 	// Register two watches for two endpoint resources. The first watch is
 	// expected to receive an error because the received resource is NACKed.
 	// The second watch is expected to get a good update.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	badResourceName := rdsName
-	updateCh1 := testutils.NewChannel()
-	edsCancel1 := client.WatchEndpoints(badResourceName, func(u xdsresource.EndpointsUpdate, err error) {
-		updateCh1.SendContext(ctx, xdsresource.EndpointsUpdateErrTuple{Update: u, Err: err})
-	})
+	ew1 := newEndpointsWatcher()
+	edsCancel1 := xdsresource.WatchEndpoints(client, badResourceName, ew1)
 	defer edsCancel1()
 	goodResourceName := ldsNameNewStyle
-	updateCh2 := testutils.NewChannel()
-	edsCancel2 := client.WatchEndpoints(goodResourceName, func(u xdsresource.EndpointsUpdate, err error) {
-		updateCh2.SendContext(ctx, xdsresource.EndpointsUpdateErrTuple{Update: u, Err: err})
-	})
+	ew2 := newEndpointsWatcher()
+	edsCancel2 := xdsresource.WatchEndpoints(client, goodResourceName, ew2)
 	defer edsCancel2()
 
 	// Configure the management server to return two endpoints resources,
@@ -816,24 +817,26 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 		},
 		SkipValidation: true,
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
 	// Verify that the expected error is propagated to the watcher which
 	// requested for the bad resource.
-	u, err := updateCh1.Receive(ctx)
+	u, err := ew1.updateCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("timeout when waiting for an endpoints resource from the management server: %v", err)
 	}
-	gotErr := u.(xdsresource.EndpointsUpdateErrTuple).Err
+	gotErr := u.(endpointsUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantEndpointsNACKErr) {
 		t.Fatalf("update received with error: %v, want %q", gotErr, wantEndpointsNACKErr)
 	}
 
 	// Verify that the watcher watching the good resource receives an update.
-	wantUpdate := xdsresource.EndpointsUpdateErrTuple{
-		Update: xdsresource.EndpointsUpdate{
+	wantUpdate := endpointsUpdateErrTuple{
+		update: xdsresource.EndpointsUpdate{
 			Localities: []xdsresource.Locality{
 				{
 					Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
@@ -848,7 +851,7 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 			},
 		},
 	}
-	if err := verifyEndpointsUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyEndpointsUpdate(ctx, ew2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 }

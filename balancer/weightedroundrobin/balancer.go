@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
+	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -42,7 +43,7 @@ import (
 )
 
 // Name is the name of the weighted round robin balancer.
-const Name = "weighted_round_robin_experimental"
+const Name = "weighted_round_robin"
 
 func init() {
 	balancer.Register(bb{})
@@ -66,10 +67,10 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 func (bb) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	lbCfg := &lbConfig{
 		// Default values as documented in A58.
-		OOBReportingPeriod:      10 * time.Second,
-		BlackoutPeriod:          10 * time.Second,
-		WeightExpirationPeriod:  3 * time.Minute,
-		WeightUpdatePeriod:      time.Second,
+		OOBReportingPeriod:      iserviceconfig.Duration(10 * time.Second),
+		BlackoutPeriod:          iserviceconfig.Duration(10 * time.Second),
+		WeightExpirationPeriod:  iserviceconfig.Duration(3 * time.Minute),
+		WeightUpdatePeriod:      iserviceconfig.Duration(time.Second),
 		ErrorUtilizationPenalty: 1,
 	}
 	if err := json.Unmarshal(js, lbCfg); err != nil {
@@ -87,8 +88,8 @@ func (bb) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, er
 	}
 
 	// Impose lower bound of 100ms on weightUpdatePeriod.
-	if !internal.AllowAnyWeightUpdatePeriod && lbCfg.WeightUpdatePeriod < 100*time.Millisecond {
-		lbCfg.WeightUpdatePeriod = 100 * time.Millisecond
+	if !internal.AllowAnyWeightUpdatePeriod && lbCfg.WeightUpdatePeriod < iserviceconfig.Duration(100*time.Millisecond) {
+		lbCfg.WeightUpdatePeriod = iserviceconfig.Duration(100 * time.Millisecond)
 	}
 
 	return lbCfg, nil
@@ -153,7 +154,12 @@ func (b *wrrBalancer) updateAddresses(addrs []resolver.Address) {
 			wsc = wsci.(*weightedSubConn)
 		} else {
 			// addr is a new address (not existing in b.subConns).
-			sc, err := b.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{})
+			var sc balancer.SubConn
+			sc, err := b.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) {
+					b.updateSubConnState(sc, state)
+				},
+			})
 			if err != nil {
 				b.logger.Warningf("Failed to create new SubConn for address %v: %v", addr, err)
 				continue
@@ -186,7 +192,7 @@ func (b *wrrBalancer) updateAddresses(addrs []resolver.Address) {
 		// addr was removed by resolver.  Remove.
 		wsci, _ := b.subConns.Get(addr)
 		wsc := wsci.(*weightedSubConn)
-		b.cc.RemoveSubConn(wsc.SubConn)
+		wsc.SubConn.Shutdown()
 		b.subConns.Delete(addr)
 	}
 }
@@ -204,6 +210,10 @@ func (b *wrrBalancer) ResolverError(err error) {
 }
 
 func (b *wrrBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
+}
+
+func (b *wrrBalancer) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	wsc := b.scMap[sc]
 	if wsc == nil {
 		b.logger.Errorf("UpdateSubConnState called with an unknown SubConn: %p, %v", sc, state)
@@ -337,7 +347,7 @@ func (p *picker) scWeights() []float64 {
 	ws := make([]float64, len(p.subConns))
 	now := internal.TimeNow()
 	for i, wsc := range p.subConns {
-		ws[i] = wsc.weight(now, p.cfg.WeightExpirationPeriod, p.cfg.BlackoutPeriod)
+		ws[i] = wsc.weight(now, time.Duration(p.cfg.WeightExpirationPeriod), time.Duration(p.cfg.BlackoutPeriod))
 	}
 	return ws
 }
@@ -358,7 +368,8 @@ func (p *picker) start(ctx context.Context) {
 		return
 	}
 	go func() {
-		ticker := time.NewTicker(p.cfg.WeightUpdatePeriod)
+		ticker := time.NewTicker(time.Duration(p.cfg.WeightUpdatePeriod))
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
@@ -418,7 +429,11 @@ func (w *weightedSubConn) OnLoadReport(load *v3orcapb.OrcaLoadReport) {
 		w.logger.Infof("Received load report for subchannel %v: %v", w.SubConn, load)
 	}
 	// Update weights of this subchannel according to the reported load
-	if load.CpuUtilization == 0 || load.RpsFractional == 0 {
+	utilization := load.ApplicationUtilization
+	if utilization == 0 {
+		utilization = load.CpuUtilization
+	}
+	if utilization == 0 || load.RpsFractional == 0 {
 		if w.logger.V(2) {
 			w.logger.Infof("Ignoring empty load report for subchannel %v", w.SubConn)
 		}
@@ -429,7 +444,7 @@ func (w *weightedSubConn) OnLoadReport(load *v3orcapb.OrcaLoadReport) {
 	defer w.mu.Unlock()
 
 	errorRate := load.Eps / load.RpsFractional
-	w.weightVal = load.RpsFractional / (load.CpuUtilization + errorRate*w.cfg.ErrorUtilizationPenalty)
+	w.weightVal = load.RpsFractional / (utilization + errorRate*w.cfg.ErrorUtilizationPenalty)
 	if w.logger.V(2) {
 		w.logger.Infof("New weight for subchannel %v: %v", w.SubConn, w.weightVal)
 	}
@@ -469,7 +484,7 @@ func (w *weightedSubConn) updateConfig(cfg *lbConfig) {
 	if w.logger.V(2) {
 		w.logger.Infof("Registering ORCA listener for %v with interval %v", w.SubConn, newPeriod)
 	}
-	opts := orca.OOBListenerOptions{ReportInterval: newPeriod}
+	opts := orca.OOBListenerOptions{ReportInterval: time.Duration(newPeriod)}
 	w.stopORCAListener = orca.RegisterOOBListener(w.SubConn, w, opts)
 }
 

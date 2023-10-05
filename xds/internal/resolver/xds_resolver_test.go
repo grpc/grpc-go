@@ -79,9 +79,15 @@ const (
 	defaultTestShortTimeout = 100 * time.Microsecond
 )
 
-var target = resolver.Target{URL: *testutils.MustParseURL("xds:///" + targetStr)}
+var (
+	target = resolver.Target{URL: *testutils.MustParseURL("xds:///" + targetStr)}
+)
 
-var routerFilter = xdsresource.HTTPFilter{Name: "rtr", Filter: httpfilter.Get(router.TypeURL)}
+func makeRouterFilter(t *testing.T) xdsresource.HTTPFilter {
+	f := httpfilter.Get(router.TypeURL)
+	cfg, _ := f.ParseFilterConfig(testutils.MarshalAny(t, &v3routerpb.Router{}))
+	return xdsresource.HTTPFilter{Name: "rtr", Filter: f, Config: cfg}
+}
 
 type s struct {
 	grpctest.Tester
@@ -593,7 +599,7 @@ func (s) TestResolverBadServiceUpdate(t *testing.T) {
 
 	// Configure a listener resource that is expected to be NACKed because it
 	// does not contain the `RouteSpecifier` field in the HTTPConnectionManager.
-	hcm := testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 		HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
 	})
 	lis := &v3listenerpb.Listener{
@@ -1315,7 +1321,7 @@ func (s) TestResolverMaxStreamDuration(t *testing.T) {
 	// different values of max stream duration.
 	ldsName := serviceName
 	rdsName := "route-" + serviceName
-	hcm := testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 		RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{Rds: &v3httppb.Rds{
 			ConfigSource: &v3corepb.ConfigSource{
 				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
@@ -1702,7 +1708,7 @@ func (s) TestResolverMultipleLDSUpdates(t *testing.T) {
 	// the same route configuration resource but has different values for some
 	// other fields. There is still no route configuration resource on the
 	// management server.
-	hcm := testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 		RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{Rds: &v3httppb.Rds{
 			ConfigSource: &v3corepb.ConfigSource{
 				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
@@ -1802,56 +1808,91 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 	testCases := []struct {
 		name         string
 		ldsFilters   []xdsresource.HTTPFilter
-		vhOverrides  map[string]httpfilter.FilterConfig
-		rtOverrides  map[string]httpfilter.FilterConfig
-		clOverrides  map[string]httpfilter.FilterConfig
+		rtCfgUpdate  xdsresource.RouteConfigUpdate
 		rpcRes       map[string][][]string
 		selectErr    string
 		newStreamErr string
 	}{
+
 		{
-			name: "no router filter",
+			name: "route type RouteActionUnsupported invalid for client",
 			ldsFilters: []xdsresource.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
+			},
+			rtCfgUpdate: xdsresource.RouteConfigUpdate{
+				VirtualHosts: []*xdsresource.VirtualHost{
+					{
+						Domains: []string{targetStr},
+						Routes: []*xdsresource.Route{{
+							Prefix: newStringP("1"),
+							WeightedClusters: map[string]xdsresource.WeightedCluster{
+								"A": {Weight: 1},
+								"B": {Weight: 1},
+							},
+							ActionType: xdsresource.RouteActionUnsupported,
+						}},
+					},
+				},
 			},
 			rpcRes: map[string][][]string{
 				"1": {
 					{"build:foo1", "override:foo2", "build:bar1", "override:bar2", "newstream:foo1", "newstream:bar1", "done:bar1", "done:foo1"},
 				},
 			},
-			selectErr: "no router filter present",
+			selectErr: errUnsupportedClientRouteAction.Error(),
 		},
 		{
-			name: "ignored after router filter",
+			name: "route type RouteActionNonForwardingAction invalid for client",
 			ldsFilters: []xdsresource.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
-				routerFilter,
-				{Name: "foo2", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo2"}},
+			},
+			rtCfgUpdate: xdsresource.RouteConfigUpdate{
+				VirtualHosts: []*xdsresource.VirtualHost{
+					{
+						Domains: []string{targetStr},
+						Routes: []*xdsresource.Route{{
+							Prefix: newStringP("1"),
+							WeightedClusters: map[string]xdsresource.WeightedCluster{
+								"A": {Weight: 1},
+								"B": {Weight: 1},
+							},
+							ActionType: xdsresource.RouteActionNonForwardingAction,
+						}},
+					},
+				},
 			},
 			rpcRes: map[string][][]string{
 				"1": {
-					{"build:foo1", "newstream:foo1", "done:foo1"},
-				},
-				"2": {
-					{"build:foo1", "newstream:foo1", "done:foo1"},
-					{"build:foo1", "newstream:foo1", "done:foo1"},
-					{"build:foo1", "newstream:foo1", "done:foo1"},
+					{"build:foo1", "override:foo2", "build:bar1", "override:bar2", "newstream:foo1", "newstream:bar1", "done:bar1", "done:foo1"},
 				},
 			},
+			selectErr: errUnsupportedClientRouteAction.Error(),
 		},
 		{
 			name: "NewStream error; ensure earlier interceptor Done is still called",
 			ldsFilters: []xdsresource.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
 				{Name: "bar", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "bar1", newStreamErr: errors.New("bar newstream err")}},
-				routerFilter,
+				makeRouterFilter(t),
+			},
+			rtCfgUpdate: xdsresource.RouteConfigUpdate{
+				VirtualHosts: []*xdsresource.VirtualHost{
+					{
+						Domains: []string{targetStr},
+						Routes: []*xdsresource.Route{{
+							Prefix: newStringP("1"),
+							WeightedClusters: map[string]xdsresource.WeightedCluster{
+								"A": {Weight: 1},
+								"B": {Weight: 1},
+							},
+							ActionType: xdsresource.RouteActionRoute,
+						}},
+					},
+				},
 			},
 			rpcRes: map[string][][]string{
 				"1": {
 					{"build:foo1", "build:bar1", "newstream:foo1", "newstream:bar1" /* <err in bar1 NewStream> */, "done:foo1"},
-				},
-				"2": {
-					{"build:foo1", "build:bar1", "newstream:foo1", "newstream:bar1" /* <err in bar1 NewSteam> */, "done:foo1"},
 				},
 			},
 			newStreamErr: "bar newstream err",
@@ -1861,11 +1902,32 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 			ldsFilters: []xdsresource.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1", newStreamErr: errors.New("this is overridden to nil")}},
 				{Name: "bar", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "bar1"}},
-				routerFilter,
+				makeRouterFilter(t),
 			},
-			vhOverrides: map[string]httpfilter.FilterConfig{"foo": filterCfg{s: "foo2"}, "bar": filterCfg{s: "bar2"}},
-			rtOverrides: map[string]httpfilter.FilterConfig{"foo": filterCfg{s: "foo3"}, "bar": filterCfg{s: "bar3"}},
-			clOverrides: map[string]httpfilter.FilterConfig{"foo": filterCfg{s: "foo4"}, "bar": filterCfg{s: "bar4"}},
+			rtCfgUpdate: xdsresource.RouteConfigUpdate{
+				VirtualHosts: []*xdsresource.VirtualHost{
+					{
+						Domains: []string{targetStr},
+						Routes: []*xdsresource.Route{{
+							Prefix: newStringP("1"),
+							WeightedClusters: map[string]xdsresource.WeightedCluster{
+								"A": {Weight: 1},
+								"B": {Weight: 1},
+							},
+							ActionType: xdsresource.RouteActionRoute,
+						}, {
+							Prefix: newStringP("2"),
+							WeightedClusters: map[string]xdsresource.WeightedCluster{
+								"A": {Weight: 1},
+								"B": {Weight: 1, HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{"foo": filterCfg{s: "foo4"}, "bar": filterCfg{s: "bar4"}}},
+							},
+							HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{"foo": filterCfg{s: "foo3"}, "bar": filterCfg{s: "bar3"}},
+							ActionType:               xdsresource.RouteActionRoute,
+						}},
+						HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{"foo": filterCfg{s: "foo2"}, "bar": filterCfg{s: "bar2"}},
+					},
+				},
+			},
 			rpcRes: map[string][][]string{
 				"1": {
 					{"build:foo1", "override:foo2", "build:bar1", "override:bar2", "newstream:foo1", "newstream:bar1", "done:bar1", "done:foo1"},
@@ -1904,26 +1966,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 
 			// Invoke the watchAPI callback with a good service update and wait for the
 			// UpdateState method to be called on the ClientConn.
-			xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
-				VirtualHosts: []*xdsresource.VirtualHost{
-					{
-						Domains: []string{targetStr},
-						Routes: []*xdsresource.Route{{
-							Prefix: newStringP("1"), WeightedClusters: map[string]xdsresource.WeightedCluster{
-								"A": {Weight: 1},
-								"B": {Weight: 1},
-							},
-						}, {
-							Prefix: newStringP("2"), WeightedClusters: map[string]xdsresource.WeightedCluster{
-								"A": {Weight: 1},
-								"B": {Weight: 1, HTTPFilterConfigOverride: tc.clOverrides},
-							},
-							HTTPFilterConfigOverride: tc.rtOverrides,
-						}},
-						HTTPFilterConfigOverride: tc.vhOverrides,
-					},
-				},
-			}, nil)
+			xdsC.InvokeWatchRouteConfigCallback("", tc.rtCfgUpdate, nil)
 
 			gotState, err := tcc.stateCh.Receive(ctx)
 			if err != nil {

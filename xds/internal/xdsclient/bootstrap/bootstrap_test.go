@@ -508,7 +508,7 @@ type fakeCertProviderBuilder struct{}
 
 // ParseConfig expects input in JSON format containing a map from string to
 // string, with a single entry and mapKey being "configKey".
-func (b *fakeCertProviderBuilder) ParseConfig(cfg interface{}) (*certprovider.BuildableConfig, error) {
+func (b *fakeCertProviderBuilder) ParseConfig(cfg any) (*certprovider.BuildableConfig, error) {
 	config, ok := cfg.(json.RawMessage)
 	if !ok {
 		return nil, fmt.Errorf("fakeCertProviderBuilder received config of type %T, want []byte", config)

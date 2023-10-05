@@ -63,7 +63,10 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 	})
 
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
-	server := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
+	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
+	if err != nil {
+		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
+	}
 	defer server.Stop()
 	testgrpc.RegisterTestServiceServer(server, &testService{})
 
@@ -205,7 +208,10 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	})
 
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
-	server := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
+	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
+	if err != nil {
+		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
+	}
 	defer server.Stop()
 	testgrpc.RegisterTestServiceServer(server, &testService{})
 

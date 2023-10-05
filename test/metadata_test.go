@@ -25,7 +25,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
@@ -125,7 +124,7 @@ func (s) TestInvalidMetadata(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run("unary "+test.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			ctx = metadata.NewOutgoingContext(ctx, test.md)
 			ctx = metadata.AppendToOutgoingContext(ctx, test.appendMD...)
@@ -138,11 +137,11 @@ func (s) TestInvalidMetadata(t *testing.T) {
 	// call the stream server's api to drive the server-side unit testing
 	for _, test := range tests {
 		t.Run("streaming "+test.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			stream, err := ss.Client.FullDuplexCall(ctx)
 			if err != nil {
-				t.Errorf("call ss.Client.FullDuplexCall(context.Background()) will success but got err :%v", err)
+				t.Errorf("call ss.Client.FullDuplexCall got err :%v", err)
 				return
 			}
 			if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
