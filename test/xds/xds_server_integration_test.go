@@ -153,7 +153,7 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 	// Create an inbound xDS listener resource for the server side that does not
 	// contain any security configuration. This should force the server-side
 	// xdsCredentials to use fallback.
-	inboundLis := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone)
+	inboundLis := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone, "routeName")
 	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	// Setup the management server with client and server-side resources.
@@ -238,7 +238,7 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 			// Create an inbound xDS listener resource for the server side that
 			// contains security configuration pointing to the file watcher
 			// plugin.
-			inboundLis := e2e.DefaultServerListener(host, port, test.secLevel)
+			inboundLis := e2e.DefaultServerListener(host, port, test.secLevel, "routeName")
 			resources.Listeners = append(resources.Listeners, inboundLis)
 
 			// Setup the management server with client and server resources.
@@ -306,7 +306,7 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	// Create an inbound xDS listener resource for the server side that does not
 	// contain any security configuration. This should force the xDS credentials
 	// on server to use its fallback.
-	inboundLis := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone)
+	inboundLis := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone, "routeName")
 	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	// Setup the management server with client and server-side resources.
@@ -360,7 +360,7 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 		Port:       port,
 		SecLevel:   e2e.SecurityLevelMTLS,
 	})
-	inboundLis = e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS)
+	inboundLis = e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS, "routeName")
 	resources.Listeners = append(resources.Listeners, inboundLis)
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
