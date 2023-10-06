@@ -115,15 +115,13 @@ func verifyUpdateFromChannel(ctx context.Context, t *testing.T, updateCh chan rd
 
 	opts := []cmp.Option{
 		cmpopts.EquateEmpty(),
-		cmpopts.SortSlices(func(s1, s2 string) bool { return s1 < s2 }),
-		cmpopts.SortMaps(func(s1, s2 string) bool { return s1 < s2 }),
 		cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw"),
 		cmp.AllowUnexported(rdsHandlerUpdate{}),
 	}
 	select {
 	case gotUpdate := <-updateCh:
 		if diff := cmp.Diff(gotUpdate, wantUpdate, opts...); diff != "" {
-			t.Fatalf("Got unexpected route update, diff (-got, +want): %v", diff)
+			t.Fatalf("Got unexpected route config update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
 		t.Fatal("Timed out waiting for a route config update")
@@ -253,7 +251,8 @@ func (s) TestRDSHandler_SuccessCaseTwoUpdates(t *testing.T) {
 
 // Tests the case where the rds handler receives an update with two routes, then
 // receives an update with only one route. The rds handler is expected to cancel
-// the watch for the route no longer present, and push a corresponding update.
+// the watch for the route no longer present, and push a corresponding update
+// with only one route.
 func (s) TestRDSHandler_SuccessCaseDeletedRoute(t *testing.T) {
 	mgmtServer, nodeID, resourceNamesCh, xdsC := setupForRDSHandlerTests(t)
 
@@ -303,11 +302,13 @@ func (s) TestRDSHandler_SuccessCaseDeletedRoute(t *testing.T) {
 	waitForResourceNames(ctx, t, resourceNamesCh, []string{})
 }
 
-// Tests the case where the rds
-// handler receives an update with two routes, and then receives an update with
-// two routes, one previously there and one added (i.e. 12 -> 23). This should
-// cause the route that is no longer there to be deleted and cancelled, and the
-// route that was added should have a watch started for it.
+// Tests the case where the rds handler receives an update with two routes, and
+// then receives an update with two routes, one previously there and one added
+// (i.e. 12 -> 23). This should cause the route that is no longer there to be
+// deleted and cancelled, and the route that was added should have a watch
+// started for it. The test also verifies that an update is not pushed by the
+// rds handler until the newly added route config resource is received from the
+// management server.
 func (s) TestRDSHandler_SuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
 	mgmtServer, nodeID, resourceNamesCh, xdsC := setupForRDSHandlerTests(t)
 
@@ -464,7 +465,7 @@ func (s) TestErrorReceived(t *testing.T) {
 	select {
 	case update := <-updateCh:
 		if !strings.Contains(update.err.Error(), wantErr) {
-			t.Fatalf("Update received with error %v, want error containing %q", update.err, wantErr)
+			t.Fatalf("Update received with error %v, want error containing %v", update.err, wantErr)
 		}
 	case <-ctx.Done():
 		t.Fatal("Timed out waiting for update from update channel")
