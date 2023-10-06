@@ -39,8 +39,8 @@ import (
 // configuration resource after the xDS resolver has successfully resolved the
 // service name and pushed an update on the channel. The test verifies that the
 // resolver stops requesting the old route configuration resource and requests
-// the new resource, and once successfully resolved, sends an update on the
-// channel.
+// the new resource, and once successfully resolved, verifies that the update
+// from the resolver matches expected service config.
 func (s) TestServiceWatch_ListenerPointsToNewRouteConfiguration(t *testing.T) {
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -97,7 +97,7 @@ func (s) TestServiceWatch_ListenerPointsToNewRouteConfiguration(t *testing.T) {
 // Tests the case where the listener resource changes to contain an inline route
 // configuration and changes back to having a route configuration resource name.
 // Verifies that the expected xDS resource names are requested by the resolver
-// and the update pushed to the channel contains the expected service config.
+// and that the update from the resolver matches expected service config.
 func (s) TestServiceWatch_ListenerPointsToInlineRouteConfiguration(t *testing.T) {
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

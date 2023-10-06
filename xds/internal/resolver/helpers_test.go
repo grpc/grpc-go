@@ -24,9 +24,6 @@ import (
 	"testing"
 	"time"
 
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal"
@@ -39,6 +36,10 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	xdsresolver "google.golang.org/grpc/xds/internal/resolver"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
 
 type s struct {
@@ -240,7 +241,6 @@ func waitForResourceNames(ctx context.Context, t *testing.T, namesCh chan []stri
 	t.Helper()
 
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		t.Logf("easwars: executing the for loop waiting for resource names")
 		select {
 		case <-ctx.Done():
 		case gotNames := <-namesCh:
