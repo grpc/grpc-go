@@ -137,8 +137,6 @@ func (a *AddressMap) Values() []any {
 	return ret
 }
 
-type endpointNodeList []endpointNode
-
 type endpointNode struct {
 	addrs map[string]int
 	val   any
@@ -161,10 +159,7 @@ func (en endpointNode) Equal(en2 endpointNode) bool {
 func toEndpointNode(endpoint Endpoint) endpointNode {
 	en := make(map[string]int)
 	for _, addr := range endpoint.Addresses {
-		if count, ok := en[addr.Addr]; ok {
-			en[addr.Addr] = count + 1
-		}
-		en[addr.Addr] = 1
+		en[addr.Addr]++
 	}
 	return endpointNode{
 		addrs: en,
@@ -172,26 +167,23 @@ func toEndpointNode(endpoint Endpoint) endpointNode {
 }
 
 // EndpointMap is a map of endpoints to arbitrary values keyed on only the
-// unordered set of addresses string within an endpoint. The reason this uses a
-// slice instead of a map is because slices or maps cannot be used as map keys.
-// Thus, for efficiency store as a map and compare to others so each node
-// comparison is o(n), where n is the number of unique addresses in the endpoint
-// rather than having to sort a list on each comparison which is n(log(n))
-// (cannot use slices for the latter case or maps for the former case as map
-// keys, so needs to be a list).
+// unordered set of address strings within an endpoint. This map is not thread
+// safe, cannot access multiple times concurrently. The zero value for an
+// EndpointMap is an empty EndpointMap ready to use.
 type EndpointMap struct {
-	endpoints endpointNodeList // Cannot use maps as a map key. Thus, keep a list, and o(n) search. Not on RPC fast path so efficiency not as important.
-}
-
-// NewEndpointMap returns a new EndpointMap.
-func NewEndpointMap() *EndpointMap {
-	return &EndpointMap{}
+	// Use a slice instead of a map is because slices or maps cannot be used as
+	// map keys. Thus, for efficiency store as a map and compare to others so
+	// each node comparison is o(n), where n is the number of unique addresses
+	// in the endpoint rather than having to sort a list on each comparison
+	// which is n(log(n)) (cannot use slices for the latter case or maps for the
+	// former case as map keys, so needs to be a list).
+	endpoints []endpointNode // Cannot use maps as a map key. Thus, keep a list, and o(n) search. Not on RPC fast path so efficiency not as important.
 }
 
 // Get returns the value for the address in the map, if present.
 func (em *EndpointMap) Get(e Endpoint) (value any, ok bool) {
 	en := toEndpointNode(e)
-	if i := em.endpoints.find(en); i != -1 {
+	if i := em.find(en); i != -1 {
 		return em.endpoints[i].val, true
 	}
 	return nil, false
@@ -200,7 +192,7 @@ func (em *EndpointMap) Get(e Endpoint) (value any, ok bool) {
 // Set updates or adds the value to the address in the map.
 func (em *EndpointMap) Set(e Endpoint, value any) {
 	en := toEndpointNode(e)
-	if i := em.endpoints.find(en); i != -1 {
+	if i := em.find(en); i != -1 {
 		em.endpoints[i].val = value
 		return
 	}
@@ -242,11 +234,11 @@ func (em *EndpointMap) Values() []any {
 	return ret
 }
 
-// find returns the index of endpoint in the endpointNodeList slice, or -1 if
-// not present. The comparisons are done on the unordered set of the addresses
-// within endpoint.
-func (l endpointNodeList) find(e endpointNode) int {
-	for i, endpoint := range l {
+// find returns the index of endpoint in the EndpointMap endpoints slice, or -1
+// if not present. The comparisons are done on the unordered set of the
+// addresses within an endpoint.
+func (em EndpointMap) find(e endpointNode) int {
+	for i, endpoint := range em.endpoints {
 		if endpoint.Equal(e) {
 			return i
 		}
@@ -257,7 +249,7 @@ func (l endpointNodeList) find(e endpointNode) int {
 // Delete removes the specified endpoint from the map.
 func (em *EndpointMap) Delete(e Endpoint) {
 	en := toEndpointNode(e)
-	entry := em.endpoints.find(en)
+	entry := em.find(en)
 	if entry == -1 {
 		return
 	}
