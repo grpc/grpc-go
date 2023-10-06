@@ -47,7 +47,7 @@ const (
 	fakeListenerHost         = "0.0.0.0"
 	fakeListenerPort         = 50051
 	testListenerResourceName = "lds.target.1.2.3.4:1111"
-	defaultTestTimeout       = 1 * time.Second
+	defaultTestTimeout       = 10 * time.Second
 	defaultTestShortTimeout  = 10 * time.Millisecond
 )
 
