@@ -36,7 +36,6 @@ const defaultCRLRefreshDuration = 1 * time.Hour
 // CRL are loaded and stored. Such implementations can be used in
 // RevocationConfig of advancedtls.ClientOptions and/or
 // advancedtls.ServerOptions .
-//
 // TODO(erm-g): Add link to related gRFC once it's ready.
 // Please refer to https://github.com/grpc/proposal/ for more details.
 type CRLProvider interface {
@@ -87,7 +86,7 @@ func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
 type Options struct {
 	CRLDirectory               string          // Path of the directory containing CRL files
 	RefreshDuration            time.Duration   // Time interval between CRLDirectory scans
-	cRLReloadingFailedCallback func(err error) // Custom callback executed when a CRL file can’t be processed
+	crlReloadingFailedCallback func(err error) // Custom callback executed when a CRL file can’t be processed
 }
 
 // FileWatcherCRLProvider implements the CRLProvider interface by periodically scanning
@@ -175,8 +174,8 @@ func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 	dir, err := os.Open(p.opts.CRLDirectory)
 	if err != nil {
 		grpclogLogger.Errorf("Can't open CRLDirectory %v", p.opts.CRLDirectory, err)
-		if p.opts.cRLReloadingFailedCallback != nil {
-			p.opts.cRLReloadingFailedCallback(err)
+		if p.opts.crlReloadingFailedCallback != nil {
+			p.opts.crlReloadingFailedCallback(err)
 		}
 	}
 	defer dir.Close()
@@ -184,8 +183,8 @@ func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 	files, err := dir.ReadDir(0)
 	if err != nil {
 		grpclogLogger.Errorf("Can't access files under CRLDirectory %v", p.opts.CRLDirectory, err)
-		if p.opts.cRLReloadingFailedCallback != nil {
-			p.opts.cRLReloadingFailedCallback(err)
+		if p.opts.crlReloadingFailedCallback != nil {
+			p.opts.crlReloadingFailedCallback(err)
 		}
 	}
 
@@ -197,8 +196,8 @@ func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 		if err != nil {
 			failCounter++
 			grpclogLogger.Warningf("Can't add CRL from file %v under CRLDirectory %v", filePath, p.opts.CRLDirectory, err)
-			if p.opts.cRLReloadingFailedCallback != nil {
-				p.opts.cRLReloadingFailedCallback(err)
+			if p.opts.crlReloadingFailedCallback != nil {
+				p.opts.crlReloadingFailedCallback(err)
 			}
 			continue
 		}

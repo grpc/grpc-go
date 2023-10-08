@@ -88,10 +88,10 @@ func (s RevocationStatus) String() string {
 	return [...]string{"RevocationUndetermined", "RevocationUnrevoked", "RevocationRevoked"}[s]
 }
 
-// CRL contains a pkix.CertificateList and parsed
-// extensions that aren't provided by the golang CRL parser.
-// GRPC requires certain specifics for CRLs - all CRLs should be loaded using
-// NewCRL() for bytes directly or ReadCRLFile() to read directly from a filepath
+// CRL contains a pkix.CertificateList and parsed extensions that aren't
+// provided by the golang CRL parser.
+// All CRLs should be loaded using NewCRL() for bytes directly or ReadCRLFile()
+// to read directly from a filepath
 type CRL struct {
 	CertList *x509.RevocationList
 	// RFC5280, 5.2.1, all conforming CRLs must have a AKID with the ID method.
@@ -99,7 +99,7 @@ type CRL struct {
 	RawIssuer      []byte
 }
 
-// NewCRL constructs new CRL from provided byte array.
+// NewCRL constructs new CRL from the provided byte array.
 func NewCRL(b []byte) (*CRL, error) {
 	crl, err := parseRevocationList(b)
 	if err != nil {

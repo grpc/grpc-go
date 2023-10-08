@@ -382,14 +382,11 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	}
 
 	makeStaticCRLProvider := func(crlPath string) *RevocationConfig {
-
-		rawCRLs := make([][]byte, 0)
 		rawCRL, err := os.ReadFile(crlPath)
 		if err != nil {
 			t.Fatalf("readFile(%v) failed err = %v", crlPath, err)
 		}
-		rawCRLs = append(rawCRLs, rawCRL)
-		cRLProvider := MakeStaticCRLProvider(rawCRLs)
+		cRLProvider := MakeStaticCRLProvider([][]byte{rawCRL})
 		return &RevocationConfig{
 			AllowUndetermined: true,
 			CRLProvider:       cRLProvider,
@@ -731,7 +728,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		},
 		// Client: set valid credentials with the revocation config
 		// Server: set valid credentials with the revocation config
-		// Expected Behavior: success, because non of the certificate chains sent in the connection are revoked
+		// Expected Behavior: success, because none of the certificate chains sent in the connection are revoked
 		{
 			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; Client uses CRL; mutualTLS",
 			clientCert:             []tls.Certificate{cs.ClientCert3},

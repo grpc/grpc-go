@@ -110,7 +110,7 @@ func TestFileWatcherCRLProviderConfig(t *testing.T) {
 	regularProvider, err := MakeFileWatcherCRLProvider(Options{
 		CRLDirectory:               testdata.Path("crl"),
 		RefreshDuration:            5 * time.Second,
-		cRLReloadingFailedCallback: customCallback,
+		crlReloadingFailedCallback: customCallback,
 	})
 	if err != nil {
 		t.Fatal("Unexpected error while creating regular FileWatcherCRLProvider:", err)
@@ -133,7 +133,7 @@ func TestFileWatcherCRLProvider(t *testing.T) {
 	p, err := MakeFileWatcherCRLProvider(Options{
 		CRLDirectory:               testdata.Path("crl"),
 		RefreshDuration:            5 * time.Second,
-		cRLReloadingFailedCallback: customCallback,
+		crlReloadingFailedCallback: customCallback,
 	})
 	if err != nil {
 		t.Fatal("Unexpected error while creating FileWatcherCRLProvider:", err)
