@@ -1440,8 +1440,9 @@ func (t *http2Server) getOutFlowWindow() int64 {
 
 func (t *http2Server) getPeer() *peer.Peer {
 	return &peer.Peer{
-		Addr:     t.remoteAddr,
-		AuthInfo: t.authInfo, // Can be nil
+		Addr:      t.remoteAddr,
+		AuthInfo:  t.authInfo, // Can be nil
+		LocalAddr: t.localAddr,
 	}
 }
 

@@ -161,14 +161,18 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 		gotAddrCount = make(map[string]int)
 		// Perform 3 iterations.
 		var iterations [][]string
+		var localIterations [][]string
 		for i := 0; i < 3; i++ {
 			iteration := make([]string, len(addrs))
+			localIteration := make([]string, len(addrs))
 			for c := 0; c < len(addrs); c++ {
 				var peer peer.Peer
 				client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer))
 				iteration[c] = peer.Addr.String()
+				localIteration[c] = peer.LocalAddr.String()
 			}
 			iterations = append(iterations, iteration)
+			localIterations = append(localIterations, localIteration)
 		}
 		// Ensure the the first iteration contains all addresses in addrs.
 		for _, addr := range iterations[0] {
@@ -179,6 +183,10 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 		}
 		// Ensure all three iterations contain the same addresses.
 		if !cmp.Equal(iterations[0], iterations[1]) || !cmp.Equal(iterations[0], iterations[2]) {
+			continue
+		}
+		// Ensure all three iterations contain the same local addresses.
+		if !cmp.Equal(localIterations[0], localIterations[1]) || !cmp.Equal(localIterations[0], localIterations[2]) {
 			continue
 		}
 		return nil

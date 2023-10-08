@@ -612,11 +612,13 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 		sopts = append(sopts, grpc.InitialConnWindowSize(te.serverInitialConnWindowSize))
 	}
 	la := "localhost:0"
+
 	switch te.e.network {
 	case "unix":
 		la = "/tmp/testsock" + fmt.Sprintf("%d", time.Now().UnixNano())
 		syscall.Unlink(la)
 	}
+
 	lis, err := listen(te.e.network, la)
 	if err != nil {
 		te.t.Fatalf("Failed to listen: %v", err)
@@ -2382,6 +2384,11 @@ func testPeerClientSide(t *testing.T, e env) {
 	if pp != sp {
 		t.Fatalf("peer.Addr = localhost:%v, want localhost:%v", pp, sp)
 	}
+
+	pla := peer.LocalAddr.String()
+	if _, _, err := net.SplitHostPort(pla); err != nil {
+		t.Fatalf("Failed to parse local address from peer.")
+	}
 }
 
 // TestPeerNegative tests that if call fails setting peer
@@ -2459,6 +2466,11 @@ func testPeerFailedRPC(t *testing.T, e env) {
 		}
 		if pp != sp {
 			t.Fatalf("peer.Addr = localhost:%v, want localhost:%v", pp, sp)
+		}
+
+		pla := peer.LocalAddr.String()
+		if _, _, err := net.SplitHostPort(pla); err != nil {
+			t.Fatalf("Failed to parse local address from peer.")
 		}
 	}
 }
