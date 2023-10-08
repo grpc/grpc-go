@@ -35,7 +35,7 @@ type Peer struct {
 	// AuthInfo is the authentication information of the transport.
 	// It is nil if there is no transport security being used.
 	AuthInfo credentials.AuthInfo
-	// LocalAddr is the peer local addrerss.
+	// LocalAddr is the peer local address.
 	LocalAddr net.Addr
 }
 
