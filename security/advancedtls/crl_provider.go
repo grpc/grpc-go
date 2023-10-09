@@ -19,7 +19,6 @@
 package advancedtls
 
 import (
-	"context"
 	"crypto/x509"
 	"fmt"
 	"os"
@@ -92,10 +91,10 @@ type Options struct {
 // FileWatcherCRLProvider implements the CRLProvider interface by periodically scanning
 // CRLDirectory (see Options) and storing CRL structs in-memory
 type FileWatcherCRLProvider struct {
-	crls   map[string]*CRL
-	opts   Options
-	mu     sync.Mutex
-	cancel context.CancelFunc
+	crls map[string]*CRL
+	opts Options
+	mu   sync.Mutex
+	done chan struct{}
 }
 
 // MakeFileWatcherCRLProvider returns a new instance of the
@@ -105,13 +104,13 @@ func MakeFileWatcherCRLProvider(o Options) (*FileWatcherCRLProvider, error) {
 	if err := o.validate(); err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
 	provider := &FileWatcherCRLProvider{
 		crls: make(map[string]*CRL),
 		opts: o,
+		done: done,
 	}
-	provider.cancel = cancel
-	go provider.run(ctx)
+	go provider.run()
 	return provider, nil
 }
 
@@ -146,14 +145,14 @@ func (o *Options) validate() error {
 }
 
 // Start starts watching the directory for CRL files and updates the provider accordingly.
-func (p *FileWatcherCRLProvider) run(ctx context.Context) {
+func (p *FileWatcherCRLProvider) run() {
 	ticker := time.NewTicker(p.opts.RefreshDuration)
 	defer ticker.Stop()
 	p.ScanCRLDirectory()
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-p.done:
 			ticker.Stop()
 			return
 		case <-ticker.C:
@@ -164,7 +163,7 @@ func (p *FileWatcherCRLProvider) run(ctx context.Context) {
 
 // Close stops the background refresh of CRLDirectory of FileWatcherCRLProvider
 func (p *FileWatcherCRLProvider) Close() {
-	p.cancel()
+	close(p.done)
 }
 
 // ScanCRLDirectory starts the process of scanning Options.CRLDirectory and
