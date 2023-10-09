@@ -93,10 +93,10 @@ func (s RevocationStatus) String() string {
 // All CRLs should be loaded using NewCRL() for bytes directly or ReadCRLFile()
 // to read directly from a filepath
 type CRL struct {
-	CertList *x509.RevocationList
+	certList *x509.RevocationList
 	// RFC5280, 5.2.1, all conforming CRLs must have a AKID with the ID method.
-	AuthorityKeyID []byte
-	RawIssuer      []byte
+	authorityKeyID []byte
+	rawIssuer      []byte
 }
 
 // NewCRL constructs new CRL from the provided byte array.
@@ -109,7 +109,7 @@ func NewCRL(b []byte) (*CRL, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parseCRLExtensions() failed err = %v", err)
 	}
-	crlExt.RawIssuer, err = extractCRLIssuer(b)
+	crlExt.rawIssuer, err = extractCRLIssuer(b)
 	if err != nil {
 		return nil, fmt.Errorf("extractCRLIssuer() failed err= %v", err)
 	}
@@ -263,7 +263,7 @@ func cachedCrl(rawIssuer []byte, cache Cache) (*CRL, bool) {
 		return nil, false
 	}
 	// If the CRL is expired, force a reload.
-	if hasExpired(crl.CertList, time.Now()) {
+	if hasExpired(crl.certList, time.Now()) {
 		return nil, false
 	}
 	return crl, true
@@ -298,7 +298,6 @@ func fetchCRL(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revocat
 			return nil, fmt.Errorf("CrlProvider failed err = %v", err)
 		}
 		if crl == nil {
-			// TODO print out cert info here? What cert contents are okay to have in a log?
 			return nil, fmt.Errorf("no CRL found for certificate's issuer")
 		}
 		return crl, nil
@@ -319,12 +318,12 @@ func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revoca
 		// problem - it's not invalid to have no CRLs if you don't have any
 		// revocations for an issuer. We just return RevocationUndetermined and
 		// there is a setting for the user to control the handling of that.
-		grpclogLogger.Warningf("fetchCRL(%v) err = %v", c.Issuer, err)
+		grpclogLogger.Warningf("fetchCRL() err = %v", err)
 		return RevocationUndetermined
 	}
 	revocation, err := checkCertRevocation(c, crl)
 	if err != nil {
-		grpclogLogger.Warningf("checkCertRevocation(CRL %v) failed: %v", crl.CertList.Issuer, err)
+		grpclogLogger.Warningf("checkCertRevocation(CRL %v) failed: %v", crl.certList.Issuer, err)
 		// We couldn't check the CRL file for some reason, so we don't know if it's RevocationUnrevoked or not.
 		return RevocationUndetermined
 	}
@@ -337,10 +336,10 @@ func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revoca
 func checkCertRevocation(c *x509.Certificate, crl *CRL) (RevocationStatus, error) {
 	// Per section 5.3.3 we prime the certificate issuer with the CRL issuer.
 	// Subsequent entries use the previous entry's issuer.
-	rawEntryIssuer := crl.RawIssuer
+	rawEntryIssuer := crl.rawIssuer
 
 	// Loop through all the revoked certificates.
-	for _, revCert := range crl.CertList.RevokedCertificates {
+	for _, revCert := range crl.certList.RevokedCertificates {
 		// 5.3 Loop through CRL entry extensions for needed information.
 		for _, ext := range revCert.Extensions {
 			if oidCertificateIssuer.Equal(ext.Id) {
@@ -436,7 +435,7 @@ func parseCRLExtensions(c *x509.RevocationList) (*CRL, error) {
 	if c == nil {
 		return nil, errors.New("c is nil, expected any value")
 	}
-	certList := &CRL{CertList: c}
+	certList := &CRL{certList: c}
 
 	for _, ext := range c.Extensions {
 		switch {
@@ -450,7 +449,7 @@ func parseCRLExtensions(c *x509.RevocationList) (*CRL, error) {
 			} else if len(rest) != 0 {
 				return nil, errors.New("trailing data after AKID extension")
 			}
-			certList.AuthorityKeyID = a.ID
+			certList.authorityKeyID = a.ID
 
 		case oidIssuingDistributionPoint.Equal(ext.Id):
 			var dp issuingDistributionPoint
@@ -475,7 +474,7 @@ func parseCRLExtensions(c *x509.RevocationList) (*CRL, error) {
 		}
 	}
 
-	if len(certList.AuthorityKeyID) == 0 {
+	if len(certList.authorityKeyID) == 0 {
 		return nil, errors.New("authority key identifier extension missing")
 	}
 	return certList, nil
@@ -517,7 +516,7 @@ func fetchCRLOpenSSLHashDir(rawIssuer []byte, cfg RevocationConfig) (*CRL, error
 		if err != nil {
 			return nil, err
 		}
-		certList.RawIssuer = rawCRLIssuer
+		certList.rawIssuer = rawCRLIssuer
 		// RFC5280, 6.3.3 (b) Verify the issuer and scope of the complete CRL.
 		if bytes.Equal(rawIssuer, rawCRLIssuer) {
 			parsedCRL = certList
@@ -544,12 +543,12 @@ func verifyCRL(crl *CRL, rawIssuer []byte, chain []*x509.Certificate) error {
 		// "Conforming CRL issuers MUST use the key identifier method, and MUST
 		// include this extension in all CRLs issued."
 		// So, this is much simpler than RFC4158 and should be compatible.
-		if bytes.Equal(c.SubjectKeyId, crl.AuthorityKeyID) && bytes.Equal(c.RawSubject, crl.RawIssuer) {
+		if bytes.Equal(c.SubjectKeyId, crl.authorityKeyID) && bytes.Equal(c.RawSubject, crl.rawIssuer) {
 			// RFC5280, 6.3.3 (g) Validate signature.
-			return crl.CertList.CheckSignatureFrom(c)
+			return crl.certList.CheckSignatureFrom(c)
 		}
 	}
-	return fmt.Errorf("verifyCRL: No certificates mached CRL issuer (%v)", crl.CertList.Issuer)
+	return fmt.Errorf("verifyCRL: No certificates mached CRL issuer (%v)", crl.certList.Issuer)
 }
 
 // pemType is the type of a PEM encoded CRL.

@@ -223,7 +223,7 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 	if err != nil {
 		t.Fatalf("parseRevocationList(dummyCrlFile) failed: %v", err)
 	}
-	crlExt := &CRL{CertList: crl}
+	crlExt := &CRL{certList: crl}
 	var crlIssuer pkix.Name = crl.Issuer
 
 	var revocationTests = []struct {
@@ -360,7 +360,7 @@ func TestCachedCRL(t *testing.T) {
 		{
 			desc: "Valid",
 			val: &CRL{
-				CertList: &x509.RevocationList{
+				certList: &x509.RevocationList{
 					NextUpdate: time.Now().Add(time.Hour),
 				}},
 			ok: true,
@@ -368,7 +368,7 @@ func TestCachedCRL(t *testing.T) {
 		{
 			desc: "Expired",
 			val: &CRL{
-				CertList: &x509.RevocationList{
+				certList: &x509.RevocationList{
 					NextUpdate: time.Now().Add(-time.Hour),
 				}},
 			ok: false,
@@ -443,7 +443,7 @@ func TestGetIssuerCRLCache(t *testing.T) {
 func TestVerifyCrl(t *testing.T) {
 	tampered := loadCRL(t, testdata.Path("crl/1.crl"))
 	// Change the signature so it won't verify
-	tampered.CertList.Signature[0]++
+	tampered.certList.Signature[0]++
 
 	verifyTests := []struct {
 		desc    string
@@ -766,8 +766,8 @@ func TestCRLCacheExpirationReloading(t *testing.T) {
 	// `3.crl`` revokes `revokedInt.pem`
 	crl := loadCRL(t, testdata.Path("crl/3.crl"))
 	// Modify the crl so that the cert is NOT revoked and add it to the cache
-	crl.CertList.RevokedCertificates = nil
-	crl.CertList.NextUpdate = time.Now().Add(time.Hour)
+	crl.certList.RevokedCertificates = nil
+	crl.certList.NextUpdate = time.Now().Add(time.Hour)
 	cache.Add(hex.EncodeToString(rawIssuer), crl)
 	var cfg = RevocationConfig{RootDir: testdata.Path("crl"), Cache: cache}
 	revocationStatus := checkChain(certs, cfg)
@@ -776,7 +776,7 @@ func TestCRLCacheExpirationReloading(t *testing.T) {
 	}
 
 	// Modify the entry in the cache so that the cache will be refreshed
-	crl.CertList.NextUpdate = time.Now()
+	crl.certList.NextUpdate = time.Now()
 	cache.Add(hex.EncodeToString(rawIssuer), crl)
 
 	revocationStatus = checkChain(certs, cfg)

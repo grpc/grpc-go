@@ -72,7 +72,7 @@ func MakeStaticCRLProvider(rawCRLs [][]byte) *StaticCRLProvider {
 
 // AddCRL adds/updates provided CRL to in-memory storage.
 func (p *StaticCRLProvider) addCRL(crl *CRL) {
-	key := crl.CertList.Issuer.ToRDNSequence().String()
+	key := crl.certList.Issuer.ToRDNSequence().String()
 	p.crls[key] = crl
 }
 
@@ -223,8 +223,8 @@ func (p *FileWatcherCRLProvider) addCRL(filePath string) error {
 	if err != nil {
 		return fmt.Errorf("addCRL: can't extract Issuer from CRL from file %v: %v", filePath, err)
 	}
-	certList.RawIssuer = rawCRLIssuer
-	key := certList.CertList.Issuer.ToRDNSequence().String()
+	certList.rawIssuer = rawCRLIssuer
+	key := certList.certList.Issuer.ToRDNSequence().String()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.crls[key] = certList

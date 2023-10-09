@@ -223,7 +223,7 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 	if err != nil {
 		t.Fatalf("x509.ParseCRL(dummyCrlFile) failed: %v", err)
 	}
-	crlExt := &CRL{CertList: crl}
+	crlExt := &CRL{certList: crl}
 	var crlIssuer pkix.Name
 	crlIssuer.FillFromRDNSequence(&crl.TBSCertList.Issuer)
 
@@ -352,7 +352,7 @@ func loadCRL(t *testing.T, path string) *CRL {
 	if err != nil {
 		t.Fatalf("parseCRLExtensions(%v) failed err = %v", path, err)
 	}
-	crlExt.RawIssuer, err = extractCRLIssuer(b)
+	crlExt.rawIssuer, err = extractCRLIssuer(b)
 	if err != nil {
 		t.Fatalf("extractCRLIssuer(%v) failed err= %v", path, err)
 	}
@@ -373,7 +373,7 @@ func TestCachedCRL(t *testing.T) {
 		{
 			desc: "Valid",
 			val: &CRL{
-				CertList: &pkix.CertificateList{
+				certList: &pkix.CertificateList{
 					TBSCertList: pkix.TBSCertificateList{
 						NextUpdate: time.Now().Add(time.Hour),
 					},
@@ -383,7 +383,7 @@ func TestCachedCRL(t *testing.T) {
 		{
 			desc: "Expired",
 			val: &CRL{
-				CertList: &pkix.CertificateList{
+				certList: &pkix.CertificateList{
 					TBSCertList: pkix.TBSCertificateList{
 						NextUpdate: time.Now().Add(-time.Hour),
 					},
@@ -460,7 +460,7 @@ func TestGetIssuerCRLCache(t *testing.T) {
 func TestVerifyCrl(t *testing.T) {
 	tampered := loadCRL(t, testdata.Path("crl/1.crl"))
 	// Change the signature so it won't verify
-	tampered.CertList.SignatureValue.Bytes[0]++
+	tampered.certList.SignatureValue.Bytes[0]++
 
 	verifyTests := []struct {
 		desc    string
@@ -755,8 +755,8 @@ func TestCRLCacheExpirationReloading(t *testing.T) {
 	// `3.crl`` revokes `revokedInt.pem`
 	crl := loadCRL(t, testdata.Path("crl/3.crl"))
 	// Modify the crl so that the cert is NOT revoked and add it to the cache
-	crl.CertList.TBSCertList.RevokedCertificates = nil
-	crl.CertList.TBSCertList.NextUpdate = time.Now().Add(time.Hour)
+	crl.certList.TBSCertList.RevokedCertificates = nil
+	crl.certList.TBSCertList.NextUpdate = time.Now().Add(time.Hour)
 	cache.Add(hex.EncodeToString(rawIssuer), crl)
 	var cfg = RevocationConfig{RootDir: testdata.Path("crl"), Cache: cache}
 	revocationStatus := checkChain(certs, cfg)
@@ -765,7 +765,7 @@ func TestCRLCacheExpirationReloading(t *testing.T) {
 	}
 
 	// Modify the entry in the cache so that the cache will be refreshed
-	crl.CertList.TBSCertList.NextUpdate = time.Now()
+	crl.certList.TBSCertList.NextUpdate = time.Now()
 	cache.Add(hex.EncodeToString(rawIssuer), crl)
 
 	revocationStatus = checkChain(certs, cfg)
