@@ -917,7 +917,7 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 		return
 	}
 	go func() {
-		s.serveStreams(st)
+		s.serveStreams(st, rawConn)
 		s.removeConn(lisAddr, st)
 	}()
 }
@@ -971,12 +971,42 @@ func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 	return st
 }
 
-func (s *Server) serveStreams(st transport.ServerTransport) {
-	defer st.Close(errors.New("finished serving streams for the server transport"))
-	var wg sync.WaitGroup
+type connectionKey struct{}
 
+// GetConnection gets the connection from the context.
+func GetConnection(ctx context.Context) net.Conn {
+	conn, _ := ctx.Value(connectionKey{}).(net.Conn)
+	return conn
+}
+
+// setConnection adds the connection to the context to be able to get
+// information about the destination ip and port for an incoming RPC. This also
+// allows any unary or streaming interceptors to see the connection.
+func setConnection(ctx context.Context, conn net.Conn) context.Context {
+	return context.WithValue(ctx, connectionKey{}, conn)
+}
+
+func (s *Server) serveStreams(st transport.ServerTransport, rawConn net.Conn) {
+	ctx := setConnection(context.Background(), rawConn)
+	ctx = peer.NewContext(ctx, st.Peer())
+	for _, sh := range s.opts.statsHandlers {
+		ctx = sh.TagConn(ctx, &stats.ConnTagInfo{
+			RemoteAddr: st.RemoteAddr(),
+			LocalAddr:  st.LocalAddr(),
+		})
+		sh.HandleConn(ctx, &stats.ConnBegin{})
+	}
+
+	defer func() {
+		st.Close(errors.New("finished serving streams for the server transport"))
+		for _, sh := range s.opts.statsHandlers {
+			sh.HandleConn(ctx, &stats.ConnEnd{})
+		}
+	}()
+
+	var wg sync.WaitGroup
 	streamQuota := newHandlerQuota(s.opts.maxConcurrentStreams)
-	st.HandleStreams(func(stream *transport.Stream) {
+	st.HandleStreams(ctx, func(stream *transport.Stream) {
 		wg.Add(1)
 
 		streamQuota.acquire()
@@ -1040,7 +1070,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer s.removeConn(listenerAddressForServeHTTP, st)
-	s.serveStreams(st)
+	s.serveStreams(st, nil)
 }
 
 func (s *Server) addConn(addr string, st transport.ServerTransport) bool {
@@ -1730,6 +1760,22 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	}
 	service := sm[:pos]
 	method := sm[pos+1:]
+
+	md, _ := metadata.FromIncomingContext(ctx)
+	for _, sh := range s.opts.statsHandlers {
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: stream.Method()})
+		sh.HandleRPC(ctx, &stats.InHeader{
+			FullMethod:  stream.Method(),
+			RemoteAddr:  t.RemoteAddr(),
+			LocalAddr:   t.LocalAddr(),
+			Compression: stream.RecvCompress(),
+			WireLength:  stream.HeaderWireLength(),
+			Header:      md,
+		})
+	}
+	// To have calls in stream callouts work. Will delete once all stats handler
+	// calls come from the gRPC layer.
+	stream.SetContext(ctx)
 
 	srv, knownService := s.services[service]
 	if knownService {

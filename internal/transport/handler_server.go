@@ -167,6 +167,14 @@ func (ht *serverHandlerTransport) Close(err error) {
 
 func (ht *serverHandlerTransport) RemoteAddr() net.Addr { return strAddr(ht.req.RemoteAddr) }
 
+func (ht *serverHandlerTransport) LocalAddr() net.Addr { return nil } // Server Handler transport has no access to local addr (was simply not calling sh with local addr).
+
+func (ht *serverHandlerTransport) Peer() *peer.Peer {
+	return &peer.Peer{
+		Addr: ht.RemoteAddr(),
+	}
+}
+
 // strAddr is a net.Addr backed by either a TCP "ip:port" string, or
 // the empty string if unknown.
 type strAddr string
@@ -347,7 +355,7 @@ func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
 	return err
 }
 
-func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream)) {
+func (ht *serverHandlerTransport) HandleStreams(_ context.Context, startStream func(*Stream)) {
 	// With this transport type there will be exactly 1 stream: this HTTP request.
 
 	ctx := ht.req.Context()
@@ -371,16 +379,16 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream)) {
 	}()
 
 	req := ht.req
-
 	s := &Stream{
-		id:             0, // irrelevant
-		requestRead:    func(int) {},
-		cancel:         cancel,
-		buf:            newRecvBuffer(),
-		st:             ht,
-		method:         req.URL.Path,
-		recvCompress:   req.Header.Get("grpc-encoding"),
-		contentSubtype: ht.contentSubtype,
+		id:               0, // irrelevant
+		requestRead:      func(int) {},
+		cancel:           cancel,
+		buf:              newRecvBuffer(),
+		st:               ht,
+		method:           req.URL.Path,
+		recvCompress:     req.Header.Get("grpc-encoding"),
+		contentSubtype:   ht.contentSubtype,
+		headerWireLength: 0, // doesn't know header wire length, will call into stats handler as 0.
 	}
 	pr := &peer.Peer{
 		Addr: ht.RemoteAddr(),
@@ -390,15 +398,6 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream)) {
 	}
 	ctx = metadata.NewIncomingContext(ctx, ht.headerMD)
 	s.ctx = peer.NewContext(ctx, pr)
-	for _, sh := range ht.stats {
-		s.ctx = sh.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
-		inHeader := &stats.InHeader{
-			FullMethod:  s.method,
-			RemoteAddr:  ht.RemoteAddr(),
-			Compression: s.recvCompress,
-		}
-		sh.HandleRPC(s.ctx, inHeader)
-	}
 	s.trReader = &transportReader{
 		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf, freeBuffer: func(*bytes.Buffer) {}},
 		windowHandler: func(int) {},

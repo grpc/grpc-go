@@ -35,7 +35,6 @@ import (
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
-	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/server"
@@ -341,7 +340,7 @@ func (s *GRPCServer) GracefulStop() {
 // table and also processes the RPC by running the incoming RPC through any HTTP
 // Filters configured.
 func routeAndProcess(ctx context.Context) error {
-	conn := transport.GetConnection(ctx)
+	conn := grpc.GetConnection(ctx)
 	cw, ok := conn.(interface {
 		VirtualHosts() []xdsresource.VirtualHostWithInterceptors
 	})
