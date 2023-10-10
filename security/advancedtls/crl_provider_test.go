@@ -218,6 +218,26 @@ func TestFileWatcherCRLProviderDirectoryScan(t *testing.T) {
 			fileNames:       []string{"1.crl"},
 			expectedEntries: 1,
 		},
+		{
+			desc:            "Addition and deletion",
+			fileNames:       []string{"2.crl", "3.crl"},
+			expectedEntries: 2,
+		},
+		{
+			desc:            "Addition and updating",
+			fileNames:       []string{"2.crl", "3.crl", "4.crl"},
+			expectedEntries: 3,
+		},
+		{
+			desc:            "Addition and a corrupt file",
+			fileNames:       []string{"5.crl", "README.md"},
+			expectedEntries: 4,
+		},
+		{
+			desc:            "Full deletion",
+			fileNames:       []string{},
+			expectedEntries: 0,
+		},
 	}
 
 	for _, tt := range tests {
