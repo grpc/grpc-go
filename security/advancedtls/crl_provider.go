@@ -187,11 +187,12 @@ func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 		}
 	}
 
+	tempCRLs := make(map[string]*CRL)
 	successCounter := 0
 	failCounter := 0
 	for _, file := range files {
 		filePath := fmt.Sprintf("%s/%s", p.opts.CRLDirectory, file.Name())
-		err := p.addCRL(filePath)
+		crl, err := ReadCRLFile(filePath)
 		if err != nil {
 			failCounter++
 			grpclogLogger.Warningf("Can't add CRL from file %v under CRLDirectory %v", filePath, p.opts.CRLDirectory, err)
@@ -200,35 +201,24 @@ func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 			}
 			continue
 		}
+		tempCRLs[crl.certList.Issuer.ToRDNSequence().String()] = crl
 		successCounter++
 	}
-	grpclogLogger.Infof("Scan of CRLDirectory %v completed, %v files tried, %v CRLs added, %v files failed", len(files), successCounter, failCounter)
-}
-
-func (p *FileWatcherCRLProvider) addCRL(filePath string) error {
-	crlBytes, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
+	if len(files) == successCounter {
+		var updatedCRLs = &tempCRLs
+		var _ = &p.crls
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		_ = updatedCRLs
+		grpclogLogger.Infof("Scan of CRLDirectory %v completed, %v files found and processed successfully, in-memory CRL storage flushed and repopulated", p.opts.CRLDirectory, len(files))
+	} else {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		for key, value := range tempCRLs {
+			p.crls[key] = value
+		}
+		grpclogLogger.Infof("Scan of CRLDirectory %v completed, %v files found, %v files processing failed, %v entries of in-memory CRL storage added/updated", p.opts.CRLDirectory, len(files), failCounter, successCounter)
 	}
-	crl, err := parseRevocationList(crlBytes)
-	if err != nil {
-		return fmt.Errorf("addCRL: can't parse CRL from file %v: %v", filePath, err)
-	}
-	var certList *CRL
-	if certList, err = parseCRLExtensions(crl); err != nil {
-		return fmt.Errorf("addCRL: unsupported CRL %v: %v", filePath, err)
-	}
-	rawCRLIssuer, err := extractCRLIssuer(crlBytes)
-	if err != nil {
-		return fmt.Errorf("addCRL: can't extract Issuer from CRL from file %v: %v", filePath, err)
-	}
-	certList.rawIssuer = rawCRLIssuer
-	key := certList.certList.Issuer.ToRDNSequence().String()
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.crls[key] = certList
-	grpclogLogger.Infof("In-memory CRL storage of FileWatcherCRLProvider for key %v updated", key)
-	return nil
 }
 
 // CRL retrieves the CRL associated with the given certificate's issuer DN from
