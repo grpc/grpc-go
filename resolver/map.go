@@ -139,12 +139,11 @@ func (a *AddressMap) Values() []any {
 
 type endpointNode struct {
 	addrs map[string]int
-	val   any
 }
 
 // Equal returns whether the unordered set of addrs counts are the same between
 // the endpoint nodes.
-func (en endpointNode) Equal(en2 endpointNode) bool {
+func (en *endpointNode) Equal(en2 *endpointNode) bool {
 	if len(en.addrs) != len(en2.addrs) {
 		return false
 	}
@@ -171,20 +170,21 @@ func toEndpointNode(endpoint Endpoint) endpointNode {
 // safe, cannot access multiple times concurrently. The zero value for an
 // EndpointMap is an empty EndpointMap ready to use.
 type EndpointMap struct {
-	// Use a slice instead of a map is because slices or maps cannot be used as
-	// map keys. Thus, for efficiency store as a map and compare to others so
-	// each node comparison is o(n), where n is the number of unique addresses
-	// in the endpoint rather than having to sort a list on each comparison
-	// which is n(log(n)) (cannot use slices for the latter case or maps for the
-	// former case as map keys, so needs to be a list).
-	endpoints []endpointNode // Cannot use maps as a map key. Thus, keep a list, and o(n) search. Not on RPC fast path so efficiency not as important.
+	endpoints map[*endpointNode]any
+}
+
+// NewEndpointMap creates a new EndpointMap.
+func NewEndpointMap() *EndpointMap {
+	return &EndpointMap{
+		endpoints: make(map[*endpointNode]any),
+	}
 }
 
 // Get returns the value for the address in the map, if present.
 func (em *EndpointMap) Get(e Endpoint) (value any, ok bool) {
 	en := toEndpointNode(e)
-	if i := em.find(en); i != -1 {
-		return em.endpoints[i].val, true
+	if endpoint := em.find(en); endpoint != nil {
+		return em.endpoints[endpoint], true
 	}
 	return nil, false
 }
@@ -192,12 +192,11 @@ func (em *EndpointMap) Get(e Endpoint) (value any, ok bool) {
 // Set updates or adds the value to the address in the map.
 func (em *EndpointMap) Set(e Endpoint, value any) {
 	en := toEndpointNode(e)
-	if i := em.find(en); i != -1 {
-		em.endpoints[i].val = value
+	if endpoint := em.find(en); endpoint != nil {
+		em.endpoints[endpoint] = value
 		return
 	}
-	en.val = value
-	em.endpoints = append(em.endpoints, en)
+	em.endpoints[&en] = value
 }
 
 // Len returns the number of entries in the map.
@@ -211,7 +210,7 @@ func (em *EndpointMap) Len() int {
 // the full endpoint data but can be used for EndpointMap accesses.
 func (em *EndpointMap) Keys() []Endpoint { // TODO: Persist the whole endpoint data to return in nodes? No use case now, but one could come up in future.
 	ret := make([]Endpoint, 0, len(em.endpoints))
-	for _, en := range em.endpoints {
+	for en := range em.endpoints {
 		var endpoint Endpoint
 		for addr, count := range en.addrs {
 			for i := 0; i < count; i++ {
@@ -228,34 +227,29 @@ func (em *EndpointMap) Keys() []Endpoint { // TODO: Persist the whole endpoint d
 // Values returns a slice of all current map values.
 func (em *EndpointMap) Values() []any {
 	ret := make([]any, 0, len(em.endpoints))
-	for _, en := range em.endpoints {
-		ret = append(ret, en.val)
+	for _, val := range em.endpoints {
+		ret = append(ret, val)
 	}
 	return ret
 }
 
-// find returns the index of endpoint in the EndpointMap endpoints slice, or -1
-// if not present. The comparisons are done on the unordered set of the
-// addresses within an endpoint.
-func (em EndpointMap) find(e endpointNode) int {
-	for i, endpoint := range em.endpoints {
-		if endpoint.Equal(e) {
-			return i
+// find returns the pointer to endpoint node in the EndpointMap endpoints map if
+// the endpoint node is already present. If not found, nil is returned. The
+// comparisons are done on the unordered set of addresses within an endpoint.
+func (em EndpointMap) find(e endpointNode) *endpointNode {
+	for endpoint := range em.endpoints {
+		if e.Equal(endpoint) {
+			return endpoint
 		}
 	}
-	return -1
+	return nil
 }
 
 // Delete removes the specified endpoint from the map.
 func (em *EndpointMap) Delete(e Endpoint) {
 	en := toEndpointNode(e)
 	entry := em.find(en)
-	if entry == -1 {
-		return
+	if entry != nil {
+		delete(em.endpoints, entry)
 	}
-	if len(em.endpoints) == 1 {
-		em.endpoints = nil
-	}
-	copy(em.endpoints[entry:], em.endpoints[entry+1:])
-	em.endpoints = em.endpoints[:len(em.endpoints)-1]
 }
