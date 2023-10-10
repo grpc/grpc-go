@@ -167,8 +167,10 @@ func (p *FileWatcherCRLProvider) Close() {
 }
 
 // ScanCRLDirectory starts the process of scanning Options.CRLDirectory and
-// updating in-memory storage of CRL structs.Please note that the same method is
+// updating in-memory storage of CRL structs. Please note that the same method is
 // called periodically by run goroutine.
+// TODO(erm-g): Add link to related gRFC once it's ready.
+// Please refer to https://github.com/grpc/proposal/ for edge case details.
 func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 	dir, err := os.Open(p.opts.CRLDirectory)
 	if err != nil {
@@ -204,6 +206,8 @@ func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 		tempCRLs[crl.certList.Issuer.ToRDNSequence().String()] = crl
 		successCounter++
 	}
+	// Only if all the files are processed successful we can swap maps (there
+	// might be deletions of entries in this case
 	if len(files) == successCounter {
 		var updatedCRLs = &tempCRLs
 		var _ = &p.crls
@@ -212,6 +216,7 @@ func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 		_ = updatedCRLs
 		grpclogLogger.Infof("Scan of CRLDirectory %v completed, %v files found and processed successfully, in-memory CRL storage flushed and repopulated", p.opts.CRLDirectory, len(files))
 	} else {
+		// Since some of the files failed we can only add/update entries in the map
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		for key, value := range tempCRLs {
