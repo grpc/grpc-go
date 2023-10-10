@@ -21,10 +21,13 @@ package advancedtls
 import (
 	"crypto/x509"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
@@ -183,4 +186,87 @@ func TestFileWatcherCRLProvider(t *testing.T) {
 		t.Fatalf("Number of callback executions: got %v, want %v", len(nonCRLFilesSet), nonCRLFilesUnderCRLDirectory)
 	}
 	p.Close()
+}
+
+// TestFileWatcherCRLProviderDirectoryScan tests how FileWatcherCRLProvider
+// handles different contents of Options.CRLDirectory
+// We update the content with new (correct and incorrect) CRL files and check if
+// in-memory storage was properly updated
+func TestFileWatcherCRLProviderDirectoryScan(t *testing.T) {
+	sourcePath := testdata.Path("crl")
+	targetPath := testdata.Path("crl/provider/filewatcher")
+	p, err := MakeFileWatcherCRLProvider(Options{
+		CRLDirectory:    targetPath,
+		RefreshDuration: 1 * time.Hour,
+	})
+	if err != nil {
+		t.Fatal("Unexpected error while creating FileWatcherCRLProvider:", err)
+	}
+
+	tests := []struct {
+		desc            string
+		fileNames       []string
+		expectedEntries int
+	}{
+		{
+			desc:            "Empty dir",
+			fileNames:       []string{},
+			expectedEntries: 0,
+		},
+		{
+			desc:            "Simple addition",
+			fileNames:       []string{"1.crl"},
+			expectedEntries: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			copyFiles(sourcePath, targetPath, tt.fileNames, t)
+			p.ScanCRLDirectory()
+			if diff := cmp.Diff(len(p.crls), tt.expectedEntries); diff != "" {
+				t.Errorf("Expected number of entries in the map do not match\ndiff (-got +want):\n%s", diff)
+			}
+		})
+	}
+
+	p.Close()
+}
+
+func copyFiles(sourcePath string, targetPath string, fileNames []string, t *testing.T) {
+	targetDir, err := os.Open(targetPath)
+	if err != nil {
+		t.Fatalf("Can't open dir %v: %v", targetPath, err)
+	}
+	defer targetDir.Close()
+	names, err := targetDir.Readdirnames(-1)
+	if err != nil {
+		t.Fatalf("Can't read dir %v: %v", targetPath, err)
+	}
+	for _, name := range names {
+		err = os.RemoveAll(filepath.Join(testdata.Path(targetPath), name))
+		if err != nil {
+			t.Fatalf("Can't remove file %v: %v", name, err)
+		}
+	}
+	for _, fileName := range fileNames {
+		destinationPath := filepath.Join(targetPath, fileName)
+
+		sourceFile, err := os.Open(filepath.Join(sourcePath, fileName))
+		if err != nil {
+			t.Fatalf("Can't open file %v: %v", fileName, err)
+		}
+		defer sourceFile.Close()
+
+		destinationFile, err := os.Create(destinationPath)
+		if err != nil {
+			t.Fatalf("Can't create file %v: %v", destinationFile, err)
+		}
+		defer destinationFile.Close()
+
+		_, err = io.Copy(destinationFile, sourceFile)
+		if err != nil {
+			t.Fatalf("Can't copy file %v to %v: %v", sourceFile, destinationFile, err)
+		}
+	}
 }

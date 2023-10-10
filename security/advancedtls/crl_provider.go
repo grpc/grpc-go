@@ -209,11 +209,12 @@ func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 	// Only if all the files are processed successful we can swap maps (there
 	// might be deletions of entries in this case
 	if len(files) == successCounter {
-		var updatedCRLs = &tempCRLs
-		var _ = &p.crls
 		p.mu.Lock()
 		defer p.mu.Unlock()
-		_ = updatedCRLs
+		p.crls = make(map[string]*CRL)
+		for key, value := range tempCRLs {
+			p.crls[key] = value
+		}
 		grpclogLogger.Infof("Scan of CRLDirectory %v completed, %v files found and processed successfully, in-memory CRL storage flushed and repopulated", p.opts.CRLDirectory, len(files))
 	} else {
 		// Since some of the files failed we can only add/update entries in the map
