@@ -336,6 +336,9 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		if err != nil {
 			return
 		}
+		if serverConfig.MaxStreams == 0 {
+			serverConfig.MaxStreams = math.MaxUint32
+		}
 		transport, err := NewServerTransport(conn, serverConfig)
 		if err != nil {
 			return
@@ -442,8 +445,8 @@ func setUpServerOnly(t *testing.T, port int, sc *ServerConfig, ht hType) *server
 	return server
 }
 
-func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, *http2Client, func()) {
-	return setUpWithOptions(t, port, &ServerConfig{MaxStreams: maxStreams}, ht, ConnectOptions{})
+func setUp(t *testing.T, port int, ht hType) (*server, *http2Client, func()) {
+	return setUpWithOptions(t, port, &ServerConfig{}, ht, ConnectOptions{})
 }
 
 func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts ConnectOptions) (*server, *http2Client, func()) {
@@ -538,7 +541,7 @@ func (s) TestInflightStreamClosing(t *testing.T) {
 
 // Tests that when streamID > MaxStreamId, the current client transport drains.
 func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
+	server, ct, cancel := setUp(t, 0, normal)
 	defer cancel()
 	defer server.stop()
 	callHdr := &CallHdr{
@@ -583,7 +586,7 @@ func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
 }
 
 func (s) TestClientSendAndReceive(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
+	server, ct, cancel := setUp(t, 0, normal)
 	defer cancel()
 	callHdr := &CallHdr{
 		Host:   "localhost",
@@ -623,7 +626,7 @@ func (s) TestClientSendAndReceive(t *testing.T) {
 }
 
 func (s) TestClientErrorNotify(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
+	server, ct, cancel := setUp(t, 0, normal)
 	defer cancel()
 	go server.stop()
 	// ct.reader should detect the error and activate ct.Error().
@@ -657,7 +660,7 @@ func performOneRPC(ct ClientTransport) {
 }
 
 func (s) TestClientMix(t *testing.T) {
-	s, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
+	s, ct, cancel := setUp(t, 0, normal)
 	defer cancel()
 	time.AfterFunc(time.Second, s.stop)
 	go func(ct ClientTransport) {
@@ -671,7 +674,7 @@ func (s) TestClientMix(t *testing.T) {
 }
 
 func (s) TestLargeMessage(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
+	server, ct, cancel := setUp(t, 0, normal)
 	defer cancel()
 	callHdr := &CallHdr{
 		Host:   "localhost",
@@ -806,7 +809,7 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 // proceed until they complete naturally, while not allowing creation of new
 // streams during this window.
 func (s) TestGracefulClose(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, math.MaxUint32, pingpong)
+	server, ct, cancel := setUp(t, 0, pingpong)
 	defer cancel()
 	defer func() {
 		// Stop the server's listener to make the server's goroutines terminate
@@ -872,7 +875,7 @@ func (s) TestGracefulClose(t *testing.T) {
 }
 
 func (s) TestLargeMessageSuspension(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, math.MaxUint32, suspended)
+	server, ct, cancel := setUp(t, 0, suspended)
 	defer cancel()
 	callHdr := &CallHdr{
 		Host:   "localhost",
@@ -980,7 +983,7 @@ func (s) TestMaxStreams(t *testing.T) {
 }
 
 func (s) TestServerContextCanceledOnClosedConnection(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, math.MaxUint32, suspended)
+	server, ct, cancel := setUp(t, 0, suspended)
 	defer cancel()
 	callHdr := &CallHdr{
 		Host:   "localhost",
@@ -1452,7 +1455,7 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 var encodingTestStatus = status.New(codes.Internal, "\n")
 
 func (s) TestEncodingRequiredStatus(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, math.MaxUint32, encodingRequiredStatus)
+	server, ct, cancel := setUp(t, 0, encodingRequiredStatus)
 	defer cancel()
 	callHdr := &CallHdr{
 		Host:   "localhost",
@@ -1480,7 +1483,7 @@ func (s) TestEncodingRequiredStatus(t *testing.T) {
 }
 
 func (s) TestInvalidHeaderField(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, math.MaxUint32, invalidHeaderField)
+	server, ct, cancel := setUp(t, 0, invalidHeaderField)
 	defer cancel()
 	callHdr := &CallHdr{
 		Host:   "localhost",
@@ -1502,7 +1505,7 @@ func (s) TestInvalidHeaderField(t *testing.T) {
 }
 
 func (s) TestHeaderChanClosedAfterReceivingAnInvalidHeader(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, math.MaxUint32, invalidHeaderField)
+	server, ct, cancel := setUp(t, 0, invalidHeaderField)
 	defer cancel()
 	defer server.stop()
 	defer ct.Close(fmt.Errorf("closed manually by test"))
@@ -2170,7 +2173,7 @@ func (s) TestPingPong1MB(t *testing.T) {
 
 // This is a stress-test of flow control logic.
 func runPingPongTest(t *testing.T, msgSize int) {
-	server, client, cancel := setUp(t, 0, 0, pingpong)
+	server, client, cancel := setUp(t, 0, pingpong)
 	defer cancel()
 	defer server.stop()
 	defer client.Close(fmt.Errorf("closed manually by test"))
@@ -2252,7 +2255,7 @@ func (s) TestHeaderTblSize(t *testing.T) {
 		}
 	}()
 
-	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
+	server, ct, cancel := setUp(t, 0, normal)
 	defer cancel()
 	defer ct.Close(fmt.Errorf("closed manually by test"))
 	defer server.stop()
@@ -2611,7 +2614,7 @@ func TestConnectionError_Unwrap(t *testing.T) {
 
 func (s) TestPeerSetInServerContext(t *testing.T) {
 	// create client and server transports.
-	server, client, cancel := setUp(t, 0, math.MaxUint32, normal)
+	server, client, cancel := setUp(t, 0, normal)
 	defer cancel()
 	defer server.stop()
 	defer client.Close(fmt.Errorf("closed manually by test"))
