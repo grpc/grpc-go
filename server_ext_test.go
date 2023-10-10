@@ -76,7 +76,6 @@ func (s) TestServer_MaxHandlers(t *testing.T) {
 	select {
 	case <-started:
 	case <-ctx.Done():
-		panic("wtf")
 		t.Fatalf("Timed out waiting for RPC to start on server.")
 	}
 
