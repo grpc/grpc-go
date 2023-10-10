@@ -58,7 +58,7 @@ func cipherSuiteLookup(cipherSuiteID uint16) string {
 			return suites[i].Name
 		}
 	}
-	return ""
+	return fmt.Sprintf("unknown ID: %v", cipherSuiteID)
 }
 
 // GetSecurityValue returns security info requested by channelz.
