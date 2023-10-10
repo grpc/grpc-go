@@ -25,13 +25,13 @@ import (
 	"strconv"
 )
 
-// A Code is a status code according to the gRPC spec:
-//
-// https://github.com/grpc/grpc/blob/master/doc/statuscodes.md
+// A Code is a status code defined according to the [gRPC documentation].
 //
 // Only the codes defined as consts in this package are valid codes. Do not use
-// other code values.  Behavior and interopability are implementation-specific
-// and not guaranteed.
+// other code values.  Behavior of other codes is implementation-specific and
+// interoperability between implementations is not guaranteed.
+//
+// [gRPC documentation]: https://github.com/grpc/grpc/blob/master/doc/statuscodes.md
 type Code uint32
 
 const (
