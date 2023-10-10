@@ -46,16 +46,14 @@ func (t TLSInfo) AuthType() string {
 
 // cipherSuiteLookup returns the string version of a TLS cipher suite ID.
 func cipherSuiteLookup(cipherSuiteID uint16) string {
-	suites := tls.CipherSuites()
-	insecureSuites := tls.InsecureCipherSuites()
-	for i := range suites {
-		if suites[i].ID == cipherSuiteID {
-			return suites[i].Name
+	for _, s := range tls.CipherSuites() {
+		if s.ID == cipherSuiteID {
+			return s.Name
 		}
 	}
-	for i := range insecureSuites {
-		if insecureSuites[i].ID == cipherSuiteID {
-			return suites[i].Name
+	for _, s := range tls.InsecureCipherSuites() {
+		if s.ID == cipherSuiteID {
+			return s.Name
 		}
 	}
 	return fmt.Sprintf("unknown ID: %v", cipherSuiteID)
