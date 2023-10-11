@@ -178,81 +178,15 @@ func verifyUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan re
 	}
 }
 
-// Tests the most basic scenario involving a DNS resolver where a name
-// resolves to a list of addresses. The test verifies that the expected update
-// is pushed to the channel.
+// Tests the scenario where a name resolves to a list of addresses, possibly
+// some grpclb addresses as well, and a service config. The test verifies that
+// the expected update is pushed to the channel.
 func (s) TestDNSResolver_Basic(t *testing.T) {
-	tests := []struct {
-		name            string
-		target          string
-		hostLookupTable map[string][]string
-		wantAddrs       []resolver.Address
-		wantSC          string
-	}{
-		{
-			name:            "default port",
-			target:          "foo.bar.com",
-			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
-			wantAddrs:       []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
-			wantSC:          generateSC("foo.bar.com"),
-		},
-		{
-			name:            "specified port",
-			target:          "foo.bar.com:1234",
-			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
-			wantAddrs:       []resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
-			wantSC:          generateSC("foo.bar.com"),
-		},
-		{
-			name:            "ipv4 with SRV and single grpclb address",
-			target:          "srv.ipv4.single.fake",
-			hostLookupTable: map[string][]string{"srv.ipv4.single.fake": {"2.4.6.8"}},
-			wantAddrs:       []resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
-			wantSC:          generateSC("srv.ipv4.single.fake"),
-		},
-		{
-			name:            "ipv4 with SRV and multiple grpclb address",
-			target:          "srv.ipv4.multi.fake",
-			hostLookupTable: map[string][]string{"srv.ipv4.multi.fake": nil},
-			wantAddrs:       nil,
-			wantSC:          generateSC("srv.ipv4.multi.fake"),
-		},
-		{
-			name:            "ipv6 with SRV and single grpclb address",
-			target:          "srv.ipv6.single.fake",
-			hostLookupTable: map[string][]string{"srv.ipv6.single.fake": nil},
-			wantAddrs:       nil,
-			wantSC:          generateSC("srv.ipv6.single.fake"),
-		},
-		{
-			name:            "ipv6 with SRV and multiple grpclb address",
-			target:          "srv.ipv6.multi.fake",
-			hostLookupTable: map[string][]string{"srv.ipv6.multi.fake": nil},
-			wantAddrs:       nil,
-			wantSC:          generateSC("srv.ipv6.multi.fake"),
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
-			overrideNetResolver(t, &testNetResolver{hostLookupTable: test.hostLookupTable})
-			_, stateCh, _ := buildResolverWithTestClientConn(t, test.target)
-
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
-			verifyUpdateFromResolver(ctx, t, stateCh, test.wantAddrs, nil, test.wantSC)
-		})
-	}
-}
-
-// Tests the scenario where a name resolves to a list of addresses and a service
-// config. The test verifies that the expected update is pushed to the channel.
-func (s) TestDNSResolver_WithSRV(t *testing.T) {
 	tests := []struct {
 		name              string
 		target            string
 		hostLookupTable   map[string][]string
+		srvLookupTable    map[string][]*net.SRV
 		wantAddrs         []resolver.Address
 		wantBalancerAddrs []resolver.Address
 		wantSC            string
@@ -280,6 +214,9 @@ func (s) TestDNSResolver_WithSRV(t *testing.T) {
 				"srv.ipv4.single.fake": {"2.4.6.8"},
 				"ipv4.single.fake":     {"1.2.3.4"},
 			},
+			srvLookupTable: map[string][]*net.SRV{
+				"_grpclb._tcp.srv.ipv4.single.fake": {&net.SRV{Target: "ipv4.single.fake", Port: 1234}},
+			},
 			wantAddrs:         []resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
 			wantBalancerAddrs: []resolver.Address{{Addr: "1.2.3.4:1234", ServerName: "ipv4.single.fake"}},
 			wantSC:            generateSC("srv.ipv4.single.fake"),
@@ -290,6 +227,9 @@ func (s) TestDNSResolver_WithSRV(t *testing.T) {
 			hostLookupTable: map[string][]string{
 				"srv.ipv4.single.fake": {"2.4.6.8"},
 				"ipv4.multi.fake":      {"1.2.3.4", "5.6.7.8", "9.10.11.12"},
+			},
+			srvLookupTable: map[string][]*net.SRV{
+				"_grpclb._tcp.srv.ipv4.multi.fake": {&net.SRV{Target: "ipv4.multi.fake", Port: 1234}},
 			},
 			wantAddrs: nil,
 			wantBalancerAddrs: []resolver.Address{
@@ -306,6 +246,9 @@ func (s) TestDNSResolver_WithSRV(t *testing.T) {
 				"srv.ipv6.single.fake": nil,
 				"ipv6.single.fake":     {"2607:f8b0:400a:801::1001"},
 			},
+			srvLookupTable: map[string][]*net.SRV{
+				"_grpclb._tcp.srv.ipv6.single.fake": {&net.SRV{Target: "ipv6.single.fake", Port: 1234}},
+			},
 			wantAddrs:         nil,
 			wantBalancerAddrs: []resolver.Address{{Addr: "[2607:f8b0:400a:801::1001]:1234", ServerName: "ipv6.single.fake"}},
 			wantSC:            generateSC("srv.ipv6.single.fake"),
@@ -316,6 +259,9 @@ func (s) TestDNSResolver_WithSRV(t *testing.T) {
 			hostLookupTable: map[string][]string{
 				"srv.ipv6.multi.fake": nil,
 				"ipv6.multi.fake":     {"2607:f8b0:400a:801::1001", "2607:f8b0:400a:801::1002", "2607:f8b0:400a:801::1003"},
+			},
+			srvLookupTable: map[string][]*net.SRV{
+				"_grpclb._tcp.srv.ipv6.multi.fake": {&net.SRV{Target: "ipv6.multi.fake", Port: 1234}},
 			},
 			wantAddrs: nil,
 			wantBalancerAddrs: []resolver.Address{
@@ -330,7 +276,10 @@ func (s) TestDNSResolver_WithSRV(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
-			overrideNetResolver(t, &testNetResolver{hostLookupTable: test.hostLookupTable})
+			overrideNetResolver(t, &testNetResolver{
+				hostLookupTable: test.hostLookupTable,
+				srvLookupTable:  test.srvLookupTable,
+			})
 			enableSRVLookups(t)
 			_, stateCh, _ := buildResolverWithTestClientConn(t, test.target)
 

@@ -35,6 +35,7 @@ type testNetResolver struct {
 
 	mu              sync.Mutex
 	hostLookupTable map[string][]string
+	srvLookupTable  map[string][]*net.SRV
 }
 
 func (tr *testNetResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
@@ -62,31 +63,12 @@ func (tr *testNetResolver) UpdateHostLookupTable(table map[string][]string) {
 	tr.mu.Unlock()
 }
 
-func (*testNetResolver) LookupSRV(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
-	return srvLookup(service, proto, name)
-}
+func (tr *testNetResolver) LookupSRV(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
 
-func (*testNetResolver) LookupTXT(ctx context.Context, host string) ([]string, error) {
-	return txtLookup(host)
-}
-
-var srvLookupTbl = struct {
-	sync.Mutex
-	tbl map[string][]*net.SRV
-}{
-	tbl: map[string][]*net.SRV{
-		"_grpclb._tcp.srv.ipv4.single.fake": {&net.SRV{Target: "ipv4.single.fake", Port: 1234}},
-		"_grpclb._tcp.srv.ipv4.multi.fake":  {&net.SRV{Target: "ipv4.multi.fake", Port: 1234}},
-		"_grpclb._tcp.srv.ipv6.single.fake": {&net.SRV{Target: "ipv6.single.fake", Port: 1234}},
-		"_grpclb._tcp.srv.ipv6.multi.fake":  {&net.SRV{Target: "ipv6.multi.fake", Port: 1234}},
-	},
-}
-
-func srvLookup(service, proto, name string) (string, []*net.SRV, error) {
 	cname := "_" + service + "._" + proto + "." + name
-	srvLookupTbl.Lock()
-	defer srvLookupTbl.Unlock()
-	if srvs, cnt := srvLookupTbl.tbl[cname]; cnt {
+	if srvs, ok := tr.srvLookupTable[cname]; ok {
 		return cname, srvs, nil
 	}
 	return "", nil, &net.DNSError{
@@ -95,6 +77,10 @@ func srvLookup(service, proto, name string) (string, []*net.SRV, error) {
 		Server:      "fake",
 		IsTemporary: true,
 	}
+}
+
+func (*testNetResolver) LookupTXT(ctx context.Context, host string) ([]string, error) {
+	return txtLookup(host)
 }
 
 // scfs contains an array of service config file string in JSON format.
