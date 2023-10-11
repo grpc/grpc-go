@@ -48,10 +48,8 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 
 func main() {
 	flag.Parse()
-	// ListenConfig allows options to be passed to the listener.
-	var lc net.ListenConfig
-	// Setting KeepAlive to -1 allows the listener to retain OS default TCP keep-alive interval.
-	lc.KeepAlive = time.Duration(-1)
+	// Setting KeepAlive to -1 allows the listener to retain OS default TCP keepalive time and interval.
+	lc := net.ListenConfig{KeepAlive: time.Duration(-1)}
 	lis, err := lc.Listen(context.Background(), "tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
