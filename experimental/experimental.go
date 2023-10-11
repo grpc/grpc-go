@@ -24,3 +24,42 @@
 //
 // All APIs in this package are experimental.
 package experimental
+
+import (
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal"
+)
+
+// WithRecvBufferPool returns a grpc.DialOption that configures the use of
+// bufferPool for parsing incoming messages on a grpc.ClientConn. Depending on
+// the application's workload, this could result in reduced memory allocation.
+//
+// If you are unsure about how to implement a memory pool but want to utilize
+// one, begin with grpc.NewSharedBufferPool.
+//
+// Note: The shared buffer pool feature will not be active if any of the
+// following options are used: WithStatsHandler, EnableTracing, or binary
+// logging. In such cases, the shared buffer pool will be ignored.
+//
+// Note: It is not recommended to use the shared buffer pool when compression is
+// enabled.
+func WithRecvBufferPool(bufferPool grpc.SharedBufferPool) grpc.DialOption {
+	return internal.WithRecvBufferPool.(func(grpc.SharedBufferPool) grpc.DialOption)(bufferPool)
+}
+
+// RecvBufferPool returns a grpc.ServerOption that configures the server to use
+// the provided shared buffer pool for parsing incoming messages. Depending on
+// the application's workload, this could result in reduced memory allocation.
+//
+// If you are unsure about how to implement a memory pool but want to utilize
+// one, begin with grpc.NewSharedBufferPool.
+//
+// Note: The shared buffer pool feature will not be active if any of the
+// following options are used: StatsHandler, EnableTracing, or binary logging.
+// In such cases, the shared buffer pool will be ignored.
+//
+// Note: It is not recommended to use the shared buffer pool when compression is
+// enabled.
+func RecvBufferPool(bufferPool grpc.SharedBufferPool) grpc.ServerOption {
+	return internal.RecvBufferPool.(func(grpc.SharedBufferPool) grpc.ServerOption)(bufferPool)
+}
