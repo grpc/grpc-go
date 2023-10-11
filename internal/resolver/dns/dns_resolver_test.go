@@ -532,7 +532,6 @@ func (s) TestResolverBuild(t *testing.T) {
 		target  string
 		wantErr string
 	}{
-		// TODO(yuxuanli): More false cases?
 		{
 			name:   "valid url",
 			target: "www.google.com",
@@ -564,10 +563,6 @@ func (s) TestResolverBuild(t *testing.T) {
 		{
 			name:   "empty host with port",
 			target: ":80",
-		},
-		{
-			name:   "",
-			target: "127.0.0...1:12345",
 		},
 		{
 			name:   "ipv6 address with zone",
