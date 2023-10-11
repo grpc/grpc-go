@@ -272,6 +272,9 @@ func main() {
 	case "large_unary":
 		interop.DoLargeUnaryCall(tc)
 		logger.Infoln("LargeUnaryCall done")
+	case "client_compressed_unary":
+		interop.DoClientCompressedUnaryCall(tc)
+		logger.Infoln("ClientCompressedUnary done")
 	case "client_streaming":
 		interop.DoClientStreaming(tc)
 		logger.Infoln("ClientStreaming done")

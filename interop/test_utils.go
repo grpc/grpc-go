@@ -39,6 +39,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/orca"
@@ -46,6 +48,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
+	"google.golang.org/grpc/interop/grpc_testing"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -105,6 +108,61 @@ func DoLargeUnaryCall(tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
 	s := len(reply.GetPayload().GetBody())
 	if t != testpb.PayloadType_COMPRESSABLE || s != largeRespSize {
 		logger.Fatalf("Got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
+	}
+}
+
+// DoClientCompressedUnaryCall verifies the client can compress unary message
+func DoClientCompressedUnaryCall(tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	compressedRequest := &testpb.SimpleRequest{
+		ResponseType:     testpb.PayloadType_COMPRESSABLE,
+		ResponseSize:     int32(largeRespSize),
+		ExpectCompressed: &grpc_testing.BoolValue{Value: true},
+		Payload:          pl,
+	}
+
+	ctx := context.Background()
+	compressedReply, err := tc.UnaryCall(
+		ctx, compressedRequest, append(args, grpc.UseCompressor(gzip.Name))...,
+	)
+	if err != nil {
+		logger.Fatal("/TestService/ClientCompressedUnary RPC failed: ", err)
+	}
+
+	compressedReplyType := compressedReply.GetPayload().GetType()
+	compressedReplyBody := len(compressedReply.GetPayload().GetBody())
+	if compressedReplyType != testpb.PayloadType_COMPRESSABLE ||
+		compressedReplyBody != largeRespSize {
+		logger.Fatalf(
+			"Got the reply with type %d len %d; want %d, %d",
+			compressedReplyType, compressedReplyBody,
+			testpb.PayloadType_COMPRESSABLE, largeRespSize,
+		)
+	}
+
+	uncompressedRequest := &testpb.SimpleRequest{
+		ResponseType:     testpb.PayloadType_COMPRESSABLE,
+		ResponseSize:     int32(largeRespSize),
+		ExpectCompressed: &grpc_testing.BoolValue{Value: false},
+		Payload:          pl,
+	}
+
+	uncompressedReply, err := tc.UnaryCall(
+		ctx, uncompressedRequest, append(args, grpc.UseCompressor(encoding.Identity))...,
+	)
+	if err != nil {
+		logger.Fatal("/TestService/ClientCompressedUnary RPC failed: ", err)
+	}
+
+	uncompressedReplyType := uncompressedReply.GetPayload().GetType()
+	uncompressedReplyBody := len(uncompressedReply.GetPayload().GetBody())
+	if uncompressedReplyType != testpb.PayloadType_COMPRESSABLE ||
+		uncompressedReplyBody != largeRespSize {
+		logger.Fatalf(
+			"Got the reply with type %d len %d; want %d, %d",
+			uncompressedReplyType, uncompressedReplyBody,
+			testpb.PayloadType_COMPRESSABLE, largeRespSize,
+		)
 	}
 }
 

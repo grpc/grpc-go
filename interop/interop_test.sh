@@ -78,6 +78,7 @@ withTimeout () {
 CASES=(
   "empty_unary"
   "large_unary"
+  "client_compressed_unary"
   "client_streaming"
   "server_streaming"
   "ping_pong"
