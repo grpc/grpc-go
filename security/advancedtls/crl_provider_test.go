@@ -190,10 +190,10 @@ func TestFileWatcherCRLProvider(t *testing.T) {
 
 // TestFileWatcherCRLProviderDirectoryScan tests how FileWatcherCRLProvider
 // handles different contents of Options.CRLDirectory
-// We update the content with new (correct and incorrect) CRL files and check if
-// in-memory storage was properly updated. Please note that the same instance of
-// FileWatcherCRLProvider is used for the whole test so test cases are not
-// independent from each other
+// We update the content with various (correct and incorrect) CRL files and
+// check if in-memory storage was properly updated. Please note that the same
+// instance of FileWatcherCRLProvider is used for the whole test so test cases
+// cases are not independent from each other.
 func TestFileWatcherCRLProviderDirectoryScan(t *testing.T) {
 	sourcePath := testdata.Path("crl")
 	targetPath := testdata.Path("crl/provider/filewatcher")
@@ -206,8 +206,8 @@ func TestFileWatcherCRLProviderDirectoryScan(t *testing.T) {
 	}
 
 	// Each test data entry contains a description of CRL directory content, name
-	// of the files to be copied there before the test case, and expected number
-	// of entries in the FileWatcherCRLProvider map.
+	// of the files to be copied there before the test case execution, and
+	// expected number of entries in the FileWatcherCRLProvider map.
 	tests := []struct {
 		desc            string
 		fileNames       []string
