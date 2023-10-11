@@ -189,7 +189,7 @@ func TestFileWatcherCRLProvider(t *testing.T) {
 }
 
 // TestFileWatcherCRLProviderDirectoryScan tests how FileWatcherCRLProvider
-// handles different contents of Options.CRLDirectory
+// handles different contents of Options.CRLDirectory.
 // We update the content with various (correct and incorrect) CRL files and
 // check if in-memory storage was properly updated. Please note that the same
 // instance of FileWatcherCRLProvider is used for the whole test so test cases
