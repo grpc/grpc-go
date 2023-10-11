@@ -167,8 +167,8 @@ func toEndpointNode(endpoint Endpoint) endpointNode {
 
 // EndpointMap is a map of endpoints to arbitrary values keyed on only the
 // unordered set of address strings within an endpoint. This map is not thread
-// safe, cannot access multiple times concurrently. The zero value for an
-// EndpointMap is an empty EndpointMap ready to use.
+// safe, thus it is unsafe to access concurrently. Must be created via
+// NewEndpointMap; do not construct directly.
 type EndpointMap struct {
 	endpoints map[*endpointNode]any
 }
@@ -248,8 +248,7 @@ func (em EndpointMap) find(e endpointNode) *endpointNode {
 // Delete removes the specified endpoint from the map.
 func (em *EndpointMap) Delete(e Endpoint) {
 	en := toEndpointNode(e)
-	entry := em.find(en)
-	if entry != nil {
+	if entry := em.find(en); entry != nil {
 		delete(em.endpoints, entry)
 	}
 }
