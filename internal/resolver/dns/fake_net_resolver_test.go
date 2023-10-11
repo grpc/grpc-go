@@ -32,44 +32,20 @@ type testNetResolver struct {
 	// request. Tests can rely on reading from this channel to be notified about
 	// resolution requests instead of sleeping for a predefined period of time.
 	lookupHostCh *testutils.Channel
+
+	mu              sync.Mutex
+	hostLookupTable map[string][]string
 }
 
 func (tr *testNetResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
 	if tr.lookupHostCh != nil {
 		tr.lookupHostCh.Send(nil)
 	}
-	return hostLookup(host)
-}
 
-func (*testNetResolver) LookupSRV(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
-	return srvLookup(service, proto, name)
-}
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
 
-func (*testNetResolver) LookupTXT(ctx context.Context, host string) ([]string, error) {
-	return txtLookup(host)
-}
-
-var hostLookupTbl = struct {
-	sync.Mutex
-	tbl map[string][]string
-}{
-	tbl: map[string][]string{
-		"foo.bar.com":          {"1.2.3.4", "5.6.7.8"},
-		"ipv4.single.fake":     {"1.2.3.4"},
-		"srv.ipv4.single.fake": {"2.4.6.8"},
-		"srv.ipv4.multi.fake":  {},
-		"srv.ipv6.single.fake": {},
-		"srv.ipv6.multi.fake":  {},
-		"ipv4.multi.fake":      {"1.2.3.4", "5.6.7.8", "9.10.11.12"},
-		"ipv6.single.fake":     {"2607:f8b0:400a:801::1001"},
-		"ipv6.multi.fake":      {"2607:f8b0:400a:801::1001", "2607:f8b0:400a:801::1002", "2607:f8b0:400a:801::1003"},
-	},
-}
-
-func hostLookup(host string) ([]string, error) {
-	hostLookupTbl.Lock()
-	defer hostLookupTbl.Unlock()
-	if addrs, ok := hostLookupTbl.tbl[host]; ok {
+	if addrs, ok := tr.hostLookupTable[host]; ok {
 		return addrs, nil
 	}
 	return nil, &net.DNSError{
@@ -78,6 +54,20 @@ func hostLookup(host string) ([]string, error) {
 		Server:      "fake",
 		IsTemporary: true,
 	}
+}
+
+func (tr *testNetResolver) UpdateHostLookupTable(table map[string][]string) {
+	tr.mu.Lock()
+	tr.hostLookupTable = table
+	tr.mu.Unlock()
+}
+
+func (*testNetResolver) LookupSRV(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
+	return srvLookup(service, proto, name)
+}
+
+func (*testNetResolver) LookupTXT(ctx context.Context, host string) ([]string, error) {
+	return txtLookup(host)
 }
 
 var srvLookupTbl = struct {

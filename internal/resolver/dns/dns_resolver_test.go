@@ -183,53 +183,60 @@ func verifyUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan re
 // is pushed to the channel.
 func (s) TestDNSResolver_Basic(t *testing.T) {
 	tests := []struct {
-		name      string
-		target    string
-		wantAddrs []resolver.Address
-		wantSC    string
+		name            string
+		target          string
+		hostLookupTable map[string][]string
+		wantAddrs       []resolver.Address
+		wantSC          string
 	}{
 		{
-			name:      "default port",
-			target:    "foo.bar.com",
-			wantAddrs: []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
-			wantSC:    generateSC("foo.bar.com"),
+			name:            "default port",
+			target:          "foo.bar.com",
+			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			wantAddrs:       []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			wantSC:          generateSC("foo.bar.com"),
 		},
 		{
-			name:      "specified port",
-			target:    "foo.bar.com:1234",
-			wantAddrs: []resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
-			wantSC:    generateSC("foo.bar.com"),
+			name:            "specified port",
+			target:          "foo.bar.com:1234",
+			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			wantAddrs:       []resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
+			wantSC:          generateSC("foo.bar.com"),
 		},
 		{
-			name:      "ipv4 with SRV and single grpclb address",
-			target:    "srv.ipv4.single.fake",
-			wantAddrs: []resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
-			wantSC:    generateSC("srv.ipv4.single.fake"),
+			name:            "ipv4 with SRV and single grpclb address",
+			target:          "srv.ipv4.single.fake",
+			hostLookupTable: map[string][]string{"srv.ipv4.single.fake": {"2.4.6.8"}},
+			wantAddrs:       []resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
+			wantSC:          generateSC("srv.ipv4.single.fake"),
 		},
 		{
-			name:      "ipv4 with SRV and multiple grpclb address",
-			target:    "srv.ipv4.multi.fake",
-			wantAddrs: nil,
-			wantSC:    generateSC("srv.ipv4.multi.fake"),
+			name:            "ipv4 with SRV and multiple grpclb address",
+			target:          "srv.ipv4.multi.fake",
+			hostLookupTable: map[string][]string{"srv.ipv4.multi.fake": nil},
+			wantAddrs:       nil,
+			wantSC:          generateSC("srv.ipv4.multi.fake"),
 		},
 		{
-			name:      "ipv6 with SRV and single grpclb address",
-			target:    "srv.ipv6.single.fake",
-			wantAddrs: nil,
-			wantSC:    generateSC("srv.ipv6.single.fake"),
+			name:            "ipv6 with SRV and single grpclb address",
+			target:          "srv.ipv6.single.fake",
+			hostLookupTable: map[string][]string{"srv.ipv6.single.fake": nil},
+			wantAddrs:       nil,
+			wantSC:          generateSC("srv.ipv6.single.fake"),
 		},
 		{
-			name:      "ipv6 with SRV and multiple grpclb address",
-			target:    "srv.ipv6.multi.fake",
-			wantAddrs: nil,
-			wantSC:    generateSC("srv.ipv6.multi.fake"),
+			name:            "ipv6 with SRV and multiple grpclb address",
+			target:          "srv.ipv6.multi.fake",
+			hostLookupTable: map[string][]string{"srv.ipv6.multi.fake": nil},
+			wantAddrs:       nil,
+			wantSC:          generateSC("srv.ipv6.multi.fake"),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
-			overrideNetResolver(t, &testNetResolver{})
+			overrideNetResolver(t, &testNetResolver{hostLookupTable: test.hostLookupTable})
 			_, stateCh, _ := buildResolverWithTestClientConn(t, test.target)
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -245,6 +252,7 @@ func (s) TestDNSResolver_WithSRV(t *testing.T) {
 	tests := []struct {
 		name              string
 		target            string
+		hostLookupTable   map[string][]string
 		wantAddrs         []resolver.Address
 		wantBalancerAddrs []resolver.Address
 		wantSC            string
@@ -252,6 +260,7 @@ func (s) TestDNSResolver_WithSRV(t *testing.T) {
 		{
 			name:              "default port",
 			target:            "foo.bar.com",
+			hostLookupTable:   map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
 			wantAddrs:         []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
 			wantBalancerAddrs: nil,
 			wantSC:            generateSC("foo.bar.com"),
@@ -259,20 +268,29 @@ func (s) TestDNSResolver_WithSRV(t *testing.T) {
 		{
 			name:              "specified port",
 			target:            "foo.bar.com:1234",
+			hostLookupTable:   map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
 			wantAddrs:         []resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
 			wantBalancerAddrs: nil,
 			wantSC:            generateSC("foo.bar.com"),
 		},
 		{
-			name:              "ipv4 with SRV and single grpclb address",
-			target:            "srv.ipv4.single.fake",
+			name:   "ipv4 with SRV and single grpclb address",
+			target: "srv.ipv4.single.fake",
+			hostLookupTable: map[string][]string{
+				"srv.ipv4.single.fake": {"2.4.6.8"},
+				"ipv4.single.fake":     {"1.2.3.4"},
+			},
 			wantAddrs:         []resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
 			wantBalancerAddrs: []resolver.Address{{Addr: "1.2.3.4:1234", ServerName: "ipv4.single.fake"}},
 			wantSC:            generateSC("srv.ipv4.single.fake"),
 		},
 		{
-			name:      "ipv4 with SRV and multiple grpclb address",
-			target:    "srv.ipv4.multi.fake",
+			name:   "ipv4 with SRV and multiple grpclb address",
+			target: "srv.ipv4.multi.fake",
+			hostLookupTable: map[string][]string{
+				"srv.ipv4.single.fake": {"2.4.6.8"},
+				"ipv4.multi.fake":      {"1.2.3.4", "5.6.7.8", "9.10.11.12"},
+			},
 			wantAddrs: nil,
 			wantBalancerAddrs: []resolver.Address{
 				{Addr: "1.2.3.4:1234", ServerName: "ipv4.multi.fake"},
@@ -282,15 +300,23 @@ func (s) TestDNSResolver_WithSRV(t *testing.T) {
 			wantSC: generateSC("srv.ipv4.multi.fake"),
 		},
 		{
-			name:              "ipv6 with SRV and single grpclb address",
-			target:            "srv.ipv6.single.fake",
+			name:   "ipv6 with SRV and single grpclb address",
+			target: "srv.ipv6.single.fake",
+			hostLookupTable: map[string][]string{
+				"srv.ipv6.single.fake": nil,
+				"ipv6.single.fake":     {"2607:f8b0:400a:801::1001"},
+			},
 			wantAddrs:         nil,
 			wantBalancerAddrs: []resolver.Address{{Addr: "[2607:f8b0:400a:801::1001]:1234", ServerName: "ipv6.single.fake"}},
 			wantSC:            generateSC("srv.ipv6.single.fake"),
 		},
 		{
-			name:      "ipv6 with SRV and multiple grpclb address",
-			target:    "srv.ipv6.multi.fake",
+			name:   "ipv6 with SRV and multiple grpclb address",
+			target: "srv.ipv6.multi.fake",
+			hostLookupTable: map[string][]string{
+				"srv.ipv6.multi.fake": nil,
+				"ipv6.multi.fake":     {"2607:f8b0:400a:801::1001", "2607:f8b0:400a:801::1002", "2607:f8b0:400a:801::1003"},
+			},
 			wantAddrs: nil,
 			wantBalancerAddrs: []resolver.Address{
 				{Addr: "[2607:f8b0:400a:801::1001]:1234", ServerName: "ipv6.multi.fake"},
@@ -304,7 +330,7 @@ func (s) TestDNSResolver_WithSRV(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
-			overrideNetResolver(t, &testNetResolver{})
+			overrideNetResolver(t, &testNetResolver{hostLookupTable: test.hostLookupTable})
 			enableSRVLookups(t)
 			_, stateCh, _ := buildResolverWithTestClientConn(t, test.target)
 
@@ -321,26 +347,33 @@ func (s) TestDNSResolver_WithSRV(t *testing.T) {
 // resolver does not backoff anymore.
 func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 	tests := []struct {
-		name      string
-		target    string
-		wantAddrs []resolver.Address
-		wantSC    string
+		name            string
+		target          string
+		hostLookupTable map[string][]string
+		wantAddrs       []resolver.Address
+		wantSC          string
 	}{
 		{
-			name:      "happy case default port",
-			target:    "foo.bar.com",
-			wantAddrs: []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
-			wantSC:    generateSC("foo.bar.com"),
+			name:            "happy case default port",
+			target:          "foo.bar.com",
+			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			wantAddrs:       []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			wantSC:          generateSC("foo.bar.com"),
 		},
 		{
-			name:      "happy case specified port",
-			target:    "foo.bar.com:1234",
-			wantAddrs: []resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
-			wantSC:    generateSC("foo.bar.com"),
+			name:            "happy case specified port",
+			target:          "foo.bar.com:1234",
+			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			wantAddrs:       []resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
+			wantSC:          generateSC("foo.bar.com"),
 		},
 		{
-			name:      "happy case another default port",
-			target:    "srv.ipv4.single.fake",
+			name:   "happy case another default port",
+			target: "srv.ipv4.single.fake",
+			hostLookupTable: map[string][]string{
+				"srv.ipv4.single.fake": {"2.4.6.8"},
+				"ipv4.single.fake":     {"1.2.3.4"},
+			},
 			wantAddrs: []resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
 			wantSC:    generateSC("srv.ipv4.single.fake"),
 		},
@@ -348,7 +381,7 @@ func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			durChan, timeChan := overrideTimeAfterFuncWithChannel(t)
-			overrideNetResolver(t, &testNetResolver{})
+			overrideNetResolver(t, &testNetResolver{hostLookupTable: test.hostLookupTable})
 
 			// Set the test clientconn to return error back to the resolver when
 			// it pushes an update on the channel.
@@ -415,26 +448,25 @@ func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 // Tests the case where the DNS resolver is asked to re-resolve by invoking the
 // ResolveNow method.
 func (s) TestDNSResolver_ResolveNow(t *testing.T) {
+	const target = "foo.bar.com"
+
 	overrideResolutionRate(t, 0)
 	overrideTimeAfterFunc(t, 0)
-	overrideNetResolver(t, &testNetResolver{})
+	tr := &testNetResolver{hostLookupTable: map[string][]string{target: {"1.2.3.4", "5.6.7.8"}}}
+	overrideNetResolver(t, tr)
 
-	const target = "foo.bar.com"
 	r, stateCh, _ := buildResolverWithTestClientConn(t, target)
 
 	// Verify that the first update pushed by the resolver matches expectations.
 	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
-	wantSC := generateSC("foo.bar.com")
+	wantSC := generateSC(target)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
 
 	// Update state in the fake net.Resolver to return only one address and a
 	// new service config.
-	hostLookupTbl.Lock()
-	oldHostTblEntry := hostLookupTbl.tbl[target]
-	hostLookupTbl.tbl[target] = hostLookupTbl.tbl[target][:len(oldHostTblEntry)-1]
-	hostLookupTbl.Unlock()
+	tr.UpdateHostLookupTable(map[string][]string{target: {"1.2.3.4"}})
 	txtLookupTbl.Lock()
 	txtTableKey := "_grpc_config." + target
 	oldTxtTblEntry := txtLookupTbl.tbl[txtTableKey]
@@ -443,9 +475,6 @@ func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 
 	// Reset state in the fake net.Resolver at the end of the test.
 	defer func() {
-		hostLookupTbl.Lock()
-		hostLookupTbl.tbl[target] = oldHostTblEntry
-		hostLookupTbl.Unlock()
 		txtLookupTbl.Lock()
 		txtLookupTbl.tbl[txtTableKey] = oldTxtTblEntry
 		txtLookupTbl.Unlock()
@@ -460,9 +489,7 @@ func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 
 	// Update state in the fake resolver to return no addresses and the same
 	// service config as before.
-	hostLookupTbl.Lock()
-	hostLookupTbl.tbl[target] = nil
-	hostLookupTbl.Unlock()
+	tr.UpdateHostLookupTable(map[string][]string{target: nil})
 
 	// Ask the resolver to re-resolve and verify that the new update matches
 	// expectations.
@@ -661,19 +688,25 @@ func (s) TestDisableServiceConfig(t *testing.T) {
 	tests := []struct {
 		name                 string
 		target               string
+		hostLookupTable      map[string][]string
 		disableServiceConfig bool
+		wantAddrs            []resolver.Address
 		wantSC               string
 	}{
 		{
 			name:                 "false",
 			target:               "foo.bar.com",
+			hostLookupTable:      map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
 			disableServiceConfig: false,
+			wantAddrs:            []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
 			wantSC:               generateSC("foo.bar.com"),
 		},
 		{
 			name:                 "true",
 			target:               "foo.bar.com",
+			hostLookupTable:      map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
 			disableServiceConfig: true,
+			wantAddrs:            []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
 			wantSC:               "",
 		},
 	}
@@ -681,7 +714,7 @@ func (s) TestDisableServiceConfig(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
-			overrideNetResolver(t, &testNetResolver{})
+			overrideNetResolver(t, &testNetResolver{hostLookupTable: test.hostLookupTable})
 
 			b := resolver.Get("dns")
 			if b == nil {
@@ -702,8 +735,7 @@ func (s) TestDisableServiceConfig(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
-			verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, test.wantSC)
+			verifyUpdateFromResolver(ctx, t, stateCh, test.wantAddrs, nil, test.wantSC)
 		})
 	}
 }
@@ -714,7 +746,7 @@ func (s) TestTXTError(t *testing.T) {
 	for _, ignore := range []bool{false, true} {
 		t.Run(fmt.Sprintf("%v", ignore), func(t *testing.T) {
 			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
-			overrideNetResolver(t, &testNetResolver{})
+			overrideNetResolver(t, &testNetResolver{hostLookupTable: map[string][]string{"ipv4.single.fake": {"1.2.3.4"}}})
 
 			origTXTIgnore := envconfig.TXTErrIgnore
 			envconfig.TXTErrIgnore = ignore
@@ -864,11 +896,14 @@ func (s) TestCustomAuthority(t *testing.T) {
 // calls ResolveNow() and ensures only the expected number of resolution
 // requests are made.
 func (s) TestRateLimitedResolve(t *testing.T) {
+	const target = "foo.bar.com"
 	_, timeChan := overrideTimeAfterFuncWithChannel(t)
-	tr := &testNetResolver{lookupHostCh: testutils.NewChannel()}
+	tr := &testNetResolver{
+		lookupHostCh:    testutils.NewChannel(),
+		hostLookupTable: map[string][]string{target: {"1.2.3.4", "5.6.7.8"}},
+	}
 	overrideNetResolver(t, tr)
 
-	const target = "foo.bar.com"
 	r, stateCh, _ := buildResolverWithTestClientConn(t, target)
 
 	// Wait for the first resolution request to be done. This happens as part
