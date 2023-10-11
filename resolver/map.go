@@ -138,17 +138,17 @@ func (a *AddressMap) Values() []any {
 }
 
 type endpointNode struct {
-	addrs map[string]int
+	addrs map[string]struct{}
 }
 
-// Equal returns whether the unordered set of addrs counts are the same between
-// the endpoint nodes.
+// Equal returns whether the unordered set of addrs are the same between the
+// endpoint nodes.
 func (en *endpointNode) Equal(en2 *endpointNode) bool {
 	if len(en.addrs) != len(en2.addrs) {
 		return false
 	}
-	for addr, count := range en.addrs {
-		if count2, ok := en2.addrs[addr]; !ok || count != count2 {
+	for addr := range en.addrs {
+		if _, ok := en2.addrs[addr]; !ok {
 			return false
 		}
 	}
@@ -156,9 +156,9 @@ func (en *endpointNode) Equal(en2 *endpointNode) bool {
 }
 
 func toEndpointNode(endpoint Endpoint) endpointNode {
-	en := make(map[string]int)
+	en := make(map[string]struct{})
 	for _, addr := range endpoint.Addresses {
-		en[addr.Addr]++
+		en[addr.Addr] = struct{}{}
 	}
 	return endpointNode{
 		addrs: en,
@@ -207,17 +207,14 @@ func (em *EndpointMap) Len() int {
 // Keys returns a slice of all current map keys, as endpoints specifying the
 // addresses present in the endpoint keys, in which uniqueness is determined by
 // the unordered set of addresses. Thus, endpoint information returned is not
-// the full endpoint data but can be used for EndpointMap accesses.
-func (em *EndpointMap) Keys() []Endpoint { // TODO: Persist the whole endpoint data to return in nodes? No use case now, but one could come up in future.
+// the full endpoint data (drops duplicated addresses and attributes) but can be
+// used for EndpointMap accesses.
+func (em *EndpointMap) Keys() []Endpoint {
 	ret := make([]Endpoint, 0, len(em.endpoints))
 	for en := range em.endpoints {
 		var endpoint Endpoint
-		for addr, count := range en.addrs {
-			for i := 0; i < count; i++ {
-				endpoint.Addresses = append(endpoint.Addresses, Address{
-					Addr: addr,
-				})
-			}
+		for addr := range en.addrs {
+			endpoint.Addresses = append(endpoint.Addresses, Address{Addr: addr})
 		}
 		ret = append(ret, endpoint)
 	}
