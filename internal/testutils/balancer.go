@@ -30,13 +30,6 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// testingLogger wraps the logging methods from testing.T.
-type testingLogger interface {
-	Log(args ...any)
-	Logf(format string, args ...any)
-	Errorf(format string, args ...any)
-}
-
 // TestSubConn implements the SubConn interface, to be used in tests.
 type TestSubConn struct {
 	tcc           *BalancerClientConn // the CC that owns this SubConn
@@ -100,7 +93,7 @@ func (tsc *TestSubConn) String() string {
 
 // BalancerClientConn is a mock balancer.ClientConn used in tests.
 type BalancerClientConn struct {
-	logger testingLogger
+	logger Logger
 
 	NewSubConnAddrsCh      chan []resolver.Address // the last 10 []Address to create subconn.
 	NewSubConnCh           chan *TestSubConn       // the last 10 subconn created.

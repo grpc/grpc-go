@@ -19,56 +19,47 @@
 package testutils
 
 import (
-	"testing"
-
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
 
+// Logger wraps the logging methods from testing.T.
+type Logger interface {
+	Log(args ...any)
+	Logf(format string, args ...any)
+	Errorf(format string, args ...any)
+}
+
 // ResolverClientConn is a fake implemetation of the resolver.ClientConn
 // interface to be used in tests.
 type ResolverClientConn struct {
 	resolver.ClientConn // Embedding the interface to avoid implementing deprecated methods.
-	logger              testingLogger
 
-	// Callbacks specified by the test.
-	updateStateF func(resolver.State) error
-	reportErrorF func(err error)
-}
-
-// NewResolverClientConn creates a ResolverClientConn.
-//
-// updateState and reportError, when non-nil, are callbacks that will be invoked
-// by the ResolverClientConn when the resolver pushes an update or reports an
-// error respectively.
-func NewResolverClientConn(t *testing.T, updateState func(resolver.State) error, reportError func(error)) *ResolverClientConn {
-	return &ResolverClientConn{
-		logger:       t,
-		updateStateF: updateState,
-		reportErrorF: reportError,
-	}
+	Logger       Logger                     // Tests should pass testing.T for this.
+	UpdateStateF func(resolver.State) error // Invoked when resolver pushes a state update.
+	ReportErrorF func(err error)            // Invoked when resolver pushes an error.
 }
 
 // UpdateState invokes the test specified callback with the update received from
 // the resolver. If the callback returns a non-nil error, the same will be
 // propagated to the resolver.
 func (t *ResolverClientConn) UpdateState(s resolver.State) error {
-	t.logger.Logf("testutils.ResolverClientConn: UpdateState(%s)", pretty.ToJSON(s))
+	t.Logger.Logf("testutils.ResolverClientConn: UpdateState(%s)", pretty.ToJSON(s))
 
-	if t.updateStateF != nil {
-		return t.updateStateF(s)
+	if t.UpdateStateF != nil {
+		return t.UpdateStateF(s)
 	}
 	return nil
 }
 
 // ReportError pushes the error received from the resolver on to ErrorCh.
 func (t *ResolverClientConn) ReportError(err error) {
-	t.logger.Logf("testutils.ResolverClientConn: ReportError(%v)", err)
+	t.Logger.Logf("testutils.ResolverClientConn: ReportError(%v)", err)
 
-	if t.reportErrorF != nil {
-		t.reportErrorF(err)
+	if t.ReportErrorF != nil {
+		t.ReportErrorF(err)
 	}
 }
 

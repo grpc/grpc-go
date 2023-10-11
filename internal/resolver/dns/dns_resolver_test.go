@@ -134,7 +134,7 @@ func buildResolverWithTestClientConn(t *testing.T, target string) (resolver.Reso
 		}
 	}
 
-	tcc := testutils.NewResolverClientConn(t, updateStateF, reportErrorF)
+	tcc := &testutils.ResolverClientConn{Logger: t, UpdateStateF: updateStateF, ReportErrorF: reportErrorF}
 	r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("dns:///%s", target))}, tcc, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("Failed to build DNS resolver for target %q: %v\n", target, err)
@@ -359,7 +359,7 @@ func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 				}
 				return balancer.ErrBadResolverState
 			}
-			tcc := testutils.NewResolverClientConn(t, updateStateF, nil)
+			tcc := &testutils.ResolverClientConn{Logger: t, UpdateStateF: updateStateF}
 
 			b := resolver.Get("dns")
 			if b == nil {
@@ -636,7 +636,7 @@ func (s) TestResolverBuild(t *testing.T) {
 				t.Fatalf("Resolver for dns:/// scheme not registered")
 			}
 
-			tcc := testutils.NewResolverClientConn(t, nil, nil)
+			tcc := &testutils.ResolverClientConn{Logger: t}
 			r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("dns:///%s", test.target))}, tcc, resolver.BuildOptions{})
 			if err != nil {
 				if test.wantErr == "" {
@@ -693,7 +693,7 @@ func (s) TestDisableServiceConfig(t *testing.T) {
 				stateCh <- s
 				return nil
 			}
-			tcc := testutils.NewResolverClientConn(t, updateStateF, nil)
+			tcc := &testutils.ResolverClientConn{Logger: t, UpdateStateF: updateStateF}
 			r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("dns:///%s", test.target))}, tcc, resolver.BuildOptions{DisableServiceConfig: test.disableServiceConfig})
 			if err != nil {
 				t.Fatalf("Failed to build DNS resolver for target %q: %v\n", test.target, err)
@@ -840,7 +840,7 @@ func (s) TestCustomAuthority(t *testing.T) {
 				t.Fatalf("Resolver for dns:/// scheme not registered")
 			}
 
-			tcc := testutils.NewResolverClientConn(t, nil, nil)
+			tcc := &testutils.ResolverClientConn{Logger: t}
 			endpoint := "foo.bar.com"
 			target := resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("dns://%s/%s", test.authority, endpoint))}
 			r, err := b.Build(target, tcc, resolver.BuildOptions{})
