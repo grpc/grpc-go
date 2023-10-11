@@ -48,7 +48,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
-	"google.golang.org/grpc/interop/grpc_testing"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -117,7 +116,7 @@ func DoClientCompressedUnaryCall(tc testgrpc.TestServiceClient, args ...grpc.Cal
 	compressedRequest := &testpb.SimpleRequest{
 		ResponseType:     testpb.PayloadType_COMPRESSABLE,
 		ResponseSize:     int32(largeRespSize),
-		ExpectCompressed: &grpc_testing.BoolValue{Value: true},
+		ExpectCompressed: &testgrpc.BoolValue{Value: true},
 		Payload:          pl,
 	}
 
@@ -143,7 +142,7 @@ func DoClientCompressedUnaryCall(tc testgrpc.TestServiceClient, args ...grpc.Cal
 	uncompressedRequest := &testpb.SimpleRequest{
 		ResponseType:     testpb.PayloadType_COMPRESSABLE,
 		ResponseSize:     int32(largeRespSize),
-		ExpectCompressed: &grpc_testing.BoolValue{Value: false},
+		ExpectCompressed: &testgrpc.BoolValue{Value: false},
 		Payload:          pl,
 	}
 
