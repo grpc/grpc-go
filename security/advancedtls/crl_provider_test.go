@@ -37,7 +37,7 @@ const nonCRLFilesUnderCRLDirectory = 5
 // cases for CRL checks. It loads the CRLs under crl directory, constructs
 // unrevoked, revoked leaf, and revoked intermediate chains, as well as a chain
 // without CRL for issuer, and checks that it’s correctly processed.
-func TestStaticCRLProvider(t *testing.T) {
+func (s) TestStaticCRLProvider(t *testing.T) {
 	rawCRLs := make([][]byte, 6)
 	for i := 1; i <= 6; i++ {
 		rawCRL, err := os.ReadFile(testdata.Path(fmt.Sprintf("crl/%d.crl", i)))
@@ -91,7 +91,7 @@ func TestStaticCRLProvider(t *testing.T) {
 // TestFileWatcherCRLProviderConfig checks creation of FileWatcherCRLProvider,
 // and the validation of Options configuration. The configurations include empty
 // one, non existing CRLDirectory, invalid RefreshDuration, and the correct one.
-func TestFileWatcherCRLProviderConfig(t *testing.T) {
+func (s) TestFileWatcherCRLProviderConfig(t *testing.T) {
 	if _, err := MakeFileWatcherCRLProvider(Options{}); err == nil {
 		t.Fatalf("Empty Options should not be allowed")
 	}
@@ -127,7 +127,7 @@ func TestFileWatcherCRLProviderConfig(t *testing.T) {
 // intermediate chains, as well as a chain without CRL for issuer, and check
 // that it’s correctly processed. Additionally, we also check if number of
 // invocations of custom callback is correct.
-func TestFileWatcherCRLProvider(t *testing.T) {
+func (s) TestFileWatcherCRLProvider(t *testing.T) {
 	// testdata.Path("crl") contains 5 non-crl files.
 	nonCRLFilesSet := make(map[string]struct{})
 	customCallback := func(err error) {
@@ -194,7 +194,7 @@ func TestFileWatcherCRLProvider(t *testing.T) {
 // check if in-memory storage was properly updated. Please note that the same
 // instance of FileWatcherCRLProvider is used for the whole test so test cases
 // cases are not independent from each other.
-func TestFileWatcherCRLProviderDirectoryScan(t *testing.T) {
+func (s) TestFileWatcherCRLProviderDirectoryScan(t *testing.T) {
 	sourcePath := testdata.Path("crl")
 	targetPath := testdata.Path("crl/provider/filewatcher")
 	p, err := MakeFileWatcherCRLProvider(Options{
@@ -259,6 +259,7 @@ func TestFileWatcherCRLProviderDirectoryScan(t *testing.T) {
 }
 
 func copyFiles(sourcePath string, targetPath string, fileNames []string, t *testing.T) {
+	t.Helper()
 	targetDir, err := os.Open(targetPath)
 	if err != nil {
 		t.Fatalf("Can't open dir %v: %v", targetPath, err)
