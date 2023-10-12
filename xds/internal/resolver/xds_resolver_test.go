@@ -98,8 +98,8 @@ func Test(t *testing.T) {
 }
 
 func (s) TestRegister(t *testing.T) {
-	if resolver.Get(xdsScheme) == nil {
-		t.Errorf("scheme %v is not registered", xdsScheme)
+	if resolver.Get(Scheme) == nil {
+		t.Errorf("scheme %v is not registered", Scheme)
 	}
 }
 
@@ -151,9 +151,9 @@ func (s) TestResolverBuilder_ClientCreationFails(t *testing.T) {
 	}()
 
 	// Build an xDS resolver and expect it to fail.
-	builder := resolver.Get(xdsScheme)
+	builder := resolver.Get(Scheme)
 	if builder == nil {
-		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
+		t.Fatalf("resolver.Get(%v) returned nil", Scheme)
 	}
 	if _, err := builder.Build(target, newTestClientConn(), resolver.BuildOptions{}); err == nil {
 		t.Fatalf("builder.Build(%v) succeeded when expected to fail", target)
@@ -234,9 +234,9 @@ func (s) TestResolverBuilder_DifferentBootstrapConfigs(t *testing.T) {
 				newXDSClient = origNewClient
 			}()
 
-			builder := resolver.Get(xdsScheme)
+			builder := resolver.Get(Scheme)
 			if builder == nil {
-				t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
+				t.Fatalf("resolver.Get(%v) returned nil", Scheme)
 			}
 
 			r, err := builder.Build(test.target, newTestClientConn(), test.buildOpts)
@@ -282,9 +282,9 @@ func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *fakeclient.Client, 
 		}
 		newXDSClient = oldClientMaker
 	}
-	builder := resolver.Get(xdsScheme)
+	builder := resolver.Get(Scheme)
 	if builder == nil {
-		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
+		t.Fatalf("resolver.Get(%v) returned nil", Scheme)
 	}
 
 	tcc := newTestClientConn()
@@ -332,9 +332,9 @@ func waitForWatchRouteConfig(ctx context.Context, t *testing.T, xdsC *fakeclient
 // returns a testClientConn which allows inspection of resolver updates, and a
 // function to close the resolver once the test is complete.
 func buildResolverForTarget(t *testing.T, target resolver.Target) (*testClientConn, func()) {
-	builder := resolver.Get(xdsScheme)
+	builder := resolver.Get(Scheme)
 	if builder == nil {
-		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
+		t.Fatalf("resolver.Get(%v) returned nil", Scheme)
 	}
 
 	tcc := newTestClientConn()

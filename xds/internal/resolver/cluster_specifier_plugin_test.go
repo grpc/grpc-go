@@ -16,21 +16,22 @@
  *
  */
 
-package resolver
+package resolver_test
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpctest"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	xdsbootstrap "google.golang.org/grpc/internal/testutils/xds/bootstrap"
@@ -39,12 +40,88 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
+	xdsresolver "google.golang.org/grpc/xds/internal/resolver"
+	protov2 "google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 )
+
+const (
+	defaultTestTimeout      = 10 * time.Second
+	defaultTestShortTimeout = 100 * time.Microsecond
+)
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+// verifyUpdateFromResolver waits for the resolver to push an update to the fake
+// resolver.ClientConn and verifies that update matches the provided service
+// config.
+//
+// Tests that want to skip verifying the contents of the service config can pass
+// an empty string.
+//
+// Returns the config selector from the state update pushed by the resolver.
+// Tests that don't need the config selector can ignore the return value.
+func verifyUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan resolver.State, wantSC string) iresolver.ConfigSelector {
+	t.Helper()
+
+	var state resolver.State
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for an update from the resolver: %v", ctx.Err())
+	case state = <-stateCh:
+		if err := state.ServiceConfig.Err; err != nil {
+			t.Fatalf("Received error in service config: %v", state.ServiceConfig.Err)
+		}
+		if wantSC == "" {
+			break
+		}
+		wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantSC)
+		if !internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantSCParsed.Config) {
+			t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
+		}
+	}
+	cs := iresolver.GetConfigSelector(state)
+	if cs == nil {
+		t.Fatal("Received nil config selector in update from resolver")
+	}
+	return cs
+}
+
+// buildResolverForTarget builds an xDS resolver for the given target. It
+// returns the following:
+// - a channel to read updates from the resolver
+// - the newly created xDS resolver
+func buildResolverForTarget(t *testing.T, target resolver.Target) (chan resolver.State, resolver.Resolver) {
+	t.Helper()
+
+	builder := resolver.Get(xdsresolver.Scheme)
+	if builder == nil {
+		t.Fatalf("Scheme %q is not registered", xdsresolver.Scheme)
+	}
+
+	stateCh := make(chan resolver.State, 1)
+	updateStateF := func(s resolver.State) error {
+		stateCh <- s
+		return nil
+	}
+	tcc := &testutils.ResolverClientConn{Logger: t, UpdateStateF: updateStateF}
+	r, err := builder.Build(target, tcc, resolver.BuildOptions{})
+	if err != nil {
+		t.Fatalf("Failed to build xDS resolver for target %q: %v", target, err)
+	}
+	t.Cleanup(r.Close)
+	return stateCh, r
+}
 
 func init() {
 	balancer.Register(cspBalancerBuilder{})
@@ -101,7 +178,7 @@ func (testClusterSpecifierPlugin) ParseClusterSpecifierConfig(cfg proto.Message)
 		return nil, fmt.Errorf("testClusterSpecifierPlugin: error parsing config %v: got type %T, want *anypb.Any", cfg, cfg)
 	}
 	lbCfg := new(wrapperspb.StringValue)
-	if err := ptypes.UnmarshalAny(anyp, lbCfg); err != nil {
+	if err := anypb.UnmarshalTo(anyp, lbCfg, protov2.UnmarshalOptions{}); err != nil {
 		return nil, fmt.Errorf("testClusterSpecifierPlugin: error parsing config %v: %v", cfg, err)
 	}
 	return []map[string]any{{"csp_experimental": cspBalancerConfig{ArbitraryField: lbCfg.GetValue()}}}, nil
@@ -163,46 +240,30 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tcc, rClose := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + serviceName)})
-	defer rClose()
+	stateCh, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + serviceName)})
 
 	// Wait for an update from the resolver, and verify the service config.
-	val, err := tcc.stateCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Timeout waiting for an update from the resolver: %v", err)
-	}
-	rState := val.(resolver.State)
-	if err := rState.ServiceConfig.Err; err != nil {
-		t.Fatalf("Received error in service config: %v", rState.ServiceConfig.Err)
-	}
-	wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(`
-{
-	"loadBalancingConfig": [
-		{
-		  "xds_cluster_manager_experimental": {
-			"children": {
-			  "cluster_specifier_plugin:cspA": {
-				"childPolicy": [
-				  {
-					"csp_experimental": {
-					  "arbitrary_field": "anything"
-					}
-				  }
-				]
-			  }
-			}
-		  }
-		}
-	  ]
-}`)
-	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
-		t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, rState.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
-	}
-
-	cs := iresolver.GetConfigSelector(rState)
-	if cs == nil {
-		t.Fatal("Received nil config selector in update from resolver")
-	}
+	wantSC := `
+ {
+	 "loadBalancingConfig": [
+		 {
+		   "xds_cluster_manager_experimental": {
+			 "children": {
+			   "cluster_specifier_plugin:cspA": {
+				 "childPolicy": [
+				   {
+					 "csp_experimental": {
+					   "arbitrary_field": "anything"
+					 }
+				   }
+				 ]
+			   }
+			 }
+		   }
+		 }
+	   ]
+ }`
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
 	if err != nil {
 		t.Fatalf("cs.SelectConfig(): %v", err)
@@ -232,37 +293,27 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 	}
 
 	// Wait for an update from the resolver, and verify the service config.
-	val, err = tcc.stateCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Timeout waiting for an update from the resolver: %v", err)
-	}
-	rState = val.(resolver.State)
-	if err := rState.ServiceConfig.Err; err != nil {
-		t.Fatalf("Received error in service config: %v", rState.ServiceConfig.Err)
-	}
-	wantSCParsed = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(`
-{
-	"loadBalancingConfig": [
-		{
-		  "xds_cluster_manager_experimental": {
-			"children": {
-			  "cluster_specifier_plugin:cspA": {
-				"childPolicy": [
-				  {
-					"csp_experimental": {
-					  "arbitrary_field": "changed"
-					}
-				  }
-				]
-			  }
-			}
-		  }
-		}
-	  ]
-}`)
-	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
-		t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, rState.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
-	}
+	wantSC = `
+ {
+	 "loadBalancingConfig": [
+		 {
+		   "xds_cluster_manager_experimental": {
+			 "children": {
+			   "cluster_specifier_plugin:cspA": {
+				 "childPolicy": [
+				   {
+					 "csp_experimental": {
+					   "arbitrary_field": "changed"
+					 }
+				   }
+				 ]
+			   }
+			 }
+		   }
+		 }
+	   ]
+ }`
+	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 }
 
 // TestXDSResolverDelayedOnCommittedCSP tests that cluster specifier plugins and
@@ -316,46 +367,31 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tcc, rClose := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + serviceName)})
-	defer rClose()
+	stateCh, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + serviceName)})
 
 	// Wait for an update from the resolver, and verify the service config.
-	val, err := tcc.stateCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Timeout waiting for an update from the resolver: %v", err)
-	}
-	rState := val.(resolver.State)
-	if err := rState.ServiceConfig.Err; err != nil {
-		t.Fatalf("Received error in service config: %v", rState.ServiceConfig.Err)
-	}
-	wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(`
-{
-	"loadBalancingConfig": [
-		{
-		  "xds_cluster_manager_experimental": {
-			"children": {
-			  "cluster_specifier_plugin:cspA": {
-				"childPolicy": [
-				  {
-					"csp_experimental": {
-					  "arbitrary_field": "anythingA"
-					}
-				  }
-				]
-			  }
-			}
-		  }
-		}
-	  ]
-}`)
-	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
-		t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, rState.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
-	}
+	wantSC := `
+ {
+	 "loadBalancingConfig": [
+		 {
+		   "xds_cluster_manager_experimental": {
+			 "children": {
+			   "cluster_specifier_plugin:cspA": {
+				 "childPolicy": [
+				   {
+					 "csp_experimental": {
+					   "arbitrary_field": "anythingA"
+					 }
+				   }
+				 ]
+			   }
+			 }
+		   }
+		 }
+	   ]
+ }`
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 
-	cs := iresolver.GetConfigSelector(rState)
-	if cs == nil {
-		t.Fatal("Received nil config selector in update from resolver")
-	}
 	resOld, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
 	if err != nil {
 		t.Fatalf("cs.SelectConfig(): %v", err)
@@ -388,52 +424,38 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 	}
 
 	// Wait for an update from the resolver, and verify the service config.
-	val, err = tcc.stateCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Timeout waiting for an update from the resolver: %v", err)
-	}
-	rState = val.(resolver.State)
-	if err := rState.ServiceConfig.Err; err != nil {
-		t.Fatalf("Received error in service config: %v", rState.ServiceConfig.Err)
-	}
-	wantSCParsed = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(`
-{
-	"loadBalancingConfig": [
-		{
-		  "xds_cluster_manager_experimental": {
-			"children": {
-			  "cluster_specifier_plugin:cspA": {
-				"childPolicy": [
-				  {
-					"csp_experimental": {
-					  "arbitrary_field": "anythingA"
-					}
-				  }
-				]
-			  },
-			  "cluster_specifier_plugin:cspB": {
-				"childPolicy": [
-				  {
-					"csp_experimental": {
-					  "arbitrary_field": "anythingB"
-					}
-				  }
-				]
-			  }
-			}
-		  }
-		}
-	  ]
-}`)
-	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
-		t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, rState.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
-	}
+	wantSC = `
+ {
+	 "loadBalancingConfig": [
+		 {
+		   "xds_cluster_manager_experimental": {
+			 "children": {
+			   "cluster_specifier_plugin:cspA": {
+				 "childPolicy": [
+				   {
+					 "csp_experimental": {
+					   "arbitrary_field": "anythingA"
+					 }
+				   }
+				 ]
+			   },
+			   "cluster_specifier_plugin:cspB": {
+				 "childPolicy": [
+				   {
+					 "csp_experimental": {
+					   "arbitrary_field": "anythingB"
+					 }
+				   }
+				 ]
+			   }
+			 }
+		   }
+		 }
+	   ]
+ }`
+	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 
 	// Perform an RPC and ensure that it is routed to the new cluster.
-	cs = iresolver.GetConfigSelector(rState)
-	if cs == nil {
-		t.Fatal("Received nil config selector in update from resolver")
-	}
 	resNew, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
 	if err != nil {
 		t.Fatalf("cs.SelectConfig(): %v", err)
@@ -449,35 +471,25 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 	// cspA.
 	resOld.OnCommitted()
 
-	val, err = tcc.stateCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Timeout waiting for an update from the resolver: %v", err)
-	}
-	rState = val.(resolver.State)
-	if err := rState.ServiceConfig.Err; err != nil {
-		t.Fatalf("Received error in service config: %v", rState.ServiceConfig.Err)
-	}
-	wantSCParsed = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(`
-{
-	"loadBalancingConfig": [
-		{
-		  "xds_cluster_manager_experimental": {
-			"children": {
-			  "cluster_specifier_plugin:cspB": {
-				"childPolicy": [
-				  {
-					"csp_experimental": {
-					  "arbitrary_field": "anythingB"
-					}
-				  }
-				]
-			  }
-			}
-		  }
-		}
-	  ]
-}`)
-	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
-		t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, rState.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
-	}
+	wantSC = `
+ {
+	 "loadBalancingConfig": [
+		 {
+		   "xds_cluster_manager_experimental": {
+			 "children": {
+			   "cluster_specifier_plugin:cspB": {
+				 "childPolicy": [
+				   {
+					 "csp_experimental": {
+					   "arbitrary_field": "anythingB"
+					 }
+				   }
+				 ]
+			   }
+			 }
+		   }
+		 }
+	   ]
+ }`
+	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 }

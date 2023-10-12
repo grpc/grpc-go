@@ -37,7 +37,11 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
-const xdsScheme = "xds"
+// Scheme is the xDS resolver's scheme.
+//
+// TODO(easwars): Rename this package as xdsresolver so that this is accessed as
+// xdsresolver.Scheme
+const Scheme = "xds"
 
 // newBuilderForTesting creates a new xds resolver builder using a specific xds
 // bootstrap config, so tests can use multiple xds clients in different
@@ -152,7 +156,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 
 // Name helps implement the resolver.Builder interface.
 func (*xdsResolverBuilder) Scheme() string {
-	return xdsScheme
+	return Scheme
 }
 
 // suWithError wraps the ServiceUpdate and error received through a watch API
