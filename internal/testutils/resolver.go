@@ -25,12 +25,14 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
+/*
 // To satisfy the resolver.ClientConn interface without an implementation for
 // these two methods, we embed the former in ResolverClientConn. When these
 // methods are removed from resolver.ClientConn, the following two lines will
 // not compile anymore and will help us to get rid of the embedding.
 var _ = ResolverClientConn{}.NewAddress
 var _ = ResolverClientConn{}.NewServiceConfig
+*/
 
 // Logger wraps the logging methods from testing.T.
 type Logger interface {

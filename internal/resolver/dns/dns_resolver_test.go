@@ -170,13 +170,213 @@ func verifyUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan re
 			t.Fatalf("Got grpclb addresses %+v, want %+v", gs.BalancerAddresses, wantBalancerAddrs)
 		}
 	}
-	if wantSC != "" {
+	if wantSC == "{}" {
+		if state.ServiceConfig != nil && state.ServiceConfig.Config != nil {
+			t.Fatalf("Got service config:\n%s \nWant service config: {}", cmp.Diff(nil, state.ServiceConfig.Config))
+		}
+
+	} else if wantSC != "" {
 		wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantSC)
 		if !internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantSCParsed.Config) {
 			t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
 		}
 	}
 }
+
+// This is the service config used by the fake net.Resolver in its TXT record.
+//   - it contains an array of 5 entries
+//   - the first three will be dropped by the DNS resolver as part of its
+//     canarying rule matching functionality:
+//   - the client language does not match in the first entry
+//   - the percentage is set to 0 in the second entry
+//   - the client host name does not match in the third entry
+//   - the fourth and fifth entries will match the canarying rules, and therefore
+//     the fourth entry will be used as it will be  the first matching entry.
+const txtRecordGood = `
+[
+	{
+		"clientLanguage": [
+			"CPP",
+			"JAVA"
+		],
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"percentage": 0,
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"clientHostName": [
+			"localhost"
+		],
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"clientLanguage": [
+			"GO"
+		],
+		"percentage": 100,
+		"serviceConfig": {
+			"loadBalancingPolicy": "round_robin",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "foo"
+						}
+					],
+					"waitForReady": true,
+					"timeout": "1s"
+				},
+				{
+					"name": [
+						{
+							"service": "bar"
+						}
+					],
+					"waitForReady": false
+				}
+			]
+		}
+	},
+	{
+		"serviceConfig": {
+			"loadBalancingPolicy": "round_robin",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "foo",
+							"method": "bar"
+						}
+					],
+					"waitForReady": true
+				}
+			]
+		}
+	}
+]`
+
+// This is the matched portion of the above TXT record entry.
+const scJSON = `
+{
+	"loadBalancingPolicy": "round_robin",
+	"methodConfig": [
+		{
+			"name": [
+				{
+					"service": "foo"
+				}
+			],
+			"waitForReady": true,
+			"timeout": "1s"
+		},
+		{
+			"name": [
+				{
+					"service": "bar"
+				}
+			],
+			"waitForReady": false
+		}
+	]
+}`
+
+// This service config contains three entries, but none of the match the DNS
+// resolver's canarying rules and hence the resulting service config pushed by
+// the DNS resolver will be an empty one.
+const txtRecordNonMatching = `
+[
+	{
+		"clientLanguage": [
+			"CPP",
+			"JAVA"
+		],
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"percentage": 0,
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"clientHostName": [
+			"localhost"
+		],
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	}
+]`
 
 // Tests the scenario where a name resolves to a list of addresses, possibly
 // some grpclb addresses as well, and a service config. The test verifies that
@@ -187,28 +387,39 @@ func (s) TestDNSResolver_Basic(t *testing.T) {
 		target            string
 		hostLookupTable   map[string][]string
 		srvLookupTable    map[string][]*net.SRV
+		txtLookupTable    map[string][]string
 		wantAddrs         []resolver.Address
 		wantBalancerAddrs []resolver.Address
 		wantSC            string
 	}{
 		{
-			name:              "default port",
-			target:            "foo.bar.com",
-			hostLookupTable:   map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			name:   "default_port",
+			target: "foo.bar.com",
+			hostLookupTable: map[string][]string{
+				"foo.bar.com": {"1.2.3.4", "5.6.7.8"},
+			},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+			},
 			wantAddrs:         []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
 			wantBalancerAddrs: nil,
-			wantSC:            generateSC("foo.bar.com"),
+			wantSC:            scJSON,
 		},
 		{
-			name:              "specified port",
-			target:            "foo.bar.com:1234",
-			hostLookupTable:   map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			name:   "specified_port",
+			target: "foo.bar.com:1234",
+			hostLookupTable: map[string][]string{
+				"foo.bar.com": {"1.2.3.4", "5.6.7.8"},
+			},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+			},
 			wantAddrs:         []resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
 			wantBalancerAddrs: nil,
-			wantSC:            generateSC("foo.bar.com"),
+			wantSC:            scJSON,
 		},
 		{
-			name:   "ipv4 with SRV and single grpclb address",
+			name:   "ipv4_with_SRV_and_single_grpclb_address",
 			target: "srv.ipv4.single.fake",
 			hostLookupTable: map[string][]string{
 				"srv.ipv4.single.fake": {"2.4.6.8"},
@@ -217,19 +428,24 @@ func (s) TestDNSResolver_Basic(t *testing.T) {
 			srvLookupTable: map[string][]*net.SRV{
 				"_grpclb._tcp.srv.ipv4.single.fake": {&net.SRV{Target: "ipv4.single.fake", Port: 1234}},
 			},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.srv.ipv4.single.fake": txtRecordServiceConfig(txtRecordGood),
+			},
 			wantAddrs:         []resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
 			wantBalancerAddrs: []resolver.Address{{Addr: "1.2.3.4:1234", ServerName: "ipv4.single.fake"}},
-			wantSC:            generateSC("srv.ipv4.single.fake"),
+			wantSC:            scJSON,
 		},
 		{
-			name:   "ipv4 with SRV and multiple grpclb address",
+			name:   "ipv4_with_SRV_and_multiple_grpclb_address",
 			target: "srv.ipv4.multi.fake",
 			hostLookupTable: map[string][]string{
-				"srv.ipv4.single.fake": {"2.4.6.8"},
-				"ipv4.multi.fake":      {"1.2.3.4", "5.6.7.8", "9.10.11.12"},
+				"ipv4.multi.fake": {"1.2.3.4", "5.6.7.8", "9.10.11.12"},
 			},
 			srvLookupTable: map[string][]*net.SRV{
 				"_grpclb._tcp.srv.ipv4.multi.fake": {&net.SRV{Target: "ipv4.multi.fake", Port: 1234}},
+			},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.srv.ipv4.multi.fake": txtRecordServiceConfig(txtRecordGood),
 			},
 			wantAddrs: nil,
 			wantBalancerAddrs: []resolver.Address{
@@ -237,10 +453,10 @@ func (s) TestDNSResolver_Basic(t *testing.T) {
 				{Addr: "5.6.7.8:1234", ServerName: "ipv4.multi.fake"},
 				{Addr: "9.10.11.12:1234", ServerName: "ipv4.multi.fake"},
 			},
-			wantSC: generateSC("srv.ipv4.multi.fake"),
+			wantSC: scJSON,
 		},
 		{
-			name:   "ipv6 with SRV and single grpclb address",
+			name:   "ipv6_with_SRV_and_single_grpclb_address",
 			target: "srv.ipv6.single.fake",
 			hostLookupTable: map[string][]string{
 				"srv.ipv6.single.fake": nil,
@@ -249,12 +465,15 @@ func (s) TestDNSResolver_Basic(t *testing.T) {
 			srvLookupTable: map[string][]*net.SRV{
 				"_grpclb._tcp.srv.ipv6.single.fake": {&net.SRV{Target: "ipv6.single.fake", Port: 1234}},
 			},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.srv.ipv6.single.fake": txtRecordServiceConfig(txtRecordNonMatching),
+			},
 			wantAddrs:         nil,
 			wantBalancerAddrs: []resolver.Address{{Addr: "[2607:f8b0:400a:801::1001]:1234", ServerName: "ipv6.single.fake"}},
-			wantSC:            generateSC("srv.ipv6.single.fake"),
+			wantSC:            "{}",
 		},
 		{
-			name:   "ipv6 with SRV and multiple grpclb address",
+			name:   "ipv6_with_SRV_and_multiple_grpclb_address",
 			target: "srv.ipv6.multi.fake",
 			hostLookupTable: map[string][]string{
 				"srv.ipv6.multi.fake": nil,
@@ -263,13 +482,16 @@ func (s) TestDNSResolver_Basic(t *testing.T) {
 			srvLookupTable: map[string][]*net.SRV{
 				"_grpclb._tcp.srv.ipv6.multi.fake": {&net.SRV{Target: "ipv6.multi.fake", Port: 1234}},
 			},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.srv.ipv6.multi.fake": txtRecordServiceConfig(txtRecordNonMatching),
+			},
 			wantAddrs: nil,
 			wantBalancerAddrs: []resolver.Address{
 				{Addr: "[2607:f8b0:400a:801::1001]:1234", ServerName: "ipv6.multi.fake"},
 				{Addr: "[2607:f8b0:400a:801::1002]:1234", ServerName: "ipv6.multi.fake"},
 				{Addr: "[2607:f8b0:400a:801::1003]:1234", ServerName: "ipv6.multi.fake"},
 			},
-			wantSC: generateSC("srv.ipv6.multi.fake"),
+			wantSC: "{}",
 		},
 	}
 
@@ -279,6 +501,7 @@ func (s) TestDNSResolver_Basic(t *testing.T) {
 			overrideNetResolver(t, &testNetResolver{
 				hostLookupTable: test.hostLookupTable,
 				srvLookupTable:  test.srvLookupTable,
+				txtLookupTable:  test.txtLookupTable,
 			})
 			enableSRVLookups(t)
 			_, stateCh, _ := buildResolverWithTestClientConn(t, test.target)
@@ -299,6 +522,7 @@ func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 		name            string
 		target          string
 		hostLookupTable map[string][]string
+		txtLookupTable  map[string][]string
 		wantAddrs       []resolver.Address
 		wantSC          string
 	}{
@@ -306,15 +530,21 @@ func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 			name:            "happy case default port",
 			target:          "foo.bar.com",
 			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
-			wantAddrs:       []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
-			wantSC:          generateSC("foo.bar.com"),
+			txtLookupTable: map[string][]string{
+				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+			},
+			wantAddrs: []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			wantSC:    scJSON,
 		},
 		{
 			name:            "happy case specified port",
 			target:          "foo.bar.com:1234",
 			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
-			wantAddrs:       []resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
-			wantSC:          generateSC("foo.bar.com"),
+			txtLookupTable: map[string][]string{
+				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+			},
+			wantAddrs: []resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
+			wantSC:    scJSON,
 		},
 		{
 			name:   "happy case another default port",
@@ -323,14 +553,20 @@ func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 				"srv.ipv4.single.fake": {"2.4.6.8"},
 				"ipv4.single.fake":     {"1.2.3.4"},
 			},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.srv.ipv4.single.fake": txtRecordServiceConfig(txtRecordGood),
+			},
 			wantAddrs: []resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
-			wantSC:    generateSC("srv.ipv4.single.fake"),
+			wantSC:    scJSON,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			durChan, timeChan := overrideTimeAfterFuncWithChannel(t)
-			overrideNetResolver(t, &testNetResolver{hostLookupTable: test.hostLookupTable})
+			overrideNetResolver(t, &testNetResolver{
+				hostLookupTable: test.hostLookupTable,
+				txtLookupTable:  test.txtLookupTable,
+			})
 
 			// Set the test clientconn to return error back to the resolver when
 			// it pushes an update on the channel.
@@ -401,14 +637,21 @@ func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 
 	overrideResolutionRate(t, 0)
 	overrideTimeAfterFunc(t, 0)
-	tr := &testNetResolver{hostLookupTable: map[string][]string{target: {"1.2.3.4", "5.6.7.8"}}}
+	tr := &testNetResolver{
+		hostLookupTable: map[string][]string{
+			"foo.bar.com": {"1.2.3.4", "5.6.7.8"},
+		},
+		txtLookupTable: map[string][]string{
+			"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+		},
+	}
 	overrideNetResolver(t, tr)
 
 	r, stateCh, _ := buildResolverWithTestClientConn(t, target)
 
 	// Verify that the first update pushed by the resolver matches expectations.
 	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
-	wantSC := generateSC(target)
+	wantSC := scJSON
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
@@ -416,18 +659,9 @@ func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 	// Update state in the fake net.Resolver to return only one address and a
 	// new service config.
 	tr.UpdateHostLookupTable(map[string][]string{target: {"1.2.3.4"}})
-	txtLookupTbl.Lock()
-	txtTableKey := "_grpc_config." + target
-	oldTxtTblEntry := txtLookupTbl.tbl[txtTableKey]
-	txtLookupTbl.tbl[txtTableKey] = []string{`grpc_config=[{"serviceConfig":{"loadBalancingPolicy": "grpclb"}}]`}
-	txtLookupTbl.Unlock()
-
-	// Reset state in the fake net.Resolver at the end of the test.
-	defer func() {
-		txtLookupTbl.Lock()
-		txtLookupTbl.tbl[txtTableKey] = oldTxtTblEntry
-		txtLookupTbl.Unlock()
-	}()
+	tr.UpdateTXTLookupTable(map[string][]string{
+		"_grpc_config.foo.bar.com": txtRecordServiceConfig(`[{"serviceConfig":{"loadBalancingPolicy": "grpclb"}}]`),
+	})
 
 	// Ask the resolver to re-resolve and verify that the new update matches
 	// expectations.
@@ -633,32 +867,42 @@ func (s) TestDisableServiceConfig(t *testing.T) {
 		name                 string
 		target               string
 		hostLookupTable      map[string][]string
+		txtLookupTable       map[string][]string
 		disableServiceConfig bool
 		wantAddrs            []resolver.Address
 		wantSC               string
 	}{
 		{
-			name:                 "false",
-			target:               "foo.bar.com",
-			hostLookupTable:      map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			name:            "false",
+			target:          "foo.bar.com",
+			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+			},
 			disableServiceConfig: false,
 			wantAddrs:            []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
-			wantSC:               generateSC("foo.bar.com"),
+			wantSC:               scJSON,
 		},
 		{
-			name:                 "true",
-			target:               "foo.bar.com",
-			hostLookupTable:      map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			name:            "true",
+			target:          "foo.bar.com",
+			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+			},
 			disableServiceConfig: true,
 			wantAddrs:            []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
-			wantSC:               "",
+			wantSC:               "{}",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
-			overrideNetResolver(t, &testNetResolver{hostLookupTable: test.hostLookupTable})
+			overrideNetResolver(t, &testNetResolver{
+				hostLookupTable: test.hostLookupTable,
+				txtLookupTable:  test.txtLookupTable,
+			})
 
 			b := resolver.Get("dns")
 			if b == nil {
