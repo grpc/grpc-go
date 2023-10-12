@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/httpfilter"
+	rinternal "google.golang.org/grpc/xds/internal/resolver/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -348,9 +349,6 @@ func (cs *configSelector) stop() {
 	}
 }
 
-// A global for testing.
-var newWRR = wrr.NewRandom
-
 // newConfigSelector creates the config selector for su; may add entries to
 // r.activeClusters for previously-unseen clusters.
 func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, error) {
@@ -366,7 +364,7 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 	}
 
 	for i, rt := range su.virtualHost.Routes {
-		clusters := newWRR()
+		clusters := rinternal.NewWRR.(func() wrr.WRR)()
 		if rt.ClusterSpecifierPlugin != "" {
 			clusterName := clusterSpecifierPluginPrefix + rt.ClusterSpecifierPlugin
 			clusters.Add(&routeCluster{
