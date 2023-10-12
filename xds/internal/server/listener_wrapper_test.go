@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -127,8 +126,10 @@ func createListenerWrapper(t *testing.T, xdsC XDSClient) (<-chan struct{}, strin
 //   - the management server returns a Listener resource that does not match the
 //     address to which our net.Listener is bound to. Test verifies that the
 //     listenerWrapper does not become ready.
-//   - the management server returns a Listener resource that contains an inline
-//     Route Configuration. Test verifies that the listenerWrapper becomes ready.
+//   - the management server returns a Listener resource that that matches the
+//     address to which our net.Listener is bound to. Also, it contains an
+//     inline Route Configuration. Test verifies that the listenerWrapper
+//     becomes ready.
 func (s) TestListenerWrapper_InlineRouteConfig(t *testing.T) {
 	mgmtServer, nodeID, ldsResourceNamesCh, _, xdsC := xdsSetupFoTests(t)
 	readyCh, host, port, lisResourceName := createListenerWrapper(t, xdsC)
@@ -171,8 +172,10 @@ func (s) TestListenerWrapper_InlineRouteConfig(t *testing.T) {
 	case <-sCtx.Done():
 	}
 
-	// Configure the management server with a good update that does not contain
-	// any rds names that need reolution.
+	// Configure the management server with a Listener resource that contains
+	// the expected host and port. Also, it does not contain any rds names that
+	// need reolution. Therefore the listenerWrapper is expected to become
+	// ready.
 	resources.Listeners = []*v3listenerpb.Listener{e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone, route1)}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -192,12 +195,6 @@ func (s) TestListenerWrapper_InlineRouteConfig(t *testing.T) {
 // when waiting for the Route Configuration resource and becomes ready once it
 // receives the Route Configuration resource.
 func (s) TestListenerWrapper_RouteNames(t *testing.T) {
-	oldRBAC := envconfig.XDSRBAC
-	envconfig.XDSRBAC = true
-	defer func() {
-		envconfig.XDSRBAC = oldRBAC
-	}()
-
 	mgmtServer, nodeID, ldsResourceNamesCh, rdsResourceNamesCh, xdsC := xdsSetupFoTests(t)
 	readyCh, host, port, lisResourceName := createListenerWrapper(t, xdsC)
 
