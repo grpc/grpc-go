@@ -73,6 +73,10 @@ func init() {
 	internal.DrainServerTransports = func(srv *Server, addr string) {
 		srv.drainServerTransports(addr)
 	}
+	internal.IsRegisteredMethod = func(srv *Server, method string) bool {
+		return srv.isRegisteredMethod(method)
+	}
+	internal.ServerFromContext = serverFromContext
 	internal.AddGlobalServerOptions = func(opt ...ServerOption) {
 		globalServerOptions = append(globalServerOptions, opt...)
 	}
@@ -1719,6 +1723,7 @@ func (s *Server) processStreamingRPC(ctx context.Context, t transport.ServerTran
 
 func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Stream) {
 	ctx := stream.Context()
+	ctx = contextWithServer(ctx, s)
 	var ti *traceInfo
 	if EnableTracing {
 		tr := trace.New("grpc.Recv."+methodFamily(stream.Method()), stream.Method())
@@ -1962,6 +1967,44 @@ func (s *Server) getCodec(contentSubtype string) baseCodec {
 		return encoding.GetCodec(proto.Name)
 	}
 	return codec
+}
+
+type serverKey struct{}
+
+// serverFromContext gets the Server from the context.
+func serverFromContext(ctx context.Context) *Server {
+	s, _ := ctx.Value(serverKey{}).(*Server)
+	return s
+}
+
+// contextWithServer sets the Server in the context.
+func contextWithServer(ctx context.Context, server *Server) context.Context {
+	return context.WithValue(ctx, serverKey{}, server)
+}
+
+// isRegisteredMethod returns whether the passed in method is registered as a
+// method on the server. /service/method and service/method will match if the
+// service and method are registered on the server.
+func (s *Server) isRegisteredMethod(serviceMethod string) bool {
+	if serviceMethod != "" && serviceMethod[0] == '/' {
+		serviceMethod = serviceMethod[1:]
+	}
+	pos := strings.LastIndex(serviceMethod, "/")
+	if pos == -1 { // Invalid method name syntax.
+		return false
+	}
+	service := serviceMethod[:pos]
+	method := serviceMethod[pos+1:]
+	srv, knownService := s.services[service]
+	if knownService {
+		if _, ok := srv.methods[method]; ok {
+			return true
+		}
+		if _, ok := srv.streams[method]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // SetHeader sets the header metadata to be sent from the server to the client.
