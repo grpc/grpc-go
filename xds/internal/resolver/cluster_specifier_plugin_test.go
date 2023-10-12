@@ -62,14 +62,9 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func (s) TestRegister(t *testing.T) {
-	if resolver.Get(xdsresolver.Scheme) == nil {
-		t.Errorf("Scheme %q is not registered", xdsresolver.Scheme)
-	}
-}
-
-// Waits for the resolver to push an update to the fake resolver.ClientConn and
-// verifies that update matches the provided service config.
+// verifyUpdateFromResolver waits for the resolver to push an update to the fake
+// resolver.ClientConn and verifies that update matches the provided service
+// config.
 //
 // Tests that want to skip verifying the contents of the service config can pass
 // an empty string.
