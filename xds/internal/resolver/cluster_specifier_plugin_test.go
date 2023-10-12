@@ -76,14 +76,14 @@ func (s) TestRegister(t *testing.T) {
 //
 // Returns the config selector from the state update pushed by the resolver.
 // Tests that don't need the config selector can ignore the return value.
-func verifyUpdateFromResolver(ctx context.Context, t *testing.T, tcc *testutils.ResolverClientConn, wantSC string) iresolver.ConfigSelector {
+func verifyUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan resolver.State, wantSC string) iresolver.ConfigSelector {
 	t.Helper()
 
 	var state resolver.State
 	select {
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for an update from the resolver: %v", ctx.Err())
-	case state = <-tcc.StateCh:
+	case state = <-stateCh:
 		if err := state.ServiceConfig.Err; err != nil {
 			t.Fatalf("Received error in service config: %v", state.ServiceConfig.Err)
 		}
@@ -103,10 +103,10 @@ func verifyUpdateFromResolver(ctx context.Context, t *testing.T, tcc *testutils.
 }
 
 // buildResolverForTarget builds an xDS resolver for the given target. It
-// returns a fake implementation of the resolver.ClientConn interface that
-// allows inspection of resolver updates, and a function to close the resolver
-// once the test is complete.
-func buildResolverForTarget(t *testing.T, target resolver.Target) (*testutils.ResolverClientConn, resolver.Resolver) {
+// returns the following:
+// - a channel to read updates from the resolver
+// - the newly created xDS resolver
+func buildResolverForTarget(t *testing.T, target resolver.Target) (chan resolver.State, resolver.Resolver) {
 	t.Helper()
 
 	builder := resolver.Get(xdsresolver.Scheme)
@@ -114,13 +114,18 @@ func buildResolverForTarget(t *testing.T, target resolver.Target) (*testutils.Re
 		t.Fatalf("Scheme %q is not registered", xdsresolver.Scheme)
 	}
 
-	tcc := testutils.NewResolverClientConn(t)
+	stateCh := make(chan resolver.State, 1)
+	updateStateF := func(s resolver.State) error {
+		stateCh <- s
+		return nil
+	}
+	tcc := &testutils.ResolverClientConn{Logger: t, UpdateStateF: updateStateF}
 	r, err := builder.Build(target, tcc, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("Failed to build xDS resolver for target %q: %v", target, err)
 	}
 	t.Cleanup(r.Close)
-	return tcc, r
+	return stateCh, r
 }
 
 func init() {
@@ -240,7 +245,7 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tcc, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + serviceName)})
+	stateCh, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + serviceName)})
 
 	// Wait for an update from the resolver, and verify the service config.
 	wantSC := `
@@ -263,7 +268,7 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 		 }
 	   ]
  }`
-	cs := verifyUpdateFromResolver(ctx, t, tcc, wantSC)
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
 	if err != nil {
 		t.Fatalf("cs.SelectConfig(): %v", err)
@@ -313,7 +318,7 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 		 }
 	   ]
  }`
-	verifyUpdateFromResolver(ctx, t, tcc, wantSC)
+	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 }
 
 // TestXDSResolverDelayedOnCommittedCSP tests that cluster specifier plugins and
@@ -367,7 +372,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tcc, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + serviceName)})
+	stateCh, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + serviceName)})
 
 	// Wait for an update from the resolver, and verify the service config.
 	wantSC := `
@@ -390,7 +395,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		 }
 	   ]
  }`
-	cs := verifyUpdateFromResolver(ctx, t, tcc, wantSC)
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 
 	resOld, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
 	if err != nil {
@@ -453,7 +458,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		 }
 	   ]
  }`
-	cs = verifyUpdateFromResolver(ctx, t, tcc, wantSC)
+	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 
 	// Perform an RPC and ensure that it is routed to the new cluster.
 	resNew, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
@@ -491,5 +496,5 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		 }
 	   ]
  }`
-	verifyUpdateFromResolver(ctx, t, tcc, wantSC)
+	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 }
