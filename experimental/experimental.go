@@ -16,7 +16,7 @@
  *
  */
 
-// Package experimental is a placeholder for experimental features that might
+// Package experimental is a collection of experimental features that might
 // have some rough edges to them. Housing experimental features in this package
 // results in a user accessing these APIs as `experimental.Foo`, thereby making
 // it explicit that the feature is experimental and using them in production

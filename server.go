@@ -584,9 +584,7 @@ func NumStreamWorkers(numServerWorkers uint32) ServerOption {
 // Deprecated: use experimental.WithRecvBufferPool instead.  Will be deleted in
 // v1.60.0 or later.
 func RecvBufferPool(bufferPool SharedBufferPool) ServerOption {
-	return newFuncServerOption(func(o *serverOptions) {
-		o.recvBufferPool = bufferPool
-	})
+	return recvBufferPool(bufferPool)
 }
 
 func recvBufferPool(bufferPool SharedBufferPool) ServerOption {

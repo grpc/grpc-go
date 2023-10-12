@@ -709,9 +709,7 @@ func WithIdleTimeout(d time.Duration) DialOption {
 // Deprecated: use experimental.WithRecvBufferPool instead.  Will be deleted in
 // v1.60.0 or later.
 func WithRecvBufferPool(bufferPool SharedBufferPool) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.recvBufferPool = bufferPool
-	})
+	return withRecvBufferPool(bufferPool)
 }
 
 func withRecvBufferPool(bufferPool SharedBufferPool) DialOption {
