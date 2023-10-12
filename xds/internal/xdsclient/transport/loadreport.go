@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
@@ -61,14 +62,18 @@ func (t *Transport) lrsStartStream() {
 		return
 	}
 
+	var flushSig sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
-	t.lrsCancelStream = cancel
+	t.lrsCancelStream = func() {
+		flushSig.Wait()
+		cancel()
+	}
 
 	// Create a new done channel everytime a new stream is created. This ensures
 	// that we don't close the same channel multiple times (from lrsRunner()
 	// goroutine) when multiple streams are created and closed.
 	t.lrsRunnerDoneCh = make(chan struct{})
-	go t.lrsRunner(ctx)
+	go t.lrsRunner(ctx, &flushSig)
 }
 
 // lrsStopStream closes the LRS stream, if this is the last user of the stream.
@@ -93,7 +98,7 @@ func (t *Transport) lrsStopStream() {
 // lrsRunner starts an LRS stream to report load data to the management server.
 // It reports load at constant intervals (as configured by the management
 // server) until the context is cancelled.
-func (t *Transport) lrsRunner(ctx context.Context) {
+func (t *Transport) lrsRunner(ctx context.Context, flushSig *sync.WaitGroup) {
 	defer close(t.lrsRunnerDoneCh)
 
 	// This feature indicates that the client supports the
@@ -127,7 +132,9 @@ func (t *Transport) lrsRunner(ctx context.Context) {
 
 		// We reset backoff state when we successfully receive at least one
 		// message from the server.
+		flushSig.Add(1)
 		t.sendLoads(streamCtx, stream, clusters, interval)
+		flushSig.Done()
 		return backoff.ErrResetBackoff
 	}
 	backoff.RunF(ctx, runLoadReportStream, t.backoff)
