@@ -30,16 +30,9 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// testingLogger wraps the logging methods from testing.T.
-type testingLogger interface {
-	Log(args ...any)
-	Logf(format string, args ...any)
-	Errorf(format string, args ...any)
-}
-
 // TestSubConn implements the SubConn interface, to be used in tests.
 type TestSubConn struct {
-	tcc           *TestClientConn // the CC that owns this SubConn
+	tcc           *BalancerClientConn // the CC that owns this SubConn
 	id            string
 	ConnectCh     chan struct{}
 	stateListener func(balancer.SubConnState)
@@ -98,9 +91,9 @@ func (tsc *TestSubConn) String() string {
 	return tsc.id
 }
 
-// TestClientConn is a mock balancer.ClientConn used in tests.
-type TestClientConn struct {
-	logger testingLogger
+// BalancerClientConn is a mock balancer.ClientConn used in tests.
+type BalancerClientConn struct {
+	logger Logger
 
 	NewSubConnAddrsCh      chan []resolver.Address // the last 10 []Address to create subconn.
 	NewSubConnCh           chan *TestSubConn       // the last 10 subconn created.
@@ -114,9 +107,9 @@ type TestClientConn struct {
 	subConnIdx int
 }
 
-// NewTestClientConn creates a TestClientConn.
-func NewTestClientConn(t *testing.T) *TestClientConn {
-	return &TestClientConn{
+// NewBalancerClientConn creates a BalancerClientConn.
+func NewBalancerClientConn(t *testing.T) *BalancerClientConn {
+	return &BalancerClientConn{
 		logger: t,
 
 		NewSubConnAddrsCh:      make(chan []resolver.Address, 10),
@@ -131,7 +124,7 @@ func NewTestClientConn(t *testing.T) *TestClientConn {
 }
 
 // NewSubConn creates a new SubConn.
-func (tcc *TestClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubConnOptions) (balancer.SubConn, error) {
+func (tcc *BalancerClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	sc := &TestSubConn{
 		tcc:           tcc,
 		id:            fmt.Sprintf("sc%d", tcc.subConnIdx),
@@ -156,13 +149,13 @@ func (tcc *TestClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubCon
 
 // RemoveSubConn is a nop; tests should all be updated to use sc.Shutdown()
 // instead.
-func (tcc *TestClientConn) RemoveSubConn(sc balancer.SubConn) {
+func (tcc *BalancerClientConn) RemoveSubConn(sc balancer.SubConn) {
 	tcc.logger.Errorf("RemoveSubConn(%v) called unexpectedly", sc)
 }
 
 // UpdateAddresses updates the addresses on the SubConn.
-func (tcc *TestClientConn) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
-	tcc.logger.Logf("testClientConn: UpdateAddresses(%v, %+v)", sc, addrs)
+func (tcc *BalancerClientConn) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
+	tcc.logger.Logf("testutils.BalancerClientConn: UpdateAddresses(%v, %+v)", sc, addrs)
 	select {
 	case tcc.UpdateAddressesAddrsCh <- addrs:
 	default:
@@ -170,8 +163,8 @@ func (tcc *TestClientConn) UpdateAddresses(sc balancer.SubConn, addrs []resolver
 }
 
 // UpdateState updates connectivity state and picker.
-func (tcc *TestClientConn) UpdateState(bs balancer.State) {
-	tcc.logger.Logf("testClientConn: UpdateState(%v)", bs)
+func (tcc *BalancerClientConn) UpdateState(bs balancer.State) {
+	tcc.logger.Logf("testutils.BalancerClientConn: UpdateState(%v)", bs)
 	select {
 	case <-tcc.NewStateCh:
 	default:
@@ -186,7 +179,7 @@ func (tcc *TestClientConn) UpdateState(bs balancer.State) {
 }
 
 // ResolveNow panics.
-func (tcc *TestClientConn) ResolveNow(o resolver.ResolveNowOptions) {
+func (tcc *BalancerClientConn) ResolveNow(o resolver.ResolveNowOptions) {
 	select {
 	case <-tcc.ResolveNowCh:
 	default:
@@ -195,14 +188,14 @@ func (tcc *TestClientConn) ResolveNow(o resolver.ResolveNowOptions) {
 }
 
 // Target panics.
-func (tcc *TestClientConn) Target() string {
+func (tcc *BalancerClientConn) Target() string {
 	panic("not implemented")
 }
 
 // WaitForErrPicker waits until an error picker is pushed to this ClientConn.
 // Returns error if the provided context expires or a non-error picker is pushed
 // to the ClientConn.
-func (tcc *TestClientConn) WaitForErrPicker(ctx context.Context) error {
+func (tcc *BalancerClientConn) WaitForErrPicker(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return errors.New("timeout when waiting for an error picker")
@@ -218,7 +211,7 @@ func (tcc *TestClientConn) WaitForErrPicker(ctx context.Context) error {
 // ClientConn with the error matching the wanted error.  Returns an error if
 // the provided context expires, including the last received picker error (if
 // any).
-func (tcc *TestClientConn) WaitForPickerWithErr(ctx context.Context, want error) error {
+func (tcc *BalancerClientConn) WaitForPickerWithErr(ctx context.Context, want error) error {
 	lastErr := errors.New("received no picker")
 	for {
 		select {
@@ -235,7 +228,7 @@ func (tcc *TestClientConn) WaitForPickerWithErr(ctx context.Context, want error)
 // WaitForConnectivityState waits until the state pushed to this ClientConn
 // matches the wanted state.  Returns an error if the provided context expires,
 // including the last received state (if any).
-func (tcc *TestClientConn) WaitForConnectivityState(ctx context.Context, want connectivity.State) error {
+func (tcc *BalancerClientConn) WaitForConnectivityState(ctx context.Context, want connectivity.State) error {
 	var lastState connectivity.State = -1
 	for {
 		select {
@@ -255,7 +248,7 @@ func (tcc *TestClientConn) WaitForConnectivityState(ctx context.Context, want co
 // is pending) to be considered.  Returns an error if the provided context
 // expires, including the last received error from IsRoundRobin or the picker
 // (if any).
-func (tcc *TestClientConn) WaitForRoundRobinPicker(ctx context.Context, want ...balancer.SubConn) error {
+func (tcc *BalancerClientConn) WaitForRoundRobinPicker(ctx context.Context, want ...balancer.SubConn) error {
 	lastErr := errors.New("received no picker")
 	for {
 		select {
@@ -294,7 +287,7 @@ func (tcc *TestClientConn) WaitForRoundRobinPicker(ctx context.Context, want ...
 
 // WaitForPicker waits for a picker that results in f returning nil.  If the
 // context expires, returns the last error returned by f (if any).
-func (tcc *TestClientConn) WaitForPicker(ctx context.Context, f func(balancer.Picker) error) error {
+func (tcc *BalancerClientConn) WaitForPicker(ctx context.Context, f func(balancer.Picker) error) error {
 	lastErr := errors.New("received no picker")
 	for {
 		select {
