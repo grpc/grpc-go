@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -86,29 +85,12 @@ func (s) TestDuplicateCompressorRegister(t *testing.T) {
 // errProtoCodec wraps the proto codec and delegates to it if it is configured
 // to return a nil error. Else, it returns the configured error.
 type errProtoCodec struct {
-	name string
-
-	mu          sync.Mutex
+	name        string
 	encodingErr error
 	decodingErr error
 }
 
-func (c *errProtoCodec) setEncodingErr(err error) {
-	c.mu.Lock()
-	c.encodingErr = err
-	c.mu.Unlock()
-}
-
-func (c *errProtoCodec) setDecodingErr(err error) {
-	c.mu.Lock()
-	c.decodingErr = err
-	c.mu.Unlock()
-}
-
 func (c *errProtoCodec) Marshal(v any) ([]byte, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if c.encodingErr != nil {
 		return nil, c.encodingErr
 	}
@@ -116,9 +98,6 @@ func (c *errProtoCodec) Marshal(v any) ([]byte, error) {
 }
 
 func (c *errProtoCodec) Unmarshal(data []byte, v any) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if c.decodingErr != nil {
 		return c.decodingErr
 	}
@@ -161,7 +140,7 @@ func (s) TestEncodeDoesntPanicOnServer(t *testing.T) {
 
 	// Configure the codec on the server to not return errors anymore and expect
 	// the RPC to succeed.
-	ec.setEncodingErr(nil)
+	ec.encodingErr = nil
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("RPC failed with error: %v", err)
 	}
@@ -198,7 +177,7 @@ func (s) TestDecodeDoesntPanicOnServer(t *testing.T) {
 
 	// Configure the codec on the server to not return errors anymore and expect
 	// the RPC to succeed.
-	ec.setDecodingErr(nil)
+	ec.decodingErr = nil
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("RPC failed with error: %v", err)
 	}
@@ -234,7 +213,7 @@ func (s) TestEncodeDoesntPanicOnClient(t *testing.T) {
 
 	// Configure the codec on the client to not return errors anymore and expect
 	// the RPC to succeed.
-	ec.setEncodingErr(nil)
+	ec.encodingErr = nil
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodec(ec)); err != nil {
 		t.Fatalf("RPC failed with error: %v", err)
 	}
@@ -270,7 +249,7 @@ func (s) TestDecodeDoesntPanicOnClient(t *testing.T) {
 
 	// Configure the codec on the client to not return errors anymore and expect
 	// the RPC to succeed.
-	ec.setDecodingErr(nil)
+	ec.decodingErr = nil
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodec(ec)); err != nil {
 		t.Fatalf("RPC failed with error: %v", err)
 	}
@@ -346,6 +325,7 @@ func (r *renameProtoCodec) Name() string { return r.name }
 
 // TestForceCodecName confirms that the ForceCodec call option sets the subtype
 // in the content-type header according to the Name() of the codec provided.
+// Verifies that the name is converted to lowercase before transmitting.
 func (s) TestForceCodecName(t *testing.T) {
 	wantContentTypeCh := make(chan []string, 1)
 	defer close(wantContentTypeCh)
