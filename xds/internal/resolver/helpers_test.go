@@ -21,6 +21,7 @@ package resolver_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -158,6 +159,21 @@ func verifyNoUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan 
 	case <-sCtx.Done():
 	case u := <-stateCh:
 		t.Fatalf("Received update from resolver %v when none expected", u)
+	}
+}
+
+// verifyErrorFromResolver waits for the resolver to push an error and verifies
+// that it matches the expected error.
+func verifyErrorFromResolver(ctx context.Context, t *testing.T, errCh chan error, wantErr string) {
+	t.Helper()
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for error to be propagated to the ClientConn")
+	case gotErr := <-errCh:
+		if gotErr == nil || !strings.Contains(gotErr.Error(), wantErr) {
+			t.Fatalf("Received error from resolver %q, want %q", gotErr, wantErr)
+		}
 	}
 }
 
