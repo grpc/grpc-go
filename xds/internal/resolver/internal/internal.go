@@ -23,7 +23,7 @@ package internal
 var (
 	// NewWRR is the function used to create a new weighted round robin
 	// implementation.
-	NewWRR any //  func() wrr.WRR
+	NewWRR any // func() wrr.WRR
 
 	// NewXDSClient is the function used to create a new xDS client.
 	NewXDSClient any // func() (xdsclient.XDSClient, func(), error)

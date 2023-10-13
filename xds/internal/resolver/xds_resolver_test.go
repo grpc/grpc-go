@@ -69,7 +69,7 @@ import (
 
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // Register the cds LB policy
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
-	_ "google.golang.org/grpc/xds/internal/httpfilter/router"    // Register the route filter
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router"    // Register the router filter
 )
 
 // Tests the case where xDS client creation is expected to fail because the
@@ -84,7 +84,7 @@ func (s) TestResolverBuilder_ClientCreationFails_NoBootstap(t *testing.T) {
 
 	target := resolver.Target{URL: *testutils.MustParseURL("xds:///target")}
 	if _, err := builder.Build(target, nil, resolver.BuildOptions{}); err == nil {
-		t.Fatalf("builder.Build(%v) succeeded when expected to fail", target)
+		t.Fatalf("xds Resolver Build(%v) succeeded when expected to fail, because there is not bootstrap configuration for the xDS client", target)
 	}
 }
 
@@ -334,7 +334,8 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 // by the xDS client, which then returns an update containing an error to the
 // resolver. Verifies that the update is propagated to the ClientConn by the
 // resolver. It also tests the cases where the resolver gets a good update
-// subsequently, and another error after the good update.
+// subsequently, and another error after the good update. The test also verifies
+// that these are propagated to the ClientConn.
 func (s) TestResolverBadServiceUpdate(t *testing.T) {
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -557,7 +558,7 @@ func (s) TestResolverRequestHash(t *testing.T) {
 // Tests the case where resources are removed from the management server,
 // causing it to send an empty update to the xDS client, which returns a
 // resource-not-found error to the xDS resolver. The test verifies that an
-// ongoing RPC is handled properly when this happens.
+// ongoing RPC is handled to completion when this happens.
 func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -849,7 +850,7 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 
 	// Update the route configuration resource on the management server to
 	// return a new cluster.
-	newClusterName := defaultTestClusterName + "-new"
+	newClusterName := "new-" + defaultTestClusterName
 	routes = []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, newClusterName)}
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
 
@@ -1034,7 +1035,6 @@ type filterCfg struct {
 
 type filterBuilder struct {
 	paths   []string
-	pathsCh chan []string
 	typeURL string
 }
 
@@ -1238,7 +1238,6 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 		listener      *v3listenerpb.Listener
 		rpcRes        map[string][][]string
 		wantStreamErr string
-		wantPathLen   int
 	}{
 		{
 			name: "NewStream error - ensure earlier interceptor Done is still called",
@@ -1280,11 +1279,10 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 			},
 			rpcRes: map[string][][]string{
 				methodName1: {
-					{"build:foo1", "build:bar1", "newstream:foo1", "newstream:bar1", "done:foo1"}, // err is bar1 NewStream
+					{"build:foo1", "build:bar1", "newstream:foo1", "newstream:bar1", "done:foo1"}, // err in bar1 NewStream()
 				},
 			},
 			wantStreamErr: "bar newstream err",
-			wantPathLen:   5,
 		},
 		{
 			name: "all overrides",
@@ -1414,7 +1412,6 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 					{"build:foo1", "override:foo4", "build:bar1", "override:bar4", "newstream:foo1", "newstream:bar1", "done:bar1", "done:foo1"},
 				},
 			},
-			wantPathLen: 8,
 		},
 	}
 
@@ -1425,10 +1422,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 			defer func() { rinternal.NewWRR = origNewWRR }()
 
 			// Register a custom httpFilter builder for the test.
-			fb := &filterBuilder{
-				pathsCh: make(chan []string, 10),
-				typeURL: testFilterName,
-			}
+			fb := &filterBuilder{typeURL: testFilterName}
 			httpfilter.Register(fb)
 
 			// Spin up an xDS management server.
