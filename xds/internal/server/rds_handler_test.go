@@ -187,7 +187,7 @@ func (s) TestRDSHandler_SuccessCaseOneRDSWatch(t *testing.T) {
 
 	// Create an rds handler and give it a single route to watch.
 	updateCh := make(chan rdsHandlerUpdate, 1)
-	rh := newRDSHandler(xdsC, updateCh)
+	rh := newRDSHandler(xdsC, nil, updateCh)
 	rh.updateRouteNamesToWatch(map[string]bool{route1: true})
 
 	// Verify that the given route is requested.
@@ -211,7 +211,7 @@ func (s) TestRDSHandler_SuccessCaseTwoUpdates(t *testing.T) {
 
 	// Create an rds handler and give it a single route to watch.
 	updateCh := make(chan rdsHandlerUpdate, 1)
-	rh := newRDSHandler(xdsC, updateCh)
+	rh := newRDSHandler(xdsC, nil, updateCh)
 	rh.updateRouteNamesToWatch(map[string]bool{route1: true})
 
 	// Verify that the given route is requested.
@@ -273,7 +273,7 @@ func (s) TestRDSHandler_SuccessCaseDeletedRoute(t *testing.T) {
 
 	// Create an rds handler and give it two routes to watch.
 	updateCh := make(chan rdsHandlerUpdate, 1)
-	rh := newRDSHandler(xdsC, updateCh)
+	rh := newRDSHandler(xdsC, nil, updateCh)
 	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route2: true})
 
 	// Verify that the given routes are requested.
@@ -329,7 +329,7 @@ func (s) TestRDSHandler_SuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
 
 	// Create an rds handler and give it two routes to watch.
 	updateCh := make(chan rdsHandlerUpdate, 1)
-	rh := newRDSHandler(xdsC, updateCh)
+	rh := newRDSHandler(xdsC, nil, updateCh)
 	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route2: true})
 
 	// Verify that the given routes are requested.
@@ -400,7 +400,7 @@ func (s) TestRDSHandler_SuccessCaseSecondUpdateMakesRouteFull(t *testing.T) {
 
 	// Create an rds handler and give it three routes to watch.
 	updateCh := make(chan rdsHandlerUpdate, 1)
-	rh := newRDSHandler(xdsC, updateCh)
+	rh := newRDSHandler(xdsC, nil, updateCh)
 	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route2: true, route3: true})
 
 	// Verify that the given routes are requested.
@@ -455,7 +455,7 @@ func (s) TestErrorReceived(t *testing.T) {
 
 	// Create an rds handler and give it a single route to watch.
 	updateCh := make(chan rdsHandlerUpdate, 1)
-	rh := newRDSHandler(xdsC, updateCh)
+	rh := newRDSHandler(xdsC, nil, updateCh)
 	rh.updateRouteNamesToWatch(map[string]bool{route1: true})
 
 	// Verify that the given route is requested.
