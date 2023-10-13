@@ -443,7 +443,7 @@ func (lw *ldsWatcher) OnResourceDoesNotExist() {
 		return
 	}
 	if lw.logger.V(2) {
-		lw.logger.Infof("LDS watch for resource %q reported resource-does-not-exits error: %v", lw.name)
+		lw.logger.Infof("LDS watch for resource %q reported resource-does-not-exist error: %v", lw.name)
 	}
 	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Listener not found in received response", lw.name)
 	lw.parent.switchMode(nil, connectivity.ServingModeNotServing, err)

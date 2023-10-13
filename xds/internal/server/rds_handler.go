@@ -21,7 +21,7 @@ package server
 import (
 	"sync"
 
-	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -36,7 +36,7 @@ type rdsHandlerUpdate struct {
 // side listeners Filter Chains (i.e. not inline).
 type rdsHandler struct {
 	xdsC   XDSClient
-	logger *internalgrpclog.PrefixLogger
+	logger *igrpclog.PrefixLogger
 
 	mu      sync.Mutex
 	updates map[string]xdsresource.RouteConfigUpdate
@@ -51,7 +51,7 @@ type rdsHandler struct {
 // newRDSHandler creates a new rdsHandler to watch for RDS resources.
 // listenerWrapper updates the list of route names to watch by calling
 // updateRouteNamesToWatch() upon receipt of new Listener configuration.
-func newRDSHandler(xdsC XDSClient, logger *internalgrpclog.PrefixLogger, ch chan rdsHandlerUpdate) *rdsHandler {
+func newRDSHandler(xdsC XDSClient, logger *igrpclog.PrefixLogger, ch chan rdsHandlerUpdate) *rdsHandler {
 	return &rdsHandler{
 		xdsC:          xdsC,
 		logger:        logger,
@@ -75,7 +75,7 @@ func (rh *rdsHandler) updateRouteNamesToWatch(routeNamesToWatch map[string]bool)
 			// The xDS client keeps a reference to the watcher until the cancel
 			// func is invoked. So, we don't need to keep a reference for fear
 			// of it being garbage collected.
-			w := &rdsWatcher{parent: rh, name: routeName}
+			w := &rdsWatcher{parent: rh, routeName: routeName}
 			rh.cancels[routeName] = xdsresource.WatchRouteConfig(rh.xdsC, routeName, w)
 		}
 	}
@@ -134,29 +134,29 @@ func (rh *rdsHandler) close() {
 // rdsWatcher implements the xdsresource.RouteConfigWatcher interface and is
 // passed to the WatchRouteConfig API.
 type rdsWatcher struct {
-	parent *rdsHandler
-	logger *internalgrpclog.PrefixLogger
-	name   string
+	parent    *rdsHandler
+	logger    *igrpclog.PrefixLogger
+	routeName string
 }
 
 func (rw *rdsWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData) {
 	if rw.logger.V(2) {
-		rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.name, update.Resource)
+		rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, update.Resource)
 	}
-	rw.parent.handleRouteUpdate(rw.name, update.Resource)
+	rw.parent.handleRouteUpdate(rw.routeName, update.Resource)
 }
 
 func (rw *rdsWatcher) OnError(err error) {
 	if rw.logger.V(2) {
-		rw.logger.Infof("RDS watch for resource %q reported error: %v", rw.name, err)
+		rw.logger.Infof("RDS watch for resource %q reported error: %v", rw.routeName, err)
 	}
 	drainAndPush(rw.parent.updateChannel, rdsHandlerUpdate{err: err})
 }
 
 func (rw *rdsWatcher) OnResourceDoesNotExist() {
 	if rw.logger.V(2) {
-		rw.logger.Infof("RDS watch for resource %q reported resource-does-not-exits error: %v", rw.name)
+		rw.logger.Infof("RDS watch for resource %q reported resource-does-not-exist error: %v", rw.routeName)
 	}
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type RouteConfiguration not found in received response", rw.name)
+	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type RouteConfiguration not found in received response", rw.routeName)
 	drainAndPush(rw.parent.updateChannel, rdsHandlerUpdate{err: err})
 }
