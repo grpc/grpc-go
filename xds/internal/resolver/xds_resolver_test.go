@@ -388,26 +388,14 @@ func (s) TestResolverBadServiceUpdate(t *testing.T) {
 // returned by the resolver picks clusters based on the route configuration
 // received from the management server.
 func (s) TestResolverGoodServiceUpdate(t *testing.T) {
-	// Spin up an xDS management server for the test.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	nodeID := uuid.New().String()
-	mgmtServer, _, _ := setupManagementServerForTest(ctx, t, nodeID)
-
-	// Configure resources on the management server.
-	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
-	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
-
-	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)})
-
 	for _, tt := range []struct {
+		name              string
 		routeConfig       *v3routepb.RouteConfiguration
 		wantServiceConfig string
 		wantClusters      map[string]bool
 	}{
 		{
-			// A route configuration with a single cluster.
+			name: "single cluster",
 			routeConfig: e2e.RouteConfigResourceWithOptions(e2e.RouteConfigOptions{
 				RouteConfigName:      defaultTestRouteConfigName,
 				ListenerName:         defaultTestServiceName,
@@ -418,7 +406,7 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 			wantClusters:      map[string]bool{fmt.Sprintf("cluster:%s", defaultTestClusterName): true},
 		},
 		{
-			// A route configuration with a two new clusters.
+			name: "two clusters",
 			routeConfig: e2e.RouteConfigResourceWithOptions(e2e.RouteConfigOptions{
 				RouteConfigName:      defaultTestRouteConfigName,
 				ListenerName:         defaultTestServiceName,
@@ -428,18 +416,10 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 			// This update contains the cluster from the previous update as well
 			// as this update, as the previous config selector still references
 			// the old cluster when the new one is pushed.
-			wantServiceConfig: fmt.Sprintf(`
-{
+			wantServiceConfig: `{
   "loadBalancingConfig": [{
     "xds_cluster_manager_experimental": {
       "children": {
-        "cluster:%s": {
-          "childPolicy": [{
-			"cds_experimental": {
-			  "cluster": "%s" 
-			}
-		  }]
-        },
         "cluster:cluster_1": {
           "childPolicy": [{
 			"cds_experimental": {
@@ -456,36 +436,45 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
         }
       }
     }
-  }]
-}`, defaultTestClusterName, defaultTestClusterName),
+  }]}`,
 			wantClusters: map[string]bool{"cluster:cluster_1": true, "cluster:cluster_2": true},
 		},
 	} {
-		// Configure the management server with a good listener resource and a
-		// route configuration resource, as specified by the test case.
-		listeners = []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
-		routes := []*v3routepb.RouteConfiguration{tt.routeConfig}
-		configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+		t.Run(tt.name, func(t *testing.T) {
+			// Spin up an xDS management server for the test.
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			nodeID := uuid.New().String()
+			mgmtServer, _, _ := setupManagementServerForTest(ctx, t, nodeID)
 
-		// Read the update pushed by the resolver to the ClientConn.
-		cs := verifyUpdateFromResolver(ctx, t, stateCh, tt.wantServiceConfig)
+			// Configure the management server with a good listener resource and a
+			// route configuration resource, as specified by the test case.
+			listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
+			routes := []*v3routepb.RouteConfiguration{tt.routeConfig}
+			configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
 
-		pickedClusters := make(map[string]bool)
-		// Odds of picking 75% cluster 100 times in a row: 1 in 3E-13.  And
-		// with the random number generator stubbed out, we can rely on this
-		// to be 100% reproducible.
-		for i := 0; i < 100; i++ {
-			res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
-			if err != nil {
-				t.Fatalf("cs.SelectConfig(): %v", err)
+			stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)})
+
+			// Read the update pushed by the resolver to the ClientConn.
+			cs := verifyUpdateFromResolver(ctx, t, stateCh, tt.wantServiceConfig)
+
+			pickedClusters := make(map[string]bool)
+			// Odds of picking 75% cluster 100 times in a row: 1 in 3E-13.  And
+			// with the random number generator stubbed out, we can rely on this
+			// to be 100% reproducible.
+			for i := 0; i < 100; i++ {
+				res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+				if err != nil {
+					t.Fatalf("cs.SelectConfig(): %v", err)
+				}
+				cluster := clustermanager.GetPickedClusterForTesting(res.Context)
+				pickedClusters[cluster] = true
+				res.OnCommitted()
 			}
-			cluster := clustermanager.GetPickedClusterForTesting(res.Context)
-			pickedClusters[cluster] = true
-			res.OnCommitted()
-		}
-		if !cmp.Equal(pickedClusters, tt.wantClusters) {
-			t.Errorf("Picked clusters: %v; want: %v", pickedClusters, tt.wantClusters)
-		}
+			if !cmp.Equal(pickedClusters, tt.wantClusters) {
+				t.Errorf("Picked clusters: %v; want: %v", pickedClusters, tt.wantClusters)
+			}
+		})
 	}
 }
 
