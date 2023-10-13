@@ -169,7 +169,7 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 			})
 
 			// Create an inbound xDS listener resource for the server side.
-			inboundLis := e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS)
+			inboundLis := e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS, "routeName")
 			for _, fc := range inboundLis.GetFilterChains() {
 				fc.TransportSocket = test.securityConfig
 			}

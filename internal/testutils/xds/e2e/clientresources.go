@@ -137,9 +137,48 @@ func marshalAny(m proto.Message) *anypb.Any {
 	return a
 }
 
-// DefaultServerListener returns a basic xds Listener resource to be used on
-// the server side.
-func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3listenerpb.Listener {
+// DefaultServerListener returns a basic xds Listener resource to be used on the
+// server side. The returned Listener resource contains an inline route
+// configuration with the name of routeName.
+func DefaultServerListener(host string, port uint32, secLevel SecurityLevel, routeName string) *v3listenerpb.Listener {
+	return defaultServerListenerCommon(host, port, secLevel, routeName, true)
+}
+
+func defaultServerListenerCommon(host string, port uint32, secLevel SecurityLevel, routeName string, inlineRouteConfig bool) *v3listenerpb.Listener {
+	var hcm *v3httppb.HttpConnectionManager
+	if inlineRouteConfig {
+		hcm = &v3httppb.HttpConnectionManager{
+			RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+				RouteConfig: &v3routepb.RouteConfiguration{
+					Name: routeName,
+					VirtualHosts: []*v3routepb.VirtualHost{{
+						// This "*" string matches on any incoming authority. This is to ensure any
+						// incoming RPC matches to Route_NonForwardingAction and will proceed as
+						// normal.
+						Domains: []string{"*"},
+						Routes: []*v3routepb.Route{{
+							Match: &v3routepb.RouteMatch{
+								PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+							},
+							Action: &v3routepb.Route_NonForwardingAction{},
+						}}}}},
+			},
+			HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
+		}
+	} else {
+		hcm = &v3httppb.HttpConnectionManager{
+			RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+				Rds: &v3httppb.Rds{
+					ConfigSource: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+					},
+					RouteConfigName: routeName,
+				},
+			},
+			HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
+		}
+	}
+
 	var tlsContext *v3tlspb.DownstreamTlsContext
 	switch secLevel {
 	case SecurityLevelNone:
@@ -212,27 +251,8 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 				},
 				Filters: []*v3listenerpb.Filter{
 					{
-						Name: "filter-1",
-						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: marshalAny(&v3httppb.HttpConnectionManager{
-								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-									RouteConfig: &v3routepb.RouteConfiguration{
-										Name: "routeName",
-										VirtualHosts: []*v3routepb.VirtualHost{{
-											// This "*" string matches on any incoming authority. This is to ensure any
-											// incoming RPC matches to Route_NonForwardingAction and will proceed as
-											// normal.
-											Domains: []string{"*"},
-											Routes: []*v3routepb.Route{{
-												Match: &v3routepb.RouteMatch{
-													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
-												},
-												Action: &v3routepb.Route_NonForwardingAction{},
-											}}}}},
-								},
-								HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
-							}),
-						},
+						Name:       "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: marshalAny(hcm)},
 					},
 				},
 				TransportSocket: ts,
@@ -260,33 +280,21 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 				},
 				Filters: []*v3listenerpb.Filter{
 					{
-						Name: "filter-1",
-						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: marshalAny(&v3httppb.HttpConnectionManager{
-								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-									RouteConfig: &v3routepb.RouteConfiguration{
-										Name: "routeName",
-										VirtualHosts: []*v3routepb.VirtualHost{{
-											// This "*" string matches on any incoming authority. This is to ensure any
-											// incoming RPC matches to Route_NonForwardingAction and will proceed as
-											// normal.
-											Domains: []string{"*"},
-											Routes: []*v3routepb.Route{{
-												Match: &v3routepb.RouteMatch{
-													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
-												},
-												Action: &v3routepb.Route_NonForwardingAction{},
-											}}}}},
-								},
-								HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
-							}),
-						},
+						Name:       "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: marshalAny(hcm)},
 					},
 				},
 				TransportSocket: ts,
 			},
 		},
 	}
+}
+
+// DefaultServerListenerWithRouteConfigName returns a basic xds Listener
+// resource to be used on the server side. The returned Listener resource
+// contains a RouteCongiguration resource name that needs to be resolved.
+func DefaultServerListenerWithRouteConfigName(host string, port uint32, secLevel SecurityLevel, routeName string) *v3listenerpb.Listener {
+	return defaultServerListenerCommon(host, port, secLevel, routeName, false)
 }
 
 // HTTPFilter constructs an xds HttpFilter with the provided name and config.

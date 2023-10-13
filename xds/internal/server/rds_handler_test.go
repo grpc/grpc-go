@@ -46,7 +46,7 @@ const (
 	route3 = "route3"
 )
 
-// setupForRDSHandlerTests performs the following setup actions:
+// xdsSetupFoTests performs the following setup actions:
 //   - spins up an xDS management server
 //   - creates an xDS client with a bootstrap configuration pointing to the above
 //     management server
@@ -54,25 +54,40 @@ const (
 // Returns the following:
 // - a reference to the management server
 // - nodeID to use when pushing resources to the management server
-// - a channel to read resource names received by the management server
+// - a channel to read lds resource names received by the management server
+// - a channel to read rds resource names received by the management server
 // - an xDS client to pass to the rdsHandler under test
-func setupForRDSHandlerTests(t *testing.T) (*e2e.ManagementServer, string, chan []string, xdsclient.XDSClient) {
-	namesCh := make(chan []string, 1)
+func xdsSetupFoTests(t *testing.T) (*e2e.ManagementServer, string, chan []string, chan []string, xdsclient.XDSClient) {
+	t.Helper()
+
+	ldsNamesCh := make(chan []string, 1)
+	rdsNamesCh := make(chan []string, 1)
 
 	// Setup the management server to push the requested route configuration
 	// resource names on to a channel for the test to inspect.
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			if req.GetTypeUrl() != version.V3RouteConfigURL {
+			switch req.GetTypeUrl() {
+			case version.V3ListenerURL:
+				select {
+				case <-ldsNamesCh:
+				default:
+				}
+				select {
+				case ldsNamesCh <- req.GetResourceNames():
+				default:
+				}
+			case version.V3RouteConfigURL:
+				select {
+				case <-rdsNamesCh:
+				default:
+				}
+				select {
+				case rdsNamesCh <- req.GetResourceNames():
+				default:
+				}
+			default:
 				return fmt.Errorf("unexpected resources %v of type %q requested", req.GetResourceNames(), req.GetTypeUrl())
-			}
-			select {
-			case <-namesCh:
-			default:
-			}
-			select {
-			case namesCh <- req.GetResourceNames():
-			default:
 			}
 			return nil
 		},
@@ -86,7 +101,7 @@ func setupForRDSHandlerTests(t *testing.T) (*e2e.ManagementServer, string, chan 
 	}
 	t.Cleanup(cancel)
 
-	return mgmtServer, nodeID, namesCh, xdsC
+	return mgmtServer, nodeID, ldsNamesCh, rdsNamesCh, xdsC
 }
 
 // Waits for the wantNames to be pushed on to namesCh. Fails the test by calling
@@ -156,7 +171,7 @@ var defaultRouteConfigUpdate = xdsresource.RouteConfigUpdate{
 //     update channel
 //   - once the handler is closed, the watch for the route name is canceled.
 func (s) TestRDSHandler_SuccessCaseOneRDSWatch(t *testing.T) {
-	mgmtServer, nodeID, resourceNamesCh, xdsC := setupForRDSHandlerTests(t)
+	mgmtServer, nodeID, _, rdsNamesCh, xdsC := xdsSetupFoTests(t)
 
 	// Configure the management server with a route config resource.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -176,7 +191,7 @@ func (s) TestRDSHandler_SuccessCaseOneRDSWatch(t *testing.T) {
 	rh.updateRouteNamesToWatch(map[string]bool{route1: true})
 
 	// Verify that the given route is requested.
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{route1})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1})
 
 	// Verify that the update is pushed to the handler's update channel.
 	wantUpdate := rdsHandlerUpdate{updates: map[string]xdsresource.RouteConfigUpdate{route1: defaultRouteConfigUpdate}}
@@ -184,7 +199,7 @@ func (s) TestRDSHandler_SuccessCaseOneRDSWatch(t *testing.T) {
 
 	// Close the rds handler and verify that the watch is canceled.
 	rh.close()
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{})
 }
 
 // Tests the case where the rds handler receives two route names to watch. The
@@ -192,7 +207,7 @@ func (s) TestRDSHandler_SuccessCaseOneRDSWatch(t *testing.T) {
 // push an update on the channel. And when the handler receives the second
 // route, the test verifies that the update is pushed.
 func (s) TestRDSHandler_SuccessCaseTwoUpdates(t *testing.T) {
-	mgmtServer, nodeID, resourceNamesCh, xdsC := setupForRDSHandlerTests(t)
+	mgmtServer, nodeID, _, rdsNamesCh, xdsC := xdsSetupFoTests(t)
 
 	// Create an rds handler and give it a single route to watch.
 	updateCh := make(chan rdsHandlerUpdate, 1)
@@ -202,11 +217,11 @@ func (s) TestRDSHandler_SuccessCaseTwoUpdates(t *testing.T) {
 	// Verify that the given route is requested.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{route1})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1})
 
 	// Update the rds handler to watch for two routes.
 	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route2: true})
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{route1, route2})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1, route2})
 
 	// Configure the management server with a single route config resource.
 	routeResource1 := routeConfigResourceForName(route1)
@@ -246,7 +261,7 @@ func (s) TestRDSHandler_SuccessCaseTwoUpdates(t *testing.T) {
 
 	// Close the rds handler and verify that the watch is canceled.
 	rh.close()
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{})
 }
 
 // Tests the case where the rds handler receives an update with two routes, then
@@ -254,7 +269,7 @@ func (s) TestRDSHandler_SuccessCaseTwoUpdates(t *testing.T) {
 // the watch for the route no longer present, and push a corresponding update
 // with only one route.
 func (s) TestRDSHandler_SuccessCaseDeletedRoute(t *testing.T) {
-	mgmtServer, nodeID, resourceNamesCh, xdsC := setupForRDSHandlerTests(t)
+	mgmtServer, nodeID, _, rdsNamesCh, xdsC := xdsSetupFoTests(t)
 
 	// Create an rds handler and give it two routes to watch.
 	updateCh := make(chan rdsHandlerUpdate, 1)
@@ -264,7 +279,7 @@ func (s) TestRDSHandler_SuccessCaseDeletedRoute(t *testing.T) {
 	// Verify that the given routes are requested.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{route1, route2})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1, route2})
 
 	// Configure the management server with two route config resources.
 	routeResource1 := routeConfigResourceForName(route1)
@@ -291,7 +306,7 @@ func (s) TestRDSHandler_SuccessCaseDeletedRoute(t *testing.T) {
 	rh.updateRouteNamesToWatch(map[string]bool{route1: true})
 
 	// Verify that the other route is no longer requested.
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{route1})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1})
 
 	// Verify that an update is pushed with only one route.
 	wantUpdate = rdsHandlerUpdate{updates: map[string]xdsresource.RouteConfigUpdate{route1: defaultRouteConfigUpdate}}
@@ -299,7 +314,7 @@ func (s) TestRDSHandler_SuccessCaseDeletedRoute(t *testing.T) {
 
 	// Close the rds handler and verify that the watch is canceled.
 	rh.close()
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{})
 }
 
 // Tests the case where the rds handler receives an update with two routes, and
@@ -310,7 +325,7 @@ func (s) TestRDSHandler_SuccessCaseDeletedRoute(t *testing.T) {
 // rds handler until the newly added route config resource is received from the
 // management server.
 func (s) TestRDSHandler_SuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
-	mgmtServer, nodeID, resourceNamesCh, xdsC := setupForRDSHandlerTests(t)
+	mgmtServer, nodeID, _, rdsNamesCh, xdsC := xdsSetupFoTests(t)
 
 	// Create an rds handler and give it two routes to watch.
 	updateCh := make(chan rdsHandlerUpdate, 1)
@@ -320,7 +335,7 @@ func (s) TestRDSHandler_SuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
 	// Verify that the given routes are requested.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{route1, route2})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1, route2})
 
 	// Configure the management server with two route config resources.
 	routeResource1 := routeConfigResourceForName(route1)
@@ -345,7 +360,7 @@ func (s) TestRDSHandler_SuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
 
 	// Update the handler with a route that was already there and a new route.
 	rh.updateRouteNamesToWatch(map[string]bool{route2: true, route3: true})
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{route2, route3})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route2, route3})
 
 	// The handler should not send an update.
 	sCtx, sCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -374,14 +389,14 @@ func (s) TestRDSHandler_SuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
 
 	// Close the rds handler and verify that the watch is canceled.
 	rh.close()
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{})
 }
 
 // Tests the scenario where the rds handler gets told to watch three rds
 // configurations, gets two successful updates, then gets told to watch only
 // those two. The rds handler should then write an update to update buffer.
 func (s) TestRDSHandler_SuccessCaseSecondUpdateMakesRouteFull(t *testing.T) {
-	mgmtServer, nodeID, resourceNamesCh, xdsC := setupForRDSHandlerTests(t)
+	mgmtServer, nodeID, _, rdsNamesCh, xdsC := xdsSetupFoTests(t)
 
 	// Create an rds handler and give it three routes to watch.
 	updateCh := make(chan rdsHandlerUpdate, 1)
@@ -391,7 +406,7 @@ func (s) TestRDSHandler_SuccessCaseSecondUpdateMakesRouteFull(t *testing.T) {
 	// Verify that the given routes are requested.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{route1, route2, route3})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1, route2, route3})
 
 	// Configure the management server with two route config resources.
 	routeResource1 := routeConfigResourceForName(route1)
@@ -424,19 +439,19 @@ func (s) TestRDSHandler_SuccessCaseSecondUpdateMakesRouteFull(t *testing.T) {
 			route2: defaultRouteConfigUpdate,
 		},
 	}
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{route1, route2})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1, route2})
 	verifyUpdateFromChannel(ctx, t, updateCh, wantUpdate)
 
 	// Close the rds handler and verify that the watch is canceled.
 	rh.close()
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{})
 }
 
 // TestErrorReceived tests the case where the rds handler receives a route name
 // to watch, then receives an update with an error. This error should be then
 // written to the update channel.
 func (s) TestErrorReceived(t *testing.T) {
-	mgmtServer, nodeID, resourceNamesCh, xdsC := setupForRDSHandlerTests(t)
+	mgmtServer, nodeID, _, rdsNamesCh, xdsC := xdsSetupFoTests(t)
 
 	// Create an rds handler and give it a single route to watch.
 	updateCh := make(chan rdsHandlerUpdate, 1)
@@ -446,7 +461,7 @@ func (s) TestErrorReceived(t *testing.T) {
 	// Verify that the given route is requested.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	waitForResourceNames(ctx, t, resourceNamesCh, []string{route1})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1})
 
 	// Configure the management server with a single route config resource, that
 	// is expected to be NACKed.
