@@ -142,10 +142,10 @@ func (s) TestResolverBuilder_DifferentBootstrapConfigs(t *testing.T) {
 
 			r, err := builder.Build(test.target, &testutils.ResolverClientConn{Logger: t}, test.buildOpts)
 			if gotErr, wantErr := err != nil, test.wantErr != ""; gotErr != wantErr {
-				t.Fatalf("builder.Build(%v) returned err: %v, wantErr: %v", test.target, err, test.wantErr)
+				t.Fatalf("xds Resolver Build(%v) returned err: %v, wantErr: %v", test.target, err, test.wantErr)
 			}
 			if test.wantErr != "" && !strings.Contains(err.Error(), test.wantErr) {
-				t.Fatalf("builder.Build(%v) returned err: %v, wantErr: %v", test.target, err, test.wantErr)
+				t.Fatalf("xds Resolver Build(%v) returned err: %v, wantErr: %v", test.target, err, test.wantErr)
 			}
 			if err != nil {
 				// This is the case where we expect an error and got it.
