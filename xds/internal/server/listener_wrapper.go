@@ -69,8 +69,7 @@ type DrainCallback func(addr net.Addr)
 // XDSClient wraps the methods on the XDSClient which are required by
 // the listenerWrapper.
 type XDSClient interface {
-	WatchListener(string, func(xdsresource.ListenerUpdate, error)) func()
-	WatchRouteConfig(string, func(xdsresource.RouteConfigUpdate, error)) func()
+	WatchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) (cancel func())
 	BootstrapConfig() *bootstrap.Config
 }
 
@@ -110,7 +109,6 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 		mode:        connectivity.ServingModeStarting,
 		closed:      grpcsync.NewEvent(),
 		goodUpdate:  grpcsync.NewEvent(),
-		ldsUpdateCh: make(chan ldsUpdateWithError, 1),
 		rdsUpdateCh: make(chan rdsHandlerUpdate, 1),
 	}
 	lw.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[xds-server-listener %p] ", lw))
@@ -120,15 +118,14 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 	lisAddr := lw.Listener.Addr().String()
 	lw.addr, lw.port, _ = net.SplitHostPort(lisAddr)
 
-	lw.rdsHandler = newRDSHandler(lw.xdsC, lw.rdsUpdateCh)
-	lw.cancelWatch = lw.xdsC.WatchListener(lw.name, lw.handleListenerUpdate)
+	lw.rdsHandler = newRDSHandler(lw.xdsC, lw.logger, lw.rdsUpdateCh)
+	lw.cancelWatch = xdsresource.WatchListener(lw.xdsC, lw.name, &ldsWatcher{
+		parent: lw,
+		logger: lw.logger,
+		name:   lw.name,
+	})
 	go lw.run()
 	return lw, lw.goodUpdate.Done()
-}
-
-type ldsUpdateWithError struct {
-	update xdsresource.ListenerUpdate
-	err    error
 }
 
 // listenerWrapper wraps the net.Listener associated with the listening address
@@ -181,8 +178,6 @@ type listenerWrapper struct {
 	// rdsUpdates are the RDS resources received from the management
 	// server, keyed on the RouteName of the RDS resource.
 	rdsUpdates unsafe.Pointer // map[string]xdsclient.RouteConfigUpdate
-	// ldsUpdateCh is a channel for XDSClient LDS updates.
-	ldsUpdateCh chan ldsUpdateWithError
 	// rdsUpdateCh is a channel for XDSClient RDS updates.
 	rdsUpdateCh chan rdsHandlerUpdate
 }
@@ -320,29 +315,10 @@ func (l *listenerWrapper) run() {
 		select {
 		case <-l.closed.Done():
 			return
-		case u := <-l.ldsUpdateCh:
-			l.handleLDSUpdate(u)
 		case u := <-l.rdsUpdateCh:
 			l.handleRDSUpdate(u)
 		}
 	}
-}
-
-// handleLDSUpdate is the callback which handles LDS Updates. It writes the
-// received update to the update channel, which is picked up by the run
-// goroutine.
-func (l *listenerWrapper) handleListenerUpdate(update xdsresource.ListenerUpdate, err error) {
-	if l.closed.HasFired() {
-		l.logger.Warningf("Resource %q received update: %v with error: %v, after listener was closed", l.name, update, err)
-		return
-	}
-	// Remove any existing entry in ldsUpdateCh and replace with the new one, as the only update
-	// listener cares about is most recent update.
-	select {
-	case <-l.ldsUpdateCh:
-	default:
-	}
-	l.ldsUpdateCh <- ldsUpdateWithError{update: update, err: err}
 }
 
 // handleRDSUpdate handles a full rds update from rds handler. On a successful
@@ -354,7 +330,6 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 		return
 	}
 	if update.err != nil {
-		l.logger.Warningf("Received error for rds names specified in resource %q: %+v", l.name, update.err)
 		if xdsresource.ErrType(update.err) == xdsresource.ErrorTypeResourceNotFound {
 			l.switchMode(nil, connectivity.ServingModeNotServing, update.err)
 		}
@@ -368,17 +343,7 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 	l.goodUpdate.Fire()
 }
 
-func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
-	if update.err != nil {
-		l.logger.Warningf("Received error for resource %q: %+v", l.name, update.err)
-		if xdsresource.ErrType(update.err) == xdsresource.ErrorTypeResourceNotFound {
-			l.switchMode(nil, connectivity.ServingModeNotServing, update.err)
-		}
-		// For errors which are anything other than "resource-not-found", we
-		// continue to use the old configuration.
-		return
-	}
-
+func (l *listenerWrapper) handleLDSUpdate(update xdsresource.ListenerUpdate) {
 	// Make sure that the socket address on the received Listener resource
 	// matches the address of the net.Listener passed to us by the user. This
 	// check is done here instead of at the XDSClient layer because of the
@@ -391,7 +356,7 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	// What this means is that the XDSClient has ACKed a resource which can push
 	// the server into a "not serving" mode. This is not ideal, but this is
 	// what we have decided to do. See gRPC A36 for more details.
-	ilc := update.update.InboundListenerCfg
+	ilc := update.InboundListenerCfg
 	if ilc.Address != l.addr || ilc.Port != l.port {
 		l.switchMode(nil, connectivity.ServingModeNotServing, fmt.Errorf("address (%s:%s) in Listener update does not match listening address: (%s:%s)", ilc.Address, ilc.Port, l.addr, l.port))
 		return
@@ -439,4 +404,47 @@ func (l *listenerWrapper) switchMode(fcs *xdsresource.FilterChainManager, newMod
 	if l.modeCallback != nil {
 		l.modeCallback(l.Listener.Addr(), newMode, err)
 	}
+}
+
+// ldsWatcher implements the xdsresource.ListenerWatcher interface and is
+// passed to the WatchListener API.
+type ldsWatcher struct {
+	parent *listenerWrapper
+	logger *internalgrpclog.PrefixLogger
+	name   string
+}
+
+func (lw *ldsWatcher) OnUpdate(update *xdsresource.ListenerResourceData) {
+	if lw.parent.closed.HasFired() {
+		lw.logger.Warningf("Resource %q received update: %#v after listener was closed", lw.name, update)
+		return
+	}
+	if lw.logger.V(2) {
+		lw.logger.Infof("LDS watch for resource %q received update: %#v", lw.name, update.Resource)
+	}
+	lw.parent.handleLDSUpdate(update.Resource)
+}
+
+func (lw *ldsWatcher) OnError(err error) {
+	if lw.parent.closed.HasFired() {
+		lw.logger.Warningf("Resource %q received error: %v after listener was closed", lw.name, err)
+		return
+	}
+	if lw.logger.V(2) {
+		lw.logger.Infof("LDS watch for resource %q reported error: %#v", lw.name, err)
+	}
+	// For errors which are anything other than "resource-not-found", we
+	// continue to use the old configuration.
+}
+
+func (lw *ldsWatcher) OnResourceDoesNotExist() {
+	if lw.parent.closed.HasFired() {
+		lw.logger.Warningf("Resource %q received resource-not-found-error after listener was closed", lw.name)
+		return
+	}
+	if lw.logger.V(2) {
+		lw.logger.Infof("LDS watch for resource %q reported resource-does-not-exits error: %v", lw.name)
+	}
+	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Listener not found in received response", lw.name)
+	lw.parent.switchMode(nil, connectivity.ServingModeNotServing, err)
 }
