@@ -128,7 +128,6 @@ func (s) TestFileWatcherCRLProviderConfig(t *testing.T) {
 // that it’s correctly processed. Additionally, we also check if number of
 // invocations of custom callback is correct.
 func (s) TestFileWatcherCRLProvider(t *testing.T) {
-	// testdata.Path("crl") contains 5 non-crl files.
 	nonCRLFilesSet := make(map[string]struct{})
 	customCallback := func(err error) {
 		nonCRLFilesSet[err.Error()] = struct{}{}

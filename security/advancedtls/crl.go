@@ -116,8 +116,8 @@ func NewCRL(b []byte) (*CRL, error) {
 	return crlExt, nil
 }
 
-// ReadCRLFile reads a file from the provided path, and returns constructed
-// from it.
+// ReadCRLFile reads a file from the provided path, and returns constructed CRL
+// struct from it.
 func ReadCRLFile(path string) (*CRL, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {

@@ -31,10 +31,13 @@ const defaultCRLRefreshDuration = 1 * time.Hour
 // CRLProvider is the interface to be implemented to enable custom CRL provider
 // behavior.
 //
-// The interface defines how the data is read, but doesn't prescribe a way
-// CRL are loaded and stored. Such implementations can be used in
-// RevocationConfig of advancedtls.ClientOptions and/or
-// advancedtls.ServerOptions .
+// The interface defines how gRPC gets CRLs from the provider during handshakes,
+// but doesn't prescribe a specific way to load and store CRLs. Such
+// implementations can be used in RevocationConfig of advancedtls.ClientOptions
+// and/or advancedtls.ServerOptions.
+// Please note that checking CRLs is being directly on the path of connection
+// establishment, so implementations of the CRL function need to be fast, and
+// slow things such as file IO should be done asynchronously.
 // TODO(erm-g): Add link to related gRFC once it's ready.
 // Please refer to https://github.com/grpc/proposal/ for more details.
 type CRLProvider interface {
@@ -47,9 +50,6 @@ type CRLProvider interface {
 // StaticCRLProvider implements CRLProvider interface by accepting raw content
 // of CRL files at creation time and storing parsed CRL structs  in-memory.
 type StaticCRLProvider struct {
-	// TODO CRL is sort of our internal representation - provide an API for
-	// people to read into it, or provide a simpler type in the API then
-	// internally convert to this form
 	crls map[string]*CRL
 }
 
