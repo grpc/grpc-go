@@ -63,7 +63,10 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 	})
 
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
-	server := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
+	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
+	if err != nil {
+		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
+	}
 	defer server.Stop()
 	testgrpc.RegisterTestServiceServer(server, &testService{})
 
@@ -72,7 +75,7 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
 	}
-	listener := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone)
+	listener := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone, "routeName")
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener},
@@ -205,7 +208,10 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	})
 
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
-	server := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
+	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
+	if err != nil {
+		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
+	}
 	defer server.Stop()
 	testgrpc.RegisterTestServiceServer(server, &testService{})
 
@@ -215,12 +221,12 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
 	}
-	listener1 := e2e.DefaultServerListener(host1, port1, e2e.SecurityLevelNone)
+	listener1 := e2e.DefaultServerListener(host1, port1, e2e.SecurityLevelNone, "routeName")
 	host2, port2, err := hostPortFromListener(lis2)
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
 	}
-	listener2 := e2e.DefaultServerListener(host2, port2, e2e.SecurityLevelNone)
+	listener2 := e2e.DefaultServerListener(host2, port2, e2e.SecurityLevelNone, "routeName")
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener1, listener2},

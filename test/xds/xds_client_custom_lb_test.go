@@ -25,7 +25,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	_ "google.golang.org/grpc/balancer/weightedroundrobin" // To register weighted_round_robin_experimental.
+	_ "google.golang.org/grpc/balancer/leastrequest"       // To register least_request
+	_ "google.golang.org/grpc/balancer/weightedroundrobin" // To register weighted_round_robin
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
@@ -41,6 +42,7 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3clientsideweightedroundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/client_side_weighted_round_robin/v3"
+	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
 	v3roundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/round_robin/v3"
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
 	"github.com/golang/protobuf/proto"
@@ -53,13 +55,13 @@ import (
 // wrrLocality is a helper that takes a proto message and returns a
 // WrrLocalityProto with the proto message marshaled into a proto.Any as a
 // child.
-func wrrLocality(m proto.Message) *v3wrrlocalitypb.WrrLocality {
+func wrrLocality(t *testing.T, m proto.Message) *v3wrrlocalitypb.WrrLocality {
 	return &v3wrrlocalitypb.WrrLocality{
 		EndpointPickingPolicy: &v3clusterpb.LoadBalancingPolicy{
 			Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 				{
 					TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-						TypedConfig: testutils.MarshalAny(m),
+						TypedConfig: testutils.MarshalAny(t, m),
 					},
 				},
 			},
@@ -70,13 +72,13 @@ func wrrLocality(m proto.Message) *v3wrrlocalitypb.WrrLocality {
 // clusterWithLBConfiguration returns a cluster resource with the proto message
 // passed Marshaled to an any and specified through the load_balancing_policy
 // field.
-func clusterWithLBConfiguration(clusterName, edsServiceName string, secLevel e2e.SecurityLevel, m proto.Message) *v3clusterpb.Cluster {
+func clusterWithLBConfiguration(t *testing.T, clusterName, edsServiceName string, secLevel e2e.SecurityLevel, m proto.Message) *v3clusterpb.Cluster {
 	cluster := e2e.DefaultCluster(clusterName, edsServiceName, secLevel)
 	cluster.LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
 		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 			{
 				TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-					TypedConfig: testutils.MarshalAny(m),
+					TypedConfig: testutils.MarshalAny(t, m),
 				},
 			},
 		},
@@ -95,6 +97,11 @@ func (s) TestWrrLocality(t *testing.T) {
 	envconfig.XDSCustomLBPolicy = true
 	defer func() {
 		envconfig.XDSCustomLBPolicy = oldCustomLBSupport
+	}()
+	oldLeastRequestLBSupport := envconfig.LeastRequestLB
+	envconfig.LeastRequestLB = true
+	defer func() {
+		envconfig.LeastRequestLB = oldLeastRequestLBSupport
 	}()
 
 	backend1 := stubserver.StartTestService(t, nil)
@@ -125,7 +132,7 @@ func (s) TestWrrLocality(t *testing.T) {
 	}{
 		{
 			name:                     "rr_child",
-			wrrLocalityConfiguration: wrrLocality(&v3roundrobinpb.RoundRobin{}),
+			wrrLocalityConfiguration: wrrLocality(t, &v3roundrobinpb.RoundRobin{}),
 			// Each addresses expected probability is locality weight of
 			// locality / total locality weights multiplied by 1 / number of
 			// endpoints in each locality (due to round robin across endpoints
@@ -150,7 +157,7 @@ func (s) TestWrrLocality(t *testing.T) {
 		// (e.g. Address 1 for locality 1, and Address 3 for locality 2).
 		{
 			name: "custom_lb_child_pick_first",
-			wrrLocalityConfiguration: wrrLocality(&v3xdsxdstypepb.TypedStruct{
+			wrrLocalityConfiguration: wrrLocality(t, &v3xdsxdstypepb.TypedStruct{
 				TypeUrl: "type.googleapis.com/pick_first",
 				Value:   &structpb.Struct{},
 			}),
@@ -171,7 +178,7 @@ func (s) TestWrrLocality(t *testing.T) {
 		// above.
 		{
 			name: "custom_lb_child_wrr/",
-			wrrLocalityConfiguration: wrrLocality(&v3clientsideweightedroundrobinpb.ClientSideWeightedRoundRobin{
+			wrrLocalityConfiguration: wrrLocality(t, &v3clientsideweightedroundrobinpb.ClientSideWeightedRoundRobin{
 				EnableOobLoadReport: &wrapperspb.BoolValue{
 					Value: false,
 				},
@@ -194,12 +201,33 @@ func (s) TestWrrLocality(t *testing.T) {
 				{addr: backend5.Address, count: 8},
 			},
 		},
+		{
+			name: "custom_lb_least_request",
+			wrrLocalityConfiguration: wrrLocality(t, &v3leastrequestpb.LeastRequest{
+				ChoiceCount: wrapperspb.UInt32(2),
+			}),
+			// The test performs a Unary RPC, and blocks until the RPC returns,
+			// and then makes the next Unary RPC. Thus, over iterations, no RPC
+			// counts are present. This causes least request's randomness of
+			// indexes to sample to converge onto a round robin distribution per
+			// locality. Thus, expect the same distribution as round robin
+			// above.
+			addressDistributionWant: []struct {
+				addr  string
+				count int
+			}{
+				{addr: backend1.Address, count: 6},
+				{addr: backend2.Address, count: 6},
+				{addr: backend3.Address, count: 8},
+				{addr: backend4.Address, count: 8},
+				{addr: backend5.Address, count: 8},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			managementServer, nodeID, _, r, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 			defer cleanup()
-
 			routeConfigName := "route-" + serviceName
 			clusterName := "cluster-" + serviceName
 			endpointsName := "endpoints-" + serviceName
@@ -207,7 +235,7 @@ func (s) TestWrrLocality(t *testing.T) {
 				NodeID:    nodeID,
 				Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)},
 				Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName)},
-				Clusters:  []*v3clusterpb.Cluster{clusterWithLBConfiguration(clusterName, endpointsName, e2e.SecurityLevelNone, test.wrrLocalityConfiguration)},
+				Clusters:  []*v3clusterpb.Cluster{clusterWithLBConfiguration(t, clusterName, endpointsName, e2e.SecurityLevelNone, test.wrrLocalityConfiguration)},
 				Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 					ClusterName: endpointsName,
 					Host:        "localhost",

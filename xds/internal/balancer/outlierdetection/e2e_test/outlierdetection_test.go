@@ -107,7 +107,9 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 	for _, addr := range addrs {
 		wantAddrCount[addr.Addr]++
 	}
+	gotAddrCount := make(map[string]int)
 	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
+		gotAddrCount = make(map[string]int)
 		// Perform 3 iterations.
 		var iterations [][]string
 		for i := 0; i < 3; i++ {
@@ -122,7 +124,6 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 			iterations = append(iterations, iteration)
 		}
 		// Ensure the the first iteration contains all addresses in addrs.
-		gotAddrCount := make(map[string]int)
 		for _, addr := range iterations[0] {
 			gotAddrCount[addr]++
 		}
@@ -135,7 +136,7 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 		}
 		return nil
 	}
-	return fmt.Errorf("timeout when waiting for roundrobin distribution of RPCs across addresses: %v", addrs)
+	return fmt.Errorf("timeout when waiting for roundrobin distribution of RPCs across addresses: %v; got: %v", addrs, gotAddrCount)
 }
 
 // TestOutlierDetectionAlgorithmsE2E tests the Outlier Detection Success Rate

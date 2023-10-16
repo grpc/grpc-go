@@ -190,7 +190,7 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 			}
 		}
 	}
-	<-cs.Done
+	<-cs.Done()
 
 	done := make(chan struct{})
 	if cs.Schedule(func(context.Context) { close(done) }) {

@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/roundrobin"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
@@ -107,7 +108,7 @@ const (
     "edsServiceName": "test-eds-service-name",
     "outlierDetection": {}
   }],
-  "xdsLbPolicy":[{"ROUND_ROBIN":{}}]
+  "xdsLbPolicy":[{"round_robin":{}}]
 }`
 	testJSONConfig2 = `{
   "discoveryMechanisms": [{
@@ -124,7 +125,7 @@ const (
     "type": "LOGICAL_DNS",
     "outlierDetection": {}
   }],
-  "xdsLbPolicy":[{"ROUND_ROBIN":{}}]
+  "xdsLbPolicy":[{"round_robin":{}}]
 }`
 	testJSONConfig3 = `{
   "discoveryMechanisms": [{
@@ -138,7 +139,7 @@ const (
     "edsServiceName": "test-eds-service-name",
     "outlierDetection": {}
   }],
-  "xdsLbPolicy":[{"ROUND_ROBIN":{}}]
+  "xdsLbPolicy":[{"round_robin":{}}]
 }`
 	testJSONConfig4 = `{
   "discoveryMechanisms": [{
@@ -166,7 +167,7 @@ const (
     "edsServiceName": "test-eds-service-name",
     "outlierDetection": {}
   }],
-  "xdsLbPolicy":[{"ROUND_ROBIN":{}}]
+  "xdsLbPolicy":[{"round_robin":{}}]
 }`
 )
 
@@ -211,7 +212,7 @@ func TestParseConfig(t *testing.T) {
 					},
 				},
 				xdsLBPolicy: iserviceconfig.BalancerConfig{ // do we want to make this not pointer
-					Name:   "ROUND_ROBIN",
+					Name:   roundrobin.Name,
 					Config: nil,
 				},
 			},
@@ -248,7 +249,7 @@ func TestParseConfig(t *testing.T) {
 					},
 				},
 				xdsLBPolicy: iserviceconfig.BalancerConfig{
-					Name:   "ROUND_ROBIN",
+					Name:   roundrobin.Name,
 					Config: nil,
 				},
 			},
@@ -275,7 +276,7 @@ func TestParseConfig(t *testing.T) {
 					},
 				},
 				xdsLBPolicy: iserviceconfig.BalancerConfig{
-					Name:   "ROUND_ROBIN",
+					Name:   roundrobin.Name,
 					Config: nil,
 				},
 			},
@@ -329,7 +330,7 @@ func TestParseConfig(t *testing.T) {
 					},
 				},
 				xdsLBPolicy: iserviceconfig.BalancerConfig{
-					Name:   "ROUND_ROBIN",
+					Name:   roundrobin.Name,
 					Config: nil,
 				},
 			},

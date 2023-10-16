@@ -103,7 +103,7 @@ func testLocalCredsE2ESucceed(network, address string) error {
 	defer cc.Close()
 
 	c := testgrpc.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	if _, err = c.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -198,7 +198,7 @@ func testLocalCredsE2EFail(dopts []grpc.DialOption) error {
 	defer cc.Close()
 
 	c := testgrpc.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	_, err = c.EmptyCall(ctx, &testpb.Empty{})

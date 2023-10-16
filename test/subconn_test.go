@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
@@ -31,6 +30,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 )
@@ -46,7 +46,7 @@ func (p *tsccPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 // TestSubConnEmpty tests that removing all addresses from a SubConn and then
 // re-adding them does not cause a panic and properly reconnects.
 func (s) TestSubConnEmpty(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// sc is the one SubConn used throughout the test.  Created on demand and
@@ -60,7 +60,22 @@ func (s) TestSubConnEmpty(t *testing.T) {
 		UpdateClientConnState: func(d *stub.BalancerData, ccs balancer.ClientConnState) error {
 			if sc == nil {
 				var err error
-				sc, err = d.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{})
+				sc, err = d.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{
+					StateListener: func(state balancer.SubConnState) {
+						switch state.ConnectivityState {
+						case connectivity.Ready:
+							d.ClientConn.UpdateState(balancer.State{
+								ConnectivityState: connectivity.Ready,
+								Picker:            &tsccPicker{sc: sc},
+							})
+						case connectivity.TransientFailure:
+							d.ClientConn.UpdateState(balancer.State{
+								ConnectivityState: connectivity.TransientFailure,
+								Picker:            base.NewErrPicker(fmt.Errorf("error connecting: %v", state.ConnectionError)),
+							})
+						}
+					},
+				})
 				if err != nil {
 					t.Errorf("error creating initial subconn: %v", err)
 				}
@@ -82,20 +97,6 @@ func (s) TestSubConnEmpty(t *testing.T) {
 			}
 			return nil
 		},
-		UpdateSubConnState: func(d *stub.BalancerData, sc balancer.SubConn, scs balancer.SubConnState) {
-			switch scs.ConnectivityState {
-			case connectivity.Ready:
-				d.ClientConn.UpdateState(balancer.State{
-					ConnectivityState: connectivity.Ready,
-					Picker:            &tsccPicker{sc: sc},
-				})
-			case connectivity.TransientFailure:
-				d.ClientConn.UpdateState(balancer.State{
-					ConnectivityState: connectivity.TransientFailure,
-					Picker:            base.NewErrPicker(fmt.Errorf("error connecting: %v", scs.ConnectionError)),
-				})
-			}
-		},
 	}
 	stub.Register("tscc", bal)
 
@@ -115,7 +116,7 @@ func (s) TestSubConnEmpty(t *testing.T) {
 
 	t.Log("Removing addresses from resolver and SubConn")
 	ss.R.UpdateState(resolver.State{Addresses: []resolver.Address{}})
-	awaitState(ctx, t, ss.CC, connectivity.TransientFailure)
+	testutils.AwaitState(ctx, t, ss.CC, connectivity.TransientFailure)
 
 	t.Log("Re-adding addresses to resolver and SubConn")
 	ss.R.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})

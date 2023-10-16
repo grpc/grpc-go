@@ -99,9 +99,11 @@ func populateSpan(ctx context.Context, rs stats.RPCStats, ti *traceInfo) {
 			trace.BoolAttribute("Client", rs.Client),
 			trace.BoolAttribute("FailFast", rs.FailFast),
 		)
+	case *stats.PickerUpdated:
+		span.Annotate(nil, "Delayed LB pick complete")
 	case *stats.InPayload:
 		// message id - "must be calculated as two different counters starting
-		// from 1 one for sent messages and one for received messages."
+		// from one for sent messages and one for received messages."
 		mi := atomic.AddUint32(&ti.countRecvMsg, 1)
 		span.AddMessageReceiveEvent(int64(mi), int64(rs.Length), int64(rs.CompressedLength))
 	case *stats.OutPayload:

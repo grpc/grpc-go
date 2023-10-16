@@ -65,7 +65,7 @@ func (o *orcab) UpdateClientConnState(s balancer.ClientConnState) error {
 		return fmt.Errorf("resolver produced no addresses")
 	}
 	var err error
-	o.sc, err = o.cc.NewSubConn(s.ResolverState.Addresses, balancer.NewSubConnOptions{})
+	o.sc, err = o.cc.NewSubConn(s.ResolverState.Addresses, balancer.NewSubConnOptions{StateListener: o.updateSubConnState})
 	if err != nil {
 		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(fmt.Errorf("error creating subconn: %v", err))})
 		return nil
@@ -82,20 +82,20 @@ func (o *orcab) ResolverError(err error) {
 	}
 }
 
-func (o *orcab) UpdateSubConnState(sc balancer.SubConn, scState balancer.SubConnState) {
-	if o.sc != sc {
-		logger.Errorf("received subconn update for unknown subconn: %v vs %v", o.sc, sc)
-		return
-	}
-	switch scState.ConnectivityState {
+func (o *orcab) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
+}
+
+func (o *orcab) updateSubConnState(state balancer.SubConnState) {
+	switch state.ConnectivityState {
 	case connectivity.Ready:
-		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &scPicker{sc: sc, o: o}})
+		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &orcaPicker{o: o}})
 	case connectivity.TransientFailure:
-		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(fmt.Errorf("all subchannels in transient failure: %v", scState.ConnectionError))})
+		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(fmt.Errorf("all subchannels in transient failure: %v", state.ConnectionError))})
 	case connectivity.Connecting:
 		// Ignore; picker already set to "connecting".
 	case connectivity.Idle:
-		sc.Connect()
+		o.sc.Connect()
 		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: base.NewErrPicker(balancer.ErrNoSubConnAvailable)})
 	case connectivity.Shutdown:
 		// Ignore; we are closing but handle that in Close instead.
@@ -113,12 +113,11 @@ func (o *orcab) OnLoadReport(r *v3orcapb.OrcaLoadReport) {
 	o.report = r
 }
 
-type scPicker struct {
-	sc balancer.SubConn
-	o  *orcab
+type orcaPicker struct {
+	o *orcab
 }
 
-func (p *scPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (p *orcaPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	doneCB := func(di balancer.DoneInfo) {
 		if lr, _ := di.ServerLoad.(*v3orcapb.OrcaLoadReport); lr != nil &&
 			(lr.CpuUtilization != 0 || lr.MemUtilization != 0 || len(lr.Utilization) > 0 || len(lr.RequestCost) > 0) {
@@ -134,7 +133,7 @@ func (p *scPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			}
 		}
 	}
-	return balancer.PickResult{SubConn: p.sc, Done: doneCB}, nil
+	return balancer.PickResult{SubConn: p.o.sc, Done: doneCB}, nil
 }
 
 func setContextCMR(ctx context.Context, lr *v3orcapb.OrcaLoadReport) {

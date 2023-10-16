@@ -27,7 +27,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -109,13 +108,13 @@ func testCompressOK(t *testing.T, e env) {
 		ResponseSize: respSize,
 		Payload:      payload,
 	}
-	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("something", "something"))
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("something", "something"))
 	if _, err := tc.UnaryCall(ctx, req); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	// Streaming RPC
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -168,13 +167,13 @@ func testIdentityEncoding(t *testing.T, e env) {
 		ResponseSize: 10,
 		Payload:      payload,
 	}
-	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("something", "something"))
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("something", "something"))
 	if _, err := tc.UnaryCall(ctx, req); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	// Streaming RPC
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx, grpc.UseCompressor("identity"))
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -543,6 +542,9 @@ func (s) TestStreamSetSendCompressorAfterHeaderSendFailure(t *testing.T) {
 }
 
 func (s) TestClientSupportedCompressors(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	for _, tt := range []struct {
 		desc string
 		ctx  context.Context
@@ -550,12 +552,12 @@ func (s) TestClientSupportedCompressors(t *testing.T) {
 	}{
 		{
 			desc: "No additional grpc-accept-encoding header",
-			ctx:  context.Background(),
+			ctx:  ctx,
 			want: []string{"gzip"},
 		},
 		{
 			desc: "With additional grpc-accept-encoding header",
-			ctx: metadata.AppendToOutgoingContext(context.Background(),
+			ctx: metadata.AppendToOutgoingContext(ctx,
 				"grpc-accept-encoding", "test-compressor-1",
 				"grpc-accept-encoding", "test-compressor-2",
 			),
@@ -563,7 +565,7 @@ func (s) TestClientSupportedCompressors(t *testing.T) {
 		},
 		{
 			desc: "With additional empty grpc-accept-encoding header",
-			ctx: metadata.AppendToOutgoingContext(context.Background(),
+			ctx: metadata.AppendToOutgoingContext(ctx,
 				"grpc-accept-encoding", "",
 			),
 			want: []string{"gzip"},
@@ -589,10 +591,7 @@ func (s) TestClientSupportedCompressors(t *testing.T) {
 			}
 			defer ss.Stop()
 
-			ctx, cancel := context.WithTimeout(tt.ctx, defaultTestTimeout)
-			defer cancel()
-
-			_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
+			_, err := ss.Client.EmptyCall(tt.ctx, &testpb.Empty{})
 			if err != nil {
 				t.Fatalf("Unexpected unary call error, got: %v, want: nil", err)
 			}
@@ -628,13 +627,13 @@ func testCompressorRegister(t *testing.T, e env) {
 		ResponseSize: respSize,
 		Payload:      payload,
 	}
-	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("something", "something"))
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("something", "something"))
 	if _, err := tc.UnaryCall(ctx, req); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	// Streaming RPC
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -693,7 +692,7 @@ func (s) TestGzipBadChecksum(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	p, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1024))

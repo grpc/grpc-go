@@ -24,7 +24,6 @@ import (
 	"net"
 	"sync"
 	"testing"
-	"time"
 
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
@@ -148,7 +147,7 @@ func (s) TestGracefulStop(t *testing.T) {
 
 	// Now dial.  The listener's Accept method will return a valid connection,
 	// even though GracefulStop has closed the listener.
-	ctx, dialCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, dialCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer dialCancel()
 	cc, err := grpc.DialContext(ctx, "", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(d))
 	if err != nil {
@@ -160,7 +159,7 @@ func (s) TestGracefulStop(t *testing.T) {
 	// 4. Send an RPC on the new connection.
 	// The server would send a GOAWAY first, but we are delaying the server's
 	// writes for now until the client writes more than the preface.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	if _, err = client.FullDuplexCall(ctx); err == nil || status.Code(err) != codes.Unavailable {
 		t.Fatalf("FullDuplexCall= _, %v; want _, <status code Unavailable>", err)
 	}

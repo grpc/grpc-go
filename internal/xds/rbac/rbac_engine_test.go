@@ -454,7 +454,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "SimpleAuditLogger_TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]any{}, "SimpleAuditLogger_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -482,7 +482,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerCustomConfig",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{"abc": 123, "xyz": "123"}, "AuditLoggerCustomConfig_TestAuditLoggerCustomConfig")},
+								TypedConfig: createUDPATypedStruct(t, map[string]any{"abc": 123, "xyz": "123"}, "AuditLoggerCustomConfig_TestAuditLoggerCustomConfig")},
 								IsOptional: false,
 							},
 						},
@@ -511,7 +511,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerCustomConfig",
-								TypedConfig: createXDSTypedStruct(t, map[string]interface{}{"abc": 123, "xyz": "123"}, "AuditLoggerCustomConfigXdsTypedStruct_TestAuditLoggerCustomConfig")},
+								TypedConfig: createXDSTypedStruct(t, map[string]any{"abc": 123, "xyz": "123"}, "AuditLoggerCustomConfigXdsTypedStruct_TestAuditLoggerCustomConfig")},
 								IsOptional: false,
 							},
 						},
@@ -540,7 +540,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "UnsupportedLogger",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "Missing Optional AuditLogger doesn't fail_UnsupportedLogger")},
+								TypedConfig: createUDPATypedStruct(t, map[string]any{}, "Missing Optional AuditLogger doesn't fail_UnsupportedLogger")},
 								IsOptional: true,
 							},
 						},
@@ -568,7 +568,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "UnsupportedLogger",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "Missing Non-Optional AuditLogger fails_UnsupportedLogger")},
+								TypedConfig: createUDPATypedStruct(t, map[string]any{}, "Missing Non-Optional AuditLogger fails_UnsupportedLogger")},
 								IsOptional: false,
 							},
 						},
@@ -626,7 +626,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerCustomConfig",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{"abc": "BADVALUE", "xyz": "123"}, "Cannot_parse_bad_CustomConfig_TestAuditLoggerCustomConfig")},
+								TypedConfig: createUDPATypedStruct(t, map[string]any{"abc": "BADVALUE", "xyz": "123"}, "Cannot_parse_bad_CustomConfig_TestAuditLoggerCustomConfig")},
 								IsOptional: false,
 							},
 						},
@@ -655,7 +655,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerCustomConfig",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{"abc": 123, "xyz": "123"}, "")},
+								TypedConfig: createUDPATypedStruct(t, map[string]any{"abc": 123, "xyz": "123"}, "")},
 								IsOptional: false,
 							},
 						},
@@ -1248,7 +1248,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_ON_ALLOW_TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]any{}, "AuditLoggingAllowAndDenyPolicy_ON_ALLOW_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1271,7 +1271,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_ON_ALLOW_TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]any{}, "AuditLoggingAllowAndDenyPolicy_ON_ALLOW_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1374,7 +1374,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_ON_DENY_TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]any{}, "AuditLoggingAllowAndDenyPolicy_ON_DENY_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1397,7 +1397,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_ON_DENY_TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]any{}, "AuditLoggingAllowAndDenyPolicy_ON_DENY_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1513,7 +1513,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_NONE_TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]any{}, "AuditLoggingAllowAndDenyPolicy_NONE_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1536,7 +1536,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_NONE_TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]any{}, "AuditLoggingAllowAndDenyPolicy_NONE_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1614,7 +1614,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_ON_DENY_AND_ALLOW_TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]any{}, "AuditLoggingAllowAndDenyPolicy_ON_DENY_AND_ALLOW_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1637,7 +1637,7 @@ func (s) TestChainEngine(t *testing.T) {
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 							{AuditLogger: &v3corepb.TypedExtensionConfig{
 								Name:        "TestAuditLoggerBuffer",
-								TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "AuditLoggingAllowAndDenyPolicy_ON_DENY_AND_ALLOW_TestAuditLoggerBuffer")},
+								TypedConfig: createUDPATypedStruct(t, map[string]any{}, "AuditLoggingAllowAndDenyPolicy_ON_DENY_AND_ALLOW_TestAuditLoggerBuffer")},
 								IsOptional: false,
 							},
 						},
@@ -1890,7 +1890,7 @@ func (b *TestAuditLoggerCustomConfigBuilder) Name() string {
 }
 
 // Builds custom configs for audit logger RBAC protos.
-func createUDPATypedStruct(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
+func createUDPATypedStruct(t *testing.T, in map[string]any, name string) *anypb.Any {
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
 	if err != nil {
@@ -1912,7 +1912,7 @@ func createUDPATypedStruct(t *testing.T, in map[string]interface{}, name string)
 }
 
 // Builds custom configs for audit logger RBAC protos.
-func createXDSTypedStruct(t *testing.T, in map[string]interface{}, name string) *anypb.Any {
+func createXDSTypedStruct(t *testing.T, in map[string]any, name string) *anypb.Any {
 	t.Helper()
 	pb, err := structpb.NewStruct(in)
 	if err != nil {

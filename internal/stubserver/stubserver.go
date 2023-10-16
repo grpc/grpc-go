@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -59,6 +60,10 @@ type StubServer struct {
 	Network string
 	Address string
 	Target  string
+
+	// Custom listener to use for serving. If unspecified, a new listener is
+	// created on a local port.
+	Listener net.Listener
 
 	cleanups []func() // Lambdas executed in Stop(); populated by Start().
 
@@ -106,8 +111,7 @@ func RegisterServiceServerOption(f func(*grpc.Server)) grpc.ServerOption {
 	return &registerServiceServerOption{f: f}
 }
 
-// StartServer only starts the server. It does not create a client to it.
-func (ss *StubServer) StartServer(sopts ...grpc.ServerOption) error {
+func (ss *StubServer) setupServer(sopts ...grpc.ServerOption) (net.Listener, error) {
 	if ss.Network == "" {
 		ss.Network = "tcp"
 	}
@@ -118,25 +122,64 @@ func (ss *StubServer) StartServer(sopts ...grpc.ServerOption) error {
 		ss.R = manual.NewBuilderWithScheme("whatever")
 	}
 
-	lis, err := net.Listen(ss.Network, ss.Address)
-	if err != nil {
-		return fmt.Errorf("net.Listen(%q, %q) = %v", ss.Network, ss.Address, err)
+	lis := ss.Listener
+	if lis == nil {
+		var err error
+		lis, err = net.Listen(ss.Network, ss.Address)
+		if err != nil {
+			return nil, fmt.Errorf("net.Listen(%q, %q) = %v", ss.Network, ss.Address, err)
+		}
 	}
 	ss.Address = lis.Addr().String()
-	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
 
-	s := grpc.NewServer(sopts...)
+	ss.S = grpc.NewServer(sopts...)
 	for _, so := range sopts {
 		switch x := so.(type) {
 		case *registerServiceServerOption:
-			x.f(s)
+			x.f(ss.S)
 		}
 	}
 
-	testgrpc.RegisterTestServiceServer(s, ss)
-	go s.Serve(lis)
-	ss.cleanups = append(ss.cleanups, s.Stop)
-	ss.S = s
+	testgrpc.RegisterTestServiceServer(ss.S, ss)
+	ss.cleanups = append(ss.cleanups, ss.S.Stop)
+	return lis, nil
+}
+
+// StartHandlerServer only starts an HTTP server with a gRPC server as the
+// handler. It does not create a client to it.  Cannot be used in a StubServer
+// that also used StartServer.
+func (ss *StubServer) StartHandlerServer(sopts ...grpc.ServerOption) error {
+	lis, err := ss.setupServer(sopts...)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		hs := &http2.Server{}
+		opts := &http2.ServeConnOpts{Handler: ss.S}
+		for {
+			conn, err := lis.Accept()
+			if err != nil {
+				return
+			}
+			hs.ServeConn(conn, opts)
+		}
+	}()
+	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
+
+	return nil
+}
+
+// StartServer only starts the server. It does not create a client to it.
+// Cannot be used in a StubServer that also used StartHandlerServer.
+func (ss *StubServer) StartServer(sopts ...grpc.ServerOption) error {
+	lis, err := ss.setupServer(sopts...)
+	if err != nil {
+		return err
+	}
+
+	go ss.S.Serve(lis)
+
 	return nil
 }
 
@@ -208,7 +251,7 @@ func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
 // StartTestService spins up a stub server exposing the TestService on a local
 // port. If the passed in server is nil, a stub server that implements only the
 // EmptyCall and UnaryCall RPCs is started.
-func StartTestService(t *testing.T, server *StubServer) *StubServer {
+func StartTestService(t *testing.T, server *StubServer, sopts ...grpc.ServerOption) *StubServer {
 	if server == nil {
 		server = &StubServer{
 			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
@@ -217,7 +260,7 @@ func StartTestService(t *testing.T, server *StubServer) *StubServer {
 			},
 		}
 	}
-	server.StartServer()
+	server.StartServer(sopts...)
 
 	t.Logf("Started test service backend at %q", server.Address)
 	return server

@@ -67,11 +67,11 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		}
 		oldTypedStructFilter = &v3httppb.HttpFilter{
 			Name:       "customFilter",
-			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: wrappedCustomFilterOldTypedStructConfig},
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: testutils.MarshalAny(t, customFilterOldTypedStructConfig)},
 		}
 		newTypedStructFilter = &v3httppb.HttpFilter{
 			Name:       "customFilter",
-			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: wrappedCustomFilterNewTypedStructConfig},
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: testutils.MarshalAny(t, customFilterNewTypedStructConfig)},
 		}
 		customOptionalFilter = &v3httppb.HttpFilter{
 			Name:       "customFilter",
@@ -113,10 +113,10 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: unknownFilterConfig},
 			IsOptional: true,
 		}
-		v3LisWithInlineRoute = testutils.MarshalAny(&v3listenerpb.Listener{
+		v3LisWithInlineRoute = testutils.MarshalAny(t, &v3listenerpb.Listener{
 			Name: v3LDSTarget,
 			ApiListener: &v3listenerpb.ApiListener{
-				ApiListener: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+				ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 					RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 						RouteConfig: &v3routepb.RouteConfiguration{
 							Name: routeName,
@@ -140,10 +140,10 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		})
 		v3LisWithFilters = func(fs ...*v3httppb.HttpFilter) *anypb.Any {
 			fs = append(fs, emptyRouterFilter)
-			return testutils.MarshalAny(&v3listenerpb.Listener{
+			return testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
-					ApiListener: testutils.MarshalAny(
+					ApiListener: testutils.MarshalAny(t,
 						&v3httppb.HttpConnectionManager{
 							RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
 								Rds: &v3httppb.Rds{
@@ -162,10 +162,10 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			})
 		}
 		v3LisToTestRBAC = func(xffNumTrustedHops uint32, originalIpDetectionExtensions []*v3corepb.TypedExtensionConfig) *anypb.Any {
-			return testutils.MarshalAny(&v3listenerpb.Listener{
+			return testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
-					ApiListener: testutils.MarshalAny(
+					ApiListener: testutils.MarshalAny(t,
 						&v3httppb.HttpConnectionManager{
 							RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
 								Rds: &v3httppb.Rds{
@@ -186,10 +186,10 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			})
 		}
 
-		v3ListenerWithCDSConfigSourceSelf = testutils.MarshalAny(&v3listenerpb.Listener{
+		v3ListenerWithCDSConfigSourceSelf = testutils.MarshalAny(t, &v3listenerpb.Listener{
 			Name: v3LDSTarget,
 			ApiListener: &v3listenerpb.ApiListener{
-				ApiListener: testutils.MarshalAny(
+				ApiListener: testutils.MarshalAny(t,
 					&v3httppb.HttpConnectionManager{
 						RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
 							Rds: &v3httppb.Rds{
@@ -240,10 +240,10 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		},
 		{
 			name: "wrong type in apiListener",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
-					ApiListener: testutils.MarshalAny(&v2xdspb.Listener{}),
+					ApiListener: testutils.MarshalAny(t, &v2xdspb.Listener{}),
 				},
 			}),
 			wantName: v3LDSTarget,
@@ -251,10 +251,10 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		},
 		{
 			name: "empty httpConnMgr in apiListener",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
-					ApiListener: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+					ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 						RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
 							Rds: &v3httppb.Rds{},
 						},
@@ -266,10 +266,10 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		},
 		{
 			name: "scopedRoutes routeConfig in apiListener",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
-					ApiListener: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+					ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 						RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
 					}),
 				},
@@ -283,16 +283,16 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
 				RouteConfigName: v3RouteConfigName,
-				HTTPFilters:     []HTTPFilter{routerFilter},
+				HTTPFilters:     []HTTPFilter{makeRouterFilter(t)},
 				Raw:             v3ListenerWithCDSConfigSourceSelf,
 			},
 		},
 		{
 			name: "rds.ConfigSource in apiListener is not ADS or Self",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
-					ApiListener: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+					ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 						RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
 							Rds: &v3httppb.Rds{
 								ConfigSource: &v3corepb.ConfigSource{
@@ -316,16 +316,16 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: ListenerUpdate{
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 				Raw:               v3LisWithFilters(),
 			},
 		},
 		{
 			name: "v3 no terminal filter",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
-					ApiListener: testutils.MarshalAny(
+					ApiListener: testutils.MarshalAny(t,
 						&v3httppb.HttpConnectionManager{
 							RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
 								Rds: &v3httppb.Rds{
@@ -356,7 +356,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						Filter: httpFilter{},
 						Config: filterConfig{Cfg: customFilterConfig},
 					},
-					routerFilter,
+					makeRouterFilter(t),
 				},
 				Raw: v3LisWithFilters(customFilter),
 			},
@@ -373,7 +373,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						Filter: httpFilter{},
 						Config: filterConfig{Cfg: customFilterOldTypedStructConfig},
 					},
-					routerFilter,
+					makeRouterFilter(t),
 				},
 				Raw: v3LisWithFilters(oldTypedStructFilter),
 			},
@@ -390,7 +390,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						Filter: httpFilter{},
 						Config: filterConfig{Cfg: customFilterNewTypedStructConfig},
 					},
-					routerFilter,
+					makeRouterFilter(t),
 				},
 				Raw: v3LisWithFilters(newTypedStructFilter),
 			},
@@ -407,7 +407,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						Filter: httpFilter{},
 						Config: filterConfig{Cfg: customFilterConfig},
 					},
-					routerFilter,
+					makeRouterFilter(t),
 				},
 				Raw: v3LisWithFilters(customOptionalFilter),
 			},
@@ -433,7 +433,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					Filter: httpFilter{},
 					Config: filterConfig{Cfg: customFilterConfig},
 				},
-					routerFilter,
+					makeRouterFilter(t),
 				},
 				Raw: v3LisWithFilters(customFilter, customFilter2),
 			},
@@ -452,7 +452,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
 				Raw:               v3LisWithFilters(serverOnlyOptionalCustomFilter),
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 			},
 		},
 		{
@@ -467,7 +467,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						Filter: clientOnlyHTTPFilter{},
 						Config: filterConfig{Cfg: clientOnlyCustomFilterConfig},
 					},
-					routerFilter},
+					makeRouterFilter(t)},
 				Raw: v3LisWithFilters(clientOnlyCustomFilter),
 			},
 		},
@@ -496,7 +496,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: ListenerUpdate{
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 				Raw:               v3LisWithFilters(unknownOptionalFilter),
 			},
 		},
@@ -507,18 +507,18 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: ListenerUpdate{
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 				Raw:               v3LisWithFilters(),
 			},
 		},
 		{
 			name:     "v3 listener resource wrapped",
-			resource: testutils.MarshalAny(&v3discoverypb.Resource{Resource: v3LisWithFilters()}),
+			resource: testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3LisWithFilters()}),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 				Raw:               v3LisWithFilters(),
 			},
 		},
@@ -533,7 +533,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: ListenerUpdate{
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
-				HTTPFilters:       []HTTPFilter{routerFilter},
+				HTTPFilters:       []HTTPFilter{makeRouterFilter(t)},
 				Raw:               v3LisToTestRBAC(0, nil),
 			},
 		},
@@ -570,7 +570,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					}}},
 				MaxStreamDuration: time.Second,
 				Raw:               v3LisWithInlineRoute,
-				HTTPFilters:       routerFilterList,
+				HTTPFilters:       makeRouterFilterList(t),
 			},
 		},
 	}
@@ -626,7 +626,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			{
 				Name: "filter-1",
 				ConfigType: &v3listenerpb.Filter_TypedConfig{
-					TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+					TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 						RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 							RouteConfig: routeConfig,
 						},
@@ -645,7 +645,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			},
 		}
-		listenerEmptyTransportSocket = testutils.MarshalAny(&v3listenerpb.Listener{
+		listenerEmptyTransportSocket = testutils.MarshalAny(t, &v3listenerpb.Listener{
 			Name:    v3LDSTarget,
 			Address: localSocketAddress,
 			FilterChains: []*v3listenerpb.FilterChain{
@@ -655,7 +655,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			},
 		})
-		listenerNoValidationContextDeprecatedFields = testutils.MarshalAny(&v3listenerpb.Listener{
+		listenerNoValidationContextDeprecatedFields = testutils.MarshalAny(t, &v3listenerpb.Listener{
 			Name:    v3LDSTarget,
 			Address: localSocketAddress,
 			FilterChains: []*v3listenerpb.FilterChain{
@@ -665,7 +665,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					TransportSocket: &v3corepb.TransportSocket{
 						Name: "envoy.transport_sockets.tls",
 						ConfigType: &v3corepb.TransportSocket_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+							TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 								CommonTlsContext: &v3tlspb.CommonTlsContext{
 									TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
 										InstanceName:    "identityPluginInstance",
@@ -683,7 +683,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
 									InstanceName:    "defaultIdentityPluginInstance",
@@ -695,7 +695,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			},
 		})
-		listenerNoValidationContextNewFields = testutils.MarshalAny(&v3listenerpb.Listener{
+		listenerNoValidationContextNewFields = testutils.MarshalAny(t, &v3listenerpb.Listener{
 			Name:    v3LDSTarget,
 			Address: localSocketAddress,
 			FilterChains: []*v3listenerpb.FilterChain{
@@ -705,7 +705,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					TransportSocket: &v3corepb.TransportSocket{
 						Name: "envoy.transport_sockets.tls",
 						ConfigType: &v3corepb.TransportSocket_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+							TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 								CommonTlsContext: &v3tlspb.CommonTlsContext{
 									TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 										InstanceName:    "identityPluginInstance",
@@ -723,7 +723,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 									InstanceName:    "defaultIdentityPluginInstance",
@@ -735,7 +735,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			},
 		})
-		listenerWithValidationContextDeprecatedFields = testutils.MarshalAny(&v3listenerpb.Listener{
+		listenerWithValidationContextDeprecatedFields = testutils.MarshalAny(t, &v3listenerpb.Listener{
 			Name:    v3LDSTarget,
 			Address: localSocketAddress,
 			FilterChains: []*v3listenerpb.FilterChain{
@@ -745,7 +745,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					TransportSocket: &v3corepb.TransportSocket{
 						Name: "envoy.transport_sockets.tls",
 						ConfigType: &v3corepb.TransportSocket_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+							TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 								RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
 								CommonTlsContext: &v3tlspb.CommonTlsContext{
 									TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
@@ -770,7 +770,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 							RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
@@ -789,7 +789,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			},
 		})
-		listenerWithValidationContextNewFields = testutils.MarshalAny(&v3listenerpb.Listener{
+		listenerWithValidationContextNewFields = testutils.MarshalAny(t, &v3listenerpb.Listener{
 			Name:    v3LDSTarget,
 			Address: localSocketAddress,
 			FilterChains: []*v3listenerpb.FilterChain{
@@ -799,7 +799,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					TransportSocket: &v3corepb.TransportSocket{
 						Name: "envoy.transport_sockets.tls",
 						ConfigType: &v3corepb.TransportSocket_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+							TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 								RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
 								CommonTlsContext: &v3tlspb.CommonTlsContext{
 									TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
@@ -826,7 +826,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 							RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
@@ -851,7 +851,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		})
 	)
 	v3LisToTestRBAC := func(xffNumTrustedHops uint32, originalIpDetectionExtensions []*v3corepb.TypedExtensionConfig) *anypb.Any {
-		return testutils.MarshalAny(&v3listenerpb.Listener{
+		return testutils.MarshalAny(t, &v3listenerpb.Listener{
 			Name:    v3LDSTarget,
 			Address: localSocketAddress,
 			FilterChains: []*v3listenerpb.FilterChain{
@@ -861,7 +861,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						{
 							Name: "filter-1",
 							ConfigType: &v3listenerpb.Filter_TypedConfig{
-								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+								TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 										RouteConfig: routeConfig,
 									},
@@ -877,7 +877,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		})
 	}
 	v3LisWithBadRBACConfiguration := func(rbacCfg *v3rbacpb.RBAC) *anypb.Any {
-		return testutils.MarshalAny(&v3listenerpb.Listener{
+		return testutils.MarshalAny(t, &v3listenerpb.Listener{
 			Name:    v3LDSTarget,
 			Address: localSocketAddress,
 			FilterChains: []*v3listenerpb.FilterChain{
@@ -887,7 +887,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						{
 							Name: "filter-1",
 							ConfigType: &v3listenerpb.Filter_TypedConfig{
-								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+								TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 										RouteConfig: routeConfig,
 									},
@@ -940,7 +940,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 	}{
 		{
 			name: "non-empty listener filters",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ListenerFilters: []*v3listenerpb.ListenerFilter{
 					{Name: "listener-filter-1"},
@@ -951,7 +951,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "use_original_dst is set",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:           v3LDSTarget,
 				UseOriginalDst: &wrapperspb.BoolValue{Value: true},
 			}),
@@ -960,13 +960,13 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name:     "no address field",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{Name: v3LDSTarget}),
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{Name: v3LDSTarget}),
 			wantName: v3LDSTarget,
 			wantErr:  "no address field in LDS response",
 		},
 		{
 			name: "no socket address field",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: &v3corepb.Address{},
 			}),
@@ -975,7 +975,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "no filter chains and no default filter chain",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -990,7 +990,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "missing http connection manager network filter",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1004,7 +1004,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "missing filter name in http filter",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1013,7 +1013,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						Filters: []*v3listenerpb.Filter{
 							{
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
-									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+									TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{}),
 								},
 							},
 						},
@@ -1025,7 +1025,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "duplicate filter names in http filter",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1035,7 +1035,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							{
 								Name: "name",
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
-									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
 										},
@@ -1046,7 +1046,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							{
 								Name: "name",
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
-									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
 										},
@@ -1063,7 +1063,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "no terminal filter",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1073,7 +1073,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							{
 								Name: "name",
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
-									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
 										},
@@ -1089,7 +1089,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "terminal filter not last",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1099,7 +1099,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							{
 								Name: "name",
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
-									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
 										},
@@ -1116,7 +1116,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "last not terminal filter",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1126,7 +1126,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							{
 								Name: "name",
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
-									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
 										},
@@ -1143,7 +1143,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "unsupported oneof in typed config of http filter",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1163,7 +1163,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "overlapping filter chain match criteria",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1186,7 +1186,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "unsupported network filter",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1196,7 +1196,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							{
 								Name: "name",
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
-									TypedConfig: testutils.MarshalAny(&v3httppb.LocalReplyConfig{}),
+									TypedConfig: testutils.MarshalAny(t, &v3httppb.LocalReplyConfig{}),
 								},
 							},
 						},
@@ -1208,7 +1208,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "badly marshaled network filter",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1233,7 +1233,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "unexpected transport socket name",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1251,7 +1251,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "unexpected transport socket typedConfig URL",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1261,7 +1261,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						TransportSocket: &v3corepb.TransportSocket{
 							Name: "envoy.transport_sockets.tls",
 							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{}),
+								TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{}),
 							},
 						},
 					},
@@ -1272,7 +1272,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "badly marshaled transport socket",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1296,7 +1296,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "missing CommonTlsContext",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1306,7 +1306,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						TransportSocket: &v3corepb.TransportSocket{
 							Name: "envoy.transport_sockets.tls",
 							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{}),
+								TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{}),
 							},
 						},
 					},
@@ -1333,7 +1333,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 												srcPortMap: map[int]*FilterChain{
 													0: {
 														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       routerFilterList,
+														HTTPFilters:       makeRouterFilterList(t),
 													},
 												},
 											},
@@ -1373,7 +1373,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "unsupported validation context in transport socket",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1383,7 +1383,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						TransportSocket: &v3corepb.TransportSocket{
 							Name: "envoy.transport_sockets.tls",
 							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+								TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 									CommonTlsContext: &v3tlspb.CommonTlsContext{
 										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
 											ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
@@ -1418,7 +1418,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 												srcPortMap: map[int]*FilterChain{
 													0: {
 														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       routerFilterList,
+														HTTPFilters:       makeRouterFilterList(t),
 													},
 												},
 											},
@@ -1434,7 +1434,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "no identity and root certificate providers using deprecated fields",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1444,7 +1444,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						TransportSocket: &v3corepb.TransportSocket{
 							Name: "envoy.transport_sockets.tls",
 							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+								TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 									RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
 									CommonTlsContext: &v3tlspb.CommonTlsContext{
 										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
@@ -1463,7 +1463,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "no identity and root certificate providers using new fields",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1473,7 +1473,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						TransportSocket: &v3corepb.TransportSocket{
 							Name: "envoy.transport_sockets.tls",
 							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+								TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 									RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
 									CommonTlsContext: &v3tlspb.CommonTlsContext{
 										TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
@@ -1492,7 +1492,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name: "no identity certificate provider with require_client_cert",
-			resource: testutils.MarshalAny(&v3listenerpb.Listener{
+			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
@@ -1502,7 +1502,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						TransportSocket: &v3corepb.TransportSocket{
 							Name: "envoy.transport_sockets.tls",
 							ConfigType: &v3corepb.TransportSocket_TypedConfig{
-								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+								TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 									CommonTlsContext: &v3tlspb.CommonTlsContext{},
 								}),
 							},
@@ -1535,7 +1535,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 															IdentityCertName:     "identityCertName",
 														},
 														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       routerFilterList,
+														HTTPFilters:       makeRouterFilterList(t),
 													},
 												},
 											},
@@ -1550,7 +1550,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 								IdentityCertName:     "defaultIdentityCertName",
 							},
 							InlineRouteConfig: inlineRouteConfig,
-							HTTPFilters:       routerFilterList,
+							HTTPFilters:       makeRouterFilterList(t),
 						},
 					},
 				},
@@ -1579,7 +1579,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 															IdentityCertName:     "identityCertName",
 														},
 														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       routerFilterList,
+														HTTPFilters:       makeRouterFilterList(t),
 													},
 												},
 											},
@@ -1594,7 +1594,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 								IdentityCertName:     "defaultIdentityCertName",
 							},
 							InlineRouteConfig: inlineRouteConfig,
-							HTTPFilters:       routerFilterList,
+							HTTPFilters:       makeRouterFilterList(t),
 						},
 					},
 				},
@@ -1626,7 +1626,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 															RequireClientCert:    true,
 														},
 														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       routerFilterList,
+														HTTPFilters:       makeRouterFilterList(t),
 													},
 												},
 											},
@@ -1644,7 +1644,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 								RequireClientCert:    true,
 							},
 							InlineRouteConfig: inlineRouteConfig,
-							HTTPFilters:       routerFilterList,
+							HTTPFilters:       makeRouterFilterList(t),
 						},
 					},
 				},
@@ -1676,7 +1676,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 															RequireClientCert:    true,
 														},
 														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       routerFilterList,
+														HTTPFilters:       makeRouterFilterList(t),
 													},
 												},
 											},
@@ -1694,7 +1694,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 								RequireClientCert:    true,
 							},
 							InlineRouteConfig: inlineRouteConfig,
-							HTTPFilters:       routerFilterList,
+							HTTPFilters:       makeRouterFilterList(t),
 						},
 					},
 				},
@@ -1838,7 +1838,6 @@ var customFilterOldTypedStructConfig = &v1udpaudpatypepb.TypedStruct{
 		},
 	},
 }
-var wrappedCustomFilterOldTypedStructConfig *anypb.Any
 
 // This custom filter uses the new TypedStruct message from the cncf/xds repo.
 var customFilterNewTypedStructConfig = &v3xdsxdstypepb.TypedStruct{
@@ -1849,20 +1848,14 @@ var customFilterNewTypedStructConfig = &v3xdsxdstypepb.TypedStruct{
 		},
 	},
 }
-var wrappedCustomFilterNewTypedStructConfig *anypb.Any
-
-func init() {
-	wrappedCustomFilterOldTypedStructConfig = testutils.MarshalAny(customFilterOldTypedStructConfig)
-	wrappedCustomFilterNewTypedStructConfig = testutils.MarshalAny(customFilterNewTypedStructConfig)
-}
 
 var unknownFilterConfig = &anypb.Any{
 	TypeUrl: "unknown.custom.filter",
 	Value:   []byte{1, 2, 3},
 }
 
-func wrappedOptionalFilter(name string) *anypb.Any {
-	return testutils.MarshalAny(&v3routepb.FilterConfig{
+func wrappedOptionalFilter(t *testing.T, name string) *anypb.Any {
+	return testutils.MarshalAny(t, &v3routepb.FilterConfig{
 		IsOptional: true,
 		Config: &anypb.Any{
 			TypeUrl: name,

@@ -51,7 +51,7 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 			loggerConfig: &v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 				AuditLogger: &v3corepb.TypedExtensionConfig{
 					Name:        "TestAuditLoggerBuffer",
-					TypedConfig: testutils.MarshalAny(&v3rbacpb.RBAC_AuditLoggingOptions{}),
+					TypedConfig: testutils.MarshalAny(t, &v3rbacpb.RBAC_AuditLoggingOptions{}),
 				},
 			},
 			expectedError: "custom config not implemented for type ",
@@ -61,7 +61,7 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 			loggerConfig: &v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 				AuditLogger: &v3corepb.TypedExtensionConfig{
 					Name:        "TestAuditLoggerBuffer",
-					TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, ""),
+					TypedConfig: createUDPATypedStruct(t, map[string]any{}, ""),
 				},
 			},
 			expectedError: "field TypedConfig.TypeURL cannot be an empty string",
@@ -71,7 +71,7 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 			loggerConfig: &v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 				AuditLogger: &v3corepb.TypedExtensionConfig{
 					Name:        "UnregisteredLogger",
-					TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "UnregisteredLogger"),
+					TypedConfig: createUDPATypedStruct(t, map[string]any{}, "UnregisteredLogger"),
 				},
 				IsOptional: false,
 			},
@@ -82,7 +82,7 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 			loggerConfig: &v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 				AuditLogger: &v3corepb.TypedExtensionConfig{
 					Name:        "TestAuditLoggerCustomConfig",
-					TypedConfig: createUDPATypedStruct(t, map[string]interface{}{"abc": "BADVALUE", "xyz": "123"}, "fail to parse custom config_TestAuditLoggerCustomConfig")},
+					TypedConfig: createUDPATypedStruct(t, map[string]any{"abc": "BADVALUE", "xyz": "123"}, "fail to parse custom config_TestAuditLoggerCustomConfig")},
 				IsOptional: false,
 			},
 			expectedError: "custom config could not be parsed",
@@ -92,7 +92,7 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 			loggerConfig: &v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 				AuditLogger: &v3corepb.TypedExtensionConfig{
 					Name:        "UnregisteredLogger",
-					TypedConfig: createUDPATypedStruct(t, map[string]interface{}{}, "no registered logger but optional passes_UnregisteredLogger"),
+					TypedConfig: createUDPATypedStruct(t, map[string]any{}, "no registered logger but optional passes_UnregisteredLogger"),
 				},
 				IsOptional: true,
 			},
@@ -137,7 +137,7 @@ func (s) TestBuildLoggerKnownTypes(t *testing.T) {
 			loggerConfig: &v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 				AuditLogger: &v3corepb.TypedExtensionConfig{
 					Name:        stdout.Name,
-					TypedConfig: createXDSTypedStruct(t, map[string]interface{}{}, stdout.Name),
+					TypedConfig: createXDSTypedStruct(t, map[string]any{}, stdout.Name),
 				},
 				IsOptional: false,
 			},

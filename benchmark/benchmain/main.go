@@ -53,6 +53,7 @@ import (
 	"reflect"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -65,6 +66,7 @@ import (
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/keepalive"
@@ -81,7 +83,8 @@ var (
 	traceMode = flags.StringWithAllowedValues("trace", toggleModeOff,
 		fmt.Sprintf("Trace mode - One of: %v", strings.Join(allToggleModes, ", ")), allToggleModes)
 	preloaderMode = flags.StringWithAllowedValues("preloader", toggleModeOff,
-		fmt.Sprintf("Preloader mode - One of: %v", strings.Join(allToggleModes, ", ")), allToggleModes)
+		fmt.Sprintf("Preloader mode - One of: %v, preloader works only in streaming and unconstrained modes and will be ignored in unary mode",
+			strings.Join(allToggleModes, ", ")), allToggleModes)
 	channelzOn = flags.StringWithAllowedValues("channelz", toggleModeOff,
 		fmt.Sprintf("Channelz mode - One of: %v", strings.Join(allToggleModes, ", ")), allToggleModes)
 	compressorMode = flags.StringWithAllowedValues("compression", compModeOff,
@@ -113,6 +116,8 @@ var (
 	sleepBetweenRPCs      = flags.DurationSlice("sleepBetweenRPCs", []time.Duration{0}, "Configures the maximum amount of time the client should sleep between consecutive RPCs - may be a a comma-separated list")
 	connections           = flag.Int("connections", 1, "The number of connections. Each connection will handle maxConcurrentCalls RPC streams")
 	recvBufferPool        = flags.StringWithAllowedValues("recvBufferPool", recvBufferPoolNil, "Configures the shared receive buffer pool. One of: nil, simple, all", allRecvBufferPools)
+	sharedWriteBuffer     = flags.StringWithAllowedValues("sharedWriteBuffer", toggleModeOff,
+		fmt.Sprintf("Configures both client and server to share write buffer - One of: %v", strings.Join(allToggleModes, ", ")), allToggleModes)
 
 	logger = grpclog.Component("benchmark")
 )
@@ -333,6 +338,10 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 	if bf.ServerReadBufferSize >= 0 {
 		sopts = append(sopts, grpc.ReadBufferSize(bf.ServerReadBufferSize))
 	}
+	if bf.SharedWriteBuffer {
+		opts = append(opts, grpc.WithSharedWriteBuffer(true))
+		sopts = append(sopts, grpc.SharedWriteBuffer(true))
+	}
 	if bf.ServerWriteBufferSize >= 0 {
 		sopts = append(sopts, grpc.WriteBufferSize(bf.ServerWriteBufferSize))
 	}
@@ -340,8 +349,8 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 	case recvBufferPoolNil:
 		// Do nothing.
 	case recvBufferPoolSimple:
-		opts = append(opts, grpc.WithRecvBufferPool(grpc.NewSharedBufferPool()))
-		sopts = append(sopts, grpc.RecvBufferPool(grpc.NewSharedBufferPool()))
+		opts = append(opts, experimental.WithRecvBufferPool(grpc.NewSharedBufferPool()))
+		sopts = append(sopts, experimental.RecvBufferPool(grpc.NewSharedBufferPool()))
 	default:
 		logger.Fatalf("Unknown shared recv buffer pool type: %v", bf.RecvBufferPool)
 	}
@@ -401,20 +410,11 @@ func makeFuncUnary(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 }
 
 func makeFuncStream(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
-	clients, cleanup := makeClients(bf)
+	streams, req, cleanup := setupStream(bf, false)
 
-	streams := make([][]testgrpc.BenchmarkService_StreamingCallClient, bf.Connections)
-	for cn := 0; cn < bf.Connections; cn++ {
-		tc := clients[cn]
-		streams[cn] = make([]testgrpc.BenchmarkService_StreamingCallClient, bf.MaxConcurrentCalls)
-		for pos := 0; pos < bf.MaxConcurrentCalls; pos++ {
-
-			stream, err := tc.StreamingCall(context.Background())
-			if err != nil {
-				logger.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
-			}
-			streams[cn][pos] = stream
-		}
+	var preparedMsg [][]*grpc.PreparedMsg
+	if bf.EnablePreloader {
+		preparedMsg = prepareMessages(streams, req)
 	}
 
 	return func(cn, pos int) {
@@ -426,24 +426,25 @@ func makeFuncStream(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 		if bf.RespPayloadCurve != nil {
 			respSizeBytes = bf.RespPayloadCurve.ChooseRandom()
 		}
-		streamCaller(streams[cn][pos], reqSizeBytes, respSizeBytes)
+		var req any
+		if bf.EnablePreloader {
+			req = preparedMsg[cn][pos]
+		} else {
+			pl := bm.NewPayload(testpb.PayloadType_COMPRESSABLE, reqSizeBytes)
+			req = &testpb.SimpleRequest{
+				ResponseType: pl.Type,
+				ResponseSize: int32(respSizeBytes),
+				Payload:      pl,
+			}
+		}
+		streamCaller(streams[cn][pos], req)
 	}, cleanup
 }
 
 func makeFuncUnconstrainedStreamPreloaded(bf stats.Features) (rpcSendFunc, rpcRecvFunc, rpcCleanupFunc) {
-	streams, req, cleanup := setupUnconstrainedStream(bf)
+	streams, req, cleanup := setupStream(bf, true)
 
-	preparedMsg := make([][]*grpc.PreparedMsg, len(streams))
-	for cn, connStreams := range streams {
-		preparedMsg[cn] = make([]*grpc.PreparedMsg, len(connStreams))
-		for pos, stream := range connStreams {
-			preparedMsg[cn][pos] = &grpc.PreparedMsg{}
-			err := preparedMsg[cn][pos].Encode(stream, req)
-			if err != nil {
-				logger.Fatalf("%v.Encode(%v, %v) = %v", preparedMsg[cn][pos], req, stream, err)
-			}
-		}
-	}
+	preparedMsg := prepareMessages(streams, req)
 
 	return func(cn, pos int) {
 			streams[cn][pos].SendMsg(preparedMsg[cn][pos])
@@ -453,7 +454,7 @@ func makeFuncUnconstrainedStreamPreloaded(bf stats.Features) (rpcSendFunc, rpcRe
 }
 
 func makeFuncUnconstrainedStream(bf stats.Features) (rpcSendFunc, rpcRecvFunc, rpcCleanupFunc) {
-	streams, req, cleanup := setupUnconstrainedStream(bf)
+	streams, req, cleanup := setupStream(bf, true)
 
 	return func(cn, pos int) {
 			streams[cn][pos].Send(req)
@@ -462,13 +463,19 @@ func makeFuncUnconstrainedStream(bf stats.Features) (rpcSendFunc, rpcRecvFunc, r
 		}, cleanup
 }
 
-func setupUnconstrainedStream(bf stats.Features) ([][]testgrpc.BenchmarkService_StreamingCallClient, *testpb.SimpleRequest, rpcCleanupFunc) {
+func setupStream(bf stats.Features, unconstrained bool) ([][]testgrpc.BenchmarkService_StreamingCallClient, *testpb.SimpleRequest, rpcCleanupFunc) {
 	clients, cleanup := makeClients(bf)
 
 	streams := make([][]testgrpc.BenchmarkService_StreamingCallClient, bf.Connections)
-	md := metadata.Pairs(benchmark.UnconstrainedStreamingHeader, "1",
-		benchmark.UnconstrainedStreamingDelayHeader, bf.SleepBetweenRPCs.String())
-	ctx := metadata.NewOutgoingContext(context.Background(), md)
+	ctx := context.Background()
+	if unconstrained {
+		md := metadata.Pairs(benchmark.UnconstrainedStreamingHeader, "1", benchmark.UnconstrainedStreamingDelayHeader, bf.SleepBetweenRPCs.String())
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
+	if bf.EnablePreloader {
+		md := metadata.Pairs(benchmark.PreloadMsgSizeHeader, strconv.Itoa(bf.RespSizeBytes), benchmark.UnconstrainedStreamingDelayHeader, bf.SleepBetweenRPCs.String())
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
 	for cn := 0; cn < bf.Connections; cn++ {
 		tc := clients[cn]
 		streams[cn] = make([]testgrpc.BenchmarkService_StreamingCallClient, bf.MaxConcurrentCalls)
@@ -491,6 +498,20 @@ func setupUnconstrainedStream(bf stats.Features) ([][]testgrpc.BenchmarkService_
 	return streams, req, cleanup
 }
 
+func prepareMessages(streams [][]testgrpc.BenchmarkService_StreamingCallClient, req *testpb.SimpleRequest) [][]*grpc.PreparedMsg {
+	preparedMsg := make([][]*grpc.PreparedMsg, len(streams))
+	for cn, connStreams := range streams {
+		preparedMsg[cn] = make([]*grpc.PreparedMsg, len(connStreams))
+		for pos, stream := range connStreams {
+			preparedMsg[cn][pos] = &grpc.PreparedMsg{}
+			if err := preparedMsg[cn][pos].Encode(stream, req); err != nil {
+				logger.Fatalf("%v.Encode(%v, %v) = %v", preparedMsg[cn][pos], req, stream, err)
+			}
+		}
+	}
+	return preparedMsg
+}
+
 // Makes a UnaryCall gRPC request using the given BenchmarkServiceClient and
 // request and response sizes.
 func unaryCaller(client testgrpc.BenchmarkServiceClient, reqSize, respSize int) {
@@ -499,8 +520,8 @@ func unaryCaller(client testgrpc.BenchmarkServiceClient, reqSize, respSize int) 
 	}
 }
 
-func streamCaller(stream testgrpc.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
-	if err := bm.DoStreamingRoundTrip(stream, reqSize, respSize); err != nil {
+func streamCaller(stream testgrpc.BenchmarkService_StreamingCallClient, req any) {
+	if err := bm.DoStreamingRoundTripPreloaded(stream, req); err != nil {
 		logger.Fatalf("DoStreamingRoundTrip failed: %v", err)
 	}
 }
@@ -589,6 +610,7 @@ type featureOpts struct {
 	serverWriteBufferSize []int
 	sleepBetweenRPCs      []time.Duration
 	recvBufferPools       []string
+	sharedWriteBuffer     []bool
 }
 
 // makeFeaturesNum returns a slice of ints of size 'maxFeatureIndex' where each
@@ -637,6 +659,8 @@ func makeFeaturesNum(b *benchOpts) []int {
 			featuresNum[i] = len(b.features.sleepBetweenRPCs)
 		case stats.RecvBufferPool:
 			featuresNum[i] = len(b.features.recvBufferPools)
+		case stats.SharedWriteBuffer:
+			featuresNum[i] = len(b.features.sharedWriteBuffer)
 		default:
 			log.Fatalf("Unknown feature index %v in generateFeatures. maxFeatureIndex is %v", i, stats.MaxFeatureIndex)
 		}
@@ -706,6 +730,7 @@ func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 			ServerWriteBufferSize: b.features.serverWriteBufferSize[curPos[stats.ServerWriteBufferSize]],
 			SleepBetweenRPCs:      b.features.sleepBetweenRPCs[curPos[stats.SleepBetweenRPCs]],
 			RecvBufferPool:        b.features.recvBufferPools[curPos[stats.RecvBufferPool]],
+			SharedWriteBuffer:     b.features.sharedWriteBuffer[curPos[stats.SharedWriteBuffer]],
 		}
 		if len(b.features.reqPayloadCurves) == 0 {
 			f.ReqSizeBytes = b.features.reqSizeBytes[curPos[stats.ReqSizeBytesIndex]]
@@ -779,6 +804,7 @@ func processFlags() *benchOpts {
 			serverWriteBufferSize: append([]int(nil), *serverWriteBufferSize...),
 			sleepBetweenRPCs:      append([]time.Duration(nil), *sleepBetweenRPCs...),
 			recvBufferPools:       setRecvBufferPool(*recvBufferPool),
+			sharedWriteBuffer:     setToggleMode(*sharedWriteBuffer),
 		},
 	}
 
@@ -789,6 +815,9 @@ func processFlags() *benchOpts {
 	} else {
 		if len(opts.features.reqSizeBytes) != 0 {
 			log.Fatalf("you may not specify -reqPayloadCurveFiles and -reqSizeBytes at the same time")
+		}
+		if len(opts.features.enablePreloader) != 0 {
+			log.Fatalf("you may not specify -reqPayloadCurveFiles and -preloader at the same time")
 		}
 		for _, file := range *reqPayloadCurveFiles {
 			pc, err := stats.NewPayloadCurve(file)
@@ -806,6 +835,9 @@ func processFlags() *benchOpts {
 	} else {
 		if len(opts.features.respSizeBytes) != 0 {
 			log.Fatalf("you may not specify -respPayloadCurveFiles and -respSizeBytes at the same time")
+		}
+		if len(opts.features.enablePreloader) != 0 {
+			log.Fatalf("you may not specify -respPayloadCurveFiles and -preloader at the same time")
 		}
 		for _, file := range *respPayloadCurveFiles {
 			pc, err := stats.NewPayloadCurve(file)

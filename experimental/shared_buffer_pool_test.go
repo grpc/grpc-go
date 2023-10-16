@@ -16,7 +16,7 @@
  *
  */
 
-package test
+package experimental_test
 
 import (
 	"bytes"
@@ -26,10 +26,23 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/experimental"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
+
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+const defaultTestTimeout = 10 * time.Second
 
 func (s) TestRecvBufferPool(t *testing.T) {
 	ss := &stubserver.StubServer{
@@ -49,15 +62,14 @@ func (s) TestRecvBufferPool(t *testing.T) {
 			return nil
 		},
 	}
-	if err := ss.Start(
-		[]grpc.ServerOption{grpc.RecvBufferPool(grpc.NewSharedBufferPool())},
-		grpc.WithRecvBufferPool(grpc.NewSharedBufferPool()),
-	); err != nil {
+	sopts := []grpc.ServerOption{experimental.RecvBufferPool(grpc.NewSharedBufferPool())}
+	dopts := []grpc.DialOption{experimental.WithRecvBufferPool(grpc.NewSharedBufferPool())}
+	if err := ss.Start(sopts, dopts...); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	stream, err := ss.Client.FullDuplexCall(ctx)

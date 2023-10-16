@@ -53,7 +53,7 @@ var (
 type byteBufCodec struct {
 }
 
-func (byteBufCodec) Marshal(v interface{}) ([]byte, error) {
+func (byteBufCodec) Marshal(v any) ([]byte, error) {
 	b, ok := v.(*[]byte)
 	if !ok {
 		return nil, fmt.Errorf("failed to marshal: %v is not type of *[]byte", v)
@@ -61,7 +61,7 @@ func (byteBufCodec) Marshal(v interface{}) ([]byte, error) {
 	return *b, nil
 }
 
-func (byteBufCodec) Unmarshal(data []byte, v interface{}) error {
+func (byteBufCodec) Unmarshal(data []byte, v any) error {
 	b, ok := v.(*[]byte)
 	if !ok {
 		return fmt.Errorf("failed to marshal: %v is not type of *[]byte", v)

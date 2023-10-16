@@ -20,14 +20,18 @@ package xds_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
 	"testing"
 
+	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
@@ -36,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -184,7 +189,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
@@ -222,7 +227,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
@@ -294,7 +299,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 
 // serverListenerWithRBACHTTPFilters returns an xds Listener resource with HTTP Filters defined in the HCM, and a route
 // configuration that always matches to a route and a VH.
-func serverListenerWithRBACHTTPFilters(host string, port uint32, rbacCfg *rpb.RBAC) *v3listenerpb.Listener {
+func serverListenerWithRBACHTTPFilters(t *testing.T, host string, port uint32, rbacCfg *rpb.RBAC) *v3listenerpb.Listener {
 	// Rather than declare typed config inline, take a HCM proto and append the
 	// RBAC Filters to it.
 	hcm := &v3httppb.HttpConnectionManager{
@@ -312,7 +317,7 @@ func serverListenerWithRBACHTTPFilters(host string, port uint32, rbacCfg *rpb.RB
 					// This tests override parsing + building when RBAC Filter
 					// passed both normal and override config.
 					TypedPerFilterConfig: map[string]*anypb.Any{
-						"rbac": testutils.MarshalAny(&rpb.RBACPerRoute{Rbac: rbacCfg}),
+						"rbac": testutils.MarshalAny(t, &rpb.RBACPerRoute{Rbac: rbacCfg}),
 					},
 				}}},
 		},
@@ -359,7 +364,7 @@ func serverListenerWithRBACHTTPFilters(host string, port uint32, rbacCfg *rpb.RB
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(hcm),
+							TypedConfig: testutils.MarshalAny(t, hcm),
 						},
 					},
 				},
@@ -389,7 +394,7 @@ func serverListenerWithRBACHTTPFilters(host string, port uint32, rbacCfg *rpb.RB
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(hcm),
+							TypedConfig: testutils.MarshalAny(t, hcm),
 						},
 					},
 				},
@@ -415,6 +420,8 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 		rbacCfg             *rpb.RBAC
 		wantStatusEmptyCall codes.Code
 		wantStatusUnaryCall codes.Code
+		wantAuthzOutcomes   map[bool]int
+		eventContent        *audit.Event
 	}{
 		// This test tests an RBAC HTTP Filter which is configured to allow any RPC.
 		// Any RPC passing through this RBAC HTTP Filter should proceed as normal.
@@ -433,10 +440,30 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 							},
 						},
 					},
+					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
+						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
+						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+							{
+								AuditLogger: &v3corepb.TypedExtensionConfig{
+									Name:        "stat_logger",
+									TypedConfig: createXDSTypedStruct(t, map[string]any{}, "stat_logger"),
+								},
+								IsOptional: false,
+							},
+						},
+					},
 				},
 			},
 			wantStatusEmptyCall: codes.OK,
 			wantStatusUnaryCall: codes.OK,
+			wantAuthzOutcomes:   map[bool]int{true: 2, false: 0},
+			// TODO(gtcooke94) add policy name (RBAC filter name) once
+			// https://github.com/grpc/grpc-go/pull/6327 is merged.
+			eventContent: &audit.Event{
+				FullMethodName: "/grpc.testing.TestService/UnaryCall",
+				MatchedRule:    "anyone",
+				Authorized:     true,
+			},
 		},
 		// This test tests an RBAC HTTP Filter which is configured to allow only
 		// RPC's with certain paths ("UnaryCall"). Only unary calls passing
@@ -605,6 +632,12 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			func() {
+				lb := &loggerBuilder{
+					authzDecisionStat: map[bool]int{true: 0, false: 0},
+					lastEvent:         &audit.Event{},
+				}
+				audit.RegisterLoggerBuilder(lb)
+
 				managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 				defer cleanup1()
 
@@ -623,7 +656,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 					Port:       port,
 					SecLevel:   e2e.SecurityLevelNone,
 				})
-				inboundLis := serverListenerWithRBACHTTPFilters(host, port, test.rbacCfg)
+				inboundLis := serverListenerWithRBACHTTPFilters(t, host, port, test.rbacCfg)
 				resources.Listeners = append(resources.Listeners, inboundLis)
 
 				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -660,6 +693,17 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 				}
 				// Toggle RBAC back on for next iterations.
 				envconfig.XDSRBAC = true
+
+				if test.wantAuthzOutcomes != nil {
+					if diff := cmp.Diff(lb.authzDecisionStat, test.wantAuthzOutcomes); diff != "" {
+						t.Fatalf("authorization decision do not match\ndiff (-got +want):\n%s", diff)
+					}
+				}
+				if test.eventContent != nil {
+					if diff := cmp.Diff(lb.lastEvent, test.eventContent); diff != "" {
+						t.Fatalf("unexpected event\ndiff (-got +want):\n%s", diff)
+					}
+				}
 			}()
 		})
 	}
@@ -668,7 +712,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 // serverListenerWithBadRouteConfiguration returns an xds Listener resource with
 // a Route Configuration that will never successfully match in order to test
 // RBAC Environment variable being toggled on and off.
-func serverListenerWithBadRouteConfiguration(host string, port uint32) *v3listenerpb.Listener {
+func serverListenerWithBadRouteConfiguration(t *testing.T, host string, port uint32) *v3listenerpb.Listener {
 	return &v3listenerpb.Listener{
 		Name: fmt.Sprintf(e2e.ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port)))),
 		Address: &v3corepb.Address{
@@ -707,7 +751,7 @@ func serverListenerWithBadRouteConfiguration(host string, port uint32) *v3listen
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
 										Name: "routeName",
@@ -755,7 +799,7 @@ func serverListenerWithBadRouteConfiguration(host string, port uint32) *v3listen
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
 										Name: "routeName",
@@ -814,7 +858,7 @@ func (s) TestRBACToggledOn_WithBadRouteConfiguration(t *testing.T) {
 	// Since RBAC support is turned ON, all the RPC's should get denied with
 	// status code Unavailable due to not matching to a route of type Non
 	// Forwarding Action (Route Table not configured properly).
-	inboundLis := serverListenerWithBadRouteConfiguration(host, port)
+	inboundLis := serverListenerWithBadRouteConfiguration(t, host, port)
 	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -871,7 +915,7 @@ func (s) TestRBACToggledOff_WithBadRouteConfiguration(t *testing.T) {
 	// This bad route configuration shouldn't affect incoming RPC's from
 	// proceeding as normal, as the configuration shouldn't be parsed due to the
 	// RBAC Environment variable not being set to true.
-	inboundLis := serverListenerWithBadRouteConfiguration(host, port)
+	inboundLis := serverListenerWithBadRouteConfiguration(t, host, port)
 	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -894,4 +938,56 @@ func (s) TestRBACToggledOff_WithBadRouteConfiguration(t *testing.T) {
 	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.OK {
 		t.Fatalf("UnaryCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
 	}
+}
+
+type statAuditLogger struct {
+	authzDecisionStat map[bool]int // Map to hold counts of authorization decisions
+	lastEvent         *audit.Event // Field to store last received event
+}
+
+func (s *statAuditLogger) Log(event *audit.Event) {
+	s.authzDecisionStat[event.Authorized]++
+	*s.lastEvent = *event
+}
+
+type loggerBuilder struct {
+	authzDecisionStat map[bool]int
+	lastEvent         *audit.Event
+}
+
+func (loggerBuilder) Name() string {
+	return "stat_logger"
+}
+
+func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
+	return &statAuditLogger{
+		authzDecisionStat: lb.authzDecisionStat,
+		lastEvent:         lb.lastEvent,
+	}
+}
+
+func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
+	return nil, nil
+}
+
+// This is used when converting a custom config from raw JSON to a TypedStruct.
+// The TypeURL of the TypeStruct will be "grpc.authz.audit_logging/<name>".
+const typeURLPrefix = "grpc.authz.audit_logging/"
+
+// Builds custom configs for audit logger RBAC protos.
+func createXDSTypedStruct(t *testing.T, in map[string]any, name string) *anypb.Any {
+	t.Helper()
+	pb, err := structpb.NewStruct(in)
+	if err != nil {
+		t.Fatalf("createXDSTypedStruct failed during structpb.NewStruct: %v", err)
+	}
+	typedStruct := &v3xdsxdstypepb.TypedStruct{
+		TypeUrl: typeURLPrefix + name,
+		Value:   pb,
+	}
+	customConfig, err := anypb.New(typedStruct)
+	if err != nil {
+		t.Fatalf("createXDSTypedStruct failed during anypb.New: %v", err)
+	}
+	return customConfig
 }

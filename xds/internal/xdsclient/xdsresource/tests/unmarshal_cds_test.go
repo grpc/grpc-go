@@ -25,12 +25,14 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/balancer/leastrequest"
 	_ "google.golang.org/grpc/balancer/roundrobin" // To register round_robin load balancer.
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/serviceconfig"
 	_ "google.golang.org/grpc/xds" // Register the xDS LB Registry Converters.
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
@@ -66,13 +68,13 @@ const (
 
 var emptyUpdate = xdsresource.ClusterUpdate{ClusterName: clusterName, LRSServerConfig: xdsresource.ClusterLRSOff}
 
-func wrrLocality(m proto.Message) *v3wrrlocalitypb.WrrLocality {
+func wrrLocality(t *testing.T, m proto.Message) *v3wrrlocalitypb.WrrLocality {
 	return &v3wrrlocalitypb.WrrLocality{
 		EndpointPickingPolicy: &v3clusterpb.LoadBalancingPolicy{
 			Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 				{
 					TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-						TypedConfig: testutils.MarshalAny(m),
+						TypedConfig: testutils.MarshalAny(t, m),
 					},
 				},
 			},
@@ -80,8 +82,8 @@ func wrrLocality(m proto.Message) *v3wrrlocalitypb.WrrLocality {
 	}
 }
 
-func wrrLocalityAny(m proto.Message) *anypb.Any {
-	return testutils.MarshalAny(wrrLocality(m))
+func wrrLocalityAny(t *testing.T, m proto.Message) *anypb.Any {
+	return testutils.MarshalAny(t, wrrLocality(t, m))
 }
 
 type customLBConfig struct {
@@ -103,6 +105,8 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 	defer func() {
 		envconfig.XDSCustomLBPolicy = origCustomLBSupport
 	}()
+	defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
+	envconfig.LeastRequestLB = true
 	tests := []struct {
 		name             string
 		cluster          *v3clusterpb.Cluster
@@ -158,7 +162,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
 					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
 						Name: "envoy.clusters.aggregate",
-						TypedConfig: testutils.MarshalAny(&v3aggregateclusterpb.ClusterConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3aggregateclusterpb.ClusterConfig{
 							Clusters: []string{"a", "b", "c"},
 						}),
 					},
@@ -179,19 +183,8 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 		},
 		{
-			name: "happy-case-no-service-name-no-lrs",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-			},
+			name:       "happy-case-no-service-name-no-lrs",
+			cluster:    e2e.DefaultCluster(clusterName, "", e2e.SecurityLevelNone),
 			wantUpdate: emptyUpdate,
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
@@ -203,21 +196,12 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 		},
 		{
-			name: "happy-case-no-lrs",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: serviceName,
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+			name:    "happy-case-no-lrs",
+			cluster: e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone),
+			wantUpdate: xdsresource.ClusterUpdate{
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
 			},
-			wantUpdate: xdsresource.ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSOff},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
 				Config: &wrrlocality.LBConfig{
@@ -229,25 +213,16 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		},
 		{
 			name: "happiest-case",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: serviceName,
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
-					},
-				},
+			cluster: e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+				ClusterName: clusterName,
+				ServiceName: serviceName,
+				EnableLRS:   true,
+			}),
+			wantUpdate: xdsresource.ClusterUpdate{
+				ClusterName:     clusterName,
+				EDSServiceName:  serviceName,
+				LRSServerConfig: xdsresource.ClusterLRSServerSelf,
 			},
-			wantUpdate: xdsresource.ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
 				Config: &wrrlocality.LBConfig{
@@ -259,19 +234,13 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		},
 		{
 			name: "happiest-case-with-circuitbreakers",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
+			cluster: func() *v3clusterpb.Cluster {
+				c := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+					ClusterName: clusterName,
 					ServiceName: serviceName,
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-				CircuitBreakers: &v3clusterpb.CircuitBreakers{
+					EnableLRS:   true,
+				})
+				c.CircuitBreakers = &v3clusterpb.CircuitBreakers{
 					Thresholds: []*v3clusterpb.CircuitBreakers_Thresholds{
 						{
 							Priority:    v3corepb.RoutingPriority_DEFAULT,
@@ -282,14 +251,15 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 							MaxRequests: nil,
 						},
 					},
-				},
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
-					},
-				},
+				}
+				return c
+			}(),
+			wantUpdate: xdsresource.ClusterUpdate{
+				ClusterName:     clusterName,
+				EDSServiceName:  serviceName,
+				LRSServerConfig: xdsresource.ClusterLRSServerSelf,
+				MaxRequests:     func() *uint32 { i := uint32(512); return &i }(),
 			},
-			wantUpdate: xdsresource.ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf, MaxRequests: func() *uint32 { i := uint32(512); return &i }()},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
 				Config: &wrrlocality.LBConfig{
@@ -301,26 +271,14 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		},
 		{
 			name: "happiest-case-with-ring-hash-lb-policy-with-default-config",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: serviceName,
-				},
-				LbPolicy: v3clusterpb.Cluster_RING_HASH,
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
-					},
-				},
-			},
+			cluster: func() *v3clusterpb.Cluster {
+				c := e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)
+				c.LbPolicy = v3clusterpb.Cluster_RING_HASH
+				return c
+			}(),
 			wantUpdate: xdsresource.ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
@@ -331,7 +289,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 		},
 		{
-			name: "happiest-case-with-ring-hash-lb-policy-with-none-default-config",
+			name: "happiest-case-with-least-request-lb-policy-with-default-config",
 			cluster: &v3clusterpb.Cluster{
 				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -343,27 +301,70 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					},
 					ServiceName: serviceName,
 				},
-				LbPolicy: v3clusterpb.Cluster_RING_HASH,
-				LbConfig: &v3clusterpb.Cluster_RingHashLbConfig_{
+				LbPolicy: v3clusterpb.Cluster_LEAST_REQUEST,
+			},
+			wantUpdate: xdsresource.ClusterUpdate{
+				ClusterName: clusterName, EDSServiceName: serviceName,
+			},
+			wantLBConfig: &iserviceconfig.BalancerConfig{
+				Name: "least_request_experimental",
+				Config: &leastrequest.LBConfig{
+					ChoiceCount: 2,
+				},
+			},
+		},
+		{
+			name: "happiest-case-with-ring-hash-lb-policy-with-none-default-config",
+			cluster: func() *v3clusterpb.Cluster {
+				c := e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)
+				c.LbPolicy = v3clusterpb.Cluster_RING_HASH
+				c.LbConfig = &v3clusterpb.Cluster_RingHashLbConfig_{
 					RingHashLbConfig: &v3clusterpb.Cluster_RingHashLbConfig{
 						MinimumRingSize: wrapperspb.UInt64(10),
 						MaximumRingSize: wrapperspb.UInt64(100),
 					},
-				},
-				LrsServer: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-						Self: &v3corepb.SelfConfigSource{},
-					},
-				},
-			},
+				}
+				return c
+			}(),
 			wantUpdate: xdsresource.ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
 				Config: &ringhash.LBConfig{
 					MinRingSize: 10,
 					MaxRingSize: 100,
+				},
+			},
+		},
+		{
+			name: "happiest-case-with-least-request-lb-policy-with-none-default-config",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_LEAST_REQUEST,
+				LbConfig: &v3clusterpb.Cluster_LeastRequestLbConfig_{
+					LeastRequestLbConfig: &v3clusterpb.Cluster_LeastRequestLbConfig{
+						ChoiceCount: wrapperspb.UInt32(3),
+					},
+				},
+			},
+			wantUpdate: xdsresource.ClusterUpdate{
+				ClusterName: clusterName, EDSServiceName: serviceName,
+			},
+			wantLBConfig: &iserviceconfig.BalancerConfig{
+				Name: "least_request_experimental",
+				Config: &leastrequest.LBConfig{
+					ChoiceCount: 3,
 				},
 			},
 		},
@@ -384,7 +385,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
+								TypedConfig: testutils.MarshalAny(t, &v3ringhashpb.RingHash{
 									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
 									MinimumRingSize: wrapperspb.UInt64(10),
 									MaximumRingSize: wrapperspb.UInt64(100),
@@ -395,7 +396,8 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				},
 			},
 			wantUpdate: xdsresource.ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
@@ -422,14 +424,15 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: wrrLocalityAny(&v3roundrobinpb.RoundRobin{}),
+								TypedConfig: wrrLocalityAny(t, &v3roundrobinpb.RoundRobin{}),
 							},
 						},
 					},
 				},
 			},
 			wantUpdate: xdsresource.ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
@@ -457,7 +460,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: wrrLocalityAny(&v3xdsxdstypepb.TypedStruct{
+								TypedConfig: wrrLocalityAny(t, &v3xdsxdstypepb.TypedStruct{
 									TypeUrl: "type.googleapis.com/myorg.MyCustomLeastRequestPolicy",
 									Value:   &structpb.Struct{},
 								}),
@@ -467,7 +470,8 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				},
 			},
 			wantUpdate: xdsresource.ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
@@ -503,7 +507,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
+								TypedConfig: testutils.MarshalAny(t, &v3ringhashpb.RingHash{
 									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
 									MinimumRingSize: wrapperspb.UInt64(10),
 									MaximumRingSize: wrapperspb.UInt64(100),
@@ -514,7 +518,8 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				},
 			},
 			wantUpdate: xdsresource.ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
@@ -549,7 +554,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
 							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: testutils.MarshalAny(&v3ringhashpb.RingHash{
+								TypedConfig: testutils.MarshalAny(t, &v3ringhashpb.RingHash{
 									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
 									MinimumRingSize: wrapperspb.UInt64(10),
 									MaximumRingSize: wrapperspb.UInt64(100),
@@ -560,7 +565,8 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				},
 			},
 			wantUpdate: xdsresource.ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",

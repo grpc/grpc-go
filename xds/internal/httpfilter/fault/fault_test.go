@@ -53,8 +53,9 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
-	_ "google.golang.org/grpc/xds/internal/balancer" // Register the balancers.
-	_ "google.golang.org/grpc/xds/internal/resolver" // Register the xds_resolver.
+	_ "google.golang.org/grpc/xds/internal/balancer"          // Register the balancers.
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
+	_ "google.golang.org/grpc/xds/internal/resolver"          // Register the xds_resolver.
 )
 
 const defaultTestTimeout = 10 * time.Second
@@ -516,7 +517,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 				hcm.HttpFilters = append(hcm.HttpFilters, e2e.HTTPFilter(fmt.Sprintf("fault%d", i), cfg))
 			}
 			hcm.HttpFilters = append(hcm.HttpFilters, routerFilter)
-			hcmAny := testutils.MarshalAny(hcm)
+			hcmAny := testutils.MarshalAny(t, hcm)
 			resources.Listeners[0].ApiListener.ApiListener = hcmAny
 			resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
 
@@ -591,7 +592,7 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 			},
 		})},
 		hcm.HttpFilters...)
-	hcmAny := testutils.MarshalAny(hcm)
+	hcmAny := testutils.MarshalAny(t, hcm)
 	resources.Listeners[0].ApiListener.ApiListener = hcmAny
 	resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
 

@@ -684,7 +684,7 @@ func DoPickFirstUnary(tc testgrpc.TestServiceClient) {
 	}
 }
 
-func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, resetChannel bool, serverAddr string, dopts []grpc.DialOption, copts []grpc.CallOption) (latency time.Duration, err error) {
+func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, resetChannel bool, serverAddr string, soakRequestSize int, soakResponseSize int, dopts []grpc.DialOption, copts []grpc.CallOption) (latency time.Duration, err error) {
 	start := time.Now()
 	client := tc
 	if resetChannel {
@@ -699,10 +699,10 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 	// per test spec, don't include channel shutdown in latency measurement
 	defer func() { latency = time.Since(start) }()
 	// do a large-unary RPC
-	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, soakRequestSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE,
-		ResponseSize: int32(largeRespSize),
+		ResponseSize: int32(soakResponseSize),
 		Payload:      pl,
 	}
 	var reply *testpb.SimpleResponse
@@ -713,8 +713,8 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 	}
 	t := reply.GetPayload().GetType()
 	s := len(reply.GetPayload().GetBody())
-	if t != testpb.PayloadType_COMPRESSABLE || s != largeRespSize {
-		err = fmt.Errorf("got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
+	if t != testpb.PayloadType_COMPRESSABLE || s != soakResponseSize {
+		err = fmt.Errorf("got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, soakResponseSize)
 		return
 	}
 	return
@@ -723,7 +723,8 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 // DoSoakTest runs large unary RPCs in a loop for a configurable number of times, with configurable failure thresholds.
 // If resetChannel is false, then each RPC will be performed on tc. Otherwise, each RPC will be performed on a new
 // stub that is created with the provided server address and dial options.
-func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.DialOption, resetChannel bool, soakIterations int, maxFailures int, perIterationMaxAcceptableLatency time.Duration, minTimeBetweenRPCs time.Duration, overallDeadline time.Time) {
+// TODO(mohanli-ml): Create SoakTestOptions as a parameter for this method.
+func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.DialOption, resetChannel bool, soakIterations int, maxFailures int, soakRequestSize int, soakResponseSize int, perIterationMaxAcceptableLatency time.Duration, minTimeBetweenRPCs time.Duration, overallDeadline time.Time) {
 	start := time.Now()
 	ctx, cancel := context.WithDeadline(context.Background(), overallDeadline)
 	defer cancel()
@@ -743,7 +744,7 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 		earliestNextStart := time.After(minTimeBetweenRPCs)
 		iterationsDone++
 		var p peer.Peer
-		latency, err := doOneSoakIteration(ctx, tc, resetChannel, serverAddr, dopts, []grpc.CallOption{grpc.Peer(&p)})
+		latency, err := doOneSoakIteration(ctx, tc, resetChannel, serverAddr, soakRequestSize, soakResponseSize, dopts, []grpc.CallOption{grpc.Peer(&p)})
 		latencyMs := int64(latency / time.Millisecond)
 		h.Add(latencyMs)
 		if err != nil {

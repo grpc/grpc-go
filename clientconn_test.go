@@ -1058,9 +1058,8 @@ func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 }
 
 func (s) TestDefaultServiceConfig(t *testing.T) {
-	r := manual.NewBuilderWithScheme("whatever")
-	addr := r.Scheme() + ":///non.existent"
-	js := `{
+	const defaultSC = `
+{
     "methodConfig": [
         {
             "name": [
@@ -1073,10 +1072,40 @@ func (s) TestDefaultServiceConfig(t *testing.T) {
         }
     ]
 }`
-	testInvalidDefaultServiceConfig(t)
-	testDefaultServiceConfigWhenResolverServiceConfigDisabled(t, r, addr, js)
-	testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t, r, addr, js)
-	testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t, r, addr, js)
+	tests := []struct {
+		name  string
+		testF func(t *testing.T, r *manual.Resolver, addr, sc string)
+		sc    string
+	}{
+		{
+			name:  "invalid-service-config",
+			testF: testInvalidDefaultServiceConfig,
+			sc:    "",
+		},
+		{
+			name:  "resolver-service-config-disabled",
+			testF: testDefaultServiceConfigWhenResolverServiceConfigDisabled,
+			sc:    defaultSC,
+		},
+		{
+			name:  "resolver-does-not-return-service-config",
+			testF: testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig,
+			sc:    defaultSC,
+		},
+		{
+			name:  "resolver-returns-invalid-service-config",
+			testF: testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig,
+			sc:    defaultSC,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := manual.NewBuilderWithScheme(test.name)
+			addr := r.Scheme() + ":///non.existent"
+			test.testF(t, r, addr, test.sc)
+		})
+	}
 }
 
 func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
@@ -1091,8 +1120,8 @@ func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
 	return i != 10
 }
 
-func testInvalidDefaultServiceConfig(t *testing.T) {
-	_, err := Dial("fake.com", WithTransportCredentials(insecure.NewCredentials()), WithDefaultServiceConfig(""))
+func testInvalidDefaultServiceConfig(t *testing.T, r *manual.Resolver, addr, sc string) {
+	_, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(sc))
 	if !strings.Contains(err.Error(), invalidDefaultServiceConfigErrPrefix) {
 		t.Fatalf("Dial got err: %v, want err contains: %v", err, invalidDefaultServiceConfigErrPrefix)
 	}
@@ -1143,17 +1172,11 @@ func testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t *testing.T
 }
 
 type stateRecordingBalancer struct {
-	notifier chan<- connectivity.State
 	balancer.Balancer
 }
 
 func (b *stateRecordingBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
-	b.notifier <- s.ConnectivityState
-	b.Balancer.UpdateSubConnState(sc, s)
-}
-
-func (b *stateRecordingBalancer) ResetNotifier(r chan<- connectivity.State) {
-	b.notifier = r
+	panic(fmt.Sprintf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, s))
 }
 
 func (b *stateRecordingBalancer) Close() {
@@ -1179,8 +1202,7 @@ func (b *stateRecordingBalancerBuilder) Build(cc balancer.ClientConn, opts balan
 	b.notifier = stateNotifications
 	b.mu.Unlock()
 	return &stateRecordingBalancer{
-		notifier: stateNotifications,
-		Balancer: balancer.Get("pick_first").Build(cc, opts),
+		Balancer: balancer.Get("pick_first").Build(&stateRecordingCCWrapper{cc, stateNotifications}, opts),
 	}
 }
 
@@ -1190,6 +1212,20 @@ func (b *stateRecordingBalancerBuilder) nextStateNotifier() <-chan connectivity.
 	ret := b.notifier
 	b.notifier = nil
 	return ret
+}
+
+type stateRecordingCCWrapper struct {
+	balancer.ClientConn
+	notifier chan<- connectivity.State
+}
+
+func (ccw *stateRecordingCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	oldListener := opts.StateListener
+	opts.StateListener = func(s balancer.SubConnState) {
+		ccw.notifier <- s.ConnectivityState
+		oldListener(s)
+	}
+	return ccw.ClientConn.NewSubConn(addrs, opts)
 }
 
 // Keep reading until something causes the connection to die (EOF, server
@@ -1219,5 +1255,42 @@ func stayConnected(cc *ClientConn) {
 		if !cc.WaitForStateChange(ctx, state) {
 			return
 		}
+	}
+}
+
+func (s) TestURLAuthorityEscape(t *testing.T) {
+	tests := []struct {
+		name      string
+		authority string
+		want      string
+	}{
+		{
+			name:      "ipv6_authority",
+			authority: "[::1]",
+			want:      "[::1]",
+		},
+		{
+			name:      "with_user_and_host",
+			authority: "userinfo@host:10001",
+			want:      "userinfo@host:10001",
+		},
+		{
+			name:      "with_multiple_slashes",
+			authority: "projects/123/network/abc/service",
+			want:      "projects%2F123%2Fnetwork%2Fabc%2Fservice",
+		},
+		{
+			name:      "all_possible_allowed_chars",
+			authority: "abc123-._~!$&'()*+,;=@:[]",
+			want:      "abc123-._~!$&'()*+,;=@:[]",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got, want := encodeAuthority(test.authority), test.want; got != want {
+				t.Errorf("encodeAuthority(%s) = %s, want %s", test.authority, got, test.want)
+			}
+		})
 	}
 }
