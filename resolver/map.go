@@ -230,9 +230,9 @@ func (em *EndpointMap) Values() []any {
 	return ret
 }
 
-// find returns the pointer to endpoint node in the EndpointMap endpoints map if
-// the endpoint node is already present. If not found, nil is returned. The
-// comparisons are done on the unordered set of addresses within an endpoint.
+// find returns a pointer to the endpoint node in em if the endpoint node is
+// already present. If not found, nil is returned. The comparisons are done on
+// the unordered set of addresses within an endpoint.
 func (em EndpointMap) find(e endpointNode) *endpointNode {
 	for endpoint := range em.endpoints {
 		if e.Equal(endpoint) {
