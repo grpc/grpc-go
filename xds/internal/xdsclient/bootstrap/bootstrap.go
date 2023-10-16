@@ -28,6 +28,8 @@ import (
 	"os"
 	"strings"
 
+	"google.golang.org/grpc/xds/internal/xdsclient/creds"
+
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/jsonpb"
 	"google.golang.org/grpc"
@@ -60,6 +62,7 @@ const (
 func init() {
 	bootstrap.RegisterCredentials(&insecureCredsBuilder{})
 	bootstrap.RegisterCredentials(&googleDefaultCredsBuilder{})
+	bootstrap.RegisterCredentials(&tlsCredsBuilder{})
 }
 
 // For overriding in unit tests.
@@ -75,6 +78,18 @@ func (i *insecureCredsBuilder) Build(json.RawMessage) (credentials.Bundle, error
 
 func (i *insecureCredsBuilder) Name() string {
 	return "insecure"
+}
+
+// tlsCredsBuilder implements the `Credentials` interface defined in
+// package `xds/bootstrap` and encapsulates a TLS credential.
+type tlsCredsBuilder struct{}
+
+func (t *tlsCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, error) {
+	return creds.NewTLS(config)
+}
+
+func (t *tlsCredsBuilder) Name() string {
+	return "tls"
 }
 
 // googleDefaultCredsBuilder implements the `Credentials` interface defined in

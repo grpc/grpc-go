@@ -1015,6 +1015,10 @@ func TestDefaultBundles(t *testing.T) {
 	if c := bootstrap.GetCredentials("insecure"); c == nil {
 		t.Errorf(`bootstrap.GetCredentials("insecure") credential is nil, want non-nil`)
 	}
+
+	if c := bootstrap.GetCredentials("tls"); c == nil {
+		t.Errorf(`bootstrap.GetCredentials("tls") credential is nil, want non-nil`)
+	}
 }
 
 func TestCredsBuilders(t *testing.T) {
@@ -1034,4 +1038,23 @@ func TestCredsBuilders(t *testing.T) {
 	if got, want := i.Name(), "insecure"; got != want {
 		t.Errorf("insecureCredsBuilder.Name = %v, want %v", got, want)
 	}
+
+	tcb := &tlsCredsBuilder{}
+	if _, err := tcb.Build(nil); err == nil {
+		t.Errorf("tlsCredsBuilder.Build succeeded, want failure")
+	}
+	if got, want := tcb.Name(), "tls"; got != want {
+		t.Errorf("tlsCredsBuilder.Name = %v, want %v", got, want)
+	}
+}
+
+func TestTlsCredsBuilder(t *testing.T) {
+	tls := &tlsCredsBuilder{}
+	if _, err := tls.Build(json.RawMessage(`{}`)); err != nil {
+		t.Errorf("unexpected error with empty config: %s", err)
+	}
+	if _, err := tls.Build(json.RawMessage(`{"ca_certificate_file":"/ca_certificates.pem","refresh_interval": "asdf"}`)); err == nil {
+		t.Errorf("expected an error with invalid refresh interval")
+	}
+	// more tests for config validity are defined in creds subpackage.
 }
