@@ -31,12 +31,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	dpb "github.com/golang/protobuf/ptypes/duration"
 	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
@@ -455,7 +455,7 @@ func testHandlerTransportHandleStreams(t *testing.T, handleStream func(st *handl
 func (s) TestHandlerTransport_HandleStreams_ErrDetails(t *testing.T) {
 	errDetails := []proto.Message{
 		&epb.RetryInfo{
-			RetryDelay: &dpb.Duration{Seconds: 60},
+			RetryDelay: &durationpb.Duration{Seconds: 60},
 		},
 		&epb.ResourceInfo{
 			ResourceType: "foo bar",

@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/envconfig"
@@ -35,6 +34,7 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
+	"google.golang.org/protobuf/proto"
 	protov2 "google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"

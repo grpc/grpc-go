@@ -34,7 +34,7 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
-	durationpb "github.com/golang/protobuf/ptypes/duration"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 const (
