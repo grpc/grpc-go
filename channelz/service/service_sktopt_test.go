@@ -36,8 +36,8 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/durationpb"
 
-	durpb "github.com/golang/protobuf/ptypes/duration"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 )
 
@@ -47,7 +47,7 @@ func init() {
 	protoToSocketOpt = protoToSocketOption
 }
 
-func convertToDuration(d *durpb.Duration) (sec int64, usec int64) {
+func durationToSecUsec(d *durationpb.Duration) (sec int64, usec int64) {
 	if d != nil {
 		if dur, err := ptypes.Duration(d); err == nil {
 			sec = int64(int64(dur) / 1e9)
@@ -62,7 +62,7 @@ func protoToLinger(protoLinger *channelzpb.SocketOptionLinger) *unix.Linger {
 	if protoLinger.GetActive() {
 		linger.Onoff = 1
 	}
-	lv, _ := convertToDuration(protoLinger.GetDuration())
+	lv, _ := durationToSecUsec(protoLinger.GetDuration())
 	linger.Linger = int32(lv)
 	return linger
 }
