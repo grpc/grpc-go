@@ -2093,7 +2093,7 @@ func (q *atomicSemaphore) release() {
 	// concurrent calls to acquire, but also note that with synchronous calls to
 	// acquire, as our system does, n will never be less than -1.  There are
 	// fairness issues (queuing) to consider if this was to be generalized.
-	if atomic.AddInt64(&q.n, -1) <= 0 {
+	if atomic.AddInt64(&q.n, 1) <= 0 {
 		// An acquire was waiting on us.  Unblock it.
 		q.wait <- struct{}{}
 	}
