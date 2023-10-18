@@ -28,7 +28,7 @@ import (
 
 func protoToTime(protoTime *channelzpb.SocketOptionTimeout) *unix.Timeval {
 	timeout := &unix.Timeval{}
-	sec, usec := convertToDuration(protoTime.GetDuration())
+	sec, usec := durationToSecUsec(protoTime.GetDuration())
 	timeout.Sec, timeout.Usec = int32(sec), int32(usec)
 	return timeout
 }
