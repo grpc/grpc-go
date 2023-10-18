@@ -46,7 +46,7 @@ func init() {
 	protoToSocketOpt = protoToSocketOption
 }
 
-func convertToDuration(d *durationpb.Duration) (sec int64, usec int64) {
+func durationToSecUsec(d *durationpb.Duration) (sec int64, usec int64) {
 	if d != nil {
 		if dur, err := durationpb.Duration(d); err == nil {
 			sec = int64(int64(dur) / 1e9)
@@ -61,7 +61,7 @@ func protoToLinger(protoLinger *channelzpb.SocketOptionLinger) *unix.Linger {
 	if protoLinger.GetActive() {
 		linger.Onoff = 1
 	}
-	lv, _ := convertToDuration(protoLinger.GetDuration())
+	lv, _ := durationToSecUsec(protoLinger.GetDuration())
 	linger.Linger = int32(lv)
 	return linger
 }
