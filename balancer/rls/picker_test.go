@@ -49,7 +49,7 @@ func (s) TestNoNonEmptyTargetsReturnsError(t *testing.T) {
 	// Setup RLS Server to return a response with an empty target string.
 	rlsServer, rlsReqCh := rlstest.SetupFakeRLSServer(t, nil)
 	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
-		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{""}}}
+		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{}}
 	})
 
 	// Register a manual resolver and push the RLS service config through it.
@@ -67,7 +67,7 @@ func (s) TestNoNonEmptyTargetsReturnsError(t *testing.T) {
 	// target list does not contain any non empty entries.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, errors.New("RLS response's target list does not contain any non-empty entries for key"))
+	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, errors.New("RLS response's target list does not contain any entries for key"))
 
 	// Make sure an RLS request is sent out. Even though the RLS Server will
 	// return no targets, the request should still hit the server.
@@ -161,7 +161,7 @@ func (s) TestPick_DataCacheMiss_NoPendingEntry_NotThrottled(t *testing.T) {
 	// smaller timeout to ensure that the test doesn't run very long.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer cancel()
-	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, errors.New("RLS response's target list does not contain any non-empty entries for key"))
+	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, errors.New("RLS response's target list does not contain any entries for key"))
 
 	// Make sure an RLS request is sent out.
 	verifyRLSRequest(t, rlsReqCh, true)

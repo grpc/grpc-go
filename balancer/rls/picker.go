@@ -254,19 +254,10 @@ func (p *rlsPicker) handleRouteLookupResponse(cacheKey cacheKey, targets []strin
 	now := time.Now()
 
 	// "An RLS request is considered to have failed if it returns a non-OK
-	// status or the RLS response's targets list does not contain any non-empty
-	// entries." - RLS LB Policy design.
-	allTargetsEmpty := true
-	for _, target := range targets {
-		if target != "" {
-			allTargetsEmpty = false
-			break
-		}
-	}
-	if allTargetsEmpty {
-		if err == nil {
-			err = fmt.Errorf("RLS response's target list does not contain any non-empty entries for key %+v", cacheKey)
-		}
+	// status or the RLS response's targets list is non-empty." - RLS LB Policy
+	// design.
+	if len(targets) == 0 && err == nil {
+		err = fmt.Errorf("RLS response's target list does not contain any entries for key %+v", cacheKey)
 		// If err is set, rpc error from the control plane and no control plane
 		// configuration is why no targets were passed into this helper, no need
 		// to specify and tell the user this information.
