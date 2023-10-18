@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,6 +46,7 @@ func (s) TestStaticCRLProvider(t *testing.T) {
 		rawCRLs = append(rawCRLs, rawCRL)
 	}
 	p := NewStaticCRLProvider(rawCRLs)
+
 	// Each test data entry contains a description of a certificate chain,
 	// certificate chain itself, and if CRL is not expected to be found.
 	tests := []struct {
@@ -143,6 +145,9 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 	const nonCRLFilesUnderCRLDirectory = 15
 	nonCRLFilesSet := make(map[string]struct{})
 	customCallback := func(err error) {
+		if strings.Contains(err.Error(), "BUILD") {
+			return
+		}
 		nonCRLFilesSet[err.Error()] = struct{}{}
 	}
 	p, err := NewFileWatcherCRLProvider(FileWatcherOptions{
@@ -153,10 +158,6 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unexpected error while creating FileWatcherCRLProvider:", err)
 	}
-
-	// We need to make sure that initial CRLDirectory scan is completed before
-	// querying the internal map.
-	p.Close()
 
 	// Each test data entry contains a description of a certificate chain,
 	// certificate chain itself, and if CRL is not expected to be found.
@@ -197,6 +198,7 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 			}
 		})
 	}
+	p.Close()
 	if diff := cmp.Diff(len(nonCRLFilesSet), nonCRLFilesUnderCRLDirectory); diff != "" {
 		t.Errorf("Unexpected number Number of callback executions\ndiff (-got +want):\n%s", diff)
 	}
@@ -313,7 +315,7 @@ func copyFiles(sourcePath string, targetPath string, fileNames []string, t *test
 		t.Fatalf("Can't read dir %v: %v", targetPath, err)
 	}
 	for _, name := range names {
-		err = os.RemoveAll(filepath.Join(testdata.Path(targetPath), name))
+		err = os.RemoveAll(filepath.Join(targetPath, name))
 		if err != nil {
 			t.Fatalf("Can't remove file %v: %v", name, err)
 		}

@@ -942,7 +942,7 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 				ServerName:        test.serverName,
 				SupportedCurves:   []tls.CurveID{tls.CurveP256},
 				SupportedPoints:   []uint8{pointFormatUncompressed},
-				SupportedVersions: []uint16{tls.VersionTLS10},
+				SupportedVersions: []uint16{tls.VersionTLS12},
 			}
 			gotCertificate, err := serverConfig.GetCertificate(clientHello)
 			if err != nil {

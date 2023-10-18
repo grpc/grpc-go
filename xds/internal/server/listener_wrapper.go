@@ -78,9 +78,6 @@ type ListenerWrapperParams struct {
 	Listener net.Listener
 	// ListenerResourceName is the xDS Listener resource to request.
 	ListenerResourceName string
-	// XDSCredsInUse specifies whether or not the user expressed interest to
-	// receive security configuration from the control plane.
-	XDSCredsInUse bool
 	// XDSClient provides the functionality from the XDSClient required here.
 	XDSClient XDSClient
 	// ModeCallback is the callback to invoke when the serving mode changes.
@@ -99,7 +96,6 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 	lw := &listenerWrapper{
 		Listener:          params.Listener,
 		name:              params.ListenerResourceName,
-		xdsCredsInUse:     params.XDSCredsInUse,
 		xdsC:              params.XDSClient,
 		modeCallback:      params.ModeCallback,
 		drainCallback:     params.DrainCallback,
@@ -135,7 +131,6 @@ type listenerWrapper struct {
 	logger *internalgrpclog.PrefixLogger
 
 	name          string
-	xdsCredsInUse bool
 	xdsC          XDSClient
 	cancelWatch   func()
 	modeCallback  ServingModeCallback
@@ -254,7 +249,7 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			// error, `grpc.Serve()` method sleeps for a small duration and
 			// therefore ends up blocking all connection attempts during that
 			// time frame, which is also not ideal for an error like this.
-			l.logger.Warningf("Connection from %s to %s failed to find any matching filter chain", conn.RemoteAddr().String(), conn.LocalAddr().String())
+			l.logger.Warningf("Connection from %s to %s failed to find any matching filter chain", conn.RemoteAddr(), conn.LocalAddr())
 			conn.Close()
 			continue
 		}
@@ -425,7 +420,7 @@ func (lw *ldsWatcher) OnError(err error) {
 		return
 	}
 	if lw.logger.V(2) {
-		lw.logger.Infof("LDS watch for resource %q reported error: %#v", lw.name, err)
+		lw.logger.Infof("LDS watch for resource %q reported error: %v", lw.name, err)
 	}
 	// For errors which are anything other than "resource-not-found", we
 	// continue to use the old configuration.
@@ -433,11 +428,11 @@ func (lw *ldsWatcher) OnError(err error) {
 
 func (lw *ldsWatcher) OnResourceDoesNotExist() {
 	if lw.parent.closed.HasFired() {
-		lw.logger.Warningf("Resource %q received resource-not-found-error after listener was closed", lw.name)
+		lw.logger.Warningf("Resource %q received resource-does-not-exist error after listener was closed", lw.name)
 		return
 	}
 	if lw.logger.V(2) {
-		lw.logger.Infof("LDS watch for resource %q reported resource-does-not-exist error: %v", lw.name)
+		lw.logger.Infof("LDS watch for resource %q reported resource-does-not-exist error", lw.name)
 	}
 	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Listener not found in received response", lw.name)
 	lw.parent.switchMode(nil, connectivity.ServingModeNotServing, err)

@@ -60,12 +60,6 @@ func compareDump(ctx context.Context, client xdsclient.XDSClient, want map[strin
 	}
 }
 
-type noopEndpointsWatcher struct{}
-
-func (noopEndpointsWatcher) OnUpdate(update *xdsresource.EndpointsResourceData) {}
-func (noopEndpointsWatcher) OnError(err error)                                  {}
-func (noopEndpointsWatcher) OnResourceDoesNotExist()                            {}
-
 func (s) TestDumpResources(t *testing.T) {
 	// Initialize the xDS resources to be used in this test.
 	ldsTargets := []string{"lds.target.good:0000", "lds.target.good:1111"}
@@ -119,10 +113,10 @@ func (s) TestDumpResources(t *testing.T) {
 
 	// Register watches, dump resources and expect configs in requested state.
 	for _, target := range ldsTargets {
-		client.WatchListener(target, func(xdsresource.ListenerUpdate, error) {})
+		xdsresource.WatchListener(client, target, noopListenerWatcher{})
 	}
 	for _, target := range rdsTargets {
-		client.WatchRouteConfig(target, func(xdsresource.RouteConfigUpdate, error) {})
+		xdsresource.WatchRouteConfig(client, target, noopRouteConfigWatcher{})
 	}
 	for _, target := range cdsTargets {
 		xdsresource.WatchCluster(client, target, noopClusterWatcher{})

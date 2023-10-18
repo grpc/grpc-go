@@ -61,13 +61,13 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/benchmark"
-	bm "google.golang.org/grpc/benchmark"
 	"google.golang.org/grpc/benchmark/flags"
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
@@ -374,15 +374,15 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 			logger.Fatalf("Failed to listen: %v", err)
 		}
 		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, address string) (net.Conn, error) {
-			return nw.ContextDialer((&net.Dialer{}).DialContext)(ctx, "tcp", lis.Addr().String())
+			return nw.ContextDialer((internal.NetDialerWithTCPKeepalive().DialContext))(ctx, "tcp", lis.Addr().String())
 		}))
 	}
 	lis = nw.Listener(lis)
-	stopper := bm.StartServer(bm.ServerInfo{Type: "protobuf", Listener: lis}, sopts...)
+	stopper := benchmark.StartServer(benchmark.ServerInfo{Type: "protobuf", Listener: lis}, sopts...)
 	conns := make([]*grpc.ClientConn, bf.Connections)
 	clients := make([]testgrpc.BenchmarkServiceClient, bf.Connections)
 	for cn := 0; cn < bf.Connections; cn++ {
-		conns[cn] = bm.NewClientConn("" /* target not used */, opts...)
+		conns[cn] = benchmark.NewClientConn("" /* target not used */, opts...)
 		clients[cn] = testgrpc.NewBenchmarkServiceClient(conns[cn])
 	}
 
@@ -430,7 +430,7 @@ func makeFuncStream(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 		if bf.EnablePreloader {
 			req = preparedMsg[cn][pos]
 		} else {
-			pl := bm.NewPayload(testpb.PayloadType_COMPRESSABLE, reqSizeBytes)
+			pl := benchmark.NewPayload(testpb.PayloadType_COMPRESSABLE, reqSizeBytes)
 			req = &testpb.SimpleRequest{
 				ResponseType: pl.Type,
 				ResponseSize: int32(respSizeBytes),
@@ -488,7 +488,7 @@ func setupStream(bf stats.Features, unconstrained bool) ([][]testgrpc.BenchmarkS
 		}
 	}
 
-	pl := bm.NewPayload(testpb.PayloadType_COMPRESSABLE, bf.ReqSizeBytes)
+	pl := benchmark.NewPayload(testpb.PayloadType_COMPRESSABLE, bf.ReqSizeBytes)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
 		ResponseSize: int32(bf.RespSizeBytes),
@@ -515,13 +515,13 @@ func prepareMessages(streams [][]testgrpc.BenchmarkService_StreamingCallClient, 
 // Makes a UnaryCall gRPC request using the given BenchmarkServiceClient and
 // request and response sizes.
 func unaryCaller(client testgrpc.BenchmarkServiceClient, reqSize, respSize int) {
-	if err := bm.DoUnaryCall(client, reqSize, respSize); err != nil {
+	if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
 		logger.Fatalf("DoUnaryCall failed: %v", err)
 	}
 }
 
 func streamCaller(stream testgrpc.BenchmarkService_StreamingCallClient, req any) {
-	if err := bm.DoStreamingRoundTripPreloaded(stream, req); err != nil {
+	if err := benchmark.DoStreamingRoundTripPreloaded(stream, req); err != nil {
 		logger.Fatalf("DoStreamingRoundTrip failed: %v", err)
 	}
 }

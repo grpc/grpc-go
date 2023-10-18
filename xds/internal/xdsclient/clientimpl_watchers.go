@@ -25,62 +25,6 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
-// This is only required temporarily, while we modify the
-// clientImpl.WatchListener API to be implemented via the wrapper
-// WatchListener() API which calls the WatchResource() API.
-type listenerWatcher struct {
-	resourceName string
-	cb           func(xdsresource.ListenerUpdate, error)
-}
-
-func (l *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData) {
-	l.cb(update.Resource, nil)
-}
-
-func (l *listenerWatcher) OnError(err error) {
-	l.cb(xdsresource.ListenerUpdate{}, err)
-}
-
-func (l *listenerWatcher) OnResourceDoesNotExist() {
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Listener not found in received response", l.resourceName)
-	l.cb(xdsresource.ListenerUpdate{}, err)
-}
-
-// WatchListener uses LDS to discover information about the Listener resource
-// identified by resourceName.
-func (c *clientImpl) WatchListener(resourceName string, cb func(xdsresource.ListenerUpdate, error)) (cancel func()) {
-	watcher := &listenerWatcher{resourceName: resourceName, cb: cb}
-	return xdsresource.WatchListener(c, resourceName, watcher)
-}
-
-// This is only required temporarily, while we modify the
-// clientImpl.WatchRouteConfig API to be implemented via the wrapper
-// WatchRouteConfig() API which calls the WatchResource() API.
-type routeConfigWatcher struct {
-	resourceName string
-	cb           func(xdsresource.RouteConfigUpdate, error)
-}
-
-func (r *routeConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData) {
-	r.cb(update.Resource, nil)
-}
-
-func (r *routeConfigWatcher) OnError(err error) {
-	r.cb(xdsresource.RouteConfigUpdate{}, err)
-}
-
-func (r *routeConfigWatcher) OnResourceDoesNotExist() {
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type RouteConfiguration not found in received response", r.resourceName)
-	r.cb(xdsresource.RouteConfigUpdate{}, err)
-}
-
-// WatchRouteConfig uses RDS to discover information about the
-// RouteConfiguration resource identified by resourceName.
-func (c *clientImpl) WatchRouteConfig(resourceName string, cb func(xdsresource.RouteConfigUpdate, error)) (cancel func()) {
-	watcher := &routeConfigWatcher{resourceName: resourceName, cb: cb}
-	return xdsresource.WatchRouteConfig(c, resourceName, watcher)
-}
-
 // WatchResource uses xDS to discover the resource associated with the provided
 // resource name. The resource type implementation determines how xDS requests
 // are sent out and how responses are deserialized and validated. Upon receipt

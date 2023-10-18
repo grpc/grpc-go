@@ -505,7 +505,6 @@ type test struct {
 	clientNopCompression        bool
 	unaryClientInt              grpc.UnaryClientInterceptor
 	streamClientInt             grpc.StreamClientInterceptor
-	sc                          <-chan grpc.ServiceConfig
 	clientInitialWindowSize     int32
 	clientInitialConnWindowSize int32
 	perRPCCreds                 credentials.PerRPCCredentials
@@ -735,8 +734,8 @@ type nopCompressor struct {
 	grpc.Compressor
 }
 
-// NewNopCompressor creates a compressor to test the case that type is not supported.
-func NewNopCompressor() grpc.Compressor {
+// newNopCompressor creates a compressor to test the case that type is not supported.
+func newNopCompressor() grpc.Compressor {
 	return &nopCompressor{grpc.NewGZIPCompressor()}
 }
 
@@ -748,8 +747,8 @@ type nopDecompressor struct {
 	grpc.Decompressor
 }
 
-// NewNopDecompressor creates a decompressor to test the case that type is not supported.
-func NewNopDecompressor() grpc.Decompressor {
+// newNopDecompressor creates a decompressor to test the case that type is not supported.
+func newNopDecompressor() grpc.Decompressor {
 	return &nopDecompressor{grpc.NewGZIPDecompressor()}
 }
 
@@ -759,10 +758,6 @@ func (d *nopDecompressor) Type() string {
 
 func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) {
 	opts = append(opts, grpc.WithDialer(te.e.dialer), grpc.WithUserAgent(te.userAgent))
-
-	if te.sc != nil {
-		opts = append(opts, grpc.WithServiceConfig(te.sc))
-	}
 
 	if te.clientCompression {
 		opts = append(opts,
@@ -775,8 +770,8 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	}
 	if te.clientNopCompression {
 		opts = append(opts,
-			grpc.WithCompressor(NewNopCompressor()),
-			grpc.WithDecompressor(NewNopDecompressor()),
+			grpc.WithCompressor(newNopCompressor()),
+			grpc.WithDecompressor(newNopDecompressor()),
 		)
 	}
 	if te.unaryClientInt != nil {
@@ -1103,18 +1098,8 @@ func testServiceConfigSetup(t *testing.T, e env) *test {
 	return te
 }
 
-func newBool(b bool) (a *bool) {
-	return &b
-}
-
 func newInt(b int) (a *int) {
 	return &b
-}
-
-func newDuration(b time.Duration) (a *time.Duration) {
-	a = new(time.Duration)
-	*a = b
-	return
 }
 
 func (s) TestGetMethodConfig(t *testing.T) {

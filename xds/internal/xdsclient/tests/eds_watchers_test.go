@@ -52,6 +52,12 @@ const (
 	edsPort3 = 3
 )
 
+type noopEndpointsWatcher struct{}
+
+func (noopEndpointsWatcher) OnUpdate(update *xdsresource.EndpointsResourceData) {}
+func (noopEndpointsWatcher) OnError(err error)                                  {}
+func (noopEndpointsWatcher) OnResourceDoesNotExist()                            {}
+
 type endpointsUpdateErrTuple struct {
 	update xdsresource.EndpointsUpdate
 	err    error

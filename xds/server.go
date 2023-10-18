@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/buffer"
@@ -54,7 +53,6 @@ var (
 		return grpc.NewServer(opts...)
 	}
 
-	grpcGetServerCreds    = internal.GetServerCredentials.(func(*grpc.Server) credentials.TransportCredentials)
 	drainServerTransports = internal.DrainServerTransports.(func(*grpc.Server, string))
 	logger                = grpclog.Component("xds")
 )
@@ -77,7 +75,6 @@ type GRPCServer struct {
 	gs             grpcServer
 	quit           *grpcsync.Event
 	logger         *internalgrpclog.PrefixLogger
-	xdsCredsInUse  bool
 	opts           *serverOptions
 	xdsC           xdsclient.XDSClient
 	xdsClientClose func()
@@ -97,18 +94,6 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 		quit: grpcsync.NewEvent(),
 	}
 	s.handleServerOptions(opts)
-
-	// We type assert our underlying gRPC server to the real grpc.Server here
-	// before trying to retrieve the configured credentials. This approach
-	// avoids performing the same type assertion in the grpc package which
-	// provides the implementation for internal.GetServerCredentials, and allows
-	// us to use a fake gRPC server in tests.
-	if gs, ok := s.gs.(*grpc.Server); ok {
-		creds := grpcGetServerCreds(gs)
-		if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
-			s.xdsCredsInUse = true
-		}
-	}
 
 	// Initializing the xDS client upfront (instead of at serving time)
 	// simplifies the code by eliminating the need for a mutex to protect the
@@ -134,22 +119,11 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 		return nil, errors.New("missing server_listener_resource_name_template in the bootstrap configuration")
 	}
 
-	// If xds credentials were specified by the user, but bootstrap configs do
-	// not contain any certificate provider configuration, it is better to fail
-	// right now rather than failing when attempting to create certificate
-	// providers after receiving an LDS response with security configuration.
-	if s.xdsCredsInUse {
-		if len(cfg.CertProviderConfigs) == 0 {
-			xdsClientClose()
-			return nil, fmt.Errorf("xds credentials are passed to the user, but certificate_providers config is missing in the bootstrap configuration")
-		}
-	}
 	s.xdsC = xdsClient
 	s.xdsClientClose = xdsClientClose
 
 	s.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(serverPrefix, s))
 	s.logger.Infof("Created xds.GRPCServer")
-	s.logger.Infof("xDS credentials in use: %v", s.xdsCredsInUse)
 
 	return s, nil
 }
@@ -235,7 +209,6 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 	lw, goodUpdateCh := server.NewListenerWrapper(server.ListenerWrapperParams{
 		Listener:             lis,
 		ListenerResourceName: name,
-		XDSCredsInUse:        s.xdsCredsInUse,
 		XDSClient:            s.xdsC,
 		ModeCallback: func(addr net.Addr, mode connectivity.ServingMode, err error) {
 			modeUpdateCh.Put(&modeChangeArgs{

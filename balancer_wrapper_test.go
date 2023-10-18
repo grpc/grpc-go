@@ -55,7 +55,7 @@ func (s) TestBalancer_StateListenerBeforeConnect(t *testing.T) {
 							t.Error("Unexpected call to StateListener with:", scs)
 						},
 					})
-					if err != nil && !strings.Contains(err.Error(), "connection is closing") && !strings.Contains(err.Error(), "is deleted") && !strings.Contains(err.Error(), "is closed or idle") {
+					if err != nil && !strings.Contains(err.Error(), "connection is closing") && !strings.Contains(err.Error(), "is deleted") && !strings.Contains(err.Error(), "is closed or idle") && !strings.Contains(err.Error(), "balancer is being closed") {
 						t.Error("Unexpected error creating subconn:", err)
 					}
 					wg.Done()
