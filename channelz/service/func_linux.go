@@ -28,7 +28,7 @@ import (
 )
 
 func convertToDuration(sec int64, usec int64) *durationpb.Duration {
-	return durationpb.new(time.Duration(sec*1e9 + usec*1e3))
+	return durationpb.New(time.Duration(sec*1e9 + usec*1e3))
 }
 
 func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {
