@@ -814,10 +814,14 @@ func (l *listenSocket) Close() error {
 // this method returns.
 // Serve will return a non-nil error unless Stop or GracefulStop is called.
 //
-// Note: Go overrides OS defaults for TCP keepalive time and interval to 15s.
+// Note: As of Go 1.13, the standard library overrides the OS defaults for
+// TCP keepalive time and interval to 15s.
 // To retain OS defaults, pass a net.Listener created by calling the Listen method
-// on a net.ListenConfig with the `KeepAlive` field set to a negative value. See
-// helloworld/greeter_server/main.go for an example.
+// on a net.ListenConfig with the `KeepAlive` field set to a negative value.
+//
+// For more information, please see [issue 23459] in the Go github repo
+//
+// [issue 23459]: https://github.com/golang/go/issues/23459
 func (s *Server) Serve(lis net.Listener) error {
 	s.mu.Lock()
 	s.printf("serving")
