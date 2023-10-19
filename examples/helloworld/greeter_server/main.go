@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"time"
 
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
@@ -48,9 +47,7 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 
 func main() {
 	flag.Parse()
-	// Setting KeepAlive to -1 allows the listener to retain OS default TCP keepalive time and interval.
-	lc := net.ListenConfig{KeepAlive: time.Duration(-1)}
-	lis, err := lc.Listen(context.Background(), "tcp", fmt.Sprintf(":%d", *port))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
