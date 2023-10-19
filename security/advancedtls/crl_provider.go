@@ -39,7 +39,8 @@ const defaultCRLRefreshDuration = 1 * time.Hour
 // establishment, so implementations of the CRL function need to be fast, and
 // slow things such as file IO should be done asynchronously.
 // TODO(erm-g): Add link to related gRFC once it's ready.
-// Please refer to https://github.com/grpc/proposal/ for more details.
+//
+// [A69: CRL Enhancements]: https://github.com/grpc/proposal/pull/382
 type CRLProvider interface {
 	// CRL accepts x509 Cert and returns back related CRL struct. The CRL struct
 	// can be nil, can contain empty or non-empty list of revkoed certificates.
@@ -170,7 +171,8 @@ func (p *FileWatcherCRLProvider) Close() {
 // updating in-memory storage of CRL structs. Please note that the same method is
 // called periodically by run goroutine.
 // TODO(erm-g): Add link to related gRFC once it's ready.
-// Please refer to https://github.com/grpc/proposal/ for edge case details.
+//
+// [A69: CRL Enhancements]: https://github.com/grpc/proposal/pull/382
 func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 	dir, err := os.Open(p.opts.CRLDirectory)
 	if err != nil {
