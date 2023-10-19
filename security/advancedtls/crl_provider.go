@@ -43,20 +43,19 @@ const defaultCRLRefreshDuration = 1 * time.Hour
 // [A69: CRL Enhancements]: https://github.com/grpc/proposal/pull/382
 type CRLProvider interface {
 	// CRL accepts x509 Cert and returns back related CRL struct. The CRL struct
-	// can be nil, can contain empty or non-empty list of revkoed certificates.
-	// Callers are expected to use the returned value as read-only.
+	// can be nil, can contain empty or non-empty list of revoked certificates.
 	CRL(cert *x509.Certificate) (*CRL, error)
 }
 
 // StaticCRLProvider implements CRLProvider interface by accepting raw content
-// of CRL files at creation time and storing parsed CRL structs  in-memory.
+// of CRL files at creation time and storing parsed CRL structs in-memory.
 type StaticCRLProvider struct {
 	crls map[string]*CRL
 }
 
-// MakeStaticCRLProvider processes raw content of CRL files, adds parsed CRL
+// NewStaticCRLProvider processes raw content of CRL files, adds parsed CRL
 // structs into in-memory, and returns a new instance of the StaticCRLProvider.
-func MakeStaticCRLProvider(rawCRLs [][]byte) *StaticCRLProvider {
+func NewStaticCRLProvider(rawCRLs [][]byte) *StaticCRLProvider {
 	p := StaticCRLProvider{}
 	p.crls = make(map[string]*CRL)
 	for idx, rawCRL := range rawCRLs {
@@ -81,64 +80,57 @@ func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
 	return p.crls[cert.Issuer.ToRDNSequence().String()], nil
 }
 
-// Options represents a data structure holding a
-// configuration for FileWatcherCRLProvider.
-type Options struct {
+// FileWatcherOptions represents a data structure holding a configuration for
+// FileWatcherCRLProvider.
+type FileWatcherOptions struct {
 	CRLDirectory               string          // Path of the directory containing CRL files
 	RefreshDuration            time.Duration   // Time interval between CRLDirectory scans
 	crlReloadingFailedCallback func(err error) // Custom callback executed when a CRL file can’t be processed
 }
 
-// FileWatcherCRLProvider implements the CRLProvider interface by periodically scanning
-// CRLDirectory (see Options) and storing CRL structs in-memory
+// FileWatcherCRLProvider implements the CRLProvider interface by periodically
+// scanning CRLDirectory (see FileWatcherOptions) and storing CRL structs
+// in-memory. Users should call Close to stop the background refresh of
+// CRLDirectory.
 type FileWatcherCRLProvider struct {
-	crls map[string]*CRL
-	opts Options
-	mu   sync.Mutex
-	done chan struct{}
+	crls      map[string]*CRL
+	opts      FileWatcherOptions
+	mu        sync.Mutex
+	scanMutex sync.Mutex
+	stop      chan struct{}
+	done      chan struct{}
 }
 
-// MakeFileWatcherCRLProvider returns a new instance of the
-// FileWatcherCRLProvider. It uses Options to validate and apply configuration
-// required for creating a new instance.
-func MakeFileWatcherCRLProvider(o Options) (*FileWatcherCRLProvider, error) {
+// NewFileWatcherCRLProvider returns a new instance of the
+// FileWatcherCRLProvider. It uses FileWatcherOptions to validate and apply
+// configuration required for creating a new instance. Users should call Close
+// to stop the background refresh of CRLDirectory.
+func NewFileWatcherCRLProvider(o FileWatcherOptions) (*FileWatcherCRLProvider, error) {
 	if err := o.validate(); err != nil {
 		return nil, err
 	}
 	done := make(chan struct{})
+	stop := make(chan struct{})
 	provider := &FileWatcherCRLProvider{
 		crls: make(map[string]*CRL),
 		opts: o,
+		stop: stop,
 		done: done,
 	}
 	go provider.run()
 	return provider, nil
 }
 
-func (o *Options) validate() error {
+func (o *FileWatcherOptions) validate() error {
 	// Checks relates to CRLDirectory.
 	if o.CRLDirectory == "" {
 		return fmt.Errorf("advancedtls: CRLDirectory needs to be specified")
 	}
-	fileInfo, err := os.Stat(o.CRLDirectory)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("advancedtls: CRLDirectory %v does not exist", o.CRLDirectory)
-		}
-		return err
-	}
-	if !fileInfo.IsDir() {
-		return fmt.Errorf("advancedtls: CRLDirectory %v is not a directory", o.CRLDirectory)
-	}
-	_, err = os.Open(o.CRLDirectory)
-	if err != nil {
-		if os.IsPermission(err) {
-			return fmt.Errorf("advancedtls: CRLDirectory %v is not readable", o.CRLDirectory)
-		}
-		return err
+	if _, err := os.ReadDir(o.CRLDirectory); err != nil {
+		return fmt.Errorf("advancedtls: CRLDirectory %v is not readable: %v", o.CRLDirectory, err)
 	}
 	// Checks related to RefreshDuration.
-	if o.RefreshDuration <= 0 || o.RefreshDuration < time.Second {
+	if o.RefreshDuration < time.Second {
 		o.RefreshDuration = defaultCRLRefreshDuration
 		grpclogLogger.Warningf("RefreshDuration must larger then 1 second: provided value %v, default value will be used %v", o.RefreshDuration, defaultCRLRefreshDuration)
 	}
@@ -147,13 +139,14 @@ func (o *Options) validate() error {
 
 // Start starts watching the directory for CRL files and updates the provider accordingly.
 func (p *FileWatcherCRLProvider) run() {
+	defer close(p.done)
 	ticker := time.NewTicker(p.opts.RefreshDuration)
 	defer ticker.Stop()
 	p.ScanCRLDirectory()
 
 	for {
 		select {
-		case <-p.done:
+		case <-p.stop:
 			ticker.Stop()
 			return
 		case <-ticker.C:
@@ -162,18 +155,22 @@ func (p *FileWatcherCRLProvider) run() {
 	}
 }
 
-// Close stops the background refresh of CRLDirectory of FileWatcherCRLProvider
+// Close stops the background refresh of CRLDirectory of FileWatcherCRLProvider.
 func (p *FileWatcherCRLProvider) Close() {
-	close(p.done)
+	close(p.stop)
+	<-p.done
 }
 
-// ScanCRLDirectory starts the process of scanning Options.CRLDirectory and
-// updating in-memory storage of CRL structs. Please note that the same method is
-// called periodically by run goroutine.
+// ScanCRLDirectory starts the process of scanning
+// FileWatcherOptions.CRLDirectory and updating in-memory storage of CRL
+// structs. Please note that the same method is called periodically by run
+// goroutine.
 // TODO(erm-g): Add link to related gRFC once it's ready.
 //
 // [A69: CRL Enhancements]: https://github.com/grpc/proposal/pull/382
 func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
+	p.scanMutex.Lock()
+	defer p.scanMutex.Unlock()
 	dir, err := os.Open(p.opts.CRLDirectory)
 	if err != nil {
 		grpclogLogger.Errorf("Can't open CRLDirectory %v", p.opts.CRLDirectory, err)

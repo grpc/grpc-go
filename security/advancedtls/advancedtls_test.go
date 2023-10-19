@@ -386,7 +386,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		if err != nil {
 			t.Fatalf("readFile(%v) failed err = %v", crlPath, err)
 		}
-		cRLProvider := MakeStaticCRLProvider([][]byte{rawCRL})
+		cRLProvider := NewStaticCRLProvider([][]byte{rawCRL})
 		return &RevocationConfig{
 			AllowUndetermined: true,
 			CRLProvider:       cRLProvider,

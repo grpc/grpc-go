@@ -517,7 +517,7 @@ func TestRevokedCert(t *testing.T) {
 		}
 		rawCRLs = append(rawCRLs, rawCRL)
 	}
-	cRLProvider := MakeStaticCRLProvider(rawCRLs)
+	cRLProvider := NewStaticCRLProvider(rawCRLs)
 	if err != nil {
 		t.Fatalf("lru.New: err = %v", err)
 	}

@@ -31,8 +31,6 @@ import (
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
-const nonCRLFilesUnderCRLDirectory = 5
-
 // TestStaticCRLProvider tests how StaticCRLProvider handles the major four
 // cases for CRL checks. It loads the CRLs under crl directory, constructs
 // unrevoked, revoked leaf, and revoked intermediate chains, as well as a chain
@@ -46,7 +44,7 @@ func (s) TestStaticCRLProvider(t *testing.T) {
 		}
 		rawCRLs = append(rawCRLs, rawCRL)
 	}
-	p := MakeStaticCRLProvider(rawCRLs)
+	p := NewStaticCRLProvider(rawCRLs)
 	// Each test data entry contains a description of a certificate chain,
 	// certificate chain itself, and if CRL is not expected to be found.
 	tests := []struct {
@@ -89,30 +87,30 @@ func (s) TestStaticCRLProvider(t *testing.T) {
 }
 
 // TestFileWatcherCRLProviderConfig checks creation of FileWatcherCRLProvider,
-// and the validation of Options configuration. The configurations include empty
+// and the validation of FileWatcherOptions configuration. The configurations include empty
 // one, non existing CRLDirectory, invalid RefreshDuration, and the correct one.
 func (s) TestFileWatcherCRLProviderConfig(t *testing.T) {
-	if _, err := MakeFileWatcherCRLProvider(Options{}); err == nil {
-		t.Fatalf("Empty Options should not be allowed")
+	if _, err := NewFileWatcherCRLProvider(FileWatcherOptions{}); err == nil {
+		t.Fatalf("Empty FileWatcherOptions should not be allowed")
 	}
-	if _, err := MakeFileWatcherCRLProvider(Options{CRLDirectory: "I_do_not_exist"}); err == nil {
+	if _, err := NewFileWatcherCRLProvider(FileWatcherOptions{CRLDirectory: "I_do_not_exist"}); err == nil {
 		t.Fatalf("CRLDirectory must exist")
 	}
-	if defaultProvider, err := MakeFileWatcherCRLProvider(Options{CRLDirectory: testdata.Path("crl/provider")}); err == nil {
-		if defaultProvider.opts.RefreshDuration != defaultCRLRefreshDuration {
-			t.Fatalf("RefreshDuration is not properly updated by validate() func")
-		}
-		defaultProvider.Close()
-	} else {
+	defaultProvider, err := NewFileWatcherCRLProvider(FileWatcherOptions{CRLDirectory: testdata.Path("crl/provider")})
+	if err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
+	if defaultProvider.opts.RefreshDuration != defaultCRLRefreshDuration {
+		t.Fatalf("RefreshDuration is not properly updated by validate() func")
+	}
+	defaultProvider.Close()
 
 	customCallback := func(err error) {
 		fmt.Printf("Custom error message: %v", err)
 	}
-	regularProvider, err := MakeFileWatcherCRLProvider(Options{
+	regularProvider, err := NewFileWatcherCRLProvider(FileWatcherOptions{
 		CRLDirectory:               testdata.Path("crl"),
-		RefreshDuration:            5 * time.Second,
+		RefreshDuration:            1 * time.Hour,
 		crlReloadingFailedCallback: customCallback,
 	})
 	if err != nil {
@@ -128,13 +126,14 @@ func (s) TestFileWatcherCRLProviderConfig(t *testing.T) {
 // that it’s correctly processed. Additionally, we also check if number of
 // invocations of custom callback is correct.
 func (s) TestFileWatcherCRLProvider(t *testing.T) {
+	const nonCRLFilesUnderCRLDirectory = 5
 	nonCRLFilesSet := make(map[string]struct{})
 	customCallback := func(err error) {
 		nonCRLFilesSet[err.Error()] = struct{}{}
 	}
-	p, err := MakeFileWatcherCRLProvider(Options{
+	p, err := NewFileWatcherCRLProvider(FileWatcherOptions{
 		CRLDirectory:               testdata.Path("crl"),
-		RefreshDuration:            5 * time.Second,
+		RefreshDuration:            1 * time.Hour,
 		crlReloadingFailedCallback: customCallback,
 	})
 	if err != nil {
@@ -188,15 +187,15 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 }
 
 // TestFileWatcherCRLProviderDirectoryScan tests how FileWatcherCRLProvider
-// handles different contents of Options.CRLDirectory.
+// handles different contents of FileWatcherOptions.CRLDirectory.
 // We update the content with various (correct and incorrect) CRL files and
 // check if in-memory storage was properly updated. Please note that the same
 // instance of FileWatcherCRLProvider is used for the whole test so test cases
-// cases are not independent from each other.
+// are not independent from each other.
 func (s) TestFileWatcherCRLProviderDirectoryScan(t *testing.T) {
 	sourcePath := testdata.Path("crl")
 	targetPath := testdata.Path("crl/provider/filewatcher")
-	p, err := MakeFileWatcherCRLProvider(Options{
+	p, err := NewFileWatcherCRLProvider(FileWatcherOptions{
 		CRLDirectory:    targetPath,
 		RefreshDuration: 1 * time.Hour,
 	})
