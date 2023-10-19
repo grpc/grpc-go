@@ -193,9 +193,7 @@ func FromIncomingContext(ctx context.Context) (MD, bool) {
 	}
 	out := make(MD, len(md))
 	for k, v := range md {
-		// We need to manually convert all keys to lower case, because MD is a
-		// map, and there's no guarantee that the MD attached to the context is
-		// created using our helper functions.
+		// Convert keys to lower case: MD can be modified after NewIncomingContext().
 		key := strings.ToLower(k)
 		out[key] = copyOf(v)
 	}
@@ -219,17 +217,14 @@ func ValueFromIncomingContext(ctx context.Context, key string) []string {
 		return copyOf(v)
 	}
 	for k, v := range md {
-		// We need to manually convert all keys to lower case, because MD is a
-		// map, and there's no guarantee that the MD attached to the context is
-		// created using our helper functions.
-		if strings.ToLower(k) == key {
+		// Case-insensitive compare: MD can be modified after NewIncomingContext().
+		if strings.EqualFold(k, key) {
 			return copyOf(v)
 		}
 	}
 	return nil
 }
 
-// the returned slice must not be modified in place
 func copyOf(v []string) []string {
 	vals := make([]string, len(v))
 	copy(vals, v)
