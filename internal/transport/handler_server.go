@@ -165,13 +165,14 @@ func (ht *serverHandlerTransport) Close(err error) {
 	})
 }
 
-func (ht *serverHandlerTransport) RemoteAddr() net.Addr { return strAddr(ht.req.RemoteAddr) }
-
-func (ht *serverHandlerTransport) LocalAddr() net.Addr { return nil } // Server Handler transport has no access to local addr (was simply not calling sh with local addr).
-
 func (ht *serverHandlerTransport) Peer() *peer.Peer {
+	var localAddr net.Addr
+	if la := ht.req.Context().Value(http.LocalAddrContextKey); la != nil {
+		localAddr = la.(net.Addr)
+	}
 	return &peer.Peer{
-		Addr: ht.RemoteAddr(),
+		Addr:      strAddr(ht.req.RemoteAddr),
+		LocalAddr: localAddr,
 	}
 }
 
@@ -357,7 +358,6 @@ func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
 
 func (ht *serverHandlerTransport) HandleStreams(_ context.Context, startStream func(*Stream)) {
 	// With this transport type there will be exactly 1 stream: this HTTP request.
-
 	ctx := ht.req.Context()
 	var cancel context.CancelFunc
 	if ht.timeoutSet {
@@ -388,11 +388,9 @@ func (ht *serverHandlerTransport) HandleStreams(_ context.Context, startStream f
 		method:           req.URL.Path,
 		recvCompress:     req.Header.Get("grpc-encoding"),
 		contentSubtype:   ht.contentSubtype,
-		headerWireLength: 0, // doesn't know header wire length, will call into stats handler as 0.
+		headerWireLength: 0, // won't have access to header wire length until golang/go#18997.
 	}
-	pr := &peer.Peer{
-		Addr: ht.RemoteAddr(),
-	}
+	pr := ht.Peer()
 	if req.TLS != nil {
 		pr.AuthInfo = credentials.TLSInfo{State: *req.TLS, CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}
 	}

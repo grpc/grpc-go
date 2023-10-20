@@ -5833,7 +5833,7 @@ func (s) TestClientSettingsFloodCloseConn(t *testing.T) {
 }
 
 func unaryInterceptorVerifyConn(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	conn := grpc.GetConnection(ctx)
+	conn := internal.GetConnection.(func(context.Context) net.Conn)(ctx)
 	if conn == nil {
 		return nil, status.Error(codes.NotFound, "connection was not in context")
 	}
@@ -5858,7 +5858,7 @@ func (s) TestUnaryServerInterceptorGetsConnection(t *testing.T) {
 }
 
 func streamingInterceptorVerifyConn(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	conn := grpc.GetConnection(ss.Context())
+	conn := internal.GetConnection.(func(context.Context) net.Conn)(ss.Context())
 	if conn == nil {
 		return status.Error(codes.NotFound, "connection was not in context")
 	}

@@ -1284,14 +1284,6 @@ func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, eo
 	})
 }
 
-func (t *http2Server) LocalAddr() net.Addr {
-	return t.localAddr
-}
-
-func (t *http2Server) RemoteAddr() net.Addr {
-	return t.remoteAddr
-}
-
 func (t *http2Server) Drain(debugData string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -1413,8 +1405,9 @@ func (t *http2Server) getOutFlowWindow() int64 {
 // Peer returns the peer of the transport.
 func (t *http2Server) Peer() *peer.Peer {
 	return &peer.Peer{
-		Addr:     t.remoteAddr,
-		AuthInfo: t.authInfo, // Can be nil
+		Addr:      t.remoteAddr,
+		LocalAddr: t.localAddr,
+		AuthInfo:  t.authInfo, // Can be nil
 	}
 }
 

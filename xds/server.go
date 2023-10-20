@@ -340,7 +340,7 @@ func (s *GRPCServer) GracefulStop() {
 // table and also processes the RPC by running the incoming RPC through any HTTP
 // Filters configured.
 func routeAndProcess(ctx context.Context) error {
-	conn := grpc.GetConnection(ctx)
+	conn := internal.GetConnection.(func(context.Context) net.Conn)(ctx)
 	cw, ok := conn.(interface {
 		VirtualHosts() []xdsresource.VirtualHostWithInterceptors
 	})

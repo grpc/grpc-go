@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -41,7 +42,7 @@ import (
 
 var logger = grpclog.Component("rbac")
 
-var getConnection = grpc.GetConnection
+var getConnection = internal.GetConnection.(func(ctx context.Context) net.Conn)
 
 // ChainEngine represents a chain of RBAC Engines, used to make authorization
 // decisions on incoming RPCs.

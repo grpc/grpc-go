@@ -81,6 +81,7 @@ func init() {
 	}
 	internal.BinaryLogger = binaryLogger
 	internal.JoinServerOptions = newJoinServerOption
+	internal.GetConnection = getConnection
 }
 
 var statusOK = status.New(codes.OK, "")
@@ -973,8 +974,8 @@ func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 
 type connectionKey struct{}
 
-// GetConnection gets the connection from the context.
-func GetConnection(ctx context.Context) net.Conn {
+// getConnection gets the connection from the context.
+func getConnection(ctx context.Context) net.Conn {
 	conn, _ := ctx.Value(connectionKey{}).(net.Conn)
 	return conn
 }
@@ -991,8 +992,8 @@ func (s *Server) serveStreams(st transport.ServerTransport, rawConn net.Conn) {
 	ctx = peer.NewContext(ctx, st.Peer())
 	for _, sh := range s.opts.statsHandlers {
 		ctx = sh.TagConn(ctx, &stats.ConnTagInfo{
-			RemoteAddr: st.RemoteAddr(),
-			LocalAddr:  st.LocalAddr(),
+			RemoteAddr: st.Peer().Addr,
+			LocalAddr:  st.Peer().LocalAddr,
 		})
 		sh.HandleConn(ctx, &stats.ConnBegin{})
 	}
@@ -1727,7 +1728,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 			tr: tr,
 			firstLine: firstLine{
 				client:     false,
-				remoteAddr: t.RemoteAddr(),
+				remoteAddr: t.Peer().Addr,
 			},
 		}
 		if dl, ok := ctx.Deadline(); ok {
@@ -1766,8 +1767,8 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: stream.Method()})
 		sh.HandleRPC(ctx, &stats.InHeader{
 			FullMethod:  stream.Method(),
-			RemoteAddr:  t.RemoteAddr(),
-			LocalAddr:   t.LocalAddr(),
+			RemoteAddr:  t.Peer().Addr,
+			LocalAddr:   t.Peer().LocalAddr,
 			Compression: stream.RecvCompress(),
 			WireLength:  stream.HeaderWireLength(),
 			Header:      md,

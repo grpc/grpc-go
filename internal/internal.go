@@ -62,6 +62,8 @@ var (
 	// gRPC server. An xDS-enabled server needs to know what type of credentials
 	// is configured on the underlying gRPC server. This is set by server.go.
 	GetServerCredentials any // func (*grpc.Server) credentials.TransportCredentials
+	// GetConnection gets the connection from the context.
+	GetConnection any // func (context.Context) net.Conn
 	// CanonicalString returns the canonical string of the code defined here:
 	// https://github.com/grpc/grpc/blob/master/doc/statuscodes.md.
 	//

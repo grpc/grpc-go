@@ -731,12 +731,6 @@ type ServerTransport interface {
 	// handlers will be terminated asynchronously.
 	Close(err error)
 
-	// LocalAddr returns the local network address.
-	LocalAddr() net.Addr
-
-	// RemoteAddr returns the remote network address.
-	RemoteAddr() net.Addr
-
 	// Peer returns the peer of the server transport.
 	Peer() *peer.Peer
 
