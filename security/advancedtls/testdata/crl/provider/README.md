@@ -1,10 +1,12 @@
 About This Directory
 -------------
-The directory test data (certificates and CRLs) used for testing CRL providers 
-functionality.
+The directory contains test data (certificates and CRLs) used for testing CRL 
+providers functionality.
 
 How to Generate Test Data Using OpenSSL
 -------------
+
+To generate test data please follow the steps below or run create.sh script.
 
 We need to generate the following artifacts for testing CRL provider:
 * server self signed CA cert
@@ -45,7 +47,7 @@ For CRL generation we need 2 more files called `index.txt` and `crlnumber.txt`:
 $ echo "1000" > crlnumber.txt
 $ touch index.txt
 ```
-Also we need anothe config `crl.cnf` - 
+Also we need another config `crl.cnf` - 
 ```
 [ ca ]
 default_ca = my_ca

@@ -13,4 +13,3 @@ crl_extensions = crl_ext
 [crl_ext]
 # Authority Key Identifier extension
 authorityKeyIdentifier=keyid:always,issuer:always
-

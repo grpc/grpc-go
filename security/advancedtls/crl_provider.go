@@ -35,10 +35,9 @@ const defaultCRLRefreshDuration = 1 * time.Hour
 // but doesn't prescribe a specific way to load and store CRLs. Such
 // implementations can be used in RevocationConfig of advancedtls.ClientOptions
 // and/or advancedtls.ServerOptions.
-// Please note that checking CRLs is being directly on the path of connection
+// Please note that checking CRLs is directly on the path of connection
 // establishment, so implementations of the CRL function need to be fast, and
 // slow things such as file IO should be done asynchronously.
-// TODO(erm-g): Add link to related gRFC once it's ready.
 //
 // [A69: CRL Enhancements]: https://github.com/grpc/proposal/pull/382
 type CRLProvider interface {
@@ -84,7 +83,7 @@ func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
 // FileWatcherCRLProvider.
 type FileWatcherOptions struct {
 	CRLDirectory               string          // Path of the directory containing CRL files
-	RefreshDuration            time.Duration   // Time interval between CRLDirectory scans
+	RefreshDuration            time.Duration   // Time interval between CRLDirectory scans, can't be smaller than 1 second
 	crlReloadingFailedCallback func(err error) // Custom callback executed when a CRL file can’t be processed
 }
 
@@ -163,9 +162,8 @@ func (p *FileWatcherCRLProvider) Close() {
 
 // ScanCRLDirectory starts the process of scanning
 // FileWatcherOptions.CRLDirectory and updating in-memory storage of CRL
-// structs. Please note that the same method is called periodically by run
-// goroutine.
-// TODO(erm-g): Add link to related gRFC once it's ready.
+// structs. Users should not call this function in a loop since it's called
+// periodically (see FileWatcherOptions.RefreshDuration) by run goroutine.
 //
 // [A69: CRL Enhancements]: https://github.com/grpc/proposal/pull/382
 func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
@@ -206,7 +204,7 @@ func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 		successCounter++
 	}
 	// Only if all the files are processed successful we can swap maps (there
-	// might be deletions of entries in this case
+	// might be deletions of entries in this case).
 	if len(files) == successCounter {
 		p.mu.Lock()
 		defer p.mu.Unlock()
@@ -216,7 +214,7 @@ func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 		}
 		grpclogLogger.Infof("Scan of CRLDirectory %v completed, %v files found and processed successfully, in-memory CRL storage flushed and repopulated", p.opts.CRLDirectory, len(files))
 	} else {
-		// Since some of the files failed we can only add/update entries in the map
+		// Since some of the files failed we can only add/update entries in the map.
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		for key, value := range tempCRLs {
