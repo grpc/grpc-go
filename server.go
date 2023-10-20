@@ -1817,36 +1817,17 @@ func ServerTransportStreamFromContext(ctx context.Context) ServerTransportStream
 // pending RPCs on the client side will get notified by connection
 // errors.
 func (s *Server) Stop() {
-	s.quit.Fire()
-	defer s.done.Fire()
-
-	s.channelzRemoveOnce.Do(func() { channelz.RemoveEntry(s.channelzID) })
-
-	s.mu.Lock()
-	s.closeListeners()
-	s.mu.Unlock()
-
-	// Wait for serving threads to be ready to exit.  Only then can we be sure no
-	// new conns will be created.
-	s.serveWG.Wait()
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.closeServerTransports()
-
-	if s.opts.numServerWorkers > 0 {
-		s.stopServerWorkers()
-	}
-
-	s.waitForServerConnRemoval()
-	s.finishEventLog()
+	s.stop(false)
 }
 
 // GracefulStop stops the gRPC server gracefully. It stops the server from
 // accepting new connections and RPCs and blocks until all the pending RPCs are
 // finished.
 func (s *Server) GracefulStop() {
+	s.stop(true)
+}
+
+func (s *Server) stop(graceful bool) {
 	s.quit.Fire()
 	defer s.done.Fire()
 
@@ -1854,7 +1835,9 @@ func (s *Server) GracefulStop() {
 
 	s.mu.Lock()
 	s.closeListeners()
-	s.drainAllServerTransports()
+	if graceful {
+		s.drainAllServerTransports()
+	}
 	s.mu.Unlock()
 
 	// Wait for serving threads to be ready to exit.  Only then can we be sure no
@@ -1863,6 +1846,10 @@ func (s *Server) GracefulStop() {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if !graceful {
+		s.closeServerTransports()
+	}
 
 	if s.opts.numServerWorkers > 0 {
 		s.stopServerWorkers()
