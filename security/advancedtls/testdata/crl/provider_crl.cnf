@@ -2,10 +2,9 @@
 default_ca = my_ca
 
 [ my_ca ]
-crl = crl.pem
 default_md = sha256
-database = index.txt
-crlnumber = crlnumber.txt
+database = provider_index.txt
+crlnumber = provider_crlnumber.txt
 default_crl_days = 30
 default_crl_hours = 1
 crl_extensions = crl_ext

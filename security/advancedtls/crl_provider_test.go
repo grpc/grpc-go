@@ -96,7 +96,7 @@ func (s) TestFileWatcherCRLProviderConfig(t *testing.T) {
 	if _, err := NewFileWatcherCRLProvider(FileWatcherOptions{CRLDirectory: "I_do_not_exist"}); err == nil {
 		t.Fatalf("CRLDirectory must exist")
 	}
-	defaultProvider, err := NewFileWatcherCRLProvider(FileWatcherOptions{CRLDirectory: testdata.Path("crl/provider")})
+	defaultProvider, err := NewFileWatcherCRLProvider(FileWatcherOptions{CRLDirectory: testdata.Path("crl")})
 	if err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
@@ -111,7 +111,7 @@ func (s) TestFileWatcherCRLProviderConfig(t *testing.T) {
 	regularProvider, err := NewFileWatcherCRLProvider(FileWatcherOptions{
 		CRLDirectory:               testdata.Path("crl"),
 		RefreshDuration:            1 * time.Hour,
-		crlReloadingFailedCallback: customCallback,
+		CRLReloadingFailedCallback: customCallback,
 	})
 	if err != nil {
 		t.Fatal("Unexpected error while creating regular FileWatcherCRLProvider:", err)
@@ -134,7 +134,7 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 	p, err := NewFileWatcherCRLProvider(FileWatcherOptions{
 		CRLDirectory:               testdata.Path("crl"),
 		RefreshDuration:            1 * time.Hour,
-		crlReloadingFailedCallback: customCallback,
+		CRLReloadingFailedCallback: customCallback,
 	})
 	if err != nil {
 		t.Fatal("Unexpected error while creating FileWatcherCRLProvider:", err)

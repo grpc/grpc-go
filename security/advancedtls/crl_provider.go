@@ -84,7 +84,7 @@ func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
 type FileWatcherOptions struct {
 	CRLDirectory               string          // Path of the directory containing CRL files
 	RefreshDuration            time.Duration   // Time interval between CRLDirectory scans, can't be smaller than 1 second
-	crlReloadingFailedCallback func(err error) // Custom callback executed when a CRL file can’t be processed
+	CRLReloadingFailedCallback func(err error) // Custom callback executed when a CRL file can’t be processed
 }
 
 // FileWatcherCRLProvider implements the CRLProvider interface by periodically
@@ -129,7 +129,7 @@ func (o *FileWatcherOptions) validate() error {
 		return fmt.Errorf("advancedtls: CRLDirectory %v is not readable: %v", o.CRLDirectory, err)
 	}
 	// Checks related to RefreshDuration.
-	if o.RefreshDuration < time.Second {
+	if o.RefreshDuration < time.Minute {
 		o.RefreshDuration = defaultCRLRefreshDuration
 		grpclogLogger.Warningf("RefreshDuration must larger then 1 second: provided value %v, default value will be used %v", o.RefreshDuration, defaultCRLRefreshDuration)
 	}
@@ -172,8 +172,8 @@ func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 	dir, err := os.Open(p.opts.CRLDirectory)
 	if err != nil {
 		grpclogLogger.Errorf("Can't open CRLDirectory %v", p.opts.CRLDirectory, err)
-		if p.opts.crlReloadingFailedCallback != nil {
-			p.opts.crlReloadingFailedCallback(err)
+		if p.opts.CRLReloadingFailedCallback != nil {
+			p.opts.CRLReloadingFailedCallback(err)
 		}
 	}
 	defer dir.Close()
@@ -181,8 +181,8 @@ func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 	files, err := dir.ReadDir(0)
 	if err != nil {
 		grpclogLogger.Errorf("Can't access files under CRLDirectory %v", p.opts.CRLDirectory, err)
-		if p.opts.crlReloadingFailedCallback != nil {
-			p.opts.crlReloadingFailedCallback(err)
+		if p.opts.CRLReloadingFailedCallback != nil {
+			p.opts.CRLReloadingFailedCallback(err)
 		}
 	}
 
@@ -195,8 +195,8 @@ func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 		if err != nil {
 			failCounter++
 			grpclogLogger.Warningf("Can't add CRL from file %v under CRLDirectory %v", filePath, p.opts.CRLDirectory, err)
-			if p.opts.crlReloadingFailedCallback != nil {
-				p.opts.crlReloadingFailedCallback(err)
+			if p.opts.CRLReloadingFailedCallback != nil {
+				p.opts.CRLReloadingFailedCallback(err)
 			}
 			continue
 		}

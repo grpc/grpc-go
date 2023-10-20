@@ -89,7 +89,7 @@ func (cs *CertStore) LoadCerts() error {
 	if cs.ClientCert2, err = tls.LoadX509KeyPair(testdata.Path("client_cert_2.pem"), testdata.Path("client_key_2.pem")); err != nil {
 		return err
 	}
-	if cs.ClientCert3, err = tls.LoadX509KeyPair(testdata.Path("crl/provider/client_cert.pem"), testdata.Path("crl/provider/client_cert.key")); err != nil {
+	if cs.ClientCert3, err = tls.LoadX509KeyPair(testdata.Path("crl/provider_client_cert.pem"), testdata.Path("crl/provider_client_cert.key")); err != nil {
 		return err
 	}
 	if cs.ServerCert1, err = tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"), testdata.Path("server_key_1.pem")); err != nil {
@@ -98,7 +98,7 @@ func (cs *CertStore) LoadCerts() error {
 	if cs.ServerCert2, err = tls.LoadX509KeyPair(testdata.Path("server_cert_2.pem"), testdata.Path("server_key_2.pem")); err != nil {
 		return err
 	}
-	if cs.ServerCert3, err = tls.LoadX509KeyPair(testdata.Path("crl/provider/server_cert.pem"), testdata.Path("crl/provider/server_cert.key")); err != nil {
+	if cs.ServerCert3, err = tls.LoadX509KeyPair(testdata.Path("crl/provider_server_cert.pem"), testdata.Path("crl/provider_server_cert.key")); err != nil {
 		return err
 	}
 	if cs.ServerPeer3, err = tls.LoadX509KeyPair(testdata.Path("server_cert_3.pem"), testdata.Path("server_key_3.pem")); err != nil {
@@ -113,7 +113,7 @@ func (cs *CertStore) LoadCerts() error {
 	if cs.ClientTrust2, err = readTrustCert(testdata.Path("client_trust_cert_2.pem")); err != nil {
 		return err
 	}
-	if cs.ClientTrust3, err = readTrustCert(testdata.Path("crl/provider/client_trust_cert.pem")); err != nil {
+	if cs.ClientTrust3, err = readTrustCert(testdata.Path("crl/provider_client_trust_cert.pem")); err != nil {
 		return err
 	}
 	if cs.ServerTrust1, err = readTrustCert(testdata.Path("server_trust_cert_1.pem")); err != nil {
@@ -122,7 +122,7 @@ func (cs *CertStore) LoadCerts() error {
 	if cs.ServerTrust2, err = readTrustCert(testdata.Path("server_trust_cert_2.pem")); err != nil {
 		return err
 	}
-	if cs.ServerTrust3, err = readTrustCert(testdata.Path("crl/provider/server_trust_cert.pem")); err != nil {
+	if cs.ServerTrust3, err = readTrustCert(testdata.Path("crl/provider_server_trust_cert.pem")); err != nil {
 		return err
 	}
 	return nil
