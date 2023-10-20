@@ -76,19 +76,19 @@ func (s) TestDumpResources(t *testing.T) {
 	listenerAnys := make([]*anypb.Any, len(ldsTargets))
 	for i := range ldsTargets {
 		listeners[i] = e2e.DefaultClientListener(ldsTargets[i], rdsTargets[i])
-		listenerAnys[i] = testutils.MarshalAny(listeners[i])
+		listenerAnys[i] = testutils.MarshalAny(t, listeners[i])
 	}
 	routes := make([]*v3routepb.RouteConfiguration, len(rdsTargets))
 	routeAnys := make([]*anypb.Any, len(rdsTargets))
 	for i := range rdsTargets {
 		routes[i] = e2e.DefaultRouteConfig(rdsTargets[i], ldsTargets[i], cdsTargets[i])
-		routeAnys[i] = testutils.MarshalAny(routes[i])
+		routeAnys[i] = testutils.MarshalAny(t, routes[i])
 	}
 	clusters := make([]*v3clusterpb.Cluster, len(cdsTargets))
 	clusterAnys := make([]*anypb.Any, len(cdsTargets))
 	for i := range cdsTargets {
 		clusters[i] = e2e.DefaultCluster(cdsTargets[i], edsTargets[i], e2e.SecurityLevelNone)
-		clusterAnys[i] = testutils.MarshalAny(clusters[i])
+		clusterAnys[i] = testutils.MarshalAny(t, clusters[i])
 	}
 	endpoints := make([]*v3endpointpb.ClusterLoadAssignment, len(edsTargets))
 	endpointAnys := make([]*anypb.Any, len(edsTargets))
@@ -96,7 +96,7 @@ func (s) TestDumpResources(t *testing.T) {
 	ports := []uint32{123, 456}
 	for i := range edsTargets {
 		endpoints[i] = e2e.DefaultEndpoint(edsTargets[i], ips[i], ports[i:i+1])
-		endpointAnys[i] = testutils.MarshalAny(endpoints[i])
+		endpointAnys[i] = testutils.MarshalAny(t, endpoints[i])
 	}
 
 	// Spin up an xDS management server on a local port.
@@ -125,7 +125,7 @@ func (s) TestDumpResources(t *testing.T) {
 		client.WatchRouteConfig(target, func(xdsresource.RouteConfigUpdate, error) {})
 	}
 	for _, target := range cdsTargets {
-		client.WatchCluster(target, func(xdsresource.ClusterUpdate, error) {})
+		xdsresource.WatchCluster(client, target, noopClusterWatcher{})
 	}
 	for _, target := range edsTargets {
 		xdsresource.WatchEndpoints(client, target, noopEndpointsWatcher{})

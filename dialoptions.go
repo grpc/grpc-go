@@ -46,6 +46,7 @@ func init() {
 	internal.WithBinaryLogger = withBinaryLogger
 	internal.JoinDialOptions = newJoinDialOption
 	internal.DisableGlobalDialOptions = newDisableGlobalDialOptions
+	internal.WithRecvBufferPool = withRecvBufferPool
 }
 
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
@@ -705,11 +706,13 @@ func WithIdleTimeout(d time.Duration) DialOption {
 // options are used: WithStatsHandler, EnableTracing, or binary logging. In such
 // cases, the shared buffer pool will be ignored.
 //
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
+// Deprecated: use experimental.WithRecvBufferPool instead.  Will be deleted in
+// v1.60.0 or later.
 func WithRecvBufferPool(bufferPool SharedBufferPool) DialOption {
+	return withRecvBufferPool(bufferPool)
+}
+
+func withRecvBufferPool(bufferPool SharedBufferPool) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.recvBufferPool = bufferPool
 	})

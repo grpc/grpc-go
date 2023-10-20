@@ -517,7 +517,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 				hcm.HttpFilters = append(hcm.HttpFilters, e2e.HTTPFilter(fmt.Sprintf("fault%d", i), cfg))
 			}
 			hcm.HttpFilters = append(hcm.HttpFilters, routerFilter)
-			hcmAny := testutils.MarshalAny(hcm)
+			hcmAny := testutils.MarshalAny(t, hcm)
 			resources.Listeners[0].ApiListener.ApiListener = hcmAny
 			resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
 
@@ -592,7 +592,7 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 			},
 		})},
 		hcm.HttpFilters...)
-	hcmAny := testutils.MarshalAny(hcm)
+	hcmAny := testutils.MarshalAny(t, hcm)
 	resources.Listeners[0].ApiListener.ApiListener = hcmAny
 	resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
 

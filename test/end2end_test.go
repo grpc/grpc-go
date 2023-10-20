@@ -51,7 +51,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/binarylog"
@@ -507,7 +506,6 @@ type test struct {
 	unaryClientInt              grpc.UnaryClientInterceptor
 	streamClientInt             grpc.StreamClientInterceptor
 	sc                          <-chan grpc.ServiceConfig
-	customCodec                 encoding.Codec
 	clientInitialWindowSize     int32
 	clientInitialConnWindowSize int32
 	perRPCCreds                 credentials.PerRPCCredentials
@@ -829,9 +827,6 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	}
 	if te.perRPCCreds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(te.perRPCCreds))
-	}
-	if te.customCodec != nil {
-		opts = append(opts, grpc.WithDefaultCallOptions(grpc.ForceCodec(te.customCodec)))
 	}
 	if te.srvAddr == "" {
 		te.srvAddr = "client.side.only.test"
@@ -2099,6 +2094,10 @@ func (t *myTap) handle(ctx context.Context, info *tap.Info) (context.Context, er
 		switch info.FullMethodName {
 		case "/grpc.testing.TestService/EmptyCall":
 			t.cnt++
+
+			if vals := info.Header.Get("return-error"); len(vals) > 0 && vals[0] == "true" {
+				return nil, status.Errorf(codes.Unknown, "tap error")
+			}
 		case "/grpc.testing.TestService/UnaryCall":
 			return nil, fmt.Errorf("tap error")
 		case "/grpc.testing.TestService/FullDuplexCall":
@@ -2120,11 +2119,26 @@ func testTap(t *testing.T, e env) {
 	tc := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	if ttap.cnt != 1 {
 		t.Fatalf("Get the count in ttap %d, want 1", ttap.cnt)
+	}
+
+	if _, err := tc.EmptyCall(metadata.AppendToOutgoingContext(ctx, "return-error", "false"), &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	if ttap.cnt != 2 {
+		t.Fatalf("Get the count in ttap %d, want 2", ttap.cnt)
+	}
+
+	if _, err := tc.EmptyCall(metadata.AppendToOutgoingContext(ctx, "return-error", "true"), &testpb.Empty{}); status.Code(err) != codes.Unknown {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.Unknown)
+	}
+	if ttap.cnt != 3 {
+		t.Fatalf("Get the count in ttap %d, want 3", ttap.cnt)
 	}
 
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 31)
@@ -4443,86 +4457,6 @@ func (s) TestGRPCMethod(t *testing.T) {
 	}
 }
 
-// renameProtoCodec is an encoding.Codec wrapper that allows customizing the
-// Name() of another codec.
-type renameProtoCodec struct {
-	encoding.Codec
-	name string
-}
-
-func (r *renameProtoCodec) Name() string { return r.name }
-
-// TestForceCodecName confirms that the ForceCodec call option sets the subtype
-// in the content-type header according to the Name() of the codec provided.
-func (s) TestForceCodecName(t *testing.T) {
-	wantContentTypeCh := make(chan []string, 1)
-	defer close(wantContentTypeCh)
-
-	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			md, ok := metadata.FromIncomingContext(ctx)
-			if !ok {
-				return nil, status.Errorf(codes.Internal, "no metadata in context")
-			}
-			if got, want := md["content-type"], <-wantContentTypeCh; !reflect.DeepEqual(got, want) {
-				return nil, status.Errorf(codes.Internal, "got content-type=%q; want [%q]", got, want)
-			}
-			return &testpb.Empty{}, nil
-		},
-	}
-	if err := ss.Start([]grpc.ServerOption{grpc.ForceServerCodec(encoding.GetCodec("proto"))}); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
-	}
-	defer ss.Stop()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	codec := &renameProtoCodec{Codec: encoding.GetCodec("proto"), name: "some-test-name"}
-	wantContentTypeCh <- []string{"application/grpc+some-test-name"}
-	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodec(codec)); err != nil {
-		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
-	}
-
-	// Confirm the name is converted to lowercase before transmitting.
-	codec.name = "aNoTHeRNaME"
-	wantContentTypeCh <- []string{"application/grpc+anothername"}
-	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodec(codec)); err != nil {
-		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
-	}
-}
-
-func (s) TestForceServerCodec(t *testing.T) {
-	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-	codec := &countingProtoCodec{}
-	if err := ss.Start([]grpc.ServerOption{grpc.ForceServerCodec(codec)}); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
-	}
-	defer ss.Stop()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
-	}
-
-	unmarshalCount := atomic.LoadInt32(&codec.unmarshalCount)
-	const wantUnmarshalCount = 1
-	if unmarshalCount != wantUnmarshalCount {
-		t.Fatalf("protoCodec.unmarshalCount = %d; want %d", unmarshalCount, wantUnmarshalCount)
-	}
-	marshalCount := atomic.LoadInt32(&codec.marshalCount)
-	const wantMarshalCount = 1
-	if marshalCount != wantMarshalCount {
-		t.Fatalf("protoCodec.marshalCount = %d; want %d", marshalCount, wantMarshalCount)
-	}
-}
-
 func (s) TestUnaryProxyDoesNotForwardMetadata(t *testing.T) {
 	const mdkey = "somedata"
 
@@ -4862,77 +4796,6 @@ func testWaitForReadyConnection(t *testing.T, e env) {
 	// Make a fail-fast RPC.
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_,_) = _, %v, want _, nil", err)
-	}
-}
-
-type errCodec struct {
-	noError bool
-}
-
-func (c *errCodec) Marshal(v any) ([]byte, error) {
-	if c.noError {
-		return []byte{}, nil
-	}
-	return nil, fmt.Errorf("3987^12 + 4365^12 = 4472^12")
-}
-
-func (c *errCodec) Unmarshal(data []byte, v any) error {
-	return nil
-}
-
-func (c *errCodec) Name() string {
-	return "Fermat's near-miss."
-}
-
-type countingProtoCodec struct {
-	marshalCount   int32
-	unmarshalCount int32
-}
-
-func (p *countingProtoCodec) Marshal(v any) ([]byte, error) {
-	atomic.AddInt32(&p.marshalCount, 1)
-	vv, ok := v.(proto.Message)
-	if !ok {
-		return nil, fmt.Errorf("failed to marshal, message is %T, want proto.Message", v)
-	}
-	return proto.Marshal(vv)
-}
-
-func (p *countingProtoCodec) Unmarshal(data []byte, v any) error {
-	atomic.AddInt32(&p.unmarshalCount, 1)
-	vv, ok := v.(proto.Message)
-	if !ok {
-		return fmt.Errorf("failed to unmarshal, message is %T, want proto.Message", v)
-	}
-	return proto.Unmarshal(data, vv)
-}
-
-func (*countingProtoCodec) Name() string {
-	return "proto"
-}
-
-func (s) TestEncodeDoesntPanic(t *testing.T) {
-	for _, e := range listTestEnv() {
-		testEncodeDoesntPanic(t, e)
-	}
-}
-
-func testEncodeDoesntPanic(t *testing.T, e env) {
-	te := newTest(t, e)
-	erc := &errCodec{}
-	te.customCodec = erc
-	te.startServer(&testServer{security: e.security})
-	defer te.tearDown()
-	te.customCodec = nil
-	tc := testgrpc.NewTestServiceClient(te.clientConn())
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	// Failure case, should not panic.
-	tc.EmptyCall(ctx, &testpb.Empty{})
-	erc.noError = true
-	// Passing case.
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 }
 
