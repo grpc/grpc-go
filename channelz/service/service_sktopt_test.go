@@ -48,7 +48,7 @@ func init() {
 }
 
 func durationToSecUsec(d *durationpb.Duration) (sec int64, usec int64) {
-	if d != nil && d.CheckValid() == nil {
+	if d.CheckValid() == nil {
 		sec = d.Seconds
 		usec = int64(d.Nanos) / 1e3
 	}
