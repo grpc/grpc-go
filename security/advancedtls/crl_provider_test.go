@@ -194,7 +194,7 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 // are not independent from each other.
 func (s) TestFileWatcherCRLProviderDirectoryScan(t *testing.T) {
 	sourcePath := testdata.Path("crl")
-	targetPath := testdata.Path("crl/provider/filewatcher")
+	targetPath := createTmpDir(t)
 	p, err := NewFileWatcherCRLProvider(FileWatcherOptions{
 		CRLDirectory:    targetPath,
 		RefreshDuration: 1 * time.Hour,
@@ -293,4 +293,17 @@ func copyFiles(sourcePath string, targetPath string, fileNames []string, t *test
 			t.Fatalf("Can't copy file %v to %v: %v", sourceFile, destinationFile, err)
 		}
 	}
+}
+
+func createTmpDir(t *testing.T) string {
+	t.Helper()
+
+	// Create a temp directory. Passing an empty string for the first argument
+	// uses the system temp directory.
+	dir, err := os.MkdirTemp("", "filewatcher*")
+	if err != nil {
+		t.Fatalf("os.MkdirTemp() failed: %v", err)
+	}
+	t.Logf("Using tmpdir: %s", dir)
+	return dir
 }

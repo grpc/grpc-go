@@ -146,7 +146,7 @@ func (p *FileWatcherCRLProvider) run() {
 	for {
 		select {
 		case <-p.stop:
-			ticker.Stop()
+			grpclogLogger.Infof("Scanning of CRLDirectory %v stopped", p.opts.CRLDirectory)
 			return
 		case <-ticker.C:
 			p.ScanCRLDirectory()
@@ -203,15 +203,12 @@ func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 		tempCRLs[crl.certList.Issuer.ToRDNSequence().String()] = crl
 		successCounter++
 	}
-	// Only if all the files are processed successful we can swap maps (there
+	// Only if all the files are processed successfully we can swap maps (there
 	// might be deletions of entries in this case).
 	if len(files) == successCounter {
 		p.mu.Lock()
 		defer p.mu.Unlock()
-		p.crls = make(map[string]*CRL)
-		for key, value := range tempCRLs {
-			p.crls[key] = value
-		}
+		p.crls = tempCRLs
 		grpclogLogger.Infof("Scan of CRLDirectory %v completed, %v files found and processed successfully, in-memory CRL storage flushed and repopulated", p.opts.CRLDirectory, len(files))
 	} else {
 		// Since some of the files failed we can only add/update entries in the map.
