@@ -39,7 +39,7 @@ const defaultCRLRefreshDuration = 1 * time.Hour
 // establishment, so implementations of the CRL function need to be fast, and
 // slow things such as file IO should be done asynchronously.
 //
-// [A69: CRL Enhancements]: https://github.com/grpc/proposal/pull/382
+// [gRFC A69]: https://github.com/grpc/proposal/blob/dddf32d0116376dd0c48adee7b0071a20bc82b5b/A69-crl-enhancements.md
 type CRLProvider interface {
 	// CRL accepts x509 Cert and returns back related CRL struct. The CRL struct
 	// can be nil, can contain empty or non-empty list of revoked certificates.
@@ -83,7 +83,7 @@ func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
 // FileWatcherCRLProvider.
 type FileWatcherOptions struct {
 	CRLDirectory               string          // Path of the directory containing CRL files
-	RefreshDuration            time.Duration   // Time interval between CRLDirectory scans, can't be smaller than 1 second
+	RefreshDuration            time.Duration   // Time interval between CRLDirectory scans, can't be smaller than 1 minute
 	CRLReloadingFailedCallback func(err error) // Custom callback executed when a CRL file can’t be processed
 }
 
@@ -165,7 +165,7 @@ func (p *FileWatcherCRLProvider) Close() {
 // structs. Users should not call this function in a loop since it's called
 // periodically (see FileWatcherOptions.RefreshDuration) by run goroutine.
 //
-// [A69: CRL Enhancements]: https://github.com/grpc/proposal/pull/382
+// [gRFC A69]: https://github.com/grpc/proposal/blob/dddf32d0116376dd0c48adee7b0071a20bc82b5b/A69-crl-enhancements.md
 func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 	p.scanMutex.Lock()
 	defer p.scanMutex.Unlock()
