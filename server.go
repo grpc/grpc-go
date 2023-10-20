@@ -1854,12 +1854,12 @@ func (s *Server) GracefulStop() {
 
 	s.mu.Lock()
 	s.closeListeners()
-	s.mu.Unlock()
-	s.serveWG.Wait()
-
-	s.mu.Lock()
 	s.drainAllServerTransports()
 	s.mu.Unlock()
+
+	// Wait for serving threads to be ready to exit.  Only then can we be sure no
+	// new conns will be created.
+	s.serveWG.Wait()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
