@@ -24,6 +24,7 @@ import (
 	"net"
 	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
@@ -215,4 +216,91 @@ func (s) TestGracefulStopClosesConnAfterLastStream(t *testing.T) {
 
 		<-gracefulStopDone // Wait for GracefulStop to return.
 	})
+}
+
+func (s) TestGracefulStopBlocksUntilGRPCConnectionsTerminate(t *testing.T) {
+	// This tests ensures that GracefulStop() blocks until all ongoing
+	// client grpc-calls finished.
+	unblockGRPCCall := make(chan struct{})
+	grpcCallExecuting := make(chan struct{})
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			close(grpcCallExecuting)
+			<-unblockGRPCCall
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+
+	err := ss.Start(nil)
+	if err != nil {
+		t.Fatalf("StubServer.start failed: %s", err)
+	}
+	t.Cleanup(ss.Stop)
+
+	grpcClientCallReturned := make(chan struct{})
+	go func() {
+		clt := ss.Client
+		_, err := clt.UnaryCall(context.Background(), &testpb.SimpleRequest{})
+		if err != nil {
+			t.Errorf("grpc call failed with error: %s", err)
+		}
+		close(grpcClientCallReturned)
+	}()
+
+	gracefulStopReturned := make(chan struct{})
+	<-grpcCallExecuting
+	go func() {
+		ss.S.GracefulStop()
+		close(gracefulStopReturned)
+	}()
+
+	time.Sleep(time.Second)
+	select {
+	case <-gracefulStopReturned:
+		t.Error("GracefulStop returned before GRPC method call ended")
+	default:
+	}
+
+	unblockGRPCCall <- struct{}{}
+	<-grpcClientCallReturned
+	<-gracefulStopReturned
+}
+
+func (s) TestStopAbortsBlockingGAbortsBlockingGRPCCall(t *testing.T) {
+	// This tests ensures that when Stop() is called while an ongoing grpc
+	// call is blocking that:
+	// - Stop() returns
+	// - and grpc-call on the client side fails with an connection closed
+	//   error
+	unblockGRPCCall := make(chan struct{})
+	grpcCallExecuting := make(chan struct{})
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			close(grpcCallExecuting)
+			<-unblockGRPCCall
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+
+	err := ss.Start(nil)
+	if err != nil {
+		t.Fatalf("StubServer.start failed: %s", err)
+	}
+	t.Cleanup(ss.Stop)
+
+	grpcClientCallReturned := make(chan struct{})
+	go func() {
+		clt := ss.Client
+		_, err := clt.UnaryCall(context.Background(), &testpb.SimpleRequest{})
+		if err == nil || !isConnClosedErr(err) {
+			t.Errorf("expected grpc call to fail with connection closed error, got: %v", err)
+		}
+		close(grpcClientCallReturned)
+	}()
+
+	<-grpcCallExecuting
+	ss.S.Stop()
+
+	unblockGRPCCall <- struct{}{}
+	<-grpcClientCallReturned
 }
