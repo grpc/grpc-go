@@ -171,11 +171,9 @@ func (t *Transport) recvFirstLoadStatsResponse(stream lrsStream) ([]string, time
 	}
 
 	rInterval := resp.GetLoadReportingInterval()
-
 	if rInterval.CheckValid() != nil {
 		return nil, 0, fmt.Errorf("invalid load_reporting_interval: %v", err)
 	}
-
 	interval := rInterval.AsDuration()
 
 	if resp.ReportEndpointGranularity {
