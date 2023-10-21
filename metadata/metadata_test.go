@@ -202,10 +202,9 @@ func (s) TestFromIncomingContext(t *testing.T) {
 	md := Pairs(
 		"X-My-Header-1", "42",
 	)
-	ctx := NewIncomingContext(context.Background(), md)
-
-	// Check that we lowercase if callers modify md after NewIncomingContext
+	// Verify that we lowercase if callers directly modify md
 	md["X-INCORRECT-UPPERCASE"] = []string{"foo"}
+	ctx := NewIncomingContext(context.Background(), md)
 
 	result, found := FromIncomingContext(ctx)
 	if !found {
@@ -239,10 +238,9 @@ func (s) TestValueFromIncomingContext(t *testing.T) {
 		"X-My-Header-2", "43-2",
 		"x-my-header-3", "44",
 	)
-	ctx := NewIncomingContext(context.Background(), md)
-
-	// Check that we lowercase if callers modify md after NewIncomingContext
+	// Verify that we lowercase if callers directly modify md
 	md["X-INCORRECT-UPPERCASE"] = []string{"foo"}
+	ctx := NewIncomingContext(context.Background(), md)
 
 	for _, test := range []struct {
 		key  string
