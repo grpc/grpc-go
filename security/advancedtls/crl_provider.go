@@ -41,8 +41,15 @@ const defaultCRLRefreshDuration = 1 * time.Hour
 //
 // [gRFC A69]: https://github.com/grpc/proposal/blob/dddf32d0116376dd0c48adee7b0071a20bc82b5b/A69-crl-enhancements.md
 type CRLProvider interface {
-	// CRL accepts x509 Cert and returns back related CRL struct. The CRL struct
-	// can be nil, can contain empty or non-empty list of revoked certificates.
+	// CRL accepts x509 Cert and returns a related CRL struct, which can contain
+	// either an empty or non-empty list of revoked certificates. If an error is
+	// thrown or (nil, nil) is returned, it indicates that we can't load any
+	// authoritative CRL files (which may not necessarily be a problem). It's not
+	// considered invalid to have no CRLs if there are no revocations for an
+	// issuer. In such cases, the status of the check CRL operation is marked as
+	// RevocationUndetermined, as defined in [RFC5280 - Undetermined].
+	//
+	// [RFC5280 - Undetermined]: https://datatracker.ietf.org/doc/html/rfc5280#section-6.3.3
 	CRL(cert *x509.Certificate) (*CRL, error)
 }
 
@@ -74,7 +81,7 @@ func (p *StaticCRLProvider) addCRL(crl *CRL) {
 	p.crls[key] = crl
 }
 
-// CRL returns CRL struct if it was previously loaded by calling AddCRL.
+// CRL returns CRL struct if it was passed to NewStaticCRLProvider.
 func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
 	return p.crls[cert.Issuer.ToRDNSequence().String()], nil
 }
