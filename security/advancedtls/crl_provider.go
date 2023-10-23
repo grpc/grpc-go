@@ -29,7 +29,7 @@ import (
 const defaultCRLRefreshDuration = 1 * time.Hour
 
 // CRLProvider is the interface to be implemented to enable custom CRL provider
-// behavior.
+// behavior, as defined in [gRFC A69].
 //
 // The interface defines how gRPC gets CRLs from the provider during handshakes,
 // but doesn't prescribe a specific way to load and store CRLs. Such
@@ -162,8 +162,9 @@ func (p *FileWatcherCRLProvider) Close() {
 
 // ScanCRLDirectory starts the process of scanning
 // FileWatcherOptions.CRLDirectory and updating in-memory storage of CRL
-// structs. Users should not call this function in a loop since it's called
-// periodically (see FileWatcherOptions.RefreshDuration) by run goroutine.
+// structs, as defined in [gRFC A69]. Users should not call this function in a
+// loop since it's called periodically (see FileWatcherOptions.RefreshDuration)
+// by run goroutine.
 //
 // [gRFC A69]: https://github.com/grpc/proposal/blob/dddf32d0116376dd0c48adee7b0071a20bc82b5b/A69-crl-enhancements.md
 func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
