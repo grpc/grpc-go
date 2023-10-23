@@ -918,7 +918,7 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 		return
 	}
 	go func() {
-		s.serveStreams(st, rawConn)
+		s.serveStreams(context.Background(), st, rawConn)
 		s.removeConn(lisAddr, st)
 	}()
 }
@@ -987,8 +987,8 @@ func setConnection(ctx context.Context, conn net.Conn) context.Context {
 	return context.WithValue(ctx, connectionKey{}, conn)
 }
 
-func (s *Server) serveStreams(st transport.ServerTransport, rawConn net.Conn) {
-	ctx := setConnection(context.Background(), rawConn)
+func (s *Server) serveStreams(ctx context.Context, st transport.ServerTransport, rawConn net.Conn) {
+	ctx = setConnection(ctx, rawConn)
 	ctx = peer.NewContext(ctx, st.Peer())
 	for _, sh := range s.opts.statsHandlers {
 		ctx = sh.TagConn(ctx, &stats.ConnTagInfo{
@@ -1071,7 +1071,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer s.removeConn(listenerAddressForServeHTTP, st)
-	s.serveStreams(st, nil)
+	s.serveStreams(r.Context(), st, nil)
 }
 
 func (s *Server) addConn(addr string, st transport.ServerTransport) bool {

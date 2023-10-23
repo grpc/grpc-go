@@ -75,11 +75,25 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats []s
 		return nil, errors.New(msg)
 	}
 
+	var localAddr net.Addr
+	if la := r.Context().Value(http.LocalAddrContextKey); la != nil {
+		localAddr = la.(net.Addr)
+	}
+	var authInfo credentials.AuthInfo
+	if r.TLS != nil {
+		authInfo = credentials.TLSInfo{State: *r.TLS, CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}
+	}
+	p := peer.Peer{
+		Addr:      strAddr(r.RemoteAddr),
+		LocalAddr: localAddr,
+		AuthInfo:  authInfo,
+	}
 	st := &serverHandlerTransport{
 		rw:             w,
 		req:            r,
 		closedCh:       make(chan struct{}),
 		writes:         make(chan func()),
+		peer:           p,
 		contentType:    contentType,
 		contentSubtype: contentSubtype,
 		stats:          stats,
@@ -134,6 +148,8 @@ type serverHandlerTransport struct {
 
 	headerMD metadata.MD
 
+	peer peer.Peer
+
 	closeOnce sync.Once
 	closedCh  chan struct{} // closed on Close
 
@@ -166,13 +182,10 @@ func (ht *serverHandlerTransport) Close(err error) {
 }
 
 func (ht *serverHandlerTransport) Peer() *peer.Peer {
-	var localAddr net.Addr
-	if la := ht.req.Context().Value(http.LocalAddrContextKey); la != nil {
-		localAddr = la.(net.Addr)
-	}
 	return &peer.Peer{
-		Addr:      strAddr(ht.req.RemoteAddr),
-		LocalAddr: localAddr,
+		Addr:      ht.peer.Addr,
+		LocalAddr: ht.peer.LocalAddr,
+		AuthInfo:  ht.peer.AuthInfo,
 	}
 }
 
@@ -356,9 +369,8 @@ func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
 	return err
 }
 
-func (ht *serverHandlerTransport) HandleStreams(_ context.Context, startStream func(*Stream)) {
+func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream func(*Stream)) {
 	// With this transport type there will be exactly 1 stream: this HTTP request.
-	ctx := ht.req.Context()
 	var cancel context.CancelFunc
 	if ht.timeoutSet {
 		ctx, cancel = context.WithTimeout(ctx, ht.timeout)
@@ -390,12 +402,7 @@ func (ht *serverHandlerTransport) HandleStreams(_ context.Context, startStream f
 		contentSubtype:   ht.contentSubtype,
 		headerWireLength: 0, // won't have access to header wire length until golang/go#18997.
 	}
-	pr := ht.Peer()
-	if req.TLS != nil {
-		pr.AuthInfo = credentials.TLSInfo{State: *req.TLS, CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}
-	}
 	ctx = metadata.NewIncomingContext(ctx, ht.headerMD)
-	s.ctx = peer.NewContext(ctx, pr)
 	s.trReader = &transportReader{
 		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf, freeBuffer: func(*bytes.Buffer) {}},
 		windowHandler: func(int) {},

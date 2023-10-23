@@ -75,8 +75,7 @@ type http2Server struct {
 	readerDone  chan struct{} // sync point to enable testing.
 	writerDone  chan struct{} // sync point to enable testing.
 	remoteAddr  net.Addr
-	localAddr   net.Addr
-	authInfo    credentials.AuthInfo // auth info about the connection
+	peer        peer.Peer
 	inTapHandle tap.ServerInHandle
 	framer      *framer
 	// The max number of concurrent streams.
@@ -242,12 +241,15 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	}
 
 	done := make(chan struct{})
+	peer := peer.Peer{
+		Addr:      conn.RemoteAddr(),
+		LocalAddr: conn.LocalAddr(),
+		AuthInfo:  authInfo,
+	}
 	t := &http2Server{
 		done:              done,
 		conn:              conn,
-		remoteAddr:        conn.RemoteAddr(),
-		localAddr:         conn.LocalAddr(),
-		authInfo:          authInfo,
+		peer:              peer,
 		framer:            framer,
 		readerDone:        make(chan struct{}),
 		writerDone:        make(chan struct{}),
@@ -273,7 +275,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 			updateFlowControl: t.updateFlowControl,
 		}
 	}
-	t.channelzID, err = channelz.RegisterNormalSocket(t, config.ChannelzParentID, fmt.Sprintf("%s -> %s", t.remoteAddr, t.localAddr))
+	t.channelzID, err = channelz.RegisterNormalSocket(t, config.ChannelzParentID, fmt.Sprintf("%s -> %s", t.peer.Addr, t.peer.LocalAddr))
 	if err != nil {
 		return nil, err
 	}
@@ -1292,6 +1294,7 @@ func (t *http2Server) Drain(debugData string) {
 	}
 	t.drainEvent = grpcsync.NewEvent()
 	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(debugData), headsUp: true})
+	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(debugData), headsUp: true})
 }
 
 var goAwayPing = &ping{data: [8]byte{1, 6, 1, 8, 0, 3, 3, 9}}
@@ -1366,11 +1369,11 @@ func (t *http2Server) ChannelzMetric() *channelz.SocketInternalMetric {
 		LastMessageReceivedTimestamp:     time.Unix(0, atomic.LoadInt64(&t.czData.lastMsgRecvTime)),
 		LocalFlowControlWindow:           int64(t.fc.getSize()),
 		SocketOptions:                    channelz.GetSocketOption(t.conn),
-		LocalAddr:                        t.localAddr,
-		RemoteAddr:                       t.remoteAddr,
+		LocalAddr:                        t.peer.LocalAddr,
+		RemoteAddr:                       t.peer.Addr,
 		// RemoteName :
 	}
-	if au, ok := t.authInfo.(credentials.ChannelzSecurityInfo); ok {
+	if au, ok := t.peer.AuthInfo.(credentials.ChannelzSecurityInfo); ok {
 		s.Security = au.GetSecurityValue()
 	}
 	s.RemoteFlowControlWindow = t.getOutFlowWindow()
@@ -1405,9 +1408,9 @@ func (t *http2Server) getOutFlowWindow() int64 {
 // Peer returns the peer of the transport.
 func (t *http2Server) Peer() *peer.Peer {
 	return &peer.Peer{
-		Addr:      t.remoteAddr,
-		LocalAddr: t.localAddr,
-		AuthInfo:  t.authInfo, // Can be nil
+		Addr:      t.peer.Addr,
+		LocalAddr: t.peer.LocalAddr,
+		AuthInfo:  t.peer.AuthInfo,
 	}
 }
 
