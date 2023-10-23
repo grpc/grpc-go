@@ -131,7 +131,7 @@ func (o *FileWatcherOptions) validate() error {
 	// Checks related to RefreshDuration.
 	if o.RefreshDuration < time.Minute {
 		o.RefreshDuration = defaultCRLRefreshDuration
-		grpclogLogger.Warningf("RefreshDuration must larger then 1 second: provided value %v, default value will be used %v", o.RefreshDuration, defaultCRLRefreshDuration)
+		grpclogLogger.Warningf("RefreshDuration must be larger than 1 minute: provided value %v, default value %v will be used.", o.RefreshDuration, defaultCRLRefreshDuration)
 	}
 	return nil
 }
