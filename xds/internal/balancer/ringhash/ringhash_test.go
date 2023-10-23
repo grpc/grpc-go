@@ -67,9 +67,9 @@ func ctxWithHash(h uint64) context.Context {
 }
 
 // setupTest creates the balancer, and does an initial sanity check.
-func setupTest(t *testing.T, addrs []resolver.Address) (*testutils.TestClientConn, balancer.Balancer, balancer.Picker) {
+func setupTest(t *testing.T, addrs []resolver.Address) (*testutils.BalancerClientConn, balancer.Balancer, balancer.Picker) {
 	t.Helper()
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(Name)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	if b == nil {

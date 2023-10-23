@@ -49,8 +49,8 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func setup(t *testing.T) (*testutils.TestClientConn, *Balancer) {
-	tcc := testutils.NewTestClientConn(t)
+func setup(t *testing.T) (*testutils.BalancerClientConn, *Balancer) {
+	tcc := testutils.NewBalancerClientConn(t)
 	return tcc, NewBalancer(tcc, balancer.BuildOptions{})
 }
 

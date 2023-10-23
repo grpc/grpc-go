@@ -16,17 +16,15 @@
  *
  */
 
-package dns
+package dns_test
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"net"
-	"os"
-	"reflect"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -34,381 +32,168 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer"
 	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/leakcheck"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/resolver/dns"
+	dnsinternal "google.golang.org/grpc/internal/resolver/dns/internal"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-)
 
-func TestMain(m *testing.M) {
-	// Set a non-zero duration only for tests which are actually testing that
-	// feature.
-	replaceDNSResRate(time.Duration(0)) // No nead to clean up since we os.Exit
-	overrideDefaultResolver(false)      // No nead to clean up since we os.Exit
-	code := m.Run()
-	os.Exit(code)
-}
+	_ "google.golang.org/grpc" // To initialize internal.ParseServiceConfig
+)
 
 const (
 	txtBytesLimit           = 255
 	defaultTestTimeout      = 10 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
+
+	colonDefaultPort = ":443"
 )
 
-type testClientConn struct {
-	resolver.ClientConn // For unimplemented functions
-	target              string
-	m1                  sync.Mutex
-	state               resolver.State
-	updateStateCalls    int
-	errChan             chan error
-	updateStateErr      error
+type s struct {
+	grpctest.Tester
 }
 
-func (t *testClientConn) UpdateState(s resolver.State) error {
-	t.m1.Lock()
-	defer t.m1.Unlock()
-	t.state = s
-	t.updateStateCalls++
-	// This error determines whether DNS Resolver actually decides to exponentially backoff or not.
-	// This can be any error.
-	return t.updateStateErr
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
 }
 
-func (t *testClientConn) getState() (resolver.State, int) {
-	t.m1.Lock()
-	defer t.m1.Unlock()
-	return t.state, t.updateStateCalls
+// Override the default net.Resolver with a test resolver.
+func overrideNetResolver(t *testing.T, r *testNetResolver) {
+	origNetResolver := dnsinternal.NewNetResolver
+	dnsinternal.NewNetResolver = func(string) (dnsinternal.NetResolver, error) { return r, nil }
+	t.Cleanup(func() { dnsinternal.NewNetResolver = origNetResolver })
 }
 
-func scFromState(s resolver.State) string {
-	if s.ServiceConfig != nil {
-		if s.ServiceConfig.Err != nil {
-			return ""
+// Override the DNS Min Res Rate used by the resolver.
+func overrideResolutionRate(t *testing.T, d time.Duration) {
+	origMinResRate := dnsinternal.MinResolutionRate
+	dnsinternal.MinResolutionRate = d
+	t.Cleanup(func() { dnsinternal.MinResolutionRate = origMinResRate })
+}
+
+// Override the timer used by the DNS resolver to fire after a duration of d.
+func overrideTimeAfterFunc(t *testing.T, d time.Duration) {
+	origTimeAfter := dnsinternal.TimeAfterFunc
+	dnsinternal.TimeAfterFunc = func(time.Duration) <-chan time.Time {
+		return time.After(d)
+	}
+	t.Cleanup(func() { dnsinternal.TimeAfterFunc = origTimeAfter })
+}
+
+// Override the timer used by the DNS resolver as follows:
+// - use the durChan to read the duration that the resolver wants to wait for
+// - use the timerChan to unblock the wait on the timer
+func overrideTimeAfterFuncWithChannel(t *testing.T) (durChan chan time.Duration, timeChan chan time.Time) {
+	origTimeAfter := dnsinternal.TimeAfterFunc
+	durChan = make(chan time.Duration, 1)
+	timeChan = make(chan time.Time)
+	dnsinternal.TimeAfterFunc = func(d time.Duration) <-chan time.Time {
+		select {
+		case durChan <- d:
+		default:
 		}
-		return s.ServiceConfig.Config.(unparsedServiceConfig).config
+		return timeChan
 	}
-	return ""
+	t.Cleanup(func() { dnsinternal.TimeAfterFunc = origTimeAfter })
+	return durChan, timeChan
 }
 
-type unparsedServiceConfig struct {
-	serviceconfig.Config
-	config string
+func enableSRVLookups(t *testing.T) {
+	origEnableSRVLookups := dns.EnableSRVLookups
+	dns.EnableSRVLookups = true
+	t.Cleanup(func() { dns.EnableSRVLookups = origEnableSRVLookups })
 }
 
-func (t *testClientConn) ParseServiceConfig(s string) *serviceconfig.ParseResult {
-	return &serviceconfig.ParseResult{Config: unparsedServiceConfig{config: s}}
-}
+// Builds a DNS resolver for target and returns a couple of channels to read the
+// state and error pushed by the resolver respectively.
+func buildResolverWithTestClientConn(t *testing.T, target string) (resolver.Resolver, chan resolver.State, chan error) {
+	t.Helper()
 
-func (t *testClientConn) ReportError(err error) {
-	t.errChan <- err
-}
-
-type testResolver struct {
-	// A write to this channel is made when this resolver receives a resolution
-	// request. Tests can rely on reading from this channel to be notified about
-	// resolution requests instead of sleeping for a predefined period of time.
-	lookupHostCh *testutils.Channel
-}
-
-func (tr *testResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
-	if tr.lookupHostCh != nil {
-		tr.lookupHostCh.Send(nil)
+	b := resolver.Get("dns")
+	if b == nil {
+		t.Fatalf("Resolver for dns:/// scheme not registered")
 	}
-	return hostLookup(host)
-}
 
-func (*testResolver) LookupSRV(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
-	return srvLookup(service, proto, name)
-}
-
-func (*testResolver) LookupTXT(ctx context.Context, host string) ([]string, error) {
-	return txtLookup(host)
-}
-
-// overrideDefaultResolver overrides the defaultResolver used by the code with
-// an instance of the testResolver. pushOnLookup controls whether the
-// testResolver created here pushes lookupHost events on its channel.
-func overrideDefaultResolver(pushOnLookup bool) func() {
-	oldResolver := defaultResolver
-
-	var lookupHostCh *testutils.Channel
-	if pushOnLookup {
-		lookupHostCh = testutils.NewChannel()
-	}
-	defaultResolver = &testResolver{lookupHostCh: lookupHostCh}
-
-	return func() {
-		defaultResolver = oldResolver
-	}
-}
-
-func replaceDNSResRate(d time.Duration) func() {
-	oldMinDNSResRate := minDNSResRate
-	minDNSResRate = d
-
-	return func() {
-		minDNSResRate = oldMinDNSResRate
-	}
-}
-
-var hostLookupTbl = struct {
-	sync.Mutex
-	tbl map[string][]string
-}{
-	tbl: map[string][]string{
-		"foo.bar.com":          {"1.2.3.4", "5.6.7.8"},
-		"ipv4.single.fake":     {"1.2.3.4"},
-		"srv.ipv4.single.fake": {"2.4.6.8"},
-		"srv.ipv4.multi.fake":  {},
-		"srv.ipv6.single.fake": {},
-		"srv.ipv6.multi.fake":  {},
-		"ipv4.multi.fake":      {"1.2.3.4", "5.6.7.8", "9.10.11.12"},
-		"ipv6.single.fake":     {"2607:f8b0:400a:801::1001"},
-		"ipv6.multi.fake":      {"2607:f8b0:400a:801::1001", "2607:f8b0:400a:801::1002", "2607:f8b0:400a:801::1003"},
-	},
-}
-
-func hostLookup(host string) ([]string, error) {
-	hostLookupTbl.Lock()
-	defer hostLookupTbl.Unlock()
-	if addrs, ok := hostLookupTbl.tbl[host]; ok {
-		return addrs, nil
-	}
-	return nil, &net.DNSError{
-		Err:         "hostLookup error",
-		Name:        host,
-		Server:      "fake",
-		IsTemporary: true,
-	}
-}
-
-var srvLookupTbl = struct {
-	sync.Mutex
-	tbl map[string][]*net.SRV
-}{
-	tbl: map[string][]*net.SRV{
-		"_grpclb._tcp.srv.ipv4.single.fake": {&net.SRV{Target: "ipv4.single.fake", Port: 1234}},
-		"_grpclb._tcp.srv.ipv4.multi.fake":  {&net.SRV{Target: "ipv4.multi.fake", Port: 1234}},
-		"_grpclb._tcp.srv.ipv6.single.fake": {&net.SRV{Target: "ipv6.single.fake", Port: 1234}},
-		"_grpclb._tcp.srv.ipv6.multi.fake":  {&net.SRV{Target: "ipv6.multi.fake", Port: 1234}},
-	},
-}
-
-func srvLookup(service, proto, name string) (string, []*net.SRV, error) {
-	cname := "_" + service + "._" + proto + "." + name
-	srvLookupTbl.Lock()
-	defer srvLookupTbl.Unlock()
-	if srvs, cnt := srvLookupTbl.tbl[cname]; cnt {
-		return cname, srvs, nil
-	}
-	return "", nil, &net.DNSError{
-		Err:         "srvLookup error",
-		Name:        cname,
-		Server:      "fake",
-		IsTemporary: true,
-	}
-}
-
-// scfs contains an array of service config file string in JSON format.
-// Notes about the scfs contents and usage:
-// scfs contains 4 service config file JSON strings for testing. Inside each
-// service config file, there are multiple choices. scfs[0:3] each contains 5
-// choices, and first 3 choices are nonmatching choices based on canarying rule,
-// while the last two are matched choices. scfs[3] only contains 3 choices, and
-// all of them are nonmatching based on canarying rule. For each of scfs[0:3],
-// the eventually returned service config, which is from the first of the two
-// matched choices, is stored in the corresponding scs element (e.g.
-// scfs[0]->scs[0]). scfs and scs elements are used in pair to test the dns
-// resolver functionality, with scfs as the input and scs used for validation of
-// the output. For scfs[3], it corresponds to empty service config, since there
-// isn't a matched choice.
-var scfs = []string{
-	`[
-	{
-		"clientLanguage": [
-			"CPP",
-			"JAVA"
-		],
-		"serviceConfig": {
-			"loadBalancingPolicy": "grpclb",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "all"
-						}
-					],
-					"timeout": "1s"
-				}
-			]
+	stateCh := make(chan resolver.State, 1)
+	updateStateF := func(s resolver.State) error {
+		select {
+		case stateCh <- s:
+		default:
 		}
-	},
-	{
-		"percentage": 0,
-		"serviceConfig": {
-			"loadBalancingPolicy": "grpclb",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "all"
-						}
-					],
-					"timeout": "1s"
-				}
-			]
-		}
-	},
-	{
-		"clientHostName": [
-			"localhost"
-		],
-		"serviceConfig": {
-			"loadBalancingPolicy": "grpclb",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "all"
-						}
-					],
-					"timeout": "1s"
-				}
-			]
-		}
-	},
-	{
-		"clientLanguage": [
-			"GO"
-		],
-		"percentage": 100,
-		"serviceConfig": {
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"method": "bar"
-						}
-					],
-					"maxRequestMessageBytes": 1024,
-					"maxResponseMessageBytes": 1024
-				}
-			]
-		}
-	},
-	{
-		"serviceConfig": {
-			"loadBalancingPolicy": "round_robin",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "foo",
-							"method": "bar"
-						}
-					],
-					"waitForReady": true
-				}
-			]
+		return nil
+	}
+
+	errCh := make(chan error, 1)
+	reportErrorF := func(err error) {
+		select {
+		case errCh <- err:
+		default:
 		}
 	}
-]`,
-	`[
-	{
-		"clientLanguage": [
-			"CPP",
-			"JAVA"
-		],
-		"serviceConfig": {
-			"loadBalancingPolicy": "grpclb",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "all"
-						}
-					],
-					"timeout": "1s"
-				}
-			]
+
+	tcc := &testutils.ResolverClientConn{Logger: t, UpdateStateF: updateStateF, ReportErrorF: reportErrorF}
+	r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("dns:///%s", target))}, tcc, resolver.BuildOptions{})
+	if err != nil {
+		t.Fatalf("Failed to build DNS resolver for target %q: %v\n", target, err)
+	}
+	t.Cleanup(func() { r.Close() })
+
+	return r, stateCh, errCh
+}
+
+// Waits for a state update from the DNS resolver and verifies the following:
+// - wantAddrs matches the list of addresses in the update
+// - wantBalancerAddrs matches the list of grpclb addresses in the update
+// - wantSC matches the service config in the update
+func verifyUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan resolver.State, wantAddrs, wantBalancerAddrs []resolver.Address, wantSC string) {
+	t.Helper()
+
+	var state resolver.State
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for a state update from the resolver")
+	case state = <-stateCh:
+	}
+
+	if !cmp.Equal(state.Addresses, wantAddrs, cmpopts.EquateEmpty()) {
+		t.Fatalf("Got addresses: %+v, want: %+v", state.Addresses, wantAddrs)
+	}
+	if gs := grpclbstate.Get(state); gs == nil {
+		if len(wantBalancerAddrs) > 0 {
+			t.Fatalf("Got no grpclb addresses. Want %d", len(wantBalancerAddrs))
 		}
-	},
-	{
-		"percentage": 0,
-		"serviceConfig": {
-			"loadBalancingPolicy": "grpclb",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "all"
-						}
-					],
-					"timeout": "1s"
-				}
-			]
-		}
-	},
-	{
-		"clientHostName": [
-			"localhost"
-		],
-		"serviceConfig": {
-			"loadBalancingPolicy": "grpclb",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "all"
-						}
-					],
-					"timeout": "1s"
-				}
-			]
-		}
-	},
-	{
-		"clientLanguage": [
-			"GO"
-		],
-		"percentage": 100,
-		"serviceConfig": {
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "foo",
-							"method": "bar"
-						}
-					],
-					"waitForReady": true,
-					"timeout": "1s",
-					"maxRequestMessageBytes": 1024,
-					"maxResponseMessageBytes": 1024
-				}
-			]
-		}
-	},
-	{
-		"serviceConfig": {
-			"loadBalancingPolicy": "round_robin",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "foo",
-							"method": "bar"
-						}
-					],
-					"waitForReady": true
-				}
-			]
+	} else {
+		if !cmp.Equal(gs.BalancerAddresses, wantBalancerAddrs) {
+			t.Fatalf("Got grpclb addresses %+v, want %+v", gs.BalancerAddresses, wantBalancerAddrs)
 		}
 	}
-]`,
-	`[
+	if wantSC == "{}" {
+		if state.ServiceConfig != nil && state.ServiceConfig.Config != nil {
+			t.Fatalf("Got service config:\n%s \nWant service config: {}", cmp.Diff(nil, state.ServiceConfig.Config))
+		}
+
+	} else if wantSC != "" {
+		wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantSC)
+		if !internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantSCParsed.Config) {
+			t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
+		}
+	}
+}
+
+// This is the service config used by the fake net.Resolver in its TXT record.
+//   - it contains an array of 5 entries
+//   - the first three will be dropped by the DNS resolver as part of its
+//     canarying rule matching functionality:
+//   - the client language does not match in the first entry
+//   - the percentage is set to 0 in the second entry
+//   - the client host name does not match in the third entry
+//   - the fourth and fifth entries will match the canarying rules, and therefore
+//     the fourth entry will be used as it will be  the first matching entry.
+const txtRecordGood = `
+[
 	{
 		"clientLanguage": [
 			"CPP",
@@ -506,8 +291,38 @@ var scfs = []string{
 			]
 		}
 	}
-]`,
-	`[
+]`
+
+// This is the matched portion of the above TXT record entry.
+const scJSON = `
+{
+	"loadBalancingPolicy": "round_robin",
+	"methodConfig": [
+		{
+			"name": [
+				{
+					"service": "foo"
+				}
+			],
+			"waitForReady": true,
+			"timeout": "1s"
+		},
+		{
+			"name": [
+				{
+					"service": "bar"
+				}
+			],
+			"waitForReady": false
+		}
+	]
+}`
+
+// This service config contains three entries, but none of the match the DNS
+// resolver's canarying rules and hence the resulting service config pushed by
+// the DNS resolver will be an empty one.
+const txtRecordNonMatching = `
+[
 	{
 		"clientLanguage": [
 			"CPP",
@@ -561,904 +376,706 @@ var scfs = []string{
 			]
 		}
 	}
-]`,
-}
+]`
 
-// scs contains an array of service config string in JSON format.
-var scs = []string{
-	`{
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"method": "bar"
-						}
-					],
-					"maxRequestMessageBytes": 1024,
-					"maxResponseMessageBytes": 1024
-				}
-			]
-		}`,
-	`{
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "foo",
-							"method": "bar"
-						}
-					],
-					"waitForReady": true,
-					"timeout": "1s",
-					"maxRequestMessageBytes": 1024,
-					"maxResponseMessageBytes": 1024
-				}
-			]
-		}`,
-	`{
-			"loadBalancingPolicy": "round_robin",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "foo"
-						}
-					],
-					"waitForReady": true,
-					"timeout": "1s"
-				},
-				{
-					"name": [
-						{
-							"service": "bar"
-						}
-					],
-					"waitForReady": false
-				}
-			]
-		}`,
-}
-
-// scLookupTbl is a map, which contains targets that have service config to
-// their configs.  Targets not in this set should not have service config.
-var scLookupTbl = map[string]string{
-	"foo.bar.com":          scs[0],
-	"srv.ipv4.single.fake": scs[1],
-	"srv.ipv4.multi.fake":  scs[2],
-}
-
-// generateSC returns a service config string in JSON format for the input name.
-func generateSC(name string) string {
-	return scLookupTbl[name]
-}
-
-// generateSCF generates a slice of strings (aggregately representing a single
-// service config file) for the input config string, which mocks the result
-// from a real DNS TXT record lookup.
-func generateSCF(cfg string) []string {
-	b := append([]byte(txtAttribute), []byte(cfg)...)
-
-	// Split b into multiple strings, each with a max of 255 bytes, which is
-	// the DNS TXT record limit.
-	var r []string
-	for i := 0; i < len(b); i += txtBytesLimit {
-		if i+txtBytesLimit > len(b) {
-			r = append(r, string(b[i:]))
-		} else {
-			r = append(r, string(b[i:i+txtBytesLimit]))
-		}
-	}
-	return r
-}
-
-var txtLookupTbl = struct {
-	sync.Mutex
-	tbl map[string][]string
-}{
-	tbl: map[string][]string{
-		txtPrefix + "foo.bar.com":          generateSCF(scfs[0]),
-		txtPrefix + "srv.ipv4.single.fake": generateSCF(scfs[1]),
-		txtPrefix + "srv.ipv4.multi.fake":  generateSCF(scfs[2]),
-		txtPrefix + "srv.ipv6.single.fake": generateSCF(scfs[3]),
-		txtPrefix + "srv.ipv6.multi.fake":  generateSCF(scfs[3]),
-	},
-}
-
-func txtLookup(host string) ([]string, error) {
-	txtLookupTbl.Lock()
-	defer txtLookupTbl.Unlock()
-	if scs, cnt := txtLookupTbl.tbl[host]; cnt {
-		return scs, nil
-	}
-	return nil, &net.DNSError{
-		Err:         "txtLookup error",
-		Name:        host,
-		Server:      "fake",
-		IsTemporary: true,
-	}
-}
-
-func TestResolve(t *testing.T) {
-	testDNSResolver(t)
-	testDNSResolverWithSRV(t)
-	testDNSResolveNow(t)
-	testIPResolver(t)
-}
-
-func testDNSResolver(t *testing.T) {
-	defer leakcheck.Check(t)
-	defer func(nt func(d time.Duration) *time.Timer) {
-		newTimer = nt
-	}(newTimer)
-	newTimer = func(_ time.Duration) *time.Timer {
-		// Will never fire on its own, will protect from triggering exponential backoff.
-		return time.NewTimer(time.Hour)
-	}
+// Tests the scenario where a name resolves to a list of addresses, possibly
+// some grpclb addresses as well, and a service config. The test verifies that
+// the expected update is pushed to the channel.
+func (s) TestDNSResolver_Basic(t *testing.T) {
 	tests := []struct {
-		target   string
-		addrWant []resolver.Address
-		scWant   string
+		name              string
+		target            string
+		hostLookupTable   map[string][]string
+		srvLookupTable    map[string][]*net.SRV
+		txtLookupTable    map[string][]string
+		wantAddrs         []resolver.Address
+		wantBalancerAddrs []resolver.Address
+		wantSC            string
 	}{
 		{
-			"foo.bar.com",
-			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
-			generateSC("foo.bar.com"),
+			name:   "default_port",
+			target: "foo.bar.com",
+			hostLookupTable: map[string][]string{
+				"foo.bar.com": {"1.2.3.4", "5.6.7.8"},
+			},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+			},
+			wantAddrs:         []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			wantBalancerAddrs: nil,
+			wantSC:            scJSON,
 		},
 		{
-			"foo.bar.com:1234",
-			[]resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
-			generateSC("foo.bar.com"),
+			name:   "specified_port",
+			target: "foo.bar.com:1234",
+			hostLookupTable: map[string][]string{
+				"foo.bar.com": {"1.2.3.4", "5.6.7.8"},
+			},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+			},
+			wantAddrs:         []resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
+			wantBalancerAddrs: nil,
+			wantSC:            scJSON,
 		},
 		{
-			"srv.ipv4.single.fake",
-			[]resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
-			generateSC("srv.ipv4.single.fake"),
+			name:   "ipv4_with_SRV_and_single_grpclb_address",
+			target: "srv.ipv4.single.fake",
+			hostLookupTable: map[string][]string{
+				"srv.ipv4.single.fake": {"2.4.6.8"},
+				"ipv4.single.fake":     {"1.2.3.4"},
+			},
+			srvLookupTable: map[string][]*net.SRV{
+				"_grpclb._tcp.srv.ipv4.single.fake": {&net.SRV{Target: "ipv4.single.fake", Port: 1234}},
+			},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.srv.ipv4.single.fake": txtRecordServiceConfig(txtRecordGood),
+			},
+			wantAddrs:         []resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
+			wantBalancerAddrs: []resolver.Address{{Addr: "1.2.3.4:1234", ServerName: "ipv4.single.fake"}},
+			wantSC:            scJSON,
 		},
 		{
-			"srv.ipv4.multi.fake",
-			nil,
-			generateSC("srv.ipv4.multi.fake"),
+			name:   "ipv4_with_SRV_and_multiple_grpclb_address",
+			target: "srv.ipv4.multi.fake",
+			hostLookupTable: map[string][]string{
+				"ipv4.multi.fake": {"1.2.3.4", "5.6.7.8", "9.10.11.12"},
+			},
+			srvLookupTable: map[string][]*net.SRV{
+				"_grpclb._tcp.srv.ipv4.multi.fake": {&net.SRV{Target: "ipv4.multi.fake", Port: 1234}},
+			},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.srv.ipv4.multi.fake": txtRecordServiceConfig(txtRecordGood),
+			},
+			wantAddrs: nil,
+			wantBalancerAddrs: []resolver.Address{
+				{Addr: "1.2.3.4:1234", ServerName: "ipv4.multi.fake"},
+				{Addr: "5.6.7.8:1234", ServerName: "ipv4.multi.fake"},
+				{Addr: "9.10.11.12:1234", ServerName: "ipv4.multi.fake"},
+			},
+			wantSC: scJSON,
 		},
 		{
-			"srv.ipv6.single.fake",
-			nil,
-			generateSC("srv.ipv6.single.fake"),
+			name:   "ipv6_with_SRV_and_single_grpclb_address",
+			target: "srv.ipv6.single.fake",
+			hostLookupTable: map[string][]string{
+				"srv.ipv6.single.fake": nil,
+				"ipv6.single.fake":     {"2607:f8b0:400a:801::1001"},
+			},
+			srvLookupTable: map[string][]*net.SRV{
+				"_grpclb._tcp.srv.ipv6.single.fake": {&net.SRV{Target: "ipv6.single.fake", Port: 1234}},
+			},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.srv.ipv6.single.fake": txtRecordServiceConfig(txtRecordNonMatching),
+			},
+			wantAddrs:         nil,
+			wantBalancerAddrs: []resolver.Address{{Addr: "[2607:f8b0:400a:801::1001]:1234", ServerName: "ipv6.single.fake"}},
+			wantSC:            "{}",
 		},
 		{
-			"srv.ipv6.multi.fake",
-			nil,
-			generateSC("srv.ipv6.multi.fake"),
+			name:   "ipv6_with_SRV_and_multiple_grpclb_address",
+			target: "srv.ipv6.multi.fake",
+			hostLookupTable: map[string][]string{
+				"srv.ipv6.multi.fake": nil,
+				"ipv6.multi.fake":     {"2607:f8b0:400a:801::1001", "2607:f8b0:400a:801::1002", "2607:f8b0:400a:801::1003"},
+			},
+			srvLookupTable: map[string][]*net.SRV{
+				"_grpclb._tcp.srv.ipv6.multi.fake": {&net.SRV{Target: "ipv6.multi.fake", Port: 1234}},
+			},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.srv.ipv6.multi.fake": txtRecordServiceConfig(txtRecordNonMatching),
+			},
+			wantAddrs: nil,
+			wantBalancerAddrs: []resolver.Address{
+				{Addr: "[2607:f8b0:400a:801::1001]:1234", ServerName: "ipv6.multi.fake"},
+				{Addr: "[2607:f8b0:400a:801::1002]:1234", ServerName: "ipv6.multi.fake"},
+				{Addr: "[2607:f8b0:400a:801::1003]:1234", ServerName: "ipv6.multi.fake"},
+			},
+			wantSC: "{}",
 		},
 	}
 
-	for _, a := range tests {
-		b := NewBuilder()
-		cc := &testClientConn{target: a.target}
-		r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("scheme:///%s", a.target))}, cc, resolver.BuildOptions{})
-		if err != nil {
-			t.Fatalf("%v\n", err)
-		}
-		var state resolver.State
-		var cnt int
-		for i := 0; i < 2000; i++ {
-			state, cnt = cc.getState()
-			if cnt > 0 {
-				break
-			}
-			time.Sleep(time.Millisecond)
-		}
-		if cnt == 0 {
-			t.Fatalf("UpdateState not called after 2s; aborting")
-		}
-		if !cmp.Equal(a.addrWant, state.Addresses, cmpopts.EquateEmpty()) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v", a.target, state.Addresses, a.addrWant)
-		}
-		sc := scFromState(state)
-		if a.scWant != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scWant)
-		}
-		r.Close()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
+			overrideNetResolver(t, &testNetResolver{
+				hostLookupTable: test.hostLookupTable,
+				srvLookupTable:  test.srvLookupTable,
+				txtLookupTable:  test.txtLookupTable,
+			})
+			enableSRVLookups(t)
+			_, stateCh, _ := buildResolverWithTestClientConn(t, test.target)
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			verifyUpdateFromResolver(ctx, t, stateCh, test.wantAddrs, test.wantBalancerAddrs, test.wantSC)
+		})
 	}
 }
 
-// DNS Resolver immediately starts polling on an error from grpc. This should continue until the ClientConn doesn't
-// send back an error from updating the DNS Resolver's state.
-func TestDNSResolverExponentialBackoff(t *testing.T) {
-	defer leakcheck.Check(t)
-	defer func(nt func(d time.Duration) *time.Timer) {
-		newTimer = nt
-	}(newTimer)
-	timerChan := testutils.NewChannel()
-	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on its own, allows this test to call timer immediately.
-		t := time.NewTimer(time.Hour)
-		timerChan.Send(t)
-		return t
-	}
+// Tests the case where the channel returns an error for the update pushed by
+// the DNS resolver. Verifies that the DNS resolver backs off before trying to
+// resolve. Once the channel returns a nil error, the test verifies that the DNS
+// resolver does not backoff anymore.
+func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 	tests := []struct {
-		name     string
-		target   string
-		addrWant []resolver.Address
-		scWant   string
+		name            string
+		target          string
+		hostLookupTable map[string][]string
+		txtLookupTable  map[string][]string
+		wantAddrs       []resolver.Address
+		wantSC          string
 	}{
 		{
-			"happy case default port",
-			"foo.bar.com",
-			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
-			generateSC("foo.bar.com"),
+			name:            "happy case default port",
+			target:          "foo.bar.com",
+			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+			},
+			wantAddrs: []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			wantSC:    scJSON,
 		},
 		{
-			"happy case specified port",
-			"foo.bar.com:1234",
-			[]resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
-			generateSC("foo.bar.com"),
+			name:            "happy case specified port",
+			target:          "foo.bar.com:1234",
+			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+			},
+			wantAddrs: []resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
+			wantSC:    scJSON,
 		},
 		{
-			"happy case another default port",
-			"srv.ipv4.single.fake",
-			[]resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
-			generateSC("srv.ipv4.single.fake"),
+			name:   "happy case another default port",
+			target: "srv.ipv4.single.fake",
+			hostLookupTable: map[string][]string{
+				"srv.ipv4.single.fake": {"2.4.6.8"},
+				"ipv4.single.fake":     {"1.2.3.4"},
+			},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.srv.ipv4.single.fake": txtRecordServiceConfig(txtRecordGood),
+			},
+			wantAddrs: []resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
+			wantSC:    scJSON,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			b := NewBuilder()
-			cc := &testClientConn{target: test.target}
-			// Cause ClientConn to return an error.
-			cc.updateStateErr = balancer.ErrBadResolverState
-			r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("scheme:///%s", test.target))}, cc, resolver.BuildOptions{})
+			durChan, timeChan := overrideTimeAfterFuncWithChannel(t)
+			overrideNetResolver(t, &testNetResolver{
+				hostLookupTable: test.hostLookupTable,
+				txtLookupTable:  test.txtLookupTable,
+			})
+
+			// Set the test clientconn to return error back to the resolver when
+			// it pushes an update on the channel.
+			var returnNilErr atomic.Bool
+			updateStateF := func(s resolver.State) error {
+				if returnNilErr.Load() {
+					return nil
+				}
+				return balancer.ErrBadResolverState
+			}
+			tcc := &testutils.ResolverClientConn{Logger: t, UpdateStateF: updateStateF}
+
+			b := resolver.Get("dns")
+			if b == nil {
+				t.Fatalf("Resolver for dns:/// scheme not registered")
+			}
+			r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("dns:///%s", test.target))}, tcc, resolver.BuildOptions{})
 			if err != nil {
-				t.Fatalf("Error building resolver for target %v: %v", test.target, err)
+				t.Fatalf("Failed to build DNS resolver for target %q: %v\n", test.target, err)
 			}
-			var state resolver.State
-			var cnt int
-			for i := 0; i < 2000; i++ {
-				state, cnt = cc.getState()
-				if cnt > 0 {
-					break
-				}
-				time.Sleep(time.Millisecond)
-			}
-			if cnt == 0 {
-				t.Fatalf("UpdateState not called after 2s; aborting")
-			}
-			if !reflect.DeepEqual(test.addrWant, state.Addresses) {
-				t.Errorf("Resolved addresses of target: %q = %+v, want %+v", test.target, state.Addresses, test.addrWant)
-			}
-			sc := scFromState(state)
-			if test.scWant != sc {
-				t.Errorf("Resolved service config of target: %q = %+v, want %+v", test.target, sc, test.scWant)
-			}
-			ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer ctxCancel()
-			// Cause timer to go off 10 times, and see if it calls updateState() correctly.
-			for i := 0; i < 10; i++ {
-				timer, err := timerChan.Receive(ctx)
-				if err != nil {
-					t.Fatalf("Error receiving timer from mock NewTimer call: %v", err)
-				}
-				timerPointer := timer.(*time.Timer)
-				timerPointer.Reset(0)
-			}
-			// Poll to see if DNS Resolver updated state the correct number of times, which allows time for the DNS Resolver to call
-			// ClientConn update state.
-			deadline := time.Now().Add(defaultTestTimeout)
-			for {
-				cc.m1.Lock()
-				got := cc.updateStateCalls
-				cc.m1.Unlock()
-				if got == 11 {
-					break
+			defer r.Close()
+
+			// Expect the DNS resolver to backoff and attempt to re-resolve.
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			const retries = 10
+			var prevDur time.Duration
+			for i := 0; i < retries; i++ {
+				select {
+				case <-ctx.Done():
+					t.Fatalf("(Iteration: %d): Timeout when waiting for DNS resolver to backoff", i)
+				case dur := <-durChan:
+					if dur <= prevDur {
+						t.Fatalf("(Iteration: %d): Unexpected decrease in amount of time to backoff", i)
+					}
 				}
 
-				if time.Now().After(deadline) {
-					t.Fatalf("Exponential backoff is not working as expected - should update state 11 times instead of %d", got)
-				}
-
-				time.Sleep(time.Millisecond)
+				// Unblock the DNS resolver's backoff by pushing the current time.
+				timeChan <- time.Now()
 			}
 
-			// Update resolver.ClientConn to not return an error anymore - this should stop it from backing off.
-			cc.updateStateErr = nil
-			timer, err := timerChan.Receive(ctx)
+			// Update resolver.ClientConn to not return an error anymore.
+			returnNilErr.Store(true)
+
+			// Unblock the DNS resolver's backoff, if ongoing, while we set the
+			// test clientConn to not return an error anymore.
+			select {
+			case timeChan <- time.Now():
+			default:
+			}
+
+			// Verify that the DNS resolver does not backoff anymore.
+			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+			defer sCancel()
+			select {
+			case <-durChan:
+				t.Fatal("Unexpected DNS resolver backoff")
+			case <-sCtx.Done():
+			}
+		})
+	}
+}
+
+// Tests the case where the DNS resolver is asked to re-resolve by invoking the
+// ResolveNow method.
+func (s) TestDNSResolver_ResolveNow(t *testing.T) {
+	const target = "foo.bar.com"
+
+	overrideResolutionRate(t, 0)
+	overrideTimeAfterFunc(t, 0)
+	tr := &testNetResolver{
+		hostLookupTable: map[string][]string{
+			"foo.bar.com": {"1.2.3.4", "5.6.7.8"},
+		},
+		txtLookupTable: map[string][]string{
+			"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+		},
+	}
+	overrideNetResolver(t, tr)
+
+	r, stateCh, _ := buildResolverWithTestClientConn(t, target)
+
+	// Verify that the first update pushed by the resolver matches expectations.
+	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
+	wantSC := scJSON
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
+
+	// Update state in the fake net.Resolver to return only one address and a
+	// new service config.
+	tr.UpdateHostLookupTable(map[string][]string{target: {"1.2.3.4"}})
+	tr.UpdateTXTLookupTable(map[string][]string{
+		"_grpc_config.foo.bar.com": txtRecordServiceConfig(`[{"serviceConfig":{"loadBalancingPolicy": "grpclb"}}]`),
+	})
+
+	// Ask the resolver to re-resolve and verify that the new update matches
+	// expectations.
+	r.ResolveNow(resolver.ResolveNowOptions{})
+	wantAddrs = []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}}
+	wantSC = `{"loadBalancingPolicy": "grpclb"}`
+	verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
+
+	// Update state in the fake resolver to return no addresses and the same
+	// service config as before.
+	tr.UpdateHostLookupTable(map[string][]string{target: nil})
+
+	// Ask the resolver to re-resolve and verify that the new update matches
+	// expectations.
+	r.ResolveNow(resolver.ResolveNowOptions{})
+	verifyUpdateFromResolver(ctx, t, stateCh, nil, nil, wantSC)
+}
+
+// Tests the case where the given name is an IP address and verifies that the
+// update pushed by the DNS resolver meets expectations.
+func (s) TestIPResolver(t *testing.T) {
+	tests := []struct {
+		name     string
+		target   string
+		wantAddr []resolver.Address
+	}{
+		{
+			name:     "localhost ipv4 default port",
+			target:   "127.0.0.1",
+			wantAddr: []resolver.Address{{Addr: "127.0.0.1:443"}},
+		},
+		{
+			name:     "localhost ipv4 non-default port",
+			target:   "127.0.0.1:12345",
+			wantAddr: []resolver.Address{{Addr: "127.0.0.1:12345"}},
+		},
+		{
+			name:     "localhost ipv6 default port no brackets",
+			target:   "::1",
+			wantAddr: []resolver.Address{{Addr: "[::1]:443"}},
+		},
+		{
+			name:     "localhost ipv6 default port with brackets",
+			target:   "[::1]",
+			wantAddr: []resolver.Address{{Addr: "[::1]:443"}},
+		},
+		{
+			name:     "localhost ipv6 non-default port",
+			target:   "[::1]:12345",
+			wantAddr: []resolver.Address{{Addr: "[::1]:12345"}},
+		},
+		{
+			name:     "ipv6 default port no brackets",
+			target:   "2001:db8:85a3::8a2e:370:7334",
+			wantAddr: []resolver.Address{{Addr: "[2001:db8:85a3::8a2e:370:7334]:443"}},
+		},
+		{
+			name:     "ipv6 default port with brackets",
+			target:   "[2001:db8:85a3::8a2e:370:7334]",
+			wantAddr: []resolver.Address{{Addr: "[2001:db8:85a3::8a2e:370:7334]:443"}},
+		},
+		{
+			name:     "ipv6 non-default port with brackets",
+			target:   "[2001:db8:85a3::8a2e:370:7334]:12345",
+			wantAddr: []resolver.Address{{Addr: "[2001:db8:85a3::8a2e:370:7334]:12345"}},
+		},
+		{
+			name:     "abbreviated ipv6 address",
+			target:   "[2001:db8::1]:http",
+			wantAddr: []resolver.Address{{Addr: "[2001:db8::1]:http"}},
+		},
+		// TODO(yuxuanli): zone support?
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			overrideResolutionRate(t, 0)
+			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
+			r, stateCh, _ := buildResolverWithTestClientConn(t, test.target)
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			verifyUpdateFromResolver(ctx, t, stateCh, test.wantAddr, nil, "")
+
+			// Attempt to re-resolve should not result in a state update.
+			r.ResolveNow(resolver.ResolveNowOptions{})
+			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+			defer sCancel()
+			select {
+			case <-sCtx.Done():
+			case s := <-stateCh:
+				t.Fatalf("Unexpected state update from the resolver: %+v", s)
+			}
+		})
+	}
+}
+
+// Tests the DNS resolver builder with different target names.
+func (s) TestResolverBuild(t *testing.T) {
+	tests := []struct {
+		name    string
+		target  string
+		wantErr string
+	}{
+		{
+			name:   "valid url",
+			target: "www.google.com",
+		},
+		{
+			name:   "host port",
+			target: "foo.bar:12345",
+		},
+		{
+			name:   "ipv4 address with default port",
+			target: "127.0.0.1",
+		},
+		{
+			name:   "ipv6 address without brackets and default port",
+			target: "::",
+		},
+		{
+			name:   "ipv4 address with non-default port",
+			target: "127.0.0.1:12345",
+		},
+		{
+			name:   "localhost ipv6 with brackets",
+			target: "[::1]:80",
+		},
+		{
+			name:   "ipv6 address with brackets",
+			target: "[2001:db8:a0b:12f0::1]:21",
+		},
+		{
+			name:   "empty host with port",
+			target: ":80",
+		},
+		{
+			name:   "ipv6 address with zone",
+			target: "[fe80::1%25lo0]:80",
+		},
+		{
+			name:   "url with port",
+			target: "golang.org:http",
+		},
+		{
+			name:   "ipv6 address with non integer port",
+			target: "[2001:db8::1]:http",
+		},
+		{
+			name:    "address ends with colon",
+			target:  "[2001:db8::1]:",
+			wantErr: dnsinternal.ErrEndsWithColon.Error(),
+		},
+		{
+			name:    "address contains only a colon",
+			target:  ":",
+			wantErr: dnsinternal.ErrEndsWithColon.Error(),
+		},
+		{
+			name:    "empty address",
+			target:  "",
+			wantErr: dnsinternal.ErrMissingAddr.Error(),
+		},
+		{
+			name:    "invalid address",
+			target:  "[2001:db8:a0b:12f0::1",
+			wantErr: "invalid target address",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
+
+			b := resolver.Get("dns")
+			if b == nil {
+				t.Fatalf("Resolver for dns:/// scheme not registered")
+			}
+
+			tcc := &testutils.ResolverClientConn{Logger: t}
+			r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("dns:///%s", test.target))}, tcc, resolver.BuildOptions{})
 			if err != nil {
-				t.Fatalf("Error receiving timer from mock NewTimer call: %v", err)
+				if test.wantErr == "" {
+					t.Fatalf("DNS resolver build for target %q failed with error: %v", test.target, err)
+				}
+				if !strings.Contains(err.Error(), test.wantErr) {
+					t.Fatalf("DNS resolver build for target %q failed with error: %v, wantErr: %s", test.target, err, test.wantErr)
+				}
+				return
 			}
-			timerPointer := timer.(*time.Timer)
-			timerPointer.Reset(0)
-			// Poll to see if DNS Resolver updated state the correct number of times, which allows time for the DNS Resolver to call
-			// ClientConn update state the final time. The DNS Resolver should then stop polling.
-			deadline = time.Now().Add(defaultTestTimeout)
-			for {
-				cc.m1.Lock()
-				got := cc.updateStateCalls
-				cc.m1.Unlock()
-				if got == 12 {
-					break
-				}
-
-				if time.Now().After(deadline) {
-					t.Fatalf("Exponential backoff is not working as expected - should stop backing off at 12 total UpdateState calls instead of %d", got)
-				}
-
-				_, err := timerChan.ReceiveOrFail()
-				if err {
-					t.Fatalf("Should not poll again after Client Conn stops returning error.")
-				}
-
-				time.Sleep(time.Millisecond)
+			if err == nil && test.wantErr != "" {
+				t.Fatalf("DNS resolver build for target %q succeeded when expected to fail with error: %s", test.target, test.wantErr)
 			}
 			r.Close()
 		})
 	}
 }
 
-func testDNSResolverWithSRV(t *testing.T) {
-	EnableSRVLookups = true
-	defer func() {
-		EnableSRVLookups = false
-	}()
-	defer leakcheck.Check(t)
-	defer func(nt func(d time.Duration) *time.Timer) {
-		newTimer = nt
-	}(newTimer)
-	newTimer = func(_ time.Duration) *time.Timer {
-		// Will never fire on its own, will protect from triggering exponential backoff.
-		return time.NewTimer(time.Hour)
-	}
+// Tests scenarios where fetching of service config is enabled or disabled, and
+// verifies that the expected update is pushed by the DNS resolver.
+func (s) TestDisableServiceConfig(t *testing.T) {
 	tests := []struct {
-		target      string
-		addrWant    []resolver.Address
-		grpclbAddrs []resolver.Address
-		scWant      string
-	}{
-		{
-			"foo.bar.com",
-			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
-			nil,
-			generateSC("foo.bar.com"),
-		},
-		{
-			"foo.bar.com:1234",
-			[]resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
-			nil,
-			generateSC("foo.bar.com"),
-		},
-		{
-			"srv.ipv4.single.fake",
-			[]resolver.Address{{Addr: "2.4.6.8" + colonDefaultPort}},
-			[]resolver.Address{{Addr: "1.2.3.4:1234", ServerName: "ipv4.single.fake"}},
-			generateSC("srv.ipv4.single.fake"),
-		},
-		{
-			"srv.ipv4.multi.fake",
-			nil,
-			[]resolver.Address{
-				{Addr: "1.2.3.4:1234", ServerName: "ipv4.multi.fake"},
-				{Addr: "5.6.7.8:1234", ServerName: "ipv4.multi.fake"},
-				{Addr: "9.10.11.12:1234", ServerName: "ipv4.multi.fake"},
-			},
-			generateSC("srv.ipv4.multi.fake"),
-		},
-		{
-			"srv.ipv6.single.fake",
-			nil,
-			[]resolver.Address{{Addr: "[2607:f8b0:400a:801::1001]:1234", ServerName: "ipv6.single.fake"}},
-			generateSC("srv.ipv6.single.fake"),
-		},
-		{
-			"srv.ipv6.multi.fake",
-			nil,
-			[]resolver.Address{
-				{Addr: "[2607:f8b0:400a:801::1001]:1234", ServerName: "ipv6.multi.fake"},
-				{Addr: "[2607:f8b0:400a:801::1002]:1234", ServerName: "ipv6.multi.fake"},
-				{Addr: "[2607:f8b0:400a:801::1003]:1234", ServerName: "ipv6.multi.fake"},
-			},
-			generateSC("srv.ipv6.multi.fake"),
-		},
-	}
-
-	for _, a := range tests {
-		b := NewBuilder()
-		cc := &testClientConn{target: a.target}
-		r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("scheme:///%s", a.target))}, cc, resolver.BuildOptions{})
-		if err != nil {
-			t.Fatalf("%v\n", err)
-		}
-		defer r.Close()
-		var state resolver.State
-		var cnt int
-		for i := 0; i < 2000; i++ {
-			state, cnt = cc.getState()
-			if cnt > 0 {
-				break
-			}
-			time.Sleep(time.Millisecond)
-		}
-		if cnt == 0 {
-			t.Fatalf("UpdateState not called after 2s; aborting")
-		}
-		if !cmp.Equal(a.addrWant, state.Addresses, cmpopts.EquateEmpty()) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v", a.target, state.Addresses, a.addrWant)
-		}
-		gs := grpclbstate.Get(state)
-		if (gs == nil && len(a.grpclbAddrs) > 0) ||
-			(gs != nil && !reflect.DeepEqual(a.grpclbAddrs, gs.BalancerAddresses)) {
-			t.Errorf("Resolved state of target: %q = %+v (State=%+v), want state.Attributes.State=%+v", a.target, state, gs, a.grpclbAddrs)
-		}
-		sc := scFromState(state)
-		if a.scWant != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scWant)
-		}
-	}
-}
-
-func mutateTbl(target string) func() {
-	hostLookupTbl.Lock()
-	oldHostTblEntry := hostLookupTbl.tbl[target]
-	hostLookupTbl.tbl[target] = hostLookupTbl.tbl[target][:len(oldHostTblEntry)-1]
-	hostLookupTbl.Unlock()
-	txtLookupTbl.Lock()
-	oldTxtTblEntry := txtLookupTbl.tbl[txtPrefix+target]
-	txtLookupTbl.tbl[txtPrefix+target] = []string{txtAttribute + `[{"serviceConfig":{"loadBalancingPolicy": "grpclb"}}]`}
-	txtLookupTbl.Unlock()
-
-	return func() {
-		hostLookupTbl.Lock()
-		hostLookupTbl.tbl[target] = oldHostTblEntry
-		hostLookupTbl.Unlock()
-		txtLookupTbl.Lock()
-		if len(oldTxtTblEntry) == 0 {
-			delete(txtLookupTbl.tbl, txtPrefix+target)
-		} else {
-			txtLookupTbl.tbl[txtPrefix+target] = oldTxtTblEntry
-		}
-		txtLookupTbl.Unlock()
-	}
-}
-
-func testDNSResolveNow(t *testing.T) {
-	defer leakcheck.Check(t)
-	defer func(nt func(d time.Duration) *time.Timer) {
-		newTimer = nt
-	}(newTimer)
-	newTimer = func(_ time.Duration) *time.Timer {
-		// Will never fire on its own, will protect from triggering exponential backoff.
-		return time.NewTimer(time.Hour)
-	}
-	tests := []struct {
-		target   string
-		addrWant []resolver.Address
-		addrNext []resolver.Address
-		scWant   string
-		scNext   string
-	}{
-		{
-			"foo.bar.com",
-			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
-			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}},
-			generateSC("foo.bar.com"),
-			`{"loadBalancingPolicy": "grpclb"}`,
-		},
-	}
-
-	for _, a := range tests {
-		b := NewBuilder()
-		cc := &testClientConn{target: a.target}
-		r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("scheme:///%s", a.target))}, cc, resolver.BuildOptions{})
-		if err != nil {
-			t.Fatalf("%v\n", err)
-		}
-		defer r.Close()
-		var state resolver.State
-		var cnt int
-		for i := 0; i < 2000; i++ {
-			state, cnt = cc.getState()
-			if cnt > 0 {
-				break
-			}
-			time.Sleep(time.Millisecond)
-		}
-		if cnt == 0 {
-			t.Fatalf("UpdateState not called after 2s; aborting.  state=%v", state)
-		}
-		if !reflect.DeepEqual(a.addrWant, state.Addresses) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v", a.target, state.Addresses, a.addrWant)
-		}
-		sc := scFromState(state)
-		if a.scWant != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scWant)
-		}
-
-		revertTbl := mutateTbl(a.target)
-		r.ResolveNow(resolver.ResolveNowOptions{})
-		for i := 0; i < 2000; i++ {
-			state, cnt = cc.getState()
-			if cnt == 2 {
-				break
-			}
-			time.Sleep(time.Millisecond)
-		}
-		if cnt != 2 {
-			t.Fatalf("UpdateState not called after 2s; aborting.  state=%v", state)
-		}
-		sc = scFromState(state)
-		if !reflect.DeepEqual(a.addrNext, state.Addresses) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v", a.target, state.Addresses, a.addrNext)
-		}
-		if a.scNext != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scNext)
-		}
-		revertTbl()
-	}
-}
-
-const colonDefaultPort = ":" + defaultPort
-
-func testIPResolver(t *testing.T) {
-	defer leakcheck.Check(t)
-	defer func(nt func(d time.Duration) *time.Timer) {
-		newTimer = nt
-	}(newTimer)
-	newTimer = func(_ time.Duration) *time.Timer {
-		// Will never fire on its own, will protect from triggering exponential backoff.
-		return time.NewTimer(time.Hour)
-	}
-	tests := []struct {
-		target string
-		want   []resolver.Address
-	}{
-		{"127.0.0.1", []resolver.Address{{Addr: "127.0.0.1" + colonDefaultPort}}},
-		{"127.0.0.1:12345", []resolver.Address{{Addr: "127.0.0.1:12345"}}},
-		{"::1", []resolver.Address{{Addr: "[::1]" + colonDefaultPort}}},
-		{"[::1]:12345", []resolver.Address{{Addr: "[::1]:12345"}}},
-		{"[::1]", []resolver.Address{{Addr: "[::1]:443"}}},
-		{"2001:db8:85a3::8a2e:370:7334", []resolver.Address{{Addr: "[2001:db8:85a3::8a2e:370:7334]" + colonDefaultPort}}},
-		{"[2001:db8:85a3::8a2e:370:7334]", []resolver.Address{{Addr: "[2001:db8:85a3::8a2e:370:7334]" + colonDefaultPort}}},
-		{"[2001:db8:85a3::8a2e:370:7334]:12345", []resolver.Address{{Addr: "[2001:db8:85a3::8a2e:370:7334]:12345"}}},
-		{"[2001:db8::1]:http", []resolver.Address{{Addr: "[2001:db8::1]:http"}}},
-		// TODO(yuxuanli): zone support?
-	}
-
-	for _, v := range tests {
-		b := NewBuilder()
-		cc := &testClientConn{target: v.target}
-		r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("scheme:///%s", v.target))}, cc, resolver.BuildOptions{})
-		if err != nil {
-			t.Fatalf("%v\n", err)
-		}
-		var state resolver.State
-		var cnt int
-		for {
-			state, cnt = cc.getState()
-			if cnt > 0 {
-				break
-			}
-			time.Sleep(time.Millisecond)
-		}
-		if !reflect.DeepEqual(v.want, state.Addresses) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v", v.target, state.Addresses, v.want)
-		}
-		r.ResolveNow(resolver.ResolveNowOptions{})
-		for i := 0; i < 50; i++ {
-			state, cnt = cc.getState()
-			if cnt > 1 {
-				t.Fatalf("Unexpected second call by resolver to UpdateState.  state: %v", state)
-			}
-			time.Sleep(time.Millisecond)
-		}
-		r.Close()
-	}
-}
-
-func TestResolveFunc(t *testing.T) {
-	defer leakcheck.Check(t)
-	defer func(nt func(d time.Duration) *time.Timer) {
-		newTimer = nt
-	}(newTimer)
-	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on its own, will protect from triggering exponential backoff.
-		return time.NewTimer(time.Hour)
-	}
-	tests := []struct {
-		addr string
-		want error
-	}{
-		// TODO(yuxuanli): More false cases?
-		{"www.google.com", nil},
-		{"foo.bar:12345", nil},
-		{"127.0.0.1", nil},
-		{"::", nil},
-		{"127.0.0.1:12345", nil},
-		{"[::1]:80", nil},
-		{"[2001:db8:a0b:12f0::1]:21", nil},
-		{":80", nil},
-		{"127.0.0...1:12345", nil},
-		{"[fe80::1%25lo0]:80", nil},
-		{"golang.org:http", nil},
-		{"[2001:db8::1]:http", nil},
-		{"[2001:db8::1]:", errEndsWithColon},
-		{":", errEndsWithColon},
-		{"", errMissingAddr},
-		{"[2001:db8:a0b:12f0::1", fmt.Errorf("invalid target address [2001:db8:a0b:12f0::1, error info: address [2001:db8:a0b:12f0::1:443: missing ']' in address")},
-	}
-
-	b := NewBuilder()
-	for _, v := range tests {
-		cc := &testClientConn{target: v.addr, errChan: make(chan error, 1)}
-		r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("scheme:///%s", v.addr))}, cc, resolver.BuildOptions{})
-		if err == nil {
-			r.Close()
-		}
-		if !reflect.DeepEqual(err, v.want) {
-			t.Errorf("Build(%q, cc, _) = %v, want %v", v.addr, err, v.want)
-		}
-	}
-}
-
-func TestDisableServiceConfig(t *testing.T) {
-	defer leakcheck.Check(t)
-	defer func(nt func(d time.Duration) *time.Timer) {
-		newTimer = nt
-	}(newTimer)
-	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on its own, will protect from triggering exponential backoff.
-		return time.NewTimer(time.Hour)
-	}
-	tests := []struct {
+		name                 string
 		target               string
-		scWant               string
+		hostLookupTable      map[string][]string
+		txtLookupTable       map[string][]string
 		disableServiceConfig bool
+		wantAddrs            []resolver.Address
+		wantSC               string
 	}{
 		{
-			"foo.bar.com",
-			generateSC("foo.bar.com"),
-			false,
+			name:            "false",
+			target:          "foo.bar.com",
+			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+			},
+			disableServiceConfig: false,
+			wantAddrs:            []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			wantSC:               scJSON,
 		},
 		{
-			"foo.bar.com",
-			"",
-			true,
+			name:            "true",
+			target:          "foo.bar.com",
+			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+			},
+			disableServiceConfig: true,
+			wantAddrs:            []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			wantSC:               "{}",
 		},
 	}
 
-	for _, a := range tests {
-		b := NewBuilder()
-		cc := &testClientConn{target: a.target}
-		r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("scheme:///%s", a.target))}, cc, resolver.BuildOptions{DisableServiceConfig: a.disableServiceConfig})
-		if err != nil {
-			t.Fatalf("%v\n", err)
-		}
-		defer r.Close()
-		var cnt int
-		var state resolver.State
-		for i := 0; i < 2000; i++ {
-			state, cnt = cc.getState()
-			if cnt > 0 {
-				break
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
+			overrideNetResolver(t, &testNetResolver{
+				hostLookupTable: test.hostLookupTable,
+				txtLookupTable:  test.txtLookupTable,
+			})
+
+			b := resolver.Get("dns")
+			if b == nil {
+				t.Fatalf("Resolver for dns:/// scheme not registered")
 			}
-			time.Sleep(time.Millisecond)
-		}
-		if cnt == 0 {
-			t.Fatalf("UpdateState not called after 2s; aborting")
-		}
-		sc := scFromState(state)
-		if a.scWant != sc {
-			t.Errorf("Resolved service config of target: %q = %+v, want %+v", a.target, sc, a.scWant)
-		}
-	}
-}
 
-func TestTXTError(t *testing.T) {
-	defer leakcheck.Check(t)
-	defer func(nt func(d time.Duration) *time.Timer) {
-		newTimer = nt
-	}(newTimer)
-	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on its own, will protect from triggering exponential backoff.
-		return time.NewTimer(time.Hour)
-	}
-	defer func(v bool) { envconfig.TXTErrIgnore = v }(envconfig.TXTErrIgnore)
-	for _, ignore := range []bool{false, true} {
-		envconfig.TXTErrIgnore = ignore
-		b := NewBuilder()
-		cc := &testClientConn{target: "ipv4.single.fake"} // has A records but not TXT records.
-		r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("scheme:///%s", "ipv4.single.fake"))}, cc, resolver.BuildOptions{})
-		if err != nil {
-			t.Fatalf("%v\n", err)
-		}
-		defer r.Close()
-		var cnt int
-		var state resolver.State
-		for i := 0; i < 2000; i++ {
-			state, cnt = cc.getState()
-			if cnt > 0 {
-				break
+			stateCh := make(chan resolver.State, 1)
+			updateStateF := func(s resolver.State) error {
+				stateCh <- s
+				return nil
 			}
-			time.Sleep(time.Millisecond)
-		}
-		if cnt == 0 {
-			t.Fatalf("UpdateState not called after 2s; aborting")
-		}
-		if !ignore && (state.ServiceConfig == nil || state.ServiceConfig.Err == nil) {
-			t.Errorf("state.ServiceConfig = %v; want non-nil error", state.ServiceConfig)
-		} else if ignore && state.ServiceConfig != nil {
-			t.Errorf("state.ServiceConfig = %v; want nil", state.ServiceConfig)
-		}
-	}
-}
-
-func TestDNSResolverRetry(t *testing.T) {
-	defer func(nt func(d time.Duration) *time.Timer) {
-		newTimer = nt
-	}(newTimer)
-	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on its own, will protect from triggering exponential backoff.
-		return time.NewTimer(time.Hour)
-	}
-	b := NewBuilder()
-	target := "ipv4.single.fake"
-	cc := &testClientConn{target: target}
-	r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("scheme:///%s", target))}, cc, resolver.BuildOptions{})
-	if err != nil {
-		t.Fatalf("%v\n", err)
-	}
-	defer r.Close()
-	var state resolver.State
-	for i := 0; i < 2000; i++ {
-		state, _ = cc.getState()
-		if len(state.Addresses) == 1 {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if len(state.Addresses) != 1 {
-		t.Fatalf("UpdateState not called with 1 address after 2s; aborting.  state=%v", state)
-	}
-	want := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}}
-	if !reflect.DeepEqual(want, state.Addresses) {
-		t.Errorf("Resolved addresses of target: %q = %+v, want %+v", target, state.Addresses, want)
-	}
-	// mutate the host lookup table so the target has 0 address returned.
-	revertTbl := mutateTbl(target)
-	// trigger a resolve that will get empty address list
-	r.ResolveNow(resolver.ResolveNowOptions{})
-	for i := 0; i < 2000; i++ {
-		state, _ = cc.getState()
-		if len(state.Addresses) == 0 {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if len(state.Addresses) != 0 {
-		t.Fatalf("UpdateState not called with 0 address after 2s; aborting.  state=%v", state)
-	}
-	revertTbl()
-	// wait for the retry to happen in two seconds.
-	r.ResolveNow(resolver.ResolveNowOptions{})
-	for i := 0; i < 2000; i++ {
-		state, _ = cc.getState()
-		if len(state.Addresses) == 1 {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if !reflect.DeepEqual(want, state.Addresses) {
-		t.Errorf("Resolved addresses of target: %q = %+v, want %+v", target, state.Addresses, want)
-	}
-}
-
-func TestCustomAuthority(t *testing.T) {
-	defer leakcheck.Check(t)
-	defer func(nt func(d time.Duration) *time.Timer) {
-		newTimer = nt
-	}(newTimer)
-	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on its own, will protect from triggering exponential backoff.
-		return time.NewTimer(time.Hour)
-	}
-
-	tests := []struct {
-		authority     string
-		authorityWant string
-		expectError   bool
-	}{
-		{
-			"4.3.2.1:" + defaultDNSSvrPort,
-			"4.3.2.1:" + defaultDNSSvrPort,
-			false,
-		},
-		{
-			"4.3.2.1:123",
-			"4.3.2.1:123",
-			false,
-		},
-		{
-			"4.3.2.1",
-			"4.3.2.1:" + defaultDNSSvrPort,
-			false,
-		},
-		{
-			"::1",
-			"[::1]:" + defaultDNSSvrPort,
-			false,
-		},
-		{
-			"[::1]",
-			"[::1]:" + defaultDNSSvrPort,
-			false,
-		},
-		{
-			"[::1]:123",
-			"[::1]:123",
-			false,
-		},
-		{
-			"dnsserver.com",
-			"dnsserver.com:" + defaultDNSSvrPort,
-			false,
-		},
-		{
-			":123",
-			"localhost:123",
-			false,
-		},
-		{
-			":",
-			"",
-			true,
-		},
-		{
-			"[::1]:",
-			"",
-			true,
-		},
-		{
-			"dnsserver.com:",
-			"",
-			true,
-		},
-	}
-	oldAddressDialer := addressDialer
-	defer func() {
-		addressDialer = oldAddressDialer
-	}()
-
-	for _, a := range tests {
-		errChan := make(chan error, 1)
-		addressDialer = func(authority string) func(ctx context.Context, network, address string) (net.Conn, error) {
-			if authority != a.authorityWant {
-				errChan <- fmt.Errorf("wrong custom authority passed to resolver. input: %s expected: %s actual: %s", a.authority, a.authorityWant, authority)
-			} else {
-				errChan <- nil
-			}
-			return func(ctx context.Context, network, address string) (net.Conn, error) {
-				return nil, errors.New("no need to dial")
-			}
-		}
-
-		mockEndpointTarget := "foo.bar.com"
-		b := NewBuilder()
-		cc := &testClientConn{target: mockEndpointTarget, errChan: make(chan error, 1)}
-		target := resolver.Target{
-			URL: *testutils.MustParseURL(fmt.Sprintf("scheme://%s/%s", a.authority, mockEndpointTarget)),
-		}
-		r, err := b.Build(target, cc, resolver.BuildOptions{})
-
-		if err == nil {
-			r.Close()
-
-			err = <-errChan
+			tcc := &testutils.ResolverClientConn{Logger: t, UpdateStateF: updateStateF}
+			r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("dns:///%s", test.target))}, tcc, resolver.BuildOptions{DisableServiceConfig: test.disableServiceConfig})
 			if err != nil {
-				t.Errorf(err.Error())
+				t.Fatalf("Failed to build DNS resolver for target %q: %v\n", test.target, err)
+			}
+			defer r.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			verifyUpdateFromResolver(ctx, t, stateCh, test.wantAddrs, nil, test.wantSC)
+		})
+	}
+}
+
+// Tests the case where a TXT lookup is expected to return an error. Verifies
+// that errors are ignored with the corresponding env var is set.
+func (s) TestTXTError(t *testing.T) {
+	for _, ignore := range []bool{false, true} {
+		t.Run(fmt.Sprintf("%v", ignore), func(t *testing.T) {
+			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
+			overrideNetResolver(t, &testNetResolver{hostLookupTable: map[string][]string{"ipv4.single.fake": {"1.2.3.4"}}})
+
+			origTXTIgnore := envconfig.TXTErrIgnore
+			envconfig.TXTErrIgnore = ignore
+			defer func() { envconfig.TXTErrIgnore = origTXTIgnore }()
+
+			// There is no entry for "ipv4.single.fake" in the txtLookupTbl
+			// maintained by the fake net.Resolver. So, a TXT lookup for this
+			// name will return an error.
+			_, stateCh, _ := buildResolverWithTestClientConn(t, "ipv4.single.fake")
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			var state resolver.State
+			select {
+			case <-ctx.Done():
+				t.Fatal("Timeout when waiting for a state update from the resolver")
+			case state = <-stateCh:
 			}
 
-			if a.expectError {
-				t.Errorf("custom authority should have caused an error: %s", a.authority)
+			if ignore {
+				if state.ServiceConfig != nil {
+					t.Fatalf("Received non-nil service config: %+v; want nil", state.ServiceConfig)
+				}
+			} else {
+				if state.ServiceConfig == nil || state.ServiceConfig.Err == nil {
+					t.Fatalf("Received service config %+v; want non-nil error", state.ServiceConfig)
+				}
 			}
-		} else if !a.expectError {
-			t.Errorf("unexpected error using custom authority %s: %s", a.authority, err)
-		}
+		})
+	}
+}
+
+// Tests different cases for a user's dial target that specifies a non-empty
+// authority (or Host field of the URL).
+func (s) TestCustomAuthority(t *testing.T) {
+	tests := []struct {
+		name          string
+		authority     string
+		wantAuthority string
+		wantBuildErr  bool
+	}{
+		{
+			name:          "authority with default DNS port",
+			authority:     "4.3.2.1:53",
+			wantAuthority: "4.3.2.1:53",
+		},
+		{
+			name:          "authority with non-default DNS port",
+			authority:     "4.3.2.1:123",
+			wantAuthority: "4.3.2.1:123",
+		},
+		{
+			name:          "authority with no port",
+			authority:     "4.3.2.1",
+			wantAuthority: "4.3.2.1:53",
+		},
+		{
+			name:          "ipv6 authority with no port",
+			authority:     "::1",
+			wantAuthority: "[::1]:53",
+		},
+		{
+			name:          "ipv6 authority with brackets and no port",
+			authority:     "[::1]",
+			wantAuthority: "[::1]:53",
+		},
+		{
+			name:          "ipv6 authority with brackers and non-default DNS port",
+			authority:     "[::1]:123",
+			wantAuthority: "[::1]:123",
+		},
+		{
+			name:          "host name with no port",
+			authority:     "dnsserver.com",
+			wantAuthority: "dnsserver.com:53",
+		},
+		{
+			name:          "no host port and non-default port",
+			authority:     ":123",
+			wantAuthority: "localhost:123",
+		},
+		{
+			name:          "only colon",
+			authority:     ":",
+			wantAuthority: "",
+			wantBuildErr:  true,
+		},
+		{
+			name:          "ipv6 name ending in colon",
+			authority:     "[::1]:",
+			wantAuthority: "",
+			wantBuildErr:  true,
+		},
+		{
+			name:          "host name ending in colon",
+			authority:     "dnsserver.com:",
+			wantAuthority: "",
+			wantBuildErr:  true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
+
+			// Override the address dialer to verify the authority being passed.
+			origAddressDialer := dnsinternal.AddressDialer
+			errChan := make(chan error, 1)
+			dnsinternal.AddressDialer = func(authority string) func(ctx context.Context, network, address string) (net.Conn, error) {
+				if authority != test.wantAuthority {
+					errChan <- fmt.Errorf("wrong custom authority passed to resolver. target: %s got authority: %s want authority: %s", test.authority, authority, test.wantAuthority)
+				} else {
+					errChan <- nil
+				}
+				return func(ctx context.Context, network, address string) (net.Conn, error) {
+					return nil, errors.New("no need to dial")
+				}
+			}
+			defer func() { dnsinternal.AddressDialer = origAddressDialer }()
+
+			b := resolver.Get("dns")
+			if b == nil {
+				t.Fatalf("Resolver for dns:/// scheme not registered")
+			}
+
+			tcc := &testutils.ResolverClientConn{Logger: t}
+			endpoint := "foo.bar.com"
+			target := resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("dns://%s/%s", test.authority, endpoint))}
+			r, err := b.Build(target, tcc, resolver.BuildOptions{})
+			if (err != nil) != test.wantBuildErr {
+				t.Fatalf("DNS resolver build for target %+v returned error %v: wantErr: %v\n", target, err, test.wantBuildErr)
+			}
+			if err != nil {
+				return
+			}
+			defer r.Close()
+
+			if err := <-errChan; err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
@@ -1466,60 +1083,21 @@ func TestCustomAuthority(t *testing.T) {
 // requests. It sets the re-resolution rate to a small value and repeatedly
 // calls ResolveNow() and ensures only the expected number of resolution
 // requests are made.
-
-func TestRateLimitedResolve(t *testing.T) {
-	defer leakcheck.Check(t)
-	defer func(nt func(d time.Duration) *time.Timer) {
-		newTimer = nt
-	}(newTimer)
-	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on its own, will protect from triggering exponential
-		// backoff.
-		return time.NewTimer(time.Hour)
+func (s) TestRateLimitedResolve(t *testing.T) {
+	const target = "foo.bar.com"
+	_, timeChan := overrideTimeAfterFuncWithChannel(t)
+	tr := &testNetResolver{
+		lookupHostCh:    testutils.NewChannel(),
+		hostLookupTable: map[string][]string{target: {"1.2.3.4", "5.6.7.8"}},
 	}
-	defer func(nt func(d time.Duration) *time.Timer) {
-		newTimerDNSResRate = nt
-	}(newTimerDNSResRate)
+	overrideNetResolver(t, tr)
 
-	timerChan := testutils.NewChannel()
-	newTimerDNSResRate = func(d time.Duration) *time.Timer {
-		// Will never fire on its own, allows this test to call timer
-		// immediately.
-		t := time.NewTimer(time.Hour)
-		timerChan.Send(t)
-		return t
-	}
-
-	// Create a new testResolver{} for this test because we want the exact count
-	// of the number of times the resolver was invoked.
-	nc := overrideDefaultResolver(true)
-	defer nc()
-
-	target := "foo.bar.com"
-	b := NewBuilder()
-	cc := &testClientConn{target: target}
-
-	r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("scheme:///%s", target))}, cc, resolver.BuildOptions{})
-	if err != nil {
-		t.Fatalf("resolver.Build() returned error: %v\n", err)
-	}
-	defer r.Close()
-
-	dnsR, ok := r.(*dnsResolver)
-	if !ok {
-		t.Fatalf("resolver.Build() returned unexpected type: %T\n", dnsR)
-	}
-
-	tr, ok := dnsR.resolver.(*testResolver)
-	if !ok {
-		t.Fatalf("delegate resolver returned unexpected type: %T\n", tr)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+	r, stateCh, _ := buildResolverWithTestClientConn(t, target)
 
 	// Wait for the first resolution request to be done. This happens as part
 	// of the first iteration of the for loop in watcher().
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	if _, err := tr.lookupHostCh.Receive(ctx); err != nil {
 		t.Fatalf("Timed out waiting for lookup() call.")
 	}
@@ -1532,21 +1110,19 @@ func TestRateLimitedResolve(t *testing.T) {
 
 	continueCtx, continueCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer continueCancel()
-
 	if _, err := tr.lookupHostCh.Receive(continueCtx); err == nil {
 		t.Fatalf("Should not have looked up again as DNS Min Res Rate timer has not gone off.")
 	}
 
-	// Make the DNSMinResRate timer fire immediately (by receiving it, then
-	// resetting to 0), this will unblock the resolver which is currently
-	// blocked on the DNS Min Res Rate timer going off, which will allow it to
-	// continue to the next iteration of the watcher loop.
-	timer, err := timerChan.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Error receiving timer from mock NewTimer call: %v", err)
+	// Make the DNSMinResRate timer fire immediately, by sending the current
+	// time on it. This will unblock the resolver which is currently blocked on
+	// the DNS Min Res Rate timer going off, which will allow it to continue to
+	// the next iteration of the watcher loop.
+	select {
+	case timeChan <- time.Now():
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for the DNS resolver to block on DNS Min Res Rate to elapse")
 	}
-	timerPointer := timer.(*time.Timer)
-	timerPointer.Reset(0)
 
 	// Now that DNS Min Res Rate timer has gone off, it should lookup again.
 	if _, err := tr.lookupHostCh.Receive(ctx); err != nil {
@@ -1558,99 +1134,84 @@ func TestRateLimitedResolve(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		r.ResolveNow(resolver.ResolveNowOptions{})
 	}
-
-	if _, err = tr.lookupHostCh.Receive(continueCtx); err == nil {
+	continueCtx, continueCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer continueCancel()
+	if _, err := tr.lookupHostCh.Receive(continueCtx); err == nil {
 		t.Fatalf("Should not have looked up again as DNS Min Res Rate timer has not gone off.")
 	}
 
 	// Make the DNSMinResRate timer fire immediately again.
-	timer, err = timerChan.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Error receiving timer from mock NewTimer call: %v", err)
+	select {
+	case timeChan <- time.Now():
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for the DNS resolver to block on DNS Min Res Rate to elapse")
 	}
-	timerPointer = timer.(*time.Timer)
-	timerPointer.Reset(0)
 
 	// Now that DNS Min Res Rate timer has gone off, it should lookup again.
-	if _, err = tr.lookupHostCh.Receive(ctx); err != nil {
+	if _, err := tr.lookupHostCh.Receive(ctx); err != nil {
 		t.Fatalf("Timed out waiting for lookup() call.")
 	}
 
 	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
 	var state resolver.State
-	for {
-		var cnt int
-		state, cnt = cc.getState()
-		if cnt > 0 {
-			break
-		}
-		time.Sleep(time.Millisecond)
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for a state update from the resolver")
+	case state = <-stateCh:
 	}
-	if !reflect.DeepEqual(state.Addresses, wantAddrs) {
-		t.Errorf("Resolved addresses of target: %q = %+v, want %+v", target, state.Addresses, wantAddrs)
+	if !cmp.Equal(state.Addresses, wantAddrs, cmpopts.EquateEmpty()) {
+		t.Fatalf("Got addresses: %+v, want: %+v", state.Addresses, wantAddrs)
 	}
 }
 
-// DNS Resolver immediately starts polling on an error. This will cause the re-resolution to return another error.
-// Thus, test that it constantly sends errors to the grpc.ClientConn.
-func TestReportError(t *testing.T) {
+// Test verifies that when the DNS resolver gets an error from the underlying
+// net.Resolver, it reports the error to the channel and backs off and retries.
+func (s) TestReportError(t *testing.T) {
+	durChan, timeChan := overrideTimeAfterFuncWithChannel(t)
+	overrideNetResolver(t, &testNetResolver{})
+
 	const target = "notfoundaddress"
-	defer func(nt func(d time.Duration) *time.Timer) {
-		newTimer = nt
-	}(newTimer)
-	timerChan := testutils.NewChannel()
-	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on its own, allows this test to call timer immediately.
-		t := time.NewTimer(time.Hour)
-		timerChan.Send(t)
-		return t
-	}
-	cc := &testClientConn{target: target, errChan: make(chan error)}
-	totalTimesCalledError := 0
-	b := NewBuilder()
-	r, err := b.Build(resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("scheme:///%s", target))}, cc, resolver.BuildOptions{})
-	if err != nil {
-		t.Fatalf("Error building resolver for target %v: %v", target, err)
-	}
+	_, _, errorCh := buildResolverWithTestClientConn(t, target)
+
 	// Should receive first error.
-	err = <-cc.errChan
-	if !strings.Contains(err.Error(), "hostLookup error") {
-		t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
-	}
-	totalTimesCalledError++
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
-	timer, err := timerChan.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Error receiving timer from mock NewTimer call: %v", err)
-	}
-	timerPointer := timer.(*time.Timer)
-	timerPointer.Reset(0)
-	defer r.Close()
-
-	// Cause timer to go off 10 times, and see if it matches DNS Resolver updating Error.
-	for i := 0; i < 10; i++ {
-		// Should call ReportError().
-		err = <-cc.errChan
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for an error from the resolver")
+	case err := <-errorCh:
 		if !strings.Contains(err.Error(), "hostLookup error") {
 			t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
 		}
-		totalTimesCalledError++
-		timer, err := timerChan.Receive(ctx)
-		if err != nil {
-			t.Fatalf("Error receiving timer from mock NewTimer call: %v", err)
-		}
-		timerPointer := timer.(*time.Timer)
-		timerPointer.Reset(0)
 	}
 
-	if totalTimesCalledError != 11 {
-		t.Errorf("ReportError() not called 11 times, instead called %d times.", totalTimesCalledError)
-	}
-	// Clean up final watcher iteration.
-	<-cc.errChan
-	_, err = timerChan.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Error receiving timer from mock NewTimer call: %v", err)
+	// Expect the DNS resolver to backoff and attempt to re-resolve. Every time,
+	// the DNS resolver will receive the same error from the net.Resolver and is
+	// expected to push it to the channel.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	const retries = 10
+	var prevDur time.Duration
+	for i := 0; i < retries; i++ {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("(Iteration: %d): Timeout when waiting for DNS resolver to backoff", i)
+		case dur := <-durChan:
+			if dur <= prevDur {
+				t.Fatalf("(Iteration: %d): Unexpected decrease in amount of time to backoff", i)
+			}
+		}
+
+		// Unblock the DNS resolver's backoff by pushing the current time.
+		timeChan <- time.Now()
+
+		select {
+		case <-ctx.Done():
+			t.Fatal("Timeout when waiting for an error from the resolver")
+		case err := <-errorCh:
+			if !strings.Contains(err.Error(), "hostLookup error") {
+				t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
+			}
+		}
 	}
 }

@@ -66,6 +66,7 @@ import (
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/keepalive"
@@ -348,8 +349,8 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 	case recvBufferPoolNil:
 		// Do nothing.
 	case recvBufferPoolSimple:
-		opts = append(opts, grpc.WithRecvBufferPool(grpc.NewSharedBufferPool()))
-		sopts = append(sopts, grpc.RecvBufferPool(grpc.NewSharedBufferPool()))
+		opts = append(opts, experimental.WithRecvBufferPool(grpc.NewSharedBufferPool()))
+		sopts = append(sopts, experimental.RecvBufferPool(grpc.NewSharedBufferPool()))
 	default:
 		logger.Fatalf("Unknown shared recv buffer pool type: %v", bf.RecvBufferPool)
 	}
