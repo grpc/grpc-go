@@ -390,9 +390,11 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		ht.Close(errors.New("request is done processing"))
 	}()
 
+	ctx = metadata.NewIncomingContext(ctx, ht.headerMD)
 	req := ht.req
 	s := &Stream{
 		id:               0, // irrelevant
+		ctx:              ctx,
 		requestRead:      func(int) {},
 		cancel:           cancel,
 		buf:              newRecvBuffer(),
@@ -402,7 +404,6 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		contentSubtype:   ht.contentSubtype,
 		headerWireLength: 0, // won't have access to header wire length until golang/go#18997.
 	}
-	ctx = metadata.NewIncomingContext(ctx, ht.headerMD)
 	s.trReader = &transportReader{
 		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf, freeBuffer: func(*bytes.Buffer) {}},
 		windowHandler: func(int) {},
