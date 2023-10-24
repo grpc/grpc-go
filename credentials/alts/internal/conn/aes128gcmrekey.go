@@ -27,7 +27,7 @@ import (
 const (
 	// Overflow length n in bytes, never encrypt more than 2^(n*8) frames (in
 	// each direction).
-	overflowLenAES128GCMRekey = 8
+	overflowLenAES128GCMRekey = 4
 	nonceLen                  = 12
 	aeadKeyLen                = 16
 	kdfKeyLen                 = 32
