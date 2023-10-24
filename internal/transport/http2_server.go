@@ -74,7 +74,6 @@ type http2Server struct {
 	loopy       *loopyWriter
 	readerDone  chan struct{} // sync point to enable testing.
 	writerDone  chan struct{} // sync point to enable testing.
-	remoteAddr  net.Addr
 	peer        peer.Peer
 	inTapHandle tap.ServerInHandle
 	framer      *framer
