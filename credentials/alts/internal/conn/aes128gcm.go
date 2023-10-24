@@ -28,7 +28,7 @@ import (
 const (
 	// Overflow length n in bytes, never encrypt more than 2^(n*8) frames (in
 	// each direction).
-	overflowLenAES128GCM = 4
+	overflowLenAES128GCM = 5
 )
 
 // aes128gcm is the struct that holds necessary information for ALTS record.
