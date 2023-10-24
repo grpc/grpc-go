@@ -40,7 +40,7 @@ const minCRLRefreshDuration = 1 * time.Minute
 // establishment, so implementations of the CRL function need to be fast, and
 // slow things such as file IO should be done asynchronously.
 //
-// [gRFC A69]: https://github.com/grpc/proposal/blob/dddf32d0116376dd0c48adee7b0071a20bc82b5b/A69-crl-enhancements.md
+// [gRFC A69]: https://github.com/grpc/proposal/pull/382
 type CRLProvider interface {
 	// CRL accepts x509 Cert and returns a related CRL struct, which can contain
 	// either an empty or non-empty list of revoked certificates. If an error is
@@ -136,7 +136,7 @@ func (o *FileWatcherOptions) validate() error {
 	}
 	// Checks related to RefreshDuration.
 	if o.RefreshDuration <= 0 {
-		grpclogLogger.Warningf("RefreshDuration is not set or negative: provided value %v, default value %v will be used.", o.RefreshDuration, defaultCRLRefreshDuration)
+		grpclogLogger.Infof("RefreshDuration is not set or negative: provided value %v, default value %v will be used.", o.RefreshDuration, defaultCRLRefreshDuration)
 		o.RefreshDuration = defaultCRLRefreshDuration
 	}
 	if o.RefreshDuration < minCRLRefreshDuration {
@@ -176,7 +176,7 @@ func (p *FileWatcherCRLProvider) Close() {
 // loop since it's called periodically (see FileWatcherOptions.RefreshDuration)
 // by run goroutine.
 //
-// [gRFC A69]: https://github.com/grpc/proposal/blob/dddf32d0116376dd0c48adee7b0071a20bc82b5b/A69-crl-enhancements.md
+// [gRFC A69]: https://github.com/grpc/proposal/pull/382
 func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
 	p.scanMutex.Lock()
 	defer p.scanMutex.Unlock()
