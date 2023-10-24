@@ -1293,7 +1293,6 @@ func (t *http2Server) Drain(debugData string) {
 	}
 	t.drainEvent = grpcsync.NewEvent()
 	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(debugData), headsUp: true})
-	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(debugData), headsUp: true})
 }
 
 var goAwayPing = &ping{data: [8]byte{1, 6, 1, 8, 0, 3, 3, 9}}
@@ -1409,7 +1408,7 @@ func (t *http2Server) Peer() *peer.Peer {
 	return &peer.Peer{
 		Addr:      t.peer.Addr,
 		LocalAddr: t.peer.LocalAddr,
-		AuthInfo:  t.peer.AuthInfo,
+		AuthInfo:  t.peer.AuthInfo, // Can be nil
 	}
 }
 
