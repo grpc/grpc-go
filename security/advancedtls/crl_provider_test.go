@@ -101,9 +101,20 @@ func (s) TestFileWatcherCRLProviderConfig(t *testing.T) {
 		t.Fatal("Unexpected error:", err)
 	}
 	if defaultProvider.opts.RefreshDuration != defaultCRLRefreshDuration {
-		t.Fatalf("RefreshDuration is not properly updated by validate() func")
+		t.Fatalf("RefreshDuration for defaultCRLRefreshDuration case is not properly updated by validate() func")
 	}
 	defaultProvider.Close()
+	tooFastRefreshProvider, err := NewFileWatcherCRLProvider(FileWatcherOptions{
+		CRLDirectory:    testdata.Path("crl"),
+		RefreshDuration: 5 * time.Second,
+	})
+	if err != nil {
+		t.Fatal("Unexpected error:", err)
+	}
+	if tooFastRefreshProvider.opts.RefreshDuration != minCRLRefreshDuration {
+		t.Fatalf("RefreshDuration for minCRLRefreshDuration case is not properly updated by validate() func")
+	}
+	tooFastRefreshProvider.Close()
 
 	customCallback := func(err error) {
 		fmt.Printf("Custom error message: %v", err)

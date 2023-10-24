@@ -103,15 +103,15 @@ type CRL struct {
 func NewCRL(b []byte) (*CRL, error) {
 	crl, err := parseRevocationList(b)
 	if err != nil {
-		return nil, fmt.Errorf("parseCrl() failed err = %v", err)
+		return nil, fmt.Errorf("fail to parse CRL: %v", err)
 	}
 	crlExt, err := parseCRLExtensions(crl)
 	if err != nil {
-		return nil, fmt.Errorf("parseCRLExtensions() failed err = %v", err)
+		return nil, fmt.Errorf("fail to parse CRL extensions: %v", err)
 	}
 	crlExt.rawIssuer, err = extractCRLIssuer(b)
 	if err != nil {
-		return nil, fmt.Errorf("extractCRLIssuer() failed err= %v", err)
+		return nil, fmt.Errorf("fail to extract CRL issuer failed err= %v", err)
 	}
 	return crlExt, nil
 }
@@ -121,11 +121,11 @@ func NewCRL(b []byte) (*CRL, error) {
 func ReadCRLFile(path string) (*CRL, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("readFile(%v) failed err = %v", path, err)
+		return nil, fmt.Errorf("cannot read file from provided path %q: %v", path, err)
 	}
 	crl, err := NewCRL(b)
 	if err != nil {
-		return nil, fmt.Errorf("ReadCRLFile(%v) failed err = %v", path, err)
+		return nil, fmt.Errorf("cannot construct CRL from file %q: %v", path, err)
 	}
 	return crl, nil
 }

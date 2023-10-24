@@ -27,6 +27,7 @@ import (
 )
 
 const defaultCRLRefreshDuration = 1 * time.Hour
+const minCRLRefreshDuration = 1 * time.Minute
 
 // CRLProvider is the interface to be implemented to enable custom CRL provider
 // behavior, as defined in [gRFC A69].
@@ -115,13 +116,11 @@ func NewFileWatcherCRLProvider(o FileWatcherOptions) (*FileWatcherCRLProvider, e
 	if err := o.validate(); err != nil {
 		return nil, err
 	}
-	done := make(chan struct{})
-	stop := make(chan struct{})
 	provider := &FileWatcherCRLProvider{
 		crls: make(map[string]*CRL),
 		opts: o,
-		stop: stop,
-		done: done,
+		stop: make(chan struct{}),
+		done: make(chan struct{}),
 	}
 	go provider.run()
 	return provider, nil
@@ -136,9 +135,13 @@ func (o *FileWatcherOptions) validate() error {
 		return fmt.Errorf("advancedtls: CRLDirectory %v is not readable: %v", o.CRLDirectory, err)
 	}
 	// Checks related to RefreshDuration.
-	if o.RefreshDuration < time.Minute {
+	if o.RefreshDuration <= 0 {
+		grpclogLogger.Warningf("RefreshDuration is not set or negative: provided value %v, default value %v will be used.", o.RefreshDuration, defaultCRLRefreshDuration)
 		o.RefreshDuration = defaultCRLRefreshDuration
-		grpclogLogger.Warningf("RefreshDuration must be larger than 1 minute: provided value %v, default value %v will be used.", o.RefreshDuration, defaultCRLRefreshDuration)
+	}
+	if o.RefreshDuration < minCRLRefreshDuration {
+		grpclogLogger.Warningf("RefreshDuration must be at least 1 minute: provided value %v, minimum value %v will be used.", o.RefreshDuration, minCRLRefreshDuration)
+		o.RefreshDuration = minCRLRefreshDuration
 	}
 	return nil
 }
