@@ -28,21 +28,22 @@ import (
 	"net"
 	"strconv"
 
-	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+
+	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 )
 
 var logger = grpclog.Component("rbac")
 
-var getConnection = internal.GetConnection.(func(ctx context.Context) net.Conn)
+var getConnection = transport.GetConnection
 
 // ChainEngine represents a chain of RBAC Engines, used to make authorization
 // decisions on incoming RPCs.

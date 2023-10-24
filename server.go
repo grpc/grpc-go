@@ -81,7 +81,6 @@ func init() {
 	}
 	internal.BinaryLogger = binaryLogger
 	internal.JoinServerOptions = newJoinServerOption
-	internal.GetConnection = getConnection
 	internal.RecvBufferPool = recvBufferPool
 }
 
@@ -983,15 +982,8 @@ func getConnection(ctx context.Context) net.Conn {
 	return conn
 }
 
-// setConnection adds the connection to the context to be able to get
-// information about the destination ip and port for an incoming RPC. This also
-// allows any unary or streaming interceptors to see the connection.
-func setConnection(ctx context.Context, conn net.Conn) context.Context {
-	return context.WithValue(ctx, connectionKey{}, conn)
-}
-
 func (s *Server) serveStreams(ctx context.Context, st transport.ServerTransport, rawConn net.Conn) {
-	ctx = setConnection(ctx, rawConn)
+	ctx = transport.SetConnection(ctx, rawConn)
 	ctx = peer.NewContext(ctx, st.Peer())
 	for _, sh := range s.opts.statsHandlers {
 		ctx = sh.TagConn(ctx, &stats.ConnTagInfo{

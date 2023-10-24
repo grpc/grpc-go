@@ -59,6 +59,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -5828,7 +5829,7 @@ func (s) TestClientSettingsFloodCloseConn(t *testing.T) {
 }
 
 func unaryInterceptorVerifyConn(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	conn := internal.GetConnection.(func(context.Context) net.Conn)(ctx)
+	conn := transport.GetConnection(ctx)
 	if conn == nil {
 		return nil, status.Error(codes.NotFound, "connection was not in context")
 	}
@@ -5853,7 +5854,7 @@ func (s) TestUnaryServerInterceptorGetsConnection(t *testing.T) {
 }
 
 func streamingInterceptorVerifyConn(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	conn := internal.GetConnection.(func(context.Context) net.Conn)(ss.Context())
+	conn := transport.GetConnection(ss.Context())
 	if conn == nil {
 		return status.Error(codes.NotFound, "connection was not in context")
 	}
