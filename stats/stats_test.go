@@ -20,12 +20,7 @@ package stats_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/internal/stubstatshandler"
-	"google.golang.org/grpc/internal/testutils"
 	"io"
 	"net"
 	"reflect"
@@ -36,7 +31,10 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
@@ -1471,8 +1469,9 @@ func (s) TestMultipleServerStatsHandler(t *testing.T) {
 // names are registered should return true, and any other query should return
 // false.
 func (s) TestStatsHandlerCallsServerIsRegisteredMethod(t *testing.T) {
-	errorCh := testutils.NewChannel()
-	stubStatsHandler := &stubstatshandler.StubStatsHandler{
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	stubStatsHandler := &testutils.StubStatsHandler{
 		TagRPCF: func(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 			// OpenTelemetry instrumentation needs the passed in Server to determine if
 			// methods are registered in different handle calls in to record metrics.
@@ -1482,27 +1481,23 @@ func (s) TestStatsHandlerCallsServerIsRegisteredMethod(t *testing.T) {
 			// component accesses this server and the subsequent helper on the server.
 			server := internal.ServerFromContext.(func(context.Context) *grpc.Server)(ctx)
 			if server == nil {
-				errorCh.Send("stats handler received ctx has no server present")
+				t.Errorf("stats handler received ctx has no server present")
 			}
 			isRegisteredMethod := internal.IsRegisteredMethod.(func(*grpc.Server, string) bool)
 			// /s/m and s/m are valid.
 			if !isRegisteredMethod(server, "/grpc.testing.TestService/UnaryCall") {
-				errorCh.Send(errors.New("UnaryCall should be a registered method according to server"))
-				return ctx
+				t.Errorf("UnaryCall should be a registered method according to server")
 			}
 			if !isRegisteredMethod(server, "grpc.testing.TestService/FullDuplexCall") {
-				errorCh.Send(errors.New("FullDuplexCall should be a registered method according to server"))
-				return ctx
+				t.Errorf("FullDuplexCall should be a registered method according to server")
 			}
 			if isRegisteredMethod(server, "/grpc.testing.TestService/DoesNotExistCall") {
-				errorCh.Send(errors.New("DoesNotExistCall should not be a registered method according to server"))
-				return ctx
+				t.Errorf("DoesNotExistCall should not be a registered method according to server")
 			}
 			if isRegisteredMethod(server, "/unknownService/UnaryCall") {
-				errorCh.Send(errors.New("/unknownService/UnaryCall should not be a registered method according to server"))
-				return ctx
+				t.Errorf("/unknownService/UnaryCall should not be a registered method according to server")
 			}
-			errorCh.Send(nil)
+			wg.Done()
 			return ctx
 		},
 	}
@@ -1528,11 +1523,5 @@ func (s) TestStatsHandlerCallsServerIsRegisteredMethod(t *testing.T) {
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{}}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
-	err, errRecv := errorCh.Receive(ctx)
-	if errRecv != nil {
-		t.Fatalf("error receiving from channel: %v", errRecv)
-	}
-	if err != nil {
-		t.Fatalf("error received from error channel: %v", err)
-	}
+	wg.Wait()
 }

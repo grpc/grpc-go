@@ -75,7 +75,7 @@ var (
 	DrainServerTransports any // func(*grpc.Server, string)
 	// IsRegisteredMethod returns whether the passed in method is registered as
 	// a method on the server.
-	IsRegisteredMethod any // func(*grpc.Server, string)
+	IsRegisteredMethod any // func(*grpc.Server, string) bool
 	// ServerFromContext returns the server from the context.
 	ServerFromContext any // func(context.Context) *grpc.Server
 	// AddGlobalServerOptions adds an array of ServerOption that will be

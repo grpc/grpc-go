@@ -16,24 +16,21 @@
  *
  */
 
-// Package stubstatshandler is a stubbable implementation of
-// google.golang.org/grpc/stats.Handler for testing purposes.
-package stubstatshandler
+package testutils
 
 import (
 	"context"
 
 	"google.golang.org/grpc/stats"
-
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
 
 // StubStatsHandler is a stats handler that is easy to customize within
-// individual test cases.
+// individual test cases. It is a stubbable implementation of
+// google.golang.org/grpc/stats.Handler for testing purposes.
 type StubStatsHandler struct {
 	// Guarantees we satisfy this interface; panics if unimplemented methods are
 	// called.
-	testgrpc.TestServiceServer
+	stats.Handler
 
 	TagRPCF     func(ctx context.Context, info *stats.RPCTagInfo) context.Context
 	HandleRPCF  func(ctx context.Context, info stats.RPCStats)
