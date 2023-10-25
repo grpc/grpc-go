@@ -77,7 +77,7 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats []s
 
 	var localAddr net.Addr
 	if la := r.Context().Value(http.LocalAddrContextKey); la != nil {
-		localAddr = la.(net.Addr)
+		localAddr, _ = la.(net.Addr)
 	}
 	var authInfo credentials.AuthInfo
 	if r.TLS != nil {
