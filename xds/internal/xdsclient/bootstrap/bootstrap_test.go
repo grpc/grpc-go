@@ -975,10 +975,6 @@ func TestNewConfigWithFederation(t *testing.T) {
 		},
 	}
 
-	oldFederationSupport := envconfig.XDSFederation
-	envconfig.XDSFederation = true
-	defer func() { envconfig.XDSFederation = oldFederationSupport }()
-
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testNewConfigWithFileNameEnv(t, test.name, test.wantErr, test.wantConfig)

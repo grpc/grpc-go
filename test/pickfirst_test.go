@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -376,8 +375,6 @@ func (s) TestPickFirst_StickyTransientFailure(t *testing.T) {
 
 // Tests the PF LB policy with shuffling enabled.
 func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
-	defer func(old bool) { envconfig.PickFirstLBConfig = old }(envconfig.PickFirstLBConfig)
-	envconfig.PickFirstLBConfig = true
 	const serviceConfig = `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": true }}]}`
 
 	// Install a shuffler that always reverses two entries.
@@ -429,45 +426,6 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 	}
 }
 
-// Tests the PF LB policy with the environment variable support of address list
-// shuffling disabled.
-func (s) TestPickFirst_ShuffleAddressListDisabled(t *testing.T) {
-	defer func(old bool) { envconfig.PickFirstLBConfig = old }(envconfig.PickFirstLBConfig)
-	envconfig.PickFirstLBConfig = false
-	const serviceConfig = `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": true }}]}`
-
-	// Install a shuffler that always reverses two entries.
-	origShuf := grpcrand.Shuffle
-	defer func() { grpcrand.Shuffle = origShuf }()
-	grpcrand.Shuffle = func(n int, f func(int, int)) {
-		if n != 2 {
-			t.Errorf("Shuffle called with n=%v; want 2", n)
-			return
-		}
-		f(0, 1) // reverse the two addresses
-	}
-
-	// Set up our backends.
-	cc, r, backends := setupPickFirst(t, 2)
-	addrs := stubBackendsToResolverAddrs(backends)
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	// Send a config with shuffling enabled.  This will reverse the addresses,
-	// so we should connect to backend 1 if shuffling is supported.  However
-	// with it disabled at the start of the test, we will connect to backend 0
-	// instead.
-	shufState := resolver.State{
-		ServiceConfig: parseServiceConfig(t, r, serviceConfig),
-		Addresses:     []resolver.Address{addrs[0], addrs[1]},
-	}
-	r.UpdateState(shufState)
-	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // Test config parsing with the env var turned on and off for various scenarios.
 func (s) TestPickFirst_ParseConfig_Success(t *testing.T) {
 	// Install a shuffler that always reverses two entries.
@@ -483,37 +441,16 @@ func (s) TestPickFirst_ParseConfig_Success(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		envVar        bool
 		serviceConfig string
 		wantFirstAddr bool
 	}{
 		{
-			name:          "env var disabled with empty pickfirst config",
-			envVar:        false,
+			name:          "empty pickfirst config",
 			serviceConfig: `{"loadBalancingConfig": [{"pick_first":{}}]}`,
 			wantFirstAddr: true,
 		},
 		{
-			name:          "env var disabled with non-empty good pickfirst config",
-			envVar:        false,
-			serviceConfig: `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": true }}]}`,
-			wantFirstAddr: true,
-		},
-		{
-			name:          "env var disabled with non-empty bad pickfirst config",
-			envVar:        false,
-			serviceConfig: `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": 666 }}]}`,
-			wantFirstAddr: true,
-		},
-		{
-			name:          "env var enabled with empty pickfirst config",
-			envVar:        true,
-			serviceConfig: `{"loadBalancingConfig": [{"pick_first":{}}]}`,
-			wantFirstAddr: true,
-		},
-		{
-			name:          "env var enabled with empty good pickfirst config",
-			envVar:        true,
+			name:          "empty good pickfirst config",
 			serviceConfig: `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": true }}]}`,
 			wantFirstAddr: false,
 		},
@@ -521,11 +458,6 @@ func (s) TestPickFirst_ParseConfig_Success(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// Set the env var as specified by the test table.
-			origPickFirstLBConfig := envconfig.PickFirstLBConfig
-			envconfig.PickFirstLBConfig = test.envVar
-			defer func() { envconfig.PickFirstLBConfig = origPickFirstLBConfig }()
-
 			// Set up our backends.
 			cc, r, backends := setupPickFirst(t, 2)
 			addrs := stubBackendsToResolverAddrs(backends)
@@ -555,10 +487,6 @@ func (s) TestPickFirst_ParseConfig_Success(t *testing.T) {
 
 // Test config parsing for a bad service config.
 func (s) TestPickFirst_ParseConfig_Failure(t *testing.T) {
-	origPickFirstLBConfig := envconfig.PickFirstLBConfig
-	envconfig.PickFirstLBConfig = true
-	defer func() { envconfig.PickFirstLBConfig = origPickFirstLBConfig }()
-
 	// Service config should fail with the below config. Name resolvers are
 	// expected to perform this parsing before they push the parsed service
 	// config to the channel.
