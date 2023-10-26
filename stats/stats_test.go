@@ -1505,13 +1505,6 @@ func (s) TestStatsHandlerCallsServerIsRegisteredMethod(t *testing.T) {
 		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-			for {
-				if _, err := stream.Recv(); err == io.EOF {
-					return nil
-				}
-			}
-		},
 	}
 	if err := ss.Start([]grpc.ServerOption{grpc.StatsHandler(stubStatsHandler)}); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
