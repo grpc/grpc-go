@@ -28,10 +28,6 @@ import (
 // individual test cases. It is a stubbable implementation of
 // google.golang.org/grpc/stats.Handler for testing purposes.
 type StubStatsHandler struct {
-	// Guarantees we satisfy this interface; panics if unimplemented methods are
-	// called.
-	stats.Handler
-
 	TagRPCF     func(ctx context.Context, info *stats.RPCTagInfo) context.Context
 	HandleRPCF  func(ctx context.Context, info stats.RPCStats)
 	TagConnF    func(ctx context.Context, info *stats.ConnTagInfo) context.Context
