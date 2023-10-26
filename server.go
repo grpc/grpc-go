@@ -1835,19 +1835,17 @@ func (s *Server) stop(graceful bool) {
 
 	s.mu.Lock()
 	s.closeListeners()
-	if graceful {
-		s.drainAllServerTransports()
-	}
-	s.mu.Unlock()
-
 	// Wait for serving threads to be ready to exit.  Only then can we be sure no
 	// new conns will be created.
+	s.mu.Unlock()
 	s.serveWG.Wait()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if !graceful {
+	if graceful {
+		s.drainAllServerTransports()
+	} else {
 		s.closeServerTransports()
 	}
 
