@@ -258,7 +258,7 @@ func (s) TestGracefulStopBlocksUntilGRPCConnectionsTerminate(t *testing.T) {
 	select {
 	case <-gracefulStopReturned:
 		t.Error("GracefulStop returned before GRPC method call ended")
-	default:
+	case <-time.After(defaultTestShortTimeout):
 	}
 
 	unblockGRPCCall <- struct{}{}
