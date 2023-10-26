@@ -99,7 +99,7 @@ func FromError(err error) (s *Status, ok bool) {
 	}
 	type grpcstatus interface{ GRPCStatus() *Status }
 	if gs, ok := err.(grpcstatus); ok && gs != nil {
-	if grpcStatus := gs.GRPCStatus(); grpcStatus != nil {
+		if grpcStatus := gs.GRPCStatus(); grpcStatus != nil {
 			return grpcStatus, true
 		}
 	} else if errors.As(err, &gs) && gs != nil {
