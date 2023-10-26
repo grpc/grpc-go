@@ -68,15 +68,30 @@ var serverConnectionCounter uint64
 
 // http2Server implements the ServerTransport interface with HTTP2.
 type http2Server struct {
+<<<<<<< HEAD
 	lastRead        int64 // Keep this field 64-bit aligned. Accessed atomically.
+	ctx             context.Context
 	done            chan struct{}
 	conn            net.Conn
 	loopy           *loopyWriter
 	readerDone      chan struct{} // sync point to enable testing.
 	loopyWriterDone chan struct{}
-	peer            peer.Peer
+	remoteAddr      net.Addr
+	localAddr       net.Addr
+	authInfo        credentials.AuthInfo // auth info about the connection
 	inTapHandle     tap.ServerInHandle
 	framer          *framer
+=======
+	lastRead    int64 // Keep this field 64-bit aligned. Accessed atomically.
+	done        chan struct{}
+	conn        net.Conn
+	loopy       *loopyWriter
+	readerDone  chan struct{} // sync point to enable testing.
+	writerDone  chan struct{} // sync point to enable testing.
+	peer        peer.Peer
+	inTapHandle tap.ServerInHandle
+	framer      *framer
+>>>>>>> upstream/master
 	// The max number of concurrent streams.
 	maxStreams uint32
 	// controlBuf delivers all the control related tasks (e.g., window
@@ -607,11 +622,16 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 // HandleStreams receives incoming streams using the given handler. This is
 // typically run in a separate goroutine.
 // traceCtx attaches trace to ctx and returns the new context.
-func (t *http2Server) HandleStreams(ctx context.Context, handle func(*Stream)) {
+<<<<<<< HEAD
+func (t *http2Server) HandleStreams(handle func(*Stream)) {
 	defer func() {
 		<-t.loopyWriterDone
 		close(t.readerDone)
 	}()
+=======
+func (t *http2Server) HandleStreams(ctx context.Context, handle func(*Stream)) {
+	defer close(t.readerDone)
+>>>>>>> upstream/master
 	for {
 		t.controlBuf.throttle()
 		frame, err := t.framer.fr.ReadFrame()
