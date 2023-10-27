@@ -265,7 +265,7 @@ func (s) TestGracefulStopBlocksUntilGRPCConnectionsTerminate(t *testing.T) {
 	<-gracefulStopReturned
 }
 
-func (s) TestStopAbortsBlockingGAbortsBlockingGRPCCall(t *testing.T) {
+func (s) TestStopAbortsBlockingGRPCCall(t *testing.T) {
 	// This tests ensures that when Stop() is called while an ongoing grpc
 	// call is blocking that:
 	// - Stop() returns
