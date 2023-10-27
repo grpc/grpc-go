@@ -1981,16 +1981,14 @@ func (cc *ClientConn) determineAuthority() error {
 	}
 
 	endpoint := cc.parsedTarget.Endpoint()
-	target := cc.target
+	auth, isAuthOverrider := any(cc.resolverBuilder).(resolver.AuthorityOverrider)
 	switch {
 	case authorityFromDialOption != "":
 		cc.authority = authorityFromDialOption
 	case authorityFromCreds != "":
 		cc.authority = authorityFromCreds
-	case strings.HasPrefix(target, "unix:") || strings.HasPrefix(target, "unix-abstract:"):
-		// TODO: remove when the unix resolver implements optional interface to
-		// return channel authority.
-		cc.authority = "localhost"
+	case isAuthOverrider:
+		cc.authority = auth.GetServiceAuthority(cc.parsedTarget)
 	case strings.HasPrefix(endpoint, ":"):
 		cc.authority = "localhost" + endpoint
 	default:
