@@ -141,7 +141,6 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 	t.Parallel()
 	const nonCRLFilesUnderCRLDirectory = 5
 	nonCRLFilesSet := make(map[string]struct{})
-	//var callbackMutex sync.Mutex
 	var nonCRLMutex sync.Mutex
 	customCallback := func(err error) {
 		nonCRLMutex.Lock()
@@ -197,12 +196,11 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 			}
 		})
 	}
-	nonCRLMutex.Lock()
+	p.Close()
 	if len(nonCRLFilesSet) < nonCRLFilesUnderCRLDirectory {
 		t.Fatalf("Number of callback executions: got %v, want %v", len(nonCRLFilesSet), nonCRLFilesUnderCRLDirectory)
 	}
-	nonCRLMutex.Unlock()
-	p.Close()
+
 }
 
 // TestFileWatcherCRLProviderDirectoryScan tests how FileWatcherCRLProvider
