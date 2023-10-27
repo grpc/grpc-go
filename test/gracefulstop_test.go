@@ -254,7 +254,6 @@ func (s) TestGracefulStopBlocksUntilGRPCConnectionsTerminate(t *testing.T) {
 		close(gracefulStopReturned)
 	}()
 
-	time.Sleep(time.Second)
 	select {
 	case <-gracefulStopReturned:
 		t.Error("GracefulStop returned before GRPC method call ended")
