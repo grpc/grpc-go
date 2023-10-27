@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -137,9 +138,14 @@ func (s) TestFileWatcherCRLProviderConfig(t *testing.T) {
 // that it’s correctly processed. Additionally, we also check if number of
 // invocations of custom callback is correct.
 func (s) TestFileWatcherCRLProvider(t *testing.T) {
+	t.Parallel()
 	const nonCRLFilesUnderCRLDirectory = 5
 	nonCRLFilesSet := make(map[string]struct{})
+	//var callbackMutex sync.Mutex
+	var nonCRLMutex sync.Mutex
 	customCallback := func(err error) {
+		nonCRLMutex.Lock()
+		defer nonCRLMutex.Unlock()
 		nonCRLFilesSet[err.Error()] = struct{}{}
 	}
 	p, err := NewFileWatcherCRLProvider(FileWatcherOptions{
@@ -191,9 +197,11 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 			}
 		})
 	}
+	nonCRLMutex.Lock()
 	if len(nonCRLFilesSet) < nonCRLFilesUnderCRLDirectory {
 		t.Fatalf("Number of callback executions: got %v, want %v", len(nonCRLFilesSet), nonCRLFilesUnderCRLDirectory)
 	}
+	nonCRLMutex.Unlock()
 	p.Close()
 }
 
@@ -258,6 +266,8 @@ func (s) TestFileWatcherCRLProviderDirectoryScan(t *testing.T) {
 		t.Run(tt.desc, func(t *testing.T) {
 			copyFiles(sourcePath, targetPath, tt.fileNames, t)
 			p.ScanCRLDirectory()
+			p.scanMutex.Lock()
+			defer p.scanMutex.Unlock()
 			if diff := cmp.Diff(len(p.crls), tt.expectedEntries); diff != "" {
 				t.Errorf("Expected number of entries in the map do not match\ndiff (-got +want):\n%s", diff)
 			}

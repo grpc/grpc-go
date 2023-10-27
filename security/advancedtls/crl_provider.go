@@ -135,8 +135,7 @@ func (o *FileWatcherOptions) validate() error {
 		return fmt.Errorf("advancedtls: CRLDirectory %v is not readable: %v", o.CRLDirectory, err)
 	}
 	// Checks related to RefreshDuration.
-	if o.RefreshDuration <= 0 {
-		grpclogLogger.Infof("RefreshDuration is not set or negative: provided value %v, default value %v will be used.", o.RefreshDuration, defaultCRLRefreshDuration)
+	if o.RefreshDuration == 0 {
 		o.RefreshDuration = defaultCRLRefreshDuration
 	}
 	if o.RefreshDuration < minCRLRefreshDuration {
