@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"time"
 )
 
 const proxyAuthHeaderKey = "Proxy-Authorization"
@@ -122,7 +123,7 @@ func proxyDial(ctx context.Context, addr string, grpcUA string) (conn net.Conn, 
 		newAddr = proxyURL.Host
 	}
 
-	conn, err = (&net.Dialer{}).DialContext(ctx, "tcp", newAddr)
+	conn, err = (&net.Dialer{KeepAlive: time.Duration(-1)}).DialContext(ctx, "tcp", newAddr)
 	if err != nil {
 		return
 	}
