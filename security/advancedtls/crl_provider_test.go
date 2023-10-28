@@ -19,6 +19,7 @@
 package advancedtls
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"io"
@@ -137,7 +138,7 @@ func (s) TestFileWatcherCRLProviderConfig(t *testing.T) {
 // that it’s correctly processed. Additionally, we also check if number of
 // invocations of custom callback is correct.
 func (s) TestFileWatcherCRLProvider(t *testing.T) {
-	const nonCRLFilesUnderCRLDirectory = 5
+	const nonCRLFilesUnderCRLDirectory = 15
 	nonCRLFilesSet := make(map[string]struct{})
 	customCallback := func(err error) {
 		nonCRLFilesSet[err.Error()] = struct{}{}
@@ -192,8 +193,8 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 		})
 	}
 	p.Close()
-	if len(nonCRLFilesSet) < nonCRLFilesUnderCRLDirectory {
-		t.Fatalf("Number of callback executions: got %v, want %v", len(nonCRLFilesSet), nonCRLFilesUnderCRLDirectory)
+	if diff := cmp.Diff(len(nonCRLFilesSet), nonCRLFilesUnderCRLDirectory); diff != "" {
+		t.Errorf("Unexpected number Number of callback executions\ndiff (-got +want):\n%s", diff)
 	}
 }
 
@@ -218,54 +219,78 @@ func (s) TestFileWatcherCRLProviderDirectoryScan(t *testing.T) {
 	// of the files to be copied there before the test case execution, and
 	// expected number of entries in the FileWatcherCRLProvider map.
 	tests := []struct {
-		desc            string
-		fileNames       []string
-		expectedEntries int
+		desc          string
+		crlFileNames  []string
+		certFileNames []struct {
+			fileName string
+			expected bool
+		}
 	}{
 		{
-			desc:            "Empty dir",
-			fileNames:       []string{},
-			expectedEntries: 0,
+			desc:         "Simple addition (1 map entry)",
+			crlFileNames: []string{"1.crl"},
+			certFileNames: []struct {
+				fileName string
+				expected bool
+			}{
+				{"crl/unrevoked.pem", true},
+			},
 		},
 		{
-			desc:            "Simple addition",
-			fileNames:       []string{"1.crl"},
-			expectedEntries: 1,
+			desc:         "Addition and deletion (2 map entries)",
+			crlFileNames: []string{"3.crl", "5.crl"},
+			certFileNames: []struct {
+				fileName string
+				expected bool
+			}{
+				{"crl/revokedInt.pem", true},
+				{"crl/revokedLeaf.pem", true},
+				{"crl/unrevoked.pem", false},
+			},
 		},
 		{
-			desc:            "Addition and deletion",
-			fileNames:       []string{"2.crl", "3.crl"},
-			expectedEntries: 2,
-		},
+			desc:         "Addition and a corrupt file (3 map entries)",
+			crlFileNames: []string{"1.crl", "README.md"},
+			certFileNames: []struct {
+				fileName string
+				expected bool
+			}{
+				{"crl/revokedInt.pem", true},
+				{"crl/revokedLeaf.pem", true},
+				{"crl/unrevoked.pem", true},
+			}},
 		{
-			desc:            "Addition and updating",
-			fileNames:       []string{"2.crl", "3.crl", "4.crl"},
-			expectedEntries: 3,
-		},
-		{
-			desc:            "Addition and a corrupt file",
-			fileNames:       []string{"5.crl", "README.md"},
-			expectedEntries: 4,
-		},
-		{
-			desc:            "Full deletion",
-			fileNames:       []string{},
-			expectedEntries: 0,
-		},
+			desc:         "Full deletion (0 map entries)",
+			crlFileNames: []string{},
+			certFileNames: []struct {
+				fileName string
+				expected bool
+			}{
+				{"crl/revokedInt.pem", false},
+				{"crl/revokedLeaf.pem", false},
+				{"crl/unrevoked.pem", false},
+			}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			copyFiles(sourcePath, targetPath, tt.fileNames, t)
+			copyFiles(sourcePath, targetPath, tt.crlFileNames, t)
 			p.ScanCRLDirectory()
-			p.scanMutex.Lock()
-			defer p.scanMutex.Unlock()
-			if diff := cmp.Diff(len(p.crls), tt.expectedEntries); diff != "" {
-				t.Errorf("Expected number of entries in the map do not match\ndiff (-got +want):\n%s", diff)
+			for _, certFileName := range tt.certFileNames {
+				c := makeChain(t, testdata.Path(certFileName.fileName))[0]
+				crl, err := p.CRL(c)
+				if err != nil {
+					t.Errorf("Cannot fetch CRL from provider: %v", err)
+				}
+				if crl == nil && certFileName.expected {
+					t.Errorf("CRL is unexpectedly nil")
+				}
+				if crl != nil && !certFileName.expected {
+					t.Errorf("CRL is unexpectedly not nil")
+				}
 			}
 		})
 	}
-
 	p.Close()
 }
 
@@ -319,4 +344,13 @@ func createTmpDir(t *testing.T) string {
 	}
 	t.Logf("Using tmpdir: %s", dir)
 	return dir
+}
+
+func loadCert(t *testing.T, certPath, key string) tls.Certificate {
+	t.Helper()
+	cert, err := tls.LoadX509KeyPair(testdata.Path(certPath), testdata.Path(key))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(%q, %q) failed: %v", certPath, key, err)
+	}
+	return cert
 }
