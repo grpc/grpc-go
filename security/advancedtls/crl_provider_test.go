@@ -19,7 +19,6 @@
 package advancedtls
 
 import (
-	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"io"
@@ -122,11 +121,14 @@ func (s) TestFileWatcherCRLProviderConfig(t *testing.T) {
 	}
 	regularProvider, err := NewFileWatcherCRLProvider(FileWatcherOptions{
 		CRLDirectory:               testdata.Path("crl"),
-		RefreshDuration:            1 * time.Hour,
+		RefreshDuration:            2 * time.Hour,
 		CRLReloadingFailedCallback: customCallback,
 	})
 	if err != nil {
 		t.Fatal("Unexpected error while creating regular FileWatcherCRLProvider:", err)
+	}
+	if regularProvider.opts.RefreshDuration != 2*time.Hour {
+		t.Fatalf("Valid refreshDuration was incorrectly updated by validate() func")
 	}
 	regularProvider.Close()
 }
@@ -344,13 +346,4 @@ func createTmpDir(t *testing.T) string {
 	}
 	t.Logf("Using tmpdir: %s", dir)
 	return dir
-}
-
-func loadCert(t *testing.T, certPath, key string) tls.Certificate {
-	t.Helper()
-	cert, err := tls.LoadX509KeyPair(testdata.Path(certPath), testdata.Path(key))
-	if err != nil {
-		t.Fatalf("tls.LoadX509KeyPair(%q, %q) failed: %v", certPath, key, err)
-	}
-	return cert
 }
