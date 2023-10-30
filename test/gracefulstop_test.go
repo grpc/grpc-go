@@ -220,7 +220,7 @@ func (s) TestGracefulStopClosesConnAfterLastStream(t *testing.T) {
 
 func (s) TestGracefulStopBlocksUntilGRPCConnectionsTerminate(t *testing.T) {
 	// This tests ensures that GracefulStop() blocks until all ongoing
-	// RPC calls finished.
+	// RPCs finished.
 	unblockGRPCCall := make(chan struct{})
 	grpcCallExecuting := make(chan struct{})
 	ss := &stubserver.StubServer{
