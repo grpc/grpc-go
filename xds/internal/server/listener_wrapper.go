@@ -342,7 +342,6 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 	}
 	atomic.StorePointer(&l.rdsUpdates, unsafe.Pointer(&update.updates))
 	l.mu.Lock()
-	l.filterChains = nil
 	l.switchModeLocked(connectivity.ServingModeServing, nil)
 	l.mu.Unlock()
 	l.goodUpdate.Fire()
@@ -364,7 +363,7 @@ func (l *listenerWrapper) handleLDSUpdate(update xdsresource.ListenerUpdate) {
 	ilc := update.InboundListenerCfg
 	if ilc.Address != l.addr || ilc.Port != l.port {
 		l.mu.Lock()
-		l.filterChains = ilc.FilterChains
+		l.filterChains = nil
 		l.switchModeLocked(connectivity.ServingModeNotServing, fmt.Errorf("address (%s:%s) in Listener update does not match listening address: (%s:%s)", ilc.Address, ilc.Port, l.addr, l.port))
 		l.mu.Unlock()
 		return

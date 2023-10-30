@@ -330,6 +330,26 @@ func DefaultRouteConfig(routeName, ldsTarget, clusterName string) *v3routepb.Rou
 	}
 }
 
+// RouteConfigNonForwardingTarget returns an xDS RouteConfig resource which
+// specifies to route to a route specfying non forwarding action. This is
+// intended to be used on the server side for RDS requests, and corresponds to
+// the inline route configuration in DefaultServerListener.
+func RouteConfigNonForwardingTarget(routeName string) *v3routepb.RouteConfiguration {
+	return &v3routepb.RouteConfiguration{
+		Name: routeName,
+		VirtualHosts: []*v3routepb.VirtualHost{{
+			// This "*" string matches on any incoming authority. This is to ensure any
+			// incoming RPC matches to Route_NonForwardingAction and will proceed as
+			// normal.
+			Domains: []string{"*"},
+			Routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+				},
+				Action: &v3routepb.Route_NonForwardingAction{},
+			}}}}}
+}
+
 // RouteConfigClusterSpecifierType determines the cluster specifier type for the
 // route actions configured in the returned RouteConfiguration resource.
 type RouteConfigClusterSpecifierType int
