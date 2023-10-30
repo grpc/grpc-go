@@ -217,9 +217,11 @@ func (s) TestFileWatcherCRLProviderDirectoryScan(t *testing.T) {
 		t.Fatal("Unexpected error while creating FileWatcherCRLProvider:", err)
 	}
 
-	// Each test data entry contains a description of CRL directory content, name
-	// of the files to be copied there before the test case execution, and
-	// expected number of entries in the FileWatcherCRLProvider map.
+	// Each test data entry contains a description of CRL directory content
+	// (including the expected number of entries in the FileWatcherCRLProvider
+	// map), the name of the files to be copied there before executing the test
+	// case, and information regarding whether a specific certificate is expected
+	// to be found in the map.
 	tests := []struct {
 		desc          string
 		crlFileNames  []string
