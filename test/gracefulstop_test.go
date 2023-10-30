@@ -89,17 +89,17 @@ func (d *delayListener) Dial(ctx context.Context) (net.Conn, error) {
 	return (&net.Dialer{}).DialContext(ctx, "tcp", d.Listener.Addr().String())
 }
 
+// TestGracefulStop ensures GracefulStop causes new connections to fail.
+//
+// Steps of this test:
+//  1. Start Server
+//  2. GracefulStop() Server after listener's Accept is called, but don't
+//     allow Accept() to exit when Close() is called on it.
+//  3. Create a new connection to the server after listener.Close() is called.
+//     Server should close this connection immediately, before handshaking.
+//  4. Send an RPC on the new connection.  Should see Unavailable error
+//     because the ClientConn is in transient failure.
 func (s) TestGracefulStop(t *testing.T) {
-	// This test ensures GracefulStop causes new connections to fail.
-	//
-	// Steps of this test:
-	// 1. Start Server
-	// 2. GracefulStop() Server after listener's Accept is called, but don't
-	//    allow Accept() to exit when Close() is called on it.
-	// 3. Create a new connection to the server after listener.Close() is called.
-	//    Server should close this connection immediately, before handshaking.
-	// 4. Send an RPC on the new connection.  Should see Unavailable error
-	//    because the ClientConn is in transient failure.
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error listenening: %v", err)
@@ -168,9 +168,10 @@ func (s) TestGracefulStop(t *testing.T) {
 	wg.Wait()
 }
 
+// TestGracefulStopClosesConnAfterLastStream ensures that a server closes the
+// connections to its clients when the final stream has completed after
+// a GOAWAY.
 func (s) TestGracefulStopClosesConnAfterLastStream(t *testing.T) {
-	// This test ensures that a server closes the connections to its clients
-	// when the final stream has completed after a GOAWAY.
 
 	handlerCalled := make(chan struct{})
 	gracefulStopCalled := make(chan struct{})
@@ -218,9 +219,9 @@ func (s) TestGracefulStopClosesConnAfterLastStream(t *testing.T) {
 	})
 }
 
+// TestGracefulStopBlocksUntilGRPCConnectionsTerminate ensures that
+// GracefulStop() blocks until all ongoing RPCs finished.
 func (s) TestGracefulStopBlocksUntilGRPCConnectionsTerminate(t *testing.T) {
-	// This tests ensures that GracefulStop() blocks until all ongoing
-	// RPCs finished.
 	unblockGRPCCall := make(chan struct{})
 	grpcCallExecuting := make(chan struct{})
 	ss := &stubserver.StubServer{
@@ -265,12 +266,11 @@ func (s) TestGracefulStopBlocksUntilGRPCConnectionsTerminate(t *testing.T) {
 	<-gracefulStopReturned
 }
 
+// TestStopAbortsBlockingGRPCCall ensures that when Stop() is called while an ongoing RPC
+// is blocking that:
+// - Stop() returns
+// - and the RPC fails with an connection  closed error on the client-side
 func (s) TestStopAbortsBlockingGRPCCall(t *testing.T) {
-	// This tests ensures that when Stop() is called while an ongoing RPC
-	// is blocking that:
-	// - Stop() returns
-	// - and the RPC fails with an connection  closed error on the
-	// client-side
 	unblockGRPCCall := make(chan struct{})
 	grpcCallExecuting := make(chan struct{})
 	ss := &stubserver.StubServer{
