@@ -105,7 +105,12 @@ func (r *Resolver) Close() {
 // UpdateState calls CC.UpdateState.
 func (r *Resolver) UpdateState(s resolver.State) {
 	r.mu.Lock()
-	err := r.CC.UpdateState(s)
+	var err error
+	if r.CC == nil {
+		r.mu.Unlock()
+		panic("cannot update state as grpc.Dial with resolver has not been called")
+	}
+	err = r.CC.UpdateState(s)
 	r.lastSeenState = &s
 	r.mu.Unlock()
 	r.UpdateStateCallback(err)
@@ -114,6 +119,10 @@ func (r *Resolver) UpdateState(s resolver.State) {
 // ReportError calls CC.ReportError.
 func (r *Resolver) ReportError(err error) {
 	r.mu.Lock()
+	if r.CC == nil {
+		r.mu.Unlock()
+		panic("cannot report error as grpc.Dial with resolver has not been called")
+	}
 	r.CC.ReportError(err)
 	r.mu.Unlock()
 }
