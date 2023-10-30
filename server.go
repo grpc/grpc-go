@@ -1885,18 +1885,15 @@ func (s *Server) stop(graceful bool) {
 		s.stopServerWorkers()
 	}
 
-	s.waitForServerConnRemoval()
-	s.finishEventLog()
-}
-
-// waitForServerConnRemoval blocks until s.conns is empty.
-//
-// s.mu must be held by the caller.
-func (s *Server) waitForServerConnRemoval() {
 	for len(s.conns) != 0 {
 		s.cv.Wait()
 	}
 	s.conns = nil
+
+	if s.events != nil {
+		s.events.Finish()
+		s.events = nil
+	}
 }
 
 // s.mu must be held by the caller.
@@ -1917,14 +1914,6 @@ func (s *Server) drainAllServerTransports() {
 			}
 		}
 		s.drain = true
-	}
-}
-
-// s.mu must be held by the caller.
-func (s *Server) finishEventLog() {
-	if s.events != nil {
-		s.events.Finish()
-		s.events = nil
 	}
 }
 
