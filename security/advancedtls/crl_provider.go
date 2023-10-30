@@ -100,12 +100,11 @@ type FileWatcherOptions struct {
 // in-memory. Users should call Close to stop the background refresh of
 // CRLDirectory.
 type FileWatcherCRLProvider struct {
-	crls      map[string]*CRL
-	opts      FileWatcherOptions
-	mu        sync.Mutex
-	scanMutex sync.Mutex
-	stop      chan struct{}
-	done      chan struct{}
+	crls map[string]*CRL
+	opts FileWatcherOptions
+	mu   sync.Mutex
+	stop chan struct{}
+	done chan struct{}
 }
 
 // NewFileWatcherCRLProvider returns a new instance of the
@@ -150,7 +149,7 @@ func (p *FileWatcherCRLProvider) run() {
 	defer close(p.done)
 	ticker := time.NewTicker(p.opts.RefreshDuration)
 	defer ticker.Stop()
-	p.ScanCRLDirectory()
+	p.scanCRLDirectory()
 
 	for {
 		select {
@@ -158,27 +157,25 @@ func (p *FileWatcherCRLProvider) run() {
 			grpclogLogger.Infof("Scanning of CRLDirectory %v stopped", p.opts.CRLDirectory)
 			return
 		case <-ticker.C:
-			p.ScanCRLDirectory()
+			p.scanCRLDirectory()
 		}
 	}
 }
 
-// Close stops the background refresh of CRLDirectory of FileWatcherCRLProvider.
+// Close waits till the background refresh of CRLDirectory of
+// FileWatcherCRLProvider is done and then stops it.
 func (p *FileWatcherCRLProvider) Close() {
 	close(p.stop)
 	<-p.done
 }
 
-// ScanCRLDirectory starts the process of scanning
+// scanCRLDirectory starts the process of scanning
 // FileWatcherOptions.CRLDirectory and updating in-memory storage of CRL
-// structs, as defined in [gRFC A69]. Users should not call this function in a
-// loop since it's called periodically (see FileWatcherOptions.RefreshDuration)
-// by run goroutine.
+// structs, as defined in [gRFC A69]. It's called periodically
+// (see FileWatcherOptions.RefreshDuration) by run goroutine.
 //
 // [gRFC A69]: https://github.com/grpc/proposal/pull/382
-func (p *FileWatcherCRLProvider) ScanCRLDirectory() {
-	p.scanMutex.Lock()
-	defer p.scanMutex.Unlock()
+func (p *FileWatcherCRLProvider) scanCRLDirectory() {
 	dir, err := os.Open(p.opts.CRLDirectory)
 	if err != nil {
 		grpclogLogger.Errorf("Can't open CRLDirectory %v", p.opts.CRLDirectory, err)

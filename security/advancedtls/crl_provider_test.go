@@ -153,7 +153,7 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unexpected error while creating FileWatcherCRLProvider:", err)
 	}
-	p.ScanCRLDirectory()
+	p.Close()
 
 	// Each test data entry contains a description of a certificate chain,
 	// certificate chain itself, and if CRL is not expected to be found.
@@ -194,7 +194,6 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 			}
 		})
 	}
-	p.Close()
 	if diff := cmp.Diff(len(nonCRLFilesSet), nonCRLFilesUnderCRLDirectory); diff != "" {
 		t.Errorf("Unexpected number Number of callback executions\ndiff (-got +want):\n%s", diff)
 	}
@@ -279,7 +278,7 @@ func (s) TestFileWatcherCRLProviderDirectoryScan(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			copyFiles(sourcePath, targetPath, tt.crlFileNames, t)
-			p.ScanCRLDirectory()
+			p.scanCRLDirectory()
 			for _, certFileName := range tt.certFileNames {
 				c := makeChain(t, testdata.Path(certFileName.fileName))[0]
 				crl, err := p.CRL(c)
