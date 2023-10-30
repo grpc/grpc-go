@@ -220,7 +220,7 @@ func (s) TestGracefulStopClosesConnAfterLastStream(t *testing.T) {
 
 func (s) TestGracefulStopBlocksUntilGRPCConnectionsTerminate(t *testing.T) {
 	// This tests ensures that GracefulStop() blocks until all ongoing
-	// client GRPC calls finished.
+	// RPC calls finished.
 	unblockGRPCCall := make(chan struct{})
 	grpcCallExecuting := make(chan struct{})
 	ss := &stubserver.StubServer{
@@ -242,7 +242,7 @@ func (s) TestGracefulStopBlocksUntilGRPCConnectionsTerminate(t *testing.T) {
 		clt := ss.Client
 		_, err := clt.UnaryCall(context.Background(), &testpb.SimpleRequest{})
 		if err != nil {
-			t.Errorf("grpc call failed with error: %s", err)
+			t.Errorf("rpc failed with error: %s", err)
 		}
 		close(grpcClientCallReturned)
 	}()
@@ -256,7 +256,7 @@ func (s) TestGracefulStopBlocksUntilGRPCConnectionsTerminate(t *testing.T) {
 
 	select {
 	case <-gracefulStopReturned:
-		t.Error("GracefulStop returned before GRPC method call ended")
+		t.Error("GracefulStop returned before rpc method call ended")
 	case <-time.After(defaultTestShortTimeout):
 	}
 
@@ -266,11 +266,11 @@ func (s) TestGracefulStopBlocksUntilGRPCConnectionsTerminate(t *testing.T) {
 }
 
 func (s) TestStopAbortsBlockingGRPCCall(t *testing.T) {
-	// This tests ensures that when Stop() is called while an ongoing grpc
-	// call is blocking that:
+	// This tests ensures that when Stop() is called while an ongoing RPC
+	// is blocking that:
 	// - Stop() returns
-	// - and the GRPC call on the client side fails with an connection
-	// closed error
+	// - and the RPC fails with an connection  closed error on the
+	// client-side
 	unblockGRPCCall := make(chan struct{})
 	grpcCallExecuting := make(chan struct{})
 	ss := &stubserver.StubServer{
@@ -292,7 +292,7 @@ func (s) TestStopAbortsBlockingGRPCCall(t *testing.T) {
 		clt := ss.Client
 		_, err := clt.UnaryCall(context.Background(), &testpb.SimpleRequest{})
 		if err == nil || !isConnClosedErr(err) {
-			t.Errorf("expected grpc call to fail with connection closed error, got: %v", err)
+			t.Errorf("expected rpc to fail with connection closed error, got: %v", err)
 		}
 		close(grpcClientCallReturned)
 	}()
