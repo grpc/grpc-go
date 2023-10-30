@@ -1889,8 +1889,9 @@ func (s *Server) stop(graceful bool) {
 	s.finishEventLog()
 }
 
-// s.mu must be held by the caller.
 // waitForServerConnRemoval blocks until s.conns is empty.
+//
+// s.mu must be held by the caller.
 func (s *Server) waitForServerConnRemoval() {
 	for len(s.conns) != 0 {
 		s.cv.Wait()
