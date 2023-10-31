@@ -35,12 +35,18 @@ type CertStore struct {
 	// ClientCert2 is the certificate sent by client to prove its identity.
 	// It is trusted by ServerTrust2.
 	ClientCert2 tls.Certificate
+	// ClientCert3 is the certificate sent by client to prove its identity.
+	// It is trusted by ServerTrust3. Used in CRL tests
+	ClientCert3 tls.Certificate
 	// ServerCert1 is the certificate sent by server to prove its identity.
 	// It is trusted by ClientTrust1.
 	ServerCert1 tls.Certificate
 	// ServerCert2 is the certificate sent by server to prove its identity.
 	// It is trusted by ClientTrust2.
 	ServerCert2 tls.Certificate
+	// ServerCert3 is a revoked certificate
+	// (this info is stored in crl_server_revoked.pem).
+	ServerCert3 tls.Certificate
 	// ServerPeer3 is the certificate sent by server to prove its identity.
 	ServerPeer3 tls.Certificate
 	// ServerPeerLocalhost1 is the certificate sent by server to prove its
@@ -51,10 +57,14 @@ type CertStore struct {
 	ClientTrust1 *x509.CertPool
 	// ClientTrust2 is the root certificate used on the client side.
 	ClientTrust2 *x509.CertPool
+	// ClientTrust3 is the root certificate used on the client side.
+	ClientTrust3 *x509.CertPool
 	// ServerTrust1 is the root certificate used on the server side.
 	ServerTrust1 *x509.CertPool
 	// ServerTrust2 is the root certificate used on the server side.
 	ServerTrust2 *x509.CertPool
+	// ServerTrust2 is the root certificate used on the server side.
+	ServerTrust3 *x509.CertPool
 }
 
 func readTrustCert(fileName string) (*x509.CertPool, error) {
@@ -79,10 +89,16 @@ func (cs *CertStore) LoadCerts() error {
 	if cs.ClientCert2, err = tls.LoadX509KeyPair(testdata.Path("client_cert_2.pem"), testdata.Path("client_key_2.pem")); err != nil {
 		return err
 	}
+	if cs.ClientCert3, err = tls.LoadX509KeyPair(testdata.Path("crl/provider_client_cert.pem"), testdata.Path("crl/provider_client_cert.key")); err != nil {
+		return err
+	}
 	if cs.ServerCert1, err = tls.LoadX509KeyPair(testdata.Path("server_cert_1.pem"), testdata.Path("server_key_1.pem")); err != nil {
 		return err
 	}
 	if cs.ServerCert2, err = tls.LoadX509KeyPair(testdata.Path("server_cert_2.pem"), testdata.Path("server_key_2.pem")); err != nil {
+		return err
+	}
+	if cs.ServerCert3, err = tls.LoadX509KeyPair(testdata.Path("crl/provider_server_cert.pem"), testdata.Path("crl/provider_server_cert.key")); err != nil {
 		return err
 	}
 	if cs.ServerPeer3, err = tls.LoadX509KeyPair(testdata.Path("server_cert_3.pem"), testdata.Path("server_key_3.pem")); err != nil {
@@ -97,10 +113,16 @@ func (cs *CertStore) LoadCerts() error {
 	if cs.ClientTrust2, err = readTrustCert(testdata.Path("client_trust_cert_2.pem")); err != nil {
 		return err
 	}
+	if cs.ClientTrust3, err = readTrustCert(testdata.Path("crl/provider_client_trust_cert.pem")); err != nil {
+		return err
+	}
 	if cs.ServerTrust1, err = readTrustCert(testdata.Path("server_trust_cert_1.pem")); err != nil {
 		return err
 	}
 	if cs.ServerTrust2, err = readTrustCert(testdata.Path("server_trust_cert_2.pem")); err != nil {
+		return err
+	}
+	if cs.ServerTrust3, err = readTrustCert(testdata.Path("crl/provider_server_trust_cert.pem")); err != nil {
 		return err
 	}
 	return nil

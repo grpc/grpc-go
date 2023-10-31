@@ -31,7 +31,10 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
@@ -1456,4 +1459,62 @@ func (s) TestMultipleServerStatsHandler(t *testing.T) {
 	if len(h.gotConn) != 4 {
 		t.Fatalf("h.gotConn: unexpected amount of ConnStats: %v != %v", len(h.gotConn), 4)
 	}
+}
+
+// TestStatsHandlerCallsServerIsRegisteredMethod tests whether a stats handler
+// gets access to a Server on the server side, and thus the method that the
+// server owns which specifies whether a method is made or not. The test sets up
+// a server with a unary call and full duplex call configured, and makes an RPC.
+// Within the stats handler, asking the server whether unary or duplex method
+// names are registered should return true, and any other query should return
+// false.
+func (s) TestStatsHandlerCallsServerIsRegisteredMethod(t *testing.T) {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	stubStatsHandler := &testutils.StubStatsHandler{
+		TagRPCF: func(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+			// OpenTelemetry instrumentation needs the passed in Server to determine if
+			// methods are registered in different handle calls in to record metrics.
+			// This tag RPC call context gets passed into every handle call, so can
+			// assert once here, since it maps to all the handle RPC calls that come
+			// after. These internal calls will be how the OpenTelemetry instrumentation
+			// component accesses this server and the subsequent helper on the server.
+			server := internal.ServerFromContext.(func(context.Context) *grpc.Server)(ctx)
+			if server == nil {
+				t.Errorf("stats handler received ctx has no server present")
+			}
+			isRegisteredMethod := internal.IsRegisteredMethod.(func(*grpc.Server, string) bool)
+			// /s/m and s/m are valid.
+			if !isRegisteredMethod(server, "/grpc.testing.TestService/UnaryCall") {
+				t.Errorf("UnaryCall should be a registered method according to server")
+			}
+			if !isRegisteredMethod(server, "grpc.testing.TestService/FullDuplexCall") {
+				t.Errorf("FullDuplexCall should be a registered method according to server")
+			}
+			if isRegisteredMethod(server, "/grpc.testing.TestService/DoesNotExistCall") {
+				t.Errorf("DoesNotExistCall should not be a registered method according to server")
+			}
+			if isRegisteredMethod(server, "/unknownService/UnaryCall") {
+				t.Errorf("/unknownService/UnaryCall should not be a registered method according to server")
+			}
+			wg.Done()
+			return ctx
+		},
+	}
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+	if err := ss.Start([]grpc.ServerOption{grpc.StatsHandler(stubStatsHandler)}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{}}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+	wg.Wait()
 }

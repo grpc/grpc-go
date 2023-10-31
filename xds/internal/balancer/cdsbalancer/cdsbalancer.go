@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/balancer/nop"
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
@@ -636,20 +635,18 @@ func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []cluste
 			DNSHostname: cluster.DNSHostName,
 		}
 	}
-	if envconfig.XDSOutlierDetection {
-		odJSON := cluster.OutlierDetection
-		// "In the cds LB policy, if the outlier_detection field is not set in
-		// the Cluster resource, a "no-op" outlier_detection config will be
-		// generated in the corresponding DiscoveryMechanism config, with all
-		// fields unset." - A50
-		if odJSON == nil {
-			// This will pick up top level defaults in Cluster Resolver
-			// ParseConfig, but sre and fpe will be nil still so still a
-			// "no-op" config.
-			odJSON = json.RawMessage(`{}`)
-		}
-		dm.OutlierDetection = odJSON
+	odJSON := cluster.OutlierDetection
+	// "In the cds LB policy, if the outlier_detection field is not set in
+	// the Cluster resource, a "no-op" outlier_detection config will be
+	// generated in the corresponding DiscoveryMechanism config, with all
+	// fields unset." - A50
+	if odJSON == nil {
+		// This will pick up top level defaults in Cluster Resolver
+		// ParseConfig, but sre and fpe will be nil still so still a
+		// "no-op" config.
+		odJSON = json.RawMessage(`{}`)
 	}
+	dm.OutlierDetection = odJSON
 
 	return append(dms, dm), true, nil
 }

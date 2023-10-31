@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
@@ -54,10 +53,6 @@ import (
 // - CDS: old style, no authority (default authority)
 // - EDS: new style, in a different authority
 func (s) TestClientSideFederation(t *testing.T) {
-	oldXDSFederation := envconfig.XDSFederation
-	envconfig.XDSFederation = true
-	defer func() { envconfig.XDSFederation = oldXDSFederation }()
-
 	// Start a management server as the default authority.
 	serverDefaultAuth, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
@@ -150,10 +145,6 @@ func (s) TestClientSideFederation(t *testing.T) {
 // in the bootstrap configuration. The test verifies that RPCs on the ClientConn
 // fail with an appropriate error.
 func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
-	oldXDSFederation := envconfig.XDSFederation
-	envconfig.XDSFederation = true
-	defer func() { envconfig.XDSFederation = oldXDSFederation }()
-
 	// Setting up the management server is not *really* required for this test
 	// case. All we need is a bootstrap configuration which does not contain the
 	// authority mentioned in the dial target. But setting up the management
@@ -209,10 +200,6 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 // with an authority which is not specified in the bootstrap configuration. The
 // test verifies that RPCs fail with an appropriate error.
 func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
-	oldXDSFederation := envconfig.XDSFederation
-	envconfig.XDSFederation = true
-	defer func() { envconfig.XDSFederation = oldXDSFederation }()
-
 	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)

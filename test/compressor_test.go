@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -398,23 +397,6 @@ func testStreamSetSendCompressorSuccess(t *testing.T, resCompressor string, want
 func (s) TestUnregisteredSetSendCompressorFailure(t *testing.T) {
 	resCompressor := "snappy2"
 	wantErr := status.Error(codes.Unknown, "unable to set send compressor: compressor not registered \"snappy2\"")
-
-	t.Run("unary", func(t *testing.T) {
-		testUnarySetSendCompressorFailure(t, resCompressor, wantErr)
-	})
-
-	t.Run("stream", func(t *testing.T) {
-		testStreamSetSendCompressorFailure(t, resCompressor, wantErr)
-	})
-}
-
-func (s) TestUnadvertisedSetSendCompressorFailure(t *testing.T) {
-	// Disable client compressor advertisement.
-	defer func(b bool) { envconfig.AdvertiseCompressors = b }(envconfig.AdvertiseCompressors)
-	envconfig.AdvertiseCompressors = false
-
-	resCompressor := "gzip"
-	wantErr := status.Error(codes.Unknown, "unable to set send compressor: client does not support compressor \"gzip\"")
 
 	t.Run("unary", func(t *testing.T) {
 		testUnarySetSendCompressorFailure(t, resCompressor, wantErr)

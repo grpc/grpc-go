@@ -3,6 +3,7 @@ module google.golang.org/grpc/security/advancedtls
 go 1.19
 
 require (
+	github.com/google/go-cmp v0.5.9
 	github.com/hashicorp/golang-lru v0.5.4
 	golang.org/x/crypto v0.14.0
 	google.golang.org/grpc v1.58.2

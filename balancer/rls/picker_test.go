@@ -20,6 +20,7 @@ package rls
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -38,6 +39,40 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
+
+// TestNoNonEmptyTargetsReturnsError tests the case where the RLS Server returns
+// a response with no non empty targets. This should be treated as an Control
+// Plane RPC failure, and thus fail Data Plane RPC's with an error with the
+// appropriate information specfying data plane sent a response with no non
+// empty targets.
+func (s) TestNoNonEmptyTargetsReturnsError(t *testing.T) {
+	// Setup RLS Server to return a response with an empty target string.
+	rlsServer, rlsReqCh := rlstest.SetupFakeRLSServer(t, nil)
+	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{}}
+	})
+
+	// Register a manual resolver and push the RLS service config through it.
+	rlsConfig := buildBasicRLSConfigWithChildPolicy(t, t.Name(), rlsServer.Address)
+	r := startManualResolverWithConfig(t, rlsConfig)
+
+	// Dial the backend.
+	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.Dial() failed: %v", err)
+	}
+	defer cc.Close()
+
+	// Make an RPC and expect it to fail with an error specifying RLS response's
+	// target list does not contain any non empty entries.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, errors.New("RLS response's target list does not contain any entries for key"))
+
+	// Make sure an RLS request is sent out. Even though the RLS Server will
+	// return no targets, the request should still hit the server.
+	verifyRLSRequest(t, rlsReqCh, true)
+}
 
 // Test verifies the scenario where there is no matching entry in the data cache
 // and no pending request either, and the ensuing RLS request is throttled.
@@ -103,7 +138,7 @@ func (s) TestPick_DataCacheMiss_NoPendingEntry_ThrottledWithoutDefaultTarget(t *
 // Test verifies the scenario where there is no matching entry in the data cache
 // and no pending request either, and the ensuing RLS request is not throttled.
 // The RLS response does not contain any backends, so the RPC fails with a
-// deadline exceeded error.
+// unavailable error.
 func (s) TestPick_DataCacheMiss_NoPendingEntry_NotThrottled(t *testing.T) {
 	// Start an RLS server and set the throttler to never throttle requests.
 	rlsServer, rlsReqCh := rlstest.SetupFakeRLSServer(t, nil)
@@ -126,7 +161,7 @@ func (s) TestPick_DataCacheMiss_NoPendingEntry_NotThrottled(t *testing.T) {
 	// smaller timeout to ensure that the test doesn't run very long.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer cancel()
-	makeTestRPCAndVerifyError(ctx, t, cc, codes.DeadlineExceeded, context.DeadlineExceeded)
+	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, errors.New("RLS response's target list does not contain any entries for key"))
 
 	// Make sure an RLS request is sent out.
 	verifyRLSRequest(t, rlsReqCh, true)

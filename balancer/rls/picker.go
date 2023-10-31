@@ -252,6 +252,16 @@ func (p *rlsPicker) handleRouteLookupResponse(cacheKey cacheKey, targets []strin
 	// entry would be used until expiration, and a new picker would be sent upon
 	// backoff expiry.
 	now := time.Now()
+
+	// "An RLS request is considered to have failed if it returns a non-OK
+	// status or the RLS response's targets list is non-empty." - RLS LB Policy
+	// design.
+	if len(targets) == 0 && err == nil {
+		err = fmt.Errorf("RLS response's target list does not contain any entries for key %+v", cacheKey)
+		// If err is set, rpc error from the control plane and no control plane
+		// configuration is why no targets were passed into this helper, no need
+		// to specify and tell the user this information.
+	}
 	if err != nil {
 		dcEntry.status = err
 		pendingEntry := p.lb.pendingMap[cacheKey]

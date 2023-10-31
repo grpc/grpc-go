@@ -202,7 +202,6 @@ func (s) TestEDSWatch(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			overrideFedEnvVar(t)
 			mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 			defer cleanup()
 
@@ -370,7 +369,6 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			overrideFedEnvVar(t)
 			mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 			defer cleanup()
 
@@ -452,7 +450,6 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 //
 // The test is run with both old and new style names.
 func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
-	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
@@ -528,7 +525,6 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 // watch callback is invoked with the contents from the cache, instead of a
 // request being sent to the management server.
 func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
-	overrideFedEnvVar(t)
 	firstRequestReceived := false
 	firstAckReceived := grpcsync.NewEvent()
 	secondRequestReceived := grpcsync.NewEvent()
@@ -628,7 +624,6 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 // verifies that the watch callback is invoked with an error once the
 // watchExpiryTimer fires.
 func (s) TestEDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
-	overrideFedEnvVar(t)
 	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
@@ -667,7 +662,6 @@ func (s) TestEDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 // verifies that the behavior associated with the expiry timer (i.e, callback
 // invocation with error) does not take place.
 func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
-	overrideFedEnvVar(t)
 	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
@@ -737,7 +731,6 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 // server is NACK'ed by the xdsclient. The test verifies that the error is
 // propagated to the watcher.
 func (s) TestEDSWatch_NACKError(t *testing.T) {
-	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
@@ -784,7 +777,6 @@ func (s) TestEDSWatch_NACKError(t *testing.T) {
 // to the valid resource receive the update, while watchers corresponding to the
 // invalid resource receive an error.
 func (s) TestEDSWatch_PartialValid(t *testing.T) {
-	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 

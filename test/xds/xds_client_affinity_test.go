@@ -25,7 +25,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -84,12 +83,6 @@ func ringhashCluster(clusterName, edsServiceName string) *v3clusterpb.Cluster {
 // propagated to pick the ring_hash policy. It doesn't test the affinity
 // behavior in ring_hash policy.
 func (s) TestClientSideAffinitySanityCheck(t *testing.T) {
-	defer func() func() {
-		old := envconfig.XDSRingHash
-		envconfig.XDSRingHash = true
-		return func() { envconfig.XDSRingHash = old }
-	}()()
-
 	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 

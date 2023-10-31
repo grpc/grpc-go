@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/internal/envconfig"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -259,9 +258,6 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			conn.Close()
 			continue
 		}
-		if !envconfig.XDSRBAC {
-			return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
-		}
 		var rc xdsresource.RouteConfigUpdate
 		if fc.InlineRouteConfig != nil {
 			rc = *fc.InlineRouteConfig
@@ -369,10 +365,8 @@ func (l *listenerWrapper) handleLDSUpdate(update xdsresource.ListenerUpdate) {
 	// Server's state to ServingModeNotServing. That prevents new connections
 	// from being accepted, whereas here we simply want the clients to reconnect
 	// to get the updated configuration.
-	if envconfig.XDSRBAC {
-		if l.drainCallback != nil {
-			l.drainCallback(l.Listener.Addr())
-		}
+	if l.drainCallback != nil {
+		l.drainCallback(l.Listener.Addr())
 	}
 	l.rdsHandler.updateRouteNamesToWatch(ilc.FilterChains.RouteConfigNames)
 	// If there are no dynamic RDS Configurations still needed to be received

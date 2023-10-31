@@ -51,8 +51,6 @@ var (
 // a resource, and more watches are registered from the first watch's callback.
 // The test verifies that this scenario does not lead to a deadlock.
 func (s) TestWatchCallAnotherWatch(t *testing.T) {
-	overrideFedEnvVar(t)
-
 	// Start an xDS management server and set the option to allow it to respond
 	// to requests which only specify a subset of the configured resources.
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
@@ -152,8 +150,6 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 //
 // It also verifies the same behavior holds after a stream restart.
 func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
-	overrideFedEnvVar(t)
-
 	// Create a restartable listener which can close existing connections.
 	l, err := testutils.LocalTCPListener()
 	if err != nil {

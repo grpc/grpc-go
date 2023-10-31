@@ -314,7 +314,7 @@ func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 		st.ht.WriteStatus(s, status.New(codes.OK, ""))
 	}
 	st.ht.HandleStreams(
-		func(s *Stream) { go handleStream(s) },
+		context.Background(), func(s *Stream) { go handleStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":          nil,
@@ -347,7 +347,7 @@ func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) 
 		st.ht.WriteStatus(s, status.New(statusCode, msg))
 	}
 	st.ht.HandleStreams(
-		func(s *Stream) { go handleStream(s) },
+		context.Background(), func(s *Stream) { go handleStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,
@@ -396,7 +396,7 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		ht.WriteStatus(s, status.New(codes.DeadlineExceeded, "too slow"))
 	}
 	ht.HandleStreams(
-		func(s *Stream) { go runStream(s) },
+		context.Background(), func(s *Stream) { go runStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,
@@ -448,7 +448,7 @@ func (s) TestHandlerTransport_HandleStreams_WriteStatusWrite(t *testing.T) {
 func testHandlerTransportHandleStreams(t *testing.T, handleStream func(st *handleStreamTest, s *Stream)) {
 	st := newHandleStreamTest(t)
 	st.ht.HandleStreams(
-		func(s *Stream) { go handleStream(st, s) },
+		context.Background(), func(s *Stream) { go handleStream(st, s) },
 	)
 }
 
@@ -481,7 +481,7 @@ func (s) TestHandlerTransport_HandleStreams_ErrDetails(t *testing.T) {
 		hst.ht.WriteStatus(s, st)
 	}
 	hst.ht.HandleStreams(
-		func(s *Stream) { go handleStream(s) },
+		context.Background(), func(s *Stream) { go handleStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,

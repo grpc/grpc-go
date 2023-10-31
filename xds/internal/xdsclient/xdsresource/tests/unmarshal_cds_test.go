@@ -100,19 +100,13 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		},
 	})
 
-	origCustomLBSupport := envconfig.XDSCustomLBPolicy
-	envconfig.XDSCustomLBPolicy = true
-	defer func() {
-		envconfig.XDSCustomLBPolicy = origCustomLBSupport
-	}()
 	defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
 	envconfig.LeastRequestLB = true
 	tests := []struct {
-		name             string
-		cluster          *v3clusterpb.Cluster
-		wantUpdate       xdsresource.ClusterUpdate
-		wantLBConfig     *iserviceconfig.BalancerConfig
-		customLBDisabled bool
+		name         string
+		cluster      *v3clusterpb.Cluster
+		wantUpdate   xdsresource.ClusterUpdate
+		wantLBConfig *iserviceconfig.BalancerConfig
 	}{
 		{
 			name: "happy-case-logical-dns",
@@ -484,53 +478,6 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 		},
 		{
-			name: "custom-lb-env-var-not-set-ignore-load-balancing-policy-use-lb-policy-and-enum",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: serviceName,
-				},
-				LbPolicy: v3clusterpb.Cluster_RING_HASH,
-				LbConfig: &v3clusterpb.Cluster_RingHashLbConfig_{
-					RingHashLbConfig: &v3clusterpb.Cluster_RingHashLbConfig{
-						MinimumRingSize: wrapperspb.UInt64(20),
-						MaximumRingSize: wrapperspb.UInt64(200),
-					},
-				},
-				LoadBalancingPolicy: &v3clusterpb.LoadBalancingPolicy{
-					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
-						{
-							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-								TypedConfig: testutils.MarshalAny(t, &v3ringhashpb.RingHash{
-									HashFunction:    v3ringhashpb.RingHash_XX_HASH,
-									MinimumRingSize: wrapperspb.UInt64(10),
-									MaximumRingSize: wrapperspb.UInt64(100),
-								}),
-							},
-						},
-					},
-				},
-			},
-			wantUpdate: xdsresource.ClusterUpdate{
-				ClusterName:    clusterName,
-				EDSServiceName: serviceName,
-			},
-			wantLBConfig: &iserviceconfig.BalancerConfig{
-				Name: "ring_hash_experimental",
-				Config: &ringhash.LBConfig{
-					MinRingSize: 20,
-					MaxRingSize: 200,
-				},
-			},
-			customLBDisabled: true,
-		},
-		{
 			name: "load-balancing-policy-takes-precedence-over-lb-policy-and-enum",
 			cluster: &v3clusterpb.Cluster{
 				Name:                 clusterName,
@@ -580,12 +527,6 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if test.customLBDisabled {
-				envconfig.XDSCustomLBPolicy = false
-				defer func() {
-					envconfig.XDSCustomLBPolicy = true
-				}()
-			}
 			update, err := xdsresource.ValidateClusterAndConstructClusterUpdateForTesting(test.cluster)
 			if err != nil {
 				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) failed: %v", test.cluster, err)
