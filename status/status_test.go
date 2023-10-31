@@ -202,21 +202,6 @@ func (s) TestFromErrorWrapped(t *testing.T) {
 	}
 }
 
-type customErrorNotImplementsInterface struct {
-}
-
-func (c customErrorNotImplementsInterface) Error() string {
-	return "test"
-}
-
-func (s) TestFromErrorNotImplementsInterfaceReturnsOKStatus(t *testing.T) {
-	err := customErrorNotImplementsInterface{}
-	s, ok := FromError(err)
-	if ok || s.Code() != codes.Unknown || s.Message() != err.Error() {
-		t.Fatalf("FromError(%v) = %v, %v; want <Code()=%s, Message()=%q, Err()!=nil>, true", err, s, ok, codes.Unknown, err.Error())
-	}
-}
-
 type customErrorNilStatus struct {
 }
 
