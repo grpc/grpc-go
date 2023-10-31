@@ -398,7 +398,7 @@ func (l *listenerWrapper) handleLDSUpdate(update xdsresource.ListenerUpdate) {
 // the serving mode has changed, it invokes the registered mode change callback.
 //
 // Caller must hold l.mu.
-func (l *listenerWrapper) switchModeLocked(newMode connectivity.ServingMode, err error) { // try this with tests, and then see if I can write a reproducible test case
+func (l *listenerWrapper) switchModeLocked(newMode connectivity.ServingMode, err error) {
 	if l.mode == newMode && l.mode == connectivity.ServingModeServing {
 		// Redundant updates are suppressed only when we are SERVING and the new
 		// mode is also SERVING. In the other case (where we are NOT_SERVING and the
