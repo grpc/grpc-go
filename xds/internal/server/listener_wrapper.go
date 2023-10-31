@@ -356,7 +356,10 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 	if update.err != nil {
 		l.logger.Warningf("Received error for rds names specified in resource %q: %+v", l.name, update.err)
 		if xdsresource.ErrType(update.err) == xdsresource.ErrorTypeResourceNotFound {
-			l.switchMode(nil, connectivity.ServingModeNotServing, update.err)
+			l.mu.Lock()
+			l.filterChains = nil
+			l.switchModeLocked(connectivity.ServingModeNotServing, update.err)
+			l.mu.Unlock()
 		}
 		// For errors which are anything other than "resource-not-found", we
 		// continue to use the old configuration.
@@ -364,7 +367,9 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 	}
 	atomic.StorePointer(&l.rdsUpdates, unsafe.Pointer(&update.updates))
 
-	l.switchMode(l.filterChains, connectivity.ServingModeServing, nil)
+	l.mu.Lock()
+	l.switchModeLocked(connectivity.ServingModeServing, nil)
+	l.mu.Unlock()
 	l.goodUpdate.Fire()
 }
 
@@ -372,7 +377,9 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	if update.err != nil {
 		l.logger.Warningf("Received error for resource %q: %+v", l.name, update.err)
 		if xdsresource.ErrType(update.err) == xdsresource.ErrorTypeResourceNotFound {
-			l.switchMode(nil, connectivity.ServingModeNotServing, update.err)
+			l.mu.Lock()
+			l.switchModeLocked(connectivity.ServingModeNotServing, update.err)
+			l.mu.Unlock()
 		}
 		// For errors which are anything other than "resource-not-found", we
 		// continue to use the old configuration.
@@ -393,7 +400,10 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	// what we have decided to do. See gRPC A36 for more details.
 	ilc := update.update.InboundListenerCfg
 	if ilc.Address != l.addr || ilc.Port != l.port {
-		l.switchMode(nil, connectivity.ServingModeNotServing, fmt.Errorf("address (%s:%s) in Listener update does not match listening address: (%s:%s)", ilc.Address, ilc.Port, l.addr, l.port))
+		l.mu.Lock()
+		l.filterChains = nil
+		l.switchModeLocked(connectivity.ServingModeNotServing, fmt.Errorf("address (%s:%s) in Listener update does not match listening address: (%s:%s)", ilc.Address, ilc.Port, l.addr, l.port))
+		l.mu.Unlock()
 		return
 	}
 
@@ -413,20 +423,20 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	// If there are no dynamic RDS Configurations still needed to be received
 	// from the management server, this listener has all the configuration
 	// needed, and is ready to serve.
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.filterChains = ilc.FilterChains // write uncondtionally
 	if len(ilc.FilterChains.RouteConfigNames) == 0 {
-		l.switchMode(ilc.FilterChains, connectivity.ServingModeServing, nil)
+		l.switchModeLocked(connectivity.ServingModeServing, nil)
 		l.goodUpdate.Fire()
 	}
 }
 
-// switchMode updates the value of serving mode and filter chains stored in the
-// listenerWrapper. And if the serving mode has changed, it invokes the
-// registered mode change callback.
-func (l *listenerWrapper) switchMode(fcs *xdsresource.FilterChainManager, newMode connectivity.ServingMode, err error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	l.filterChains = fcs
+// switchMode updates the value of serving mode of the listenerWrapper. And if
+// the serving mode has changed, it invokes the registered mode change callback.
+//
+// Caller must hold l.mu.
+func (l *listenerWrapper) switchModeLocked(newMode connectivity.ServingMode, err error) {
 	if l.mode == newMode && l.mode == connectivity.ServingModeServing {
 		// Redundant updates are suppressed only when we are SERVING and the new
 		// mode is also SERVING. In the other case (where we are NOT_SERVING and the
