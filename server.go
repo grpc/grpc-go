@@ -1866,7 +1866,7 @@ func (s *Server) stop(graceful bool) {
 	s.channelzRemoveOnce.Do(func() { channelz.RemoveEntry(s.channelzID) })
 
 	s.mu.Lock()
-	s.closeListeners()
+	s.closeListenersLocked()
 	// Wait for serving threads to be ready to exit.  Only then can we be sure no
 	// new conns will be created.
 	s.mu.Unlock()
@@ -1876,9 +1876,9 @@ func (s *Server) stop(graceful bool) {
 	defer s.mu.Unlock()
 
 	if graceful {
-		s.drainAllServerTransports()
+		s.drainAllServerTransportsLocked()
 	} else {
-		s.closeServerTransports()
+		s.closeServerTransportsLocked()
 	}
 
 	if s.opts.numServerWorkers > 0 {
@@ -1897,7 +1897,7 @@ func (s *Server) stop(graceful bool) {
 }
 
 // s.mu must be held by the caller.
-func (s *Server) closeServerTransports() {
+func (s *Server) closeServerTransportsLocked() {
 	for _, conns := range s.conns {
 		for st := range conns {
 			st.Close(errors.New("Server.Stop called"))
@@ -1906,7 +1906,7 @@ func (s *Server) closeServerTransports() {
 }
 
 // s.mu must be held by the caller.
-func (s *Server) drainAllServerTransports() {
+func (s *Server) drainAllServerTransportsLocked() {
 	if !s.drain {
 		for _, conns := range s.conns {
 			for st := range conns {
@@ -1918,7 +1918,7 @@ func (s *Server) drainAllServerTransports() {
 }
 
 // s.mu must be held by the caller.
-func (s *Server) closeListeners() {
+func (s *Server) closeListenersLocked() {
 	for lis := range s.lis {
 		lis.Close()
 	}
