@@ -229,7 +229,8 @@ func (p *FileWatcherCRLProvider) scanCRLDirectory() {
 }
 
 // CRL retrieves the CRL associated with the given certificate's issuer DN from
-// in-memory if it was previously loaded during CRLDirectory scan.
+// in-memory if it was loaded during FileWatcherOptions.CRLDirectory scan before
+// the execution of this function.
 func (p *FileWatcherCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

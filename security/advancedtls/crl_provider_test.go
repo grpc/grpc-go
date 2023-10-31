@@ -153,6 +153,9 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unexpected error while creating FileWatcherCRLProvider:", err)
 	}
+
+	// We need to make sure that initial CRLDirectory scan is completed before
+	// querying the internal map.
 	p.Close()
 
 	// Each test data entry contains a description of a certificate chain,
@@ -208,6 +211,7 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 func (s) TestFileWatcherCRLProviderDirectoryScan(t *testing.T) {
 	sourcePath := testdata.Path("crl")
 	targetPath := createTmpDir(t)
+	defer os.RemoveAll(targetPath)
 	p, err := NewFileWatcherCRLProvider(FileWatcherOptions{
 		CRLDirectory:    targetPath,
 		RefreshDuration: 1 * time.Hour,
