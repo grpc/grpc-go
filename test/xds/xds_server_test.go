@@ -54,8 +54,8 @@ func (s) TestServeLDSRDS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
 	}
-	listener := e2e.DefaultServerListenerWithRouteConfigName(host, port, e2e.SecurityLevelNone, "routeName")
 
+	listener := e2e.DefaultServerListenerWithRouteConfigName(host, port, e2e.SecurityLevelNone, "routeName")
 	routeConfig := e2e.RouteConfigNonForwardingTarget("routeName")
 
 	resources := e2e.UpdateOptions{
