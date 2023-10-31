@@ -70,6 +70,12 @@ func (s) TestServeLDSRDS(t *testing.T) {
 		t.Fatal(err)
 	}
 	serving := grpcsync.NewEvent()
+
+	// In order to successfully Dial and make an RPC, the server should be in
+	// state Serving (successfully proceed the good LDS and RDS update
+	// configured on the management server). If you do not wait for Serving
+	// here, a Dial could potentially trigger an Accept on the server which
+	// would immediately close the accepted connection.
 	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
 		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
 		if args.Mode == connectivity.ServingModeServing {
