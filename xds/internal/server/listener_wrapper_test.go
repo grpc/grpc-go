@@ -194,7 +194,7 @@ func (s) TestListenerWrapper_InlineRouteConfig(t *testing.T) {
 // resource. The test verifies that the listenerWrapper does not become ready
 // when waiting for the Route Configuration resource and becomes ready once it
 // receives the Route Configuration resource.
-func (s) TestListenerWrapper_RouteNames(t *testing.T) { // This is what I need, LDS + RDS and then accept a conn that looks up
+func (s) TestListenerWrapper_RouteNames(t *testing.T) {
 	mgmtServer, nodeID, ldsResourceNamesCh, rdsResourceNamesCh, xdsC := xdsSetupFoTests(t)
 	readyCh, host, port, lisResourceName := createListenerWrapper(t, xdsC)
 
