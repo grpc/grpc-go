@@ -109,8 +109,9 @@ type FileWatcherCRLProvider struct {
 
 // NewFileWatcherCRLProvider returns a new instance of the
 // FileWatcherCRLProvider. It uses FileWatcherOptions to validate and apply
-// configuration required for creating a new instance. Users should call Close
-// to stop the background refresh of CRLDirectory.
+// configuration required for creating a new instance. The initial scan of
+// CRLDirectory is performed inside this function. Users should call Close to
+// stop the background refresh of CRLDirectory.
 func NewFileWatcherCRLProvider(o FileWatcherOptions) (*FileWatcherCRLProvider, error) {
 	if err := o.validate(); err != nil {
 		return nil, err
@@ -121,6 +122,7 @@ func NewFileWatcherCRLProvider(o FileWatcherOptions) (*FileWatcherCRLProvider, e
 		stop: make(chan struct{}),
 		done: make(chan struct{}),
 	}
+	provider.scanCRLDirectory()
 	go provider.run()
 	return provider, nil
 }
@@ -149,7 +151,6 @@ func (p *FileWatcherCRLProvider) run() {
 	defer close(p.done)
 	ticker := time.NewTicker(p.opts.RefreshDuration)
 	defer ticker.Stop()
-	p.scanCRLDirectory()
 
 	for {
 		select {
