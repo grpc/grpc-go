@@ -78,12 +78,12 @@ func (r *Resolver) InitialState(s resolver.State) {
 func (r *Resolver) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	r.BuildCallback(target, cc, opts)
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.CC = cc
 	if r.lastSeenState != nil {
 		err := r.CC.UpdateState(*r.lastSeenState)
 		go r.UpdateStateCallback(err)
 	}
-	r.mu.Unlock()
 	return r, nil
 }
 
