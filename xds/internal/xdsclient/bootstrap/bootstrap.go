@@ -28,8 +28,6 @@ import (
 	"os"
 	"strings"
 
-	"google.golang.org/grpc/xds/internal/xdsclient/creds"
-
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/jsonpb"
 	"google.golang.org/grpc"
@@ -41,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient/creds"
 )
 
 const (
