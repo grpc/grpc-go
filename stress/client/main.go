@@ -56,7 +56,7 @@ var (
 	tlsServerName        = flag.String("server_host_override", "foo.test.google.fr", "The server name use to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
 	caFile               = flag.String("ca_file", "", "The file containing the CA root cert file")
 
-	totalNumCalls int32
+	totalNumCalls int64
 	logger        = grpclog.Component("stress")
 )
 
@@ -242,7 +242,7 @@ func performRPCs(gauge *gauge, conn *grpc.ClientConn, selector *weightedRandomTe
 			interop.DoCustomMetadata(client, grpc.WaitForReady(true))
 		}
 		numCalls++
-		atomic.AddInt32(&totalNumCalls, 1)
+		defer func() { atomic.AddInt64(&totalNumCalls, numCalls) }()
 		gauge.set(int64(float64(numCalls) / time.Since(startTime).Seconds()))
 
 		select {
