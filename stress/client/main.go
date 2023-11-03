@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -55,7 +56,8 @@ var (
 	tlsServerName        = flag.String("server_host_override", "foo.test.google.fr", "The server name use to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
 	caFile               = flag.String("ca_file", "", "The file containing the CA root cert file")
 
-	logger = grpclog.Component("stress")
+	totalNumCalls int32
+	logger        = grpclog.Component("stress")
 )
 
 // testCaseWithWeight contains the test case type and its weight.
@@ -206,7 +208,6 @@ func startServer(server *server, port int) {
 	s := grpc.NewServer()
 	metricspb.RegisterMetricsServiceServer(s, server)
 	s.Serve(lis)
-
 }
 
 // performRPCs uses weightedRandomTestSelector to select test case and runs the tests.
@@ -241,6 +242,7 @@ func performRPCs(gauge *gauge, conn *grpc.ClientConn, selector *weightedRandomTe
 			interop.DoCustomMetadata(client, grpc.WaitForReady(true))
 		}
 		numCalls++
+		atomic.AddInt32(&totalNumCalls, 1)
 		gauge.set(int64(float64(numCalls) / time.Since(startTime).Seconds()))
 
 		select {
@@ -335,6 +337,6 @@ func main() {
 		close(stop)
 	}
 	wg.Wait()
+	logger.Infof("Total calls made: %v", totalNumCalls)
 	logger.Infof(" ===== ALL DONE ===== ")
-
 }
