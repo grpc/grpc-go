@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync"
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
@@ -62,18 +61,14 @@ func (t *Transport) lrsStartStream() {
 		return
 	}
 
-	var flushSig sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
-	t.lrsCancelStream = func() {
-		flushSig.Wait()
-		cancel()
-	}
+	t.lrsCancelStream = cancel
 
 	// Create a new done channel everytime a new stream is created. This ensures
 	// that we don't close the same channel multiple times (from lrsRunner()
 	// goroutine) when multiple streams are created and closed.
 	t.lrsRunnerDoneCh = make(chan struct{})
-	go t.lrsRunner(ctx, &flushSig)
+	go t.lrsRunner(ctx)
 }
 
 // lrsStopStream closes the LRS stream, if this is the last user of the stream.
@@ -98,7 +93,7 @@ func (t *Transport) lrsStopStream() {
 // lrsRunner starts an LRS stream to report load data to the management server.
 // It reports load at constant intervals (as configured by the management
 // server) until the context is cancelled.
-func (t *Transport) lrsRunner(ctx context.Context, flushSig *sync.WaitGroup) {
+func (t *Transport) lrsRunner(ctx context.Context) {
 	defer close(t.lrsRunnerDoneCh)
 
 	// This feature indicates that the client supports the
@@ -132,9 +127,7 @@ func (t *Transport) lrsRunner(ctx context.Context, flushSig *sync.WaitGroup) {
 
 		// We reset backoff state when we successfully receive at least one
 		// message from the server.
-		flushSig.Add(1)
 		t.sendLoads(streamCtx, stream, clusters, interval)
-		flushSig.Done()
 		return backoff.ErrResetBackoff
 	}
 	backoff.RunF(ctx, runLoadReportStream, t.backoff)
@@ -143,13 +136,20 @@ func (t *Transport) lrsRunner(ctx context.Context, flushSig *sync.WaitGroup) {
 func (t *Transport) sendLoads(ctx context.Context, stream lrsStream, clusterNames []string, interval time.Duration) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
+
+	var loads []*load.Data
 	for {
 		select {
 		case <-tick.C:
 		case <-ctx.Done():
-			return
+			if len(loads) == 0 { // return only if data load is empty, to flush the stream
+				return
+			}
+			continue
 		}
-		if err := t.sendLoadStatsRequest(stream, t.lrsStore.Stats(clusterNames)); err != nil {
+
+		loads = t.lrsStore.Stats(clusterNames)
+		if err := t.sendLoadStatsRequest(stream, loads); err != nil {
 			t.logger.Warningf("Writing to LRS stream failed: %v", err)
 			return
 		}
