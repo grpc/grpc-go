@@ -81,7 +81,7 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -195,7 +195,7 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -358,7 +358,7 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -442,7 +442,7 @@ func (s) TestPriority_HigherDownWhileAddingLower(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -543,7 +543,7 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -645,7 +645,7 @@ func (s) TestPriority_InitTimeout(t *testing.T) {
 		}
 	}()()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -716,7 +716,7 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 		}
 	}()()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -875,7 +875,7 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -967,7 +967,7 @@ func (s) TestPriority_FirstPriorityUnavailable(t *testing.T) {
 	}(DefaultPriorityInitTimeout)
 	DefaultPriorityInitTimeout = testPriorityInitTimeout
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -1013,7 +1013,7 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -1110,7 +1110,7 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -1206,7 +1206,7 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -1310,7 +1310,7 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 		}
 	}()()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -1409,7 +1409,7 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -1508,7 +1508,7 @@ func (s) TestPriority_ChildPolicyUpdatePickerInline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -1551,7 +1551,7 @@ func (s) TestPriority_IgnoreReresolutionRequest(t *testing.T) {
 		},
 	})
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -1650,7 +1650,7 @@ func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
 		},
 	})
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -1772,7 +1772,7 @@ func (s) TestPriority_HighPriorityInitIdle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -1838,7 +1838,7 @@ func (s) TestPriority_AddLowPriorityWhenHighIsInIdle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
@@ -1919,7 +1919,7 @@ func (s) TestPriority_HighPriorityUpdatesWhenLowInUse(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()

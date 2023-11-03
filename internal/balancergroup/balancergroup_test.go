@@ -73,7 +73,7 @@ func Test(t *testing.T) {
 // - b3, weight 1, backends [1,2]
 // Start the balancer group again and check for behavior.
 func (s) TestBalancerGroup_start_close(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
 	bg := New(Options{
@@ -176,7 +176,7 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	stub.Register(balancerName, stub.BalancerFuncs{})
 	builder := balancer.Get(balancerName)
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
 	bg := New(Options{
@@ -203,8 +203,8 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 // Two rr balancers are added to bg, each with 2 ready subConns. A sub-balancer
 // is removed later, so the balancer group returned has one sub-balancer in its
 // own map, and one sub-balancer in cache.
-func initBalancerGroupForCachingTest(t *testing.T, idleCacheTimeout time.Duration) (*weightedaggregator.Aggregator, *BalancerGroup, *testutils.TestClientConn, map[resolver.Address]*testutils.TestSubConn) {
-	cc := testutils.NewTestClientConn(t)
+func initBalancerGroupForCachingTest(t *testing.T, idleCacheTimeout time.Duration) (*weightedaggregator.Aggregator, *BalancerGroup, *testutils.BalancerClientConn, map[resolver.Address]*testutils.TestSubConn) {
+	cc := testutils.NewBalancerClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
 	bg := New(Options{
@@ -503,7 +503,7 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 			return nil
 		},
 	})
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bg := New(Options{
 		CC:              cc,
 		BuildOpts:       bOpts,
@@ -531,7 +531,7 @@ func (s) TestBalancerExitIdleOne(t *testing.T) {
 			exitIdleCh <- struct{}{}
 		},
 	})
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	bg := New(Options{
 		CC:              cc,
 		BuildOpts:       balancer.BuildOptions{},
@@ -561,7 +561,7 @@ func (s) TestBalancerExitIdleOne(t *testing.T) {
 // for the second passed in address and also only picks that created SubConn.
 // The new aggregated picker should reflect this change for the child.
 func (s) TestBalancerGracefulSwitch(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
 	bg := New(Options{

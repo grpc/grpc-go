@@ -75,7 +75,7 @@ func testPick(t *testing.T, p balancer.Picker, info balancer.PickInfo, wantSC ba
 }
 
 func TestClusterPicks(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
@@ -154,7 +154,7 @@ func TestClusterPicks(t *testing.T) {
 // TestConfigUpdateAddCluster covers the cases the balancer receives config
 // update with extra clusters.
 func TestConfigUpdateAddCluster(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
@@ -312,7 +312,7 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 // TestRoutingConfigUpdateDeleteAll covers the cases the balancer receives
 // config update with no clusters. Pick should fail with details in error.
 func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
@@ -498,7 +498,7 @@ func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 		},
 	})
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, bOpts)
@@ -558,7 +558,7 @@ func init() {
 // TestInitialIdle covers the case that if the child reports Idle, the overall
 // state will be Idle.
 func TestInitialIdle(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
@@ -605,7 +605,7 @@ func TestInitialIdle(t *testing.T) {
 // it's state and completes the graceful switch process the new picker should
 // reflect this change.
 func TestClusterGracefulSwitch(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
@@ -708,17 +708,17 @@ func TestClusterGracefulSwitch(t *testing.T) {
 // tcc wraps a testutils.TestClientConn but stores all state transitions in a
 // slice.
 type tcc struct {
-	*testutils.TestClientConn
+	*testutils.BalancerClientConn
 	states []balancer.State
 }
 
 func (t *tcc) UpdateState(bs balancer.State) {
 	t.states = append(t.states, bs)
-	t.TestClientConn.UpdateState(bs)
+	t.BalancerClientConn.UpdateState(bs)
 }
 
 func (s) TestUpdateStatePauses(t *testing.T) {
-	cc := &tcc{TestClientConn: testutils.NewTestClientConn(t)}
+	cc := &tcc{BalancerClientConn: testutils.NewBalancerClientConn(t)}
 
 	balFuncs := stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, s balancer.ClientConnState) error {

@@ -167,7 +167,7 @@ func init() {
 // glue code in weighted_target. It also tests an empty target config update,
 // which should trigger a transient failure state update.
 func (s) TestWeightedTarget(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
@@ -329,7 +329,7 @@ func (s) TestWeightedTarget(t *testing.T) {
 // have a weighted target balancer will one sub-balancer, and we add and remove
 // backends from the subBalancer.
 func (s) TestWeightedTarget_OneSubBalancer_AddRemoveBackend(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
@@ -427,7 +427,7 @@ func (s) TestWeightedTarget_OneSubBalancer_AddRemoveBackend(t *testing.T) {
 // TestWeightedTarget_TwoSubBalancers_OneBackend tests the case where we have a
 // weighted target balancer with two sub-balancers, each with one backend.
 func (s) TestWeightedTarget_TwoSubBalancers_OneBackend(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
@@ -493,7 +493,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_OneBackend(t *testing.T) {
 // a weighted target balancer with two sub-balancers, each with more than one
 // backend.
 func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
@@ -637,7 +637,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 // case where we have a weighted target balancer with two sub-balancers of
 // differing weights.
 func (s) TestWeightedTarget_TwoSubBalancers_DifferentWeight_MoreBackends(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
@@ -718,7 +718,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_DifferentWeight_MoreBackends(t *test
 // have a weighted target balancer with three sub-balancers and we remove one of
 // the subBalancers.
 func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
@@ -879,7 +879,7 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 // where we have a weighted target balancer with two sub-balancers, and we
 // change the weight of these subBalancers.
 func (s) TestWeightedTarget_TwoSubBalancers_ChangeWeight_MoreBackends(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
@@ -997,7 +997,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_ChangeWeight_MoreBackends(t *testing
 // the picks won't fail with transient_failure, and should instead wait for the
 // other sub-balancer.
 func (s) TestWeightedTarget_InitOneSubBalancerTransientFailure(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
@@ -1059,7 +1059,7 @@ func (s) TestWeightedTarget_InitOneSubBalancerTransientFailure(t *testing.T) {
 // connecting, the overall state stays in transient_failure, and all picks
 // return transient failure error.
 func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
@@ -1141,7 +1141,7 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 
 // Verify that a SubConn is created with the expected address and hierarchy
 // path cleared.
-func verifyAddressInNewSubConn(t *testing.T, cc *testutils.TestClientConn, addr resolver.Address) {
+func verifyAddressInNewSubConn(t *testing.T, cc *testutils.BalancerClientConn, addr resolver.Address) {
 	t.Helper()
 
 	gotAddr := <-cc.NewSubConnAddrsCh
@@ -1163,7 +1163,7 @@ type subConnWithAddr struct {
 //
 // Returned value is a map from subBalancer (identified by its config) to
 // subConns created by it.
-func waitForNewSubConns(t *testing.T, cc *testutils.TestClientConn, num int) map[string][]subConnWithAddr {
+func waitForNewSubConns(t *testing.T, cc *testutils.BalancerClientConn, num int) map[string][]subConnWithAddr {
 	t.Helper()
 
 	scs := make(map[string][]subConnWithAddr)
@@ -1233,7 +1233,7 @@ func init() {
 // TestInitialIdle covers the case that if the child reports Idle, the overall
 // state will be Idle.
 func (s) TestInitialIdle(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
@@ -1274,7 +1274,7 @@ func (s) TestInitialIdle(t *testing.T) {
 // TestIgnoreSubBalancerStateTransitions covers the case that if the child reports a
 // transition from TF to Connecting, the overall state will still be TF.
 func (s) TestIgnoreSubBalancerStateTransitions(t *testing.T) {
-	cc := &tcc{TestClientConn: testutils.NewTestClientConn(t)}
+	cc := &tcc{BalancerClientConn: testutils.NewBalancerClientConn(t)}
 
 	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
@@ -1314,17 +1314,17 @@ func (s) TestIgnoreSubBalancerStateTransitions(t *testing.T) {
 // tcc wraps a testutils.TestClientConn but stores all state transitions in a
 // slice.
 type tcc struct {
-	*testutils.TestClientConn
+	*testutils.BalancerClientConn
 	states []balancer.State
 }
 
 func (t *tcc) UpdateState(bs balancer.State) {
 	t.states = append(t.states, bs)
-	t.TestClientConn.UpdateState(bs)
+	t.BalancerClientConn.UpdateState(bs)
 }
 
 func (s) TestUpdateStatePauses(t *testing.T) {
-	cc := &tcc{TestClientConn: testutils.NewTestClientConn(t)}
+	cc := &tcc{BalancerClientConn: testutils.NewBalancerClientConn(t)}
 
 	balFuncs := stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, s balancer.ClientConnState) error {

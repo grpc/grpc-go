@@ -138,57 +138,6 @@ func (xdsC *Client) WaitForCancelRouteConfigWatch(ctx context.Context) (string, 
 	return val.(string), err
 }
 
-// WatchCluster registers a CDS watch.
-func (xdsC *Client) WatchCluster(clusterName string, callback func(xdsresource.ClusterUpdate, error)) func() {
-	// Due to the tree like structure of aggregate clusters, there can be multiple callbacks persisted for each cluster
-	// node. However, the client doesn't care about the parent child relationship between the nodes, only that it invokes
-	// the right callback for a particular cluster.
-	xdsC.cdsCbs[clusterName] = callback
-	xdsC.cdsWatchCh.Send(clusterName)
-	return func() {
-		xdsC.cdsCancelCh.Send(clusterName)
-	}
-}
-
-// WaitForWatchCluster waits for WatchCluster to be invoked on this client and
-// returns the clusterName being watched.
-func (xdsC *Client) WaitForWatchCluster(ctx context.Context) (string, error) {
-	val, err := xdsC.cdsWatchCh.Receive(ctx)
-	if err != nil {
-		return "", err
-	}
-	return val.(string), err
-}
-
-// InvokeWatchClusterCallback invokes the registered cdsWatch callback.
-//
-// Not thread safe with WatchCluster. Only call this after
-// WaitForWatchCluster.
-func (xdsC *Client) InvokeWatchClusterCallback(update xdsresource.ClusterUpdate, err error) {
-	// Keeps functionality with previous usage of this, if single callback call that callback.
-	if len(xdsC.cdsCbs) == 1 {
-		var clusterName string
-		for cluster := range xdsC.cdsCbs {
-			clusterName = cluster
-		}
-		xdsC.cdsCbs[clusterName](update, err)
-	} else {
-		// Have what callback you call with the update determined by the service name in the ClusterUpdate. Left up to the
-		// caller to make sure the cluster update matches with a persisted callback.
-		xdsC.cdsCbs[update.ClusterName](update, err)
-	}
-}
-
-// WaitForCancelClusterWatch waits for a CDS watch to be cancelled  and returns
-// context.DeadlineExceeded otherwise.
-func (xdsC *Client) WaitForCancelClusterWatch(ctx context.Context) (string, error) {
-	clusterNameReceived, err := xdsC.cdsCancelCh.Receive(ctx)
-	if err != nil {
-		return "", err
-	}
-	return clusterNameReceived.(string), err
-}
-
 // WatchEndpoints registers an EDS watch for provided clusterName.
 func (xdsC *Client) WatchEndpoints(clusterName string, callback func(xdsresource.EndpointsUpdate, error)) (cancel func()) {
 	xdsC.edsCbs[clusterName] = callback

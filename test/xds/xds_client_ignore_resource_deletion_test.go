@@ -337,7 +337,7 @@ func resourceWithListenerForGRPCServer(t *testing.T, nodeID string) (e2e.UpdateO
 	if err != nil {
 		t.Fatalf("Failed to retrieve host and port of listener at %q: %v", lis.Addr(), err)
 	}
-	listener := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone)
+	listener := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone, "routeName")
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*listenerpb.Listener{listener},

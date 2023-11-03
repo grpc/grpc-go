@@ -51,7 +51,7 @@ func (s) TestBuildLoggerErrors(t *testing.T) {
 			loggerConfig: &v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 				AuditLogger: &v3corepb.TypedExtensionConfig{
 					Name:        "TestAuditLoggerBuffer",
-					TypedConfig: testutils.MarshalAny(&v3rbacpb.RBAC_AuditLoggingOptions{}),
+					TypedConfig: testutils.MarshalAny(t, &v3rbacpb.RBAC_AuditLoggingOptions{}),
 				},
 			},
 			expectedError: "custom config not implemented for type ",

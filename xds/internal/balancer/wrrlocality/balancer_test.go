@@ -167,7 +167,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 	if builder == nil {
 		t.Fatalf("balancer.Get(%q) returned nil", Name)
 	}
-	tcc := testutils.NewTestClientConn(t)
+	tcc := testutils.NewBalancerClientConn(t)
 	bal := builder.Build(tcc, balancer.BuildOptions{})
 	defer bal.Close()
 	wrrL := bal.(*wrrLocalityBalancer)

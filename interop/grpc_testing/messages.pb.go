@@ -288,7 +288,7 @@ func (x HookRequest_HookRequestCommand) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use HookRequest_HookRequestCommand.Descriptor instead.
 func (HookRequest_HookRequestCommand) EnumDescriptor() ([]byte, []int) {
-	return file_grpc_testing_messages_proto_rawDescGZIP(), []int{20, 0}
+	return file_grpc_testing_messages_proto_rawDescGZIP(), []int{21, 0}
 }
 
 // TODO(dgq): Go back to using well-known types once
@@ -1619,6 +1619,62 @@ func (x *TestOrcaReport) GetUtilization() map[string]float64 {
 	return nil
 }
 
+// Status that will be return to callers of the Hook method
+type SetReturnStatusRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	GrpcCodeToReturn      int32  `protobuf:"varint,1,opt,name=grpc_code_to_return,json=grpcCodeToReturn,proto3" json:"grpc_code_to_return,omitempty"`
+	GrpcStatusDescription string `protobuf:"bytes,2,opt,name=grpc_status_description,json=grpcStatusDescription,proto3" json:"grpc_status_description,omitempty"`
+}
+
+func (x *SetReturnStatusRequest) Reset() {
+	*x = SetReturnStatusRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_grpc_testing_messages_proto_msgTypes[20]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SetReturnStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetReturnStatusRequest) ProtoMessage() {}
+
+func (x *SetReturnStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_testing_messages_proto_msgTypes[20]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetReturnStatusRequest.ProtoReflect.Descriptor instead.
+func (*SetReturnStatusRequest) Descriptor() ([]byte, []int) {
+	return file_grpc_testing_messages_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *SetReturnStatusRequest) GetGrpcCodeToReturn() int32 {
+	if x != nil {
+		return x.GrpcCodeToReturn
+	}
+	return 0
+}
+
+func (x *SetReturnStatusRequest) GetGrpcStatusDescription() string {
+	if x != nil {
+		return x.GrpcStatusDescription
+	}
+	return ""
+}
+
 type HookRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -1634,7 +1690,7 @@ type HookRequest struct {
 func (x *HookRequest) Reset() {
 	*x = HookRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_grpc_testing_messages_proto_msgTypes[20]
+		mi := &file_grpc_testing_messages_proto_msgTypes[21]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1647,7 +1703,7 @@ func (x *HookRequest) String() string {
 func (*HookRequest) ProtoMessage() {}
 
 func (x *HookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_testing_messages_proto_msgTypes[20]
+	mi := &file_grpc_testing_messages_proto_msgTypes[21]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1660,7 +1716,7 @@ func (x *HookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HookRequest.ProtoReflect.Descriptor instead.
 func (*HookRequest) Descriptor() ([]byte, []int) {
-	return file_grpc_testing_messages_proto_rawDescGZIP(), []int{20}
+	return file_grpc_testing_messages_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *HookRequest) GetCommand() HookRequest_HookRequestCommand {
@@ -1700,7 +1756,7 @@ type HookResponse struct {
 func (x *HookResponse) Reset() {
 	*x = HookResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_grpc_testing_messages_proto_msgTypes[21]
+		mi := &file_grpc_testing_messages_proto_msgTypes[22]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1713,7 +1769,7 @@ func (x *HookResponse) String() string {
 func (*HookResponse) ProtoMessage() {}
 
 func (x *HookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_testing_messages_proto_msgTypes[21]
+	mi := &file_grpc_testing_messages_proto_msgTypes[22]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1726,7 +1782,7 @@ func (x *HookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HookResponse.ProtoReflect.Descriptor instead.
 func (*HookResponse) Descriptor() ([]byte, []int) {
-	return file_grpc_testing_messages_proto_rawDescGZIP(), []int{21}
+	return file_grpc_testing_messages_proto_rawDescGZIP(), []int{22}
 }
 
 type LoadBalancerStatsResponse_MetadataEntry struct {
@@ -1746,7 +1802,7 @@ type LoadBalancerStatsResponse_MetadataEntry struct {
 func (x *LoadBalancerStatsResponse_MetadataEntry) Reset() {
 	*x = LoadBalancerStatsResponse_MetadataEntry{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_grpc_testing_messages_proto_msgTypes[22]
+		mi := &file_grpc_testing_messages_proto_msgTypes[23]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1759,7 +1815,7 @@ func (x *LoadBalancerStatsResponse_MetadataEntry) String() string {
 func (*LoadBalancerStatsResponse_MetadataEntry) ProtoMessage() {}
 
 func (x *LoadBalancerStatsResponse_MetadataEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_testing_messages_proto_msgTypes[22]
+	mi := &file_grpc_testing_messages_proto_msgTypes[23]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1809,7 +1865,7 @@ type LoadBalancerStatsResponse_RpcMetadata struct {
 func (x *LoadBalancerStatsResponse_RpcMetadata) Reset() {
 	*x = LoadBalancerStatsResponse_RpcMetadata{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_grpc_testing_messages_proto_msgTypes[23]
+		mi := &file_grpc_testing_messages_proto_msgTypes[24]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1822,7 +1878,7 @@ func (x *LoadBalancerStatsResponse_RpcMetadata) String() string {
 func (*LoadBalancerStatsResponse_RpcMetadata) ProtoMessage() {}
 
 func (x *LoadBalancerStatsResponse_RpcMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_testing_messages_proto_msgTypes[23]
+	mi := &file_grpc_testing_messages_proto_msgTypes[24]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1857,7 +1913,7 @@ type LoadBalancerStatsResponse_MetadataByPeer struct {
 func (x *LoadBalancerStatsResponse_MetadataByPeer) Reset() {
 	*x = LoadBalancerStatsResponse_MetadataByPeer{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_grpc_testing_messages_proto_msgTypes[24]
+		mi := &file_grpc_testing_messages_proto_msgTypes[25]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1870,7 +1926,7 @@ func (x *LoadBalancerStatsResponse_MetadataByPeer) String() string {
 func (*LoadBalancerStatsResponse_MetadataByPeer) ProtoMessage() {}
 
 func (x *LoadBalancerStatsResponse_MetadataByPeer) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_testing_messages_proto_msgTypes[24]
+	mi := &file_grpc_testing_messages_proto_msgTypes[25]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1905,7 +1961,7 @@ type LoadBalancerStatsResponse_RpcsByPeer struct {
 func (x *LoadBalancerStatsResponse_RpcsByPeer) Reset() {
 	*x = LoadBalancerStatsResponse_RpcsByPeer{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_grpc_testing_messages_proto_msgTypes[25]
+		mi := &file_grpc_testing_messages_proto_msgTypes[26]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1918,7 +1974,7 @@ func (x *LoadBalancerStatsResponse_RpcsByPeer) String() string {
 func (*LoadBalancerStatsResponse_RpcsByPeer) ProtoMessage() {}
 
 func (x *LoadBalancerStatsResponse_RpcsByPeer) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_testing_messages_proto_msgTypes[25]
+	mi := &file_grpc_testing_messages_proto_msgTypes[26]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1956,7 +2012,7 @@ type LoadBalancerAccumulatedStatsResponse_MethodStats struct {
 func (x *LoadBalancerAccumulatedStatsResponse_MethodStats) Reset() {
 	*x = LoadBalancerAccumulatedStatsResponse_MethodStats{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_grpc_testing_messages_proto_msgTypes[33]
+		mi := &file_grpc_testing_messages_proto_msgTypes[34]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1969,7 +2025,7 @@ func (x *LoadBalancerAccumulatedStatsResponse_MethodStats) String() string {
 func (*LoadBalancerAccumulatedStatsResponse_MethodStats) ProtoMessage() {}
 
 func (x *LoadBalancerAccumulatedStatsResponse_MethodStats) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_testing_messages_proto_msgTypes[33]
+	mi := &file_grpc_testing_messages_proto_msgTypes[34]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2013,7 +2069,7 @@ type ClientConfigureRequest_Metadata struct {
 func (x *ClientConfigureRequest_Metadata) Reset() {
 	*x = ClientConfigureRequest_Metadata{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_grpc_testing_messages_proto_msgTypes[36]
+		mi := &file_grpc_testing_messages_proto_msgTypes[37]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2026,7 +2082,7 @@ func (x *ClientConfigureRequest_Metadata) String() string {
 func (*ClientConfigureRequest_Metadata) ProtoMessage() {}
 
 func (x *ClientConfigureRequest_Metadata) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_testing_messages_proto_msgTypes[36]
+	mi := &file_grpc_testing_messages_proto_msgTypes[37]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2406,38 +2462,46 @@ var file_grpc_testing_messages_proto_rawDesc = []byte{
 	0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03,
 	0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14,
 	0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x01, 0x52, 0x05, 0x76,
-	0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0xa5, 0x02, 0x0a, 0x0b, 0x48, 0x6f, 0x6f,
-	0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x46, 0x0a, 0x07, 0x63, 0x6f, 0x6d, 0x6d,
-	0x61, 0x6e, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x2c, 0x2e, 0x67, 0x72, 0x70, 0x63,
-	0x2e, 0x74, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x67, 0x2e, 0x48, 0x6f, 0x6f, 0x6b, 0x52, 0x65, 0x71,
-	0x75, 0x65, 0x73, 0x74, 0x2e, 0x48, 0x6f, 0x6f, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
-	0x43, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x52, 0x07, 0x63, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64,
-	0x12, 0x2d, 0x0a, 0x13, 0x67, 0x72, 0x70, 0x63, 0x5f, 0x63, 0x6f, 0x64, 0x65, 0x5f, 0x74, 0x6f,
-	0x5f, 0x72, 0x65, 0x74, 0x75, 0x72, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x05, 0x52, 0x10, 0x67,
-	0x72, 0x70, 0x63, 0x43, 0x6f, 0x64, 0x65, 0x54, 0x6f, 0x52, 0x65, 0x74, 0x75, 0x72, 0x6e, 0x12,
-	0x36, 0x0a, 0x17, 0x67, 0x72, 0x70, 0x63, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x5f, 0x64,
-	0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x15, 0x67, 0x72, 0x70, 0x63, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x44, 0x65, 0x73, 0x63,
-	0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x1f, 0x0a, 0x0b, 0x73, 0x65, 0x72, 0x76, 0x65,
-	0x72, 0x5f, 0x70, 0x6f, 0x72, 0x74, 0x18, 0x04, 0x20, 0x01, 0x28, 0x05, 0x52, 0x0a, 0x73, 0x65,
-	0x72, 0x76, 0x65, 0x72, 0x50, 0x6f, 0x72, 0x74, 0x22, 0x46, 0x0a, 0x12, 0x48, 0x6f, 0x6f, 0x6b,
-	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x43, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x12, 0x0f,
-	0x0a, 0x0b, 0x55, 0x4e, 0x53, 0x50, 0x45, 0x43, 0x49, 0x46, 0x49, 0x45, 0x44, 0x10, 0x00, 0x12,
-	0x09, 0x0a, 0x05, 0x53, 0x54, 0x41, 0x52, 0x54, 0x10, 0x01, 0x12, 0x08, 0x0a, 0x04, 0x53, 0x54,
-	0x4f, 0x50, 0x10, 0x02, 0x12, 0x0a, 0x0a, 0x06, 0x52, 0x45, 0x54, 0x55, 0x52, 0x4e, 0x10, 0x03,
-	0x22, 0x0e, 0x0a, 0x0c, 0x48, 0x6f, 0x6f, 0x6b, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x2a, 0x1f, 0x0a, 0x0b, 0x50, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x54, 0x79, 0x70, 0x65, 0x12,
-	0x10, 0x0a, 0x0c, 0x43, 0x4f, 0x4d, 0x50, 0x52, 0x45, 0x53, 0x53, 0x41, 0x42, 0x4c, 0x45, 0x10,
-	0x00, 0x2a, 0x6f, 0x0a, 0x0f, 0x47, 0x72, 0x70, 0x63, 0x6c, 0x62, 0x52, 0x6f, 0x75, 0x74, 0x65,
-	0x54, 0x79, 0x70, 0x65, 0x12, 0x1d, 0x0a, 0x19, 0x47, 0x52, 0x50, 0x43, 0x4c, 0x42, 0x5f, 0x52,
-	0x4f, 0x55, 0x54, 0x45, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x5f, 0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57,
-	0x4e, 0x10, 0x00, 0x12, 0x1e, 0x0a, 0x1a, 0x47, 0x52, 0x50, 0x43, 0x4c, 0x42, 0x5f, 0x52, 0x4f,
-	0x55, 0x54, 0x45, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x5f, 0x46, 0x41, 0x4c, 0x4c, 0x42, 0x41, 0x43,
-	0x4b, 0x10, 0x01, 0x12, 0x1d, 0x0a, 0x19, 0x47, 0x52, 0x50, 0x43, 0x4c, 0x42, 0x5f, 0x52, 0x4f,
-	0x55, 0x54, 0x45, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x5f, 0x42, 0x41, 0x43, 0x4b, 0x45, 0x4e, 0x44,
-	0x10, 0x02, 0x42, 0x1d, 0x0a, 0x1b, 0x69, 0x6f, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x74, 0x65,
-	0x73, 0x74, 0x69, 0x6e, 0x67, 0x2e, 0x69, 0x6e, 0x74, 0x65, 0x67, 0x72, 0x61, 0x74, 0x69, 0x6f,
-	0x6e, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x7f, 0x0a, 0x16, 0x53, 0x65, 0x74, 0x52,
+	0x65, 0x74, 0x75, 0x72, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x12, 0x2d, 0x0a, 0x13, 0x67, 0x72, 0x70, 0x63, 0x5f, 0x63, 0x6f, 0x64, 0x65, 0x5f,
+	0x74, 0x6f, 0x5f, 0x72, 0x65, 0x74, 0x75, 0x72, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52,
+	0x10, 0x67, 0x72, 0x70, 0x63, 0x43, 0x6f, 0x64, 0x65, 0x54, 0x6f, 0x52, 0x65, 0x74, 0x75, 0x72,
+	0x6e, 0x12, 0x36, 0x0a, 0x17, 0x67, 0x72, 0x70, 0x63, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73,
+	0x5f, 0x64, 0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x15, 0x67, 0x72, 0x70, 0x63, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x44, 0x65,
+	0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0xa5, 0x02, 0x0a, 0x0b, 0x48, 0x6f,
+	0x6f, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x46, 0x0a, 0x07, 0x63, 0x6f, 0x6d,
+	0x6d, 0x61, 0x6e, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x2c, 0x2e, 0x67, 0x72, 0x70,
+	0x63, 0x2e, 0x74, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x67, 0x2e, 0x48, 0x6f, 0x6f, 0x6b, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x2e, 0x48, 0x6f, 0x6f, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x43, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x52, 0x07, 0x63, 0x6f, 0x6d, 0x6d, 0x61, 0x6e,
+	0x64, 0x12, 0x2d, 0x0a, 0x13, 0x67, 0x72, 0x70, 0x63, 0x5f, 0x63, 0x6f, 0x64, 0x65, 0x5f, 0x74,
+	0x6f, 0x5f, 0x72, 0x65, 0x74, 0x75, 0x72, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x05, 0x52, 0x10,
+	0x67, 0x72, 0x70, 0x63, 0x43, 0x6f, 0x64, 0x65, 0x54, 0x6f, 0x52, 0x65, 0x74, 0x75, 0x72, 0x6e,
+	0x12, 0x36, 0x0a, 0x17, 0x67, 0x72, 0x70, 0x63, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x5f,
+	0x64, 0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x03, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x15, 0x67, 0x72, 0x70, 0x63, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x44, 0x65, 0x73,
+	0x63, 0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x1f, 0x0a, 0x0b, 0x73, 0x65, 0x72, 0x76,
+	0x65, 0x72, 0x5f, 0x70, 0x6f, 0x72, 0x74, 0x18, 0x04, 0x20, 0x01, 0x28, 0x05, 0x52, 0x0a, 0x73,
+	0x65, 0x72, 0x76, 0x65, 0x72, 0x50, 0x6f, 0x72, 0x74, 0x22, 0x46, 0x0a, 0x12, 0x48, 0x6f, 0x6f,
+	0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x43, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x12,
+	0x0f, 0x0a, 0x0b, 0x55, 0x4e, 0x53, 0x50, 0x45, 0x43, 0x49, 0x46, 0x49, 0x45, 0x44, 0x10, 0x00,
+	0x12, 0x09, 0x0a, 0x05, 0x53, 0x54, 0x41, 0x52, 0x54, 0x10, 0x01, 0x12, 0x08, 0x0a, 0x04, 0x53,
+	0x54, 0x4f, 0x50, 0x10, 0x02, 0x12, 0x0a, 0x0a, 0x06, 0x52, 0x45, 0x54, 0x55, 0x52, 0x4e, 0x10,
+	0x03, 0x22, 0x0e, 0x0a, 0x0c, 0x48, 0x6f, 0x6f, 0x6b, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x2a, 0x1f, 0x0a, 0x0b, 0x50, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x54, 0x79, 0x70, 0x65,
+	0x12, 0x10, 0x0a, 0x0c, 0x43, 0x4f, 0x4d, 0x50, 0x52, 0x45, 0x53, 0x53, 0x41, 0x42, 0x4c, 0x45,
+	0x10, 0x00, 0x2a, 0x6f, 0x0a, 0x0f, 0x47, 0x72, 0x70, 0x63, 0x6c, 0x62, 0x52, 0x6f, 0x75, 0x74,
+	0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x1d, 0x0a, 0x19, 0x47, 0x52, 0x50, 0x43, 0x4c, 0x42, 0x5f,
+	0x52, 0x4f, 0x55, 0x54, 0x45, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x5f, 0x55, 0x4e, 0x4b, 0x4e, 0x4f,
+	0x57, 0x4e, 0x10, 0x00, 0x12, 0x1e, 0x0a, 0x1a, 0x47, 0x52, 0x50, 0x43, 0x4c, 0x42, 0x5f, 0x52,
+	0x4f, 0x55, 0x54, 0x45, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x5f, 0x46, 0x41, 0x4c, 0x4c, 0x42, 0x41,
+	0x43, 0x4b, 0x10, 0x01, 0x12, 0x1d, 0x0a, 0x19, 0x47, 0x52, 0x50, 0x43, 0x4c, 0x42, 0x5f, 0x52,
+	0x4f, 0x55, 0x54, 0x45, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x5f, 0x42, 0x41, 0x43, 0x4b, 0x45, 0x4e,
+	0x44, 0x10, 0x02, 0x42, 0x1d, 0x0a, 0x1b, 0x69, 0x6f, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x74,
+	0x65, 0x73, 0x74, 0x69, 0x6e, 0x67, 0x2e, 0x69, 0x6e, 0x74, 0x65, 0x67, 0x72, 0x61, 0x74, 0x69,
+	0x6f, 0x6e, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -2453,7 +2517,7 @@ func file_grpc_testing_messages_proto_rawDescGZIP() []byte {
 }
 
 var file_grpc_testing_messages_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_grpc_testing_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
+var file_grpc_testing_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
 var file_grpc_testing_messages_proto_goTypes = []interface{}{
 	(PayloadType)(0),                                 // 0: grpc.testing.PayloadType
 	(GrpclbRouteType)(0),                             // 1: grpc.testing.GrpclbRouteType
@@ -2480,25 +2544,26 @@ var file_grpc_testing_messages_proto_goTypes = []interface{}{
 	(*ClientConfigureResponse)(nil),                  // 22: grpc.testing.ClientConfigureResponse
 	(*MemorySize)(nil),                               // 23: grpc.testing.MemorySize
 	(*TestOrcaReport)(nil),                           // 24: grpc.testing.TestOrcaReport
-	(*HookRequest)(nil),                              // 25: grpc.testing.HookRequest
-	(*HookResponse)(nil),                             // 26: grpc.testing.HookResponse
-	(*LoadBalancerStatsResponse_MetadataEntry)(nil),  // 27: grpc.testing.LoadBalancerStatsResponse.MetadataEntry
-	(*LoadBalancerStatsResponse_RpcMetadata)(nil),    // 28: grpc.testing.LoadBalancerStatsResponse.RpcMetadata
-	(*LoadBalancerStatsResponse_MetadataByPeer)(nil), // 29: grpc.testing.LoadBalancerStatsResponse.MetadataByPeer
-	(*LoadBalancerStatsResponse_RpcsByPeer)(nil),     // 30: grpc.testing.LoadBalancerStatsResponse.RpcsByPeer
-	nil, // 31: grpc.testing.LoadBalancerStatsResponse.RpcsByPeerEntry
-	nil, // 32: grpc.testing.LoadBalancerStatsResponse.RpcsByMethodEntry
-	nil, // 33: grpc.testing.LoadBalancerStatsResponse.MetadatasByPeerEntry
-	nil, // 34: grpc.testing.LoadBalancerStatsResponse.RpcsByPeer.RpcsByPeerEntry
-	nil, // 35: grpc.testing.LoadBalancerAccumulatedStatsResponse.NumRpcsStartedByMethodEntry
-	nil, // 36: grpc.testing.LoadBalancerAccumulatedStatsResponse.NumRpcsSucceededByMethodEntry
-	nil, // 37: grpc.testing.LoadBalancerAccumulatedStatsResponse.NumRpcsFailedByMethodEntry
-	(*LoadBalancerAccumulatedStatsResponse_MethodStats)(nil), // 38: grpc.testing.LoadBalancerAccumulatedStatsResponse.MethodStats
-	nil,                                     // 39: grpc.testing.LoadBalancerAccumulatedStatsResponse.StatsPerMethodEntry
-	nil,                                     // 40: grpc.testing.LoadBalancerAccumulatedStatsResponse.MethodStats.ResultEntry
-	(*ClientConfigureRequest_Metadata)(nil), // 41: grpc.testing.ClientConfigureRequest.Metadata
-	nil,                                     // 42: grpc.testing.TestOrcaReport.RequestCostEntry
-	nil,                                     // 43: grpc.testing.TestOrcaReport.UtilizationEntry
+	(*SetReturnStatusRequest)(nil),                   // 25: grpc.testing.SetReturnStatusRequest
+	(*HookRequest)(nil),                              // 26: grpc.testing.HookRequest
+	(*HookResponse)(nil),                             // 27: grpc.testing.HookResponse
+	(*LoadBalancerStatsResponse_MetadataEntry)(nil),  // 28: grpc.testing.LoadBalancerStatsResponse.MetadataEntry
+	(*LoadBalancerStatsResponse_RpcMetadata)(nil),    // 29: grpc.testing.LoadBalancerStatsResponse.RpcMetadata
+	(*LoadBalancerStatsResponse_MetadataByPeer)(nil), // 30: grpc.testing.LoadBalancerStatsResponse.MetadataByPeer
+	(*LoadBalancerStatsResponse_RpcsByPeer)(nil),     // 31: grpc.testing.LoadBalancerStatsResponse.RpcsByPeer
+	nil, // 32: grpc.testing.LoadBalancerStatsResponse.RpcsByPeerEntry
+	nil, // 33: grpc.testing.LoadBalancerStatsResponse.RpcsByMethodEntry
+	nil, // 34: grpc.testing.LoadBalancerStatsResponse.MetadatasByPeerEntry
+	nil, // 35: grpc.testing.LoadBalancerStatsResponse.RpcsByPeer.RpcsByPeerEntry
+	nil, // 36: grpc.testing.LoadBalancerAccumulatedStatsResponse.NumRpcsStartedByMethodEntry
+	nil, // 37: grpc.testing.LoadBalancerAccumulatedStatsResponse.NumRpcsSucceededByMethodEntry
+	nil, // 38: grpc.testing.LoadBalancerAccumulatedStatsResponse.NumRpcsFailedByMethodEntry
+	(*LoadBalancerAccumulatedStatsResponse_MethodStats)(nil), // 39: grpc.testing.LoadBalancerAccumulatedStatsResponse.MethodStats
+	nil,                                     // 40: grpc.testing.LoadBalancerAccumulatedStatsResponse.StatsPerMethodEntry
+	nil,                                     // 41: grpc.testing.LoadBalancerAccumulatedStatsResponse.MethodStats.ResultEntry
+	(*ClientConfigureRequest_Metadata)(nil), // 42: grpc.testing.ClientConfigureRequest.Metadata
+	nil,                                     // 43: grpc.testing.TestOrcaReport.RequestCostEntry
+	nil,                                     // 44: grpc.testing.TestOrcaReport.UtilizationEntry
 }
 var file_grpc_testing_messages_proto_depIdxs = []int32{
 	0,  // 0: grpc.testing.Payload.type:type_name -> grpc.testing.PayloadType
@@ -2519,26 +2584,26 @@ var file_grpc_testing_messages_proto_depIdxs = []int32{
 	7,  // 15: grpc.testing.StreamingOutputCallRequest.response_status:type_name -> grpc.testing.EchoStatus
 	24, // 16: grpc.testing.StreamingOutputCallRequest.orca_oob_report:type_name -> grpc.testing.TestOrcaReport
 	6,  // 17: grpc.testing.StreamingOutputCallResponse.payload:type_name -> grpc.testing.Payload
-	31, // 18: grpc.testing.LoadBalancerStatsResponse.rpcs_by_peer:type_name -> grpc.testing.LoadBalancerStatsResponse.RpcsByPeerEntry
-	32, // 19: grpc.testing.LoadBalancerStatsResponse.rpcs_by_method:type_name -> grpc.testing.LoadBalancerStatsResponse.RpcsByMethodEntry
-	33, // 20: grpc.testing.LoadBalancerStatsResponse.metadatas_by_peer:type_name -> grpc.testing.LoadBalancerStatsResponse.MetadatasByPeerEntry
-	35, // 21: grpc.testing.LoadBalancerAccumulatedStatsResponse.num_rpcs_started_by_method:type_name -> grpc.testing.LoadBalancerAccumulatedStatsResponse.NumRpcsStartedByMethodEntry
-	36, // 22: grpc.testing.LoadBalancerAccumulatedStatsResponse.num_rpcs_succeeded_by_method:type_name -> grpc.testing.LoadBalancerAccumulatedStatsResponse.NumRpcsSucceededByMethodEntry
-	37, // 23: grpc.testing.LoadBalancerAccumulatedStatsResponse.num_rpcs_failed_by_method:type_name -> grpc.testing.LoadBalancerAccumulatedStatsResponse.NumRpcsFailedByMethodEntry
-	39, // 24: grpc.testing.LoadBalancerAccumulatedStatsResponse.stats_per_method:type_name -> grpc.testing.LoadBalancerAccumulatedStatsResponse.StatsPerMethodEntry
+	32, // 18: grpc.testing.LoadBalancerStatsResponse.rpcs_by_peer:type_name -> grpc.testing.LoadBalancerStatsResponse.RpcsByPeerEntry
+	33, // 19: grpc.testing.LoadBalancerStatsResponse.rpcs_by_method:type_name -> grpc.testing.LoadBalancerStatsResponse.RpcsByMethodEntry
+	34, // 20: grpc.testing.LoadBalancerStatsResponse.metadatas_by_peer:type_name -> grpc.testing.LoadBalancerStatsResponse.MetadatasByPeerEntry
+	36, // 21: grpc.testing.LoadBalancerAccumulatedStatsResponse.num_rpcs_started_by_method:type_name -> grpc.testing.LoadBalancerAccumulatedStatsResponse.NumRpcsStartedByMethodEntry
+	37, // 22: grpc.testing.LoadBalancerAccumulatedStatsResponse.num_rpcs_succeeded_by_method:type_name -> grpc.testing.LoadBalancerAccumulatedStatsResponse.NumRpcsSucceededByMethodEntry
+	38, // 23: grpc.testing.LoadBalancerAccumulatedStatsResponse.num_rpcs_failed_by_method:type_name -> grpc.testing.LoadBalancerAccumulatedStatsResponse.NumRpcsFailedByMethodEntry
+	40, // 24: grpc.testing.LoadBalancerAccumulatedStatsResponse.stats_per_method:type_name -> grpc.testing.LoadBalancerAccumulatedStatsResponse.StatsPerMethodEntry
 	3,  // 25: grpc.testing.ClientConfigureRequest.types:type_name -> grpc.testing.ClientConfigureRequest.RpcType
-	41, // 26: grpc.testing.ClientConfigureRequest.metadata:type_name -> grpc.testing.ClientConfigureRequest.Metadata
-	42, // 27: grpc.testing.TestOrcaReport.request_cost:type_name -> grpc.testing.TestOrcaReport.RequestCostEntry
-	43, // 28: grpc.testing.TestOrcaReport.utilization:type_name -> grpc.testing.TestOrcaReport.UtilizationEntry
+	42, // 26: grpc.testing.ClientConfigureRequest.metadata:type_name -> grpc.testing.ClientConfigureRequest.Metadata
+	43, // 27: grpc.testing.TestOrcaReport.request_cost:type_name -> grpc.testing.TestOrcaReport.RequestCostEntry
+	44, // 28: grpc.testing.TestOrcaReport.utilization:type_name -> grpc.testing.TestOrcaReport.UtilizationEntry
 	4,  // 29: grpc.testing.HookRequest.command:type_name -> grpc.testing.HookRequest.HookRequestCommand
 	2,  // 30: grpc.testing.LoadBalancerStatsResponse.MetadataEntry.type:type_name -> grpc.testing.LoadBalancerStatsResponse.MetadataType
-	27, // 31: grpc.testing.LoadBalancerStatsResponse.RpcMetadata.metadata:type_name -> grpc.testing.LoadBalancerStatsResponse.MetadataEntry
-	28, // 32: grpc.testing.LoadBalancerStatsResponse.MetadataByPeer.rpc_metadata:type_name -> grpc.testing.LoadBalancerStatsResponse.RpcMetadata
-	34, // 33: grpc.testing.LoadBalancerStatsResponse.RpcsByPeer.rpcs_by_peer:type_name -> grpc.testing.LoadBalancerStatsResponse.RpcsByPeer.RpcsByPeerEntry
-	30, // 34: grpc.testing.LoadBalancerStatsResponse.RpcsByMethodEntry.value:type_name -> grpc.testing.LoadBalancerStatsResponse.RpcsByPeer
-	29, // 35: grpc.testing.LoadBalancerStatsResponse.MetadatasByPeerEntry.value:type_name -> grpc.testing.LoadBalancerStatsResponse.MetadataByPeer
-	40, // 36: grpc.testing.LoadBalancerAccumulatedStatsResponse.MethodStats.result:type_name -> grpc.testing.LoadBalancerAccumulatedStatsResponse.MethodStats.ResultEntry
-	38, // 37: grpc.testing.LoadBalancerAccumulatedStatsResponse.StatsPerMethodEntry.value:type_name -> grpc.testing.LoadBalancerAccumulatedStatsResponse.MethodStats
+	28, // 31: grpc.testing.LoadBalancerStatsResponse.RpcMetadata.metadata:type_name -> grpc.testing.LoadBalancerStatsResponse.MetadataEntry
+	29, // 32: grpc.testing.LoadBalancerStatsResponse.MetadataByPeer.rpc_metadata:type_name -> grpc.testing.LoadBalancerStatsResponse.RpcMetadata
+	35, // 33: grpc.testing.LoadBalancerStatsResponse.RpcsByPeer.rpcs_by_peer:type_name -> grpc.testing.LoadBalancerStatsResponse.RpcsByPeer.RpcsByPeerEntry
+	31, // 34: grpc.testing.LoadBalancerStatsResponse.RpcsByMethodEntry.value:type_name -> grpc.testing.LoadBalancerStatsResponse.RpcsByPeer
+	30, // 35: grpc.testing.LoadBalancerStatsResponse.MetadatasByPeerEntry.value:type_name -> grpc.testing.LoadBalancerStatsResponse.MetadataByPeer
+	41, // 36: grpc.testing.LoadBalancerAccumulatedStatsResponse.MethodStats.result:type_name -> grpc.testing.LoadBalancerAccumulatedStatsResponse.MethodStats.ResultEntry
+	39, // 37: grpc.testing.LoadBalancerAccumulatedStatsResponse.StatsPerMethodEntry.value:type_name -> grpc.testing.LoadBalancerAccumulatedStatsResponse.MethodStats
 	3,  // 38: grpc.testing.ClientConfigureRequest.Metadata.type:type_name -> grpc.testing.ClientConfigureRequest.RpcType
 	39, // [39:39] is the sub-list for method output_type
 	39, // [39:39] is the sub-list for method input_type
@@ -2794,7 +2859,7 @@ func file_grpc_testing_messages_proto_init() {
 			}
 		}
 		file_grpc_testing_messages_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*HookRequest); i {
+			switch v := v.(*SetReturnStatusRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2806,7 +2871,7 @@ func file_grpc_testing_messages_proto_init() {
 			}
 		}
 		file_grpc_testing_messages_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*HookResponse); i {
+			switch v := v.(*HookRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2818,7 +2883,7 @@ func file_grpc_testing_messages_proto_init() {
 			}
 		}
 		file_grpc_testing_messages_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*LoadBalancerStatsResponse_MetadataEntry); i {
+			switch v := v.(*HookResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2830,7 +2895,7 @@ func file_grpc_testing_messages_proto_init() {
 			}
 		}
 		file_grpc_testing_messages_proto_msgTypes[23].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*LoadBalancerStatsResponse_RpcMetadata); i {
+			switch v := v.(*LoadBalancerStatsResponse_MetadataEntry); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2842,7 +2907,7 @@ func file_grpc_testing_messages_proto_init() {
 			}
 		}
 		file_grpc_testing_messages_proto_msgTypes[24].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*LoadBalancerStatsResponse_MetadataByPeer); i {
+			switch v := v.(*LoadBalancerStatsResponse_RpcMetadata); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2854,6 +2919,18 @@ func file_grpc_testing_messages_proto_init() {
 			}
 		}
 		file_grpc_testing_messages_proto_msgTypes[25].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*LoadBalancerStatsResponse_MetadataByPeer); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_grpc_testing_messages_proto_msgTypes[26].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*LoadBalancerStatsResponse_RpcsByPeer); i {
 			case 0:
 				return &v.state
@@ -2865,7 +2942,7 @@ func file_grpc_testing_messages_proto_init() {
 				return nil
 			}
 		}
-		file_grpc_testing_messages_proto_msgTypes[33].Exporter = func(v interface{}, i int) interface{} {
+		file_grpc_testing_messages_proto_msgTypes[34].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*LoadBalancerAccumulatedStatsResponse_MethodStats); i {
 			case 0:
 				return &v.state
@@ -2877,7 +2954,7 @@ func file_grpc_testing_messages_proto_init() {
 				return nil
 			}
 		}
-		file_grpc_testing_messages_proto_msgTypes[36].Exporter = func(v interface{}, i int) interface{} {
+		file_grpc_testing_messages_proto_msgTypes[37].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ClientConfigureRequest_Metadata); i {
 			case 0:
 				return &v.state
@@ -2896,7 +2973,7 @@ func file_grpc_testing_messages_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_grpc_testing_messages_proto_rawDesc,
 			NumEnums:      5,
-			NumMessages:   39,
+			NumMessages:   40,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -898,14 +898,22 @@ var LoadBalancerStatsService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	HookService_Hook_FullMethodName = "/grpc.testing.HookService/Hook"
+	HookService_Hook_FullMethodName              = "/grpc.testing.HookService/Hook"
+	HookService_SetReturnStatus_FullMethodName   = "/grpc.testing.HookService/SetReturnStatus"
+	HookService_ClearReturnStatus_FullMethodName = "/grpc.testing.HookService/ClearReturnStatus"
 )
 
 // HookServiceClient is the client API for HookService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type HookServiceClient interface {
+	// Sends a request that will "hang" until the return status is set by a call
+	// to a SetReturnStatus
 	Hook(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
+	// Sets a return status for pending and upcoming calls to Hook
+	SetReturnStatus(ctx context.Context, in *SetReturnStatusRequest, opts ...grpc.CallOption) (*Empty, error)
+	// Clears the return status. Incoming calls to Hook will "hang"
+	ClearReturnStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type hookServiceClient struct {
@@ -925,11 +933,35 @@ func (c *hookServiceClient) Hook(ctx context.Context, in *Empty, opts ...grpc.Ca
 	return out, nil
 }
 
+func (c *hookServiceClient) SetReturnStatus(ctx context.Context, in *SetReturnStatusRequest, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, HookService_SetReturnStatus_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hookServiceClient) ClearReturnStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, HookService_ClearReturnStatus_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HookServiceServer is the server API for HookService service.
 // All implementations must embed UnimplementedHookServiceServer
 // for forward compatibility
 type HookServiceServer interface {
+	// Sends a request that will "hang" until the return status is set by a call
+	// to a SetReturnStatus
 	Hook(context.Context, *Empty) (*Empty, error)
+	// Sets a return status for pending and upcoming calls to Hook
+	SetReturnStatus(context.Context, *SetReturnStatusRequest) (*Empty, error)
+	// Clears the return status. Incoming calls to Hook will "hang"
+	ClearReturnStatus(context.Context, *Empty) (*Empty, error)
 	mustEmbedUnimplementedHookServiceServer()
 }
 
@@ -939,6 +971,12 @@ type UnimplementedHookServiceServer struct {
 
 func (UnimplementedHookServiceServer) Hook(context.Context, *Empty) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Hook not implemented")
+}
+func (UnimplementedHookServiceServer) SetReturnStatus(context.Context, *SetReturnStatusRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetReturnStatus not implemented")
+}
+func (UnimplementedHookServiceServer) ClearReturnStatus(context.Context, *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ClearReturnStatus not implemented")
 }
 func (UnimplementedHookServiceServer) mustEmbedUnimplementedHookServiceServer() {}
 
@@ -971,6 +1009,42 @@ func _HookService_Hook_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HookService_SetReturnStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetReturnStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HookServiceServer).SetReturnStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HookService_SetReturnStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HookServiceServer).SetReturnStatus(ctx, req.(*SetReturnStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HookService_ClearReturnStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HookServiceServer).ClearReturnStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HookService_ClearReturnStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HookServiceServer).ClearReturnStatus(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // HookService_ServiceDesc is the grpc.ServiceDesc for HookService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -981,6 +1055,14 @@ var HookService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Hook",
 			Handler:    _HookService_Hook_Handler,
+		},
+		{
+			MethodName: "SetReturnStatus",
+			Handler:    _HookService_SetReturnStatus_Handler,
+		},
+		{
+			MethodName: "ClearReturnStatus",
+			Handler:    _HookService_ClearReturnStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

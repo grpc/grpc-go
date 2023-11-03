@@ -31,13 +31,19 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	iresolver "google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/resolver"
+	rinternal "google.golang.org/grpc/xds/internal/resolver/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
-const xdsScheme = "xds"
+// Scheme is the xDS resolver's scheme.
+//
+// TODO(easwars): Rename this package as xdsresolver so that this is accessed as
+// xdsresolver.Scheme
+const Scheme = "xds"
 
 // newBuilderForTesting creates a new xds resolver builder using a specific xds
 // bootstrap config, so tests can use multiple xds clients in different
@@ -50,12 +56,12 @@ func newBuilderForTesting(config []byte) (resolver.Builder, error) {
 	}, nil
 }
 
-// For overriding in unittests.
-var newXDSClient = func() (xdsclient.XDSClient, func(), error) { return xdsclient.New() }
-
 func init() {
 	resolver.Register(&xdsResolverBuilder{})
 	internal.NewXDSResolverWithConfigForTesting = newBuilderForTesting
+
+	rinternal.NewWRR = wrr.NewRandom
+	rinternal.NewXDSClient = xdsclient.New
 }
 
 type xdsResolverBuilder struct {
@@ -82,7 +88,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	r.logger = prefixLogger(r)
 	r.logger.Infof("Creating resolver for target: %+v", target)
 
-	newXDSClient := newXDSClient
+	newXDSClient := rinternal.NewXDSClient.(func() (xdsclient.XDSClient, func(), error))
 	if b.newXDSClient != nil {
 		newXDSClient = b.newXDSClient
 	}
@@ -111,7 +117,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	}
 	if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
 		if len(bootstrapConfig.CertProviderConfigs) == 0 {
-			return nil, errors.New("xds: xdsCreds specified but certificate_providers config missing in bootstrap file")
+			return nil, fmt.Errorf("xds: use of xDS credentials is specified, but certificate_providers config missing in bootstrap file")
 		}
 	}
 
@@ -152,7 +158,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 
 // Name helps implement the resolver.Builder interface.
 func (*xdsResolverBuilder) Scheme() string {
-	return xdsScheme
+	return Scheme
 }
 
 // suWithError wraps the ServiceUpdate and error received through a watch API

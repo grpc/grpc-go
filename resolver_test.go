@@ -142,3 +142,23 @@ func (s) TestResolverAddressesToEndpoints(t *testing.T) {
 		t.Fatalf("timed out waiting for endpoints")
 	}
 }
+
+// Test ensures that there is no panic if the attributes within
+// resolver.State.Addresses contains a typed-nil value.
+func (s) TestResolverAddressesWithTypedNilAttribute(t *testing.T) {
+	r := manual.NewBuilderWithScheme(t.Name())
+	resolver.Register(r)
+
+	addrAttr := attributes.New("typed_nil", (*stringerVal)(nil))
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: "addr1", Attributes: addrAttr}}})
+
+	cc, err := Dial(r.Scheme()+":///", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
+	if err != nil {
+		t.Fatalf("Unexpected error dialing: %v", err)
+	}
+	defer cc.Close()
+}
+
+type stringerVal struct{ s string }
+
+func (s stringerVal) String() string { return s.s }
