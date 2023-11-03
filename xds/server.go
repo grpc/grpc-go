@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/buffer"
-	"google.golang.org/grpc/internal/envconfig"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -395,10 +394,8 @@ func routeAndProcess(ctx context.Context) error {
 // xdsUnaryInterceptor is the unary interceptor added to the gRPC server to
 // perform any xDS specific functionality on unary RPCs.
 func xdsUnaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-	if envconfig.XDSRBAC {
-		if err := routeAndProcess(ctx); err != nil {
-			return nil, err
-		}
+	if err := routeAndProcess(ctx); err != nil {
+		return nil, err
 	}
 	return handler(ctx, req)
 }
@@ -406,10 +403,8 @@ func xdsUnaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, 
 // xdsStreamInterceptor is the stream interceptor added to the gRPC server to
 // perform any xDS specific functionality on streaming RPCs.
 func xdsStreamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	if envconfig.XDSRBAC {
-		if err := routeAndProcess(ss.Context()); err != nil {
-			return err
-		}
+	if err := routeAndProcess(ss.Context()); err != nil {
+		return err
 	}
 	return handler(srv, ss)
 }

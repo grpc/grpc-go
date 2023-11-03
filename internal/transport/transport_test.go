@@ -35,8 +35,6 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/peer"
-
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
@@ -356,19 +354,19 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		s.mu.Unlock()
 		switch ht {
 		case notifyCall:
-			go transport.HandleStreams(h.handleStreamAndNotify)
+			go transport.HandleStreams(context.Background(), h.handleStreamAndNotify)
 		case suspended:
-			go transport.HandleStreams(func(*Stream) {})
+			go transport.HandleStreams(context.Background(), func(*Stream) {})
 		case misbehaved:
-			go transport.HandleStreams(func(s *Stream) {
+			go transport.HandleStreams(context.Background(), func(s *Stream) {
 				go h.handleStreamMisbehave(t, s)
 			})
 		case encodingRequiredStatus:
-			go transport.HandleStreams(func(s *Stream) {
+			go transport.HandleStreams(context.Background(), func(s *Stream) {
 				go h.handleStreamEncodingRequiredStatus(s)
 			})
 		case invalidHeaderField:
-			go transport.HandleStreams(func(s *Stream) {
+			go transport.HandleStreams(context.Background(), func(s *Stream) {
 				go h.handleStreamInvalidHeaderField(s)
 			})
 		case delayRead:
@@ -377,15 +375,15 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 			s.mu.Lock()
 			close(s.ready)
 			s.mu.Unlock()
-			go transport.HandleStreams(func(s *Stream) {
+			go transport.HandleStreams(context.Background(), func(s *Stream) {
 				go h.handleStreamDelayRead(t, s)
 			})
 		case pingpong:
-			go transport.HandleStreams(func(s *Stream) {
+			go transport.HandleStreams(context.Background(), func(s *Stream) {
 				go h.handleStreamPingPong(t, s)
 			})
 		default:
-			go transport.HandleStreams(func(s *Stream) {
+			go transport.HandleStreams(context.Background(), func(s *Stream) {
 				go h.handleStream(t, s)
 			})
 		}
@@ -1687,7 +1685,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	client.Close(errors.New("closed manually by test"))
 	st.Close(errors.New("closed manually by test"))
 	<-st.readerDone
-	<-st.writerDone
+	<-st.loopyWriterDone
 	<-client.readerDone
 	<-client.writerDone
 	for _, cstream := range clientStreams {
@@ -2593,53 +2591,4 @@ func TestConnectionError_Unwrap(t *testing.T) {
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Error("ConnectionError does not unwrap")
 	}
-}
-
-func (s) TestPeerSetInServerContext(t *testing.T) {
-	// create client and server transports.
-	server, client, cancel := setUp(t, 0, normal)
-	defer cancel()
-	defer server.stop()
-	defer client.Close(fmt.Errorf("closed manually by test"))
-
-	// create a stream with client transport.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	stream, err := client.NewStream(ctx, &CallHdr{})
-	if err != nil {
-		t.Fatalf("failed to create a stream: %v", err)
-	}
-
-	waitWhileTrue(t, func() (bool, error) {
-		server.mu.Lock()
-		defer server.mu.Unlock()
-
-		if len(server.conns) == 0 {
-			return true, fmt.Errorf("timed-out while waiting for connection to be created on the server")
-		}
-		return false, nil
-	})
-
-	// verify peer is set in client transport context.
-	if _, ok := peer.FromContext(client.ctx); !ok {
-		t.Fatalf("Peer expected in client transport's context, but actually not found.")
-	}
-
-	// verify peer is set in stream context.
-	if _, ok := peer.FromContext(stream.ctx); !ok {
-		t.Fatalf("Peer expected in stream context, but actually not found.")
-	}
-
-	// verify peer is set in server transport context.
-	server.mu.Lock()
-	for k := range server.conns {
-		sc, ok := k.(*http2Server)
-		if !ok {
-			t.Fatalf("ServerTransport is of type %T, want %T", k, &http2Server{})
-		}
-		if _, ok = peer.FromContext(sc.ctx); !ok {
-			t.Fatalf("Peer expected in server transport's context, but actually not found.")
-		}
-	}
-	server.mu.Unlock()
 }

@@ -27,7 +27,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/internal/envconfig"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -113,14 +112,6 @@ func (testClusterSpecifierPlugin) ParseClusterSpecifierConfig(cfg proto.Message)
 // The test also verifies that a change in the cluster specifier plugin config
 // result in appropriate change in the service config pushed by the resolver.
 func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
-	// Env var GRPC_EXPERIMENTAL_XDS_RLS_LB controls whether the xDS client
-	// allows routes with cluster specifier plugin as their route action.
-	oldRLS := envconfig.XDSRLS
-	envconfig.XDSRLS = true
-	defer func() {
-		envconfig.XDSRLS = oldRLS
-	}()
-
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -211,14 +202,6 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 // their corresponding configurations remain in service config if RPCs are in
 // flight.
 func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
-	// Env var GRPC_EXPERIMENTAL_XDS_RLS_LB controls whether the xDS client
-	// allows routes with cluster specifier plugin as their route action.
-	oldRLS := envconfig.XDSRLS
-	envconfig.XDSRLS = true
-	defer func() {
-		envconfig.XDSRLS = oldRLS
-	}()
-
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
