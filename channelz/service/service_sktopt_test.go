@@ -31,12 +31,13 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/golang/protobuf/ptypes"
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/protobuf/testing/protocmp"
-	"google.golang.org/protobuf/types/known/durationpb"
 
+	durpb "github.com/golang/protobuf/ptypes/duration"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 )
 
@@ -46,10 +47,12 @@ func init() {
 	protoToSocketOpt = protoToSocketOption
 }
 
-func durationToSecUsec(d *durationpb.Duration) (sec int64, usec int64) {
-	if d.CheckValid() == nil {
-		sec = d.Seconds
-		usec = int64(d.Nanos) / 1e3
+func convertToDuration(d *durpb.Duration) (sec int64, usec int64) {
+	if d != nil {
+		if dur, err := ptypes.Duration(d); err == nil {
+			sec = int64(int64(dur) / 1e9)
+			usec = (int64(dur) - sec*1e9) / 1e3
+		}
 	}
 	return
 }
@@ -59,7 +62,7 @@ func protoToLinger(protoLinger *channelzpb.SocketOptionLinger) *unix.Linger {
 	if protoLinger.GetActive() {
 		linger.Onoff = 1
 	}
-	lv, _ := durationToSecUsec(protoLinger.GetDuration())
+	lv, _ := convertToDuration(protoLinger.GetDuration())
 	linger.Linger = int32(lv)
 	return linger
 }
@@ -70,25 +73,25 @@ func protoToSocketOption(skopts []*channelzpb.SocketOption) *channelz.SocketOpti
 		switch opt.GetName() {
 		case "SO_LINGER":
 			protoLinger := &channelzpb.SocketOptionLinger{}
-			err := opt.GetAdditional().UnmarshalTo(protoLinger)
+			err := ptypes.UnmarshalAny(opt.GetAdditional(), protoLinger)
 			if err == nil {
 				skdata.Linger = protoToLinger(protoLinger)
 			}
 		case "SO_RCVTIMEO":
 			protoTimeout := &channelzpb.SocketOptionTimeout{}
-			err := opt.GetAdditional().UnmarshalTo(protoTimeout)
+			err := ptypes.UnmarshalAny(opt.GetAdditional(), protoTimeout)
 			if err == nil {
 				skdata.RecvTimeout = protoToTime(protoTimeout)
 			}
 		case "SO_SNDTIMEO":
 			protoTimeout := &channelzpb.SocketOptionTimeout{}
-			err := opt.GetAdditional().UnmarshalTo(protoTimeout)
+			err := ptypes.UnmarshalAny(opt.GetAdditional(), protoTimeout)
 			if err == nil {
 				skdata.SendTimeout = protoToTime(protoTimeout)
 			}
 		case "TCP_INFO":
 			tcpi := &channelzpb.SocketOptionTcpInfo{}
-			err := opt.GetAdditional().UnmarshalTo(tcpi)
+			err := ptypes.UnmarshalAny(opt.GetAdditional(), tcpi)
 			if err == nil {
 				skdata.TCPInfo = &unix.TCPInfo{
 					State:          uint8(tcpi.TcpiState),
