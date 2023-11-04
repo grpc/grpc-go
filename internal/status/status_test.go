@@ -2,15 +2,12 @@ package status
 
 import (
 	"testing"
-	"time"
 
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"google.golang.org/protobuf/types/known/anypb"
 
 	protoV1 "github.com/golang/protobuf/proto"
 )
@@ -30,7 +27,7 @@ func (s) TestWithDetailsVersionsCompat(t *testing.T) {
 	}
 	status := New(codes.InvalidArgument, "an error")
 
-	if _, err = status.WithDetails(details...); err != nil {
+	if _, err := status.WithDetails(details...); err != nil {
 		t.Fatal(err)
 	}
 }
