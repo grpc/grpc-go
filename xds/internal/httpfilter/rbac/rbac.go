@@ -26,7 +26,6 @@ import (
 	"strings"
 
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/rbac"
 	"google.golang.org/grpc/xds/internal/httpfilter"
@@ -38,9 +37,7 @@ import (
 )
 
 func init() {
-	if envconfig.XDSRBAC {
-		httpfilter.Register(builder{})
-	}
+	httpfilter.Register(builder{})
 
 	// TODO: Remove these once the RBAC env var is removed.
 	internal.RegisterRBACHTTPFilterForTesting = func() {

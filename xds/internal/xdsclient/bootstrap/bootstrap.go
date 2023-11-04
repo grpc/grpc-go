@@ -499,18 +499,10 @@ func newConfigFromContents(data []byte) (*Config, error) {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 		case "client_default_listener_resource_name_template":
-			if !envconfig.XDSFederation {
-				logger.Warningf("Bootstrap field %v is not support when Federation is disabled", k)
-				continue
-			}
 			if err := json.Unmarshal(v, &config.ClientDefaultListenerResourceNameTemplate); err != nil {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 		case "authorities":
-			if !envconfig.XDSFederation {
-				logger.Warningf("Bootstrap field %v is not support when Federation is disabled", k)
-				continue
-			}
 			if err := json.Unmarshal(v, &config.Authorities); err != nil {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}

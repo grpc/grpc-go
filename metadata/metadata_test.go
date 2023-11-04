@@ -198,6 +198,39 @@ func (s) TestDelete(t *testing.T) {
 	}
 }
 
+func (s) TestFromIncomingContext(t *testing.T) {
+	md := Pairs(
+		"X-My-Header-1", "42",
+	)
+	// Verify that we lowercase if callers directly modify md
+	md["X-INCORRECT-UPPERCASE"] = []string{"foo"}
+	ctx := NewIncomingContext(context.Background(), md)
+
+	result, found := FromIncomingContext(ctx)
+	if !found {
+		t.Fatal("FromIncomingContext must return metadata")
+	}
+	expected := MD{
+		"x-my-header-1":         []string{"42"},
+		"x-incorrect-uppercase": []string{"foo"},
+	}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("FromIncomingContext returned %#v, expected %#v", result, expected)
+	}
+
+	// ensure modifying result does not modify the value in the context
+	result["new_key"] = []string{"foo"}
+	result["x-my-header-1"][0] = "mutated"
+
+	result2, found := FromIncomingContext(ctx)
+	if !found {
+		t.Fatal("FromIncomingContext must return metadata")
+	}
+	if !reflect.DeepEqual(result2, expected) {
+		t.Errorf("FromIncomingContext after modifications returned %#v, expected %#v", result2, expected)
+	}
+}
+
 func (s) TestValueFromIncomingContext(t *testing.T) {
 	md := Pairs(
 		"X-My-Header-1", "42",
@@ -205,6 +238,8 @@ func (s) TestValueFromIncomingContext(t *testing.T) {
 		"X-My-Header-2", "43-2",
 		"x-my-header-3", "44",
 	)
+	// Verify that we lowercase if callers directly modify md
+	md["X-INCORRECT-UPPERCASE"] = []string{"foo"}
 	ctx := NewIncomingContext(context.Background(), md)
 
 	for _, test := range []struct {
@@ -226,6 +261,10 @@ func (s) TestValueFromIncomingContext(t *testing.T) {
 		{
 			key:  "x-unknown",
 			want: nil,
+		},
+		{
+			key:  "x-incorrect-uppercase",
+			want: []string{"foo"},
 		},
 	} {
 		v := ValueFromIncomingContext(ctx, test.key)
@@ -348,8 +387,22 @@ func BenchmarkFromIncomingContext(b *testing.B) {
 func BenchmarkValueFromIncomingContext(b *testing.B) {
 	md := Pairs("X-My-Header-1", "42")
 	ctx := NewIncomingContext(context.Background(), md)
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		ValueFromIncomingContext(ctx, "x-my-header-1")
-	}
+
+	b.Run("key-found", func(b *testing.B) {
+		for n := 0; n < b.N; n++ {
+			result := ValueFromIncomingContext(ctx, "x-my-header-1")
+			if len(result) != 1 {
+				b.Fatal("ensures not optimized away")
+			}
+		}
+	})
+
+	b.Run("key-not-found", func(b *testing.B) {
+		for n := 0; n < b.N; n++ {
+			result := ValueFromIncomingContext(ctx, "key-not-found")
+			if len(result) != 0 {
+				b.Fatal("ensures not optimized away")
+			}
+		}
+	})
 }

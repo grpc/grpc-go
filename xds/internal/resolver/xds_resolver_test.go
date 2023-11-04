@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
@@ -159,11 +158,6 @@ func (s) TestResolverBuilder_DifferentBootstrapConfigs(t *testing.T) {
 // Test builds an xDS resolver and verifies that the resource name specified in
 // the discovery request matches expectations.
 func (s) TestResolverResourceName(t *testing.T) {
-	// Federation support is required when new style names are used.
-	oldXDSFederation := envconfig.XDSFederation
-	envconfig.XDSFederation = true
-	defer func() { envconfig.XDSFederation = oldXDSFederation }()
-
 	tests := []struct {
 		name                         string
 		listenerResourceNameTemplate string
@@ -482,10 +476,6 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 // specifying to generate a hash. The configSelector generated should
 // successfully generate a Hash.
 func (s) TestResolverRequestHash(t *testing.T) {
-	oldRH := envconfig.XDSRingHash
-	envconfig.XDSRingHash = true
-	defer func() { envconfig.XDSRingHash = oldRH }()
-
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()

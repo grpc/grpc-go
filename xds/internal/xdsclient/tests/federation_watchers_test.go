@@ -44,8 +44,6 @@ const testNonDefaultAuthority = "non-default-authority"
 // Returns the management server associated with the non-default authority, the
 // nodeID to use, and the xDS client.
 func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string, xdsclient.XDSClient) {
-	overrideFedEnvVar(t)
-
 	// Start a management server as the default authority.
 	serverDefaultAuthority, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {

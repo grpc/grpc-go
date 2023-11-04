@@ -25,7 +25,6 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
@@ -628,9 +627,6 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error)
 				// TODO: Implement terminal filter logic, as per A36.
 				filterChain.HTTPFilters = filters
 				seenHCM = true
-				if !envconfig.XDSRBAC {
-					continue
-				}
 				switch hcm.RouteSpecifier.(type) {
 				case *v3httppb.HttpConnectionManager_Rds:
 					if hcm.GetRds().GetConfigSource().GetAds() == nil {
