@@ -41,7 +41,7 @@ import (
 	"google.golang.org/grpc/testdata"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
-	metricspb "google.golang.org/grpc/stress/grpc_testing"
+	metricspb "google.golang.org/grpc/interop/stress/grpc_testing"
 )
 
 var (
