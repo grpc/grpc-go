@@ -1,22 +1,22 @@
 #!/bin/bash
 
-set -ex         # Exit on error; debugging enabled.
-set -o pipefail # Fail a pipe if any sub-command fails.
+set -ex  # Exit on error; debugging enabled.
+set -o pipefail  # Fail a pipe if any sub-command fails.
 
 # not makes sure the command passed to it does not exit with a return code of 0.
 not() {
-	# This is required instead of the earlier (! $COMMAND) because subshells and
-	# pipefail don't work the same on Darwin as in Linux.
-	! "$@"
+  # This is required instead of the earlier (! $COMMAND) because subshells and
+  # pipefail don't work the same on Darwin as in Linux.
+  ! "$@"
 }
 
 die() {
-	echo "$@" >&2
-	exit 1
+  echo "$@" >&2
+  exit 1
 }
 
 fail_on_output() {
-	tee /dev/stderr | not read
+  tee /dev/stderr | not read
 }
 
 # Check to make sure it's safe to modify the user's git repo.
@@ -24,7 +24,7 @@ git status --porcelain | fail_on_output
 
 # Undo any edits made by this script.
 cleanup() {
-	git reset --hard HEAD
+  git reset --hard HEAD
 }
 trap cleanup EXIT
 
@@ -32,44 +32,40 @@ PATH="${HOME}/go/bin:${GOROOT}/bin:${PATH}"
 go version
 
 if [[ "$1" = "-install" ]]; then
-	# Install the pinned versions as defined in module tools.
-	pushd ./test/tools
-	go install \
-		golang.org/x/lint/golint \
-		golang.org/x/tools/cmd/goimports \
-		honnef.co/go/tools/cmd/staticcheck \
-		github.com/client9/misspell/cmd/misspell
-	popd
-	if [[ -z "${VET_SKIP_PROTO}" ]]; then
-		if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
-			PROTOBUF_VERSION=22.0 # a.k.a v4.22.0 in pb.go files.
-			PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
-			pushd /home/runner/go
-			wget https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/${PROTOC_FILENAME}
-			unzip ${PROTOC_FILENAME}
-			bin/protoc --version
-			popd
-		elif not which protoc >/dev/null; then
-			die "Please install protoc into your path"
-		fi
-	fi
-	exit 0
+  # Install the pinned versions as defined in module tools.
+  pushd ./test/tools
+  go install \
+    golang.org/x/lint/golint \
+    golang.org/x/tools/cmd/goimports \
+    honnef.co/go/tools/cmd/staticcheck \
+    github.com/client9/misspell/cmd/misspell
+  popd
+  if [[ -z "${VET_SKIP_PROTO}" ]]; then
+    if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
+      PROTOBUF_VERSION=22.0 # a.k.a v4.22.0 in pb.go files.
+      PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
+      pushd /home/runner/go
+      wget https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/${PROTOC_FILENAME}
+      unzip ${PROTOC_FILENAME}
+      bin/protoc --version
+      popd
+    elif not which protoc > /dev/null; then
+      die "Please install protoc into your path"
+    fi
+  fi
+  exit 0
 elif [[ "$#" -ne 0 ]]; then
-	die "Unknown argument(s): $*"
+  die "Unknown argument(s): $*"
 fi
 
 # - Check that generated proto files are up to date.
 if [[ -z "${VET_SKIP_PROTO}" ]]; then
-	make proto && git status --porcelain 2>&1 | fail_on_output ||
-		(
-			git status
-			git --no-pager diff
-			exit 1
-		)
+  make proto && git status --porcelain 2>&1 | fail_on_output || \
+    (git status; git --no-pager diff; exit 1)
 fi
 
 if [[ -n "${VET_ONLY_PROTO}" ]]; then
-	exit 0
+  exit 0
 fi
 
 # - Ensure all source files contain a copyright message.
@@ -86,7 +82,7 @@ not git grep -l 'x/net/context' -- "*.go"
 
 # - Do not import math/rand for real library code.  Use internal/grpcrand for
 #   thread safety.
-git grep -l '"math/rand"' -- "*.go" 2>&1 | not grep -v '^examples\|^interop/stress\|grpcrand\|^benchmark\|wrr_test'
+git grep -l '"math/rand"' -- "*.go" 2>&1 | not grep -v '^examples\|^stress\|grpcrand\|^benchmark\|wrr_test'
 
 # - Do not use "interface{}"; use "any" instead.
 git grep -l 'interface{}' -- "*.go" 2>&1 | not grep -v '\.pb\.go\|protoc-gen-go-grpc'
@@ -98,7 +94,7 @@ git grep -l -e 'grpclog.I' --or -e 'grpclog.W' --or -e 'grpclog.E' --or -e 'grpc
 not git grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/" -- "*.go"
 
 # - Ensure all usages of grpc_testing package are renamed when importing.
-not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" -- "*.go"
+not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" -- "*.go" 
 
 # - Ensure all xds proto imports are renamed to *pb or *grpc.
 git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.pb.go' | not grep -v 'pb "\|grpc "'
@@ -109,21 +105,17 @@ misspell -error .
 # go mod tidy.
 # Perform these checks on each module inside gRPC.
 for MOD_FILE in $(find . -name 'go.mod'); do
-	MOD_DIR=$(dirname ${MOD_FILE})
-	pushd ${MOD_DIR}
-	go vet -all ./... | fail_on_output
-	gofmt -s -d -l . 2>&1 | fail_on_output
-	goimports -l . 2>&1 | not grep -vE "\.pb\.go"
-	golint ./... 2>&1 | not grep -vE "/grpc_testing_not_regenerate/.*\.pb\.go:"
+  MOD_DIR=$(dirname ${MOD_FILE})
+  pushd ${MOD_DIR}
+  go vet -all ./... | fail_on_output
+  gofmt -s -d -l . 2>&1 | fail_on_output
+  goimports -l . 2>&1 | not grep -vE "\.pb\.go"
+  golint ./... 2>&1 | not grep -vE "/grpc_testing_not_regenerate/.*\.pb\.go:"
 
-	go mod tidy -compat=1.19
-	git status --porcelain 2>&1 | fail_on_output ||
-		(
-			git status
-			git --no-pager diff
-			exit 1
-		)
-	popd
+  go mod tidy -compat=1.19
+  git status --porcelain 2>&1 | fail_on_output || \
+    (git status; git --no-pager diff; exit 1)
+  popd
 done
 
 # - Collection of static analysis checks
@@ -132,7 +124,7 @@ done
 # plugins.
 # TODO(dfawley): enable ST1019 (duplicate imports) but allow for protobufs.
 SC_OUT="$(mktemp)"
-staticcheck -go 1.19 -checks 'inherit,-ST1015,-ST1019,-SA1019' ./... >"${SC_OUT}" || true
+staticcheck -go 1.19 -checks 'inherit,-ST1015,-ST1019,-SA1019' ./... > "${SC_OUT}" || true
 # Error if anything other than deprecation warnings are printed.
 not grep -v "is deprecated:.*SA1019" "${SC_OUT}"
 # Only ignore the following deprecated types/fields/functions.
@@ -188,32 +180,32 @@ xxx_messageInfo_
 
 # - special golint on package comments.
 lint_package_comment_per_package() {
-	# Number of files in this go package.
-	fileCount=$(go list -f '{{len .GoFiles}}' $1)
-	if [ ${fileCount} -eq 0 ]; then
-		return 0
-	fi
-	# Number of package errors generated by golint.
-	lintPackageCommentErrorsCount=$(golint --min_confidence 0 $1 | grep -c "should have a package comment")
-	# golint complains about every file that's missing the package comment. If the
-	# number of files for this package is greater than the number of errors, there's
-	# at least one file with package comment, good. Otherwise, fail.
-	if [ ${fileCount} -le ${lintPackageCommentErrorsCount} ]; then
-		echo "Package $1 (with ${fileCount} files) is missing package comment"
-		return 1
-	fi
+  # Number of files in this go package.
+  fileCount=$(go list -f '{{len .GoFiles}}' $1)
+  if [ ${fileCount} -eq 0 ]; then
+    return 0
+  fi
+  # Number of package errors generated by golint.
+  lintPackageCommentErrorsCount=$(golint --min_confidence 0 $1 | grep -c "should have a package comment")
+  # golint complains about every file that's missing the package comment. If the
+  # number of files for this package is greater than the number of errors, there's
+  # at least one file with package comment, good. Otherwise, fail.
+  if [ ${fileCount} -le ${lintPackageCommentErrorsCount} ]; then
+    echo "Package $1 (with ${fileCount} files) is missing package comment"
+    return 1
+  fi
 }
 lint_package_comment() {
-	set +ex
+  set +ex
 
-	count=0
-	for i in $(go list ./...); do
-		lint_package_comment_per_package "$i"
-		((count += $?))
-	done
+  count=0
+  for i in $(go list ./...); do
+    lint_package_comment_per_package "$i"
+    ((count += $?))
+  done
 
-	set -ex
-	return $count
+  set -ex
+  return $count
 }
 lint_package_comment
 
