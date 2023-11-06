@@ -52,6 +52,9 @@ type CRLProvider interface {
 	//
 	// [RFC5280 - Undetermined]: https://datatracker.ietf.org/doc/html/rfc5280#section-6.3.3
 	CRL(cert *x509.Certificate) (*CRL, error)
+
+	// Close cleans up resources allocated by the provider.
+	Close()
 }
 
 // StaticCRLProvider implements CRLProvider interface by accepting raw content
@@ -86,6 +89,9 @@ func (p *StaticCRLProvider) addCRL(crl *CRL) {
 func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
 	return p.crls[cert.Issuer.ToRDNSequence().String()], nil
 }
+
+// Close is a no-op.
+func (p *StaticCRLProvider) Close() {}
 
 // FileWatcherOptions represents a data structure holding a configuration for
 // FileWatcherCRLProvider.
