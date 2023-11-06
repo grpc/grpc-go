@@ -23,7 +23,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.3.0
 // - protoc             v4.22.0
-// source: stress/grpc_testing/metrics.proto
+// source: interop/stress/grpc_testing/metrics.proto
 
 package grpc_testing
 
@@ -197,5 +197,5 @@ var MetricsService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "stress/grpc_testing/metrics.proto",
+	Metadata: "interop/stress/grpc_testing/metrics.proto",
 }
