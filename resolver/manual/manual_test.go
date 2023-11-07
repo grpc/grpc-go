@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2017 gRPC authors.
+ * Copyright 2023 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ func TestResolver(t *testing.T) {
 		},
 	})
 
-	t.Run("update_state", func(t *testing.T) {
+	t.Run("update_state_panics", func(t *testing.T) {
 		defer func() {
 			want := "cannot update state as grpc.Dial with resolver has not been called"
 			if r := recover(); r != want {
@@ -48,7 +48,7 @@ func TestResolver(t *testing.T) {
 			{Addr: "anotheraddress"},
 		}})
 	})
-	t.Run("report_error", func(t *testing.T) {
+	t.Run("report_error_panics", func(t *testing.T) {
 		defer func() {
 			want := "cannot report error as grpc.Dial with resolver has not been called"
 			if r := recover(); r != want {
@@ -58,14 +58,16 @@ func TestResolver(t *testing.T) {
 		r.ReportError(errors.New("example"))
 	})
 
-	_, err := grpc.Dial("whatever://localhost",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithResolvers(r))
-	if err != nil {
-		t.Errorf("dial setup error: %v", err)
-	}
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{
-		{Addr: "ok"},
-	}})
-	r.ReportError(errors.New("example"))
+	t.Run("happy_path", func(t *testing.T) {
+		_, err := grpc.Dial("whatever://localhost",
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithResolvers(r))
+		if err != nil {
+			t.Errorf("dial setup error: %v", err)
+		}
+		r.UpdateState(resolver.State{Addresses: []resolver.Address{
+			{Addr: "ok"},
+		}})
+		r.ReportError(errors.New("example"))
+	})
 }
