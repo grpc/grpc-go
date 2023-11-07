@@ -13,13 +13,13 @@ ignore:
   # Tests and test related files.
   - "**/test"
   - "**/testutils"
-  - "testdata"
+  - "**/testdata"
   - "interop"
   # Other submodules.
   - "cmd"
   - "security"
   - "examples"
   - "gcp"
-  - "stats/opensensus"
+  - "stats/opencensus"
 comment:
   layout: "header, diff, files"
