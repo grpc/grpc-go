@@ -419,7 +419,7 @@ func WithTimeout(d time.Duration) DialOption {
 // To retain OS defaults, use a net.Dialer with the KeepAlive field set to a
 // negative value.
 //
-// For more information, please see [issue 23459] in the Go github repo
+// For more information, please see [issue 23459] in the Go github repo.
 //
 // [issue 23459]: https://github.com/golang/go/issues/23459
 func WithContextDialer(f func(context.Context, string) (net.Conn, error)) DialOption {

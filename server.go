@@ -819,7 +819,7 @@ func (l *listenSocket) Close() error {
 // To retain OS defaults, pass a net.Listener created by calling the Listen method
 // on a net.ListenConfig with the `KeepAlive` field set to a negative value.
 //
-// For more information, please see [issue 23459] in the Go github repo
+// For more information, please see [issue 23459] in the Go github repo.
 //
 // [issue 23459]: https://github.com/golang/go/issues/23459
 func (s *Server) Serve(lis net.Listener) error {
