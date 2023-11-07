@@ -7,21 +7,18 @@ coverage:
       default:
         informational: true
 ignore:
-  - "benchmark/**/*"
-  - "stress/**/*"
-  # All 'pb.go's
+  - "benchmark"
+  # All 'pb.go's.
   - "**/*.pb.go"
   # Tests and test related files.
-  - "test/**/*"
-  - "xds/internal/testutils/**/*"
-  - "xds/internal/test/**/*"
-  - "balancer/rls/internal/test/e2e/**/*"
+  - "**/test"
+  - "**/testutils"
   - "testdata"
   # Other submodules.
-  - "security/**/*"
-  - "examples/**/*"
-  - "interop/**/*"
-  - "stats/**/*"
-  - "gcp/**/*"
+  - "security"
+  - "examples"
+  - "interop"
+  - "stats"
+  - "gcp"
 comment:
   layout: "header, diff, files"
