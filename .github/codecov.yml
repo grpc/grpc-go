@@ -14,11 +14,12 @@ ignore:
   - "**/test"
   - "**/testutils"
   - "testdata"
+  - "interop"
   # Other submodules.
+  - "cmd"
   - "security"
   - "examples"
-  - "interop"
-  - "stats"
   - "gcp"
+  - "stats/opensensus"
 comment:
   layout: "header, diff, files"
