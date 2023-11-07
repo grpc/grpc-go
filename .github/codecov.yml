@@ -7,19 +7,19 @@ coverage:
       default:
         informational: true
 ignore:
-  - "benchmark"
   # All 'pb.go's.
   - "**/*.pb.go"
   # Tests and test related files.
   - "**/test"
-  - "**/testutils"
   - "**/testdata"
+  - "**/testutils"
+  - "benchmark"
   - "interop"
   # Other submodules.
   - "cmd"
-  - "security"
   - "examples"
   - "gcp"
+  - "security"
   - "stats/opencensus"
 comment:
   layout: "header, diff, files"
