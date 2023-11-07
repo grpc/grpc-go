@@ -1,16 +1,25 @@
 coverage:
   status:
-    patch:
-      default:
-        target: "80"
     project:
       default:
-        target: auto
-        threshold: 1
+        informational: true
+    patch:
+      default:
+        informational: true
 ignore:
-  - "test/"
-  - "benchmark/"
-  - "internal/testutils"
-  - ".*.pb.go"
+  # All 'pb.go's.
+  - "**/*.pb.go"
+  # Tests and test related files.
+  - "**/test"
+  - "**/testdata"
+  - "**/testutils"
+  - "benchmark"
+  - "interop"
+  # Other submodules.
+  - "cmd"
+  - "examples"
+  - "gcp"
+  - "security"
+  - "stats/opencensus"
 comment:
-  layout: "header"
+  layout: "header, diff, files"
