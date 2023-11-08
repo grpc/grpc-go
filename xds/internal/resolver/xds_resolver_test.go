@@ -67,7 +67,6 @@ import (
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // Register the cds LB policy
-	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"    // Register the router filter
 )
 
