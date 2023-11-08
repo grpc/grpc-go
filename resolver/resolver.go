@@ -324,7 +324,7 @@ type Resolver interface {
 // default authority for the ClientConn.
 // By default, the authority used is target.Endpoint()
 type AuthorityOverrider interface {
-	// GetServiceAuthority returns the authority to use for a ClientConn with the
+	// OverrideAuthority returns the authority to use for a ClientConn with the
 	// given target. It must not perform I/O or any other blocking operations.
-	GetServiceAuthority(t Target) string
+	OverrideAuthority(Target) string
 }

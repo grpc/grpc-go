@@ -61,7 +61,7 @@ func (b *builder) Scheme() string {
 	return b.scheme
 }
 
-func (b *builder) GetServiceAuthority(t resolver.Target) string {
+func (b *builder) OverrideAuthority(t resolver.Target) string {
 	return "localhost"
 }
 
