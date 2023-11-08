@@ -45,6 +45,7 @@ func (s) TestStaticCRLProvider(t *testing.T) {
 		rawCRLs = append(rawCRLs, rawCRL)
 	}
 	p := NewStaticCRLProvider(rawCRLs)
+
 	// Each test data entry contains a description of a certificate chain,
 	// certificate chain itself, and if CRL is not expected to be found.
 	tests := []struct {
@@ -154,10 +155,6 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 		t.Fatal("Unexpected error while creating FileWatcherCRLProvider:", err)
 	}
 
-	// We need to make sure that initial CRLDirectory scan is completed before
-	// querying the internal map.
-	p.Close()
-
 	// Each test data entry contains a description of a certificate chain,
 	// certificate chain itself, and if CRL is not expected to be found.
 	tests := []struct {
@@ -197,6 +194,7 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 			}
 		})
 	}
+	p.Close()
 	if diff := cmp.Diff(len(nonCRLFilesSet), nonCRLFilesUnderCRLDirectory); diff != "" {
 		t.Errorf("Unexpected number Number of callback executions\ndiff (-got +want):\n%s", diff)
 	}
