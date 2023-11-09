@@ -85,11 +85,10 @@ func (cs *CallbackSerializer) run(ctx context.Context) {
 			// Do nothing here. Next iteration of the for loop will not happen,
 			// since ctx.Err() would be non-nil.
 		case callback, ok := <-cs.callbacks.Get():
-			if !ok {
-				return
+			if ok {
+				cs.callbacks.Load()
+				callback.(func(ctx context.Context))(ctx)
 			}
-			cs.callbacks.Load()
-			callback.(func(ctx context.Context))(ctx)
 		}
 	}
 
