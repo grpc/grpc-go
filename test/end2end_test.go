@@ -735,8 +735,8 @@ type nopCompressor struct {
 	grpc.Compressor
 }
 
-// NewNopCompressor creates a compressor to test the case that type is not supported.
-func NewNopCompressor() grpc.Compressor {
+// newNopCompressor creates a compressor to test the case that type is not supported.
+func newNopCompressor() grpc.Compressor {
 	return &nopCompressor{grpc.NewGZIPCompressor()}
 }
 
@@ -748,8 +748,8 @@ type nopDecompressor struct {
 	grpc.Decompressor
 }
 
-// NewNopDecompressor creates a decompressor to test the case that type is not supported.
-func NewNopDecompressor() grpc.Decompressor {
+// newNopDecompressor creates a decompressor to test the case that type is not supported.
+func newNopDecompressor() grpc.Decompressor {
 	return &nopDecompressor{grpc.NewGZIPDecompressor()}
 }
 
@@ -775,8 +775,8 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	}
 	if te.clientNopCompression {
 		opts = append(opts,
-			grpc.WithCompressor(NewNopCompressor()),
-			grpc.WithDecompressor(NewNopDecompressor()),
+			grpc.WithCompressor(newNopCompressor()),
+			grpc.WithDecompressor(newNopDecompressor()),
 		)
 	}
 	if te.unaryClientInt != nil {
