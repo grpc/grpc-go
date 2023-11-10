@@ -634,6 +634,7 @@ func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 //     callback associated with that resource.  It should not result in the
 //     invocation of the watch callback associated with the deleted resource.
 func (s) TestCDSWatch_ResourceRemoved(t *testing.T) {
+	t.Skip("Disabled; see https://github.com/grpc/grpc-go/issues/6781")
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
