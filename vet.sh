@@ -35,7 +35,6 @@ if [[ "$1" = "-install" ]]; then
   # Install the pinned versions as defined in module tools.
   pushd ./test/tools
   go install \
-    golang.org/x/lint/golint \
     golang.org/x/tools/cmd/goimports \
     honnef.co/go/tools/cmd/staticcheck \
     github.com/client9/misspell/cmd/misspell
@@ -105,8 +104,7 @@ git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.
 
 misspell -error .
 
-# - gofmt, goimports, golint (with exceptions for generated code), go vet,
-# go mod tidy.
+# - gofmt, goimports, go vet, go mod tidy.
 # Perform these checks on each module inside gRPC.
 for MOD_FILE in $(find . -name 'go.mod'); do
   MOD_DIR=$(dirname ${MOD_FILE})
