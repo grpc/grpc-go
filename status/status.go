@@ -97,6 +97,13 @@ func FromError(err error) (s *Status, ok bool) {
 	if err == nil {
 		return nil, true
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			// type assertion passes but GRPCStatus method is still nil
+			s = New(codes.Unknown, err.Error())
+			ok = false
+		}
+	}()
 	type grpcstatus interface{ GRPCStatus() *Status }
 	if gs, ok := err.(grpcstatus); ok && gs != nil {
 		if grpcStatus := gs.GRPCStatus(); grpcStatus != nil {
