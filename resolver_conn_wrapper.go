@@ -197,26 +197,6 @@ func (ccr *ccResolverWrapper) NewAddress(addrs []resolver.Address) {
 	})
 }
 
-// NewServiceConfig is called by the resolver implementation to send service
-// configs to gRPC.
-func (ccr *ccResolverWrapper) NewServiceConfig(sc string) {
-	ccr.serializerScheduleLocked(func(_ context.Context) {
-		channelz.Infof(logger, ccr.channelzID, "ccResolverWrapper: got new service config: %s", sc)
-		if ccr.ignoreServiceConfig {
-			channelz.Info(logger, ccr.channelzID, "Service config lookups disabled; ignoring config")
-			return
-		}
-		scpr := parseServiceConfig(sc)
-		if scpr.Err != nil {
-			channelz.Warningf(logger, ccr.channelzID, "ccResolverWrapper: error parsing service config: %v", scpr.Err)
-			return
-		}
-		ccr.addChannelzTraceEvent(resolver.State{Addresses: ccr.curState.Addresses, ServiceConfig: scpr})
-		ccr.curState.ServiceConfig = scpr
-		ccr.cc.updateResolverState(ccr.curState, nil)
-	})
-}
-
 // ParseServiceConfig is called by resolver implementations to parse a JSON
 // representation of the service config.
 func (ccr *ccResolverWrapper) ParseServiceConfig(scJSON string) *serviceconfig.ParseResult {
