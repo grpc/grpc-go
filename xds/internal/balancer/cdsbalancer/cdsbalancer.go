@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
@@ -99,9 +100,9 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 	}
 	b.ccw = &ccWrapper{
 		ClientConn: cc,
-		xdsHI:      b.xdsHI,
+		parent:     b,
 	}
-	b.logger = prefixLogger((b))
+	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
 
 	var creds credentials.TransportCredentials
@@ -149,11 +150,15 @@ type cdsBalancer struct {
 	// The following fields are initialized at build time and are either
 	// read-only after that or provide their own synchronization, and therefore
 	// do not need to be guarded by a mutex.
-	ccw               *ccWrapper                 // ClientConn interface passed to child LB.
-	bOpts             balancer.BuildOptions      // BuildOptions passed to child LB.
-	childConfigParser balancer.ConfigParser      // Config parser for cluster_resolver LB policy.
-	xdsHI             *xdsinternal.HandshakeInfo // Handshake info from security configuration.
-	logger            *grpclog.PrefixLogger      // Prefix logger for all logging.
+	ccw               *ccWrapper            // ClientConn interface passed to child LB.
+	bOpts             balancer.BuildOptions // BuildOptions passed to child LB.
+	childConfigParser balancer.ConfigParser // Config parser for cluster_resolver LB policy.
+	logger            *grpclog.PrefixLogger // Prefix logger for all logging.
+
+	hiMu           sync.Mutex
+	xdsHI          *xdsinternal.HandshakeInfo // Handshake info from security configuration.
+	cachedRoot     certprovider.Provider
+	cachedIdentity certprovider.Provider
 
 	// The serializer and its cancel func are initialized at build time, and the
 	// rest of the fields here are only accessed from serializer callbacks (or
@@ -165,12 +170,7 @@ type cdsBalancer struct {
 	xdsClient        xdsclient.XDSClient          // xDS client to watch Cluster resources.
 	watchers         map[string]*watcherState     // Set of watchers and associated state, keyed by cluster name.
 	lbCfg            *lbConfig                    // Current load balancing configuration.
-
-	// The certificate providers are cached here to that they can be closed when
-	// a new provider is to be created.
-	cachedRoot     certprovider.Provider
-	cachedIdentity certprovider.Provider
-	xdsCredsInUse  bool
+	xdsCredsInUse    bool
 }
 
 // handleSecurityConfig processes the security configuration received from the
@@ -180,6 +180,9 @@ type cdsBalancer struct {
 //
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) handleSecurityConfig(config *xdsresource.SecurityConfig) error {
+	b.hiMu.Lock()
+	defer b.hiMu.Unlock()
+
 	// If xdsCredentials are not in use, i.e, the user did not want to get
 	// security configuration from an xDS server, we should not be acting on the
 	// received security config here. Doing so poses a security threat.
@@ -660,9 +663,7 @@ func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []cluste
 type ccWrapper struct {
 	balancer.ClientConn
 
-	// The certificate providers in this HandshakeInfo are updated based on the
-	// received security configuration in the Cluster resource.
-	xdsHI *xdsinternal.HandshakeInfo
+	parent *cdsBalancer
 }
 
 // NewSubConn intercepts NewSubConn() calls from the child policy and adds an
@@ -670,9 +671,11 @@ type ccWrapper struct {
 // handshaker to perform the TLS handshake.
 func (ccw *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	newAddrs := make([]resolver.Address, len(addrs))
+	ccw.parent.hiMu.Lock()
 	for i, addr := range addrs {
-		newAddrs[i] = xdsinternal.SetHandshakeInfo(addr, ccw.xdsHI)
+		newAddrs[i] = xdsinternal.SetHandshakeInfo(addr, ccw.parent.xdsHI)
 	}
+	ccw.parent.hiMu.Unlock()
 	// No need to override opts.StateListener; just forward all calls to the
 	// child that created the SubConn.
 	return ccw.ClientConn.NewSubConn(newAddrs, opts)
@@ -680,8 +683,10 @@ func (ccw *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubC
 
 func (ccw *ccWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
 	newAddrs := make([]resolver.Address, len(addrs))
+	ccw.parent.hiMu.Lock()
 	for i, addr := range addrs {
-		newAddrs[i] = xdsinternal.SetHandshakeInfo(addr, ccw.xdsHI)
+		newAddrs[i] = xdsinternal.SetHandshakeInfo(addr, ccw.parent.xdsHI)
 	}
+	ccw.parent.hiMu.Unlock()
 	ccw.ClientConn.UpdateAddresses(sc, newAddrs)
 }
