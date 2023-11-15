@@ -203,7 +203,7 @@ func (s) TestTLS_CipherSuites(t *testing.T) {
 	}
 }
 
-// Tests that CipherSuites is not overriden when it is set.
+// Tests that CipherSuites is not overridden when it is set.
 func (s) TestTLS_CipherSuitesOverridable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
