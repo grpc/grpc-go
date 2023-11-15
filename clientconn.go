@@ -212,7 +212,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	cc.csMgr = newConnectivityStateManager(cc.ctx, cc.channelzID)
-	cc.blockingpicker = newPickerWrapper(cc.dopts.copts.StatsHandlers)
+	cc.pickerWrapper = newPickerWrapper(cc.dopts.copts.StatsHandlers)
 	cc.balancerWrapper = newCCBalancerWrapper(cc, balancer.BuildOptions{
 		DialCreds:        cc.dopts.copts.TransportCredentials,
 		CredsBundle:      cc.dopts.copts.CredsBundle,
@@ -369,7 +369,7 @@ func (cc *ClientConn) exitIdleMode() error {
 	}()
 
 	cc.idlenessState = ccIdlenessStateExitingIdle
-	cc.blockingpicker.exitIdleMode()
+	cc.pickerWrapper.exitIdleMode()
 
 	var credsClone credentials.TransportCredentials
 	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
@@ -417,7 +417,7 @@ func (cc *ClientConn) enterIdleMode() error {
 	// `cc.resolverWrapper`, it makes the code simpler in the wrapper. We should
 	// try to do the same for the balancer and picker wrappers too.
 	cc.resolverWrapper.close()
-	cc.blockingpicker.enterIdleMode()
+	cc.pickerWrapper.enterIdleMode()
 	cc.balancerWrapper.enterIdleMode()
 	cc.csMgr.updateState(connectivity.Idle)
 	cc.idlenessState = ccIdlenessStateIdle
@@ -645,7 +645,7 @@ type ClientConn struct {
 	// The following provide their own synchronization, and therefore don't
 	// require cc.mu to be held to access them.
 	csMgr              *connectivityStateManager
-	blockingpicker     *pickerWrapper
+	pickerWrapper      *pickerWrapper
 	safeConfigSelector iresolver.SafeConfigSelector
 	czData             *channelzData
 	retryThrottler     atomic.Value // Updated from service config.
@@ -900,7 +900,7 @@ func (cc *ClientConn) applyFailingLB(sc *serviceconfig.ParseResult) {
 		err = status.Errorf(codes.Unavailable, "illegal service config type: %T", sc.Config)
 	}
 	cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{nil})
-	cc.blockingpicker.updatePicker(base.NewErrPicker(err))
+	cc.pickerWrapper.updatePicker(base.NewErrPicker(err))
 	cc.csMgr.updateState(connectivity.TransientFailure)
 }
 
@@ -1164,7 +1164,7 @@ func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method string) (transport.ClientTransport, balancer.PickResult, error) {
-	return cc.blockingpicker.pick(ctx, failfast, balancer.PickInfo{
+	return cc.pickerWrapper.pick(ctx, failfast, balancer.PickInfo{
 		Ctx:            ctx,
 		FullMethodName: method,
 	})
@@ -1263,7 +1263,7 @@ func (cc *ClientConn) Close() error {
 
 	// The order of closing matters here since the balancer wrapper assumes the
 	// picker is closed before it is closed.
-	cc.blockingpicker.close()
+	cc.pickerWrapper.close()
 	cc.balancerWrapper.close()
 	if rWrapper := cc.resolverWrapper; rWrapper != nil {
 		rWrapper.close()
