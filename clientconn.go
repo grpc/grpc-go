@@ -255,22 +255,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.dopts.bs = backoff.DefaultExponential
 	}
 
-	if cc.dopts.scChan != nil {
-		// Blocking wait for the initial service config.
-		select {
-		case sc, ok := <-cc.dopts.scChan:
-			if ok {
-				cc.sc = &sc
-				cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{&sc})
-			}
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-	if cc.dopts.scChan != nil {
-		go cc.scWatcher()
-	}
-
 	// This creates the name resolver, load balancer, blocking picker etc.
 	if err := cc.exitIdleMode(); err != nil {
 		return nil, err
@@ -744,25 +728,6 @@ func (cc *ClientConn) Connect() {
 	// If the ClientConn was not in idle mode, we need to call ExitIdle on the
 	// LB policy so that connections can be created.
 	cc.balancerWrapper.exitIdleMode()
-}
-
-func (cc *ClientConn) scWatcher() {
-	for {
-		select {
-		case sc, ok := <-cc.dopts.scChan:
-			if !ok {
-				return
-			}
-			cc.mu.Lock()
-			// TODO: load balance policy runtime change is ignored.
-			// We may revisit this decision in the future.
-			cc.sc = &sc
-			cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{&sc})
-			cc.mu.Unlock()
-		case <-cc.ctx.Done():
-			return
-		}
-	}
 }
 
 // waitForResolvedAddrs blocks until the resolver has provided addresses or the
