@@ -25,6 +25,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
@@ -75,14 +76,15 @@ func (tcc *testCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.New
 	if len(addrs) != 1 {
 		return nil, fmt.Errorf("NewSubConn got %d addresses, want 1", len(addrs))
 	}
-	getHI := internal.GetXDSHandshakeInfoForTesting.(func(attr *attributes.Attributes) *xdscredsinternal.HandshakeInfo)
+	getHI := internal.GetXDSHandshakeInfoForTesting.(func(attr *attributes.Attributes) *unsafe.Pointer)
 	hi := getHI(addrs[0].Attributes)
 	if hi == nil {
 		return nil, fmt.Errorf("NewSubConn got address without xDS handshake info")
 	}
+
 	sc, err := tcc.ClientConn.NewSubConn(addrs, opts)
 	select {
-	case tcc.handshakeInfoCh <- hi:
+	case tcc.handshakeInfoCh <- (*xdscredsinternal.HandshakeInfo)(*hi):
 	default:
 	}
 	return sc, err
@@ -292,7 +294,7 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting to read handshake info passed to NewSubConn")
 	}
-	wantHI := xdscredsinternal.NewHandshakeInfo(nil, nil)
+	wantHI := xdscredsinternal.NewHandshakeInfo(nil, nil, nil, false)
 	if !cmp.Equal(gotHI, wantHI) {
 		t.Fatalf("NewSubConn got handshake info %+v, want %+v", gotHI, wantHI)
 	}
@@ -343,7 +345,7 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting to read handshake info passed to NewSubConn")
 	}
-	wantHI := xdscredsinternal.NewHandshakeInfo(nil, nil)
+	wantHI := xdscredsinternal.NewHandshakeInfo(nil, nil, nil, false)
 	if !cmp.Equal(gotHI, wantHI) {
 		t.Fatalf("NewSubConn got handshake info %+v, want %+v", gotHI, wantHI)
 	}
