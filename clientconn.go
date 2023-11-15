@@ -1257,20 +1257,18 @@ func (cc *ClientConn) Close() error {
 	cc.conns = nil
 	cc.csMgr.updateState(connectivity.Shutdown)
 
-	pWrapper := cc.blockingpicker
-	rWrapper := cc.resolverWrapper
-	bWrapper := cc.balancerWrapper
-	idlenessMgr := cc.idlenessMgr
+	// We can safely unlock and continue to access all fields now as
+	// cc.conns==nil, preventing any further operations on cc.
 	cc.mu.Unlock()
 
 	// The order of closing matters here since the balancer wrapper assumes the
 	// picker is closed before it is closed.
-	pWrapper.close()
-	bWrapper.close()
-	if rWrapper != nil {
+	cc.blockingpicker.close()
+	cc.balancerWrapper.close()
+	if rWrapper := cc.resolverWrapper; rWrapper != nil {
 		rWrapper.close()
 	}
-	if idlenessMgr != nil {
+	if idlenessMgr := cc.idlenessMgr; idlenessMgr != nil {
 		idlenessMgr.Close()
 	}
 
