@@ -160,6 +160,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 	cc.exitIdleCond = sync.NewCond(&cc.mu)
 
+	// Apply dial options.
 	disableGlobalOpts := false
 	for _, opt := range opts {
 		if _, ok := opt.(*disableGlobalDialOptions); ok {
@@ -177,20 +178,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	for _, opt := range opts {
 		opt.apply(&cc.dopts)
 	}
-
 	chainUnaryClientInterceptors(cc)
 	chainStreamClientInterceptors(cc)
-
-	defer func() {
-		if err != nil {
-			cc.Close()
-		}
-	}()
-
-	// Register ClientConn with channelz.
-	cc.channelzRegistration(target)
-
-	cc.csMgr = newConnectivityStateManager(cc.ctx, cc.channelzID)
 
 	if err := cc.validateTransportCredentials(); err != nil {
 		return nil, err
@@ -210,6 +199,37 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	} else {
 		cc.dopts.copts.UserAgent = grpcUA
 	}
+
+	// Register ClientConn with channelz.
+	cc.channelzRegistration(target)
+
+	// Determine the resolver to use.
+	if err := cc.parseTargetAndFindResolver(); err != nil {
+		channelz.RemoveEntry(cc.channelzID)
+		return nil, err
+	}
+	if err = cc.determineAuthority(); err != nil {
+		channelz.RemoveEntry(cc.channelzID)
+		return nil, err
+	}
+
+	cc.csMgr = newConnectivityStateManager(cc.ctx, cc.channelzID)
+	cc.pickerWrapper = newPickerWrapper(cc.dopts.copts.StatsHandlers)
+	cc.balancerWrapper = newCCBalancerWrapper(cc, balancer.BuildOptions{
+		DialCreds:        cc.dopts.copts.TransportCredentials,
+		CredsBundle:      cc.dopts.copts.CredsBundle,
+		Dialer:           cc.dopts.copts.Dialer,
+		Authority:        cc.authority,
+		CustomUserAgent:  cc.dopts.copts.UserAgent,
+		ChannelzParentID: cc.channelzID,
+		Target:           cc.parsedTarget,
+	})
+
+	defer func() {
+		if err != nil {
+			cc.Close()
+		}
+	}()
 
 	if cc.dopts.timeout > 0 {
 		var cancel context.CancelFunc
@@ -233,14 +253,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	if cc.dopts.bs == nil {
 		cc.dopts.bs = backoff.DefaultExponential
-	}
-
-	// Determine the resolver to use.
-	if err := cc.parseTargetAndFindResolver(); err != nil {
-		return nil, err
-	}
-	if err = cc.determineAuthority(); err != nil {
-		return nil, err
 	}
 
 	// This creates the name resolver, load balancer, blocking picker etc.
@@ -343,31 +355,13 @@ func (cc *ClientConn) exitIdleMode() error {
 	}()
 
 	cc.idlenessState = ccIdlenessStateExitingIdle
-	exitedIdle := false
-	if cc.blockingpicker == nil {
-		cc.blockingpicker = newPickerWrapper(cc.dopts.copts.StatsHandlers)
-	} else {
-		cc.blockingpicker.exitIdleMode()
-		exitedIdle = true
-	}
+	cc.pickerWrapper.exitIdleMode()
 
 	var credsClone credentials.TransportCredentials
 	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
 		credsClone = creds.Clone()
 	}
-	if cc.balancerWrapper == nil {
-		cc.balancerWrapper = newCCBalancerWrapper(cc, balancer.BuildOptions{
-			DialCreds:        credsClone,
-			CredsBundle:      cc.dopts.copts.CredsBundle,
-			Dialer:           cc.dopts.copts.Dialer,
-			Authority:        cc.authority,
-			CustomUserAgent:  cc.dopts.copts.UserAgent,
-			ChannelzParentID: cc.channelzID,
-			Target:           cc.parsedTarget,
-		})
-	} else {
-		cc.balancerWrapper.exitIdleMode()
-	}
+	cc.balancerWrapper.exitIdleMode()
 	cc.firstResolveEvent = grpcsync.NewEvent()
 	cc.mu.Unlock()
 
@@ -378,9 +372,7 @@ func (cc *ClientConn) exitIdleMode() error {
 		return err
 	}
 
-	if exitedIdle {
-		cc.addTraceEvent("exiting idle mode")
-	}
+	cc.addTraceEvent("exiting idle mode")
 	return nil
 }
 
@@ -411,7 +403,7 @@ func (cc *ClientConn) enterIdleMode() error {
 	// `cc.resolverWrapper`, it makes the code simpler in the wrapper. We should
 	// try to do the same for the balancer and picker wrappers too.
 	cc.resolverWrapper.close()
-	cc.blockingpicker.enterIdleMode()
+	cc.pickerWrapper.enterIdleMode()
 	cc.balancerWrapper.enterIdleMode()
 	cc.csMgr.updateState(connectivity.Idle)
 	cc.idlenessState = ccIdlenessStateIdle
@@ -639,7 +631,7 @@ type ClientConn struct {
 	// The following provide their own synchronization, and therefore don't
 	// require cc.mu to be held to access them.
 	csMgr              *connectivityStateManager
-	blockingpicker     *pickerWrapper
+	pickerWrapper      *pickerWrapper
 	safeConfigSelector iresolver.SafeConfigSelector
 	czData             *channelzData
 	retryThrottler     atomic.Value // Updated from service config.
@@ -875,7 +867,7 @@ func (cc *ClientConn) applyFailingLB(sc *serviceconfig.ParseResult) {
 		err = status.Errorf(codes.Unavailable, "illegal service config type: %T", sc.Config)
 	}
 	cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{nil})
-	cc.blockingpicker.updatePicker(base.NewErrPicker(err))
+	cc.pickerWrapper.updatePicker(base.NewErrPicker(err))
 	cc.csMgr.updateState(connectivity.TransientFailure)
 }
 
@@ -1139,7 +1131,7 @@ func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method string) (transport.ClientTransport, balancer.PickResult, error) {
-	return cc.blockingpicker.pick(ctx, failfast, balancer.PickInfo{
+	return cc.pickerWrapper.pick(ctx, failfast, balancer.PickInfo{
 		Ctx:            ctx,
 		FullMethodName: method,
 	})
@@ -1232,24 +1224,18 @@ func (cc *ClientConn) Close() error {
 	cc.conns = nil
 	cc.csMgr.updateState(connectivity.Shutdown)
 
-	pWrapper := cc.blockingpicker
-	rWrapper := cc.resolverWrapper
-	bWrapper := cc.balancerWrapper
-	idlenessMgr := cc.idlenessMgr
+	// We can safely unlock and continue to access all fields now as
+	// cc.conns==nil, preventing any further operations on cc.
 	cc.mu.Unlock()
 
 	// The order of closing matters here since the balancer wrapper assumes the
 	// picker is closed before it is closed.
-	if pWrapper != nil {
-		pWrapper.close()
-	}
-	if bWrapper != nil {
-		bWrapper.close()
-	}
-	if rWrapper != nil {
+	cc.pickerWrapper.close()
+	cc.balancerWrapper.close()
+	if rWrapper := cc.resolverWrapper; rWrapper != nil {
 		rWrapper.close()
 	}
-	if idlenessMgr != nil {
+	if idlenessMgr := cc.idlenessMgr; idlenessMgr != nil {
 		idlenessMgr.Close()
 	}
 
