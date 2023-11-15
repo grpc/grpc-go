@@ -505,7 +505,6 @@ type test struct {
 	clientNopCompression        bool
 	unaryClientInt              grpc.UnaryClientInterceptor
 	streamClientInt             grpc.StreamClientInterceptor
-	sc                          <-chan grpc.ServiceConfig
 	clientInitialWindowSize     int32
 	clientInitialConnWindowSize int32
 	perRPCCreds                 credentials.PerRPCCredentials
@@ -759,10 +758,6 @@ func (d *nopDecompressor) Type() string {
 
 func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) {
 	opts = append(opts, grpc.WithDialer(te.e.dialer), grpc.WithUserAgent(te.userAgent))
-
-	if te.sc != nil {
-		opts = append(opts, grpc.WithServiceConfig(te.sc))
-	}
 
 	if te.clientCompression {
 		opts = append(opts,
