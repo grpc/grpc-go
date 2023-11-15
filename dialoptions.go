@@ -64,7 +64,6 @@ type dialOptions struct {
 	block                       bool
 	returnLastError             bool
 	timeout                     time.Duration
-	scChan                      <-chan ServiceConfig
 	authority                   string
 	binaryLogger                binarylog.Logger
 	copts                       transport.ConnectOptions
@@ -248,19 +247,6 @@ func WithCompressor(cp Compressor) DialOption {
 func WithDecompressor(dc Decompressor) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.dc = dc
-	})
-}
-
-// WithServiceConfig returns a DialOption which has a channel to read the
-// service configuration.
-//
-// Deprecated: service config should be received through name resolver or via
-// WithDefaultServiceConfig, as specified at
-// https://github.com/grpc/grpc/blob/master/doc/service_config.md.  Will be
-// removed in a future 1.x release.
-func WithServiceConfig(c <-chan ServiceConfig) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.scChan = c
 	})
 }
 
