@@ -181,6 +181,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	chainUnaryClientInterceptors(cc)
 	chainStreamClientInterceptors(cc)
 
+	cc.blockingpicker = newPickerWrapper(cc.dopts.copts.StatsHandlers)
+
 	defer func() {
 		if err != nil {
 			cc.Close()
@@ -359,13 +361,7 @@ func (cc *ClientConn) exitIdleMode() error {
 	}()
 
 	cc.idlenessState = ccIdlenessStateExitingIdle
-	exitedIdle := false
-	if cc.blockingpicker == nil {
-		cc.blockingpicker = newPickerWrapper(cc.dopts.copts.StatsHandlers)
-	} else {
-		cc.blockingpicker.exitIdleMode()
-		exitedIdle = true
-	}
+	cc.blockingpicker.exitIdleMode()
 
 	var credsClone credentials.TransportCredentials
 	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
@@ -394,9 +390,7 @@ func (cc *ClientConn) exitIdleMode() error {
 		return err
 	}
 
-	if exitedIdle {
-		cc.addTraceEvent("exiting idle mode")
-	}
+	cc.addTraceEvent("exiting idle mode")
 	return nil
 }
 
@@ -1275,9 +1269,7 @@ func (cc *ClientConn) Close() error {
 
 	// The order of closing matters here since the balancer wrapper assumes the
 	// picker is closed before it is closed.
-	if pWrapper != nil {
-		pWrapper.close()
-	}
+	pWrapper.close()
 	if bWrapper != nil {
 		bWrapper.close()
 	}
