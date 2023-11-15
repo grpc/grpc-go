@@ -140,14 +140,6 @@ func (ccr *ccResolverWrapper) close() {
 	go r.Close()
 }
 
-// serializerScheduleLocked is a convenience method to schedule a function to be
-// run on the serializer while holding ccr.mu.
-func (ccr *ccResolverWrapper) serializerScheduleLocked(f func(context.Context)) {
-	ccr.mu.Lock()
-	ccr.serializer.Schedule(f)
-	ccr.mu.Unlock()
-}
-
 // UpdateState is called by resolver implementations to report new state to gRPC
 // which includes addresses and service config.
 func (ccr *ccResolverWrapper) UpdateState(s resolver.State) error {
@@ -181,7 +173,7 @@ func (ccr *ccResolverWrapper) UpdateState(s resolver.State) error {
 // ReportError is called by resolver implementations to report errors
 // encountered during name resolution to gRPC.
 func (ccr *ccResolverWrapper) ReportError(err error) {
-	ccr.serializerScheduleLocked(func(_ context.Context) {
+	ccr.serializer.Schedule(func(_ context.Context) {
 		channelz.Warningf(logger, ccr.channelzID, "ccResolverWrapper: reporting error to cc: %v", err)
 		ccr.cc.updateResolverState(resolver.State{}, err)
 	})
@@ -190,7 +182,7 @@ func (ccr *ccResolverWrapper) ReportError(err error) {
 // NewAddress is called by the resolver implementation to send addresses to
 // gRPC.
 func (ccr *ccResolverWrapper) NewAddress(addrs []resolver.Address) {
-	ccr.serializerScheduleLocked(func(_ context.Context) {
+	ccr.serializer.Schedule(func(_ context.Context) {
 		ccr.addChannelzTraceEvent(resolver.State{Addresses: addrs, ServiceConfig: ccr.curState.ServiceConfig})
 		ccr.curState.Addresses = addrs
 		ccr.cc.updateResolverState(ccr.curState, nil)
