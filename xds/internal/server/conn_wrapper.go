@@ -128,8 +128,7 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	c.identityProvider = ip
 	c.rootProvider = rp
 
-	xdsHI := xdsinternal.NewHandshakeInfo(c.rootProvider, c.identityProvider, nil, secCfg.RequireClientCert)
-	return xdsHI, nil
+	return xdsinternal.NewHandshakeInfo(c.rootProvider, c.identityProvider, nil, secCfg.RequireClientCert), nil
 }
 
 // Close closes the providers and the underlying connection.

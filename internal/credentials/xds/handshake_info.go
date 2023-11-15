@@ -72,7 +72,7 @@ func SetHandshakeInfo(addr resolver.Address, hiPtr *unsafe.Pointer) resolver.Add
 	return addr
 }
 
-// GetHandshakeInfo returns a pointer to the HandshakeInfo stored in attr.
+// GetHandshakeInfo returns a pointer to the *HandshakeInfo stored in attr.
 func GetHandshakeInfo(attr *attributes.Attributes) *unsafe.Pointer {
 	v := attr.Value(handshakeAttrKey{})
 	hi, _ := v.(*unsafe.Pointer)
@@ -82,8 +82,6 @@ func GetHandshakeInfo(attr *attributes.Attributes) *unsafe.Pointer {
 // HandshakeInfo wraps all the security configuration required by client and
 // server handshake methods in xds credentials. The xDS implementation will be
 // responsible for populating these fields.
-//
-// Safe for concurrent access.
 type HandshakeInfo struct {
 	// All fields written at init time and read only after that, so no
 	// synchronization needed.

@@ -27,6 +27,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
@@ -220,11 +221,11 @@ func newTestContextWithHandshakeInfo(parent context.Context, root, identity cert
 	// Creating the HandshakeInfo and adding it to the attributes is very
 	// similar to what the CDS balancer would do when it intercepts calls to
 	// NewSubConn().
-	var sm []matcher.StringMatcher
+	var sms []matcher.StringMatcher
 	if sanExactMatch != "" {
-		sm = []matcher.StringMatcher{matcher.StringMatcherForTesting(newStringP(sanExactMatch), nil, nil, nil, nil, false)}
+		sms = []matcher.StringMatcher{matcher.StringMatcherForTesting(newStringP(sanExactMatch), nil, nil, nil, nil, false)}
 	}
-	info := xdsinternal.NewHandshakeInfo(root, identity, sm, false)
+	info := xdsinternal.NewHandshakeInfo(root, identity, sms, false)
 	uPtr := unsafe.Pointer(info)
 	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, &uPtr)
 
@@ -563,9 +564,9 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	// the HandshakeInfo with the new provider.
 	root2 := makeRootProvider(t, "x509/server_ca_cert.pem")
 	handshakeInfo = xdsinternal.NewHandshakeInfo(root2, nil, []matcher.StringMatcher{matcher.StringMatcherForTesting(newStringP(defaultTestCertSAN), nil, nil, nil, nil, false)}, false)
-	uPtr = unsafe.Pointer(handshakeInfo)
-	addr = xdsinternal.SetHandshakeInfo(resolver.Address{}, &uPtr)
-	ctx = icredentials.NewClientHandshakeInfoContext(ctx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
+	// Update the existing pointer, which address attribute will continue to
+	// point to.
+	atomic.StorePointer(&uPtr, unsafe.Pointer(handshakeInfo))
 	_, ai, err := creds.ClientHandshake(ctx, authority, conn)
 	if err != nil {
 		t.Fatalf("ClientHandshake() returned failed: %q", err)
