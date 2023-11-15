@@ -76,17 +76,14 @@ type ccBalancerWrapper struct {
 	mode             ccbMode                      // Tracks the current mode of the wrapper.
 }
 
-// newCCBalancerWrapper creates a new balancer wrapper. The underlying balancer
-// is not created until the switchTo() method is invoked.
+// newCCBalancerWrapper creates a new balancer wrapper in idle state. The
+// underlying balancer is not created until the switchTo() method is invoked.
 func newCCBalancerWrapper(cc *ClientConn, bopts balancer.BuildOptions) *ccBalancerWrapper {
-	ctx, cancel := context.WithCancel(context.Background())
 	ccb := &ccBalancerWrapper{
-		cc:               cc,
-		opts:             bopts,
-		serializer:       grpcsync.NewCallbackSerializer(ctx),
-		serializerCancel: cancel,
+		cc:   cc,
+		opts: bopts,
+		mode: ccbModeIdle,
 	}
-	ccb.balancer = gracefulswitch.NewBalancer(ccb, bopts)
 	return ccb
 }
 
@@ -258,7 +255,7 @@ func (ccb *ccBalancerWrapper) exitIdleMode() {
 	// exitIdleMode(), and since we just created a new serializer, we can be
 	// sure that the below function will be scheduled.
 	done := make(chan struct{})
-	ccb.serializer.Schedule(func(_ context.Context) {
+	ccb.serializer.Schedule(func(context.Context) {
 		defer close(done)
 
 		ccb.mu.Lock()
@@ -271,7 +268,11 @@ func (ccb *ccBalancerWrapper) exitIdleMode() {
 
 		// Gracefulswitch balancer does not support a switchTo operation after
 		// being closed. Hence we need to create a new one here.
-		ccb.balancer = gracefulswitch.NewBalancer(ccb, ccb.opts)
+		opts := ccb.opts
+		if c := opts.DialCreds; c != nil {
+			opts.DialCreds = c.Clone()
+		}
+		ccb.balancer = gracefulswitch.NewBalancer(ccb, opts)
 		ccb.mode = ccbModeActive
 		channelz.Info(logger, ccb.cc.channelzID, "ccBalancerWrapper: exiting idle mode")
 

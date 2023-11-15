@@ -160,6 +160,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 	cc.exitIdleCond = sync.NewCond(&cc.mu)
 
+	// Apply dial options
 	disableGlobalOpts := false
 	for _, opt := range opts {
 		if _, ok := opt.(*disableGlobalDialOptions); ok {
@@ -177,22 +178,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	for _, opt := range opts {
 		opt.apply(&cc.dopts)
 	}
-
 	chainUnaryClientInterceptors(cc)
 	chainStreamClientInterceptors(cc)
-
-	cc.blockingpicker = newPickerWrapper(cc.dopts.copts.StatsHandlers)
-
-	defer func() {
-		if err != nil {
-			cc.Close()
-		}
-	}()
-
-	// Register ClientConn with channelz.
-	cc.channelzRegistration(target)
-
-	cc.csMgr = newConnectivityStateManager(cc.ctx, cc.channelzID)
 
 	if err := cc.validateTransportCredentials(); err != nil {
 		return nil, err
@@ -212,6 +199,35 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	} else {
 		cc.dopts.copts.UserAgent = grpcUA
 	}
+
+	// Register ClientConn with channelz.
+	cc.channelzRegistration(target)
+
+	// Determine the resolver to use.
+	if err := cc.parseTargetAndFindResolver(); err != nil {
+		return nil, err
+	}
+	if err = cc.determineAuthority(); err != nil {
+		return nil, err
+	}
+
+	cc.csMgr = newConnectivityStateManager(cc.ctx, cc.channelzID)
+	cc.blockingpicker = newPickerWrapper(cc.dopts.copts.StatsHandlers)
+	cc.balancerWrapper = newCCBalancerWrapper(cc, balancer.BuildOptions{
+		DialCreds:        cc.dopts.copts.TransportCredentials,
+		CredsBundle:      cc.dopts.copts.CredsBundle,
+		Dialer:           cc.dopts.copts.Dialer,
+		Authority:        cc.authority,
+		CustomUserAgent:  cc.dopts.copts.UserAgent,
+		ChannelzParentID: cc.channelzID,
+		Target:           cc.parsedTarget,
+	})
+
+	defer func() {
+		if err != nil {
+			cc.Close()
+		}
+	}()
 
 	if cc.dopts.timeout > 0 {
 		var cancel context.CancelFunc
@@ -235,14 +251,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	if cc.dopts.bs == nil {
 		cc.dopts.bs = backoff.DefaultExponential
-	}
-
-	// Determine the resolver to use.
-	if err := cc.parseTargetAndFindResolver(); err != nil {
-		return nil, err
-	}
-	if err = cc.determineAuthority(); err != nil {
-		return nil, err
 	}
 
 	if cc.dopts.scChan != nil {
@@ -367,19 +375,7 @@ func (cc *ClientConn) exitIdleMode() error {
 	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
 		credsClone = creds.Clone()
 	}
-	if cc.balancerWrapper == nil {
-		cc.balancerWrapper = newCCBalancerWrapper(cc, balancer.BuildOptions{
-			DialCreds:        credsClone,
-			CredsBundle:      cc.dopts.copts.CredsBundle,
-			Dialer:           cc.dopts.copts.Dialer,
-			Authority:        cc.authority,
-			CustomUserAgent:  cc.dopts.copts.UserAgent,
-			ChannelzParentID: cc.channelzID,
-			Target:           cc.parsedTarget,
-		})
-	} else {
-		cc.balancerWrapper.exitIdleMode()
-	}
+	cc.balancerWrapper.exitIdleMode()
 	cc.firstResolveEvent = grpcsync.NewEvent()
 	cc.mu.Unlock()
 
@@ -1270,9 +1266,7 @@ func (cc *ClientConn) Close() error {
 	// The order of closing matters here since the balancer wrapper assumes the
 	// picker is closed before it is closed.
 	pWrapper.close()
-	if bWrapper != nil {
-		bWrapper.close()
-	}
+	bWrapper.close()
 	if rWrapper != nil {
 		rWrapper.close()
 	}
