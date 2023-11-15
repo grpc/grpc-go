@@ -1098,18 +1098,8 @@ func testServiceConfigSetup(t *testing.T, e env) *test {
 	return te
 }
 
-func newBool(b bool) (a *bool) {
-	return &b
-}
-
 func newInt(b int) (a *int) {
 	return &b
-}
-
-func newDuration(b time.Duration) (a *time.Duration) {
-	a = new(time.Duration)
-	*a = b
-	return
 }
 
 func (s) TestGetMethodConfig(t *testing.T) {
