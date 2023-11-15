@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/idle"
@@ -119,41 +118,15 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 	}, nil
 }
 
-// DialContext creates a client connection to the given target. By default, it's
-// a non-blocking dial (the function won't wait for connections to be
-// established, and connecting happens in the background). To make it a blocking
-// dial, use WithBlock() dial option.
-//
-// In the non-blocking case, the ctx does not act against the connection. It
-// only controls the setup steps.
-//
-// In the blocking case, ctx can be used to cancel or expire the pending
-// connection. Once this function returns, the cancellation and expiration of
-// ctx will be noop. Users should call ClientConn.Close to terminate all the
-// pending operations after this function returns.
-//
-// The target name syntax is defined in
-// https://github.com/grpc/grpc/blob/master/doc/naming.md.
-// e.g. to use dns resolver, a "dns:///" prefix should be applied to the target.
-func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
+// newClient returns a new client in idle mode.
+func newClient(target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
-		target: target,
-		conns:  make(map[*addrConn]struct{}),
-		dopts:  defaultDialOptions(),
-		czData: new(channelzData),
+		target:        target,
+		conns:         make(map[*addrConn]struct{}),
+		dopts:         defaultDialOptions(),
+		czData:        new(channelzData),
+		idlenessState: ccIdlenessStateIdle,
 	}
-
-	// We start the channel off in idle mode, but kick it out of idle at the end
-	// of this method, instead of waiting for the first RPC. Other gRPC
-	// implementations do wait for the first RPC to kick the channel out of
-	// idle. But doing so would be a major behavior change for our users who are
-	// used to seeing the channel active after Dial.
-	//
-	// Taking this approach of kicking it out of idle at the end of this method
-	// allows us to share the code between channel creation and exiting idle
-	// mode. This will also make it easy for us to switch to starting the
-	// channel off in idle, if at all we ever get to do that.
-	cc.idlenessState = ccIdlenessStateIdle
 
 	cc.retryThrottler.Store((*retryThrottler)(nil))
 	cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{nil})
@@ -194,14 +167,14 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 	cc.mkp = cc.dopts.copts.KeepaliveParams
 
-	if cc.dopts.copts.UserAgent != "" {
-		cc.dopts.copts.UserAgent += " " + grpcUA
-	} else {
-		cc.dopts.copts.UserAgent = grpcUA
-	}
-
 	// Register ClientConn with channelz.
 	cc.channelzRegistration(target)
+
+	// TODO: Ideally it should be impossible to error from this function after
+	// channelz registration.  This will require removing some channelz logs
+	// from the following functions that can error.  Errors can be returned to
+	// the user, and successful logs can be emitted here, after the checks have
+	// passed and channelz is subsequently registered.
 
 	// Determine the resolver to use.
 	if err := cc.parseTargetAndFindResolver(); err != nil {
@@ -225,11 +198,62 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		Target:           cc.parsedTarget,
 	})
 
+	// Configure idleness support with configured idle timeout or default idle
+	// timeout duration. Idleness can be explicitly disabled by the user, by
+	// setting the dial option to 0.
+	cc.idlenessMgr = idle.NewManager(idle.ManagerOptions{Enforcer: (*idler)(cc), Timeout: cc.dopts.idleTimeout, Logger: logger})
+
+	return cc, nil
+}
+
+// DialContext creates a client connection to the given target. By default, it's
+// a non-blocking dial (the function won't wait for connections to be
+// established, and connecting happens in the background). To make it a blocking
+// dial, use WithBlock() dial option.
+//
+// In the non-blocking case, the ctx does not act against the connection. It
+// only controls the setup steps.
+//
+// In the blocking case, ctx can be used to cancel or expire the pending
+// connection. Once this function returns, the cancellation and expiration of
+// ctx will be noop. Users should call ClientConn.Close to terminate all the
+// pending operations after this function returns.
+//
+// The target name syntax is defined in
+// https://github.com/grpc/grpc/blob/master/doc/naming.md.
+// e.g. to use dns resolver, a "dns:///" prefix should be applied to the target.
+func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
+	cc, err := newClient(target, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	// We start the channel off in idle mode, but kick it out of idle now,
+	// instead of waiting for the first RPC. Other gRPC implementations do wait
+	// for the first RPC to kick the channel out of idle. But doing so would be
+	// a major behavior change for our users who are used to seeing the channel
+	// active after Dial.
+	//
+	// Taking this approach of kicking it out of idle at the end of this method
+	// allows us to share the code between channel creation and exiting idle
+	// mode. This will also make it easy for us to switch to starting the
+	// channel off in idle, i.e. by making newClient exported.
+
 	defer func() {
 		if err != nil {
 			cc.Close()
 		}
 	}()
+
+	// This creates the name resolver, load balancer, blocking picker etc.
+	if err := cc.exitIdleMode(); err != nil {
+		return nil, err
+	}
+
+	// Return now for non-blocking dials.
+	if !cc.dopts.block {
+		return cc, nil
+	}
 
 	if cc.dopts.timeout > 0 {
 		var cancel context.CancelFunc
@@ -250,25 +274,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		default:
 		}
 	}()
-
-	if cc.dopts.bs == nil {
-		cc.dopts.bs = backoff.DefaultExponential
-	}
-
-	// This creates the name resolver, load balancer, blocking picker etc.
-	if err := cc.exitIdleMode(); err != nil {
-		return nil, err
-	}
-
-	// Configure idleness support with configured idle timeout or default idle
-	// timeout duration. Idleness can be explicitly disabled by the user, by
-	// setting the dial option to 0.
-	cc.idlenessMgr = idle.NewManager(idle.ManagerOptions{Enforcer: (*idler)(cc), Timeout: cc.dopts.idleTimeout, Logger: logger})
-
-	// Return early for non-blocking dials.
-	if !cc.dopts.block {
-		return cc, nil
-	}
 
 	// A blocking dial blocks until the clientConn is ready.
 	for {
@@ -357,10 +362,6 @@ func (cc *ClientConn) exitIdleMode() error {
 	cc.idlenessState = ccIdlenessStateExitingIdle
 	cc.pickerWrapper.exitIdleMode()
 
-	var credsClone credentials.TransportCredentials
-	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
-		credsClone = creds.Clone()
-	}
 	cc.balancerWrapper.exitIdleMode()
 	cc.firstResolveEvent = grpcsync.NewEvent()
 	cc.mu.Unlock()
@@ -368,7 +369,7 @@ func (cc *ClientConn) exitIdleMode() error {
 	// This needs to be called without cc.mu because this builds a new resolver
 	// which might update state or report error inline which needs to be handled
 	// by cc.updateResolverState() which also grabs cc.mu.
-	if err := cc.initResolverWrapper(credsClone); err != nil {
+	if err := cc.initResolverWrapper(cc.dopts.copts.TransportCredentials); err != nil {
 		return err
 	}
 
@@ -377,7 +378,7 @@ func (cc *ClientConn) exitIdleMode() error {
 }
 
 // enterIdleMode puts the channel in idle mode, and as part of it shuts down the
-// name resolver, load balancer and any subchannels.
+// name resolver, load balancer, and any subchannels.
 func (cc *ClientConn) enterIdleMode() error {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()

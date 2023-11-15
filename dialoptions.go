@@ -483,7 +483,7 @@ func FailOnNonTempDialError(f bool) DialOption {
 // the RPCs.
 func WithUserAgent(s string) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.copts.UserAgent = s
+		o.copts.UserAgent = s + " " + grpcUA
 	})
 }
 
@@ -633,14 +633,16 @@ func withHealthCheckFunc(f internal.HealthChecker) DialOption {
 
 func defaultDialOptions() dialOptions {
 	return dialOptions{
-		healthCheckFunc: internal.HealthCheckFunc,
 		copts: transport.ConnectOptions{
-			WriteBufferSize: defaultWriteBufSize,
 			ReadBufferSize:  defaultReadBufSize,
+			WriteBufferSize: defaultWriteBufSize,
 			UseProxy:        true,
+			UserAgent:       grpcUA,
 		},
-		recvBufferPool: nopBufferPool{},
-		idleTimeout:    30 * time.Minute,
+		bs:              internalbackoff.DefaultExponential,
+		healthCheckFunc: internal.HealthCheckFunc,
+		idleTimeout:     30 * time.Minute,
+		recvBufferPool:  nopBufferPool{},
 	}
 }
 
