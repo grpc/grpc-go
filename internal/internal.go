@@ -57,7 +57,7 @@ var (
 	// GetXDSHandshakeInfoForTesting returns a pointer to the xds.HandshakeInfo
 	// stored in the passed in attributes. This is set by
 	// credentials/xds/xds.go.
-	GetXDSHandshakeInfoForTesting any // func (*attributes.Attributes) *xds.HandshakeInfo
+	GetXDSHandshakeInfoForTesting any // func (*attributes.Attributes) *unsafe.Pointer
 	// GetServerCredentials returns the transport credentials configured on a
 	// gRPC server. An xDS-enabled server needs to know what type of credentials
 	// is configured on the underlying gRPC server. This is set by server.go.
