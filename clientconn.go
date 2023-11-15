@@ -205,9 +205,11 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	// Determine the resolver to use.
 	if err := cc.parseTargetAndFindResolver(); err != nil {
+		channelz.RemoveEntry(cc.channelzID)
 		return nil, err
 	}
 	if err = cc.determineAuthority(); err != nil {
+		channelz.RemoveEntry(cc.channelzID)
 		return nil, err
 	}
 
