@@ -160,7 +160,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 	cc.exitIdleCond = sync.NewCond(&cc.mu)
 
-	// Apply dial options
+	// Apply dial options.
 	disableGlobalOpts := false
 	for _, opt := range opts {
 		if _, ok := opt.(*disableGlobalDialOptions); ok {
