@@ -38,6 +38,8 @@ type writeQuota struct {
 	// It is implemented as a field so that it can be updated
 	// by tests.
 	replenish func(n int)
+	// waitingSize is the queued size of the stream waiting for quota.
+	waitingSize int32
 }
 
 func newWriteQuota(sz int32, done <-chan struct{}) *writeQuota {
@@ -56,8 +58,10 @@ func (w *writeQuota) get(sz int32) error {
 			atomic.AddInt32(&w.quota, -sz)
 			return nil
 		}
+		atomic.AddInt32(&w.waitingSize, 1)
 		select {
 		case <-w.ch:
+			atomic.AddInt32(&w.waitingSize, -1)
 			continue
 		case <-w.done:
 			return errStreamDone
@@ -66,13 +70,17 @@ func (w *writeQuota) get(sz int32) error {
 }
 
 func (w *writeQuota) realReplenish(n int) {
-	sz := int32(n)
-	a := atomic.AddInt32(&w.quota, sz)
-	b := a - sz
-	if b <= 0 && a > 0 {
-		select {
-		case w.ch <- struct{}{}:
-		default:
+	a := atomic.AddInt32(&w.quota, int32(n))
+	wSize := atomic.LoadInt32(&w.waitingSize)
+	if a > 0 {
+		stop := false
+		for !stop && wSize > 0 {
+			select {
+			case w.ch <- struct{}{}:
+				wSize--
+			default:
+				stop = true
+			}
 		}
 	}
 }

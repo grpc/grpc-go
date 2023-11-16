@@ -42,6 +42,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
@@ -2590,5 +2591,84 @@ func TestConnectionError_Unwrap(t *testing.T) {
 	err := connectionErrorf(false, os.ErrNotExist, "unwrap me")
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Error("ConnectionError does not unwrap")
+	}
+}
+
+func (s) TestFlowControlWriteQuota(t *testing.T) {
+	// Disable dynamic flow control.
+	sc := &ServerConfig{
+		InitialWindowSize:     defaultWindowSize,
+		InitialConnWindowSize: defaultWindowSize,
+	}
+	co := ConnectOptions{
+		InitialWindowSize:     defaultWindowSize,
+		InitialConnWindowSize: defaultWindowSize,
+	}
+	server, client, cancel := setUpWithOptions(t, 0, sc, pingpong, co)
+	defer cancel()
+	defer server.stop()
+	defer client.Close(fmt.Errorf("closed manually by test"))
+	waitWhileTrue(t, func() (bool, error) {
+		server.mu.Lock()
+		defer server.mu.Unlock()
+		if len(server.conns) == 0 {
+			return true, fmt.Errorf("timed out while waiting for server transport to be created")
+		}
+		return false, nil
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stream, err := client.NewStream(ctx, &CallHdr{})
+	if err != nil {
+		t.Fatalf("Failed to create stream. Err: %v", err)
+	}
+
+	opts := &Options{}
+	burstNum := 300
+	msgSize := make([]int32, burstNum)
+	for i := 0; i < burstNum; i++ {
+		msgSize[i] = grpcrand.Int31n(defaultWriteQuota) + defaultWriteQuota/4
+	}
+
+	errCh := make(chan error, burstNum*2)
+	for _, size := range msgSize {
+		go func(msgSize int32) {
+			outgoingHeader := make([]byte, 5)
+			outgoingHeader[0] = byte(0)
+			binary.BigEndian.PutUint32(outgoingHeader[1:], uint32(msgSize))
+
+			if err := client.Write(stream, outgoingHeader, make([]byte, msgSize), opts); err != nil {
+				errCh <- fmt.Errorf("Error on client while writing message. Err: %v", err)
+			}
+		}(size)
+	}
+
+	go func() {
+		incomingHeader := make([]byte, 5)
+		for i := 0; i < burstNum; i++ {
+			if _, err := stream.Read(incomingHeader); err != nil {
+				errCh <- fmt.Errorf("Error on client while reading data header. Err: %v", err)
+			}
+			sz := binary.BigEndian.Uint32(incomingHeader[1:])
+			recvMsg := make([]byte, int(sz))
+			if _, err := stream.Read(recvMsg); err != nil {
+				errCh <- fmt.Errorf("Error on client while reading data. Err: %v", err)
+			}
+		}
+
+		client.Write(stream, nil, nil, &Options{Last: true})
+		if _, err := stream.Read(incomingHeader); err != io.EOF {
+			errCh <- fmt.Errorf("Client expected EOF from the server. Got: %v", err)
+		}
+		cancel()
+	}()
+
+	select {
+	case <-errCh:
+		t.Fatalf("Error while reading from stream: %v", err)
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out while reading from stream")
+	case <-ctx.Done():
 	}
 }
