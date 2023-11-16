@@ -205,9 +205,9 @@ func (pw *pickerWrapper) close() {
 	close(pw.blockingCh)
 }
 
-// enterIdleMode clears the pickerWrapper and prepares it for being used again
-// when idle mode is exited.
-func (pw *pickerWrapper) enterIdleMode() {
+// reset clears the pickerWrapper and prepares it for being used again when idle
+// mode is exited.
+func (pw *pickerWrapper) reset() {
 	pw.mu.Lock()
 	defer pw.mu.Unlock()
 	if pw.done {

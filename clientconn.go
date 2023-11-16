@@ -187,10 +187,8 @@ func newClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	cc.csMgr = newConnectivityStateManager(cc.ctx, cc.channelzID)
 	cc.pickerWrapper = newPickerWrapper(cc.dopts.copts.StatsHandlers)
 
-	// Configure idleness support with configured idle timeout or default idle
-	// timeout duration. Idleness can be explicitly disabled by the user, by
-	// setting the dial option to 0.
 	cc.idlenessMgr = idle.NewManager(idle.ManagerOptions{Enforcer: (*idler)(cc), Timeout: cc.dopts.idleTimeout})
+	cc.initIdleStateLocked()
 
 	return cc, nil
 }
@@ -327,22 +325,24 @@ func (cc *ClientConn) exitIdleMode() (err error) {
 		cc.mu.Unlock()
 		return errConnClosing
 	}
-
-	cc.resolverWrapper = newCCResolverWrapper(cc)
-	cc.balancerWrapper = newCCBalancerWrapper(cc)
-	cc.firstResolveEvent = grpcsync.NewEvent()
 	cc.mu.Unlock()
 
 	// This needs to be called without cc.mu because this builds a new resolver
 	// which might update state or report error inline needs to acquire cc.mu.
 	if err := cc.resolverWrapper.start(); err != nil {
-		cc.balancerWrapper.close()
-		cc.resolverWrapper.close()
 		return err
 	}
 
 	cc.addTraceEvent("exiting idle mode")
 	return nil
+}
+
+// initIdleStateLocked initializes common state to how it should be while idle.
+func (cc *ClientConn) initIdleStateLocked() {
+	cc.resolverWrapper = newCCResolverWrapper(cc)
+	cc.balancerWrapper = newCCBalancerWrapper(cc)
+	cc.firstResolveEvent = grpcsync.NewEvent()
+	cc.conns = make(map[*addrConn]struct{})
 }
 
 // enterIdleMode puts the channel in idle mode, and as part of it shuts down the
@@ -360,16 +360,16 @@ func (cc *ClientConn) enterIdleMode() {
 	// of setting it to nil here, we recreate the map. This also means that we
 	// don't have to do this when exiting idle mode.
 	conns := cc.conns
-	cc.conns = make(map[*addrConn]struct{})
 
 	rWrapper := cc.resolverWrapper
+	rWrapper.close()
+	cc.pickerWrapper.reset()
 	bWrapper := cc.balancerWrapper
-
-	cc.resolverWrapper.close()
-	cc.pickerWrapper.enterIdleMode()
-	cc.balancerWrapper.close()
+	bWrapper.close()
 	cc.csMgr.updateState(connectivity.Idle)
 	cc.addTraceEvent("entering idle mode")
+
+	cc.initIdleStateLocked()
 
 	cc.mu.Unlock()
 
@@ -1109,17 +1109,8 @@ func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSel
 
 func (cc *ClientConn) resolveNow(o resolver.ResolveNowOptions) {
 	cc.mu.RLock()
-	if cc.resolverWrapper != nil {
-		cc.resolverWrapper.resolveNow(o)
-	}
-	//	r := cc.resolverWrapper
+	cc.resolverWrapper.resolveNow(o)
 	cc.mu.RUnlock()
-	/*
-		if r == nil {
-			return
-		}
-		go r.resolveNow(o)
-	*/
 }
 
 func (cc *ClientConn) resolveNowLocked(o resolver.ResolveNowOptions) {
@@ -1173,17 +1164,14 @@ func (cc *ClientConn) Close() error {
 	// cc.conns==nil, preventing any further operations on cc.
 	cc.mu.Unlock()
 
-	if cc.resolverWrapper != nil {
-		cc.resolverWrapper.close()
-		<-cc.resolverWrapper.serializer.Done()
-	}
+	cc.resolverWrapper.close()
 	// The order of closing matters here since the balancer wrapper assumes the
 	// picker is closed before it is closed.
 	cc.pickerWrapper.close()
-	if cc.balancerWrapper != nil {
-		cc.balancerWrapper.close()
-		<-cc.balancerWrapper.serializer.Done()
-	}
+	cc.balancerWrapper.close()
+
+	<-cc.resolverWrapper.serializer.Done()
+	<-cc.balancerWrapper.serializer.Done()
 
 	for ac := range conns {
 		ac.tearDown(ErrClientConnClosing)
