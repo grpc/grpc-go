@@ -48,15 +48,19 @@ import (
 type ccBalancerWrapper struct {
 	// The following fields are initialized when the wrapper is created and are
 	// read-only afterwards, and therefore can be accessed without a mutex.
-	cc       *ClientConn
-	opts     balancer.BuildOptions
-	balancer *gracefulswitch.Balancer
-
+	cc               *ClientConn
+	opts             balancer.BuildOptions
+	balancer         *gracefulswitch.Balancer
 	serializer       *grpcsync.CallbackSerializer
 	serializerCancel context.CancelFunc
 
 	// The following fields are only accessed within the serializer.
 	curBalancerName string
+
+	// The following fields are protected by mu.  Caller must take cc.mu before
+	// taking mu.
+	mu     sync.Mutex
+	closed bool
 }
 
 // newCCBalancerWrapper creates a new balancer wrapper in idle state. The
@@ -200,10 +204,20 @@ func (ccb *ccBalancerWrapper) exitIdle() {
 }
 
 func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	ccb.cc.mu.Lock()
+	defer ccb.cc.mu.Unlock()
+
+	ccb.mu.Lock()
+	if ccb.closed {
+		ccb.mu.Unlock()
+		return nil, errConnIdling
+	}
+	ccb.mu.Unlock()
+
 	if len(addrs) == 0 {
 		return nil, fmt.Errorf("grpc: cannot create SubConn with empty address list")
 	}
-	ac, err := ccb.cc.newAddrConn(addrs, opts)
+	ac, err := ccb.cc.newAddrConnLocked(addrs, opts)
 	if err != nil {
 		channelz.Warningf(logger, ccb.cc.channelzID, "acBalancerWrapper: NewSubConn: failed to newAddrConn: %v", err)
 		return nil, err
@@ -232,17 +246,39 @@ func (ccb *ccBalancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resol
 }
 
 func (ccb *ccBalancerWrapper) UpdateState(s balancer.State) {
+	ccb.cc.mu.Lock()
+	defer ccb.cc.mu.Unlock()
+
+	ccb.mu.Lock()
+	if ccb.closed {
+		ccb.mu.Unlock()
+		return
+	}
+	ccb.mu.Unlock()
 	// Update picker before updating state.  Even though the ordering here does
 	// not matter, it can lead to multiple calls of Pick in the common start-up
 	// case where we wait for ready and then perform an RPC.  If the picker is
 	// updated later, we could call the "connecting" picker when the state is
 	// updated, and then call the "ready" picker after the picker gets updated.
+
+	// Note that there is no need to check if the balancer wrapper was closed,
+	// as we know the graceful switch LB policy will not call cc if it has been
+	// closed.
 	ccb.cc.pickerWrapper.updatePicker(s.Picker)
 	ccb.cc.csMgr.updateState(s.ConnectivityState)
 }
 
 func (ccb *ccBalancerWrapper) ResolveNow(o resolver.ResolveNowOptions) {
-	ccb.cc.resolveNow(o)
+	ccb.cc.mu.RLock()
+	defer ccb.cc.mu.RUnlock()
+
+	ccb.mu.Lock()
+	if ccb.closed {
+		ccb.mu.Unlock()
+		return
+	}
+	ccb.mu.Unlock()
+	ccb.cc.resolveNowLocked(o)
 }
 
 func (ccb *ccBalancerWrapper) Target() string {

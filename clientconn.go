@@ -120,11 +120,11 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 // newClient returns a new client in idle mode.
 func newClient(target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
-		target:        target,
-		conns:         make(map[*addrConn]struct{}),
-		dopts:         defaultDialOptions(),
-		czData:        new(channelzData),
-		idlenessState: ccIdlenessStateIdle,
+		target: target,
+		conns:  make(map[*addrConn]struct{}),
+		dopts:  defaultDialOptions(),
+		czData: new(channelzData),
+		idle:   true,
 	}
 
 	cc.retryThrottler.Store((*retryThrottler)(nil))
@@ -190,7 +190,7 @@ func newClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	// Configure idleness support with configured idle timeout or default idle
 	// timeout duration. Idleness can be explicitly disabled by the user, by
 	// setting the dial option to 0.
-	cc.idlenessMgr = idle.NewManager(idle.ManagerOptions{Enforcer: (*idler)(cc), Timeout: cc.dopts.idleTimeout, Logger: logger})
+	cc.idlenessMgr = idle.NewManager(idle.ManagerOptions{Enforcer: (*idler)(cc), Timeout: cc.dopts.idleTimeout})
 
 	return cc, nil
 }
@@ -234,8 +234,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}()
 
-	// This creates the name resolver, load balancer, blocking picker etc.
-	if err := cc.exitIdleMode(); err != nil {
+	// This creates the name resolver, load balancer, etc.
+	if err := cc.idlenessMgr.ExitIdleMode(); err != nil {
 		return nil, err
 	}
 
@@ -310,8 +310,8 @@ func (cc *ClientConn) addTraceEvent(msg string) {
 
 type idler ClientConn
 
-func (i *idler) EnterIdleMode() error {
-	return (*ClientConn)(i).enterIdleMode()
+func (i *idler) EnterIdleMode() {
+	(*ClientConn)(i).enterIdleMode()
 }
 
 func (i *idler) ExitIdleMode() error {
@@ -319,45 +319,25 @@ func (i *idler) ExitIdleMode() error {
 }
 
 // exitIdleMode moves the channel out of idle mode by recreating the name
-// resolver and load balancer.
-func (cc *ClientConn) exitIdleMode() error {
+// resolver and load balancer.  This should never be called directly; use
+// cc.idlenessMgr.ExitIdleMode instead.
+func (cc *ClientConn) exitIdleMode() (err error) {
 	cc.mu.Lock()
 	if cc.conns == nil {
 		cc.mu.Unlock()
 		return errConnClosing
 	}
-	if cc.idlenessState != ccIdlenessStateIdle {
-		channelz.Infof(logger, cc.channelzID, "ClientConn asked to exit idle mode, current mode is %v", cc.idlenessState)
-		cc.mu.Unlock()
-		return nil
-	}
 
-	defer func() {
-		// When Close() and exitIdleMode() race against each other, one of the
-		// following two can happen:
-		// - Close() wins the race and runs first. exitIdleMode() runs after, and
-		//   sees that the ClientConn is already closed and hence returns early.
-		// - exitIdleMode() wins the race and runs first and recreates the balancer
-		//   and releases the lock before recreating the resolver. If Close() runs
-		//   in this window, it will wait for exitIdleMode to complete.
-		//
-		// We achieve this synchronization using the below condition variable.
-		cc.mu.Lock()
-		cc.idlenessState = ccIdlenessStateActive
-		cc.mu.Unlock()
-	}()
-
-	cc.idlenessState = ccIdlenessStateExitingIdle
-	cc.pickerWrapper.exitIdleMode()
-
+	cc.resolverWrapper = newCCResolverWrapper(cc)
 	cc.balancerWrapper = newCCBalancerWrapper(cc)
 	cc.firstResolveEvent = grpcsync.NewEvent()
 	cc.mu.Unlock()
 
 	// This needs to be called without cc.mu because this builds a new resolver
-	// which might update state or report error inline which needs to be handled
-	// by cc.updateResolverState() which also grabs cc.mu.
-	if err := cc.initResolverWrapper(); err != nil {
+	// which might update state or report error inline needs to acquire cc.mu.
+	if err := cc.resolverWrapper.start(); err != nil {
+		cc.balancerWrapper.close()
+		cc.resolverWrapper.close()
 		return err
 	}
 
@@ -366,18 +346,14 @@ func (cc *ClientConn) exitIdleMode() error {
 }
 
 // enterIdleMode puts the channel in idle mode, and as part of it shuts down the
-// name resolver, load balancer, and any subchannels.
-func (cc *ClientConn) enterIdleMode() error {
+// name resolver, load balancer, and any subchannels.  This should never be
+// called directly; use cc.idlenessMgr.EnterIdleMode instead.
+func (cc *ClientConn) enterIdleMode() {
 	cc.mu.Lock()
 
 	if cc.conns == nil {
 		cc.mu.Unlock()
-		return ErrClientConnClosing
-	}
-	if cc.idlenessState != ccIdlenessStateActive {
-		cc.mu.Unlock()
-		channelz.Warningf(logger, cc.channelzID, "ClientConn asked to enter idle mode, current mode is %v", cc.idlenessState)
-		return nil
+		return
 	}
 
 	// cc.conns == nil is a proxy for the ClientConn being closed. So, instead
@@ -388,23 +364,23 @@ func (cc *ClientConn) enterIdleMode() error {
 
 	rWrapper := cc.resolverWrapper
 	bWrapper := cc.balancerWrapper
+
 	cc.resolverWrapper.close()
 	cc.pickerWrapper.enterIdleMode()
 	cc.balancerWrapper.close()
 	cc.csMgr.updateState(connectivity.Idle)
-	cc.idlenessState = ccIdlenessStateIdle
 	cc.addTraceEvent("entering idle mode")
 
-	go func() {
-		for ac := range conns {
-			ac.tearDown(errConnIdling)
-		}
-	}()
-
 	cc.mu.Unlock()
+
+	// Block until the name resolver and LB policy are closed.
 	<-rWrapper.serializer.Done()
 	<-bWrapper.serializer.Done()
-	return nil
+
+	// Close all subchannels after the LB policy is closed.
+	for ac := range conns {
+		ac.tearDown(errConnIdling)
+	}
 }
 
 // validateTransportCredentials performs a series of checks on the configured
@@ -615,7 +591,7 @@ type ClientConn struct {
 	channelzID      *channelz.Identifier // Channelz identifier for the channel.
 	resolverBuilder resolver.Builder     // See parseTargetAndFindResolver().
 	balancerWrapper *ccBalancerWrapper   // Uses gracefulswitch.balancer underneath.
-	idlenessMgr     idle.Manager
+	idlenessMgr     *idle.Manager
 
 	// The following provide their own synchronization, and therefore don't
 	// require cc.mu to be held to access them.
@@ -636,41 +612,10 @@ type ClientConn struct {
 	sc              *ServiceConfig             // Latest service config received from the resolver.
 	conns           map[*addrConn]struct{}     // Set to nil on close.
 	mkp             keepalive.ClientParameters // May be updated upon receipt of a GoAway.
-	idlenessState   ccIdlenessState            // Tracks idleness state of the channel.
+	idle            bool
 
 	lceMu               sync.Mutex // protects lastConnectionError
 	lastConnectionError error
-}
-
-// ccIdlenessState tracks the idleness state of the channel.
-//
-// Channels start off in `active` and move to `idle` after a period of
-// inactivity. When moving back to `active` upon an incoming RPC, they
-// transition through `exiting_idle`. This state is useful for synchronization
-// with Close().
-//
-// This state tracking is mostly for self-protection. The idlenessManager is
-// expected to keep track of the state as well, and is expected not to call into
-// the ClientConn unnecessarily.
-type ccIdlenessState int8
-
-const (
-	ccIdlenessStateActive ccIdlenessState = iota
-	ccIdlenessStateIdle
-	ccIdlenessStateExitingIdle
-)
-
-func (s ccIdlenessState) String() string {
-	switch s {
-	case ccIdlenessStateActive:
-		return "active"
-	case ccIdlenessStateIdle:
-		return "idle"
-	case ccIdlenessStateExitingIdle:
-		return "exitingIdle"
-	default:
-		return "unknown"
-	}
 }
 
 // WaitForStateChange waits until the connectivity.State of ClientConn changes from sourceState or
@@ -712,10 +657,15 @@ func (cc *ClientConn) GetState() connectivity.State {
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 // release.
 func (cc *ClientConn) Connect() {
-	cc.exitIdleMode()
+	if err := cc.idlenessMgr.ExitIdleMode(); err != nil {
+		cc.addTraceEvent(fmt.Sprintf("error exiting idle mode: %v", err))
+		return
+	}
 	// If the ClientConn was not in idle mode, we need to call ExitIdle on the
 	// LB policy so that connections can be created.
+	cc.mu.Lock()
 	cc.balancerWrapper.exitIdle()
+	cc.mu.Unlock()
 }
 
 // waitForResolvedAddrs blocks until the resolver has provided addresses or the
@@ -749,11 +699,11 @@ func init() {
 	internal.SubscribeToConnectivityStateChanges = func(cc *ClientConn, s grpcsync.Subscriber) func() {
 		return cc.csMgr.pubSub.Subscribe(s)
 	}
-	internal.EnterIdleModeForTesting = func(cc *ClientConn) error {
-		return cc.enterIdleMode()
+	internal.EnterIdleModeForTesting = func(cc *ClientConn) {
+		cc.idlenessMgr.EnterIdleModeForTesting()
 	}
 	internal.ExitIdleModeForTesting = func(cc *ClientConn) error {
-		return cc.exitIdleMode()
+		return cc.idlenessMgr.ExitIdleMode()
 	}
 }
 
@@ -769,9 +719,8 @@ func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
 	}
 }
 
-func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
+func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) error {
 	defer cc.firstResolveEvent.Fire()
-	cc.mu.Lock()
 	// Check if the ClientConn is already closed. Some fields (e.g.
 	// balancerWrapper) are set to nil when closing the ClientConn, and could
 	// cause nil pointer panic if we don't have this check.
@@ -817,7 +766,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 			if cc.sc == nil {
 				// Apply the failing LB only if we haven't received valid service config
 				// from the name resolver in the past.
-				cc.applyFailingLB(s.ServiceConfig)
+				cc.applyFailingLBLocked(s.ServiceConfig)
 				cc.mu.Unlock()
 				return ret
 			}
@@ -839,15 +788,13 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	return ret
 }
 
-// applyFailingLB is akin to configuring an LB policy on the channel which
+// applyFailingLBLocked is akin to configuring an LB policy on the channel which
 // always fails RPCs. Here, an actual LB policy is not configured, but an always
 // erroring picker is configured, which returns errors with information about
 // what was invalid in the received service config. A config selector with no
 // service config is configured, and the connectivity state of the channel is
 // set to TransientFailure.
-//
-// Caller must hold cc.mu.
-func (cc *ClientConn) applyFailingLB(sc *serviceconfig.ParseResult) {
+func (cc *ClientConn) applyFailingLBLocked(sc *serviceconfig.ParseResult) {
 	var err error
 	if sc.Err != nil {
 		err = status.Errorf(codes.Unavailable, "error parsing service config: %v", sc.Err)
@@ -860,7 +807,9 @@ func (cc *ClientConn) applyFailingLB(sc *serviceconfig.ParseResult) {
 }
 
 func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State, err error) {
+	cc.mu.Lock()
 	cc.balancerWrapper.updateSubConnState(sc, s, err)
+	cc.mu.Unlock()
 }
 
 // Makes a copy of the input addresses slice and clears out the balancer
@@ -877,10 +826,14 @@ func copyAddressesWithoutBalancerAttributes(in []resolver.Address) []resolver.Ad
 	return out
 }
 
-// newAddrConn creates an addrConn for addrs and adds it to cc.conns.
+// newAddrConnLocked creates an addrConn for addrs and adds it to cc.conns.
 //
 // Caller needs to make sure len(addrs) > 0.
-func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (*addrConn, error) {
+func (cc *ClientConn) newAddrConnLocked(addrs []resolver.Address, opts balancer.NewSubConnOptions) (*addrConn, error) {
+	if cc.conns == nil {
+		return nil, ErrClientConnClosing
+	}
+
 	ac := &addrConn{
 		state:        connectivity.Idle,
 		cc:           cc,
@@ -892,12 +845,6 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSub
 		stateChan:    make(chan struct{}),
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
-	// Track ac in cc. This needs to be done before any getTransport(...) is called.
-	cc.mu.Lock()
-	defer cc.mu.Unlock()
-	if cc.conns == nil {
-		return nil, ErrClientConnClosing
-	}
 
 	var err error
 	ac.channelzID, err = channelz.RegisterSubChannel(ac, cc.channelzID, "")
@@ -913,6 +860,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSub
 		},
 	})
 
+	// Track ac in cc. This needs to be done before any getTransport(...) is called.
 	cc.conns[ac] = struct{}{}
 	return ac, nil
 }
@@ -1161,12 +1109,21 @@ func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSel
 
 func (cc *ClientConn) resolveNow(o resolver.ResolveNowOptions) {
 	cc.mu.RLock()
-	r := cc.resolverWrapper
-	cc.mu.RUnlock()
-	if r == nil {
-		return
+	if cc.resolverWrapper != nil {
+		cc.resolverWrapper.resolveNow(o)
 	}
-	go r.resolveNow(o)
+	//	r := cc.resolverWrapper
+	cc.mu.RUnlock()
+	/*
+		if r == nil {
+			return
+		}
+		go r.resolveNow(o)
+	*/
+}
+
+func (cc *ClientConn) resolveNowLocked(o resolver.ResolveNowOptions) {
+	cc.resolverWrapper.resolveNow(o)
 }
 
 // ResetConnectBackoff wakes up all subchannels in transient failure and causes
@@ -1789,7 +1746,7 @@ func (cc *ClientConn) parseTargetAndFindResolver() error {
 	if err != nil {
 		channelz.Infof(logger, cc.channelzID, "dial target %q parse failed: %v", cc.target, err)
 	} else {
-		channelz.Infof(logger, cc.channelzID, "parsed dial target is: %+v", parsedTarget)
+		channelz.Infof(logger, cc.channelzID, "parsed dial target is: %#v", parsedTarget)
 		rb = cc.getResolver(parsedTarget.URL.Scheme)
 		if rb != nil {
 			cc.parsedTarget = parsedTarget
@@ -1945,24 +1902,5 @@ func (cc *ClientConn) determineAuthority() error {
 		cc.authority = encodeAuthority(endpoint)
 	}
 	channelz.Infof(logger, cc.channelzID, "Channel authority set to %q", cc.authority)
-	return nil
-}
-
-// initResolverWrapper creates a ccResolverWrapper, which builds the name
-// resolver. This method grabs the lock to assign the newly built resolver
-// wrapper to the cc.resolverWrapper field.
-func (cc *ClientConn) initResolverWrapper() error {
-	rw, err := newCCResolverWrapper(cc)
-	if err != nil {
-		return fmt.Errorf("failed to build resolver: %v", err)
-	}
-	// Resolver implementations may report state update or error inline when
-	// built (or right after), and this is handled in cc.updateResolverState.
-	// Also, an error from the resolver might lead to a re-resolution request
-	// from the balancer, which is handled in resolveNow() where
-	// `cc.resolverWrapper` is accessed. Hence, we need to hold the lock here.
-	cc.mu.Lock()
-	cc.resolverWrapper = rw
-	cc.mu.Unlock()
 	return nil
 }

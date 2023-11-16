@@ -42,7 +42,8 @@ type ccResolverWrapper struct {
 	// The following fields are only accessed within the serializer.
 	resolver resolver.Resolver
 
-	// The following fields are protected by mu.
+	// The following fields are protected by mu.  Caller must take cc.mu before
+	// taking mu.
 	mu       sync.Mutex
 	curState resolver.State
 	closed   bool
@@ -50,35 +51,33 @@ type ccResolverWrapper struct {
 
 // newCCResolverWrapper uses the resolver.Builder to build a Resolver and
 // returns a ccResolverWrapper object which wraps the newly built resolver.
-func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
+func newCCResolverWrapper(cc *ClientConn) *ccResolverWrapper {
 	ctx, cancel := context.WithCancel(cc.ctx)
-	ccr := &ccResolverWrapper{
+	return &ccResolverWrapper{
 		cc:                  cc,
 		ignoreServiceConfig: cc.dopts.disableServiceConfig,
 		serializer:          grpcsync.NewCallbackSerializer(ctx),
 		serializerCancel:    cancel,
 	}
+}
 
+func (ccr *ccResolverWrapper) start() error {
 	errCh := make(chan error)
 	ccr.serializer.Schedule(func(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
 		opts := resolver.BuildOptions{
-			DisableServiceConfig: cc.dopts.disableServiceConfig,
-			DialCreds:            cc.dopts.copts.TransportCredentials,
-			CredsBundle:          cc.dopts.copts.CredsBundle,
-			Dialer:               cc.dopts.copts.Dialer,
+			DisableServiceConfig: ccr.cc.dopts.disableServiceConfig,
+			DialCreds:            ccr.cc.dopts.copts.TransportCredentials,
+			CredsBundle:          ccr.cc.dopts.copts.CredsBundle,
+			Dialer:               ccr.cc.dopts.copts.Dialer,
 		}
 		var err error
-		ccr.resolver, err = cc.resolverBuilder.Build(cc.parsedTarget, ccr, opts)
+		ccr.resolver, err = ccr.cc.resolverBuilder.Build(ccr.cc.parsedTarget, ccr, opts)
 		errCh <- err
 	})
-
-	if err := <-errCh; err != nil {
-		return nil, err
-	}
-	return ccr, nil
+	return <-errCh
 }
 
 func (ccr *ccResolverWrapper) resolveNow(o resolver.ResolveNowOptions) {
@@ -92,14 +91,14 @@ func (ccr *ccResolverWrapper) resolveNow(o resolver.ResolveNowOptions) {
 
 func (ccr *ccResolverWrapper) close() {
 	channelz.Info(logger, ccr.cc.channelzID, "Closing the name resolver")
+	ccr.mu.Lock()
+	ccr.closed = true
+	ccr.mu.Unlock()
 
 	ccr.serializer.Schedule(func(context.Context) {
 		if ccr.resolver == nil {
 			return
 		}
-		ccr.mu.Lock()
-		ccr.closed = true
-		ccr.mu.Unlock()
 		ccr.resolver.Close()
 		ccr.resolver = nil
 	})
@@ -109,8 +108,11 @@ func (ccr *ccResolverWrapper) close() {
 // UpdateState is called by resolver implementations to report new state to gRPC
 // which includes addresses and service config.
 func (ccr *ccResolverWrapper) UpdateState(s resolver.State) error {
+	ccr.cc.mu.Lock()
 	ccr.mu.Lock()
 	if ccr.closed {
+		ccr.mu.Unlock()
+		ccr.cc.mu.Unlock()
 		return nil
 	}
 	if s.Endpoints == nil {
@@ -124,35 +126,39 @@ func (ccr *ccResolverWrapper) UpdateState(s resolver.State) error {
 	ccr.addChannelzTraceEvent(s)
 	ccr.curState = s
 	ccr.mu.Unlock()
-	return ccr.cc.updateResolverState(s, nil)
+	return ccr.cc.updateResolverStateAndUnlock(s, nil)
 }
 
 // ReportError is called by resolver implementations to report errors
 // encountered during name resolution to gRPC.
 func (ccr *ccResolverWrapper) ReportError(err error) {
+	ccr.cc.mu.Lock()
 	ccr.mu.Lock()
 	if ccr.closed {
 		ccr.mu.Unlock()
+		ccr.cc.mu.Unlock()
 		return
 	}
 	ccr.mu.Unlock()
 	channelz.Warningf(logger, ccr.cc.channelzID, "ccResolverWrapper: reporting error to cc: %v", err)
-	ccr.cc.updateResolverState(resolver.State{}, err)
+	ccr.cc.updateResolverStateAndUnlock(resolver.State{}, err)
 }
 
 // NewAddress is called by the resolver implementation to send addresses to
 // gRPC.
 func (ccr *ccResolverWrapper) NewAddress(addrs []resolver.Address) {
+	ccr.cc.mu.Lock()
 	ccr.mu.Lock()
 	if ccr.closed {
 		ccr.mu.Unlock()
+		ccr.cc.mu.Unlock()
 		return
 	}
 	s := resolver.State{Addresses: addrs, ServiceConfig: ccr.curState.ServiceConfig}
 	ccr.addChannelzTraceEvent(s)
 	ccr.curState = s
 	ccr.mu.Unlock()
-	ccr.cc.updateResolverState(s, nil)
+	ccr.cc.updateResolverStateAndUnlock(s, nil)
 }
 
 // ParseServiceConfig is called by resolver implementations to parse a JSON

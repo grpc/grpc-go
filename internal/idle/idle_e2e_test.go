@@ -586,12 +586,8 @@ func (s) TestChannelIdleness_RaceBetweenEnterAndExitIdleMode(t *testing.T) {
 	}
 	defer cc.Close()
 
-	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn) error)
-	enterIdleFunc := func() {
-		if err := enterIdle(cc); err != nil {
-			t.Errorf("Failed to enter idle mode: %v", err)
-		}
-	}
+	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
+	enterIdleFunc := func() { enterIdle(cc) }
 	exitIdle := internal.ExitIdleModeForTesting.(func(*grpc.ClientConn) error)
 	exitIdleFunc := func() {
 		if err := exitIdle(cc); err != nil {
