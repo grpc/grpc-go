@@ -295,7 +295,9 @@ func (m *manager) Close() {
 	atomic.StoreInt32(&m.closed, 1)
 
 	m.idleMu.Lock()
-	m.timer.Stop()
-	m.timer = nil
+	if m.timer != nil {
+		m.timer.Stop()
+		m.timer = nil
+	}
 	m.idleMu.Unlock()
 }

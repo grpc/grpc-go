@@ -32,15 +32,6 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-type ccbMode int
-
-const (
-	ccbModeActive = iota
-	ccbModeIdle
-	ccbModeClosed
-	ccbModeExitingIdle
-)
-
 // ccBalancerWrapper sits between the ClientConn and the Balancer.
 //
 // ccBalancerWrapper implements methods corresponding to the ones on the
@@ -57,84 +48,85 @@ const (
 type ccBalancerWrapper struct {
 	// The following fields are initialized when the wrapper is created and are
 	// read-only afterwards, and therefore can be accessed without a mutex.
-	cc   *ClientConn
-	opts balancer.BuildOptions
+	cc       *ClientConn
+	opts     balancer.BuildOptions
+	balancer *gracefulswitch.Balancer
 
-	// Outgoing (gRPC --> balancer) calls are guaranteed to execute in a
-	// mutually exclusive manner as they are scheduled in the serializer. Fields
-	// accessed *only* in these serializer callbacks, can therefore be accessed
-	// without a mutex.
-	balancer        *gracefulswitch.Balancer
+	serializer       *grpcsync.CallbackSerializer
+	serializerCancel context.CancelFunc
+
+	// The following fields are only accessed within the serializer.
 	curBalancerName string
-
-	// mu guards access to the below fields. Access to the serializer and its
-	// cancel function needs to be mutex protected because they are overwritten
-	// when the wrapper exits idle mode.
-	mu               sync.Mutex
-	serializer       *grpcsync.CallbackSerializer // To serialize all outoing calls.
-	serializerCancel context.CancelFunc           // To close the seralizer at close/enterIdle time.
-	mode             ccbMode                      // Tracks the current mode of the wrapper.
 }
 
 // newCCBalancerWrapper creates a new balancer wrapper in idle state. The
 // underlying balancer is not created until the switchTo() method is invoked.
-func newCCBalancerWrapper(cc *ClientConn, bopts balancer.BuildOptions) *ccBalancerWrapper {
+func newCCBalancerWrapper(cc *ClientConn) *ccBalancerWrapper {
+	ctx, cancel := context.WithCancel(cc.ctx)
 	ccb := &ccBalancerWrapper{
-		cc:   cc,
-		opts: bopts,
-		mode: ccbModeIdle,
+		cc: cc,
+		opts: balancer.BuildOptions{
+			DialCreds:        cc.dopts.copts.TransportCredentials,
+			CredsBundle:      cc.dopts.copts.CredsBundle,
+			Dialer:           cc.dopts.copts.Dialer,
+			Authority:        cc.authority,
+			CustomUserAgent:  cc.dopts.copts.UserAgent,
+			ChannelzParentID: cc.channelzID,
+			Target:           cc.parsedTarget,
+		},
+		serializer:       grpcsync.NewCallbackSerializer(ctx),
+		serializerCancel: cancel,
 	}
+	ccb.balancer = gracefulswitch.NewBalancer(ccb, ccb.opts)
 	return ccb
 }
 
 // updateClientConnState is invoked by grpc to push a ClientConnState update to
-// the underlying balancer.
+// the underlying balancer.  This is always executed from the serializer, so
+// it is safe to call into the balancer here.
 func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnState) error {
-	ccb.mu.Lock()
-	errCh := make(chan error, 1)
-	// Here and everywhere else where Schedule() is called, it is done with the
-	// lock held. But the lock guards only the scheduling part. The actual
-	// callback is called asynchronously without the lock being held.
-	ok := ccb.serializer.Schedule(func(_ context.Context) {
-		errCh <- ccb.balancer.UpdateClientConnState(*ccs)
+	errCh := make(chan error)
+	ok := ccb.serializer.Schedule(func(ctx context.Context) {
+		defer close(errCh)
+		if ctx.Err() != nil {
+			return
+		}
+		err := ccb.balancer.UpdateClientConnState(*ccs)
+		if logger.V(2) && err != nil {
+			logger.Infof("error from balancer.UpdateClientConnState: %v", err)
+		}
+		errCh <- err
 	})
 	if !ok {
-		// If we are unable to schedule a function with the serializer, it
-		// indicates that it has been closed. A serializer is only closed when
-		// the wrapper is closed or is in idle.
-		ccb.mu.Unlock()
-		return fmt.Errorf("grpc: cannot send state update to a closed or idle balancer")
+		return nil
 	}
-	ccb.mu.Unlock()
-
-	// We get here only if the above call to Schedule succeeds, in which case it
-	// is guaranteed that the scheduled function will run. Therefore it is safe
-	// to block on this channel.
-	err := <-errCh
-	if logger.V(2) && err != nil {
-		logger.Infof("error from balancer.UpdateClientConnState: %v", err)
-	}
-	return err
+	return <-errCh
 }
 
 // updateSubConnState is invoked by grpc to push a subConn state update to the
 // underlying balancer.
 func (ccb *ccBalancerWrapper) updateSubConnState(sc balancer.SubConn, s connectivity.State, err error) {
-	ccb.mu.Lock()
-	ccb.serializer.Schedule(func(_ context.Context) {
+	ccb.serializer.Schedule(func(ctx context.Context) {
+		if ctx.Err() != nil {
+			return
+		}
 		// Even though it is optional for balancers, gracefulswitch ensures
 		// opts.StateListener is set, so this cannot ever be nil.
+		// TODO: delete this comment when UpdateSubConnState is removed.
 		sc.(*acBalancerWrapper).stateListener(balancer.SubConnState{ConnectivityState: s, ConnectionError: err})
 	})
-	ccb.mu.Unlock()
 }
 
+// resolverError is invoked by grpc to push a resolver error to the underlying
+// balancer.  This is always executed from the serializer, so it is safe to call
+// into the balancer here.
 func (ccb *ccBalancerWrapper) resolverError(err error) {
-	ccb.mu.Lock()
-	ccb.serializer.Schedule(func(_ context.Context) {
+	ccb.serializer.Schedule(func(ctx context.Context) {
+		if ctx.Err() != nil {
+			return
+		}
 		ccb.balancer.ResolverError(err)
 	})
-	ccb.mu.Unlock()
 }
 
 // switchTo is invoked by grpc to instruct the balancer wrapper to switch to the
@@ -148,8 +140,10 @@ func (ccb *ccBalancerWrapper) resolverError(err error) {
 // the ccBalancerWrapper keeps track of the current LB policy name, and skips
 // the graceful balancer switching process if the name does not change.
 func (ccb *ccBalancerWrapper) switchTo(name string) {
-	ccb.mu.Lock()
-	ccb.serializer.Schedule(func(_ context.Context) {
+	ccb.serializer.Schedule(func(ctx context.Context) {
+		if ctx.Err() != nil {
+			return
+		}
 		// TODO: Other languages use case-sensitive balancer registries. We should
 		// switch as well. See: https://github.com/grpc/grpc-go/issues/5288.
 		if strings.EqualFold(ccb.curBalancerName, name) {
@@ -157,7 +151,6 @@ func (ccb *ccBalancerWrapper) switchTo(name string) {
 		}
 		ccb.buildLoadBalancingPolicy(name)
 	})
-	ccb.mu.Unlock()
 }
 
 // buildLoadBalancingPolicy performs the following:
@@ -186,109 +179,27 @@ func (ccb *ccBalancerWrapper) buildLoadBalancingPolicy(name string) {
 
 func (ccb *ccBalancerWrapper) close() {
 	channelz.Info(logger, ccb.cc.channelzID, "ccBalancerWrapper: closing")
-	ccb.closeBalancer(ccbModeClosed)
-}
-
-// enterIdleMode is invoked by grpc when the channel enters idle mode upon
-// expiry of idle_timeout. This call blocks until the balancer is closed.
-func (ccb *ccBalancerWrapper) enterIdleMode() {
-	channelz.Info(logger, ccb.cc.channelzID, "ccBalancerWrapper: entering idle mode")
-	ccb.closeBalancer(ccbModeIdle)
-}
-
-// closeBalancer is invoked when the channel is being closed or when it enters
-// idle mode upon expiry of idle_timeout.
-func (ccb *ccBalancerWrapper) closeBalancer(m ccbMode) {
-	ccb.mu.Lock()
-	if ccb.mode == ccbModeClosed || ccb.mode == ccbModeIdle {
-		ccb.mu.Unlock()
-		return
-	}
-
-	ccb.mode = m
-	done := ccb.serializer.Done()
-	b := ccb.balancer
-	ok := ccb.serializer.Schedule(func(_ context.Context) {
-		// Close the serializer to ensure that no more calls from gRPC are sent
-		// to the balancer.
-		ccb.serializerCancel()
-		// Empty the current balancer name because we don't have a balancer
-		// anymore and also so that we act on the next call to switchTo by
-		// creating a new balancer specified by the new resolver.
-		ccb.curBalancerName = ""
-	})
-	if !ok {
-		ccb.mu.Unlock()
-		return
-	}
-	ccb.mu.Unlock()
-
-	// Give enqueued callbacks a chance to finish before closing the balancer.
-	<-done
-	b.Close()
-}
-
-// exitIdleMode is invoked by grpc when the channel exits idle mode either
-// because of an RPC or because of an invocation of the Connect() API. This
-// recreates the balancer that was closed previously when entering idle mode.
-//
-// If the channel is not in idle mode, we know for a fact that we are here as a
-// result of the user calling the Connect() method on the ClientConn. In this
-// case, we can simply forward the call to the underlying balancer, instructing
-// it to reconnect to the backends.
-func (ccb *ccBalancerWrapper) exitIdleMode() {
-	ccb.mu.Lock()
-	if ccb.mode == ccbModeClosed {
-		// Request to exit idle is a no-op when wrapper is already closed.
-		ccb.mu.Unlock()
-		return
-	}
-
-	if ccb.mode == ccbModeIdle {
-		// Recreate the serializer which was closed when we entered idle.
-		ctx, cancel := context.WithCancel(context.Background())
-		ccb.serializer = grpcsync.NewCallbackSerializer(ctx)
-		ccb.serializerCancel = cancel
-	}
-
-	// The ClientConn guarantees that mutual exclusion between close() and
-	// exitIdleMode(), and since we just created a new serializer, we can be
-	// sure that the below function will be scheduled.
-	done := make(chan struct{})
 	ccb.serializer.Schedule(func(context.Context) {
-		defer close(done)
-
-		ccb.mu.Lock()
-		defer ccb.mu.Unlock()
-
-		if ccb.mode != ccbModeIdle {
-			ccb.balancer.ExitIdle()
+		if ccb.balancer == nil {
 			return
 		}
-
-		// Gracefulswitch balancer does not support a switchTo operation after
-		// being closed. Hence we need to create a new one here.
-		ccb.balancer = gracefulswitch.NewBalancer(ccb, ccb.opts)
-		ccb.mode = ccbModeActive
-		channelz.Info(logger, ccb.cc.channelzID, "ccBalancerWrapper: exiting idle mode")
-
+		ccb.balancer.Close()
+		ccb.balancer = nil
 	})
-	ccb.mu.Unlock()
-
-	<-done
+	ccb.serializerCancel()
 }
 
-func (ccb *ccBalancerWrapper) isIdleOrClosed() bool {
-	ccb.mu.Lock()
-	defer ccb.mu.Unlock()
-	return ccb.mode == ccbModeIdle || ccb.mode == ccbModeClosed
+// exitIdle invokes the balancer's exitIdle method in the scheduler.
+func (ccb *ccBalancerWrapper) exitIdle() {
+	ccb.serializer.Schedule(func(ctx context.Context) {
+		if ctx.Err() != nil {
+			return
+		}
+		ccb.balancer.ExitIdle()
+	})
 }
 
 func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	if ccb.isIdleOrClosed() {
-		return nil, fmt.Errorf("grpc: cannot create SubConn when balancer is closed or idle")
-	}
-
 	if len(addrs) == 0 {
 		return nil, fmt.Errorf("grpc: cannot create SubConn with empty address list")
 	}
@@ -313,10 +224,6 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 }
 
 func (ccb *ccBalancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
-	if ccb.isIdleOrClosed() {
-		return
-	}
-
 	acbw, ok := sc.(*acBalancerWrapper)
 	if !ok {
 		return
@@ -325,10 +232,6 @@ func (ccb *ccBalancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resol
 }
 
 func (ccb *ccBalancerWrapper) UpdateState(s balancer.State) {
-	if ccb.isIdleOrClosed() {
-		return
-	}
-
 	// Update picker before updating state.  Even though the ordering here does
 	// not matter, it can lead to multiple calls of Pick in the common start-up
 	// case where we wait for ready and then perform an RPC.  If the picker is
@@ -339,10 +242,6 @@ func (ccb *ccBalancerWrapper) UpdateState(s balancer.State) {
 }
 
 func (ccb *ccBalancerWrapper) ResolveNow(o resolver.ResolveNowOptions) {
-	if ccb.isIdleOrClosed() {
-		return
-	}
-
 	ccb.cc.resolveNow(o)
 }
 
@@ -374,20 +273,7 @@ func (acbw *acBalancerWrapper) Connect() {
 }
 
 func (acbw *acBalancerWrapper) Shutdown() {
-	ccb := acbw.ccb
-	if ccb.isIdleOrClosed() {
-		// It it safe to ignore this call when the balancer is closed or in idle
-		// because the ClientConn takes care of closing the connections.
-		//
-		// Not returning early from here when the balancer is closed or in idle
-		// leads to a deadlock though, because of the following sequence of
-		// calls when holding cc.mu:
-		// cc.exitIdleMode --> ccb.enterIdleMode --> gsw.Close -->
-		// ccb.RemoveAddrConn --> cc.removeAddrConn
-		return
-	}
-
-	ccb.cc.removeAddrConn(acbw.ac, errConnDrain)
+	acbw.ccb.cc.removeAddrConn(acbw.ac, errConnDrain)
 }
 
 // NewStream begins a streaming RPC on the addrConn.  If the addrConn is not
