@@ -18,6 +18,10 @@
 
 package server
 
+/*
+
+// Switch these to assert on Ready based off Accept() + Close()
+
 import (
 	"context"
 	"errors"
@@ -130,6 +134,10 @@ func createListenerWrapper(t *testing.T, xdsC XDSClient) (<-chan struct{}, strin
 //     address to which our net.Listener is bound to. Also, it contains an
 //     inline Route Configuration. Test verifies that the listenerWrapper
 //     becomes ready.
+
+// write same test, but ready downstream check is if Conns accept + close
+// or if it actually tries to match filter chain logic
+
 func (s) TestListenerWrapper_InlineRouteConfig(t *testing.T) {
 	mgmtServer, nodeID, ldsResourceNamesCh, _, xdsC := xdsSetupFoTests(t)
 	readyCh, host, port, lisResourceName := createListenerWrapper(t, xdsC)
@@ -194,6 +202,10 @@ func (s) TestListenerWrapper_InlineRouteConfig(t *testing.T) {
 // resource. The test verifies that the listenerWrapper does not become ready
 // when waiting for the Route Configuration resource and becomes ready once it
 // receives the Route Configuration resource.
+
+// write same test, but ready downstream check is if Conns accept + close
+// or if it actually tries to match filter chain logic
+
 func (s) TestListenerWrapper_RouteNames(t *testing.T) {
 	mgmtServer, nodeID, ldsResourceNamesCh, rdsResourceNamesCh, xdsC := xdsSetupFoTests(t)
 	readyCh, host, port, lisResourceName := createListenerWrapper(t, xdsC)
@@ -313,6 +325,9 @@ func (fc *fakeConn) Close() error {
 //   - injects a fake net.Conn via the fake net.Listener. This Conn is expected
 //     to match the filter chains on the Listener resource. Verifies that
 //     Accept() does not return an error in this case.
+
+// Same test, but poll instead of using Accept channel to switch it to ready
+
 func (s) TestListenerWrapper_Accept(t *testing.T) {
 	boCh := testutils.NewChannel()
 	origBackoffFunc := backoffFunc
@@ -336,7 +351,7 @@ func (s) TestListenerWrapper_Accept(t *testing.T) {
 		ListenerResourceName: lisResourceName,
 		XDSClient:            xdsC,
 	}
-	l, readyCh := NewListenerWrapper(params)
+	l, readyCh := NewListenerWrapper(params) // Server now immediately serves, rather than this going ready on first update
 	if l == nil {
 		t.Fatalf("NewListenerWrapper(%+v) returned nil", params)
 	}
@@ -368,7 +383,7 @@ func (s) TestListenerWrapper_Accept(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for the ready channel to be written to after receipt of a good Listener update")
-	case <-readyCh:
+	case <-readyCh: // I feel like should eventually report serving, handleRDSUpdates does it sync so whenever that function gets invoked is what you block on here...
 	}
 
 	// Push a non-temporary error into Accept().
@@ -378,6 +393,7 @@ func (s) TestListenerWrapper_Accept(t *testing.T) {
 		t.Fatalf("listenerWrapper.Accept() returned error: %v, want: %v", err, nonTempErr)
 	}
 
+	// (does this behavior stay the same?)
 	// Invoke Accept() in a goroutine since we expect it to swallow:
 	// 1. temporary errors returned from the underlying listener
 	// 2. errors related to finding a matching filter chain for the incoming
@@ -404,7 +420,7 @@ func (s) TestListenerWrapper_Accept(t *testing.T) {
 
 	// Push a fakeConn which matches the filter chains configured on the
 	// received Listener resource. Verify that Accept() returns.
-	fc := &fakeConn{
+	fc := &fakeConn{ // here you go, inject certain conn properties, I don't know if you can inject this e2e though...
 		local:   &net.TCPAddr{IP: net.IPv4(192, 168, 1, 2)},
 		remote:  &net.TCPAddr{IP: net.IPv4(192, 168, 1, 2), Port: 80},
 		closeCh: testutils.NewChannel(),
@@ -414,3 +430,72 @@ func (s) TestListenerWrapper_Accept(t *testing.T) {
 		t.Fatalf("error when waiting for Accept() to return the conn on filter chain match: %v", err)
 	}
 }
+
+func (s) TestLisWrapper(t *testing.T) {
+
+	// I don't need this anymore I think
+	boCh := testutils.NewChannel()
+	origBackoffFunc := backoffFunc
+	backoffFunc = func(v int) time.Duration {
+		boCh.Send(v)
+		return 0
+	}
+	defer func() { backoffFunc = origBackoffFunc }()
+	// I don't think I need this codeblock anymore either
+
+
+
+	mgmtServer, nodeID, ldsResourceNamesCh, _, xdsC := xdsSetupFoTests(t)
+
+
+
+	// Create a listener wrapper with a fake listener and verify that it
+	// extracts the host and port from the passed in listener.
+	lis := &fakeListener{ // lis wrapper wraps a listener, also need to wrap it for test
+		acceptCh: make(chan connAndErr, 1),
+		closeCh:  testutils.NewChannel(),
+	}
+	lisResourceName := fmt.Sprintf(e2e.ServerListenerResourceNameTemplate, net.JoinHostPort(fakeListenerHost, strconv.Itoa(int(fakeListenerPort))))
+	params := ListenerWrapperParams{
+		Listener:             lis,
+		ListenerResourceName: lisResourceName,
+		XDSClient:            xdsC,
+	}
+
+	lis := NewListenerWrapper(params) // these params have to get to the same thing set up client etc.
+
+	// pass it to a server to serve
+
+	// before it gets full rds should Accept() and Close() connections
+
+
+	// lis wrapper wraps a lis, need to figure out how wrapped lis fits in
+
+	// configure LDS pointing to RDS only
+
+	// before RDS comes in
+	// Accept + Close() (needs a server, so perhaps e2e) ^^^ creation of components to unit test
+
+	// previously this was testing writes to update channel from good update,
+	// this is wrong and I no longer need to test this
+
+}
+
+
+
+// What exactly is above testing, and do I want to keep it or change it
+
+// this component has changed a lot too
+
+// specific unit test case scenarios listed in e2e tests...:
+
+// Before wrote ready when first lds
+// Serve serves on the lis, before used to block on the lis state
+// now Serves() but not ready so Accept() + Close()...invariant to test
+
+// used to block Serve() on it leaving READY, now just Serves and Accepts() and Closes()
+// I don't know the layering to change here
+
+// and has current and pending (but maybe best to test this e2e)
+
+*/

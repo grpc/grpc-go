@@ -2759,23 +2759,42 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 // The Equal() methods defined below help with using cmp.Equal() on these types
 // which contain all unexported fields.
 
-func (fci *FilterChainManager) Equal(other *FilterChainManager) bool {
-	if (fci == nil) != (other == nil) {
+func (fcm *FilterChainManager) Equal(other *FilterChainManager) bool {
+	if (fcm == nil) != (other == nil) {
 		return false
 	}
-	if fci == nil {
+	if fcm == nil {
 		return true
 	}
 	switch {
-	case !cmp.Equal(fci.dstPrefixMap, other.dstPrefixMap, cmpopts.EquateEmpty()):
+	case !cmp.Equal(fcm.dstPrefixMap, other.dstPrefixMap, cmpopts.EquateEmpty()):
 		return false
 	// TODO: Support comparing dstPrefixes slice?
-	case !cmp.Equal(fci.def, other.def, cmpopts.EquateEmpty(), protocmp.Transform()):
+	case !cmp.Equal(fcm.def, other.def, cmpopts.EquateEmpty(), protocmp.Transform()):
 		return false
-	case !cmp.Equal(fci.RouteConfigNames, other.RouteConfigNames, cmpopts.EquateEmpty()):
+	case !cmp.Equal(fcm.RouteConfigNames, other.RouteConfigNames, cmpopts.EquateEmpty()):
 		return false
 	}
 	return true
+}
+
+func (fc *FilterChain) Equal(other *FilterChain) bool {
+	if (fc == nil) != (other == nil) {
+		return false
+	}
+	if fc == nil {
+		return true
+	}
+	if !cmp.Equal(fc.SecurityCfg, other.SecurityCfg, cmpopts.EquateEmpty()) {
+		return false
+	}
+	if !cmp.Equal(fc.RouteConfigName, other.RouteConfigName) {
+		return false
+	}
+	if !cmp.Equal(fc.HTTPFilters, other.HTTPFilters, cmpopts.EquateEmpty(), protocmp.Transform()) {
+		return false
+	}
+	return cmp.Equal(fc.InlineRouteConfig, other.InlineRouteConfig, cmpopts.EquateEmpty())
 }
 
 func (dpe *destPrefixEntry) Equal(other *destPrefixEntry) bool {
@@ -2826,28 +2845,28 @@ func (spe *sourcePrefixEntry) Equal(other *sourcePrefixEntry) bool {
 // The String() methods defined below help with debugging test failures as the
 // regular %v or %+v formatting directives do not expands pointer fields inside
 // structs, and these types have a lot of pointers pointing to other structs.
-func (fci *FilterChainManager) String() string {
-	if fci == nil {
+func (fcm *FilterChainManager) String() string {
+	if fcm == nil {
 		return ""
 	}
 
 	var sb strings.Builder
-	if fci.dstPrefixMap != nil {
+	if fcm.dstPrefixMap != nil {
 		sb.WriteString("destination_prefix_map: map {\n")
-		for k, v := range fci.dstPrefixMap {
+		for k, v := range fcm.dstPrefixMap {
 			sb.WriteString(fmt.Sprintf("%q: %v\n", k, v))
 		}
 		sb.WriteString("}\n")
 	}
-	if fci.dstPrefixes != nil {
+	if fcm.dstPrefixes != nil {
 		sb.WriteString("destination_prefixes: [")
-		for _, p := range fci.dstPrefixes {
+		for _, p := range fcm.dstPrefixes {
 			sb.WriteString(fmt.Sprintf("%v ", p))
 		}
 		sb.WriteString("]")
 	}
-	if fci.def != nil {
-		sb.WriteString(fmt.Sprintf("default_filter_chain: %+v ", fci.def))
+	if fcm.def != nil {
+		sb.WriteString(fmt.Sprintf("default_filter_chain: %+v ", fcm.def))
 	}
 	return sb.String()
 }
@@ -2908,11 +2927,11 @@ func (spe *sourcePrefixEntry) String() string {
 	return sb.String()
 }
 
-func (f *FilterChain) String() string {
-	if f == nil || f.SecurityCfg == nil {
+func (fc *FilterChain) String() string {
+	if fc == nil || fc.SecurityCfg == nil {
 		return ""
 	}
-	return fmt.Sprintf("security_config: %v", f.SecurityCfg)
+	return fmt.Sprintf("security_config: %v", fc.SecurityCfg)
 }
 
 func ipNetFromCIDR(cidr string) *net.IPNet {

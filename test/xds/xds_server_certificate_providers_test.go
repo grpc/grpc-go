@@ -28,14 +28,12 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -233,12 +231,7 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	}
 	defer cc.Close()
 
-	client := testgrpc.NewTestServiceClient(cc)
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := client.EmptyCall(sCtx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
-		t.Fatalf("EmptyCall() failed: %v, wantCode: %s", err, codes.DeadlineExceeded)
-	}
+	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...)
 }
 
 // Tests the case where the bootstrap configuration contains one certificate
@@ -484,10 +477,5 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	}
 	defer cc2.Close()
 
-	client2 := testgrpc.NewTestServiceClient(cc2)
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := client2.EmptyCall(sCtx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
-		t.Fatalf("EmptyCall() failed: %v, wantCode: %s", err, codes.DeadlineExceeded)
-	}
+	waitForFailedRPCWithStatusCode(ctx, t, cc2, errAcceptAndClose...)
 }
