@@ -21,6 +21,7 @@ package xds_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"testing"
@@ -48,6 +49,15 @@ func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, er
 
 func (*testService) UnaryCall(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	return &testpb.SimpleResponse{}, nil
+}
+
+func (*testService) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallServer) error {
+	for {
+		_, err := stream.Recv() // hangs here forever if stream doesn't shut down...doesn't receive EOF without any errors
+		if err == io.EOF {
+			return nil
+		}
+	}
 }
 
 func testModeChangeServerOption(t *testing.T) grpc.ServerOption {

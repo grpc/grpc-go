@@ -31,6 +31,7 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	internaladmin "google.golang.org/grpc/internal/admin"
 	"google.golang.org/grpc/resolver"
@@ -47,6 +48,8 @@ import (
 
 	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
+
+var logger = grpclog.Component("xds")
 
 func init() {
 	internaladmin.AddService(func(registrar grpc.ServiceRegistrar) (func(), error) {
@@ -75,6 +78,7 @@ func init() {
 		v3statusgrpc.RegisterClientStatusDiscoveryServiceServer(grpcServer, csdss)
 		return csdss.Close, nil
 	})
+
 }
 
 // NewXDSResolverWithConfigForTesting creates a new xDS resolver builder using
