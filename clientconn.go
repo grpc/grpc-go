@@ -1984,7 +1984,7 @@ func (cc *ClientConn) determineAuthority() error {
 		cc.authority = authorityFromDialOption
 	} else if authorityFromCreds != "" {
 		cc.authority = authorityFromCreds
-	} else if auth, isAuthOverrider := cc.resolverBuilder.(resolver.AuthorityOverrider); isAuthOverrider {
+	} else if auth, ok := cc.resolverBuilder.(resolver.AuthorityOverrider); ok {
 		cc.authority = auth.OverrideAuthority(cc.parsedTarget)
 	} else if endpoint := cc.parsedTarget.Endpoint(); strings.HasPrefix(endpoint, ":") {
 		cc.authority = "localhost" + endpoint
