@@ -1288,6 +1288,11 @@ func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, eo
 	})
 }
 
+// CallbackConn is a conn with a callback function.
+type CallbackConn interface {
+	Callback(ServerTransport)
+}
+
 func (t *http2Server) Drain(debugData string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

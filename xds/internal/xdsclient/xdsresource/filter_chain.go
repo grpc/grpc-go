@@ -21,15 +21,17 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"unsafe"
+
+	"google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/xds/internal/httpfilter"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	"google.golang.org/grpc/internal/resolver"
-	"google.golang.org/grpc/xds/internal/httpfilter"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
 const (
@@ -66,6 +68,8 @@ type FilterChain struct {
 	//
 	// Exactly one of RouteConfigName and InlineRouteConfig is set.
 	InlineRouteConfig *RouteConfigUpdate
+	// RC is the routing configuration for this filter chain (LDS + RDS).
+	RC *unsafe.Pointer // *(RoutingConfiguration)
 }
 
 // VirtualHostWithInterceptors captures information present in a VirtualHost
@@ -194,10 +198,24 @@ type FilterChainManager struct {
 
 	def *FilterChain // Default filter chain, if specified.
 
+	// Slice of filter chains managed by this filter chain manager.
+	fcs []*FilterChain
+
 	// RouteConfigNames are the route configuration names which need to be
 	// dynamically queried for RDS Configuration for any FilterChains which
 	// specify to load RDS Configuration dynamically.
 	RouteConfigNames map[string]bool
+
+	// Persisted to gracefully close once filter chain manager no longer active.
+	conns []net.Conn
+}
+
+func (fcm *FilterChainManager) AddConn(conn net.Conn) {
+	fcm.conns = append(fcm.conns, conn)
+}
+
+func (fcm *FilterChainManager) Conns() []net.Conn {
+	return fcm.conns
 }
 
 // destPrefixEntry is the value type of the map indexed on destination prefixes.
@@ -284,6 +302,7 @@ func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, err
 		}
 	}
 	fci.def = def
+	fci.fcs = append(fci.fcs, def)
 
 	// If there are no supported filter chains and no default filter chain, we
 	// fail here. This will call the Listener resource to be NACK'ed.
@@ -474,6 +493,7 @@ func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePre
 			return errors.New("multiple filter chains with overlapping matching rules are defined")
 		}
 		srcEntry.srcPortMap[0] = fc
+		fci.fcs = append(fci.fcs, fc)
 		return nil
 	}
 	for _, port := range srcPorts {
@@ -482,7 +502,12 @@ func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePre
 		}
 		srcEntry.srcPortMap[port] = fc
 	}
+	fci.fcs = append(fci.fcs, fc)
 	return nil
+}
+
+func (fci *FilterChainManager) FilterChains() []*FilterChain {
+	return fci.fcs
 }
 
 // filterChainFromProto extracts the relevant information from the FilterChain

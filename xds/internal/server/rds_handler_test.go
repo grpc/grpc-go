@@ -490,3 +490,14 @@ func (s) TestErrorReceived(t *testing.T) {
 func newStringP(s string) *string {
 	return &s
 }
+
+// e2e tests:
+// partial inline route config, partial rds
+// inline goes serving and works (I think I have tests for this) (should immediately go serving, will test rds names left to watch logic)
+// rds waits for it to go serving
+// serivng not serving serving transitions
+
+// is the rds conditional for it being ready correct? *** Unit test? in RDS Handler test?
+// how to even unit test/what's the point of unit test?
+
+// I wrote this test lol

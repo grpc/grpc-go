@@ -816,3 +816,5 @@ func (s) TestServeAndCloseDoNotRace(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// need to write a test for serving not serving serving if it works correctly...

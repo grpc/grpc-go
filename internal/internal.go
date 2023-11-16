@@ -68,11 +68,6 @@ var (
 	// This is used in the 1.0 release of gcp/observability, and thus must not be
 	// deleted or changed.
 	CanonicalString any // func (codes.Code) string
-	// DrainServerTransports initiates a graceful close of existing connections
-	// on a gRPC server accepted on the provided listener address. An
-	// xDS-enabled server invokes this method on a grpc.Server when a particular
-	// listener moves to "not-serving" mode.
-	DrainServerTransports any // func(*grpc.Server, string)
 	// IsRegisteredMethod returns whether the passed in method is registered as
 	// a method on the server.
 	IsRegisteredMethod any // func(*grpc.Server, string) bool
