@@ -124,7 +124,6 @@ func newClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 		conns:  make(map[*addrConn]struct{}),
 		dopts:  defaultDialOptions(),
 		czData: new(channelzData),
-		idle:   true,
 	}
 
 	cc.retryThrottler.Store((*retryThrottler)(nil))
@@ -612,7 +611,6 @@ type ClientConn struct {
 	sc              *ServiceConfig             // Latest service config received from the resolver.
 	conns           map[*addrConn]struct{}     // Set to nil on close.
 	mkp             keepalive.ClientParameters // May be updated upon receipt of a GoAway.
-	idle            bool
 
 	lceMu               sync.Mutex // protects lastConnectionError
 	lastConnectionError error
