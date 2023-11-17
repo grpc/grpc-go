@@ -130,7 +130,7 @@ func (m *Manager) handleIdleTimeout() {
 		// Set the timer to fire after a duration of idle timeout, calculated
 		// from the time the most recent RPC completed.
 		atomic.StoreInt32(&m.activeSinceLastTimerCheck, 0)
-		m.resetIdleTimer(time.Duration(time.Now().UnixNano()-atomic.LoadInt64(&m.lastCallEndTime)) + m.timeout)
+		m.resetIdleTimer(time.Duration(atomic.LoadInt64(&m.lastCallEndTime)-time.Now().UnixNano()) + m.timeout)
 		return
 	}
 
