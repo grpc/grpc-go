@@ -59,11 +59,14 @@ type Cache interface {
 type RevocationConfig struct {
 	// RootDir is the directory to search for CRL files.
 	// Directory format must match OpenSSL X509_LOOKUP_hash_dir(3).
+	// Deprecated: use CRLProvider instead.
 	RootDir string
 	// AllowUndetermined controls if certificate chains with RevocationUndetermined
 	// revocation status are allowed to complete.
 	AllowUndetermined bool
 	// Cache will store CRL files if not nil, otherwise files are reloaded for every lookup.
+	// Only used for caching CRLs when using the RootDir setting.
+	// Deprecated: use CRLProvider instead.
 	Cache Cache
 	// CRLProvider is an alternative to using RootDir directly for the
 	// X509_LOOKUP_hash_dir approach to CRL files. If set, the CRLProvider's CRL
