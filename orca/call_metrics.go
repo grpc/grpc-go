@@ -91,7 +91,7 @@ func (rw *recorderWrapper) recorder() CallMetricsRecorder {
 func (rw *recorderWrapper) setTrailerMetadata(ctx context.Context) {
 	var sm *ServerMetrics
 	if rw.smp != nil {
-		sm = copyServerMetrics(rw.smp.ServerMetrics())
+		sm = rw.smp.ServerMetrics()
 		sm.merge(rw.r.ServerMetrics())
 	} else {
 		sm = rw.r.ServerMetrics()

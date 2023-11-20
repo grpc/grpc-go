@@ -142,7 +142,7 @@ type ServerMetricsRecorder interface {
 }
 
 type serverMetricsRecorder struct {
-	state atomic.Pointer[ServerMetrics] // latest snapshot of the current metrics
+	state atomic.Pointer[ServerMetrics] // the current metrics
 }
 
 // NewServerMetricsRecorder returns an in-memory store for ServerMetrics and
@@ -167,9 +167,9 @@ func newServerMetricsRecorder() *serverMetricsRecorder {
 	return s
 }
 
-// ServerMetrics returns a pointer to the latest snapshot of ServerMetrics.
+// ServerMetrics returns a copy of the current ServerMetrics.
 func (s *serverMetricsRecorder) ServerMetrics() *ServerMetrics {
-	return s.state.Load()
+	return copyServerMetrics(s.state.Load())
 }
 
 func copyMap(m map[string]float64) map[string]float64 {
