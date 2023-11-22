@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,6 +145,9 @@ func (s) TestFileWatcherCRLProvider(t *testing.T) {
 	const nonCRLFilesUnderCRLDirectory = 15
 	nonCRLFilesSet := make(map[string]struct{})
 	customCallback := func(err error) {
+		if strings.Contains(err.Error(), "BUILD") {
+			return
+		}
 		nonCRLFilesSet[err.Error()] = struct{}{}
 	}
 	p, err := NewFileWatcherCRLProvider(FileWatcherOptions{
@@ -311,7 +315,7 @@ func copyFiles(sourcePath string, targetPath string, fileNames []string, t *test
 		t.Fatalf("Can't read dir %v: %v", targetPath, err)
 	}
 	for _, name := range names {
-		err = os.RemoveAll(filepath.Join(testdata.Path(targetPath), name))
+		err = os.RemoveAll(filepath.Join(targetPath, name))
 		if err != nil {
 			t.Fatalf("Can't remove file %v: %v", name, err)
 		}
