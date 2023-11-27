@@ -25,7 +25,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-  "os"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,15 +35,15 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
 
-  _ "google.golang.org/grpc/xds/googledirectpath" // Register xDS resolver required for c2p directpath.
+	_ "google.golang.org/grpc/xds/googledirectpath" // Register xDS resolver required for c2p directpath.
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	metricspb "google.golang.org/grpc/interop/stress/grpc_testing"
@@ -87,7 +87,7 @@ func parseTestCases(testCaseString string) []testCaseWithWeight {
 			panic(fmt.Sprintf("invalid test case with weight: %s", str))
 		}
 		// Check if test case is supported.
-    testCaseName := strings.ToLower(testCaseNameAndWeight[0])
+		testCaseName := strings.ToLower(testCaseNameAndWeight[0])
 		switch testCaseName {
 		case
 			"empty_unary",
@@ -297,7 +297,7 @@ func newConn(address string, useTLS, testCA bool, tlsServerName string) (*grpc.C
 		} else {
 			logger.Fatalf("Unknown custom credentials: %v", *customCredentialsType)
 		}
-	} else if useTLS {  
+	} else if useTLS {
 		var sn string
 		if tlsServerName != "" {
 			sn = tlsServerName
@@ -324,7 +324,7 @@ func newConn(address string, useTLS, testCA bool, tlsServerName string) (*grpc.C
 
 func main() {
 	flag.Parse()
-  resolver.SetDefaultScheme("dns")
+	resolver.SetDefaultScheme("dns")
 	addresses := strings.Split(*serverAddresses, ",")
 	tests := parseTestCases(*testCases)
 	logParameterInfo(addresses, tests)
@@ -359,6 +359,6 @@ func main() {
 		close(stop)
 	}
 	wg.Wait()
-  fmt.Fprintf(os.Stdout, "Total calls made: %v\n", totalNumCalls)
+	fmt.Fprintf(os.Stdout, "Total calls made: %v\n", totalNumCalls)
 	logger.Infof(" ===== ALL DONE ===== ")
 }
