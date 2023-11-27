@@ -38,7 +38,9 @@ func newListenerWatcher(name string, parent *xdsResolver) *listenerWatcher {
 }
 
 func (l *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData) {
-	l.parent.logger.Infof("Received update for Listener resource %q: %v", l.name, pretty.ToJSON(update))
+	if l.parent.logger.V(2) {
+		l.parent.logger.Infof("Received update for Listener resource %q: %v", l.name, pretty.ToJSON(update))
+	}
 
 	l.parent.serializer.Schedule(func(context.Context) {
 		l.parent.onListenerResourceUpdate(update.Resource)
@@ -46,7 +48,9 @@ func (l *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData) {
 }
 
 func (l *listenerWatcher) OnError(err error) {
-	l.parent.logger.Infof("Received error for Listener resource %q: %v", l.name, err)
+	if l.parent.logger.V(2) {
+		l.parent.logger.Infof("Received error for Listener resource %q: %v", l.name, err)
+	}
 
 	l.parent.serializer.Schedule(func(context.Context) {
 		l.parent.onError(err)
@@ -54,7 +58,9 @@ func (l *listenerWatcher) OnError(err error) {
 }
 
 func (l *listenerWatcher) OnResourceDoesNotExist() {
-	l.parent.logger.Infof("Listener resource %q does not exist", l.name)
+	if l.parent.logger.V(2) {
+		l.parent.logger.Infof("Listener resource %q does not exist", l.name)
+	}
 
 	l.parent.serializer.Schedule(func(context.Context) {
 		l.parent.onListenerResourceNotFound()
@@ -79,7 +85,9 @@ type routeConfigWatcher struct {
 }
 
 func (r *routeConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData) {
-	r.parent.logger.Infof("Received update for RouteConfiguration resource %q: %v", r.name, pretty.ToJSON(update))
+	if r.parent.logger.V(2) {
+		r.parent.logger.Infof("Received update for RouteConfiguration resource %q: %v", r.name, pretty.ToJSON(update))
+	}
 
 	r.parent.serializer.Schedule(func(context.Context) {
 		r.parent.onRouteConfigResourceUpdate(r.name, update.Resource)
@@ -87,7 +95,9 @@ func (r *routeConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceDat
 }
 
 func (r *routeConfigWatcher) OnError(err error) {
-	r.parent.logger.Infof("Received error for RouteConfiguration resource %q: %v", r.name, err)
+	if r.parent.logger.V(2) {
+		r.parent.logger.Infof("Received error for RouteConfiguration resource %q: %v", r.name, err)
+	}
 
 	r.parent.serializer.Schedule(func(context.Context) {
 		r.parent.onError(err)
@@ -95,7 +105,9 @@ func (r *routeConfigWatcher) OnError(err error) {
 }
 
 func (r *routeConfigWatcher) OnResourceDoesNotExist() {
-	r.parent.logger.Infof("RouteConfiguration resource %q does not exist", r.name)
+	if r.parent.logger.V(2) {
+		r.parent.logger.Infof("RouteConfiguration resource %q does not exist", r.name)
+	}
 
 	r.parent.serializer.Schedule(func(context.Context) {
 		r.parent.onRouteConfigResourceNotFound(r.name)
