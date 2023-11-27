@@ -82,13 +82,13 @@ func parseTestCases(testCaseString string) []testCaseWithWeight {
 	testCaseStrings := strings.Split(testCaseString, ",")
 	testCases := make([]testCaseWithWeight, len(testCaseStrings))
 	for i, str := range testCaseStrings {
-		testCase := strings.Split(str, ":")
-		if len(testCase) != 2 {
+		testCaseNameAndWeight := strings.Split(str, ":")
+		if len(testCaseNameAndWeight) != 2 {
 			panic(fmt.Sprintf("invalid test case with weight: %s", str))
 		}
 		// Check if test case is supported.
-    testCaseName := strings.ToLower(testCase[0])
-		switch strings.ToLower(testCaseName) {
+    testCaseName := strings.ToLower(testCaseNameAndWeight[0])
+		switch testCaseName {
 		case
 			"empty_unary",
 			"large_unary",
@@ -102,10 +102,10 @@ func parseTestCases(testCaseString string) []testCaseWithWeight {
 			"status_code_and_message",
 			"custom_metadata":
 		default:
-			panic(fmt.Sprintf("unknown test type: %s", testCase[0]))
+			panic(fmt.Sprintf("unknown test type: %s", testCaseNameAndWeight[0]))
 		}
 		testCases[i].name = testCaseName
-		w, err := strconv.Atoi(testCase[1])
+		w, err := strconv.Atoi(testCaseNameAndWeight[1])
 		if err != nil {
 			panic(fmt.Sprintf("%v", err))
 		}
