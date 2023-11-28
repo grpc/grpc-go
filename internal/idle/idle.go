@@ -193,7 +193,18 @@ func (m *Manager) tryEnterIdleMode() bool {
 }
 
 func (m *Manager) EnterIdleModeForTesting() {
-	m.tryEnterIdleMode()
+	if !atomic.CompareAndSwapInt32(&m.activeCallsCount, 0, -math.MaxInt32) {
+		// We have an active RPC and cannot enter idle mode.
+		return
+	}
+	if m.tryEnterIdleMode() {
+		// Successfully entered idle mode. No further action necessary.
+		return
+	}
+	// Failed to enter idle mode due to a concurrent RPC that kept the channel
+	// active, or because of an error from the channel. Undo the attempt to
+	// enter idle, and reset the timer to try again later.
+	atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
 }
 
 // OnCallBegin is invoked at the start of every RPC.
@@ -201,7 +212,6 @@ func (m *Manager) OnCallBegin() error {
 	if m.isClosed() {
 		return nil
 	}
-
 	if atomic.AddInt32(&m.activeCallsCount, 1) > 0 {
 		// Channel is not idle now. Set the activity bit and allow the call.
 		atomic.StoreInt32(&m.activeSinceLastTimerCheck, 1)

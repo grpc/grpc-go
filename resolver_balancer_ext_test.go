@@ -19,12 +19,16 @@
 package grpc_test
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -67,5 +71,52 @@ func (s) TestResolverBalancerInteraction(t *testing.T) {
 	case <-rnCh:
 	case <-time.After(defaultTestTimeout):
 		t.Fatalf("timed out waiting for resolver.ResolveNow")
+	}
+}
+
+type resolverBuilderWithErr struct {
+	resolver.Resolver
+	errCh  <-chan error
+	scheme string
+}
+
+func (b *resolverBuilderWithErr) Build(_ resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
+	if err := <-b.errCh; err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func (b *resolverBuilderWithErr) Scheme() string {
+	return b.scheme
+}
+
+func (b *resolverBuilderWithErr) Close() {}
+
+// TestResolverBuildFailure tests:
+// 1. resolver.Builder.Build() passes.
+// 2. Channel enters idle mode.
+// 3. An RPC happens.
+// 4. resolver.Builder.Build() fails.
+func (s) TestResolverBuildFailure(t *testing.T) {
+	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
+	const name = "trbf"
+	resErrCh := make(chan error, 1)
+	resolver.Register(&resolverBuilderWithErr{errCh: resErrCh, scheme: name})
+
+	resErrCh <- nil
+	cc, err := grpc.Dial(name+":///", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.Dial error: %v", err)
+	}
+	defer cc.Close()
+	enterIdle(cc)
+	const errStr = "test error from resolver builder"
+	t.Log("pushing res err")
+	resErrCh <- errors.New(errStr)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := cc.Invoke(ctx, "/a/b", nil, nil); err == nil || !strings.Contains(err.Error(), errStr) {
+		t.Fatalf("Invoke = %v; want %v", err, errStr)
 	}
 }
