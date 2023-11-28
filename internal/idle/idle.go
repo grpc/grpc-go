@@ -40,9 +40,8 @@ type Enforcer interface {
 	EnterIdleMode()
 }
 
-// Manager implements the Manager interface. It uses atomic operations to
-// synchronize access to shared state and a mutex to guarantee mutual exclusion
-// in a critical section.
+// Manager implements idleness detection and calls the configured Enforcer to
+// enter/exit idle mode when appropriate.  Must be created by NewManager.
 type Manager struct {
 	// State accessed atomically.
 	lastCallEndTime           int64 // Unix timestamp in nanos; time when the most recent RPC completed.
@@ -71,34 +70,26 @@ type Manager struct {
 	timer        *time.Timer
 }
 
-// ManagerOptions is a collection of options used by
-// NewManager.
-type ManagerOptions struct {
-	Enforcer Enforcer
-	Timeout  time.Duration
-}
-
 // NewManager creates a new idleness manager implementation for the
 // given idle timeout.  It begins in idle mode.
-func NewManager(opts ManagerOptions) *Manager {
+func NewManager(enforcer Enforcer, timeout time.Duration) *Manager {
 	return &Manager{
-		enforcer:         opts.Enforcer,
-		timeout:          opts.Timeout,
+		enforcer:         enforcer,
+		timeout:          timeout,
 		actuallyIdle:     true,
 		activeCallsCount: -math.MaxInt32,
 	}
 }
 
-// resetIdleTimer resets the idle timer to the given duration. This method
-// should only be called from the timer callback.
+// resetIdleTimerLocked resets the idle timer to the given duration.  Called
+// when exiting idle mode or when the timer fires and we need to reset it.
 func (m *Manager) resetIdleTimerLocked(d time.Duration) {
-	if m.isClosed() || m.timeout == 0 {
+	if m.isClosed() || m.timeout == 0 || m.actuallyIdle {
 		return
 	}
 
 	// It is safe to ignore the return value from Reset() because this method is
-	// only ever called from the timer callback, which means the timer has
-	// already fired.
+	// only ever called from the timer callback or when exiting idle mode.
 	if m.timer != nil {
 		m.timer.Stop()
 	}
@@ -193,6 +184,14 @@ func (m *Manager) tryEnterIdleMode() bool {
 }
 
 func (m *Manager) EnterIdleModeForTesting() {
+	if m.timeout == 0 {
+		m.idleMu.Lock()
+		defer m.idleMu.Unlock()
+		if !m.actuallyIdle {
+			m.enforcer.EnterIdleMode()
+		}
+		return
+	}
 	if !atomic.CompareAndSwapInt32(&m.activeCallsCount, 0, -math.MaxInt32) {
 		// We have an active RPC and cannot enter idle mode.
 		return
@@ -211,6 +210,11 @@ func (m *Manager) EnterIdleModeForTesting() {
 func (m *Manager) OnCallBegin() error {
 	if m.isClosed() {
 		return nil
+	}
+	if m.timeout == 0 {
+		// When the manager is disabled (timeout==0), we just exit idle mode if
+		// needed and return.
+		return m.ExitIdleMode()
 	}
 	if atomic.AddInt32(&m.activeCallsCount, 1) > 0 {
 		// Channel is not idle now. Set the activity bit and allow the call.
@@ -268,7 +272,7 @@ func (m *Manager) ExitIdleMode() error {
 
 // OnCallEnd is invoked at the end of every RPC.
 func (m *Manager) OnCallEnd() {
-	if m.isClosed() {
+	if m.timeout == 0 || m.isClosed() {
 		return
 	}
 

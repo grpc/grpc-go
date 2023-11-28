@@ -33,14 +33,14 @@ import (
 // ccResolverWrapper is a wrapper on top of cc for resolvers.
 // It implements resolver.ClientConn interface.
 type ccResolverWrapper struct {
-	// The following fields are read-only.
+	// The following fields are initialized when the wrapper is created and are
+	// read-only afterwards, and therefore can be accessed without a mutex.
 	cc                  *ClientConn
 	ignoreServiceConfig bool
 	serializer          *grpcsync.CallbackSerializer
 	serializerCancel    context.CancelFunc
 
-	// The following fields are only accessed within the serializer.
-	resolver resolver.Resolver
+	resolver resolver.Resolver // only accessed within the serializer
 
 	// The following fields are protected by mu.  Caller must take cc.mu before
 	// taking mu.

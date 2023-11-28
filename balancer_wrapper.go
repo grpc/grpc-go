@@ -37,7 +37,8 @@ import (
 // ccBalancerWrapper implements methods corresponding to the ones on the
 // balancer.Balancer interface. The ClientConn is free to call these methods
 // concurrently and the ccBalancerWrapper ensures that calls from the ClientConn
-// to the Balancer happen synchronously and in order.
+// to the Balancer happen in order by performing them in the serializer, without
+// any mutexes held.
 //
 // ccBalancerWrapper also implements the balancer.ClientConn interface and is
 // passed to the Balancer implementations. It invokes unexported methods on the
@@ -54,10 +55,9 @@ type ccBalancerWrapper struct {
 	serializer       *grpcsync.CallbackSerializer
 	serializerCancel context.CancelFunc
 
-	// The following fields are only accessed within the serializer.
-	curBalancerName string
+	curBalancerName string // only accessed within the serializer
 
-	// The following fields are protected by mu.  Caller must take cc.mu before
+	// The following field is protected by mu.  Caller must take cc.mu before
 	// taking mu.
 	mu     sync.Mutex
 	closed bool
@@ -92,7 +92,7 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 	errCh := make(chan error)
 	ok := ccb.serializer.Schedule(func(ctx context.Context) {
 		defer close(errCh)
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || ccb.balancer == nil {
 			return
 		}
 		err := ccb.balancer.UpdateClientConnState(*ccs)
@@ -111,7 +111,7 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 // underlying balancer.
 func (ccb *ccBalancerWrapper) updateSubConnState(sc balancer.SubConn, s connectivity.State, err error) {
 	ccb.serializer.Schedule(func(ctx context.Context) {
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || ccb.balancer == nil {
 			return
 		}
 		// Even though it is optional for balancers, gracefulswitch ensures
@@ -122,11 +122,10 @@ func (ccb *ccBalancerWrapper) updateSubConnState(sc balancer.SubConn, s connecti
 }
 
 // resolverError is invoked by grpc to push a resolver error to the underlying
-// balancer.  This is always executed from the serializer, so it is safe to call
-// into the balancer here.
+// balancer.  The call to the balancer is executed from the serializer.
 func (ccb *ccBalancerWrapper) resolverError(err error) {
 	ccb.serializer.Schedule(func(ctx context.Context) {
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || ccb.balancer == nil {
 			return
 		}
 		ccb.balancer.ResolverError(err)
@@ -145,7 +144,7 @@ func (ccb *ccBalancerWrapper) resolverError(err error) {
 // the graceful balancer switching process if the name does not change.
 func (ccb *ccBalancerWrapper) switchTo(name string) {
 	ccb.serializer.Schedule(func(ctx context.Context) {
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || ccb.balancer == nil {
 			return
 		}
 		// TODO: Other languages use case-sensitive balancer registries. We should
@@ -193,10 +192,10 @@ func (ccb *ccBalancerWrapper) close() {
 	ccb.serializerCancel()
 }
 
-// exitIdle invokes the balancer's exitIdle method in the scheduler.
+// exitIdle invokes the balancer's exitIdle method in the serializer.
 func (ccb *ccBalancerWrapper) exitIdle() {
 	ccb.serializer.Schedule(func(ctx context.Context) {
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || ccb.balancer == nil {
 			return
 		}
 		ccb.balancer.ExitIdle()

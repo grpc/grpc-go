@@ -186,7 +186,7 @@ func newClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	cc.csMgr = newConnectivityStateManager(cc.ctx, cc.channelzID)
 	cc.pickerWrapper = newPickerWrapper(cc.dopts.copts.StatsHandlers)
 
-	cc.idlenessMgr = idle.NewManager(idle.ManagerOptions{Enforcer: (*idler)(cc), Timeout: cc.dopts.idleTimeout})
+	cc.idlenessMgr = idle.NewManager((*idler)(cc), cc.dopts.idleTimeout)
 	cc.initIdleStateLocked()
 
 	return cc, nil
@@ -327,7 +327,8 @@ func (cc *ClientConn) exitIdleMode() (err error) {
 	cc.mu.Unlock()
 
 	// This needs to be called without cc.mu because this builds a new resolver
-	// which might update state or report error inline needs to acquire cc.mu.
+	// which might update state or report error inline, which would then need to
+	// acquire cc.mu.
 	if err := cc.resolverWrapper.start(); err != nil {
 		return err
 	}
@@ -589,7 +590,6 @@ type ClientConn struct {
 	dopts           dialOptions          // Default and user specified dial options.
 	channelzID      *channelz.Identifier // Channelz identifier for the channel.
 	resolverBuilder resolver.Builder     // See parseTargetAndFindResolver().
-	balancerWrapper *ccBalancerWrapper   // Uses gracefulswitch.balancer underneath.
 	idlenessMgr     *idle.Manager
 
 	// The following provide their own synchronization, and therefore don't
@@ -600,17 +600,18 @@ type ClientConn struct {
 	czData             *channelzData
 	retryThrottler     atomic.Value // Updated from service config.
 
-	// firstResolveEvent is used to track whether the name resolver sent us at
-	// least one update. RPCs block on this event.
-	firstResolveEvent *grpcsync.Event
-
 	// mu protects the following fields.
 	// TODO: split mu so the same mutex isn't used for everything.
 	mu              sync.RWMutex
-	resolverWrapper *ccResolverWrapper         // Initialized in Dial; cleared in Close.
+	resolverWrapper *ccResolverWrapper         // Always recreated whenever entering idle to simplify Close.
+	balancerWrapper *ccBalancerWrapper         // Always recreated whenever entering idle to simplify Close.
 	sc              *ServiceConfig             // Latest service config received from the resolver.
 	conns           map[*addrConn]struct{}     // Set to nil on close.
 	mkp             keepalive.ClientParameters // May be updated upon receipt of a GoAway.
+	// firstResolveEvent is used to track whether the name resolver sent us at
+	// least one update. RPCs block on this event.  May be accessed without mu
+	// if we know we cannot enter idle mode while accessing it.
+	firstResolveEvent *grpcsync.Event
 
 	lceMu               sync.Mutex // protects lastConnectionError
 	lastConnectionError error

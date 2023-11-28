@@ -97,7 +97,7 @@ func (s) TestManager_Disabled(t *testing.T) {
 	// Create an idleness manager that is disabled because of idleTimeout being
 	// set to `0`.
 	enforcer := newTestEnforcer()
-	mgr := NewManager(ManagerOptions{Enforcer: enforcer, Timeout: time.Duration(0)})
+	mgr := NewManager(enforcer, time.Duration(0))
 
 	// Ensure that the timer callback does not fire within a short deadline.
 	select {
@@ -134,7 +134,7 @@ func (s) TestManager_Enabled_TimerFires(t *testing.T) {
 	callbackCh := overrideNewTimer(t)
 
 	enforcer := newTestEnforcer()
-	mgr := NewManager(ManagerOptions{Enforcer: enforcer, Timeout: time.Duration(defaultTestIdleTimeout)})
+	mgr := NewManager(enforcer, time.Duration(defaultTestIdleTimeout))
 	defer mgr.Close()
 	mgr.ExitIdleMode()
 
@@ -160,7 +160,7 @@ func (s) TestManager_Enabled_OngoingCall(t *testing.T) {
 	callbackCh := overrideNewTimer(t)
 
 	enforcer := newTestEnforcer()
-	mgr := NewManager(ManagerOptions{Enforcer: enforcer, Timeout: time.Duration(defaultTestIdleTimeout)})
+	mgr := NewManager(enforcer, time.Duration(defaultTestIdleTimeout))
 	defer mgr.Close()
 	mgr.ExitIdleMode()
 
@@ -206,7 +206,7 @@ func (s) TestManager_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	callbackCh := overrideNewTimer(t)
 
 	enforcer := newTestEnforcer()
-	mgr := NewManager(ManagerOptions{Enforcer: enforcer, Timeout: time.Duration(defaultTestIdleTimeout)})
+	mgr := NewManager(enforcer, time.Duration(defaultTestIdleTimeout))
 	defer mgr.Close()
 	mgr.ExitIdleMode()
 
@@ -258,7 +258,7 @@ func (s) TestManager_Enabled_ExitIdleOnRPC(t *testing.T) {
 	overrideNewTimer(t)
 
 	enforcer := newTestEnforcer()
-	mgr := NewManager(ManagerOptions{Enforcer: enforcer, Timeout: time.Duration(defaultTestIdleTimeout)})
+	mgr := NewManager(enforcer, time.Duration(defaultTestIdleTimeout))
 	defer mgr.Close()
 
 	mgr.ExitIdleMode()
@@ -352,7 +352,7 @@ func (s) TestManager_IdleTimeoutRacesWithOnCallBegin(t *testing.T) {
 
 			// Configure a large idle timeout so that we can control the
 			// race between the timer callback and RPCs.
-			mgr := NewManager(ManagerOptions{Enforcer: enforcer, Timeout: time.Duration(10 * time.Minute)})
+			mgr := NewManager(enforcer, time.Duration(10*time.Minute))
 			defer mgr.Close()
 			mgr.ExitIdleMode()
 
