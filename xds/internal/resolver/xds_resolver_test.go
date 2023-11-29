@@ -105,7 +105,7 @@ func (s) TestResolverBuilder_DifferentBootstrapConfigs(t *testing.T) {
 				NodeID:    "node-id",
 				ServerURI: "dummy-management-server",
 			},
-			wantErr: `authority "non-existing-authority" is not found in the bootstrap file`,
+			wantErr: `authority "non-existing-authority" specified in dial target "xds://non-existing-authority/target" is not found in the bootstrap file`,
 		},
 		{
 			name:   "xDS creds specified without certificate providers in bootstrap",

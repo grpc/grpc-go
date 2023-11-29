@@ -87,7 +87,13 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	r.logger = prefixLogger(r)
 	r.logger.Infof("Creating resolver for target: %+v", target)
 
-	// Initialize the serializer used to synchronize xDS updates.
+	// Initialize the serializer used to synchronize the following:
+	// - updates from the xDS client. This could lead to generation of new
+	//   service config if resolution is complete.
+	// - completion of an RPC to a removed cluster causing the associated ref
+	//   count to become zero, resulting in generation of new service config.
+	// - stopping of a config selector that results in generation of new service
+	//   config.
 	ctx, cancel := context.WithCancel(context.Background())
 	r.serializer = grpcsync.NewCallbackSerializer(ctx)
 	r.serializerCancel = cancel
@@ -124,7 +130,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 //   - Verifies that the bootstrap configuration contains certificate providers if
 //     the use of xDS credentials is specified by the user.
 //   - Verifies that if the provided dial target contains an authority, the
-//     bootstrap configuration contains server config for this authority.
+//     bootstrap configuration contains server config for that authority.
 //
 // Returns the listener resource name template to use. If any of the above
 // validations fail, a non-nil error is returned.
@@ -160,7 +166,7 @@ func (r *xdsResolver) sanityChecksOnBootstrapConfig(target resolver.Target, opts
 	if authority := target.URL.Host; authority != "" {
 		a := bootstrapConfig.Authorities[authority]
 		if a == nil {
-			return "", fmt.Errorf("xds: authority %q is not found in the bootstrap file", authority)
+			return "", fmt.Errorf("xds: authority %q specified in dial target %q is not found in the bootstrap file", authority, target)
 		}
 		if a.ClientListenerResourceNameTemplate != "" {
 			// This check will never be false, because
@@ -202,13 +208,11 @@ type xdsResolver struct {
 	serializer       *grpcsync.CallbackSerializer
 	serializerCancel context.CancelFunc
 
-	// Listener watcher related state.
 	ldsResourceName     string
 	listenerWatcher     *listenerWatcher
 	listenerUpdateRecvd bool
 	currentListener     xdsresource.ListenerUpdate
 
-	// RouteConfiguration watcher related state.
 	rdsResourceName        string
 	routeConfigWatcher     *routeConfigWatcher
 	routeConfigUpdateRecvd bool
@@ -253,6 +257,8 @@ func (r *xdsResolver) Close() {
 // channel with that service config and the provided config selector.  Returns
 // false if an error occurs while generating the service config and the update
 // cannot be sent.
+//
+// Only executed in the context of a serializer callback.
 func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
 	// Delete entries from r.activeClusters with zero references;
 	// otherwise serviceConfigJSON will generate a config including
@@ -274,7 +280,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
 		r.cc.ReportError(err)
 		return false
 	}
-	r.logger.Infof("For Listener resource %q, generated service config: %v", r.ldsResourceName, pretty.FormatJSON(sc))
+	r.logger.Infof("For Listener resource %q and RouteConfiguration resource %q, generated service config: %v", r.ldsResourceName, r.rdsResourceName, pretty.FormatJSON(sc))
 
 	// Send the update to the ClientConn.
 	state := iresolver.SetConfigSelector(resolver.State{
@@ -382,17 +388,22 @@ type clusterInfo struct {
 }
 
 // Determines if the xdsResolver has received all required configuration from
-// the management server.
+// the management server, and a matching virtual host was found in the route
+// configuration.
 func (r *xdsResolver) resolutionComplete() bool {
 	return r.listenerUpdateRecvd && r.routeConfigUpdateRecvd && r.currentVirtualHost != nil
 }
 
-// onResolutionComplete performs the following actions when the resolver has
-// received sufficient configuration from the xDS client:
-//   - creates a new config selector
-//   - prunes active clusters and pushes a new service config on the channel
-//   - decrement references to the old config selector and assigns the new one
-//     as the current one.
+// onResolutionComplete performs the following actions when resolution is
+// complete, i.e Listener and RouteConfiguration resources have been received
+// from the management server and a matching virtual host is found in the
+// latter.
+//   - creates a new config selector (this involves incrementing references to
+//     clusters owned by this config selector).
+//   - stops the old config selector (this involves decrementing references to
+//     clusters owned by this config selector).
+//   - prunes active clusters and pushes a new service config to the channel.
+//   - updates the current config selector used by the resolver.
 //
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) onResolutionComplete() {
@@ -422,7 +433,6 @@ func (r *xdsResolver) onResolutionComplete() {
 func (r *xdsResolver) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdate) {
 	matchVh := xdsresource.FindBestMatchingVirtualHost(r.ldsResourceName, update.VirtualHosts)
 	if matchVh == nil {
-		// No matching virtual host found.
 		r.onError(fmt.Errorf("no matching virtual host found for %q", r.ldsResourceName))
 		return
 	}
@@ -472,7 +482,7 @@ func (r *xdsResolver) onListenerResourceUpdate(update xdsresource.ListenerUpdate
 }
 
 // onError propagates the error up to the channel. And since this is invoked
-// only for non-resource-not-found error, we don't have to update resolver state
+// only for non resource-not-found error, we don't have to update resolver state
 // and we can keep using the old config.
 func (r *xdsResolver) onError(err error) {
 	r.cc.ReportError(err)
@@ -480,7 +490,7 @@ func (r *xdsResolver) onError(err error) {
 
 // Contains common functionality to be executed when resources of either type
 // are removed.
-func (r *xdsResolver) onResourceNotFoundCommon() {
+func (r *xdsResolver) onResourceNotFound() {
 	// We cannot remove clusters from the service config that have ongoing RPCs.
 	// Instead, what we can do is to send an erroring (nil) config selector
 	// along with normal service config. This will ensure that new RPCs will
@@ -499,15 +509,13 @@ func (r *xdsResolver) onResourceNotFoundCommon() {
 func (r *xdsResolver) onListenerResourceNotFound() {
 	if r.routeConfigWatcher != nil {
 		r.routeConfigWatcher.stop()
-		r.routeConfigWatcher = nil
-		r.currentVirtualHost = nil
-		r.routeConfigUpdateRecvd = false
 	}
 	r.rdsResourceName = ""
 	r.currentVirtualHost = nil
 	r.routeConfigUpdateRecvd = false
+	r.routeConfigWatcher = nil
 
-	r.onResourceNotFoundCommon()
+	r.onResourceNotFound()
 }
 
 func (r *xdsResolver) onRouteConfigResourceUpdate(name string, update xdsresource.RouteConfigUpdate) {
@@ -523,7 +531,7 @@ func (r *xdsResolver) onRouteConfigResourceNotFound(name string) {
 	if r.rdsResourceName != name {
 		return
 	}
-	r.onResourceNotFoundCommon()
+	r.onResourceNotFound()
 }
 
 func (r *xdsResolver) onClusterRefDownToZero() {

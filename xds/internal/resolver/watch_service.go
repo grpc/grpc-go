@@ -26,20 +26,20 @@ import (
 )
 
 type listenerWatcher struct {
-	name   string
-	cancel func()
-	parent *xdsResolver
+	resourceName string
+	cancel       func()
+	parent       *xdsResolver
 }
 
-func newListenerWatcher(name string, parent *xdsResolver) *listenerWatcher {
-	lw := &listenerWatcher{name: name, parent: parent}
-	lw.cancel = xdsresource.WatchListener(parent.xdsClient, name, lw)
+func newListenerWatcher(resourceName string, parent *xdsResolver) *listenerWatcher {
+	lw := &listenerWatcher{resourceName: resourceName, parent: parent}
+	lw.cancel = xdsresource.WatchListener(parent.xdsClient, resourceName, lw)
 	return lw
 }
 
 func (l *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData) {
 	if l.parent.logger.V(2) {
-		l.parent.logger.Infof("Received update for Listener resource %q: %v", l.name, pretty.ToJSON(update))
+		l.parent.logger.Infof("Received update for Listener resource %q: %v", l.resourceName, pretty.ToJSON(update))
 	}
 
 	l.parent.serializer.Schedule(func(context.Context) {
@@ -49,7 +49,7 @@ func (l *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData) {
 
 func (l *listenerWatcher) OnError(err error) {
 	if l.parent.logger.V(2) {
-		l.parent.logger.Infof("Received error for Listener resource %q: %v", l.name, err)
+		l.parent.logger.Infof("Received error for Listener resource %q: %v", l.resourceName, err)
 	}
 
 	l.parent.serializer.Schedule(func(context.Context) {
@@ -59,7 +59,7 @@ func (l *listenerWatcher) OnError(err error) {
 
 func (l *listenerWatcher) OnResourceDoesNotExist() {
 	if l.parent.logger.V(2) {
-		l.parent.logger.Infof("Listener resource %q does not exist", l.name)
+		l.parent.logger.Infof("Received resource-not-found-error for Listener resource %q", l.resourceName)
 	}
 
 	l.parent.serializer.Schedule(func(context.Context) {
@@ -69,34 +69,34 @@ func (l *listenerWatcher) OnResourceDoesNotExist() {
 
 func (l *listenerWatcher) stop() {
 	l.cancel()
-	l.parent.logger.Infof("Canceling watch on Listener resource %q", l.name)
-}
-
-func newRouteConfigWatcher(name string, parent *xdsResolver) *routeConfigWatcher {
-	rw := &routeConfigWatcher{name: name, parent: parent}
-	rw.cancel = xdsresource.WatchRouteConfig(parent.xdsClient, name, rw)
-	return rw
+	l.parent.logger.Infof("Canceling watch on Listener resource %q", l.resourceName)
 }
 
 type routeConfigWatcher struct {
-	name   string
-	cancel func()
-	parent *xdsResolver
+	resourceName string
+	cancel       func()
+	parent       *xdsResolver
+}
+
+func newRouteConfigWatcher(resourceName string, parent *xdsResolver) *routeConfigWatcher {
+	rw := &routeConfigWatcher{resourceName: resourceName, parent: parent}
+	rw.cancel = xdsresource.WatchRouteConfig(parent.xdsClient, resourceName, rw)
+	return rw
 }
 
 func (r *routeConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData) {
 	if r.parent.logger.V(2) {
-		r.parent.logger.Infof("Received update for RouteConfiguration resource %q: %v", r.name, pretty.ToJSON(update))
+		r.parent.logger.Infof("Received update for RouteConfiguration resource %q: %v", r.resourceName, pretty.ToJSON(update))
 	}
 
 	r.parent.serializer.Schedule(func(context.Context) {
-		r.parent.onRouteConfigResourceUpdate(r.name, update.Resource)
+		r.parent.onRouteConfigResourceUpdate(r.resourceName, update.Resource)
 	})
 }
 
 func (r *routeConfigWatcher) OnError(err error) {
 	if r.parent.logger.V(2) {
-		r.parent.logger.Infof("Received error for RouteConfiguration resource %q: %v", r.name, err)
+		r.parent.logger.Infof("Received error for RouteConfiguration resource %q: %v", r.resourceName, err)
 	}
 
 	r.parent.serializer.Schedule(func(context.Context) {
@@ -106,15 +106,15 @@ func (r *routeConfigWatcher) OnError(err error) {
 
 func (r *routeConfigWatcher) OnResourceDoesNotExist() {
 	if r.parent.logger.V(2) {
-		r.parent.logger.Infof("RouteConfiguration resource %q does not exist", r.name)
+		r.parent.logger.Infof("Received error for RouteConfiguration resource %q", r.resourceName)
 	}
 
 	r.parent.serializer.Schedule(func(context.Context) {
-		r.parent.onRouteConfigResourceNotFound(r.name)
+		r.parent.onRouteConfigResourceNotFound(r.resourceName)
 	})
 }
 
 func (r *routeConfigWatcher) stop() {
 	r.cancel()
-	r.parent.logger.Infof("Canceling watch on RouteConfiguration resource %q", r.name)
+	r.parent.logger.Infof("Canceling watch on RouteConfiguration resource %q", r.resourceName)
 }
