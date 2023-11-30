@@ -250,7 +250,7 @@ func (m *Manager) ExitIdleMode() error {
 		// - Channel is in idle mode, and multiple new RPCs come in at the same
 		//   time, all of them notice a negative calls count in OnCallBegin and get
 		//   here. The first one to get the lock would got the channel to exit idle.
-		// - Channel is in idle mode, and the user calls Connect which calls
+		// - Channel is not in idle mode, and the user calls Connect which calls
 		//   m.ExitIdleMode.
 		//
 		// In any case, there is nothing to do here.

@@ -186,9 +186,8 @@ func newClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	cc.csMgr = newConnectivityStateManager(cc.ctx, cc.channelzID)
 	cc.pickerWrapper = newPickerWrapper(cc.dopts.copts.StatsHandlers)
 
+	cc.initIdleStateLocked() // Safe to call without the lock, since nothing else has a reference to cc.
 	cc.idlenessMgr = idle.NewManager((*idler)(cc), cc.dopts.idleTimeout)
-	cc.initIdleStateLocked()
-
 	return cc, nil
 }
 
@@ -610,7 +609,9 @@ type ClientConn struct {
 	mkp             keepalive.ClientParameters // May be updated upon receipt of a GoAway.
 	// firstResolveEvent is used to track whether the name resolver sent us at
 	// least one update. RPCs block on this event.  May be accessed without mu
-	// if we know we cannot enter idle mode while accessing it.
+	// if we know we cannot be asked to enter idle mode while accessing it (e.g.
+	// when the idle manager has already been closed, or if we are already
+	// entering idle mode).
 	firstResolveEvent *grpcsync.Event
 
 	lceMu               sync.Mutex // protects lastConnectionError

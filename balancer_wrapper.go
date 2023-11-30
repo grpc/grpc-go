@@ -51,11 +51,13 @@ type ccBalancerWrapper struct {
 	// read-only afterwards, and therefore can be accessed without a mutex.
 	cc               *ClientConn
 	opts             balancer.BuildOptions
-	balancer         *gracefulswitch.Balancer
 	serializer       *grpcsync.CallbackSerializer
 	serializerCancel context.CancelFunc
 
-	curBalancerName string // only accessed within the serializer
+	// The following fields are only accessed within the serializer or during
+	// initialization.
+	curBalancerName string
+	balancer        *gracefulswitch.Balancer
 
 	// The following field is protected by mu.  Caller must take cc.mu before
 	// taking mu.

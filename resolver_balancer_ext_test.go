@@ -35,11 +35,11 @@ import (
 )
 
 // TestResolverBalancerInteraction tests:
-// 1. resolver.Builder.Build()
-// 2. resolver.ClientConn.UpdateState()
-// 3. balancer.Balancer.UpdateClientConnState()
-// 4. balancer.ClientConn.ResolveNow()
-// 5. resolver.Resolver.ResolveNow()
+// 1. resolver.Builder.Build() ->
+// 2. resolver.ClientConn.UpdateState() ->
+// 3. balancer.Balancer.UpdateClientConnState() ->
+// 4. balancer.ClientConn.ResolveNow() ->
+// 5. resolver.Resolver.ResolveNow() ->
 func (s) TestResolverBalancerInteraction(t *testing.T) {
 	const name = "testrbi"
 	bf := stub.BalancerFuncs{
