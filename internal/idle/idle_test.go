@@ -319,7 +319,7 @@ type racyEnforcer struct {
 func (ri *racyEnforcer) ExitIdleMode() error {
 	// Set only on the initial ExitIdleMode
 	if ri.started == false {
-		if *ri.state != stateInitial {
+		if !atomic.CompareAndSwapInt32((*int32)(ri.state), int32(stateInitial), int32(stateExitedIdle)) {
 			return fmt.Errorf("idleness enforcer's first ExitIdleMode after EnterIdleMode")
 		}
 		ri.started = true
