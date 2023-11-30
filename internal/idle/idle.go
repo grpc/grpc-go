@@ -125,20 +125,8 @@ func (m *Manager) handleIdleTimeout() {
 		return
 	}
 
-	// This CAS operation is extremely likely to succeed given that there has
-	// been no activity since the last time we were here.  Setting the
-	// activeCallsCount to -math.MaxInt32 indicates to OnCallBegin() that the
-	// channel is either in idle mode or is trying to get there.
-	if !atomic.CompareAndSwapInt32(&m.activeCallsCount, 0, -math.MaxInt32) {
-		// This CAS operation can fail if an RPC started after we checked for
-		// activity at the top of this method, or one was ongoing from before
-		// the last time we were here. In both case, reset the timer and return.
-		m.resetIdleTimer(m.timeout)
-		return
-	}
-
-	// Now that we've set the active calls count to -math.MaxInt32, it's time to
-	// actually move to idle mode.
+	// Now that we've checked that there has been no activity, attempt to enter
+	// idle mode, which is very likely to succeed.
 	if m.tryEnterIdleMode() {
 		// Successfully entered idle mode. No timer needed until we exit idle.
 		return
@@ -147,7 +135,6 @@ func (m *Manager) handleIdleTimeout() {
 	// Failed to enter idle mode due to a concurrent RPC that kept the channel
 	// active, or because of an error from the channel. Undo the attempt to
 	// enter idle, and reset the timer to try again later.
-	atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
 	m.resetIdleTimer(m.timeout)
 }
 
@@ -159,43 +146,44 @@ func (m *Manager) handleIdleTimeout() {
 //
 // Holds idleMu which ensures mutual exclusion with exitIdleMode.
 func (m *Manager) tryEnterIdleMode() bool {
+	// Setting the activeCallsCount to -math.MaxInt32 indicates to OnCallBegin()
+	// that the channel is either in idle mode or is trying to get there.
+	if !atomic.CompareAndSwapInt32(&m.activeCallsCount, 0, -math.MaxInt32) {
+		// This CAS operation can fail if an RPC started after we checked for
+		// activity in the timer handler, or one was ongoing from before the
+		// last time the timer fired, or if a test is attempting to enter idle
+		// mode without checking.  In all cases, abort going into idle mode.
+		return false
+	}
+	// N.B. if we fail to enter idle mode after this, we must re-add
+	// math.MaxInt32 to m.activeCallsCount.
+
 	m.idleMu.Lock()
 	defer m.idleMu.Unlock()
 
 	if atomic.LoadInt32(&m.activeCallsCount) != -math.MaxInt32 {
 		// We raced and lost to a new RPC. Very rare, but stop entering idle.
+		atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
 		return false
 	}
 	if atomic.LoadInt32(&m.activeSinceLastTimerCheck) == 1 {
-		// An very short RPC could have come in (and also finished) after we
+		// A very short RPC could have come in (and also finished) after we
 		// checked for calls count and activity in handleIdleTimeout(), but
 		// before the CAS operation. So, we need to check for activity again.
+		atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
 		return false
 	}
 
-	// No new RPCs have come in since we last set the active calls count value
-	// -math.MaxInt32 in the timer callback. And since we have the lock, it is
-	// safe to enter idle mode now.
+	// No new RPCs have come in since we set the active calls count value to
+	// -math.MaxInt32. And since we have the lock, it is safe to enter idle mode
+	// unconditionally now.
 	m.enforcer.EnterIdleMode()
-
-	// Successfully entered idle mode.
 	m.actuallyIdle = true
 	return true
 }
 
 func (m *Manager) EnterIdleModeForTesting() {
-	if !atomic.CompareAndSwapInt32(&m.activeCallsCount, 0, -math.MaxInt32) {
-		// We have an active RPC and cannot enter idle mode.
-		return
-	}
-	if m.tryEnterIdleMode() {
-		// Successfully entered idle mode. No further action necessary.
-		return
-	}
-	// Failed to enter idle mode due to a concurrent RPC that kept the channel
-	// active, or because of an error from the channel. Undo the attempt to
-	// enter idle, and reset the timer to try again later.
-	atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
+	m.tryEnterIdleMode()
 }
 
 // OnCallBegin is invoked at the start of every RPC.
