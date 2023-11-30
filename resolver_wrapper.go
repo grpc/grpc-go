@@ -49,8 +49,8 @@ type ccResolverWrapper struct {
 	closed   bool
 }
 
-// newCCResolverWrapper uses the resolver.Builder to build a Resolver and
-// returns a ccResolverWrapper object which wraps the newly built resolver.
+// newCCResolverWrapper initializes the ccResolverWrapper.  It can only be used
+// after calling start, which builds the resolver.
 func newCCResolverWrapper(cc *ClientConn) *ccResolverWrapper {
 	ctx, cancel := context.WithCancel(cc.ctx)
 	return &ccResolverWrapper{
@@ -61,6 +61,9 @@ func newCCResolverWrapper(cc *ClientConn) *ccResolverWrapper {
 	}
 }
 
+// start builds the name resolver using the resolver.Builder in cc and returns
+// any error encountered.  It must always be the first operation performed on
+// any newly created ccResolverWrapper, except that close may be called instead.
 func (ccr *ccResolverWrapper) start() error {
 	errCh := make(chan error)
 	ccr.serializer.Schedule(func(ctx context.Context) {
