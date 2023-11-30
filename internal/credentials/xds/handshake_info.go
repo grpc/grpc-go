@@ -91,6 +91,8 @@ type HandshakeInfo struct {
 	requireClientCert bool                    // Only on server side.
 }
 
+// NewHandshakeInfo returns a new handshake info configured with the provided
+// options.
 func NewHandshakeInfo(rootProvider certprovider.Provider, identityProvider certprovider.Provider, sanMatchers []matcher.StringMatcher, requireClientCert bool) *HandshakeInfo {
 	return &HandshakeInfo{
 		rootProvider:      rootProvider,
