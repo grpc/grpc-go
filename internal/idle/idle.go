@@ -184,14 +184,6 @@ func (m *Manager) tryEnterIdleMode() bool {
 }
 
 func (m *Manager) EnterIdleModeForTesting() {
-	if m.timeout == 0 {
-		m.idleMu.Lock()
-		defer m.idleMu.Unlock()
-		if !m.actuallyIdle {
-			m.enforcer.EnterIdleMode()
-		}
-		return
-	}
 	if !atomic.CompareAndSwapInt32(&m.activeCallsCount, 0, -math.MaxInt32) {
 		// We have an active RPC and cannot enter idle mode.
 		return
@@ -211,11 +203,7 @@ func (m *Manager) OnCallBegin() error {
 	if m.isClosed() {
 		return nil
 	}
-	if m.timeout == 0 {
-		// When the manager is disabled (timeout==0), we just exit idle mode if
-		// needed and return.
-		return m.ExitIdleMode()
-	}
+
 	if atomic.AddInt32(&m.activeCallsCount, 1) > 0 {
 		// Channel is not idle now. Set the activity bit and allow the call.
 		atomic.StoreInt32(&m.activeSinceLastTimerCheck, 1)
@@ -272,7 +260,7 @@ func (m *Manager) ExitIdleMode() error {
 
 // OnCallEnd is invoked at the end of every RPC.
 func (m *Manager) OnCallEnd() {
-	if m.timeout == 0 || m.isClosed() {
+	if m.isClosed() {
 		return
 	}
 
