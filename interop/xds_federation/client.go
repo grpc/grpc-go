@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"strings"
 	"sync"
@@ -115,10 +116,11 @@ func main() {
 	// run soak tests with the different clients
 	logger.Infof("Clients running with test case %q", *testCase)
 	var wg sync.WaitGroup
+	ctx := context.Background()
 	for i := range clients {
 		wg.Add(1)
 		go func(c clientConfig) {
-			interop.DoSoakTest(c.tc, c.uri, c.opts, resetChannel, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, time.Now().Add(time.Duration(*soakOverallTimeoutSeconds)*time.Second))
+			interop.DoSoakTest(c.tc, ctx, c.uri, c.opts, resetChannel, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, time.Now().Add(time.Duration(*soakOverallTimeoutSeconds)*time.Second))
 			logger.Infof("%s test done for server: %s", *testCase, c.uri)
 			wg.Done()
 		}(clients[i])

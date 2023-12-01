@@ -214,32 +214,33 @@ func startServer(server *server, port int) {
 func performRPCs(gauge *gauge, conn *grpc.ClientConn, selector *weightedRandomTestSelector, stop <-chan bool) {
 	client := testgrpc.NewTestServiceClient(conn)
 	var numCalls int64
+	ctx := context.Background()
 	startTime := time.Now()
 	for {
 		test := selector.getNextTest()
 		switch test {
 		case "empty_unary":
-			interop.DoEmptyUnaryCall(client)
+			interop.DoEmptyUnaryCall(client, ctx)
 		case "large_unary":
-			interop.DoLargeUnaryCall(client)
+			interop.DoLargeUnaryCall(client, ctx)
 		case "client_streaming":
-			interop.DoClientStreaming(client)
+			interop.DoClientStreaming(client, ctx)
 		case "server_streaming":
-			interop.DoServerStreaming(client)
+			interop.DoServerStreaming(client, ctx)
 		case "ping_pong":
-			interop.DoPingPong(client)
+			interop.DoPingPong(client, ctx)
 		case "empty_stream":
-			interop.DoEmptyStream(client)
+			interop.DoEmptyStream(client, ctx)
 		case "timeout_on_sleeping_server":
-			interop.DoTimeoutOnSleepingServer(client)
+			interop.DoTimeoutOnSleepingServer(client, ctx)
 		case "cancel_after_begin":
-			interop.DoCancelAfterBegin(client)
+			interop.DoCancelAfterBegin(client, ctx)
 		case "cancel_after_first_response":
-			interop.DoCancelAfterFirstResponse(client)
+			interop.DoCancelAfterFirstResponse(client, ctx)
 		case "status_code_and_message":
-			interop.DoStatusCodeAndMessage(client)
+			interop.DoStatusCodeAndMessage(client, ctx)
 		case "custom_metadata":
-			interop.DoCustomMetadata(client)
+			interop.DoCustomMetadata(client, ctx)
 		}
 		numCalls++
 		defer func() { atomic.AddInt64(&totalNumCalls, numCalls) }()
