@@ -341,6 +341,9 @@ func (cc *ClientConn) initIdleStateLocked() {
 	cc.resolverWrapper = newCCResolverWrapper(cc)
 	cc.balancerWrapper = newCCBalancerWrapper(cc)
 	cc.firstResolveEvent = grpcsync.NewEvent()
+	// cc.conns == nil is a proxy for the ClientConn being closed. So, instead
+	// of setting it to nil here, we recreate the map. This also means that we
+	// don't have to do this when exiting idle mode.
 	cc.conns = make(map[*addrConn]struct{})
 }
 
@@ -355,9 +358,6 @@ func (cc *ClientConn) enterIdleMode() {
 		return
 	}
 
-	// cc.conns == nil is a proxy for the ClientConn being closed. So, instead
-	// of setting it to nil here, we recreate the map. This also means that we
-	// don't have to do this when exiting idle mode.
 	conns := cc.conns
 
 	rWrapper := cc.resolverWrapper
@@ -658,7 +658,7 @@ func (cc *ClientConn) GetState() connectivity.State {
 // release.
 func (cc *ClientConn) Connect() {
 	if err := cc.idlenessMgr.ExitIdleMode(); err != nil {
-		cc.addTraceEvent(fmt.Sprintf("error exiting idle mode: %v", err))
+		cc.addTraceEvent(err.Error())
 		return
 	}
 	// If the ClientConn was not in idle mode, we need to call ExitIdle on the

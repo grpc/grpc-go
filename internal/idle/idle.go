@@ -234,7 +234,7 @@ func (m *Manager) ExitIdleMode() error {
 	}
 
 	if err := m.enforcer.ExitIdleMode(); err != nil {
-		return fmt.Errorf("channel failed to exit idle mode: %w", err)
+		return fmt.Errorf("failed to exit idle mode: %w", err)
 	}
 
 	// Undo the idle entry process. This also respects any new RPC attempts.

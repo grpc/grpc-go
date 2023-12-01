@@ -92,6 +92,9 @@ func (ccr *ccResolverWrapper) resolveNow(o resolver.ResolveNowOptions) {
 	})
 }
 
+// close initiates async shutdown of the wrapper.  To determine the wrapper has
+// finished shutting down, the channel should block on ccr.serializer.Done()
+// without cc.mu held.
 func (ccr *ccResolverWrapper) close() {
 	channelz.Info(logger, ccr.cc.channelzID, "Closing the name resolver")
 	ccr.mu.Lock()

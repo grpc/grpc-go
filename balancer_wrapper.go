@@ -182,7 +182,13 @@ func (ccb *ccBalancerWrapper) buildLoadBalancingPolicy(name string) {
 	ccb.curBalancerName = builder.Name()
 }
 
+// close initiates async shutdown of the wrapper.  To determine the wrapper has
+// finished shutting down, the channel should block on ccb.serializer.Done()
+// without cc.mu held.
 func (ccb *ccBalancerWrapper) close() {
+	ccb.mu.Lock()
+	ccb.closed = true
+	ccb.mu.Unlock()
 	channelz.Info(logger, ccb.cc.channelzID, "ccBalancerWrapper: closing")
 	ccb.serializer.Schedule(func(context.Context) {
 		if ccb.balancer == nil {
