@@ -29,9 +29,11 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 )
@@ -165,6 +167,98 @@ func (s) TestEnterIdleDuringResolverUpdateState(t *testing.T) {
 		})
 		enterIdle(cc)
 		p.Stop()
+		cc.Connect()
+	}
+}
+
+// TestEnterIdleDuringBalancerUpdateState tests calling UpdateState at the same
+// time as the balancer being closed while the channel enters idle mode.
+func (s) TestEnterIdleDuringBalancerUpdateState(t *testing.T) {
+	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
+	const name = "testeidbus"
+
+	// Create a balancer that calls UpdateState once asynchronously, attempting
+	// to make the channel appear ready even after entering idle.
+	bf := stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			go func() {
+				bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.Ready})
+			}()
+			return nil
+		},
+	}
+	stub.Register(name, bf)
+
+	rb := manual.NewBuilderWithScheme(name)
+	rb.BuildCallback = func(_ resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) {
+		cc.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "test"}}})
+	}
+	resolver.Register(rb)
+
+	cc, err := grpc.Dial(
+		name+":///",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"`+name+`":{}}]}`))
+	if err != nil {
+		t.Fatalf("grpc.Dial error: %v", err)
+	}
+	defer cc.Close()
+
+	// Enter/exit idle mode repeatedly.
+	for i := 0; i < 2000; i++ {
+		enterIdle(cc)
+		if got, want := cc.GetState(), connectivity.Idle; got != want {
+			t.Fatalf("cc state = %v; want %v", got, want)
+		}
+		cc.Connect()
+	}
+}
+
+// TestEnterIdleDuringBalancerNewSubConn tests calling NewSubConn at the same
+// time as the balancer being closed while the channel enters idle mode.
+func (s) TestEnterIdleDuringBalancerNewSubConn(t *testing.T) {
+	channelz.TurnOn()
+	defer internal.ChannelzTurnOffForTesting()
+	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
+	const name = "testeidbnsc"
+
+	// Create a balancer that calls NewSubConn once asynchronously, attempting
+	// to create a subchannel after going idle.
+	bf := stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			go func() {
+				bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "test"}}, balancer.NewSubConnOptions{})
+			}()
+			return nil
+		},
+	}
+	stub.Register(name, bf)
+
+	rb := manual.NewBuilderWithScheme(name)
+	rb.BuildCallback = func(_ resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) {
+		cc.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "test"}}})
+	}
+	resolver.Register(rb)
+
+	cc, err := grpc.Dial(
+		name+":///",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"`+name+`":{}}]}`))
+	if err != nil {
+		t.Fatalf("grpc.Dial error: %v", err)
+	}
+	defer cc.Close()
+
+	// Enter/exit idle mode repeatedly.
+	for i := 0; i < 2000; i++ {
+		enterIdle(cc)
+		tcs, _ := channelz.GetTopChannels(0, 0)
+		if len(tcs) != 1 {
+			t.Fatalf("Found channels: %v; expected 1 entry", tcs)
+		}
+		if len(tcs[0].SubChans) != 0 {
+			t.Fatalf("Found subchannels: %v; expected 0 entries", tcs[0].SubChans)
+		}
 		cc.Connect()
 	}
 }
