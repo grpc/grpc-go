@@ -58,13 +58,14 @@ func main() {
 	}
 	defer conn.Close()
 	tc := testgrpc.NewTestServiceClient(conn)
+	ctx := context.Background()
 	for i := 0; i < *numTimes; i++ {
 		if *testCase == "ping_pong" {
-			interop.DoPingPong(tc)
+			interop.DoPingPong(tc, ctx)
 		} else if *testCase == "large_unary" {
-			interop.DoLargeUnaryCall(tc)
+			interop.DoLargeUnaryCall(tc, ctx)
 		} else if *testCase == "custom_metadata" {
-			interop.DoCustomMetadata(tc)
+			interop.DoCustomMetadata(tc, ctx)
 		} else {
 			log.Fatalf("Invalid test case: %s", *testCase)
 		}
