@@ -1980,13 +1980,14 @@ func (cc *ClientConn) determineAuthority() error {
 		return fmt.Errorf("ClientConn's authority from transport creds %q and dial option %q don't match", authorityFromCreds, authorityFromDialOption)
 	}
 
+	endpoint := cc.parsedTarget.Endpoint()
 	if authorityFromDialOption != "" {
 		cc.authority = authorityFromDialOption
 	} else if authorityFromCreds != "" {
 		cc.authority = authorityFromCreds
 	} else if auth, ok := cc.resolverBuilder.(resolver.AuthorityOverrider); ok {
 		cc.authority = auth.OverrideAuthority(cc.parsedTarget)
-	} else if endpoint := cc.parsedTarget.Endpoint(); strings.HasPrefix(endpoint, ":") {
+	} else if strings.HasPrefix(endpoint, ":") {
 		cc.authority = "localhost" + endpoint
 	} else {
 		cc.authority = encodeAuthority(endpoint)
