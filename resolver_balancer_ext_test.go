@@ -21,6 +21,8 @@ package grpc_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -118,5 +120,51 @@ func (s) TestResolverBuildFailure(t *testing.T) {
 	defer cancel()
 	if err := cc.Invoke(ctx, "/a/b", nil, nil); err == nil || !strings.Contains(err.Error(), errStr) {
 		t.Fatalf("Invoke = %v; want %v", err, errStr)
+	}
+}
+
+// TestEnterIdleDuringResolverUpdateState tests a scenario that used to deadlock
+// while calling UpdateState at the same time as the resolver being closed while
+// the channel enters idle mode.
+func (s) TestEnterIdleDuringResolverUpdateState(t *testing.T) {
+	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
+	const name = "testeidrus"
+
+	// Create a manual resolver that spams UpdateState calls until it is closed.
+	rb := manual.NewBuilderWithScheme(name)
+	var cancel context.CancelFunc
+	rb.BuildCallback = func(_ resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) {
+		var ctx context.Context
+		ctx, cancel = context.WithCancel(context.Background())
+		go func() {
+			for ctx.Err() == nil {
+				cc.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "test"}}})
+			}
+		}()
+	}
+	rb.CloseCallback = func() {
+		cancel()
+	}
+	resolver.Register(rb)
+
+	cc, err := grpc.Dial(name+":///", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.Dial error: %v", err)
+	}
+	defer cc.Close()
+
+	// Enter/exit idle mode repeatedly.
+	for i := 0; i < 2000; i++ {
+		// Start a timer so we panic out of the deadlock and can see all the
+		// stack traces to debug the problem.
+		p := time.AfterFunc(time.Second, func() {
+			buf := make([]byte, 8192)
+			buf = buf[0:runtime.Stack(buf, true)]
+			t.Error("Timed out waiting for enterIdle")
+			panic(fmt.Sprint("Stack trace:\n", string(buf)))
+		})
+		enterIdle(cc)
+		p.Stop()
+		cc.Connect()
 	}
 }
