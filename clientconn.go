@@ -1224,7 +1224,7 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	} else {
 		channelz.Infof(logger, ac.channelzID, "Subchannel Connectivity change to %v, last error: %s", s, lastErr)
 	}
-	ac.acbw.ccb.updateSubConnState(ac.acbw, s, lastErr)
+	ac.acbw.updateState(s, lastErr)
 }
 
 // adjustParams updates parameters used to create transports upon

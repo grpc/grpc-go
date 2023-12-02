@@ -109,20 +109,6 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 	return <-errCh
 }
 
-// updateSubConnState is invoked by grpc to push a subConn state update to the
-// underlying balancer.
-func (ccb *ccBalancerWrapper) updateSubConnState(sc balancer.SubConn, s connectivity.State, err error) {
-	ccb.serializer.Schedule(func(ctx context.Context) {
-		if ctx.Err() != nil || ccb.balancer == nil {
-			return
-		}
-		// Even though it is optional for balancers, gracefulswitch ensures
-		// opts.StateListener is set, so this cannot ever be nil.
-		// TODO: delete this comment when UpdateSubConnState is removed.
-		sc.(*acBalancerWrapper).stateListener(balancer.SubConnState{ConnectivityState: s, ConnectionError: err})
-	})
-}
-
 // resolverError is invoked by grpc to push a resolver error to the underlying
 // balancer.  The call to the balancer is executed from the serializer.
 func (ccb *ccBalancerWrapper) resolverError(err error) {
@@ -301,6 +287,20 @@ type acBalancerWrapper struct {
 
 	mu        sync.Mutex
 	producers map[balancer.ProducerBuilder]*refCountedProducer
+}
+
+// updateState is invoked by grpc to push a subConn state update to the
+// underlying balancer.
+func (acbw *acBalancerWrapper) updateState(s connectivity.State, err error) {
+	acbw.ccb.serializer.Schedule(func(ctx context.Context) {
+		if ctx.Err() != nil || acbw.ccb.balancer == nil {
+			return
+		}
+		// Even though it is optional for balancers, gracefulswitch ensures
+		// opts.StateListener is set, so this cannot ever be nil.
+		// TODO: delete this comment when UpdateSubConnState is removed.
+		acbw.stateListener(balancer.SubConnState{ConnectivityState: s, ConnectionError: err})
+	})
 }
 
 func (acbw *acBalancerWrapper) String() string {
