@@ -217,7 +217,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 	ccb.mu.Lock()
 	if ccb.closed {
 		ccb.mu.Unlock()
-		return nil, errConnIdling
+		return nil, fmt.Errorf("balancer is being closed; no new SubConns allowed.")
 	}
 	ccb.mu.Unlock()
 

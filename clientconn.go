@@ -806,12 +806,6 @@ func (cc *ClientConn) applyFailingLBLocked(sc *serviceconfig.ParseResult) {
 	cc.csMgr.updateState(connectivity.TransientFailure)
 }
 
-func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State, err error) {
-	cc.mu.Lock()
-	cc.balancerWrapper.updateSubConnState(sc, s, err)
-	cc.mu.Unlock()
-}
-
 // Makes a copy of the input addresses slice and clears out the balancer
 // attributes field. Addresses are passed during subconn creation and address
 // update operations. In both cases, we will clear the balancer attributes by
@@ -1192,7 +1186,7 @@ type addrConn struct {
 
 	cc     *ClientConn
 	dopts  dialOptions
-	acbw   balancer.SubConn
+	acbw   *acBalancerWrapper
 	scopts balancer.NewSubConnOptions
 
 	// transport is set when there's a viable transport (note: ac state may not be READY as LB channel
@@ -1230,7 +1224,7 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	} else {
 		channelz.Infof(logger, ac.channelzID, "Subchannel Connectivity change to %v, last error: %s", s, lastErr)
 	}
-	ac.cc.handleSubConnStateChange(ac.acbw, s, lastErr)
+	ac.acbw.ccb.updateSubConnState(ac.acbw, s, lastErr)
 }
 
 // adjustParams updates parameters used to create transports upon
