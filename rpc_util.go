@@ -640,12 +640,21 @@ func encode(c baseCodec, msg any) ([]byte, error) {
 	return b, nil
 }
 
-// compress returns the input bytes compressed by compressor or cp.  If both
-// compressors are nil, returns nil.
+const (
+	// minCompressionLength is the number of bytes that the gzip algorithm "compresses" an empty message to
+	minCompressionLength = 21
+)
+
+// compress returns the input bytes compressed by compressor or cp. Only
+// compresses the bytes if compression is likely to reduce the size of the
+// message, otherwise returns nil. If both compressors are nil, returns nil.
 //
 // TODO(dfawley): eliminate cp parameter by wrapping Compressor in an encoding.Compressor.
 func compress(in []byte, cp Compressor, compressor encoding.Compressor) ([]byte, error) {
 	if compressor == nil && cp == nil {
+		return nil, nil
+	}
+	if len(in) <= minCompressionLength {
 		return nil, nil
 	}
 	wrapErr := func(err error) error {
