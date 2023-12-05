@@ -179,39 +179,16 @@ func RegisterServer(ref string) *Server {
 	return svr
 }
 
-// RegisterListenSocket registers the given listen socket s in channelz database
-// with ref as its reference name, and add it to the child list of its parent
-// (identified by pid). It returns the unique channelz tracking id assigned to
-// this listen socket.
-//
-// If channelz is not turned ON, the channelz database is not mutated.
-func RegisterListenSocket(parent *Server, refName string, lis any) *Socket {
-	id := IDGen.genID()
-
-	ls := &Socket{
-		SocketType:    SocketTypeListen,
-		ID:            id,
-		RefName:       refName,
-		Parent:        parent,
-		SocketOptions: GetSocketOption(lis),
-	}
-	if IsOn() {
-		db.addListenSocket(id, ls, ls.getParentID())
-	}
-	return ls
-}
-
-// RegisterNormalSocket registers the given normal socket s in channelz database
+// RegisterSocket registers the given normal socket s in channelz database
 // with ref as its reference name, and adds it to the child list of its parent
-// (identified by pid). It returns the unique channelz tracking id assigned to
-// this normal socket.
+// (identified by skt.Parent, which must be set). It returns the unique channelz
+// tracking id assigned to this normal socket.
 //
 // If channelz is not turned ON, the channelz database is not mutated.
-func RegisterNormalSocket(skt *Socket) *Socket {
+func RegisterSocket(skt *Socket) *Socket {
 	skt.ID = IDGen.genID()
-	skt.SocketType = SocketTypeNormal
 	if IsOn() {
-		db.addNormalSocket(skt.ID, skt, skt.Parent)
+		db.addSocket(skt)
 	}
 	return skt
 }

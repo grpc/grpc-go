@@ -73,13 +73,6 @@ func (s *Server) ListenSockets() map[int64]string {
 	return copyMap(s.listenSockets)
 }
 
-// NormalSockets returns the connected sockets for s.
-func (s *Server) NormalSockets() map[int64]string {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	return copyMap(s.sockets)
-}
-
 // String returns a printable description of s.
 func (s *Server) String() string {
 	return fmt.Sprintf("Server #%d", s.ID)

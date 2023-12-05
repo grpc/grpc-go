@@ -850,7 +850,7 @@ func (s *Server) Serve(lis net.Listener) error {
 
 	ls := &listenSocket{
 		Listener: lis,
-		channelz: channelz.RegisterListenSocket(s.channelz, lis.Addr().String(), lis),
+		channelz: channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeListen, Parent: s.channelz, RefName: lis.Addr().String(), SocketOptions: channelz.GetSocketOption(lis)}),
 	}
 	s.lis[ls] = true
 

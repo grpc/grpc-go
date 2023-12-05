@@ -267,7 +267,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	if au, ok := authInfo.(credentials.ChannelzSecurityInfo); ok {
 		czSecurity = au.GetSecurityValue()
 	}
-	t.channelz = channelz.RegisterNormalSocket(
+	t.channelz = channelz.RegisterSocket(
 		&channelz.Socket{
 			SocketType:       channelz.SocketTypeNormal,
 			Parent:           config.ChannelzParent,

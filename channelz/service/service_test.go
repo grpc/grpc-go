@@ -251,9 +251,9 @@ func (s) TestGetServerSockets(t *testing.T) {
 	defer channelz.RemoveEntry(svrID.ID)
 	refNames := []string{"listen socket 1", "normal socket 1", "normal socket 2"}
 	ids := make([]int64, 3)
-	ids[0] = channelz.RegisterListenSocket(svrID, refNames[0], nil).ID
-	ids[1] = channelz.RegisterNormalSocket(&channelz.Socket{Parent: svrID, RefName: refNames[1]}).ID
-	ids[2] = channelz.RegisterNormalSocket(&channelz.Socket{Parent: svrID, RefName: refNames[2]}).ID
+	ids[0] = channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeListen, Parent: svrID, RefName: refNames[0]}).ID
+	ids[1] = channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, Parent: svrID, RefName: refNames[1]}).ID
+	ids[2] = channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, Parent: svrID, RefName: refNames[2]}).ID
 	for _, id := range ids {
 		defer channelz.RemoveEntry(id)
 	}
@@ -274,7 +274,7 @@ func (s) TestGetServerSockets(t *testing.T) {
 	}
 
 	for i := 0; i < 50; i++ {
-		id := channelz.RegisterNormalSocket(&channelz.Socket{Parent: svrID})
+		id := channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, Parent: svrID})
 		defer channelz.RemoveEntry(id.ID)
 	}
 	resp, _ = svr.GetServerSockets(ctx, &channelzpb.GetServerSocketsRequest{ServerId: svrID.ID, StartSocketId: 0})
@@ -290,9 +290,9 @@ func (s) TestGetServerSocketsNonZeroStartID(t *testing.T) {
 	defer channelz.RemoveEntry(svrID.ID)
 	refNames := []string{"listen socket 1", "normal socket 1", "normal socket 2"}
 	ids := make([]int64, 3)
-	ids[0] = channelz.RegisterListenSocket(svrID, refNames[0], nil).ID
-	ids[1] = channelz.RegisterNormalSocket(&channelz.Socket{Parent: svrID, RefName: refNames[1]}).ID
-	ids[2] = channelz.RegisterNormalSocket(&channelz.Socket{Parent: svrID, RefName: refNames[2]}).ID
+	ids[0] = channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeListen, Parent: svrID, RefName: refNames[0]}).ID
+	ids[1] = channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, Parent: svrID, RefName: refNames[1]}).ID
+	ids[2] = channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, Parent: svrID, RefName: refNames[2]}).ID
 	for _, id := range ids {
 		defer channelz.RemoveEntry(id)
 	}
@@ -442,9 +442,9 @@ func (s) TestGetSubChannel(t *testing.T) {
 			Severity: channelz.CtInfo,
 		},
 	})
-	skt1 := channelz.RegisterNormalSocket(&channelz.Socket{Parent: subChan, RefName: refNames[2]})
+	skt1 := channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, Parent: subChan, RefName: refNames[2]})
 	defer channelz.RemoveEntry(skt1.ID)
-	skt2 := channelz.RegisterNormalSocket(&channelz.Socket{Parent: subChan, RefName: refNames[3]})
+	skt2 := channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, Parent: subChan, RefName: refNames[3]})
 	defer channelz.RemoveEntry(skt2.ID)
 	channelz.AddTraceEvent(logger, subChan, 0, &channelz.TraceEventDesc{
 		Desc:     subchanConnectivityChange,
@@ -636,7 +636,7 @@ func (s) TestGetSocket(t *testing.T) {
 	for i, s := range ss {
 		s.Parent = svrID
 		s.RefName = strconv.Itoa(i)
-		skts[i] = channelz.RegisterNormalSocket(s)
+		skts[i] = channelz.RegisterSocket(s)
 		defer channelz.RemoveEntry(skts[i].ID)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

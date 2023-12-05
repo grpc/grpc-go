@@ -445,8 +445,8 @@ func (s) TestCZRecusivelyDeletionOfEntry(t *testing.T) {
 	topChan := channelz.RegisterChannel(nil, "")
 	subChan1 := channelz.RegisterSubChannel(topChan.ID, "")
 	subChan2 := channelz.RegisterSubChannel(topChan.ID, "")
-	skt1 := channelz.RegisterNormalSocket(&channelz.Socket{Parent: subChan1})
-	skt2 := channelz.RegisterNormalSocket(&channelz.Socket{Parent: subChan1})
+	skt1 := channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, Parent: subChan1})
+	skt2 := channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, Parent: subChan1})
 
 	tcs, _ := channelz.GetTopChannels(0, 0)
 	if tcs == nil || len(tcs) != 1 {

@@ -53,9 +53,8 @@ type channelMap struct {
 	topLevelChannels map[int64]struct{}
 	channels         map[int64]*Channel
 	subChannels      map[int64]*SubChannel
-	normalSockets    map[int64]*Socket
+	sockets          map[int64]*Socket
 	servers          map[int64]*Server
-	listenSockets    map[int64]*Socket
 }
 
 func newChannelMap() *channelMap {
@@ -63,9 +62,8 @@ func newChannelMap() *channelMap {
 		topLevelChannels: make(map[int64]struct{}),
 		channels:         make(map[int64]*Channel),
 		subChannels:      make(map[int64]*SubChannel),
-		normalSockets:    make(map[int64]*Socket),
+		sockets:          make(map[int64]*Socket),
 		servers:          make(map[int64]*Server),
-		listenSockets:    make(map[int64]*Socket),
 	}
 }
 
@@ -102,27 +100,15 @@ func (c *channelMap) addSubChannel(id int64, sc *SubChannel, pid int64) {
 	}
 }
 
-func (c *channelMap) addListenSocket(id int64, ls *Socket, pid int64) {
+func (c *channelMap) addSocket(s *Socket) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	ls.cm = c
-	c.listenSockets[id] = ls
-	if p := c.servers[pid]; p != nil {
-		p.addChild(id, ls)
-	} else {
-		logger.Infof("listen socket %d references invalid parent ID %d", id, pid)
+	s.cm = c
+	c.sockets[s.ID] = s
+	if s.Parent == nil {
+		logger.Infof("normal socket %d has no parent", s.ID)
 	}
-}
-
-func (c *channelMap) addNormalSocket(id int64, ns *Socket, parent Entity) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	ns.cm = c
-	c.normalSockets[id] = ns
-	if parent == nil {
-		logger.Infof("normal socket %d has no parent", id)
-	}
-	parent.(entry).addChild(id, ns)
+	s.Parent.(entry).addChild(s.ID, s)
 }
 
 // removeEntry triggers the removal of an entry, which may not indeed delete the
@@ -165,10 +151,7 @@ func (c *channelMap) findEntry(id int64) entry {
 	if v, ok := c.servers[id]; ok {
 		return v
 	}
-	if v, ok := c.listenSockets[id]; ok {
-		return v
-	}
-	if v, ok := c.normalSockets[id]; ok {
+	if v, ok := c.sockets[id]; ok {
 		return v
 	}
 	return &dummyEntry{idNotFound: id}
@@ -180,8 +163,8 @@ func (c *channelMap) findEntry(id int64) entry {
 // caller must check this entry is ready to be deleted, i.e removeEntry() has
 // been called on it, and no children still exist.
 func (c *channelMap) deleteEntry(id int64) entry {
-	if v, ok := c.normalSockets[id]; ok {
-		delete(c.normalSockets, id)
+	if v, ok := c.sockets[id]; ok {
+		delete(c.sockets, id)
 		return v
 	}
 	if v, ok := c.subChannels[id]; ok {
@@ -191,10 +174,6 @@ func (c *channelMap) deleteEntry(id int64) entry {
 	if v, ok := c.channels[id]; ok {
 		delete(c.channels, id)
 		delete(c.topLevelChannels, id)
-		return v
-	}
-	if v, ok := c.listenSockets[id]; ok {
-		delete(c.listenSockets, id)
 		return v
 	}
 	if v, ok := c.servers[id]; ok {
@@ -336,7 +315,7 @@ func (c *channelMap) getServerSockets(id int64, startID int64, maxResults int) (
 			end = false
 			break
 		}
-		if ns, ok := c.normalSockets[v]; ok {
+		if ns, ok := c.sockets[v]; ok {
 			sks = append(sks, ns)
 		}
 	}
@@ -358,10 +337,7 @@ func (c *channelMap) getSubChannel(id int64) *SubChannel {
 func (c *channelMap) getSocket(id int64) *Socket {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if ls, ok := c.listenSockets[id]; ok {
-		return ls
-	}
-	return c.normalSockets[id]
+	return c.sockets[id]
 }
 
 func (c *channelMap) getServer(id int64) *Server {
