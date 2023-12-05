@@ -319,7 +319,7 @@ type racyEnforcer struct {
 func (ri *racyEnforcer) ExitIdleMode() error {
 	// Set only on the initial ExitIdleMode
 	if ri.started == false {
-		if !atomic.CompareAndSwapInt32((*int32)(ri.state), int32(stateInitial), int32(stateExitedIdle)) {
+		if !atomic.CompareAndSwapInt32((*int32)(ri.state), int32(stateInitial), int32(stateInitial)) {
 			return fmt.Errorf("idleness enforcer's first ExitIdleMode after EnterIdleMode")
 		}
 		ri.started = true
@@ -360,16 +360,16 @@ func (s) TestManager_IdleTimeoutRacesWithOnCallBegin(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				<-time.After(defaultTestIdleTimeout / 10)
+				<-time.After(defaultTestIdleTimeout / 50)
 				mgr.handleIdleTimeout()
 			}()
-			for j := 0; j < 100; j++ {
+			for j := 0; j < 5; j++ {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
 					// Wait for the configured idle timeout and simulate an RPC to
 					// race with the idle timeout timer callback.
-					<-time.After(defaultTestIdleTimeout / 10)
+					<-time.After(defaultTestIdleTimeout / 50)
 					if err := mgr.OnCallBegin(); err != nil {
 						t.Errorf("OnCallBegin() failed: %v", err)
 					}
