@@ -182,10 +182,12 @@ var (
 	GRPCResolverSchemeExtraMetadata string = "xds"
 
 	// EnterIdleModeForTesting gets the ClientConn to enter IDLE mode.
-	EnterIdleModeForTesting any // func(*grpc.ClientConn) error
+	EnterIdleModeForTesting any // func(*grpc.ClientConn)
 
 	// ExitIdleModeForTesting gets the ClientConn to exit IDLE mode.
 	ExitIdleModeForTesting any // func(*grpc.ClientConn) error
+
+	ChannelzTurnOffForTesting func()
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.
