@@ -18,7 +18,6 @@
 package internal
 
 import (
-	"context"
 	"net"
 	"syscall"
 	"time"
@@ -42,7 +41,7 @@ func NetDialerWithTCPKeepalive() *net.Dialer {
 		// disabling the overriding of TCP keepalive parameters by setting the
 		// KeepAlive field to a negative value above, results in OS defaults for
 		// the TCP keealive interval and time parameters.
-		ControlContext: func(_ context.Context, _, _ string, c syscall.RawConn) error {
+		Control: func(_, _ string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
 				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_KEEPALIVE, 1)
 			})

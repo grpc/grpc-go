@@ -405,8 +405,8 @@ func WithTimeout(d time.Duration) DialOption {
 // defaults for TCP keepalive time and interval to 15s. To enable TCP keepalive
 // with OS defaults for keepalive time and interval, use a net.Dialer that sets
 // the KeepAlive field to a negative value, and sets the SO_KEEPALIVE socket
-// option to true from the Control or ControlContext field. For a concrete
-// example of how to do this, see internal.NetDialerWithTCPKeepalive().
+// option to true from the Control field. For a concrete example of how to do
+// this, see internal.NetDialerWithTCPKeepalive().
 //
 // For more information, please see [issue 23459] in the Go github repo.
 //
