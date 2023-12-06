@@ -401,10 +401,12 @@ func WithTimeout(d time.Duration) DialOption {
 // returned by f, gRPC checks the error's Temporary() method to decide if it
 // should try to reconnect to the network address.
 //
-// Note: As of Go 1.21, the standard library overrides the OS defaults for
-// TCP keepalive time and interval to 15s.
-// To retain OS defaults, use a net.Dialer with the KeepAlive field set to a
-// negative value.
+// Note: As of Go 1.21, the standard library overrides the OS defaults for TCP
+// keepalive time and interval to 15s. To enable TCP keepalive with OS defaults
+// for keepalive time and interval, use a net.Dialer that sets the KeepAlive
+// field set to a negative value, and sets the SO_KEEPALIVE socket option to
+// true from the Control or ControlContext field. For a concrete example of how
+// to do this, see internal.NetDialerWithTCPKeepalive().
 //
 // For more information, please see [issue 23459] in the Go github repo.
 //
