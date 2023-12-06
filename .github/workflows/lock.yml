@@ -15,8 +15,8 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: dessant/lock-threads@v2
+      - uses: dessant/lock-threads@d42e5f49803f3c4e14ffee0378e31481265dda22 # v5.0.0
         with:
           github-token: ${{ github.token }}
-          issue-lock-inactive-days: 180
-          pr-lock-inactive-days: 180
+          issue-inactive-days: 180
+          pr-inactive-days: 180
