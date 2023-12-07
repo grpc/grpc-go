@@ -170,6 +170,206 @@ func (x) TestAllExtensionNumbersForTypeName(t *testing.T) {
 	}
 }
 
+func (x) TestFileDescWithDependencies(t *testing.T) {
+	depFile, err := protodesc.NewFile(
+		&descriptorpb.FileDescriptorProto{
+			Name: proto.String("dep.proto"),
+		}, nil,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	deps := &protoregistry.Files{}
+	if err := deps.RegisterFile(depFile); err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	rootFileProto := &descriptorpb.FileDescriptorProto{
+		Name: proto.String("root.proto"),
+		Dependency: []string{
+			"google/protobuf/descriptor.proto",
+			"reflection/grpc_testing/proto2_ext2.proto",
+			"dep.proto",
+		},
+	}
+
+	// dep.proto is in deps; the other imports come from protoregistry.GlobalFiles
+	resolver := &combinedResolver{first: protoregistry.GlobalFiles, second: deps}
+	rootFile, err := protodesc.NewFile(rootFileProto, resolver)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	// Create a file hierarchy that contains a placeholder for dep.proto
+	placeholderDep := placeholderFile{depFile}
+	placeholderDeps := &protoregistry.Files{}
+	if err := placeholderDeps.RegisterFile(placeholderDep); err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	resolver = &combinedResolver{first: protoregistry.GlobalFiles, second: placeholderDeps}
+
+	rootFileHasPlaceholderDep, err := protodesc.NewFile(rootFileProto, resolver)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	rootFileIsPlaceholder := placeholderFile{rootFile}
+
+	// Full transitive dependency graph of root.proto includes five files:
+	// - root.proto
+	//   - google/protobuf/descriptor.proto
+	//   - reflection/grpc_testing/proto2_ext2.proto
+	//     - reflection/grpc_testing/proto2.proto
+	//   - dep.proto
+
+	for _, test := range []struct {
+		name   string
+		sent   []string
+		root   protoreflect.FileDescriptor
+		expect []string
+	}{
+		{
+			name: "send_all",
+			root: rootFile,
+			// expect full transitive closure
+			expect: []string{
+				"root.proto",
+				"google/protobuf/descriptor.proto",
+				"reflection/grpc_testing/proto2_ext2.proto",
+				"reflection/grpc_testing/proto2.proto",
+				"dep.proto",
+			},
+		},
+		{
+			name: "already_sent",
+			sent: []string{
+				"root.proto",
+				"google/protobuf/descriptor.proto",
+				"reflection/grpc_testing/proto2_ext2.proto",
+				"reflection/grpc_testing/proto2.proto",
+				"dep.proto",
+			},
+			root: rootFile,
+			// expect only the root to be re-sent
+			expect: []string{"root.proto"},
+		},
+		{
+			name: "some_already_sent",
+			sent: []string{
+				"reflection/grpc_testing/proto2_ext2.proto",
+				"reflection/grpc_testing/proto2.proto",
+			},
+			root: rootFile,
+			expect: []string{
+				"root.proto",
+				"google/protobuf/descriptor.proto",
+				"dep.proto",
+			},
+		},
+		{
+			name: "root_is_placeholder",
+			root: rootFileIsPlaceholder,
+			// expect error, no files
+		},
+		{
+			name: "placeholder_skipped",
+			root: rootFileHasPlaceholderDep,
+			// dep.proto is a placeholder so is skipped
+			expect: []string{
+				"root.proto",
+				"google/protobuf/descriptor.proto",
+				"reflection/grpc_testing/proto2_ext2.proto",
+				"reflection/grpc_testing/proto2.proto",
+			},
+		},
+		{
+			name: "placeholder_skipped_and_some_sent",
+			sent: []string{
+				"reflection/grpc_testing/proto2_ext2.proto",
+				"reflection/grpc_testing/proto2.proto",
+			},
+			root: rootFileHasPlaceholderDep,
+			expect: []string{
+				"root.proto",
+				"google/protobuf/descriptor.proto",
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			s := NewServerV1(ServerOptions{}).(*serverReflectionServer)
+
+			sent := map[string]bool{}
+			for _, path := range test.sent {
+				sent[path] = true
+			}
+
+			descriptors, err := s.fileDescWithDependencies(test.root, sent)
+			if len(test.expect) == 0 {
+				// if we're not expecting any files then we're expecting an error
+				if err == nil {
+					t.Fatalf("expecting an error; instead got %d files", len(descriptors))
+				}
+				return
+			}
+
+			checkDescriptorResults(t, descriptors, test.expect)
+		})
+	}
+}
+
+func checkDescriptorResults(t *testing.T, descriptors [][]byte, expect []string) {
+	t.Helper()
+	if len(descriptors) != len(expect) {
+		t.Errorf("expected result to contain %d descriptor(s); instead got %d", len(expect), len(descriptors))
+	}
+	names := map[string]struct{}{}
+	for i, desc := range descriptors {
+		var descProto descriptorpb.FileDescriptorProto
+		if err := proto.Unmarshal(desc, &descProto); err != nil {
+			t.Fatalf("could not unmarshal descriptor result #%d", i+1)
+		}
+		names[descProto.GetName()] = struct{}{}
+	}
+	actual := make([]string, 0, len(names))
+	for name := range names {
+		actual = append(actual, name)
+	}
+	sort.Strings(actual)
+	sort.Strings(expect)
+	if !reflect.DeepEqual(actual, expect) {
+		t.Fatalf("expected file descriptors for %v; instead got %v", expect, actual)
+	}
+}
+
+type placeholderFile struct {
+	protoreflect.FileDescriptor
+}
+
+func (placeholderFile) IsPlaceholder() bool {
+	return true
+}
+
+type combinedResolver struct {
+	first, second protodesc.Resolver
+}
+
+func (r *combinedResolver) FindFileByPath(path string) (protoreflect.FileDescriptor, error) {
+	file, err := r.first.FindFileByPath(path)
+	if err == nil {
+		return file, nil
+	}
+	return r.second.FindFileByPath(path)
+}
+
+func (r *combinedResolver) FindDescriptorByName(name protoreflect.FullName) (protoreflect.Descriptor, error) {
+	desc, err := r.first.FindDescriptorByName(name)
+	if err == nil {
+		return desc, nil
+	}
+	return r.second.FindDescriptorByName(name)
+}
+
 // Do end2end tests.
 
 type server struct {

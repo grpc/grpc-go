@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/xds/internal"
 
 	"google.golang.org/grpc/xds/internal/testutils"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
@@ -66,7 +65,7 @@ func setupTest(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptio
 	}
 
 	a, err := newAuthority(authorityArgs{
-		serverCfg: xdstestutils.ServerConfigForAddress(t, ms.Address),
+		serverCfg: testutils.ServerConfigForAddress(t, ms.Address),
 		bootstrapCfg: &bootstrap.Config{
 			NodeProto: &v3corepb.Node{Id: nodeID},
 		},

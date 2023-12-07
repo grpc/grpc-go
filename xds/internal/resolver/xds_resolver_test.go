@@ -67,7 +67,6 @@ import (
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // Register the cds LB policy
-	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"    // Register the router filter
 )
 
@@ -595,6 +594,17 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 			t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
 		}
 	}
+
+	// Re-add the listener and expect everything to work again.
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+	// Read the update pushed by the resolver to the ClientConn.
+	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+
+	res, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
+	}
+	res.OnCommitted()
 }
 
 // Tests the case where resources returned by the management server are removed.

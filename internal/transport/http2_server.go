@@ -68,15 +68,15 @@ var serverConnectionCounter uint64
 
 // http2Server implements the ServerTransport interface with HTTP2.
 type http2Server struct {
-	lastRead    int64 // Keep this field 64-bit aligned. Accessed atomically.
-	done        chan struct{}
-	conn        net.Conn
-	loopy       *loopyWriter
-	readerDone  chan struct{} // sync point to enable testing.
-	writerDone  chan struct{} // sync point to enable testing.
-	peer        peer.Peer
-	inTapHandle tap.ServerInHandle
-	framer      *framer
+	lastRead        int64 // Keep this field 64-bit aligned. Accessed atomically.
+	done            chan struct{}
+	conn            net.Conn
+	loopy           *loopyWriter
+	readerDone      chan struct{} // sync point to enable testing.
+	loopyWriterDone chan struct{}
+	peer            peer.Peer
+	inTapHandle     tap.ServerInHandle
+	framer          *framer
 	// The max number of concurrent streams.
 	maxStreams uint32
 	// controlBuf delivers all the control related tasks (e.g., window
@@ -251,7 +251,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		peer:              peer,
 		framer:            framer,
 		readerDone:        make(chan struct{}),
-		writerDone:        make(chan struct{}),
+		loopyWriterDone:   make(chan struct{}),
 		maxStreams:        config.MaxStreams,
 		inTapHandle:       config.InTapHandle,
 		fc:                &trInFlow{limit: uint32(icwz)},
@@ -323,7 +323,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger)
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
 		t.loopy.run()
-		close(t.writerDone)
+		close(t.loopyWriterDone)
 	}()
 	go t.keepalive()
 	return t, nil
@@ -608,7 +608,10 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 // typically run in a separate goroutine.
 // traceCtx attaches trace to ctx and returns the new context.
 func (t *http2Server) HandleStreams(ctx context.Context, handle func(*Stream)) {
-	defer close(t.readerDone)
+	defer func() {
+		<-t.loopyWriterDone
+		close(t.readerDone)
+	}()
 	for {
 		t.controlBuf.throttle()
 		frame, err := t.framer.fr.ReadFrame()

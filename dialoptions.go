@@ -64,7 +64,6 @@ type dialOptions struct {
 	block                       bool
 	returnLastError             bool
 	timeout                     time.Duration
-	scChan                      <-chan ServiceConfig
 	authority                   string
 	binaryLogger                binarylog.Logger
 	copts                       transport.ConnectOptions
@@ -251,19 +250,6 @@ func WithDecompressor(dc Decompressor) DialOption {
 	})
 }
 
-// WithServiceConfig returns a DialOption which has a channel to read the
-// service configuration.
-//
-// Deprecated: service config should be received through name resolver or via
-// WithDefaultServiceConfig, as specified at
-// https://github.com/grpc/grpc/blob/master/doc/service_config.md.  Will be
-// removed in a future 1.x release.
-func WithServiceConfig(c <-chan ServiceConfig) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.scChan = c
-	})
-}
-
 // WithConnectParams configures the ClientConn to use the provided ConnectParams
 // for creating and maintaining connections to servers.
 //
@@ -414,6 +400,15 @@ func WithTimeout(d time.Duration) DialOption {
 // connections. If FailOnNonTempDialError() is set to true, and an error is
 // returned by f, gRPC checks the error's Temporary() method to decide if it
 // should try to reconnect to the network address.
+//
+// Note: As of Go 1.21, the standard library overrides the OS defaults for
+// TCP keepalive time and interval to 15s.
+// To retain OS defaults, use a net.Dialer with the KeepAlive field set to a
+// negative value.
+//
+// For more information, please see [issue 23459] in the Go github repo.
+//
+// [issue 23459]: https://github.com/golang/go/issues/23459
 func WithContextDialer(f func(context.Context, string) (net.Conn, error)) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.Dialer = f
@@ -488,7 +483,7 @@ func FailOnNonTempDialError(f bool) DialOption {
 // the RPCs.
 func WithUserAgent(s string) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.copts.UserAgent = s
+		o.copts.UserAgent = s + " " + grpcUA
 	})
 }
 
@@ -638,14 +633,16 @@ func withHealthCheckFunc(f internal.HealthChecker) DialOption {
 
 func defaultDialOptions() dialOptions {
 	return dialOptions{
-		healthCheckFunc: internal.HealthCheckFunc,
 		copts: transport.ConnectOptions{
-			WriteBufferSize: defaultWriteBufSize,
 			ReadBufferSize:  defaultReadBufSize,
+			WriteBufferSize: defaultWriteBufSize,
 			UseProxy:        true,
+			UserAgent:       grpcUA,
 		},
-		recvBufferPool: nopBufferPool{},
-		idleTimeout:    30 * time.Minute,
+		bs:              internalbackoff.DefaultExponential,
+		healthCheckFunc: internal.HealthCheckFunc,
+		idleTimeout:     30 * time.Minute,
+		recvBufferPool:  nopBufferPool{},
 	}
 }
 

@@ -176,7 +176,9 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 	if networkType == "tcp" && useProxy {
 		return proxyDial(ctx, address, grpcUA)
 	}
-	return (&net.Dialer{}).DialContext(ctx, networkType, address)
+	// KeepAlive is set to a negative value to prevent Go's override of the TCP
+	// keepalive time and interval; retain the OS default.
+	return (&net.Dialer{KeepAlive: time.Duration(-1)}).DialContext(ctx, networkType, address)
 }
 
 func isTemporary(err error) bool {
@@ -493,8 +495,9 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 
 func (t *http2Client) getPeer() *peer.Peer {
 	return &peer.Peer{
-		Addr:     t.remoteAddr,
-		AuthInfo: t.authInfo, // Can be nil
+		Addr:      t.remoteAddr,
+		AuthInfo:  t.authInfo, // Can be nil
+		LocalAddr: t.localAddr,
 	}
 }
 

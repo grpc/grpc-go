@@ -1,14 +1,18 @@
 name: codecov
 on: [push, pull_request]
+
+permissions:
+  contents: read
+
 jobs:
   upload:
     runs-on: ubuntu-latest
     steps:
       - name: Install checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Install checkout
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
         with:
           go-version: "stable"
 
@@ -16,4 +20,4 @@ jobs:
         run: go test -coverprofile=coverage.out -coverpkg=./... ./...
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@eaaf4bedf32dbdc6b720b63067d99c4d77d6047d # v3.1.4

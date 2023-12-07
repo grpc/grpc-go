@@ -1685,7 +1685,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	client.Close(errors.New("closed manually by test"))
 	st.Close(errors.New("closed manually by test"))
 	<-st.readerDone
-	<-st.writerDone
+	<-st.loopyWriterDone
 	<-client.readerDone
 	<-client.writerDone
 	for _, cstream := range clientStreams {

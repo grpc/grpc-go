@@ -188,8 +188,7 @@ func TestMatchingSANExists_FailureCases(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			hi := NewHandshakeInfo(nil, nil)
-			hi.SetSANMatchers(test.sanMatchers)
+			hi := NewHandshakeInfo(nil, nil, test.sanMatchers, false)
 
 			if hi.MatchingSANExists(inputCert) {
 				t.Fatalf("hi.MatchingSANExists(%+v) with SAN matchers +%v succeeded when expected to fail", inputCert, test.sanMatchers)
@@ -289,8 +288,7 @@ func TestMatchingSANExists_Success(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			hi := NewHandshakeInfo(nil, nil)
-			hi.SetSANMatchers(test.sanMatchers)
+			hi := NewHandshakeInfo(nil, nil, test.sanMatchers, false)
 
 			if !hi.MatchingSANExists(inputCert) {
 				t.Fatalf("hi.MatchingSANExists(%+v) with SAN matchers +%v failed when expected to succeed", inputCert, test.sanMatchers)

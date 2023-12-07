@@ -813,6 +813,15 @@ func (l *listenSocket) Close() error {
 // Serve returns when lis.Accept fails with fatal errors.  lis will be closed when
 // this method returns.
 // Serve will return a non-nil error unless Stop or GracefulStop is called.
+//
+// Note: As of Go 1.21, the standard library overrides the OS defaults for
+// TCP keepalive time and interval to 15s.
+// To retain OS defaults, pass a net.Listener created by calling the Listen method
+// on a net.ListenConfig with the `KeepAlive` field set to a negative value.
+//
+// For more information, please see [issue 23459] in the Go github repo.
+//
+// [issue 23459]: https://github.com/golang/go/issues/23459
 func (s *Server) Serve(lis net.Listener) error {
 	s.mu.Lock()
 	s.printf("serving")
@@ -996,15 +1005,11 @@ func (s *Server) serveStreams(ctx context.Context, st transport.ServerTransport,
 		}
 	}()
 
-	var wg sync.WaitGroup
 	streamQuota := newHandlerQuota(s.opts.maxConcurrentStreams)
 	st.HandleStreams(ctx, func(stream *transport.Stream) {
-		wg.Add(1)
-
 		streamQuota.acquire()
 		f := func() {
 			defer streamQuota.release()
-			defer wg.Done()
 			s.handleStream(st, stream)
 		}
 
@@ -1018,7 +1023,6 @@ func (s *Server) serveStreams(ctx context.Context, st transport.ServerTransport,
 		}
 		go f()
 	})
-	wg.Wait()
 }
 
 var _ http.Handler = (*Server)(nil)
@@ -1859,62 +1863,64 @@ func ServerTransportStreamFromContext(ctx context.Context) ServerTransportStream
 // pending RPCs on the client side will get notified by connection
 // errors.
 func (s *Server) Stop() {
-	s.quit.Fire()
-
-	defer func() {
-		s.serveWG.Wait()
-		s.done.Fire()
-	}()
-
-	s.channelzRemoveOnce.Do(func() { channelz.RemoveEntry(s.channelzID) })
-
-	s.mu.Lock()
-	listeners := s.lis
-	s.lis = nil
-	conns := s.conns
-	s.conns = nil
-	// interrupt GracefulStop if Stop and GracefulStop are called concurrently.
-	s.cv.Broadcast()
-	s.mu.Unlock()
-
-	for lis := range listeners {
-		lis.Close()
-	}
-	for _, cs := range conns {
-		for st := range cs {
-			st.Close(errors.New("Server.Stop called"))
-		}
-	}
-	if s.opts.numServerWorkers > 0 {
-		s.stopServerWorkers()
-	}
-
-	s.mu.Lock()
-	if s.events != nil {
-		s.events.Finish()
-		s.events = nil
-	}
-	s.mu.Unlock()
+	s.stop(false)
 }
 
 // GracefulStop stops the gRPC server gracefully. It stops the server from
 // accepting new connections and RPCs and blocks until all the pending RPCs are
 // finished.
 func (s *Server) GracefulStop() {
+	s.stop(true)
+}
+
+func (s *Server) stop(graceful bool) {
 	s.quit.Fire()
 	defer s.done.Fire()
 
 	s.channelzRemoveOnce.Do(func() { channelz.RemoveEntry(s.channelzID) })
+
 	s.mu.Lock()
-	if s.conns == nil {
-		s.mu.Unlock()
-		return
+	s.closeListenersLocked()
+	// Wait for serving threads to be ready to exit.  Only then can we be sure no
+	// new conns will be created.
+	s.mu.Unlock()
+	s.serveWG.Wait()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if graceful {
+		s.drainAllServerTransportsLocked()
+	} else {
+		s.closeServerTransportsLocked()
 	}
 
-	for lis := range s.lis {
-		lis.Close()
+	if s.opts.numServerWorkers > 0 {
+		s.stopServerWorkers()
 	}
-	s.lis = nil
+
+	for len(s.conns) != 0 {
+		s.cv.Wait()
+	}
+	s.conns = nil
+
+	if s.events != nil {
+		s.events.Finish()
+		s.events = nil
+	}
+}
+
+// s.mu must be held by the caller.
+func (s *Server) closeServerTransportsLocked() {
+	for _, conns := range s.conns {
+		for st := range conns {
+			st.Close(errors.New("Server.Stop called"))
+		}
+	}
+}
+
+// s.mu must be held by the caller.
+func (s *Server) drainAllServerTransportsLocked() {
 	if !s.drain {
 		for _, conns := range s.conns {
 			for st := range conns {
@@ -1923,22 +1929,14 @@ func (s *Server) GracefulStop() {
 		}
 		s.drain = true
 	}
+}
 
-	// Wait for serving threads to be ready to exit.  Only then can we be sure no
-	// new conns will be created.
-	s.mu.Unlock()
-	s.serveWG.Wait()
-	s.mu.Lock()
-
-	for len(s.conns) != 0 {
-		s.cv.Wait()
+// s.mu must be held by the caller.
+func (s *Server) closeListenersLocked() {
+	for lis := range s.lis {
+		lis.Close()
 	}
-	s.conns = nil
-	if s.events != nil {
-		s.events.Finish()
-		s.events = nil
-	}
-	s.mu.Unlock()
+	s.lis = nil
 }
 
 // contentSubtype must be lowercase
