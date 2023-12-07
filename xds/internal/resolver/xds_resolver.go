@@ -462,7 +462,7 @@ func (r *xdsResolver) onResourceNotFound() {
 	// along with normal service config. This will ensure that new RPCs will
 	// fail, and once the active RPCs complete, the reference counts on the
 	// clusters will come down to zero. At that point, we will send an empty
-	// service config config with no addresses. This results in the pick-first
+	// service config with no addresses. This results in the pick-first
 	// LB policy being configured on the channel, and since there are no
 	// address, pick-first will put the channel in TRANSIENT_FAILURE.
 	r.sendNewServiceConfig(nil)
