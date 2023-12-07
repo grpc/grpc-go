@@ -89,12 +89,14 @@ func (t testServer) EmptyCall(_ context.Context, _ *testpb.Empty) (*testpb.Empty
 }
 
 func TestCaReloading(t *testing.T) {
+	srvAddr, stopSrv := startServer(t, "localhost:0", tls.NoClientCert)
+
 	serverCa, err := os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
 	if err != nil {
 		t.Fatalf("failed to read test CA cert: %s", err)
 	}
 
-	// Write CA to a temporary file so that we can modify it later.
+	// Write CA certs to a temporary file so that we can modify it later.
 	caPath := t.TempDir() + "/ca.pem"
 	err = os.WriteFile(caPath, serverCa, 0644)
 	if err != nil {
@@ -109,21 +111,8 @@ func TestCaReloading(t *testing.T) {
 		t.Fatalf("failed to create TLS bundle: %v", err)
 	}
 
-	// TLS server with a valid cert
-	serverCreds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
-	if err != nil {
-		t.Fatalf("failed to generate server credentials: %v", err)
-	}
-	s := grpc.NewServer(grpc.Creds(serverCreds))
-	testgrpc.RegisterTestServiceServer(s, &testServer{})
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("error listening: %v", err)
-	}
-	go s.Serve(lis)
-
 	conn, err := grpc.Dial(
-		lis.Addr().String(),
+		srvAddr.String(),
 		grpc.WithCredentialsBundle(tlsBundle),
 		grpc.WithAuthority("x.test.example.com"),
 	)
@@ -136,8 +125,9 @@ func TestCaReloading(t *testing.T) {
 	if err != nil {
 		t.Errorf("error calling EmptyCall: %v", err)
 	}
-	// close the server so that we force a new handshake later on.
-	s.Stop()
+	// close the server and create a new one to force client to do a new
+	// handshake.
+	stopSrv()
 
 	invalidCa, err := os.ReadFile(testdata.Path("ca.pem"))
 	if err != nil {
@@ -152,27 +142,23 @@ func TestCaReloading(t *testing.T) {
 	// Leave time for the file_watcher provider to reload the CA.
 	time.Sleep(100 * time.Millisecond)
 
-	s = grpc.NewServer(grpc.Creds(serverCreds))
-	defer s.Stop()
-	testgrpc.RegisterTestServiceServer(s, &testServer{})
-	lis, err = net.Listen("tcp", lis.Addr().String())
-	if err != nil {
-		t.Fatalf("error listening: %v", err)
-	}
-	go s.Serve(lis)
+	_, stopFunc := startServer(t, srvAddr.String(), tls.NoClientCert)
+	defer stopFunc()
 
 	// Client handshake should fail because the server cert is signed by an
 	// unknown CA.
 	_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
 	if st, ok := status.FromError(err); !ok || st.Code() != codes.Unavailable {
 		t.Errorf("expected unavailable error, got %v", err)
-		if strings.Contains(st.Message(), "x509: certificate signed by unknown authority") {
-			t.Errorf("expected error to contain 'x509: certificate signed by unknown authority', got %v", st.Message())
-		}
+	} else if !strings.Contains(st.Message(), "certificate signed by unknown authority") {
+		t.Errorf("expected error to contain 'certificate signed by unknown authority', got %v", st.Message())
 	}
 }
 
 func TestMTLS(t *testing.T) {
+	srvAddr, stopFunc := startServer(t, "localhost:0", tls.RequireAndVerifyClientCert)
+	defer stopFunc()
+
 	cfg := fmt.Sprintf(`{
 		"ca_certificate_file": "%s",
 		"certificate_file": "%s",
@@ -185,7 +171,59 @@ func TestMTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create TLS bundle: %v", err)
 	}
+	dialOpts := []grpc.DialOption{
+		grpc.WithCredentialsBundle(tlsBundle),
+		grpc.WithAuthority("x.test.example.com"),
+	}
 
+	t.Run("ValidClientCert", func(t *testing.T) {
+		conn, err := grpc.Dial(srvAddr.String(), dialOpts...)
+		if err != nil {
+			t.Fatalf("error dialing: %v", err)
+		}
+		client := testgrpc.NewTestServiceClient(conn)
+
+		_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
+		if err != nil {
+			t.Errorf("error calling EmptyCall: %v", err)
+		}
+		conn.Close()
+	})
+
+	t.Run("Provider failing", func(t *testing.T) {
+		// Check that if the provider returns an errors, we fail the handshake.
+		// It's not easy to trigger this condition, so we rely on closing the
+		// provider.
+		creds, ok := tlsBundle.TransportCredentials().(*reloadingCreds)
+
+		// Force the provider to be initialized. The test is flaky otherwise,
+		// since close may be a noop.
+		_, _ = creds.provider.KeyMaterial(context.Background())
+
+		if !ok {
+			t.Fatalf("expected reloadingCreds, got %T", tlsBundle.TransportCredentials())
+		}
+
+		creds.provider.Close()
+
+		conn, err := grpc.Dial(srvAddr.String(), dialOpts...)
+		if err != nil {
+			t.Fatalf("error dialing: %v", err)
+		}
+		client := testgrpc.NewTestServiceClient(conn)
+		_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
+		if st, ok := status.FromError(err); !ok || st.Code() != codes.Unavailable {
+			t.Errorf("expected unavailable error, got %v", err)
+		} else if !strings.Contains(st.Message(), "provider instance is closed") {
+			t.Errorf("expected error to contain 'provider instance is closed', got %v", st.Message())
+		}
+		conn.Close()
+	})
+}
+
+type stopFunc func()
+
+func startServer(t *testing.T, addr string, clientAuth tls.ClientAuthType) (net.Addr, stopFunc) {
 	// Create a TLS server with a valid cert that requires a client cert.
 	serverCert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
@@ -201,7 +239,7 @@ func TestMTLS(t *testing.T) {
 	}
 	serverTLSCfg := &tls.Config{
 		Certificates: []tls.Certificate{serverCert},
-		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientAuth:   clientAuth,
 		ClientCAs:    clientCA,
 	}
 	if err != nil {
@@ -209,25 +247,10 @@ func TestMTLS(t *testing.T) {
 	}
 	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(serverTLSCfg)))
 	testgrpc.RegisterTestServiceServer(s, &testServer{})
-	lis, err := net.Listen("tcp", "localhost:0")
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		t.Fatalf("error listening: %v", err)
 	}
 	go s.Serve(lis)
-	defer s.Stop()
-
-	conn, err := grpc.Dial(
-		lis.Addr().String(),
-		grpc.WithCredentialsBundle(tlsBundle),
-		grpc.WithAuthority("x.test.example.com"),
-	)
-	if err != nil {
-		t.Fatalf("error dialing: %v", err)
-	}
-	defer conn.Close()
-	client := testgrpc.NewTestServiceClient(conn)
-	_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
-	if err != nil {
-		t.Errorf("error calling EmptyCall: %v", err)
-	}
+	return lis.Addr(), func() { s.Stop() }
 }
