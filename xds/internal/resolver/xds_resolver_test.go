@@ -103,7 +103,7 @@ func (s) TestResolverBuilder_DifferentBootstrapConfigs(t *testing.T) {
 				NodeID:    "node-id",
 				ServerURI: "dummy-management-server",
 			},
-			wantErr: `authority "non-existing-authority" is not found in the bootstrap file`,
+			wantErr: `authority "non-existing-authority" specified in dial target "xds://non-existing-authority/target" is not found in the bootstrap file`,
 		},
 		{
 			name:   "xDS creds specified without certificate providers in bootstrap",
@@ -997,7 +997,7 @@ func (s) TestResolverWRR(t *testing.T) {
 	// Read the update pushed by the resolver to the ClientConn.
 	cs := verifyUpdateFromResolver(ctx, t, stateCh, "")
 
-	// Make RPCs are verify WRR behavior in the cluster specifier.
+	// Make RPCs to verify WRR behavior in the cluster specifier.
 	picks := map[string]int{}
 	for i := 0; i < 100; i++ {
 		res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
