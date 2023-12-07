@@ -16,9 +16,9 @@
  *
  */
 
-// Package creds implements mTLS Credentials in xDS Bootstrap File.
+// Package tlscreds implements mTLS Credentials in xDS Bootstrap File.
 // See [gRFC A65](github.com/grpc/proposal/blob/master/A65-xds-mtls-creds-in-bootstrap.md).
-package creds
+package tlscreds
 
 import (
 	"context"
@@ -30,105 +30,106 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
-	_ "google.golang.org/grpc/credentials/tls/certprovider/pemfile" // for file_watcher provider
+	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
 )
 
-// tlsBundle is an implementation of credentials.Bundle which implements mTLS
+// bundle is an implementation of credentials.Bundle which implements mTLS
 // Credentials in xDS Bootstrap File.
 // See [gRFC A65](github.com/grpc/proposal/blob/master/A65-xds-mtls-creds-in-bootstrap.md).
-type tlsBundle struct {
+type bundle struct {
 	jd                   json.RawMessage
 	transportCredentials credentials.TransportCredentials
 }
 
-// NewTLS returns a credentials.Bundle which implements mTLS Credentials in xDS
+// NewBundle returns a credentials.Bundle which implements mTLS Credentials in xDS
 // Bootstrap File. It delegates certificate loading to a file_watcher provider
 // if either client certificates or server root CA is specified.
 // See [gRFC A65](github.com/grpc/proposal/blob/master/A65-xds-mtls-creds-in-bootstrap.md).
-func NewTLS(jd json.RawMessage) (credentials.Bundle, error) {
+func NewBundle(jd json.RawMessage) (credentials.Bundle, error) {
 	cfg := &struct {
 		CertificateFile   string `json:"certificate_file"`
 		CACertificateFile string `json:"ca_certificate_file"`
 		PrivateKeyFile    string `json:"private_key_file"`
 	}{}
 
-	tlsConfig := tls.Config{}
 	if err := json.Unmarshal(jd, cfg); err != nil {
 		return nil, err
 	}
 
-	// We cannot simply always use a file_watcher provider because it behaves
-	// slightly differently from the xDS TLS config. Quoting A65:
-	//
-	// > The only difference between the file-watcher certificate provider
-	// > config and this one is that in the file-watcher certificate provider,
-	// > at least one of the "certificate_file" or "ca_certificate_file" fields
-	// > must be specified, whereas in this configuration, it is acceptable to
-	// > specify neither one.
-	//
-	// We only use a file_watcher provider if either one of them or both are
-	// specified.
-	if cfg.CACertificateFile != "" || cfg.CertificateFile != "" || cfg.PrivateKeyFile != "" {
-		// file_watcher currently ignores BuildOptions.
-		provider, err := certprovider.GetProvider("file_watcher", jd, certprovider.BuildOptions{})
-		if err != nil {
-			// GetProvider fails if jd is invalid, e.g. if only one of private
-			// key and certificate is specified.
-			return nil, fmt.Errorf("failed to get TLS provider: %w", err)
-		}
-		if cfg.CertificateFile != "" {
-			tlsConfig.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
-				// Client cert reloading for mTLS.
-				km, err := provider.KeyMaterial(context.Background())
-				if err != nil {
-					return nil, err
-				}
-				if len(km.Certs) != 1 {
-					// xDS bootstrap has a single private key file, so there
-					// must be exactly one certificate or certificate chain
-					// matching this private key.
-					return nil, fmt.Errorf("certificate_file must contains exactly one certificate or certificate chain")
-				}
-				return &km.Certs[0], nil
-			}
-			if cfg.CACertificateFile == "" {
-				// No need for a callback to load the CA. Use the normal mTLS
-				// transport credentials.
-				return &tlsBundle{
-					jd:                   jd,
-					transportCredentials: credentials.NewTLS(&tlsConfig),
-				}, nil
-			}
-		}
-		return &tlsBundle{
-			jd: jd,
-			transportCredentials: &caReloadingClientTLSCreds{
-				baseConfig: &tlsConfig,
-				provider:   provider,
-			},
+	if cfg.CACertificateFile == "" && cfg.CertificateFile == "" && cfg.PrivateKeyFile == "" {
+		// We do not always use a file_watcher provider because it behaves
+		// slightly differently from the xDS TLS config provider. Quoting A65:
+		//
+		// > The only difference between the file-watcher certificate provider
+		// > config and this one is that in the file-watcher certificate provider,
+		// > at least one of the "certificate_file" or "ca_certificate_file" fields
+		// > must be specified, whereas in this configuration, it is acceptable to
+		// > specify neither one.
+		//
+		// Here, none of certificate_file and ca_certificate_file are set.
+		// Use the system-wide root certs. No need to use the file_watcher
+		// provider.
+		return &bundle{
+			jd:                   jd,
+			transportCredentials: credentials.NewTLS(&tls.Config{}),
 		}, nil
 	}
 
-	// None of certificate_file and ca_certificate_file are set.
-	// Use the system-wide root certs.
-	return &tlsBundle{
-		jd:                   jd,
-		transportCredentials: credentials.NewTLS(&tlsConfig),
+	tlsConfig := tls.Config{}
+	// The pemfile plugin (file_watcher) currently ignores BuildOptions.
+	provider, err := certprovider.GetProvider(pemfile.PluginName, jd, certprovider.BuildOptions{})
+	if err != nil {
+		// GetProvider fails if jd is invalid, e.g. if only one of private
+		// key and certificate is specified.
+		return nil, err
+	}
+	if cfg.CertificateFile != "" {
+		tlsConfig.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			// Client cert reloading for mTLS.
+			km, err := provider.KeyMaterial(context.Background())
+			if err != nil {
+				return nil, err
+			}
+			if len(km.Certs) != 1 {
+				// xDS bootstrap has a single private key file, so there
+				// must be exactly one certificate or certificate chain
+				// matching this private key.
+				return nil, fmt.Errorf("certificate_file must contains exactly one certificate or certificate chain")
+			}
+			return &km.Certs[0], nil
+		}
+		if cfg.CACertificateFile == "" {
+			// No need for a callback to load the CA. Use the normal mTLS
+			// transport credentials.
+			return &bundle{
+				jd:                   jd,
+				transportCredentials: credentials.NewTLS(&tlsConfig),
+			}, nil
+		}
+	}
+	return &bundle{
+		jd: jd,
+		transportCredentials: &caReloadingClientTLSCreds{
+			baseConfig: &tlsConfig,
+			provider:   provider,
+		},
 	}, nil
 }
 
-func (t *tlsBundle) TransportCredentials() credentials.TransportCredentials {
+func (t *bundle) TransportCredentials() credentials.TransportCredentials {
 	return t.transportCredentials
 }
 
-func (t *tlsBundle) PerRPCCredentials() credentials.PerRPCCredentials {
+func (t *bundle) PerRPCCredentials() credentials.PerRPCCredentials {
 	// mTLS provides transport credentials only. There are no per-RPC
 	// credentials.
 	return nil
 }
 
-func (t *tlsBundle) NewWithMode(_ string) (credentials.Bundle, error) {
-	return NewTLS(t.jd)
+func (t *bundle) NewWithMode(string) (credentials.Bundle, error) {
+	// This bundle has a single mode which only uses TLS transport credentials,
+	// so there is no legitimate case where callers would call NewWithMode.
+	return nil, fmt.Errorf("xDS TLS credentials only support one mode")
 }
 
 // caReloadingClientTLSCreds is credentials.TransportCredentials for client

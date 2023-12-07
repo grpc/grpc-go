@@ -39,7 +39,7 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/creds"
+	"google.golang.org/grpc/xds/internal/xdsclient/tlscreds"
 )
 
 const (
@@ -84,7 +84,7 @@ func (i *insecureCredsBuilder) Name() string {
 type tlsCredsBuilder struct{}
 
 func (t *tlsCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, error) {
-	return creds.NewTLS(config)
+	return tlscreds.NewBundle(config)
 }
 
 func (t *tlsCredsBuilder) Name() string {

@@ -16,7 +16,7 @@
  *
  */
 
-package creds
+package tlscreds
 
 import (
 	"context"
@@ -55,7 +55,7 @@ func TestValidTlsBuilder(t *testing.T) {
 	for _, jd := range tests {
 		t.Run(jd, func(t *testing.T) {
 			msg := json.RawMessage(jd)
-			if _, err := NewTLS(msg); err != nil {
+			if _, err := NewBundle(msg); err != nil {
 				t.Errorf("expected no error but got: %s", err)
 			}
 		})
@@ -67,13 +67,13 @@ func TestInvalidTlsBuilder(t *testing.T) {
 		jd, err string
 	}{
 		{`{"ca_certificate_file": 1}`, "json: cannot unmarshal number into Go struct field .ca_certificate_file of type string"},
-		{`{"certificate_file":"bar"}`, "failed to get TLS provider: pemfile: private key file and identity cert file should be both specified or not specified"},
+		{`{"certificate_file":"bar"}`, "pemfile: private key file and identity cert file should be both specified or not specified"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.jd, func(t *testing.T) {
 			msg := json.RawMessage(test.jd)
-			if _, err := NewTLS(msg); err.Error() != test.err {
+			if _, err := NewBundle(msg); err.Error() != test.err {
 				t.Errorf("expected: %s, got: %s", test.err, err)
 			}
 		})
@@ -104,7 +104,7 @@ func TestCaReloading(t *testing.T) {
 		"ca_certificate_file": "%s",
 		"refresh_interval": ".01s"
 	}`, caPath)
-	tlsBundle, err := NewTLS([]byte(cfg))
+	tlsBundle, err := NewBundle([]byte(cfg))
 	if err != nil {
 		t.Fatalf("failed to create TLS bundle: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestMTLS(t *testing.T) {
 		testdata.Path("x509/server_ca_cert.pem"),
 		testdata.Path("x509/client1_cert.pem"),
 		testdata.Path("x509/client1_key.pem"))
-	tlsBundle, err := NewTLS([]byte(cfg))
+	tlsBundle, err := NewBundle([]byte(cfg))
 	if err != nil {
 		t.Fatalf("failed to create TLS bundle: %v", err)
 	}
