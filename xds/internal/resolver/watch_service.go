@@ -21,7 +21,6 @@ package resolver
 import (
 	"context"
 
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -38,30 +37,18 @@ func newListenerWatcher(resourceName string, parent *xdsResolver) *listenerWatch
 }
 
 func (l *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData) {
-	if l.parent.logger.V(2) {
-		l.parent.logger.Infof("Received update for Listener resource %q: %v", l.resourceName, pretty.ToJSON(update))
-	}
-
 	l.parent.serializer.Schedule(func(context.Context) {
 		l.parent.onListenerResourceUpdate(update.Resource)
 	})
 }
 
 func (l *listenerWatcher) OnError(err error) {
-	if l.parent.logger.V(2) {
-		l.parent.logger.Infof("Received error for Listener resource %q: %v", l.resourceName, err)
-	}
-
 	l.parent.serializer.Schedule(func(context.Context) {
-		l.parent.onError(err)
+		l.parent.onListenerResourceError(err)
 	})
 }
 
 func (l *listenerWatcher) OnResourceDoesNotExist() {
-	if l.parent.logger.V(2) {
-		l.parent.logger.Infof("Received resource-not-found-error for Listener resource %q", l.resourceName)
-	}
-
 	l.parent.serializer.Schedule(func(context.Context) {
 		l.parent.onListenerResourceNotFound()
 	})
@@ -85,30 +72,18 @@ func newRouteConfigWatcher(resourceName string, parent *xdsResolver) *routeConfi
 }
 
 func (r *routeConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData) {
-	if r.parent.logger.V(2) {
-		r.parent.logger.Infof("Received update for RouteConfiguration resource %q: %v", r.resourceName, pretty.ToJSON(update))
-	}
-
 	r.parent.serializer.Schedule(func(context.Context) {
 		r.parent.onRouteConfigResourceUpdate(r.resourceName, update.Resource)
 	})
 }
 
 func (r *routeConfigWatcher) OnError(err error) {
-	if r.parent.logger.V(2) {
-		r.parent.logger.Infof("Received error for RouteConfiguration resource %q: %v", r.resourceName, err)
-	}
-
 	r.parent.serializer.Schedule(func(context.Context) {
-		r.parent.onError(err)
+		r.parent.onRouteConfigResourceError(r.resourceName, err)
 	})
 }
 
 func (r *routeConfigWatcher) OnResourceDoesNotExist() {
-	if r.parent.logger.V(2) {
-		r.parent.logger.Infof("Received error for RouteConfiguration resource %q", r.resourceName)
-	}
-
 	r.parent.serializer.Schedule(func(context.Context) {
 		r.parent.onRouteConfigResourceNotFound(r.resourceName)
 	})

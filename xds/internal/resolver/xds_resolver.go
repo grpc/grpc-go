@@ -127,8 +127,8 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 
 // Performs the following sanity checks:
 //   - Verifies that the bootstrap configuration is not empty.
-//   - Verifies that the bootstrap configuration contains certificate providers if
-//     the use of xDS credentials is specified by the user.
+//   - Verifies that if xDS credentials are specified by the user, the
+//     bootstrap configuration contains certificate providers.
 //   - Verifies that if the provided dial target contains an authority, the
 //     bootstrap configuration contains server config for that authority.
 //
@@ -276,7 +276,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
 	sc, err := serviceConfigJSON(r.activeClusters)
 	if err != nil {
 		// JSON marshal error; should never happen.
-		r.logger.Errorf("Failed to marshal newly built service config: %v", err)
+		r.logger.Errorf("For Listener resource %q and RouteConfiguration resource %q, failed to marshal newly built service config: %v", r.ldsResourceName, r.rdsResourceName, err)
 		r.cc.ReportError(err)
 		return false
 	}
@@ -387,9 +387,9 @@ type clusterInfo struct {
 	cfg xdsChildConfig
 }
 
-// Determines if the xdsResolver has received all required configuration from
-// the management server, and a matching virtual host was found in the route
-// configuration.
+// Determines if the xdsResolver has received all required configuration, i.e
+// Listener and RouteConfiguration resources, from the management server, and
+// whether a matching virtual host was found in the RouteConfiguration resource.
 func (r *xdsResolver) resolutionComplete() bool {
 	return r.listenerUpdateRecvd && r.routeConfigUpdateRecvd && r.currentVirtualHost != nil
 }
@@ -443,7 +443,41 @@ func (r *xdsResolver) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdat
 	r.onResolutionComplete()
 }
 
+// onError propagates the error up to the channel. And since this is invoked
+// only for non resource-not-found errors, we don't have to update resolver
+// state and we can keep using the old config.
+//
+// Only executed in the context of a serializer callback.
+func (r *xdsResolver) onError(err error) {
+	r.cc.ReportError(err)
+}
+
+// Contains common functionality to be executed when resources of either type
+// are removed.
+//
+// Only executed in the context of a serializer callback.
+func (r *xdsResolver) onResourceNotFound() {
+	// We cannot remove clusters from the service config that have ongoing RPCs.
+	// Instead, what we can do is to send an erroring (nil) config selector
+	// along with normal service config. This will ensure that new RPCs will
+	// fail, and once the active RPCs complete, the reference counts on the
+	// clusters will come down to zero. At that point, we will send an empty
+	// service config config with no addresses. This results in the pick-first
+	// LB policy being configured on the channel, and since there are no
+	// address, pick-first will put the channel in TRANSIENT_FAILURE.
+	r.sendNewServiceConfig(nil)
+
+	// Stop and dereference the active config selector, if one exists.
+	r.curConfigSelector.stop()
+	r.curConfigSelector = nil
+}
+
+// Only executed in the context of a serializer callback.
 func (r *xdsResolver) onListenerResourceUpdate(update xdsresource.ListenerUpdate) {
+	if r.logger.V(2) {
+		r.logger.Infof("Received update for Listener resource %q: %v", r.ldsResourceName, pretty.ToJSON(update))
+	}
+
 	r.currentListener = update
 	r.listenerUpdateRecvd = true
 
@@ -471,7 +505,9 @@ func (r *xdsResolver) onListenerResourceUpdate(update xdsresource.ListenerUpdate
 
 	// If the route config name has changed, cancel the old watcher and start a
 	// new one. At this point, since we have not yet resolved the new route
-	// config name, we don't have to send an update to the channel.
+	// config name, we don't send an update to the channel, and therefore
+	// continue using the old route configuration (if received) until the new
+	// one is received.
 	r.rdsResourceName = update.RouteConfigName
 	if r.routeConfigWatcher != nil {
 		r.routeConfigWatcher.stop()
@@ -481,32 +517,21 @@ func (r *xdsResolver) onListenerResourceUpdate(update xdsresource.ListenerUpdate
 	r.routeConfigWatcher = newRouteConfigWatcher(r.rdsResourceName, r)
 }
 
-// onError propagates the error up to the channel. And since this is invoked
-// only for non resource-not-found error, we don't have to update resolver state
-// and we can keep using the old config.
-func (r *xdsResolver) onError(err error) {
-	r.cc.ReportError(err)
+func (r *xdsResolver) onListenerResourceError(err error) {
+	if r.logger.V(2) {
+		r.logger.Infof("Received error for Listener resource %q: %v", r.ldsResourceName, err)
+	}
+	r.onError(err)
 }
 
-// Contains common functionality to be executed when resources of either type
-// are removed.
-func (r *xdsResolver) onResourceNotFound() {
-	// We cannot remove clusters from the service config that have ongoing RPCs.
-	// Instead, what we can do is to send an erroring (nil) config selector
-	// along with normal service config. This will ensure that new RPCs will
-	// fail, and once the active RPCs complete, the reference counts on the
-	// clusters will come down to zero. At that point, we will send an empty
-	// service config config with no addresses. This results in the pick-first
-	// LB policy being configured on the channel, and since there are no
-	// address, pick-first will put the channel in TRANSIENT_FAILURE.
-	r.sendNewServiceConfig(nil)
-
-	// Stop and dereference the active config selector, if one exists.
-	r.curConfigSelector.stop()
-	r.curConfigSelector = nil
-}
-
+// Only executed in the context of a serializer callback.
 func (r *xdsResolver) onListenerResourceNotFound() {
+	if r.logger.V(2) {
+		r.logger.Infof("Received resource-not-found-error for Listener resource %q", r.ldsResourceName)
+	}
+
+	r.listenerUpdateRecvd = false
+
 	if r.routeConfigWatcher != nil {
 		r.routeConfigWatcher.stop()
 	}
@@ -518,7 +543,12 @@ func (r *xdsResolver) onListenerResourceNotFound() {
 	r.onResourceNotFound()
 }
 
+// Only executed in the context of a serializer callback.
 func (r *xdsResolver) onRouteConfigResourceUpdate(name string, update xdsresource.RouteConfigUpdate) {
+	if r.logger.V(2) {
+		r.logger.Infof("Received update for RouteConfiguration resource %q: %v", name, pretty.ToJSON(update))
+	}
+
 	if r.rdsResourceName != name {
 		// Drop updates from canceled watchers.
 		return
@@ -527,13 +557,27 @@ func (r *xdsResolver) onRouteConfigResourceUpdate(name string, update xdsresourc
 	r.applyRouteConfigUpdate(update)
 }
 
+// Only executed in the context of a serializer callback.
+func (r *xdsResolver) onRouteConfigResourceError(name string, err error) {
+	if r.logger.V(2) {
+		r.logger.Infof("Received error for RouteConfiguration resource %q: %v", name, err)
+	}
+	r.onError(err)
+}
+
+// Only executed in the context of a serializer callback.
 func (r *xdsResolver) onRouteConfigResourceNotFound(name string) {
+	if r.logger.V(2) {
+		r.logger.Infof("Received resource-not-found-error for RouteConfiguration resource %q", name)
+	}
+
 	if r.rdsResourceName != name {
 		return
 	}
 	r.onResourceNotFound()
 }
 
+// Only executed in the context of a serializer callback.
 func (r *xdsResolver) onClusterRefDownToZero() {
 	r.sendNewServiceConfig(r.curConfigSelector)
 }
