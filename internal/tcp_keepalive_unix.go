@@ -1,3 +1,5 @@
+//go:build unix
+
 /*
  * Copyright 2023 gRPC authors.
  *
@@ -21,6 +23,8 @@ import (
 	"net"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // NetDialerWithTCPKeepalive returns a net.Dialer that enables TCP keepalives on
@@ -43,7 +47,7 @@ func NetDialerWithTCPKeepalive() *net.Dialer {
 		// the TCP keealive interval and time parameters.
 		Control: func(_, _ string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
-				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_KEEPALIVE, 1)
+				unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_KEEPALIVE, 1)
 			})
 		},
 	}
