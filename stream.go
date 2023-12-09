@@ -894,9 +894,8 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 		return err
 	}
 
-	// TODO(dfawley): should we be checking len(data) instead?
-	if len(payload) > *cs.callInfo.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), *cs.callInfo.maxSendMessageSize)
+	if len(data) > *cs.callInfo.maxSendMessageSize || len(payload) > *cs.callInfo.maxSendMessageSize {
+		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), *cs.callInfo.maxSendMessageSize)
 	}
 	op := func(a *csAttempt) error {
 		return a.sendMsg(m, hdr, payload, data)
@@ -1371,14 +1370,13 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, payld, _, err := prepareMsg(m, as.codec, as.cp, as.comp)
+	hdr, payld, data, err := prepareMsg(m, as.codec, as.cp, as.comp)
 	if err != nil {
 		return err
 	}
 
-	// TODO(dfawley): should we be checking len(data) instead?
-	if len(payld) > *as.callInfo.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payld), *as.callInfo.maxSendMessageSize)
+	if len(data) > *as.callInfo.maxSendMessageSize || len(payld) > *as.callInfo.maxSendMessageSize {
+		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), *as.callInfo.maxSendMessageSize)
 	}
 
 	if err := as.t.Write(as.s, hdr, payld, &transport.Options{Last: !as.desc.ClientStreams}); err != nil {
@@ -1648,9 +1646,8 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 		return err
 	}
 
-	// TODO(dfawley): should we be checking len(data) instead?
-	if len(payload) > ss.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), ss.maxSendMessageSize)
+	if len(data) > ss.maxSendMessageSize || len(payload) > ss.maxSendMessageSize {
+		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), ss.maxSendMessageSize)
 	}
 	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
