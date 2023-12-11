@@ -165,10 +165,6 @@ func (s) TestNewServer_Success(t *testing.T) {
 				t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 			}
 			defer s.Stop()
-
-			if s.xdsCredsInUse != test.wantXDSCredsInUse {
-				t.Fatalf("xdsCredsInUse is %v, want %v", s.xdsCredsInUse, test.wantXDSCredsInUse)
-			}
 		})
 	}
 }
@@ -196,24 +192,6 @@ func (s) TestNewServer_Failure(t *testing.T) {
 				BootstrapContentsForTesting([]byte(`{}`)),
 			},
 			wantErr: "xDS client creation failed",
-		},
-		{
-			desc: "certificate provider config is missing",
-			serverOpts: []grpc.ServerOption{
-				grpc.Creds(xdsCreds),
-				func() grpc.ServerOption {
-					bs, err := bootstrap.Contents(bootstrap.Options{
-						NodeID:                             uuid.New().String(),
-						ServerURI:                          nonExistentManagementServer,
-						ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
-					})
-					if err != nil {
-						t.Errorf("Failed to create bootstrap configuration: %v", err)
-					}
-					return BootstrapContentsForTesting(bs)
-				}(),
-			},
-			wantErr: "certificate_providers config is missing",
 		},
 		{
 			desc: "server_listener_resource_name_template is missing",

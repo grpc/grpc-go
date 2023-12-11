@@ -78,9 +78,6 @@ type ListenerWrapperParams struct {
 	Listener net.Listener
 	// ListenerResourceName is the xDS Listener resource to request.
 	ListenerResourceName string
-	// XDSCredsInUse specifies whether or not the user expressed interest to
-	// receive security configuration from the control plane.
-	XDSCredsInUse bool
 	// XDSClient provides the functionality from the XDSClient required here.
 	XDSClient XDSClient
 	// ModeCallback is the callback to invoke when the serving mode changes.
@@ -99,7 +96,6 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 	lw := &listenerWrapper{
 		Listener:          params.Listener,
 		name:              params.ListenerResourceName,
-		xdsCredsInUse:     params.XDSCredsInUse,
 		xdsC:              params.XDSClient,
 		modeCallback:      params.ModeCallback,
 		drainCallback:     params.DrainCallback,
@@ -135,7 +131,6 @@ type listenerWrapper struct {
 	logger *internalgrpclog.PrefixLogger
 
 	name          string
-	xdsCredsInUse bool
 	xdsC          XDSClient
 	cancelWatch   func()
 	modeCallback  ServingModeCallback

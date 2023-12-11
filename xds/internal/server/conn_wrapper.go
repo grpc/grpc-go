@@ -19,7 +19,6 @@
 package server
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -92,15 +91,6 @@ func (c *connWrapper) GetDeadline() time.Time {
 // configuration for this connection. This method is invoked by the
 // ServerHandshake() method of the XdsCredentials.
 func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
-	// Ideally this should never happen, since xdsCredentials are the only ones
-	// which will invoke this method at handshake time. But to be on the safe
-	// side, we avoid acting on the security configuration received from the
-	// control plane when the user has not configured the use of xDS
-	// credentials, by checking the value of this flag.
-	if !c.parent.xdsCredsInUse {
-		return nil, errors.New("user has not configured xDS credentials")
-	}
-
 	if c.filterChain.SecurityCfg == nil {
 		// If the security config is empty, this means that the control plane
 		// did not provide any security configuration and therefore we should
@@ -145,6 +135,9 @@ func (c *connWrapper) Close() error {
 func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanceName, certName string, wantIdentity, wantRoot bool) (certprovider.Provider, error) {
 	cfg, ok := configs[instanceName]
 	if !ok {
+		// Defensive programming. If a resource received from the management
+		// server contains a certificate provider instance name that is not
+		// found in the bootstrap, the resource is NACKed by the xDS client.
 		return nil, fmt.Errorf("certificate provider instance %q not found in bootstrap file", instanceName)
 	}
 	provider, err := cfg.Build(certprovider.BuildOptions{
