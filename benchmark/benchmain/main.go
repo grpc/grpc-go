@@ -67,6 +67,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
@@ -373,7 +374,7 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 			logger.Fatalf("Failed to listen: %v", err)
 		}
 		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, address string) (net.Conn, error) {
-			return nw.ContextDialer((&net.Dialer{KeepAlive: time.Duration(-1)}).DialContext)(ctx, "tcp", lis.Addr().String())
+			return nw.ContextDialer((internal.NetDialerWithTCPKeepalive().DialContext))(ctx, "tcp", lis.Addr().String())
 		}))
 	}
 	lis = nw.Listener(lis)
