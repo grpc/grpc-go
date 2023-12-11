@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/buffer"
@@ -54,7 +53,6 @@ var (
 		return grpc.NewServer(opts...)
 	}
 
-	grpcGetServerCreds    = internal.GetServerCredentials.(func(*grpc.Server) credentials.TransportCredentials)
 	drainServerTransports = internal.DrainServerTransports.(func(*grpc.Server, string))
 	logger                = grpclog.Component("xds")
 )
