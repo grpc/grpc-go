@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"time"
 
 	"golang.org/x/sync/semaphore"
 	grpc "google.golang.org/grpc"
@@ -308,8 +309,10 @@ func (h *altsHandshaker) accessHandshakerService(req *altspb.HandshakerReq) (*al
 // the results. Handshaker service takes care of frame parsing, so we read
 // whatever received from the network and send it to the handshaker service.
 func (h *altsHandshaker) processUntilDone(resp *altspb.HandshakerResp, extra []byte) (*altspb.HandshakerResult, []byte, error) {
+	var lastWriteTime time.Time
 	for {
 		if len(resp.OutFrames) > 0 {
+			lastWriteTime = time.Now()
 			if _, err := h.conn.Write(resp.OutFrames); err != nil {
 				return nil, nil, err
 			}
@@ -333,11 +336,15 @@ func (h *altsHandshaker) processUntilDone(resp *altspb.HandshakerResp, extra []b
 		// Append extra bytes from the previous interaction with the
 		// handshaker service with the current buffer read from conn.
 		p := append(extra, buf[:n]...)
+		// Compute the time elapsed since the last write to the peer.
+		timeElapsed := time.Now().Sub(lastWriteTime)
+		timeElapsedMs := uint32(timeElapsed.Milliseconds())
 		// From here on, p and extra point to the same slice.
 		resp, err = h.accessHandshakerService(&altspb.HandshakerReq{
 			ReqOneof: &altspb.HandshakerReq_Next{
 				Next: &altspb.NextHandshakeMessageReq{
-					InBytes: p,
+					InBytes:          p,
+					NetworkLatencyMs: timeElapsedMs,
 				},
 			},
 		})

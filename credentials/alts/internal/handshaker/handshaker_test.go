@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -74,6 +75,9 @@ type testRPCStream struct {
 	first bool
 	// useful for testing concurrent calls.
 	delay time.Duration
+	// The minimum expected value of the network_latency_ms field in a
+	// NextHandshakeMessageReq.
+	minExpectedNetworkLatency time.Duration
 }
 
 func (t *testRPCStream) Recv() (*altspb.HandshakerResp, error) {
@@ -102,6 +106,19 @@ func (t *testRPCStream) Send(req *altspb.HandshakerReq) error {
 			}
 		}
 	} else {
+		switch req := req.ReqOneof.(type) {
+		case *altspb.HandshakerReq_Next:
+			// Compare the network_latency_ms field to the minimum expected network
+			// latency.
+			networkLatency := time.Duration(req.Next.NetworkLatencyMs) * time.Millisecond
+			if networkLatency < t.minExpectedNetworkLatency {
+				return fmt.Errorf("networkLatency (%v) is smaller than expected min network latency (%v)", networkLatency, t.minExpectedNetworkLatency)
+			}
+			break
+		default:
+			return fmt.Errorf("handshake request has unexpected type: %v", req)
+		}
+
 		// Add delay to test concurrent calls.
 		cleanup := stat.Update()
 		defer cleanup()
@@ -133,9 +150,11 @@ func (s) TestClientHandshake(t *testing.T) {
 	for _, testCase := range []struct {
 		delay              time.Duration
 		numberOfHandshakes int
+		readLatency        time.Duration
 	}{
-		{0 * time.Millisecond, 1},
-		{100 * time.Millisecond, 10 * int(envconfig.ALTSMaxConcurrentHandshakes)},
+		{0 * time.Millisecond, 1, time.Duration(0)},
+		{0 * time.Millisecond, 1, 2 * time.Millisecond},
+		{100 * time.Millisecond, 10 * int(envconfig.ALTSMaxConcurrentHandshakes), time.Duration(0)},
 	} {
 		errc := make(chan error)
 		stat.Reset()
@@ -145,8 +164,9 @@ func (s) TestClientHandshake(t *testing.T) {
 
 		for i := 0; i < testCase.numberOfHandshakes; i++ {
 			stream := &testRPCStream{
-				t:        t,
-				isClient: true,
+				t:                         t,
+				isClient:                  true,
+				minExpectedNetworkLatency: testCase.readLatency,
 			}
 			// Preload the inbound frames.
 			f1 := testutil.MakeFrame("ServerInit")
@@ -154,7 +174,7 @@ func (s) TestClientHandshake(t *testing.T) {
 			in := bytes.NewBuffer(f1)
 			in.Write(f2)
 			out := new(bytes.Buffer)
-			tc := testutil.NewTestConn(in, out)
+			tc := testutil.NewTestConnWithReadLatency(in, out, testCase.readLatency)
 			chs := &altsHandshaker{
 				stream: stream,
 				conn:   tc,
