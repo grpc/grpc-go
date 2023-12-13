@@ -253,7 +253,8 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 
 			// Register a watch, and push the results on to a channel.
 			lw := newListenerWatcher()
-			xdsresource.WatchListener(client, test.resourceName, lw)
+			cancel := xdsresource.WatchListener(client, test.resourceName, lw)
+			defer cancel()
 			t.Logf("Registered a watch for Listener %q", test.resourceName)
 
 			// Wait for the discovery request to be sent out.
@@ -506,7 +507,8 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 
 			// Register a watch, and push the results on to a channel.
 			rw := newRouteConfigWatcher()
-			xdsresource.WatchRouteConfig(client, test.resourceName, rw)
+			cancel := xdsresource.WatchRouteConfig(client, test.resourceName, rw)
+			defer cancel()
 			t.Logf("Registered a watch for Route Configuration %q", test.resourceName)
 
 			// Wait for the discovery request to be sent out.
@@ -722,7 +724,8 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 
 			// Register a watch, and push the results on to a channel.
 			cw := newClusterWatcher()
-			xdsresource.WatchCluster(client, test.resourceName, cw)
+			cancel := xdsresource.WatchCluster(client, test.resourceName, cw)
+			defer cancel()
 			t.Logf("Registered a watch for Cluster %q", test.resourceName)
 
 			// Wait for the discovery request to be sent out.
@@ -1034,8 +1037,8 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 
 			// Register a watch, and push the results on to a channel.
 			ew := newEndpointsWatcher()
-			edsCancel := xdsresource.WatchEndpoints(client, test.resourceName, ew)
-			defer edsCancel()
+			cancel := xdsresource.WatchEndpoints(client, test.resourceName, ew)
+			defer cancel()
 			t.Logf("Registered a watch for Endpoint %q", test.resourceName)
 
 			// Wait for the discovery request to be sent out.

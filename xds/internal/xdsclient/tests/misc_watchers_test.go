@@ -47,11 +47,9 @@ var (
 	routeConfigResourceType = internal.ResourceTypeMapForTesting[version.V3RouteConfigURL].(xdsresource.Type)
 )
 
-// This route configuration watcher
-// callback of the first resource, register two more watches (one for the
-// same resource name, which would be satisfied from the cache, and another
-// for a different resource name, which would be satisfied from the server).
-type routeConfigWatcherWithWatchFromCallback struct {
+// This route configuration watcher registers two
+// more watches from the OnUpdate callback of the original resource for which it was created.
+type testRouteConfigWatcher struct {
 	client           xdsclient.XDSClient
 	name1, name2     string
 	rcw1, rcw2       *routeConfigWatcher
@@ -59,8 +57,8 @@ type routeConfigWatcherWithWatchFromCallback struct {
 	updateCh         *testutils.Channel
 }
 
-func newRouteConfigWatcherWithWatchFromCallback(client xdsclient.XDSClient, name1, name2 string) *routeConfigWatcherWithWatchFromCallback {
-	return &routeConfigWatcherWithWatchFromCallback{
+func newTestRouteConfigWatcher(client xdsclient.XDSClient, name1, name2 string) *testRouteConfigWatcher {
+	return &testRouteConfigWatcher{
 		client:   client,
 		name1:    name1,
 		name2:    name2,
@@ -70,14 +68,14 @@ func newRouteConfigWatcherWithWatchFromCallback(client xdsclient.XDSClient, name
 	}
 }
 
-func (rw *routeConfigWatcherWithWatchFromCallback) OnUpdate(update *xdsresource.RouteConfigResourceData) {
+func (rw *testRouteConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData) {
 	rw.updateCh.Send(routeConfigUpdateErrTuple{update: update.Resource})
 
 	rw.cancel1 = xdsresource.WatchRouteConfig(rw.client, rw.name1, rw.rcw1)
 	rw.cancel2 = xdsresource.WatchRouteConfig(rw.client, rw.name2, rw.rcw2)
 }
 
-func (rw *routeConfigWatcherWithWatchFromCallback) OnError(err error) {
+func (rw *testRouteConfigWatcher) OnError(err error) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
@@ -85,11 +83,11 @@ func (rw *routeConfigWatcherWithWatchFromCallback) OnError(err error) {
 	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: err})
 }
 
-func (rw *routeConfigWatcherWithWatchFromCallback) OnResourceDoesNotExist() {
+func (rw *testRouteConfigWatcher) OnResourceDoesNotExist() {
 	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "RouteConfiguration not found in received response")})
 }
 
-func (rw *routeConfigWatcherWithWatchFromCallback) cancel() {
+func (rw *testRouteConfigWatcher) cancel() {
 	rw.cancel1()
 	rw.cancel2()
 }
@@ -125,7 +123,13 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	rw := newRouteConfigWatcherWithWatchFromCallback(client, rdsName, rdsNameNewStyle)
+	// Create a route configuration watcher that registers two more watches from
+	// the OnUpdate callback:
+	// - one for the same resource name as this watch, which would be
+	//   satisfied from xdsClient cache
+	// - the other for a different resource name, which would be
+	//   satisfied from the server
+	rw := newTestRouteConfigWatcher(client, rdsName, rdsNameNewStyle)
 	defer rw.cancel()
 	rdsCancel := xdsresource.WatchRouteConfig(client, rdsName, rw)
 	defer rdsCancel()
