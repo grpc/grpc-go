@@ -57,7 +57,7 @@ var (
 	// GetXDSHandshakeInfoForTesting returns a pointer to the xds.HandshakeInfo
 	// stored in the passed in attributes. This is set by
 	// credentials/xds/xds.go.
-	GetXDSHandshakeInfoForTesting any // func (*attributes.Attributes) *xds.HandshakeInfo
+	GetXDSHandshakeInfoForTesting any // func (*attributes.Attributes) *unsafe.Pointer
 	// GetServerCredentials returns the transport credentials configured on a
 	// gRPC server. An xDS-enabled server needs to know what type of credentials
 	// is configured on the underlying gRPC server. This is set by server.go.
@@ -182,12 +182,14 @@ var (
 	GRPCResolverSchemeExtraMetadata string = "xds"
 
 	// EnterIdleModeForTesting gets the ClientConn to enter IDLE mode.
-	EnterIdleModeForTesting any // func(*grpc.ClientConn) error
+	EnterIdleModeForTesting any // func(*grpc.ClientConn)
 
 	// ExitIdleModeForTesting gets the ClientConn to exit IDLE mode.
 	ExitIdleModeForTesting any // func(*grpc.ClientConn) error
 
-	// Gets the function definition from metadata package
+	ChannelzTurnOffForTesting func()
+  
+  // Gets the function definition from metadata package
 	FromOutgoingContextRaw any // func(context.Context) (metadata.MD, [][]string, bool)
 )
 
