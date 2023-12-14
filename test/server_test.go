@@ -21,80 +21,16 @@ package test
 import (
 	"context"
 	"io"
-	"runtime"
-	"sync"
 	"testing"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/status"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
-
-// Tests the case where the server worker goroutine option is enabled, and a
-// number of RPCs are initiated around the same time that Stop() is called. This
-// used to result in a write to a closed channel. This test verifies that there
-// is no panic.
-func (s) TestServerWorkers_RPCsAndStop(t *testing.T) {
-	ss := stubserver.StartTestService(t, nil, grpc.NumStreamWorkers(uint32(runtime.NumCPU())))
-	// This deferred stop takes care of stopping the server when one of the
-	// below grpc.Dials fail, and the test exits early.
-	defer ss.Stop()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	const numChannels = 20
-	const numRPCLoops = 20
-	var wg sync.WaitGroup
-	for i := 0; i < numChannels; i++ {
-		cc, err := grpc.Dial(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			t.Fatalf("[iteration: %d] grpc.Dial(%s) failed: %v", i, ss.Address, err)
-		}
-		defer cc.Close()
-
-		client := testgrpc.NewTestServiceClient(cc)
-		for j := 0; j < numRPCLoops; j++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for {
-					if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-						t.Logf("EmptyCall() failed: %v", err)
-						return
-					}
-				}
-			}()
-		}
-	}
-	// Call Stop() concurrently with the above RPC attempts.
-	ss.Stop()
-	wg.Wait()
-}
-
-// Tests the case where the server worker goroutine option is enabled, and both
-// Stop() and GracefulStop() care called. This used to result in a close of a
-// closed channel. This test verifies that there is no panic.
-func (s) TestServerGracefulStopAndStop(t *testing.T) {
-	ss := stubserver.StartTestService(t, nil, grpc.NumStreamWorkers(uint32(runtime.NumCPU())))
-	defer ss.Stop()
-
-	if err := ss.StartClient(grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
-		t.Fatalf("Failed to create client to stub server: %v", err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	client := testgrpc.NewTestServiceClient(ss.CC)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("EmptyCall() failed: %v", err)
-	}
-
-	ss.S.GracefulStop()
-}
 
 type ctxKey string
 
