@@ -337,7 +337,7 @@ func (h *altsHandshaker) processUntilDone(resp *altspb.HandshakerResp, extra []b
 		// handshaker service with the current buffer read from conn.
 		p := append(extra, buf[:n]...)
 		// Compute the time elapsed since the last write to the peer.
-		timeElapsed := time.Now().Sub(lastWriteTime)
+		timeElapsed := time.Since(lastWriteTime)
 		timeElapsedMs := uint32(timeElapsed.Milliseconds())
 		// From here on, p and extra point to the same slice.
 		resp, err = h.accessHandshakerService(&altspb.HandshakerReq{
