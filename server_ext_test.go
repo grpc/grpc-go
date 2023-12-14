@@ -145,18 +145,13 @@ func (s) TestStreamWorkers_RPCsAndStop(t *testing.T) {
 			go func(client testgrpc.TestServiceClient) {
 				defer wg.Done()
 				for {
-					sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-					defer sCancel()
-					_, err := client.EmptyCall(sCtx, &testpb.Empty{})
+					_, err := client.EmptyCall(ctx, &testpb.Empty{})
 					if err == nil {
 						continue
 					}
-					if code := status.Code(err); code == codes.DeadlineExceeded || code == codes.Unavailable {
+					if code := status.Code(err); code == codes.Unavailable {
 						// Once Stop() has been called on the server, we expect
-						// subsequent calls to fail with Unavailable or
-						// DeadlineExceeded, the latter happens when the client
-						// channel moves to TRANSIENT_FAILURE and will never
-						// recover from there.
+						// subsequent calls to fail with Unavailable.
 						return
 					}
 					t.Errorf("EmptyCall() failed: %v", err)
