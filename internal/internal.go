@@ -186,6 +186,9 @@ var (
 
 	// ExitIdleModeForTesting gets the ClientConn to exit IDLE mode.
 	ExitIdleModeForTesting any // func(*grpc.ClientConn) error
+
+	// Gets the function definition from metadata package
+	FromOutgoingContextRaw any // func(context.Context) (metadata.MD, [][]string, bool)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.

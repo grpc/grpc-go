@@ -36,6 +36,7 @@ import (
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	icredentials "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/internal/grpclog"
@@ -566,7 +567,8 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-trace-bin", Value: encodeBinHeader(b)})
 	}
 
-	if md, added, ok := metadata.FromOutgoingContextRaw(ctx); ok {
+	fromOutgoingCtxRaw := internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
+	if md, added, ok := fromOutgoingCtxRaw(ctx); ok {
 		var k string
 		for k, vv := range md {
 			// HTTP doesn't allow you to set pseudoheaders after non pseudoheaders were set.

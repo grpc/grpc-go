@@ -184,7 +184,8 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	// when the RPC completes.
 	opts = append([]CallOption{OnFinish(func(error) { cc.idlenessMgr.OnCallEnd() })}, opts...)
 
-	if md, added, ok := metadata.FromOutgoingContextRaw(ctx); ok {
+	fromOutgoingCtxRaw := internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
+	if md, added, ok := fromOutgoingCtxRaw(ctx); ok {
 		// validate md
 		if err := imetadata.Validate(md); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
