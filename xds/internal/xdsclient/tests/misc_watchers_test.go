@@ -47,8 +47,8 @@ var (
 	routeConfigResourceType = internal.ResourceTypeMapForTesting[version.V3RouteConfigURL].(xdsresource.Type)
 )
 
-// This route configuration watcher registers two
-// more watches from the OnUpdate callback of the original resource for which it was created.
+// This route configuration watcher registers two watches corresponding to the
+// names passed in at creation time on a valid update.
 type testRouteConfigWatcher struct {
 	client           xdsclient.XDSClient
 	name1, name2     string
