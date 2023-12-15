@@ -118,12 +118,6 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	return lisDefault, lisNonDefault, client, close
 }
 
-type noopClusterWatcher struct{}
-
-func (noopClusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData) {}
-func (noopClusterWatcher) OnError(err error)                                {}
-func (noopClusterWatcher) OnResourceDoesNotExist()                          {}
-
 // TestAuthorityShare tests the authority sharing logic. The test verifies the
 // following scenarios:
 //   - A watch for a resource name with an authority matching an existing watch
