@@ -41,6 +41,17 @@ import (
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
 
+type noopClusterWatcher struct{}
+
+func (noopClusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData) {}
+func (noopClusterWatcher) OnError(err error)                                {}
+func (noopClusterWatcher) OnResourceDoesNotExist()                          {}
+
+type clusterUpdateErrTuple struct {
+	update xdsresource.ClusterUpdate
+	err    error
+}
+
 type clusterWatcher struct {
 	updateCh *testutils.Channel
 }
@@ -49,20 +60,20 @@ func newClusterWatcher() *clusterWatcher {
 	return &clusterWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (ew *clusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData) {
-	ew.updateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: update.Resource})
+func (cw *clusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData) {
+	cw.updateCh.Send(clusterUpdateErrTuple{update: update.Resource})
 }
 
-func (ew *clusterWatcher) OnError(err error) {
+func (cw *clusterWatcher) OnError(err error) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
-	ew.updateCh.Replace(xdsresource.ClusterUpdateErrTuple{Err: err})
+	cw.updateCh.Replace(clusterUpdateErrTuple{err: err})
 }
 
-func (ew *clusterWatcher) OnResourceDoesNotExist() {
-	ew.updateCh.Replace(xdsresource.ClusterUpdateErrTuple{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response")})
+func (cw *clusterWatcher) OnResourceDoesNotExist() {
+	cw.updateCh.Replace(clusterUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response")})
 }
 
 // badClusterResource returns a cluster resource for the given name which
@@ -83,19 +94,19 @@ const wantClusterNACKErr = "unsupported config_source_specifier"
 //
 // Returns an error if no update is received before the context deadline expires
 // or the received update does not match the expected one.
-func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate xdsresource.ClusterUpdateErrTuple) error {
+func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate clusterUpdateErrTuple) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for a cluster resource from the management server: %v", err)
 	}
-	got := u.(xdsresource.ClusterUpdateErrTuple)
-	if wantUpdate.Err != nil {
-		if gotType, wantType := xdsresource.ErrType(got.Err), xdsresource.ErrType(wantUpdate.Err); gotType != wantType {
+	got := u.(clusterUpdateErrTuple)
+	if wantUpdate.err != nil {
+		if gotType, wantType := xdsresource.ErrType(got.err), xdsresource.ErrType(wantUpdate.err); gotType != wantType {
 			return fmt.Errorf("received update with error type %v, want %v", gotType, wantType)
 		}
 	}
 	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy")}
-	if diff := cmp.Diff(wantUpdate.Update, got.Update, cmpOpts...); diff != "" {
+	if diff := cmp.Diff(wantUpdate.update, got.update, cmpOpts...); diff != "" {
 		return fmt.Errorf("received unepected diff in the cluster resource update: (-want, got):\n%s", diff)
 	}
 	return nil
@@ -133,7 +144,7 @@ func (s) TestCDSWatch(t *testing.T) {
 		watchedResource        *v3clusterpb.Cluster // The resource being watched.
 		updatedWatchedResource *v3clusterpb.Cluster // The watched resource after an update.
 		notWatchedResource     *v3clusterpb.Cluster // A resource which is not being watched.
-		wantUpdate             xdsresource.ClusterUpdateErrTuple
+		wantUpdate             clusterUpdateErrTuple
 	}{
 		{
 			desc:                   "old style resource",
@@ -141,8 +152,8 @@ func (s) TestCDSWatch(t *testing.T) {
 			watchedResource:        e2e.DefaultCluster(cdsName, edsName, e2e.SecurityLevelNone),
 			updatedWatchedResource: e2e.DefaultCluster(cdsName, "new-eds-resource", e2e.SecurityLevelNone),
 			notWatchedResource:     e2e.DefaultCluster("unsubscribed-cds-resource", edsName, e2e.SecurityLevelNone),
-			wantUpdate: xdsresource.ClusterUpdateErrTuple{
-				Update: xdsresource.ClusterUpdate{
+			wantUpdate: clusterUpdateErrTuple{
+				update: xdsresource.ClusterUpdate{
 					ClusterName:    cdsName,
 					EDSServiceName: edsName,
 				},
@@ -154,8 +165,8 @@ func (s) TestCDSWatch(t *testing.T) {
 			watchedResource:        e2e.DefaultCluster(cdsNameNewStyle, edsNameNewStyle, e2e.SecurityLevelNone),
 			updatedWatchedResource: e2e.DefaultCluster(cdsNameNewStyle, "new-eds-resource", e2e.SecurityLevelNone),
 			notWatchedResource:     e2e.DefaultCluster("unsubscribed-cds-resource", edsNameNewStyle, e2e.SecurityLevelNone),
-			wantUpdate: xdsresource.ClusterUpdateErrTuple{
-				Update: xdsresource.ClusterUpdate{
+			wantUpdate: clusterUpdateErrTuple{
+				update: xdsresource.ClusterUpdate{
 					ClusterName:    cdsNameNewStyle,
 					EDSServiceName: edsNameNewStyle,
 				},
@@ -249,22 +260,22 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 		resourceName           string
 		watchedResource        *v3clusterpb.Cluster // The resource being watched.
 		updatedWatchedResource *v3clusterpb.Cluster // The watched resource after an update.
-		wantUpdateV1           xdsresource.ClusterUpdateErrTuple
-		wantUpdateV2           xdsresource.ClusterUpdateErrTuple
+		wantUpdateV1           clusterUpdateErrTuple
+		wantUpdateV2           clusterUpdateErrTuple
 	}{
 		{
 			desc:                   "old style resource",
 			resourceName:           cdsName,
 			watchedResource:        e2e.DefaultCluster(cdsName, edsName, e2e.SecurityLevelNone),
 			updatedWatchedResource: e2e.DefaultCluster(cdsName, "new-eds-resource", e2e.SecurityLevelNone),
-			wantUpdateV1: xdsresource.ClusterUpdateErrTuple{
-				Update: xdsresource.ClusterUpdate{
+			wantUpdateV1: clusterUpdateErrTuple{
+				update: xdsresource.ClusterUpdate{
 					ClusterName:    cdsName,
 					EDSServiceName: edsName,
 				},
 			},
-			wantUpdateV2: xdsresource.ClusterUpdateErrTuple{
-				Update: xdsresource.ClusterUpdate{
+			wantUpdateV2: clusterUpdateErrTuple{
+				update: xdsresource.ClusterUpdate{
 					ClusterName:    cdsName,
 					EDSServiceName: "new-eds-resource",
 				},
@@ -275,14 +286,14 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			resourceName:           cdsNameNewStyle,
 			watchedResource:        e2e.DefaultCluster(cdsNameNewStyle, edsNameNewStyle, e2e.SecurityLevelNone),
 			updatedWatchedResource: e2e.DefaultCluster(cdsNameNewStyle, "new-eds-resource", e2e.SecurityLevelNone),
-			wantUpdateV1: xdsresource.ClusterUpdateErrTuple{
-				Update: xdsresource.ClusterUpdate{
+			wantUpdateV1: clusterUpdateErrTuple{
+				update: xdsresource.ClusterUpdate{
 					ClusterName:    cdsNameNewStyle,
 					EDSServiceName: edsNameNewStyle,
 				},
 			},
-			wantUpdateV2: xdsresource.ClusterUpdateErrTuple{
-				Update: xdsresource.ClusterUpdate{
+			wantUpdateV2: clusterUpdateErrTuple{
+				update: xdsresource.ClusterUpdate{
 					ClusterName:    cdsNameNewStyle,
 					EDSServiceName: "new-eds-resource",
 				},
@@ -414,14 +425,14 @@ func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	}
 
 	// Verify the contents of the received update for the all watchers.
-	wantUpdate12 := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate12 := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    cdsName,
 			EDSServiceName: edsName,
 		},
 	}
-	wantUpdate3 := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate3 := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    cdsNameNewStyle,
 			EDSServiceName: edsNameNewStyle,
 		},
@@ -492,8 +503,8 @@ func (s) TestCDSWatch_ResourceCaching(t *testing.T) {
 	}
 
 	// Verify the contents of the received update.
-	wantUpdate := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    cdsName,
 			EDSServiceName: edsName,
 		},
@@ -558,7 +569,7 @@ func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	wantErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")
-	if err := verifyClusterUpdate(ctx, cw.updateCh, xdsresource.ClusterUpdateErrTuple{Err: wantErr}); err != nil {
+	if err := verifyClusterUpdate(ctx, cw.updateCh, clusterUpdateErrTuple{err: wantErr}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -605,8 +616,8 @@ func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	}
 
 	// Verify the contents of the received update.
-	wantUpdate := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    cdsName,
 			EDSServiceName: edsName,
 		},
@@ -673,14 +684,14 @@ func (s) TestCDSWatch_ResourceRemoved(t *testing.T) {
 	}
 
 	// Verify the contents of the received update for both watchers.
-	wantUpdate1 := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate1 := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    resourceName1,
 			EDSServiceName: edsName,
 		},
 	}
-	wantUpdate2 := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate2 := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    resourceName2,
 			EDSServiceName: edsNameNewStyle,
 		},
@@ -704,7 +715,7 @@ func (s) TestCDSWatch_ResourceRemoved(t *testing.T) {
 
 	// The first watcher should receive a resource removed error, while the
 	// second watcher should not receive an update.
-	if err := verifyClusterUpdate(ctx, cw1.updateCh, xdsresource.ClusterUpdateErrTuple{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")}); err != nil {
+	if err := verifyClusterUpdate(ctx, cw1.updateCh, clusterUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")}); err != nil {
 		t.Fatal(err)
 	}
 	if err := verifyNoClusterUpdate(ctx, cw2.updateCh); err != nil {
@@ -724,8 +735,8 @@ func (s) TestCDSWatch_ResourceRemoved(t *testing.T) {
 	if err := verifyNoClusterUpdate(ctx, cw1.updateCh); err != nil {
 		t.Fatal(err)
 	}
-	wantUpdate := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    resourceName2,
 			EDSServiceName: "new-eds-resource",
 		},
@@ -773,7 +784,7 @@ func (s) TestCDSWatch_NACKError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for a cluster resource from the management server: %v", err)
 	}
-	gotErr := u.(xdsresource.ClusterUpdateErrTuple).Err
+	gotErr := u.(clusterUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantClusterNACKErr) {
 		t.Fatalf("update received with error: %v, want %q", gotErr, wantClusterNACKErr)
 	}
@@ -828,15 +839,15 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for a cluster resource from the management server: %v", err)
 	}
-	gotErr := u.(xdsresource.ClusterUpdateErrTuple).Err
+	gotErr := u.(clusterUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantClusterNACKErr) {
 		t.Fatalf("update received with error: %v, want %q", gotErr, wantClusterNACKErr)
 	}
 
 	// Verify that the watcher watching the good resource receives a good
 	// update.
-	wantUpdate := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    goodResourceName,
 			EDSServiceName: edsName,
 		},
@@ -889,8 +900,8 @@ func (s) TestCDSWatch_PartialResponse(t *testing.T) {
 	}
 
 	// Verify the contents of the received update for first watcher.
-	wantUpdate1 := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate1 := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    resourceName1,
 			EDSServiceName: edsName,
 		},
@@ -919,8 +930,8 @@ func (s) TestCDSWatch_PartialResponse(t *testing.T) {
 	}
 
 	// Verify the contents of the received update for the second watcher.
-	wantUpdate2 := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate2 := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    resourceName2,
 			EDSServiceName: edsNameNewStyle,
 		},

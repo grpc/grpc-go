@@ -72,6 +72,41 @@ const (
 	edsNameNewStyle = "xdstp:///envoy.config.endpoint.v3.ClusterLoadAssignment/xdsclient-test-eds-resource"
 )
 
+type noopListenerWatcher struct{}
+
+func (noopListenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData) {}
+func (noopListenerWatcher) OnError(err error)                                 {}
+func (noopListenerWatcher) OnResourceDoesNotExist()                           {}
+
+type listenerUpdateErrTuple struct {
+	update xdsresource.ListenerUpdate
+	err    error
+}
+
+type listenerWatcher struct {
+	updateCh *testutils.Channel
+}
+
+func newListenerWatcher() *listenerWatcher {
+	return &listenerWatcher{updateCh: testutils.NewChannel()}
+}
+
+func (cw *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData) {
+	cw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
+}
+
+func (cw *listenerWatcher) OnError(err error) {
+	// When used with a go-control-plane management server that continuously
+	// resends resources which are NACKed by the xDS client, using a `Replace()`
+	// here and in OnResourceDoesNotExist() simplifies tests which will have
+	// access to the most recently received error.
+	cw.updateCh.Replace(listenerUpdateErrTuple{err: err})
+}
+
+func (cw *listenerWatcher) OnResourceDoesNotExist() {
+	cw.updateCh.Replace(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
+}
+
 // badListenerResource returns a listener resource for the given name which does
 // not contain the `RouteSpecifier` field in the HTTPConnectionManager, and
 // hence is expected to be NACKed by the client.
@@ -115,14 +150,14 @@ func verifyNoListenerUpdate(ctx context.Context, updateCh *testutils.Channel) er
 //
 // Returns an error if no update is received before the context deadline expires
 // or the received update does not match the expected one.
-func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate xdsresource.ListenerUpdateErrTuple) error {
+func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate listenerUpdateErrTuple) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for a listener resource from the management server: %v", err)
 	}
-	got := u.(xdsresource.ListenerUpdateErrTuple)
-	if wantUpdate.Err != nil {
-		if gotType, wantType := xdsresource.ErrType(got.Err), xdsresource.ErrType(wantUpdate.Err); gotType != wantType {
+	got := u.(listenerUpdateErrTuple)
+	if wantUpdate.err != nil {
+		if gotType, wantType := xdsresource.ErrType(got.err), xdsresource.ErrType(wantUpdate.err); gotType != wantType {
 			return fmt.Errorf("received update with error type %v, want %v", gotType, wantType)
 		}
 	}
@@ -131,7 +166,7 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 		cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
 		cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
 	}
-	if diff := cmp.Diff(wantUpdate.Update, got.Update, cmpOpts...); diff != "" {
+	if diff := cmp.Diff(wantUpdate.update, got.update, cmpOpts...); diff != "" {
 		return fmt.Errorf("received unepected diff in the listener resource update: (-want, got):\n%s", diff)
 	}
 	return nil
@@ -155,7 +190,7 @@ func (s) TestLDSWatch(t *testing.T) {
 		watchedResource        *v3listenerpb.Listener // The resource being watched.
 		updatedWatchedResource *v3listenerpb.Listener // The watched resource after an update.
 		notWatchedResource     *v3listenerpb.Listener // A resource which is not being watched.
-		wantUpdate             xdsresource.ListenerUpdateErrTuple
+		wantUpdate             listenerUpdateErrTuple
 	}{
 		{
 			desc:                   "old style resource",
@@ -163,8 +198,8 @@ func (s) TestLDSWatch(t *testing.T) {
 			watchedResource:        e2e.DefaultClientListener(ldsName, rdsName),
 			updatedWatchedResource: e2e.DefaultClientListener(ldsName, "new-rds-resource"),
 			notWatchedResource:     e2e.DefaultClientListener("unsubscribed-lds-resource", rdsName),
-			wantUpdate: xdsresource.ListenerUpdateErrTuple{
-				Update: xdsresource.ListenerUpdate{
+			wantUpdate: listenerUpdateErrTuple{
+				update: xdsresource.ListenerUpdate{
 					RouteConfigName: rdsName,
 					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 				},
@@ -176,8 +211,8 @@ func (s) TestLDSWatch(t *testing.T) {
 			watchedResource:        e2e.DefaultClientListener(ldsNameNewStyle, rdsNameNewStyle),
 			updatedWatchedResource: e2e.DefaultClientListener(ldsNameNewStyle, "new-rds-resource"),
 			notWatchedResource:     e2e.DefaultClientListener("unsubscribed-lds-resource", rdsNameNewStyle),
-			wantUpdate: xdsresource.ListenerUpdateErrTuple{
-				Update: xdsresource.ListenerUpdate{
+			wantUpdate: listenerUpdateErrTuple{
+				update: xdsresource.ListenerUpdate{
 					RouteConfigName: rdsNameNewStyle,
 					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 				},
@@ -199,10 +234,8 @@ func (s) TestLDSWatch(t *testing.T) {
 
 			// Register a watch for a listener resource and have the watch
 			// callback push the received update on to a channel.
-			updateCh := testutils.NewChannel()
-			ldsCancel := client.WatchListener(test.resourceName, func(u xdsresource.ListenerUpdate, err error) {
-				updateCh.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-			})
+			lw := newListenerWatcher()
+			ldsCancel := xdsresource.WatchListener(client, test.resourceName, lw)
 
 			// Configure the management server to return a single listener
 			// resource, corresponding to the one we registered a watch for.
@@ -218,7 +251,7 @@ func (s) TestLDSWatch(t *testing.T) {
 			}
 
 			// Verify the contents of the received update.
-			if err := verifyListenerUpdate(ctx, updateCh, test.wantUpdate); err != nil {
+			if err := verifyListenerUpdate(ctx, lw.updateCh, test.wantUpdate); err != nil {
 				t.Fatal(err)
 			}
 
@@ -232,7 +265,7 @@ func (s) TestLDSWatch(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyNoListenerUpdate(ctx, updateCh); err != nil {
+			if err := verifyNoListenerUpdate(ctx, lw.updateCh); err != nil {
 				t.Fatal(err)
 			}
 
@@ -247,7 +280,7 @@ func (s) TestLDSWatch(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyNoListenerUpdate(ctx, updateCh); err != nil {
+			if err := verifyNoListenerUpdate(ctx, lw.updateCh); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -273,22 +306,22 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 		resourceName           string
 		watchedResource        *v3listenerpb.Listener // The resource being watched.
 		updatedWatchedResource *v3listenerpb.Listener // The watched resource after an update.
-		wantUpdateV1           xdsresource.ListenerUpdateErrTuple
-		wantUpdateV2           xdsresource.ListenerUpdateErrTuple
+		wantUpdateV1           listenerUpdateErrTuple
+		wantUpdateV2           listenerUpdateErrTuple
 	}{
 		{
 			desc:                   "old style resource",
 			resourceName:           ldsName,
 			watchedResource:        e2e.DefaultClientListener(ldsName, rdsName),
 			updatedWatchedResource: e2e.DefaultClientListener(ldsName, "new-rds-resource"),
-			wantUpdateV1: xdsresource.ListenerUpdateErrTuple{
-				Update: xdsresource.ListenerUpdate{
+			wantUpdateV1: listenerUpdateErrTuple{
+				update: xdsresource.ListenerUpdate{
 					RouteConfigName: rdsName,
 					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 				},
 			},
-			wantUpdateV2: xdsresource.ListenerUpdateErrTuple{
-				Update: xdsresource.ListenerUpdate{
+			wantUpdateV2: listenerUpdateErrTuple{
+				update: xdsresource.ListenerUpdate{
 					RouteConfigName: "new-rds-resource",
 					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 				},
@@ -299,14 +332,14 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			resourceName:           ldsNameNewStyle,
 			watchedResource:        e2e.DefaultClientListener(ldsNameNewStyle, rdsNameNewStyle),
 			updatedWatchedResource: e2e.DefaultClientListener(ldsNameNewStyle, "new-rds-resource"),
-			wantUpdateV1: xdsresource.ListenerUpdateErrTuple{
-				Update: xdsresource.ListenerUpdate{
+			wantUpdateV1: listenerUpdateErrTuple{
+				update: xdsresource.ListenerUpdate{
 					RouteConfigName: rdsNameNewStyle,
 					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 				},
 			},
-			wantUpdateV2: xdsresource.ListenerUpdateErrTuple{
-				Update: xdsresource.ListenerUpdate{
+			wantUpdateV2: listenerUpdateErrTuple{
+				update: xdsresource.ListenerUpdate{
 					RouteConfigName: "new-rds-resource",
 					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 				},
@@ -328,15 +361,11 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 
 			// Register two watches for the same listener resource and have the
 			// callbacks push the received updates on to a channel.
-			updateCh1 := testutils.NewChannel()
-			ldsCancel1 := client.WatchListener(test.resourceName, func(u xdsresource.ListenerUpdate, err error) {
-				updateCh1.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-			})
+			lw1 := newListenerWatcher()
+			ldsCancel1 := xdsresource.WatchListener(client, test.resourceName, lw1)
 			defer ldsCancel1()
-			updateCh2 := testutils.NewChannel()
-			ldsCancel2 := client.WatchListener(test.resourceName, func(u xdsresource.ListenerUpdate, err error) {
-				updateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-			})
+			lw2 := newListenerWatcher()
+			ldsCancel2 := xdsresource.WatchListener(client, test.resourceName, lw2)
 
 			// Configure the management server to return a single listener
 			// resource, corresponding to the one we registered watches for.
@@ -352,10 +381,10 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			}
 
 			// Verify the contents of the received update.
-			if err := verifyListenerUpdate(ctx, updateCh1, test.wantUpdateV1); err != nil {
+			if err := verifyListenerUpdate(ctx, lw1.updateCh, test.wantUpdateV1); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyListenerUpdate(ctx, updateCh2, test.wantUpdateV1); err != nil {
+			if err := verifyListenerUpdate(ctx, lw2.updateCh, test.wantUpdateV1); err != nil {
 				t.Fatal(err)
 			}
 
@@ -366,10 +395,10 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyNoListenerUpdate(ctx, updateCh1); err != nil {
+			if err := verifyNoListenerUpdate(ctx, lw1.updateCh); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyNoListenerUpdate(ctx, updateCh2); err != nil {
+			if err := verifyNoListenerUpdate(ctx, lw2.updateCh); err != nil {
 				t.Fatal(err)
 			}
 
@@ -383,10 +412,10 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyListenerUpdate(ctx, updateCh1, test.wantUpdateV2); err != nil {
+			if err := verifyListenerUpdate(ctx, lw1.updateCh, test.wantUpdateV2); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyNoListenerUpdate(ctx, updateCh2); err != nil {
+			if err := verifyNoListenerUpdate(ctx, lw2.updateCh); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -413,22 +442,16 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 
 	// Register two watches for the same listener resource and have the
 	// callbacks push the received updates on to a channel.
-	updateCh1 := testutils.NewChannel()
-	ldsCancel1 := client.WatchListener(ldsName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh1.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw1 := newListenerWatcher()
+	ldsCancel1 := xdsresource.WatchListener(client, ldsName, lw1)
 	defer ldsCancel1()
-	updateCh2 := testutils.NewChannel()
-	ldsCancel2 := client.WatchListener(ldsName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw2 := newListenerWatcher()
+	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
 	defer ldsCancel2()
 
 	// Register the third watch for a different listener resource.
-	updateCh3 := testutils.NewChannel()
-	ldsCancel3 := client.WatchListener(ldsNameNewStyle, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh3.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw3 := newListenerWatcher()
+	ldsCancel3 := xdsresource.WatchListener(client, ldsNameNewStyle, lw3)
 	defer ldsCancel3()
 
 	// Configure the management server to return two listener resources,
@@ -450,19 +473,19 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	// Verify the contents of the received update for the all watchers. The two
 	// resources returned differ only in the resource name. Therefore the
 	// expected update is the same for all the watchers.
-	wantUpdate := xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
+	wantUpdate := listenerUpdateErrTuple{
+		update: xdsresource.ListenerUpdate{
 			RouteConfigName: rdsName,
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
 	}
-	if err := verifyListenerUpdate(ctx, updateCh1, wantUpdate); err != nil {
+	if err := verifyListenerUpdate(ctx, lw1.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyListenerUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyListenerUpdate(ctx, updateCh3, wantUpdate); err != nil {
+	if err := verifyListenerUpdate(ctx, lw3.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -504,10 +527,8 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 
 	// Register a watch for a listener resource and have the watch
 	// callback push the received update on to a channel.
-	updateCh1 := testutils.NewChannel()
-	ldsCancel1 := client.WatchListener(ldsName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh1.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw1 := newListenerWatcher()
+	ldsCancel1 := xdsresource.WatchListener(client, ldsName, lw1)
 	defer ldsCancel1()
 
 	// Configure the management server to return a single listener
@@ -524,13 +545,13 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	}
 
 	// Verify the contents of the received update.
-	wantUpdate := xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
+	wantUpdate := listenerUpdateErrTuple{
+		update: xdsresource.ListenerUpdate{
 			RouteConfigName: rdsName,
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
 	}
-	if err := verifyListenerUpdate(ctx, updateCh1, wantUpdate); err != nil {
+	if err := verifyListenerUpdate(ctx, lw1.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -541,12 +562,10 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 
 	// Register another watch for the same resource. This should get the update
 	// from the cache.
-	updateCh2 := testutils.NewChannel()
-	ldsCancel2 := client.WatchListener(ldsName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw2 := newListenerWatcher()
+	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
 	defer ldsCancel2()
-	if err := verifyListenerUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 	// No request should get sent out as part of this watch.
@@ -581,10 +600,8 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 
 	// Register a watch for a resource which is expected to fail with an error
 	// after the watch expiry timer fires.
-	updateCh := testutils.NewChannel()
-	ldsCancel := client.WatchListener(ldsName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw := newListenerWatcher()
+	ldsCancel := xdsresource.WatchListener(client, ldsName, lw)
 	defer ldsCancel()
 
 	// Wait for the watch expiry timer to fire.
@@ -594,7 +611,7 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	wantErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")
-	if err := verifyListenerUpdate(ctx, updateCh, xdsresource.ListenerUpdateErrTuple{Err: wantErr}); err != nil {
+	if err := verifyListenerUpdate(ctx, lw.updateCh, listenerUpdateErrTuple{err: wantErr}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -623,10 +640,8 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 
 	// Register a watch for a listener resource and have the watch
 	// callback push the received update on to a channel.
-	updateCh := testutils.NewChannel()
-	ldsCancel := client.WatchListener(ldsName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw := newListenerWatcher()
+	ldsCancel := xdsresource.WatchListener(client, ldsName, lw)
 	defer ldsCancel()
 
 	// Configure the management server to return a single listener
@@ -643,20 +658,20 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	}
 
 	// Verify the contents of the received update.
-	wantUpdate := xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
+	wantUpdate := listenerUpdateErrTuple{
+		update: xdsresource.ListenerUpdate{
 			RouteConfigName: rdsName,
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
 	}
-	if err := verifyListenerUpdate(ctx, updateCh, wantUpdate); err != nil {
+	if err := verifyListenerUpdate(ctx, lw.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
 	// Wait for the watch expiry timer to fire, and verify that the callback is
 	// not invoked.
 	<-time.After(defaultTestWatchExpiryTimeout)
-	if err := verifyNoListenerUpdate(ctx, updateCh); err != nil {
+	if err := verifyNoListenerUpdate(ctx, lw.updateCh); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -686,17 +701,13 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	// Register two watches for two listener resources and have the
 	// callbacks push the received updates on to a channel.
 	resourceName1 := ldsName
-	updateCh1 := testutils.NewChannel()
-	ldsCancel1 := client.WatchListener(resourceName1, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh1.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw1 := newListenerWatcher()
+	ldsCancel1 := xdsresource.WatchListener(client, resourceName1, lw1)
 	defer ldsCancel1()
 
 	resourceName2 := ldsNameNewStyle
-	updateCh2 := testutils.NewChannel()
-	ldsCancel2 := client.WatchListener(resourceName2, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw2 := newListenerWatcher()
+	ldsCancel2 := xdsresource.WatchListener(client, resourceName2, lw2)
 	defer ldsCancel2()
 
 	// Configure the management server to return two listener resources,
@@ -718,16 +729,16 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	// Verify the contents of the received update for both watchers. The two
 	// resources returned differ only in the resource name. Therefore the
 	// expected update is the same for both watchers.
-	wantUpdate := xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
+	wantUpdate := listenerUpdateErrTuple{
+		update: xdsresource.ListenerUpdate{
 			RouteConfigName: rdsName,
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
 	}
-	if err := verifyListenerUpdate(ctx, updateCh1, wantUpdate); err != nil {
+	if err := verifyListenerUpdate(ctx, lw1.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyListenerUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
@@ -743,12 +754,12 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 
 	// The first watcher should receive a resource removed error, while the
 	// second watcher should not see an update.
-	if err := verifyListenerUpdate(ctx, updateCh1, xdsresource.ListenerUpdateErrTuple{
-		Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, ""),
+	if err := verifyListenerUpdate(ctx, lw1.updateCh, listenerUpdateErrTuple{
+		err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, ""),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyNoListenerUpdate(ctx, updateCh2); err != nil {
+	if err := verifyNoListenerUpdate(ctx, lw2.updateCh); err != nil {
 		t.Fatal(err)
 	}
 
@@ -762,16 +773,16 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
-	if err := verifyNoListenerUpdate(ctx, updateCh1); err != nil {
+	if err := verifyNoListenerUpdate(ctx, lw1.updateCh); err != nil {
 		t.Fatal(err)
 	}
-	wantUpdate = xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
+	wantUpdate = listenerUpdateErrTuple{
+		update: xdsresource.ListenerUpdate{
 			RouteConfigName: "new-rds-resource",
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
 	}
-	if err := verifyListenerUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -792,12 +803,8 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 
 	// Register a watch for a listener resource and have the watch
 	// callback push the received update on to a channel.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	updateCh := testutils.NewChannel()
-	ldsCancel := client.WatchListener(ldsName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh.SendContext(ctx, xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw := newListenerWatcher()
+	ldsCancel := xdsresource.WatchListener(client, ldsName, lw)
 	defer ldsCancel()
 
 	// Configure the management server to return a single listener resource
@@ -807,16 +814,18 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 		Listeners:      []*v3listenerpb.Listener{badListenerResource(t, ldsName)},
 		SkipValidation: true,
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
 	// Verify that the expected error is propagated to the watcher.
-	u, err := updateCh.Receive(ctx)
+	u, err := lw.updateCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("timeout when waiting for a listener resource from the management server: %v", err)
 	}
-	gotErr := u.(xdsresource.ListenerUpdateErrTuple).Err
+	gotErr := u.(listenerUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
 		t.Fatalf("update received with error: %v, want %q", gotErr, wantListenerNACKErr)
 	}
@@ -844,16 +853,12 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	badResourceName := ldsName
-	updateCh1 := testutils.NewChannel()
-	ldsCancel1 := client.WatchListener(badResourceName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh1.SendContext(ctx, xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw1 := newListenerWatcher()
+	ldsCancel1 := xdsresource.WatchListener(client, badResourceName, lw1)
 	defer ldsCancel1()
 	goodResourceName := ldsNameNewStyle
-	updateCh2 := testutils.NewChannel()
-	ldsCancel2 := client.WatchListener(goodResourceName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh2.SendContext(ctx, xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw2 := newListenerWatcher()
+	ldsCancel2 := xdsresource.WatchListener(client, goodResourceName, lw2)
 	defer ldsCancel2()
 
 	// Configure the management server with two listener resources. One of these
@@ -872,24 +877,24 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 
 	// Verify that the expected error is propagated to the watcher which
 	// requested for the bad resource.
-	u, err := updateCh1.Receive(ctx)
+	u, err := lw1.updateCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("timeout when waiting for a listener resource from the management server: %v", err)
 	}
-	gotErr := u.(xdsresource.ListenerUpdateErrTuple).Err
+	gotErr := u.(listenerUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
 		t.Fatalf("update received with error: %v, want %q", gotErr, wantListenerNACKErr)
 	}
 
 	// Verify that the watcher watching the good resource receives a good
 	// update.
-	wantUpdate := xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
+	wantUpdate := listenerUpdateErrTuple{
+		update: xdsresource.ListenerUpdate{
 			RouteConfigName: rdsName,
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
 	}
-	if err := verifyListenerUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -915,17 +920,13 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	// Register two watches for two listener resources and have the
 	// callbacks push the received updates on to a channel.
 	resourceName1 := ldsName
-	updateCh1 := testutils.NewChannel()
-	ldsCancel1 := client.WatchListener(resourceName1, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh1.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw1 := newListenerWatcher()
+	ldsCancel1 := xdsresource.WatchListener(client, resourceName1, lw1)
 	defer ldsCancel1()
 
 	resourceName2 := ldsNameNewStyle
-	updateCh2 := testutils.NewChannel()
-	ldsCancel2 := client.WatchListener(resourceName2, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw2 := newListenerWatcher()
+	ldsCancel2 := xdsresource.WatchListener(client, resourceName2, lw2)
 	defer ldsCancel2()
 
 	// Configure the management server to return only one of the two listener
@@ -944,18 +945,18 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	}
 
 	// Verify the contents of the received update for first watcher.
-	wantUpdate1 := xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
+	wantUpdate1 := listenerUpdateErrTuple{
+		update: xdsresource.ListenerUpdate{
 			RouteConfigName: rdsName,
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
 	}
-	if err := verifyListenerUpdate(ctx, updateCh1, wantUpdate1); err != nil {
+	if err := verifyListenerUpdate(ctx, lw1.updateCh, wantUpdate1); err != nil {
 		t.Fatal(err)
 	}
 
 	// Verify that the second watcher does not get an update with an error.
-	if err := verifyNoListenerUpdate(ctx, updateCh2); err != nil {
+	if err := verifyNoListenerUpdate(ctx, lw2.updateCh); err != nil {
 		t.Fatal(err)
 	}
 
@@ -974,19 +975,19 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	}
 
 	// Verify the contents of the received update for the second watcher.
-	wantUpdate2 := xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
+	wantUpdate2 := listenerUpdateErrTuple{
+		update: xdsresource.ListenerUpdate{
 			RouteConfigName: rdsName,
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
 	}
-	if err := verifyListenerUpdate(ctx, updateCh2, wantUpdate2); err != nil {
+	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate2); err != nil {
 		t.Fatal(err)
 	}
 
 	// Verify that the first watcher gets no update, as the first resource did
 	// not change.
-	if err := verifyNoListenerUpdate(ctx, updateCh1); err != nil {
+	if err := verifyNoListenerUpdate(ctx, lw1.updateCh); err != nil {
 		t.Fatal(err)
 	}
 }

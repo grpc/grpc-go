@@ -144,7 +144,8 @@ type Server struct {
 	channelzID *channelz.Identifier
 	czData     *channelzData
 
-	serverWorkerChannel chan func()
+	serverWorkerChannel      chan func()
+	serverWorkerChannelClose func()
 }
 
 type serverOptions struct {
@@ -623,13 +624,12 @@ func (s *Server) serverWorker() {
 // connections to reduce the time spent overall on runtime.morestack.
 func (s *Server) initServerWorkers() {
 	s.serverWorkerChannel = make(chan func())
+	s.serverWorkerChannelClose = grpcsync.OnceFunc(func() {
+		close(s.serverWorkerChannel)
+	})
 	for i := uint32(0); i < s.opts.numServerWorkers; i++ {
 		go s.serverWorker()
 	}
-}
-
-func (s *Server) stopServerWorkers() {
-	close(s.serverWorkerChannel)
 }
 
 // NewServer creates a gRPC server which has no service registered and has not
@@ -814,14 +814,17 @@ func (l *listenSocket) Close() error {
 // this method returns.
 // Serve will return a non-nil error unless Stop or GracefulStop is called.
 //
-// Note: As of Go 1.21, the standard library overrides the OS defaults for
-// TCP keepalive time and interval to 15s.
-// To retain OS defaults, pass a net.Listener created by calling the Listen method
-// on a net.ListenConfig with the `KeepAlive` field set to a negative value.
-//
-// For more information, please see [issue 23459] in the Go github repo.
-//
-// [issue 23459]: https://github.com/golang/go/issues/23459
+// Note: All supported releases of Go (as of December 2023) override the OS
+// defaults for TCP keepalive time and interval to 15s. To enable TCP keepalive
+// with OS defaults for keepalive time and interval, callers need to do the
+// following two things:
+//   - pass a net.Listener created by calling the Listen method on a
+//     net.ListenConfig with the `KeepAlive` field set to a negative value. This
+//     will result in the Go standard library not overriding OS defaults for TCP
+//     keepalive interval and time. But this will also result in the Go standard
+//     library not enabling TCP keepalives by default.
+//   - override the Accept method on the passed in net.Listener and set the
+//     SO_KEEPALIVE socket option to enable TCP keepalives, with OS defaults.
 func (s *Server) Serve(lis net.Listener) error {
 	s.mu.Lock()
 	s.printf("serving")
@@ -1895,14 +1898,18 @@ func (s *Server) stop(graceful bool) {
 		s.closeServerTransportsLocked()
 	}
 
-	if s.opts.numServerWorkers > 0 {
-		s.stopServerWorkers()
-	}
-
 	for len(s.conns) != 0 {
 		s.cv.Wait()
 	}
 	s.conns = nil
+
+	if s.opts.numServerWorkers > 0 {
+		// Closing the channel (only once, via grpcsync.OnceFunc) after all the
+		// connections have been closed above ensures that there are no
+		// goroutines executing the callback passed to st.HandleStreams (where
+		// the channel is written to).
+		s.serverWorkerChannelClose()
+	}
 
 	if s.events != nil {
 		s.events.Finish()
