@@ -31,7 +31,7 @@ RUN go build -tags osusergo,netgo interop/xds/client/client.go
 # reduces the docker image size.
 FROM alpine
 COPY --from=build /go/src/grpc-go/client .
-ENV GRPC_GO_LOG_VERBOSITY_LEVEL=2
+ENV GRPC_GO_LOG_VERBOSITY_LEVEL=99
 ENV GRPC_GO_LOG_SEVERITY_LEVEL="info"
 ENV GRPC_GO_LOG_FORMATTER="json"
 ENTRYPOINT ["./client"]
