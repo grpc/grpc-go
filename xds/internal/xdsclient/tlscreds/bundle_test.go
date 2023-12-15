@@ -56,7 +56,7 @@ func TestValidTlsBuilder(t *testing.T) {
 		t.Run(jd, func(t *testing.T) {
 			msg := json.RawMessage(jd)
 			if _, err := NewBundle(msg); err != nil {
-				t.Errorf("expected no error but got: %s", err)
+				t.Errorf("NewBundle(%s): expected no error but got: %s", jd, err)
 			}
 		})
 	}
@@ -66,7 +66,7 @@ func TestInvalidTlsBuilder(t *testing.T) {
 	tests := []struct {
 		jd, err string
 	}{
-		{`{"ca_certificate_file": 1}`, "json: cannot unmarshal number into Go struct field .ca_certificate_file of type string"},
+		{`{"ca_certificate_file": 1}`, "failed to unmarshal config: json: cannot unmarshal number into Go struct field .ca_certificate_file of type string"},
 		{`{"certificate_file":"bar"}`, "pemfile: private key file and identity cert file should be both specified or not specified"},
 	}
 
@@ -74,7 +74,7 @@ func TestInvalidTlsBuilder(t *testing.T) {
 		t.Run(test.jd, func(t *testing.T) {
 			msg := json.RawMessage(test.jd)
 			if _, err := NewBundle(msg); err.Error() != test.err {
-				t.Errorf("expected: %s, got: %s", test.err, err)
+				t.Errorf("NewBundle(%s): want error %s, got: %s", msg, test.err, err)
 			}
 		})
 	}
@@ -93,14 +93,14 @@ func TestCaReloading(t *testing.T) {
 
 	serverCa, err := os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
 	if err != nil {
-		t.Fatalf("failed to read test CA cert: %s", err)
+		t.Fatalf("Failed to read test CA cert: %s", err)
 	}
 
 	// Write CA certs to a temporary file so that we can modify it later.
 	caPath := t.TempDir() + "/ca.pem"
 	err = os.WriteFile(caPath, serverCa, 0644)
 	if err != nil {
-		t.Fatalf("failed to write test CA cert: %v", err)
+		t.Fatalf("Failed to write test CA cert: %v", err)
 	}
 	cfg := fmt.Sprintf(`{
 		"ca_certificate_file": "%s",
@@ -108,7 +108,7 @@ func TestCaReloading(t *testing.T) {
 	}`, caPath)
 	tlsBundle, err := NewBundle([]byte(cfg))
 	if err != nil {
-		t.Fatalf("failed to create TLS bundle: %v", err)
+		t.Fatalf("Failed to create TLS bundle: %v", err)
 	}
 
 	conn, err := grpc.Dial(
@@ -117,13 +117,13 @@ func TestCaReloading(t *testing.T) {
 		grpc.WithAuthority("x.test.example.com"),
 	)
 	if err != nil {
-		t.Fatalf("error dialing: %v", err)
+		t.Fatalf("Error dialing: %v", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 	_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
 	if err != nil {
-		t.Errorf("error calling EmptyCall: %v", err)
+		t.Errorf("Error calling EmptyCall: %v", err)
 	}
 	// close the server and create a new one to force client to do a new
 	// handshake.
@@ -131,12 +131,12 @@ func TestCaReloading(t *testing.T) {
 
 	invalidCa, err := os.ReadFile(testdata.Path("ca.pem"))
 	if err != nil {
-		t.Fatalf("failed to read test CA cert: %v", err)
+		t.Fatalf("Failed to read test CA cert: %v", err)
 	}
 	// unload root cert
 	err = os.WriteFile(caPath, invalidCa, 0644)
 	if err != nil {
-		t.Fatalf("failed to write test CA cert: %v", err)
+		t.Fatalf("Failed to write test CA cert: %v", err)
 	}
 
 	// Leave time for the file_watcher provider to reload the CA.
@@ -149,9 +149,9 @@ func TestCaReloading(t *testing.T) {
 	// unknown CA.
 	_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
 	if st, ok := status.FromError(err); !ok || st.Code() != codes.Unavailable {
-		t.Errorf("expected unavailable error, got %v", err)
-	} else if !strings.Contains(st.Message(), "certificate signed by unknown authority") {
-		t.Errorf("expected error to contain 'certificate signed by unknown authority', got %v", st.Message())
+		t.Errorf("Expected unavailable error, got %v", err)
+	} else if want := "certificate signed by unknown authority"; !strings.Contains(st.Message(), want) {
+		t.Errorf("Expected call error to contain '%s', got %v", want, st.Message())
 	}
 }
 
@@ -169,7 +169,7 @@ func TestMTLS(t *testing.T) {
 		testdata.Path("x509/client1_key.pem"))
 	tlsBundle, err := NewBundle([]byte(cfg))
 	if err != nil {
-		t.Fatalf("failed to create TLS bundle: %v", err)
+		t.Fatalf("Failed to create TLS bundle: %v", err)
 	}
 	dialOpts := []grpc.DialOption{
 		grpc.WithCredentialsBundle(tlsBundle),
@@ -179,13 +179,13 @@ func TestMTLS(t *testing.T) {
 	t.Run("ValidClientCert", func(t *testing.T) {
 		conn, err := grpc.Dial(srvAddr.String(), dialOpts...)
 		if err != nil {
-			t.Fatalf("error dialing: %v", err)
+			t.Fatalf("Error dialing: %v", err)
 		}
 		client := testgrpc.NewTestServiceClient(conn)
 
 		_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
 		if err != nil {
-			t.Errorf("error calling EmptyCall: %v", err)
+			t.Errorf("Error calling EmptyCall: %v", err)
 		}
 		conn.Close()
 	})
@@ -201,21 +201,21 @@ func TestMTLS(t *testing.T) {
 		_, _ = creds.provider.KeyMaterial(context.Background())
 
 		if !ok {
-			t.Fatalf("expected reloadingCreds, got %T", tlsBundle.TransportCredentials())
+			t.Fatalf("Expected reloadingCreds, got %T", tlsBundle.TransportCredentials())
 		}
 
 		creds.provider.Close()
 
 		conn, err := grpc.Dial(srvAddr.String(), dialOpts...)
 		if err != nil {
-			t.Fatalf("error dialing: %v", err)
+			t.Fatalf("Error dialing: %v", err)
 		}
 		client := testgrpc.NewTestServiceClient(conn)
 		_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
 		if st, ok := status.FromError(err); !ok || st.Code() != codes.Unavailable {
-			t.Errorf("expected unavailable error, got %v", err)
-		} else if !strings.Contains(st.Message(), "provider instance is closed") {
-			t.Errorf("expected error to contain 'provider instance is closed', got %v", st.Message())
+			t.Errorf("Expected unavailable error, got %v", err)
+		} else if want := "provider instance is closed"; !strings.Contains(st.Message(), want) {
+			t.Errorf("Expected error to contain '%s', got %v", want, st.Message())
 		}
 		conn.Close()
 	})
@@ -227,15 +227,15 @@ func startServer(t *testing.T, addr string, clientAuth tls.ClientAuthType) (net.
 	// Create a TLS server with a valid cert that requires a client cert.
 	serverCert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
-		t.Fatalf("failed to load server cert: %v", err)
+		t.Fatalf("Failed to load server cert: %v", err)
 	}
 	pemClientCA, err := os.ReadFile(testdata.Path("x509/client_ca_cert.pem"))
 	if err != nil {
-		t.Fatalf("failed to read test client CA cert: %v", err)
+		t.Fatalf("Failed to read test client CA cert: %v", err)
 	}
 	clientCA := x509.NewCertPool()
 	if !clientCA.AppendCertsFromPEM(pemClientCA) {
-		t.Fatal("failed to add client CA's certificate")
+		t.Fatal("Failed to add client CA's certificate")
 	}
 	serverTLSCfg := &tls.Config{
 		Certificates: []tls.Certificate{serverCert},
@@ -243,13 +243,13 @@ func startServer(t *testing.T, addr string, clientAuth tls.ClientAuthType) (net.
 		ClientCAs:    clientCA,
 	}
 	if err != nil {
-		t.Fatalf("failed to generate server credentials: %v", err)
+		t.Fatalf("Failed to generate server credentials: %v", err)
 	}
 	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(serverTLSCfg)))
 	testgrpc.RegisterTestServiceServer(s, &testServer{})
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		t.Fatalf("error listening: %v", err)
+		t.Fatalf("Error listening: %v", err)
 	}
 	go s.Serve(lis)
 	return lis.Addr(), func() { s.Stop() }

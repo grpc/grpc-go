@@ -24,6 +24,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 
@@ -49,9 +50,11 @@ func NewBundle(jd json.RawMessage) (credentials.Bundle, error) {
 		PrivateKeyFile    string `json:"private_key_file"`
 	}{}
 
-	if err := json.Unmarshal(jd, cfg); err != nil {
-		return nil, err
-	}
+	if jd != nil {
+		if err := json.Unmarshal(jd, cfg); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal config: %v", err)
+		}
+	} // Else the config field is absent. Treat it as an empty config.
 
 	if cfg.CACertificateFile == "" && cfg.CertificateFile == "" && cfg.PrivateKeyFile == "" {
 		// We cannot use (and do not need) a file_watcher provider in this case,
@@ -63,9 +66,7 @@ func NewBundle(jd json.RawMessage) (credentials.Bundle, error) {
 		// > provider, at least one of the "certificate_file" or
 		// > "ca_certificate_file" fields must be specified, whereas in this
 		// > configuration, it is acceptable to specify neither one.
-		return &bundle{
-			transportCredentials: credentials.NewTLS(&tls.Config{}),
-		}, nil
+		return &bundle{transportCredentials: credentials.NewTLS(&tls.Config{})}, nil
 	}
 	// Otherwise we need to use a file_watcher provider to watch the CA,
 	// private and public keys.
@@ -76,9 +77,7 @@ func NewBundle(jd json.RawMessage) (credentials.Bundle, error) {
 		return nil, err
 	}
 	return &bundle{
-		transportCredentials: &reloadingCreds{
-			provider: provider,
-		},
+		transportCredentials: &reloadingCreds{provider: provider},
 	}, nil
 }
 
@@ -124,15 +123,13 @@ func (c *reloadingCreds) Info() credentials.ProtocolInfo {
 }
 
 func (c *reloadingCreds) Clone() credentials.TransportCredentials {
-	return &reloadingCreds{
-		provider: c.provider,
-	}
+	return &reloadingCreds{provider: c.provider}
 }
 
-func (c *reloadingCreds) OverrideServerName(_ string) error {
-	panic("cannot override server name for private xds tls credentials")
+func (c *reloadingCreds) OverrideServerName(string) error {
+	return errors.New("overriding server name is not supported by xDS client TLS credentials")
 }
 
-func (c *reloadingCreds) ServerHandshake(_ net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	panic("cannot perform handshake for server. xDS TLS credentials are client only.")
+func (c *reloadingCreds) ServerHandshake(net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return nil, nil, errors.New("server handshake is not supported by xDS client TLS credentials")
 }

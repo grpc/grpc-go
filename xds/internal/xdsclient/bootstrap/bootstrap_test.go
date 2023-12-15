@@ -1040,8 +1040,8 @@ func TestCredsBuilders(t *testing.T) {
 	}
 
 	tcb := &tlsCredsBuilder{}
-	if _, err := tcb.Build(nil); err == nil {
-		t.Errorf("tlsCredsBuilder.Build succeeded, want failure")
+	if _, err := tcb.Build(nil); err != nil {
+		t.Errorf("tlsCredsBuilder.Build failed: %v", err)
 	}
 	if got, want := tcb.Name(), "tls"; got != want {
 		t.Errorf("tlsCredsBuilder.Name = %v, want %v", got, want)
@@ -1051,10 +1051,10 @@ func TestCredsBuilders(t *testing.T) {
 func TestTlsCredsBuilder(t *testing.T) {
 	tls := &tlsCredsBuilder{}
 	if _, err := tls.Build(json.RawMessage(`{}`)); err != nil {
-		t.Errorf("unexpected error with empty config: %s", err)
+		t.Errorf("tls.Build() failed with empty config: %s", err)
 	}
 	if _, err := tls.Build(json.RawMessage(`{"ca_certificate_file":"/ca_certificates.pem","refresh_interval": "asdf"}`)); err == nil {
-		t.Errorf("expected an error with invalid refresh interval")
+		t.Errorf("tls.Build() succeeded with an invalid refresh interval, when expected to fail")
 	}
-	// more tests for config validity are defined in creds subpackage.
+	// more tests for config validity are defined in tlscreds subpackage.
 }
