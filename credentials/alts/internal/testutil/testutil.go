@@ -84,10 +84,7 @@ func NewTestConn(in *bytes.Buffer, out *bytes.Buffer) net.Conn {
 
 // NewTestConnWithReadLatency creates a new instance of testConn object that
 // pauses for readLatency before any call to Read() returns.
-func NewTestConnWithReadLatency(
-	in *bytes.Buffer,
-	out *bytes.Buffer,
-	readLatency time.Duration) net.Conn {
+func NewTestConnWithReadLatency(in *bytes.Buffer, out *bytes.Buffer, readLatency time.Duration) net.Conn {
 	return &testConn{
 		in:          in,
 		out:         out,

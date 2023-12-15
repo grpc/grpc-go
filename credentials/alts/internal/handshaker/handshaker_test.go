@@ -110,9 +110,8 @@ func (t *testRPCStream) Send(req *altspb.HandshakerReq) error {
 		case *altspb.HandshakerReq_Next:
 			// Compare the network_latency_ms field to the minimum expected network
 			// latency.
-			networkLatency := time.Duration(req.Next.NetworkLatencyMs) * time.Millisecond
-			if networkLatency < t.minExpectedNetworkLatency {
-				return fmt.Errorf("networkLatency (%v) is smaller than expected min network latency (%v)", networkLatency, t.minExpectedNetworkLatency)
+			if nl := time.Duration(req.Next.NetworkLatencyMs) * time.Millisecond; nl < t.minExpectedNetworkLatency {
+				return fmt.Errorf("networkLatency (%v) is smaller than expected min network latency (%v)", nl, t.minExpectedNetworkLatency)
 			}
 		default:
 			return fmt.Errorf("handshake request has unexpected type: %v", req)
