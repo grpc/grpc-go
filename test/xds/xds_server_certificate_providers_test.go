@@ -315,6 +315,9 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	}
 	resource1 := e2e.DefaultServerListener(host1, port1, e2e.SecurityLevelMTLS, "routeName")
 	host2, port2, err := hostPortFromListener(lis2)
+	if err != nil {
+		t.Fatalf("Failed to retrieve host and port of server: %v", err)
+	}
 	hcm := &v3httppb.HttpConnectionManager{
 		RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 			RouteConfig: &v3routepb.RouteConfiguration{
