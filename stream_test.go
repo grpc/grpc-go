@@ -32,7 +32,6 @@ import (
 )
 
 const defaultTestTimeout = 10 * time.Second
-const defaultTestShortTimeout = 10 * time.Millisecond
 
 type s struct {
 	grpctest.Tester
