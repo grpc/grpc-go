@@ -130,7 +130,7 @@ func (s) TestStreamWorkers_RPCsAndStop(t *testing.T) {
 		}
 		defer ccs[i].Close()
 		client := testgrpc.NewTestServiceClient(ccs[i])
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			t.Fatalf("EmptyCall() failed: %v", err)
 		}
 	}
