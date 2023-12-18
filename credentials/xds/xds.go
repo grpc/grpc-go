@@ -275,6 +275,10 @@ func (c *credsImpl) OverrideServerName(_ string) error {
 	return errors.New("serverName for peer validation must be configured as a list of acceptable SANs")
 }
 
+func (c *credsImpl) TLSConfig() *tls.Config {
+	return nil
+}
+
 // UsesXDS returns true if c uses xDS to fetch security configuration
 // used at handshake time, and false otherwise.
 func (c *credsImpl) UsesXDS() bool {

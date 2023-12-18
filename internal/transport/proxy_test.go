@@ -141,7 +141,7 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 	// Dial to proxy server.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	c, err := proxyDial(ctx, blis.Addr().String(), "test")
+	c, err := proxyDial(ctx, blis.Addr().String(), "test", nil)
 	if err != nil {
 		t.Fatalf("http connect Dial failed: %v", err)
 	}

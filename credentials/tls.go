@@ -153,6 +153,10 @@ func (c *tlsCreds) OverrideServerName(serverNameOverride string) error {
 	return nil
 }
 
+func (c *tlsCreds) TLSConfig() *tls.Config {
+	return c.config.Clone()
+}
+
 // The following cipher suites are forbidden for use with HTTP/2 by
 // https://datatracker.ietf.org/doc/html/rfc7540#appendix-A
 var tls12ForbiddenCipherSuites = map[uint16]struct{}{

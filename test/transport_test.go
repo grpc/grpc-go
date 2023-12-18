@@ -19,6 +19,7 @@ package test
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"net"
 	"sync"
@@ -72,6 +73,9 @@ func (c *transportRestartCheckCreds) Clone() credentials.TransportCredentials {
 	return c
 }
 func (c *transportRestartCheckCreds) OverrideServerName(s string) error {
+	return nil
+}
+func (c *transportRestartCheckCreds) TLSConfig() *tls.Config {
 	return nil
 }
 

@@ -20,6 +20,7 @@ package grpclb
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -127,6 +128,9 @@ func (c *serverNameCheckCreds) Clone() credentials.TransportCredentials {
 	return &serverNameCheckCreds{}
 }
 func (c *serverNameCheckCreds) OverrideServerName(s string) error {
+	return nil
+}
+func (c *serverNameCheckCreds) TLSConfig() *tls.Config {
 	return nil
 }
 

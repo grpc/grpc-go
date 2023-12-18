@@ -114,7 +114,7 @@ func (o RootCertificateOptions) nonNilFieldCount() int {
 // At most one option could be set.
 type IdentityCertificateOptions struct {
 	// If Certificates is set, it will be used every time when needed to present
-	//identity certificates, without performing identity certificate reloading.
+	// identity certificates, without performing identity certificate reloading.
 	Certificates []tls.Certificate
 	// If GetIdentityCertificatesForClient is set, it will be invoked to obtain
 	// identity certs for every new connection.
@@ -470,6 +470,13 @@ func (c *advancedTLSCreds) Clone() credentials.TransportCredentials {
 
 func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 	c.config.ServerName = serverNameOverride
+	return nil
+}
+
+func (c *advancedTLSCreds) TLSConfig() *tls.Config {
+	if c.config != nil {
+		return c.config.Clone()
+	}
 	return nil
 }
 

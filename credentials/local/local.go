@@ -31,6 +31,7 @@ package local
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"strings"
@@ -108,5 +109,9 @@ func (c *localTC) Clone() credentials.TransportCredentials {
 // Since this feature is specific to TLS (SNI + hostname verification check), it does not take any effet for local credentials.
 func (c *localTC) OverrideServerName(serverNameOverride string) error {
 	c.info.ServerName = serverNameOverride
+	return nil
+}
+
+func (c *localTC) TLSConfig() *tls.Config {
 	return nil
 }

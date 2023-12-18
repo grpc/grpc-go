@@ -20,6 +20,7 @@ package google
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"net/url"
 	"strings"
@@ -125,4 +126,8 @@ func (c *clusterTransportCreds) OverrideServerName(s string) error {
 		return err
 	}
 	return c.alts.OverrideServerName(s)
+}
+
+func (c *clusterTransportCreds) TLSConfig() *tls.Config {
+	return c.tls.TLSConfig()
 }

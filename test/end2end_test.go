@@ -4178,6 +4178,9 @@ func (c *clientFailCreds) Clone() credentials.TransportCredentials {
 func (c *clientFailCreds) OverrideServerName(s string) error {
 	return nil
 }
+func (c *clientFailCreds) TLSConfig() *tls.Config {
+	return nil
+}
 
 // This test makes sure that failfast RPCs fail if client handshake fails with
 // fatal errors.

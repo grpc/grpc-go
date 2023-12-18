@@ -20,6 +20,7 @@ package test
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -227,6 +228,9 @@ func (c clientAlwaysFailCred) Info() credentials.ProtocolInfo {
 func (c clientAlwaysFailCred) Clone() credentials.TransportCredentials {
 	return nil
 }
+func (c *clientAlwaysFailCred) TLSConfig() *tls.Config {
+	return nil
+}
 
 func (s) TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "empty", balancer: "round_robin"})
@@ -421,6 +425,9 @@ func (c *authorityCheckCreds) Info() credentials.ProtocolInfo {
 }
 func (c *authorityCheckCreds) Clone() credentials.TransportCredentials {
 	return c
+}
+func (c *authorityCheckCreds) TLSConfig() *tls.Config {
+	return nil
 }
 
 // This test makes sure that the authority client handshake gets is the endpoint

@@ -25,6 +25,7 @@ package alts
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -286,6 +287,10 @@ func (g *altsTC) Clone() credentials.TransportCredentials {
 
 func (g *altsTC) OverrideServerName(serverNameOverride string) error {
 	g.info.ServerName = serverNameOverride
+	return nil
+}
+
+func (g *altsTC) TLSConfig() *tls.Config {
 	return nil
 }
 

@@ -20,6 +20,7 @@ package test
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -367,6 +368,9 @@ func (ac *attrTransportCreds) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{}
 }
 func (ac *attrTransportCreds) Clone() credentials.TransportCredentials {
+	return nil
+}
+func (ac *attrTransportCreds) TLSConfig() *tls.Config {
 	return nil
 }
 

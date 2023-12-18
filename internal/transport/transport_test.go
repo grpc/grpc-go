@@ -21,6 +21,7 @@ package transport
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -1150,7 +1151,7 @@ func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	if err := client.Write(cstream1, nil, make([]byte, defaultWindowSize), &Options{Last: true}); err != nil {
 		t.Fatalf("Client failed to write data. Err: %v", err)
 	}
-	//Client should be able to create another stream and send data on it.
+	// Client should be able to create another stream and send data on it.
 	cstream2, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("Failed to create 2nd stream. Err: %v", err)
@@ -2331,6 +2332,9 @@ func (ac *attrTransportCreds) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{}
 }
 func (ac *attrTransportCreds) Clone() credentials.TransportCredentials {
+	return nil
+}
+func (ac *attrTransportCreds) TLSConfig() *tls.Config {
 	return nil
 }
 

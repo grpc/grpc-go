@@ -21,8 +21,10 @@ package transport
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"google.golang.org/grpc/credentials"
 	"io"
 	"net"
 	"net/http"
@@ -114,24 +116,40 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr stri
 // proxyDial dials, connecting to a proxy first if necessary. Checks if a proxy
 // is necessary, dials, does the HTTP CONNECT handshake, and returns the
 // connection.
-func proxyDial(ctx context.Context, addr string, grpcUA string) (net.Conn, error) {
+func proxyDial(ctx context.Context, addr string, grpcUA string, transportCreds credentials.TransportCredentials) (net.Conn, error) {
 	newAddr := addr
 	proxyURL, err := mapAddress(addr)
 	if err != nil {
 		return nil, err
 	}
-	if proxyURL != nil {
-		newAddr = proxyURL.Host
-	}
 
-	conn, err := internal.NetDialerWithTCPKeepalive().DialContext(ctx, "tcp", newAddr)
-	if err != nil {
-		return nil, err
-	}
 	if proxyURL == nil {
 		// proxy is disabled if proxyURL is nil.
-		return conn, err
+		return internal.NetDialerWithTCPKeepalive().DialContext(ctx, "tcp", newAddr)
 	}
+
+	newAddr = proxyURL.Host
+	var conn net.Conn
+	if proxyURL.Scheme == "https" {
+		conf := &tls.Config{
+			InsecureSkipVerify: true,
+		}
+		if transportCreds.TLSConfig() != nil {
+			conf = transportCreds.TLSConfig()
+		}
+
+		conn, err = tls.Dial("tcp", newAddr, conf)
+		if err != nil {
+			return nil, err
+		}
+
+	} else {
+		conn, err = internal.NetDialerWithTCPKeepalive().DialContext(ctx, "tcp", newAddr)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return doHTTPConnectHandshake(ctx, conn, addr, proxyURL, grpcUA)
 }
 
