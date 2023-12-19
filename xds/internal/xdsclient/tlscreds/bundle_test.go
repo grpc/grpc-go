@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/stubserver"
@@ -32,6 +33,8 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/testdata"
 )
+
+const defaultTestTimeout = 5 * time.Second
 
 func TestFailingProvider(t *testing.T) {
 	s := stubserver.StartTestService(t, nil, grpc.Creds(e2e.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)))
@@ -69,14 +72,24 @@ func TestFailingProvider(t *testing.T) {
 
 	creds.provider.Close()
 
-	conn, err := grpc.Dial(s.Address, dialOpts...)
-	if err != nil {
-		t.Fatalf("Error dialing: %v", err)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
+		conn, err := grpc.Dial(s.Address, dialOpts...)
+		if err != nil {
+			t.Fatalf("Error dialing: %v", err)
+		}
+		client := testgrpc.NewTestServiceClient(conn)
+		_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
+		const wantErr = "provider instance is closed"
+		if err != nil && strings.Contains(err.Error(), wantErr) {
+			break
+		}
+		t.Logf("EmptyCall() got err: %s, want err to contain: %s", err, "provider instance is closed")
+		conn.Close()
 	}
-	client := testgrpc.NewTestServiceClient(conn)
-	_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
-	if wantErr := "provider instance is closed"; err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("got error %v when expected error to contain %v", err, wantErr)
+	if ctx.Err() != nil {
+		t.Errorf("Timed out waiting for provider closed to trigger an RPC error")
 	}
-	conn.Close()
 }

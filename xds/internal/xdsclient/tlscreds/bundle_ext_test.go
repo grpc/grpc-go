@@ -39,9 +39,7 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/tlscreds"
 )
 
-const (
-	defaultTestTimeout = 5 * time.Second
-)
+const defaultTestTimeout = 5 * time.Second
 
 func TestValidTlsBuilder(t *testing.T) {
 	tests := []struct {
