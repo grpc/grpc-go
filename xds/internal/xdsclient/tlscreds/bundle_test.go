@@ -60,11 +60,6 @@ func TestFailingProvider(t *testing.T) {
 		t.Fatalf("Failed to create TLS bundle: %v", err)
 	}
 
-	dialOpts := []grpc.DialOption{
-		grpc.WithCredentialsBundle(tlsBundle),
-		grpc.WithAuthority("x.test.example.com"),
-	}
-
 	// Force a provider that returns an error, and make sure the client fails
 	// the handshake.
 	creds, ok := tlsBundle.TransportCredentials().(*reloadingCreds)
@@ -73,7 +68,7 @@ func TestFailingProvider(t *testing.T) {
 	}
 	creds.provider = &failingProvider{}
 
-	conn, err := grpc.Dial(s.Address, dialOpts...)
+	conn, err := grpc.Dial(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
 	if err != nil {
 		t.Fatalf("Error dialing: %v", err)
 	}

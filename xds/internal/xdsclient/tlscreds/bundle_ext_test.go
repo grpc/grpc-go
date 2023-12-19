@@ -101,8 +101,7 @@ func TestCaReloading(t *testing.T) {
 
 	// Write CA certs to a temporary file so that we can modify it later.
 	caPath := t.TempDir() + "/ca.pem"
-	err = os.WriteFile(caPath, serverCa, 0644)
-	if err != nil {
+	if err = os.WriteFile(caPath, serverCa, 0644); err != nil {
 		t.Fatalf("Failed to write test CA cert: %v", err)
 	}
 	cfg := fmt.Sprintf(`{
@@ -126,9 +125,12 @@ func TestCaReloading(t *testing.T) {
 		t.Fatalf("Error dialing: %v", err)
 	}
 	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	client := testgrpc.NewTestServiceClient(conn)
-	_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
-	if err != nil {
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Errorf("Error calling EmptyCall: %v", err)
 	}
 	// close the server and create a new one to force client to do a new
@@ -145,9 +147,6 @@ func TestCaReloading(t *testing.T) {
 		t.Fatalf("Failed to write test CA cert: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
 	for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
 		ss := stubserver.StubServer{
 			Address:    server.Address,
@@ -162,6 +161,7 @@ func TestCaReloading(t *testing.T) {
 		const wantErr = "certificate signed by unknown authority"
 		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), wantErr) {
 			// Certs have reloaded.
+			server.Stop()
 			break
 		}
 		t.Logf("EmptyCall() got err: %s, want code: %s, want err: %s", err, codes.Unavailable, wantErr)
@@ -188,18 +188,13 @@ func TestMTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TLS bundle: %v", err)
 	}
-	dialOpts := []grpc.DialOption{
-		grpc.WithCredentialsBundle(tlsBundle),
-		grpc.WithAuthority("x.test.example.com"),
-	}
-
-	conn, err := grpc.Dial(s.Address, dialOpts...)
+	conn, err := grpc.Dial(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
 	if err != nil {
 		t.Fatalf("Error dialing: %v", err)
 	}
+	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
-	_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
-	if err != nil {
+	if _, err = client.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 		t.Errorf("EmptyCall(): got error %v when expected to succeed", err)
 	}
 }
