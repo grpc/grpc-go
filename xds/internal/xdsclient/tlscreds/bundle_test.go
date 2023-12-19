@@ -28,12 +28,21 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/testdata"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 type failingProvider struct{}
 
@@ -43,7 +52,7 @@ func (f failingProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMate
 
 func (f failingProvider) Close() {}
 
-func TestFailingProvider(t *testing.T) {
+func (s) TestFailingProvider(t *testing.T) {
 	s := stubserver.StartTestService(t, nil, grpc.Creds(e2e.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)))
 	defer s.Stop()
 
@@ -66,6 +75,7 @@ func TestFailingProvider(t *testing.T) {
 	if !ok {
 		t.Fatalf("Got %T, expected reloadingCreds", tlsBundle.TransportCredentials())
 	}
+	creds.provider.Close()
 	creds.provider = &failingProvider{}
 
 	conn, err := grpc.Dial(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))

@@ -155,9 +155,9 @@ type ServerConfig struct {
 
 	// As part of unmarshaling the JSON config into this struct, we ensure that
 	// the credentials config is valid by building an instance of the specified
-	// credentials and store it here as a grpc.DialOption for easy access when
-	// dialing this xDS server.
-	credsDialOption grpc.DialOption
+	// credentials and store it here for easy access when dialing this xDS
+	// server.
+	credsBundle credentials.Bundle
 
 	// IgnoreResourceDeletion controls the behavior of the xDS client when the
 	// server deletes a previously sent Listener or Cluster resource. If set, the
@@ -167,9 +167,9 @@ type ServerConfig struct {
 	IgnoreResourceDeletion bool
 }
 
-// CredsDialOption returns the configured credentials as a grpc dial option.
-func (sc *ServerConfig) CredsDialOption() grpc.DialOption {
-	return sc.credsDialOption
+// CredsBundle returns the configured credentials bundle.
+func (sc *ServerConfig) CredsBundle() credentials.Bundle {
+	return sc.credsBundle
 }
 
 // String returns the string representation of the ServerConfig.
@@ -225,7 +225,7 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("failed to build credentials bundle from bootstrap for %q: %v", cc.Type, err)
 		}
 		sc.Creds = ChannelCreds(cc)
-		sc.credsDialOption = grpc.WithCredentialsBundle(bundle)
+		sc.credsBundle = bundle
 		break
 	}
 	return nil
@@ -538,7 +538,7 @@ func newConfigFromContents(data []byte) (*Config, error) {
 	if config.XDSServer.ServerURI == "" {
 		return nil, fmt.Errorf("xds: required field %q not found in bootstrap %s", "xds_servers.server_uri", jsonData["xds_servers"])
 	}
-	if config.XDSServer.CredsDialOption() == nil {
+	if config.XDSServer.CredsBundle() == nil {
 		return nil, fmt.Errorf("xds: required field %q doesn't contain valid value in bootstrap %s", "xds_servers.channel_creds", jsonData["xds_servers"])
 	}
 	// Post-process the authorities' client listener resource template field:

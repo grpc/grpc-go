@@ -97,6 +97,15 @@ func (t *bundle) NewWithMode(string) (credentials.Bundle, error) {
 	return nil, fmt.Errorf("xDS TLS credentials only support one mode")
 }
 
+// Close releases the underlying provider. Note that credentials.Bundle are
+// not closeable, so users of this type must use a type assertion to call Close.
+func (t *bundle) Close() {
+	cred, ok := t.transportCredentials.(*reloadingCreds)
+	if ok {
+		cred.provider.Close()
+	}
+}
+
 // reloadingCreds is a credentials.TransportCredentials for client
 // side mTLS that reloads the server root CA certificate and the client
 // certificates from the provider on every client handshake. This is necessary

@@ -85,5 +85,10 @@ func (c *clientImpl) close() {
 	c.authorityMu.Unlock()
 	c.serializerClose()
 
+	if closableBundle, ok := c.config.XDSServer.CredsBundle().(interface {
+		Close()
+	}); ok {
+		closableBundle.Close()
+	}
 	c.logger.Infof("Shutdown")
 }

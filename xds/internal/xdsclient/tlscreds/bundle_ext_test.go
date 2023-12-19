@@ -30,6 +30,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -41,34 +42,76 @@ import (
 
 const defaultTestTimeout = 5 * time.Second
 
-func TestValidTlsBuilder(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestValidTlsBuilder(t *testing.T) {
+	caCert := testdata.Path("x509/server_ca_cert.pem")
+	clientCert := testdata.Path("x509/client1_cert.pem")
+	clientKey := testdata.Path("x509/client1_key.pem")
 	tests := []struct {
 		name string
 		jd   string
 	}{
-		{name: "Absent configuration", jd: `null`},
-		{name: "Empty configuration", jd: `{}`},
-		{name: "Only CA certificate chain", jd: `{"ca_certificate_file": "foo"}`},
-		{name: "Only private key and certificate chain", jd: `{"certificate_file":"bar","private_key_file":"baz"}`},
-		{name: "CA chain, private key and certificate chain", jd: `{"ca_certificate_file":"foo","certificate_file":"bar","private_key_file":"baz"}`},
-		{name: "Only refresh interval", jd: `{"refresh_interval": "1s"}`},
-		{name: "Refresh interval and CA certificate chain", jd: `{"refresh_interval": "1s","ca_certificate_file": "foo"}`},
-		{name: "Refresh interval, private key and certificate chain", jd: `{"refresh_interval": "1s","certificate_file":"bar","private_key_file":"baz"}`},
-		{name: "Refresh interval, CA chain, private key and certificate chain", jd: `{"refresh_interval": "1s","ca_certificate_file":"foo","certificate_file":"bar","private_key_file":"baz"}`},
-		{name: "Unknown field", jd: `{"unknown_field": "foo"}`},
+		{
+			name: "Absent configuration",
+			jd:   `null`,
+		},
+		{
+			name: "Empty configuration",
+			jd:   `{}`,
+		},
+		{
+			name: "Only CA certificate chain",
+			jd:   fmt.Sprintf(`{"ca_certificate_file": "%s"}`, caCert),
+		},
+		{
+			name: "Only private key and certificate chain",
+			jd:   fmt.Sprintf(`{"certificate_file":"%s","private_key_file":"%s"}`, clientCert, clientKey),
+		},
+		{
+			name: "CA chain, private key and certificate chain",
+			jd:   fmt.Sprintf(`{"ca_certificate_file":"%s","certificate_file":"%s","private_key_file":"%s"}`, caCert, clientCert, clientKey),
+		},
+		{
+			name: "Only refresh interval", jd: `{"refresh_interval": "1s"}`,
+		},
+		{
+			name: "Refresh interval and CA certificate chain",
+			jd:   fmt.Sprintf(`{"refresh_interval": "1s","ca_certificate_file": "%s"}`, caCert),
+		},
+		{
+			name: "Refresh interval, private key and certificate chain",
+			jd:   fmt.Sprintf(`{"refresh_interval": "1s","certificate_file":"%s","private_key_file":"%s"}`, clientCert, clientKey),
+		},
+		{
+			name: "Refresh interval, CA chain, private key and certificate chain",
+			jd:   fmt.Sprintf(`{"refresh_interval": "1s","ca_certificate_file":"%s","certificate_file":"%s","private_key_file":"%s"}`, caCert, clientCert, clientKey),
+		},
+		{
+			name: "Unknown field",
+			jd:   `{"unknown_field": "foo"}`,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			msg := json.RawMessage(test.jd)
-			if _, err := tlscreds.NewBundle(msg); err != nil {
+			if bundle, err := tlscreds.NewBundle(msg); err != nil {
 				t.Errorf("NewBundle(%s) returned error %s when expected to succeed", test.jd, err)
+			} else {
+				bundle.Close()
 			}
 		})
 	}
 }
 
-func TestInvalidTlsBuilder(t *testing.T) {
+func (s) TestInvalidTlsBuilder(t *testing.T) {
 	tests := []struct {
 		name, jd, wantErrPrefix string
 	}{
@@ -78,7 +121,7 @@ func TestInvalidTlsBuilder(t *testing.T) {
 			wantErrPrefix: "failed to unmarshal config:"},
 		{
 			name:          "Missing private key",
-			jd:            `{"certificate_file":"bar"}`,
+			jd:            fmt.Sprintf(`{"certificate_file":"%s"}`, testdata.Path("x509/server_cert.pem")),
 			wantErrPrefix: "pemfile: private key file and identity cert file should be both specified or not specified",
 		},
 	}
@@ -86,14 +129,15 @@ func TestInvalidTlsBuilder(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			msg := json.RawMessage(test.jd)
-			if _, err := tlscreds.NewBundle(msg); err == nil || !strings.HasPrefix(err.Error(), test.wantErrPrefix) {
+			if bundle, err := tlscreds.NewBundle(msg); err == nil || !strings.HasPrefix(err.Error(), test.wantErrPrefix) {
 				t.Errorf("NewBundle(%s): got error %s, want an error with prefix %s", msg, err, test.wantErrPrefix)
+				bundle.Close()
 			}
 		})
 	}
 }
 
-func TestCaReloading(t *testing.T) {
+func (s) TestCaReloading(t *testing.T) {
 	serverCa, err := os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
 	if err != nil {
 		t.Fatalf("Failed to read test CA cert: %s", err)
@@ -112,6 +156,7 @@ func TestCaReloading(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TLS bundle: %v", err)
 	}
+	defer tlsBundle.Close()
 
 	serverCredentials := grpc.Creds(e2e.CreateServerTLSCredentials(t, tls.NoClientCert))
 	server := stubserver.StartTestService(t, nil, serverCredentials)
@@ -172,7 +217,7 @@ func TestCaReloading(t *testing.T) {
 	}
 }
 
-func TestMTLS(t *testing.T) {
+func (s) TestMTLS(t *testing.T) {
 	s := stubserver.StartTestService(t, nil, grpc.Creds(e2e.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)))
 	defer s.Stop()
 
@@ -188,6 +233,7 @@ func TestMTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TLS bundle: %v", err)
 	}
+	defer tlsBundle.Close()
 	conn, err := grpc.Dial(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
 	if err != nil {
 		t.Fatalf("Error dialing: %v", err)
