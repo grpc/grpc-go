@@ -1051,7 +1051,7 @@ func TestCredsBuilders(t *testing.T) {
 func TestTlsCredsBuilder(t *testing.T) {
 	tls := &tlsCredsBuilder{}
 	if _, err := tls.Build(json.RawMessage(`{}`)); err != nil {
-		t.Errorf("tls.Build() failed with empty config: %s", err)
+		t.Errorf("tls.Build() failed with error %s when expected to succeed", err)
 	}
 	if _, err := tls.Build(json.RawMessage(`{"ca_certificate_file":"/ca_certificates.pem","refresh_interval": "asdf"}`)); err == nil {
 		t.Errorf("tls.Build() succeeded with an invalid refresh interval, when expected to fail")

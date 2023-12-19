@@ -60,7 +60,7 @@ func TestFailingProvider(t *testing.T) {
 	// provider.
 	creds, ok := tlsBundle.TransportCredentials().(*reloadingCreds)
 	if !ok {
-		t.Fatalf("Expected reloadingCreds, got %T", tlsBundle.TransportCredentials())
+		t.Fatalf("Got %T, expected reloadingCreds", tlsBundle.TransportCredentials())
 	}
 
 	// Force the provider to be initialized. The test is flaky otherwise,
@@ -75,8 +75,8 @@ func TestFailingProvider(t *testing.T) {
 	}
 	client := testgrpc.NewTestServiceClient(conn)
 	_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
-	if wantErr := "provider instance is closed"; strings.HasSuffix(err.Error(), wantErr) {
-		t.Errorf("Expected error to end with %v, got %v", wantErr, err)
+	if wantErr := "provider instance is closed"; err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("got error %v when expected error to contain %v", err, wantErr)
 	}
 	conn.Close()
 }

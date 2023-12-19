@@ -74,8 +74,15 @@ func TestInvalidTlsBuilder(t *testing.T) {
 	tests := []struct {
 		name, jd, wantErrPrefix string
 	}{
-		{"Wrong type in json", `{"ca_certificate_file": 1}`, "failed to unmarshal config:"},
-		{"Missing private key", `{"certificate_file":"bar"}`, "pemfile: private key file and identity cert file should be both specified or not specified"},
+		{
+			name:          "Wrong type in json",
+			jd:            `{"ca_certificate_file": 1}`,
+			wantErrPrefix: "failed to unmarshal config:"},
+		{
+			name:          "Missing private key",
+			jd:            `{"certificate_file":"bar"}`,
+			wantErrPrefix: "pemfile: private key file and identity cert file should be both specified or not specified",
+		},
 	}
 
 	for _, test := range tests {
@@ -150,8 +157,8 @@ func TestCaReloading(t *testing.T) {
 		}
 		server = stubserver.StartTestService(t, &ss, serverCredentials)
 
-		// Client handshake should fail because the server cert is signed by an
-		// unknown CA.
+		// Client handshake should eventually fail because the client CA was
+		// reloaded, and thus the server cert is signed by an unknown CA.
 		t.Log(server)
 		_, err = client.EmptyCall(ctx, &testpb.Empty{})
 		const wantErr = "certificate signed by unknown authority"
@@ -159,7 +166,7 @@ func TestCaReloading(t *testing.T) {
 			// Certs have reloaded.
 			break
 		}
-		t.Logf("EmptyCall() want code: %s, want err: %s, got err: %s", codes.Unavailable, wantErr, err)
+		t.Logf("EmptyCall() got err: %s, want code: %s, want err: %s", err, codes.Unavailable, wantErr)
 		server.Stop()
 	}
 	if ctx.Err() != nil {
@@ -195,6 +202,6 @@ func TestMTLS(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(conn)
 	_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
 	if err != nil {
-		t.Errorf("Error calling EmptyCall: %v", err)
+		t.Errorf("EmptyCall(): got error %v when expected to succeed", err)
 	}
 }
