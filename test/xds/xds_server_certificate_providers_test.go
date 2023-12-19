@@ -98,7 +98,7 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Success(t *test
 		t.Fatal(err)
 	}
 
-	// Create a client that uses insecure creds and verifiy RPCs.
+	// Create a client that uses insecure creds and verify RPCs.
 	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial local test server: %v", err)
@@ -115,8 +115,10 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Success(t *test
 // providers, and xDS credentials with an insecure fallback is specified at
 // server creation time. The management server is configured to return a
 // server-side xDS Listener resource with mTLS security configuration. The xDS
-// client is expected to NACK this resource and therefore he xDS-enabled gRPC
-// server is expected to not enter "serving" mode.
+// client is expected to NACK this resource because the certificate provider
+// instance name specified in the Listener resource will not be present in the
+// bootstrap file. The test verifies that server creation does not fail and that
+// the xDS-enabled gRPC server does not enter "serving" mode.
 func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -156,7 +158,8 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
 
-	// Configure xDS credentials to be used on the server-side.
+	// Configure xDS credentials with an insecure fallback to be used on the
+	// server-side.
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
 		t.Fatal(err)
@@ -214,14 +217,15 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 		t.Fatal("Timeout when waiting for an NACK from the xDS client for the LDS response")
 	}
 
-	// Wait a short duration and ensure that the server does not enter ""
+	// Wait a short duration and ensure that the server does not enter "serving"
+	// mode.
 	select {
 	case <-time.After(2 * defaultTestShortTimeout):
 	case <-modeCh:
 		t.Fatal("Server changed to serving mode when not expected to")
 	}
 
-	// Create a client that uses insecure creds and verifiy that RPCs don't
+	// Create a client that uses insecure creds and verify that RPCs don't
 	// succeed.
 	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -233,10 +237,21 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := client.EmptyCall(sCtx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
-		t.Fatalf("EmptyCall() failed: %v", err)
+		t.Fatalf("EmptyCall() failed: %v, wantCode: %s", err, codes.DeadlineExceeded)
 	}
 }
 
+// Tests the case where the bootstrap configuration contains one certificate
+// provider, and xDS credentials with an insecure fallback is specified at
+// server creation time. Two listeners are configured on the xDS-enabled gRPC
+// server. The management server responds with two listener resources:
+//  1. contains valid security configuration pointing to the certificate provider
+//     instance specified in the bootstrap
+//  3. contains invalid security configuration pointing to a non-existent
+//     certificate provider instance
+//
+// The test verifies that an RPC to the first listener succeeds, while the
+// second listener never moves to "serving" mode and RPCs to it fail.
 func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -433,7 +448,7 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 		t.Fatal(err)
 	}
 
-	// Create a client that uses TLS creds and verifiy RPCs to listener1.
+	// Create a client that uses TLS creds and verify RPCs to listener1.
 	clientCreds := e2e.CreateClientTLSCredentials(t)
 	cc1, err := grpc.Dial(lis1.Addr().String(), grpc.WithTransportCredentials(clientCreds))
 	if err != nil {
@@ -453,14 +468,15 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 		t.Fatal("Timeout when waiting for an NACK from the xDS client for the LDS response")
 	}
 
-	// Wait a short duration and ensure that the server does not enter ""
+	// Wait a short duration and ensure that the server does not enter "serving"
+	// mode.
 	select {
 	case <-time.After(2 * defaultTestShortTimeout):
 	case <-modeCh:
 		t.Fatal("Server changed to serving mode when not expected to")
 	}
 
-	// Create a client that uses insecure creds and verifiy that RPCs don't
+	// Create a client that uses insecure creds and verify that RPCs don't
 	// succeed to listener2.
 	cc2, err := grpc.Dial(lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -472,6 +488,6 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := client2.EmptyCall(sCtx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
-		t.Fatalf("EmptyCall() failed: %v", err)
+		t.Fatalf("EmptyCall() failed: %v, wantCode: %s", err, codes.DeadlineExceeded)
 	}
 }
