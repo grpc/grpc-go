@@ -39,28 +39,32 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/tlscreds"
 )
 
+const (
+	defaultTestTimeout = 5 * time.Second
+)
+
 func TestValidTlsBuilder(t *testing.T) {
 	tests := []struct {
 		name string
 		jd   string
 	}{
-		{"Absent configuration", `null`},
-		{"Empty configuration", `{}`},
-		{"Only CA certificate chain", `{"ca_certificate_file": "foo"}`},
-		{"Only private key and certificate chain", `{"certificate_file":"bar","private_key_file":"baz"}`},
-		{"CA chain, private key and certificate chain", `{"ca_certificate_file":"foo","certificate_file":"bar","private_key_file":"baz"}`},
-		{"Only refresh interval", `{"refresh_interval": "1s"}`},
-		{"Refresh interval and CA certificate chain", `{"refresh_interval": "1s","ca_certificate_file": "foo"}`},
-		{"Refresh interval, private key and certificate chain", `{"refresh_interval": "1s","certificate_file":"bar","private_key_file":"baz"}`},
-		{"Refresh interval, CA chain, private key and certificate chain", `{"refresh_interval": "1s","ca_certificate_file":"foo","certificate_file":"bar","private_key_file":"baz"}`},
-		{"Unknown field", `{"unknown_field": "foo"}`},
+		{name: "Absent configuration", jd: `null`},
+		{name: "Empty configuration", jd: `{}`},
+		{name: "Only CA certificate chain", jd: `{"ca_certificate_file": "foo"}`},
+		{name: "Only private key and certificate chain", jd: `{"certificate_file":"bar","private_key_file":"baz"}`},
+		{name: "CA chain, private key and certificate chain", jd: `{"ca_certificate_file":"foo","certificate_file":"bar","private_key_file":"baz"}`},
+		{name: "Only refresh interval", jd: `{"refresh_interval": "1s"}`},
+		{name: "Refresh interval and CA certificate chain", jd: `{"refresh_interval": "1s","ca_certificate_file": "foo"}`},
+		{name: "Refresh interval, private key and certificate chain", jd: `{"refresh_interval": "1s","certificate_file":"bar","private_key_file":"baz"}`},
+		{name: "Refresh interval, CA chain, private key and certificate chain", jd: `{"refresh_interval": "1s","ca_certificate_file":"foo","certificate_file":"bar","private_key_file":"baz"}`},
+		{name: "Unknown field", jd: `{"unknown_field": "foo"}`},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			msg := json.RawMessage(test.jd)
 			if _, err := tlscreds.NewBundle(msg); err != nil {
-				t.Errorf("NewBundle(%s): expected no error but got: %s", test.jd, err)
+				t.Errorf("NewBundle(%s) returned error %s when expected to succeed", test.jd, err)
 			}
 		})
 	}
@@ -78,7 +82,7 @@ func TestInvalidTlsBuilder(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			msg := json.RawMessage(test.jd)
 			if _, err := tlscreds.NewBundle(msg); err == nil || !strings.HasPrefix(err.Error(), test.wantErrPrefix) {
-				t.Errorf("NewBundle(%s): want error %s, got: %s", msg, test.wantErrPrefix, err)
+				t.Errorf("NewBundle(%s): got error %s, want %s", msg, err, test.wantErrPrefix)
 			}
 		})
 	}
@@ -136,19 +140,30 @@ func TestCaReloading(t *testing.T) {
 		t.Fatalf("Failed to write test CA cert: %v", err)
 	}
 
-	// Leave time for the file_watcher provider to reload the CA.
-	time.Sleep(100 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
-	server = stubserver.StartTestService(t, &stubserver.StubServer{Address: server.Address}, serverCredentials)
-	defer server.Stop()
+	for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
+		ss := stubserver.StubServer{
+			Address:    server.Address,
+			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+		}
+		server = stubserver.StartTestService(t, &ss, serverCredentials)
 
-	// Client handshake should fail because the server cert is signed by an
-	// unknown CA.
-	_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
-	if st, ok := status.FromError(err); !ok || st.Code() != codes.Unavailable {
-		t.Errorf("Expected unavailable error, got %v", err)
-	} else if want := "certificate signed by unknown authority"; !strings.Contains(st.Message(), want) {
-		t.Errorf("Expected call error to contain '%s', got %v", want, st.Message())
+		// Client handshake should fail because the server cert is signed by an
+		// unknown CA.
+		t.Log(server)
+		_, err = client.EmptyCall(ctx, &testpb.Empty{})
+		const wantErr = "certificate signed by unknown authority"
+		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), wantErr) {
+			// Certs have reloaded.
+			break
+		}
+		t.Logf("EmptyCall() want code: %s, want err: %s, got err: %s", codes.Unavailable, wantErr, err)
+		server.Stop()
+	}
+	if ctx.Err() != nil {
+		t.Errorf("Timed out waiting for CA certs reloading")
 	}
 }
 

@@ -1,9 +1,28 @@
+/*
+ *
+ * Copyright 2023 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package tlscreds
 
 import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -14,7 +33,7 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
-func TestFaillingProvider(t *testing.T) {
+func TestFailingProvider(t *testing.T) {
 	s := stubserver.StartTestService(t, nil, grpc.Creds(e2e.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)))
 	defer s.Stop()
 
@@ -27,6 +46,10 @@ func TestFaillingProvider(t *testing.T) {
 		testdata.Path("x509/client1_cert.pem"),
 		testdata.Path("x509/client1_key.pem"))
 	tlsBundle, err := NewBundle([]byte(cfg))
+	if err != nil {
+		t.Fatalf("Failed to create TLS bundle: %v", err)
+	}
+
 	dialOpts := []grpc.DialOption{
 		grpc.WithCredentialsBundle(tlsBundle),
 		grpc.WithAuthority("x.test.example.com"),
@@ -52,7 +75,7 @@ func TestFaillingProvider(t *testing.T) {
 	}
 	client := testgrpc.NewTestServiceClient(conn)
 	_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
-	if wantErr := "provider instance is closed"; err.Error() != wantErr {
+	if wantErr := "provider instance is closed"; strings.HasSuffix(err.Error(), wantErr) {
 		t.Errorf("Expected error to end with %v, got %v", wantErr, err)
 	}
 	conn.Close()
