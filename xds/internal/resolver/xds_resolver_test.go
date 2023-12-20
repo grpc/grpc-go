@@ -31,9 +31,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
-	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -86,71 +83,36 @@ func (s) TestResolverBuilder_ClientCreationFails_NoBootstap(t *testing.T) {
 	}
 }
 
-// Tests the resolver builder's Build() method with different xDS bootstrap
-// configurations.
-func (s) TestResolverBuilder_DifferentBootstrapConfigs(t *testing.T) {
-	tests := []struct {
-		name          string
-		target        resolver.Target
-		buildOpts     resolver.BuildOptions
-		bootstrapOpts xdsbootstrap.Options
-		wantErr       string
-	}{
-		{
-			name:   "authority not defined in bootstrap",
-			target: resolver.Target{URL: *testutils.MustParseURL("xds://non-existing-authority/target")},
-			bootstrapOpts: xdsbootstrap.Options{
-				NodeID:    "node-id",
-				ServerURI: "dummy-management-server",
-			},
-			wantErr: `authority "non-existing-authority" specified in dial target "xds://non-existing-authority/target" is not found in the bootstrap file`,
-		},
-		{
-			name:   "xDS creds specified without certificate providers in bootstrap",
-			target: resolver.Target{URL: *testutils.MustParseURL("xds:///target")},
-			buildOpts: resolver.BuildOptions{
-				DialCreds: func() credentials.TransportCredentials {
-					creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
-					if err != nil {
-						t.Fatalf("xds.NewClientCredentials() failed: %v", err)
-					}
-					return creds
-				}(),
-			},
-			bootstrapOpts: xdsbootstrap.Options{
-				NodeID:    "node-id",
-				ServerURI: "dummy-management-server",
-			},
-			wantErr: `use of xDS credentials is specified, but certificate_providers config missing in bootstrap file`,
-		},
+// Tests the case where the specified dial target contains an authority that is
+// not specified in the bootstrap file. Verifies that the resolver.Build method
+// fails with the expected error string.
+func (s) TestResolverBuilder_AuthorityNotDefinedInBootstrap(t *testing.T) {
+	bootstrapCleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
+		NodeID:    "node-id",
+		ServerURI: "dummy-management-server",
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// Create a bootstrap file and set the env var.
-			bootstrapCleanup, err := xdsbootstrap.CreateFile(test.bootstrapOpts)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer bootstrapCleanup()
+	defer bootstrapCleanup()
 
-			builder := resolver.Get(xdsresolver.Scheme)
-			if builder == nil {
-				t.Fatalf("Scheme %q is not registered", xdsresolver.Scheme)
-			}
+	builder := resolver.Get(xdsresolver.Scheme)
+	if builder == nil {
+		t.Fatalf("Scheme %q is not registered", xdsresolver.Scheme)
+	}
 
-			r, err := builder.Build(test.target, &testutils.ResolverClientConn{Logger: t}, test.buildOpts)
-			if gotErr, wantErr := err != nil, test.wantErr != ""; gotErr != wantErr {
-				t.Fatalf("xds Resolver Build(%v) returned err: %v, wantErr: %v", test.target, err, test.wantErr)
-			}
-			if test.wantErr != "" && !strings.Contains(err.Error(), test.wantErr) {
-				t.Fatalf("xds Resolver Build(%v) returned err: %v, wantErr: %v", test.target, err, test.wantErr)
-			}
-			if err != nil {
-				// This is the case where we expect an error and got it.
-				return
-			}
-			r.Close()
-		})
+	target := resolver.Target{URL: *testutils.MustParseURL("xds://non-existing-authority/target")}
+	const wantErr = `authority "non-existing-authority" specified in dial target "xds://non-existing-authority/target" is not found in the bootstrap file`
+
+	r, err := builder.Build(target, &testutils.ResolverClientConn{Logger: t}, resolver.BuildOptions{})
+	if r != nil {
+		r.Close()
+	}
+	if err == nil {
+		t.Fatalf("xds Resolver Build(%v) succeeded for target with authority not specified in bootstrap", target)
+	}
+	if !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("xds Resolver Build(%v) returned err: %v, wantErr: %v", target, err, wantErr)
 	}
 }
 

@@ -87,7 +87,7 @@ func CreateClientTLSCredentials(t *testing.T) credentials.TransportCredentials {
 	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(b) {
-		t.Fatal("failed to append certificates")
+		t.Fatal("Failed to append certificates")
 	}
 	return credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{cert},
