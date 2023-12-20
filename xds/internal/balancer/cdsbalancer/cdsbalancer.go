@@ -206,16 +206,8 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsresource.SecurityConfig) e
 
 	}
 
-	bc := b.xdsClient.BootstrapConfig()
-	if bc == nil || bc.CertProviderConfigs == nil {
-		// Bootstrap did not find any certificate provider configs, but the user
-		// has specified xdsCredentials and the management server has sent down
-		// security configuration.
-		return fmt.Errorf("xds: certificate_providers config missing in bootstrap file")
-	}
-	cpc := bc.CertProviderConfigs
-
 	// A root provider is required whether we are using TLS or mTLS.
+	cpc := b.xdsClient.BootstrapConfig().CertProviderConfigs
 	rootProvider, err := buildProvider(cpc, config.RootInstanceName, config.RootCertName, false, true)
 	if err != nil {
 		return err
@@ -248,6 +240,9 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsresource.SecurityConfig) e
 func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanceName, certName string, wantIdentity, wantRoot bool) (certprovider.Provider, error) {
 	cfg, ok := configs[instanceName]
 	if !ok {
+		// Defensive programming. If a resource received from the management
+		// server contains a certificate provider instance name that is not
+		// found in the bootstrap, the resource is NACKed by the xDS client.
 		return nil, fmt.Errorf("certificate provider instance %q not found in bootstrap file", instanceName)
 	}
 	provider, err := cfg.Build(certprovider.BuildOptions{
