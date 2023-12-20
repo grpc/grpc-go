@@ -168,10 +168,10 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
 	// Pass it a mode change server option that pushes on a channel the mode
 	// changes to "not serving".
-	modeCh := make(chan struct{})
+	servingModeCh := make(chan struct{})
 	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
 		if args.Mode == connectivity.ServingModeServing {
-			close(modeCh)
+			close(servingModeCh)
 		}
 	})
 	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bs))
@@ -221,7 +221,7 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	// mode.
 	select {
 	case <-time.After(2 * defaultTestShortTimeout):
-	case <-modeCh:
+	case <-servingModeCh:
 		t.Fatal("Server changed to serving mode when not expected to")
 	}
 
@@ -247,7 +247,7 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 // server. The management server responds with two listener resources:
 //  1. contains valid security configuration pointing to the certificate provider
 //     instance specified in the bootstrap
-//  3. contains invalid security configuration pointing to a non-existent
+//  2. contains invalid security configuration pointing to a non-existent
 //     certificate provider instance
 //
 // The test verifies that an RPC to the first listener succeeds, while the
@@ -294,11 +294,11 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	modeCh := make(chan struct{})
+	servingModeCh := make(chan struct{})
 	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
 		if addr.String() == lis2.Addr().String() {
 			if args.Mode == connectivity.ServingModeServing {
-				close(modeCh)
+				close(servingModeCh)
 			}
 		}
 	})
@@ -472,7 +472,7 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	// mode.
 	select {
 	case <-time.After(2 * defaultTestShortTimeout):
-	case <-modeCh:
+	case <-servingModeCh:
 		t.Fatal("Server changed to serving mode when not expected to")
 	}
 
