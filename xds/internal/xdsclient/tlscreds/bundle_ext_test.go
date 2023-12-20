@@ -50,6 +50,10 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+type Closable interface {
+	Close()
+}
+
 func (s) TestValidTlsBuilder(t *testing.T) {
 	caCert := testdata.Path("x509/server_ca_cert.pem")
 	clientCert := testdata.Path("x509/client1_cert.pem")
@@ -105,7 +109,7 @@ func (s) TestValidTlsBuilder(t *testing.T) {
 			if bundle, err := tlscreds.NewBundle(msg); err != nil {
 				t.Errorf("NewBundle(%s) returned error %s when expected to succeed", test.jd, err)
 			} else {
-				bundle.Close()
+				bundle.(Closable).Close()
 			}
 		})
 	}
@@ -131,7 +135,7 @@ func (s) TestInvalidTlsBuilder(t *testing.T) {
 			msg := json.RawMessage(test.jd)
 			if bundle, err := tlscreds.NewBundle(msg); err == nil || !strings.HasPrefix(err.Error(), test.wantErrPrefix) {
 				t.Errorf("NewBundle(%s): got error %s, want an error with prefix %s", msg, err, test.wantErrPrefix)
-				bundle.Close()
+				bundle.(Closable).Close()
 			}
 		})
 	}
@@ -156,7 +160,7 @@ func (s) TestCaReloading(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TLS bundle: %v", err)
 	}
-	defer tlsBundle.Close()
+	defer tlsBundle.(Closable).Close()
 
 	serverCredentials := grpc.Creds(e2e.CreateServerTLSCredentials(t, tls.NoClientCert))
 	server := stubserver.StartTestService(t, nil, serverCredentials)
@@ -233,7 +237,7 @@ func (s) TestMTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TLS bundle: %v", err)
 	}
-	defer tlsBundle.Close()
+	defer tlsBundle.(Closable).Close()
 	conn, err := grpc.Dial(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
 	if err != nil {
 		t.Fatalf("Error dialing: %v", err)

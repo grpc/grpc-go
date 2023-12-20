@@ -20,6 +20,7 @@ package xds_test
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"strings"
 	"testing"
@@ -226,7 +227,7 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	// backend1 configured with TLS creds, represents cluster1
 	// backend2 configured with insecure creds, represents cluster2
 	// backend3 configured with insecure creds, represents cluster3
-	creds := e2e.CreateServerTLSCredentials(t)
+	creds := e2e.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)
 	server1 := stubserver.StartTestService(t, nil, grpc.Creds(creds))
 	defer server1.Stop()
 	server2 := stubserver.StartTestService(t, nil)
