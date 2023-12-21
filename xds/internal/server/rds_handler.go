@@ -19,6 +19,8 @@
 package server
 
 import (
+	"sync"
+
 	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
@@ -39,7 +41,9 @@ type rdsHandler struct {
 	// configuration for RDS, otherwise treat as an error case and fail at L7
 	// level.
 	updates map[string]rdsWatcherUpdate
-	cancels map[string]func()
+
+	cancelsMu sync.Mutex // Protects close reading cancels, since can happen async with write.
+	cancels   map[string]func()
 }
 
 // newRDSHandler creates a new rdsHandler to watch for RDS resources.
@@ -60,6 +64,8 @@ func newRDSHandler(lw *listenerWrapper, xdsC XDSClient, logger *igrpclog.PrefixL
 // This function handles all the logic with respect to any routes that may have
 // been added or deleted as compared to what was previously present.
 func (rh *rdsHandler) updateRouteNamesToWatch(routeNamesToWatch map[string]bool) {
+	rh.cancelsMu.Lock()
+	defer rh.cancelsMu.Unlock()
 	// Add and start watches for any routes for any new routes in
 	// routeNamesToWatch.
 	for routeName := range routeNamesToWatch {
@@ -119,6 +125,8 @@ func (rh *rdsHandler) handleRouteUpdate(routeName string, update rdsWatcherUpdat
 // is closed, and it cleans up resources by canceling all the active RDS
 // watches.
 func (rh *rdsHandler) close() {
+	rh.cancelsMu.Lock()
+	defer rh.cancelsMu.Unlock()
 	for _, cancel := range rh.cancels {
 		cancel()
 	}
