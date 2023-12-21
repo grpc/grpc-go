@@ -45,6 +45,7 @@ var (
 	errAcceptAndClose = []*status.Status{
 		status.New(codes.Unavailable, "connection error: desc = \"error reading server preface: EOF\""),
 		status.New(codes.Unavailable, "write: broken pipe"),
+		status.New(codes.Unavailable, "read: connection reset by peer"),
 	}
 )
 
