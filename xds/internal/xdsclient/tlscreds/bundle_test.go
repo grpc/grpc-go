@@ -64,10 +64,11 @@ func (s) TestFailingProvider(t *testing.T) {
 		testdata.Path("x509/server_ca_cert.pem"),
 		testdata.Path("x509/client1_cert.pem"),
 		testdata.Path("x509/client1_key.pem"))
-	tlsBundle, err := NewBundle([]byte(cfg))
+	tlsBundle, stop, err := NewBundle([]byte(cfg))
 	if err != nil {
 		t.Fatalf("Failed to create TLS bundle: %v", err)
 	}
+	stop()
 
 	// Force a provider that returns an error, and make sure the client fails
 	// the handshake.
@@ -75,7 +76,6 @@ func (s) TestFailingProvider(t *testing.T) {
 	if !ok {
 		t.Fatalf("Got %T, expected reloadingCreds", tlsBundle.TransportCredentials())
 	}
-	creds.provider.Close()
 	creds.provider = &failingProvider{}
 
 	conn, err := grpc.Dial(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))

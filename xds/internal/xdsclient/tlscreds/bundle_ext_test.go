@@ -106,10 +106,10 @@ func (s) TestValidTlsBuilder(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			msg := json.RawMessage(test.jd)
-			if bundle, err := tlscreds.NewBundle(msg); err != nil {
+			if _, stop, err := tlscreds.NewBundle(msg); err != nil {
 				t.Errorf("NewBundle(%s) returned error %s when expected to succeed", test.jd, err)
 			} else {
-				bundle.(Closable).Close()
+				stop()
 			}
 		})
 	}
@@ -133,9 +133,9 @@ func (s) TestInvalidTlsBuilder(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			msg := json.RawMessage(test.jd)
-			if bundle, err := tlscreds.NewBundle(msg); err == nil || !strings.HasPrefix(err.Error(), test.wantErrPrefix) {
+			if _, stop, err := tlscreds.NewBundle(msg); err == nil || !strings.HasPrefix(err.Error(), test.wantErrPrefix) {
 				t.Errorf("NewBundle(%s): got error %s, want an error with prefix %s", msg, err, test.wantErrPrefix)
-				bundle.(Closable).Close()
+				stop()
 			}
 		})
 	}
@@ -156,11 +156,11 @@ func (s) TestCaReloading(t *testing.T) {
 		"ca_certificate_file": "%s",
 		"refresh_interval": ".01s"
 	}`, caPath)
-	tlsBundle, err := tlscreds.NewBundle([]byte(cfg))
+	tlsBundle, stop, err := tlscreds.NewBundle([]byte(cfg))
 	if err != nil {
 		t.Fatalf("Failed to create TLS bundle: %v", err)
 	}
-	defer tlsBundle.(Closable).Close()
+	defer stop()
 
 	serverCredentials := grpc.Creds(e2e.CreateServerTLSCredentials(t, tls.NoClientCert))
 	server := stubserver.StartTestService(t, nil, serverCredentials)
@@ -233,11 +233,11 @@ func (s) TestMTLS(t *testing.T) {
 		testdata.Path("x509/server_ca_cert.pem"),
 		testdata.Path("x509/client1_cert.pem"),
 		testdata.Path("x509/client1_key.pem"))
-	tlsBundle, err := tlscreds.NewBundle([]byte(cfg))
+	tlsBundle, stop, err := tlscreds.NewBundle([]byte(cfg))
 	if err != nil {
 		t.Fatalf("Failed to create TLS bundle: %v", err)
 	}
-	defer tlsBundle.(Closable).Close()
+	defer stop()
 	conn, err := grpc.Dial(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
 	if err != nil {
 		t.Fatalf("Error dialing: %v", err)

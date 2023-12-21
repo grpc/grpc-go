@@ -1023,16 +1023,20 @@ func TestDefaultBundles(t *testing.T) {
 
 func TestCredsBuilders(t *testing.T) {
 	b := &googleDefaultCredsBuilder{}
-	if _, err := b.Build(nil); err != nil {
+	if _, stop, err := b.Build(nil); err != nil {
 		t.Errorf("googleDefaultCredsBuilder.Build failed: %v", err)
+	} else {
+		stop()
 	}
 	if got, want := b.Name(), "google_default"; got != want {
 		t.Errorf("googleDefaultCredsBuilder.Name = %v, want %v", got, want)
 	}
 
 	i := &insecureCredsBuilder{}
-	if _, err := i.Build(nil); err != nil {
+	if _, stop, err := i.Build(nil); err != nil {
 		t.Errorf("insecureCredsBuilder.Build failed: %v", err)
+	} else {
+		stop()
 	}
 
 	if got, want := i.Name(), "insecure"; got != want {
@@ -1040,8 +1044,10 @@ func TestCredsBuilders(t *testing.T) {
 	}
 
 	tcb := &tlsCredsBuilder{}
-	if _, err := tcb.Build(nil); err != nil {
+	if _, stop, err := tcb.Build(nil); err != nil {
 		t.Errorf("tlsCredsBuilder.Build failed: %v", err)
+	} else {
+		stop()
 	}
 	if got, want := tcb.Name(), "tls"; got != want {
 		t.Errorf("tlsCredsBuilder.Name = %v, want %v", got, want)
@@ -1050,11 +1056,14 @@ func TestCredsBuilders(t *testing.T) {
 
 func TestTlsCredsBuilder(t *testing.T) {
 	tls := &tlsCredsBuilder{}
-	if _, err := tls.Build(json.RawMessage(`{}`)); err != nil {
+	if _, stop, err := tls.Build(json.RawMessage(`{}`)); err != nil {
 		t.Errorf("tls.Build() failed with error %s when expected to succeed", err)
+	} else {
+		stop()
 	}
-	if _, err := tls.Build(json.RawMessage(`{"ca_certificate_file":"/ca_certificates.pem","refresh_interval": "asdf"}`)); err == nil {
+	if _, stop, err := tls.Build(json.RawMessage(`{"ca_certificate_file":"/ca_certificates.pem","refresh_interval": "asdf"}`)); err == nil {
 		t.Errorf("tls.Build() succeeded with an invalid refresh interval, when expected to fail")
+		stop()
 	}
 	// more tests for config validity are defined in tlscreds subpackage.
 }

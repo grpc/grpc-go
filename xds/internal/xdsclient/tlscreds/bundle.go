@@ -43,7 +43,7 @@ type bundle struct {
 // Bootstrap File. It delegates certificate loading to a file_watcher provider
 // if either client certificates or server root CA is specified.
 // See gRFC A65: github.com/grpc/proposal/blob/master/A65-xds-mtls-creds-in-bootstrap.md
-func NewBundle(jd json.RawMessage) (credentials.Bundle, error) {
+func NewBundle(jd json.RawMessage) (credentials.Bundle, func(), error) {
 	cfg := &struct {
 		CertificateFile   string `json:"certificate_file"`
 		CACertificateFile string `json:"ca_certificate_file"`
@@ -52,7 +52,7 @@ func NewBundle(jd json.RawMessage) (credentials.Bundle, error) {
 
 	if jd != nil {
 		if err := json.Unmarshal(jd, cfg); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal config: %v", err)
+			return nil, nil, fmt.Errorf("failed to unmarshal config: %v", err)
 		}
 	} // Else the config field is absent. Treat it as an empty config.
 
@@ -66,7 +66,7 @@ func NewBundle(jd json.RawMessage) (credentials.Bundle, error) {
 		// > provider, at least one of the "certificate_file" or
 		// > "ca_certificate_file" fields must be specified, whereas in this
 		// > configuration, it is acceptable to specify neither one.
-		return &bundle{transportCredentials: credentials.NewTLS(&tls.Config{})}, nil
+		return &bundle{transportCredentials: credentials.NewTLS(&tls.Config{})}, func() {}, nil
 	}
 	// Otherwise we need to use a file_watcher provider to watch the CA,
 	// private and public keys.
@@ -74,11 +74,11 @@ func NewBundle(jd json.RawMessage) (credentials.Bundle, error) {
 	// The pemfile plugin (file_watcher) currently ignores BuildOptions.
 	provider, err := certprovider.GetProvider(pemfile.PluginName, jd, certprovider.BuildOptions{})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return &bundle{
 		transportCredentials: &reloadingCreds{provider: provider},
-	}, nil
+	}, func() { provider.Close() }, nil
 }
 
 func (t *bundle) TransportCredentials() credentials.TransportCredentials {

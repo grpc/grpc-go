@@ -71,8 +71,8 @@ var bootstrapFileReadFunc = os.ReadFile
 // package `xds/bootstrap` and encapsulates an insecure credential.
 type insecureCredsBuilder struct{}
 
-func (i *insecureCredsBuilder) Build(json.RawMessage) (credentials.Bundle, error) {
-	return insecure.NewBundle(), nil
+func (i *insecureCredsBuilder) Build(json.RawMessage) (credentials.Bundle, func(), error) {
+	return insecure.NewBundle(), func() {}, nil
 }
 
 func (i *insecureCredsBuilder) Name() string {
@@ -83,7 +83,7 @@ func (i *insecureCredsBuilder) Name() string {
 // package `xds/bootstrap` and encapsulates a TLS credential.
 type tlsCredsBuilder struct{}
 
-func (t *tlsCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, error) {
+func (t *tlsCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, func(), error) {
 	return tlscreds.NewBundle(config)
 }
 
@@ -95,8 +95,8 @@ func (t *tlsCredsBuilder) Name() string {
 // package `xds/boostrap` and encapsulates a Google Default credential.
 type googleDefaultCredsBuilder struct{}
 
-func (d *googleDefaultCredsBuilder) Build(json.RawMessage) (credentials.Bundle, error) {
-	return google.NewDefaultCredentials(), nil
+func (d *googleDefaultCredsBuilder) Build(json.RawMessage) (credentials.Bundle, func(), error) {
+	return google.NewDefaultCredentials(), func() {}, nil
 }
 
 func (d *googleDefaultCredsBuilder) Name() string {
@@ -155,9 +155,9 @@ type ServerConfig struct {
 
 	// As part of unmarshaling the JSON config into this struct, we ensure that
 	// the credentials config is valid by building an instance of the specified
-	// credentials and store it here for easy access when dialing this xDS
-	// server.
-	credsBundle credentials.Bundle
+	// credentials and store it here as a grpc.DialOption for easy access when
+	// dialing this xDS server.
+	credsDialOption grpc.DialOption
 
 	// IgnoreResourceDeletion controls the behavior of the xDS client when the
 	// server deletes a previously sent Listener or Cluster resource. If set, the
@@ -165,11 +165,15 @@ type ServerConfig struct {
 	// when a resource is deleted, nor will it remove the existing resource value
 	// from its cache.
 	IgnoreResourceDeletion bool
+
+	// Cleanups are called when the xDS client for this server is closed. Allows
+	// cleaning up resources created specifically for the xDS client.
+	Cleanups []func()
 }
 
-// CredsBundle returns the configured credentials bundle.
-func (sc *ServerConfig) CredsBundle() credentials.Bundle {
-	return sc.credsBundle
+// CredsDialOption returns the configured credentials as a grpc dial option.
+func (sc *ServerConfig) CredsDialOption() grpc.DialOption {
+	return sc.credsDialOption
 }
 
 // String returns the string representation of the ServerConfig.
@@ -220,12 +224,13 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		if c == nil {
 			continue
 		}
-		bundle, err := c.Build(cc.Config)
+		bundle, cancel, err := c.Build(cc.Config)
 		if err != nil {
 			return fmt.Errorf("failed to build credentials bundle from bootstrap for %q: %v", cc.Type, err)
 		}
 		sc.Creds = ChannelCreds(cc)
-		sc.credsBundle = bundle
+		sc.credsDialOption = grpc.WithCredentialsBundle(bundle)
+		sc.Cleanups = append(sc.Cleanups, cancel)
 		break
 	}
 	return nil
@@ -538,7 +543,7 @@ func newConfigFromContents(data []byte) (*Config, error) {
 	if config.XDSServer.ServerURI == "" {
 		return nil, fmt.Errorf("xds: required field %q not found in bootstrap %s", "xds_servers.server_uri", jsonData["xds_servers"])
 	}
-	if config.XDSServer.CredsBundle() == nil {
+	if config.XDSServer.CredsDialOption() == nil {
 		return nil, fmt.Errorf("xds: required field %q doesn't contain valid value in bootstrap %s", "xds_servers.channel_creds", jsonData["xds_servers"])
 	}
 	// Post-process the authorities' client listener resource template field:
