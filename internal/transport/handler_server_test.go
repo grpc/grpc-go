@@ -227,7 +227,7 @@ type testHandlerResponseWriter struct {
 	*httptest.ResponseRecorder
 }
 
-func (w testHandlerResponseWriter) Flush()                   {}
+func (w testHandlerResponseWriter) Flush() {}
 
 func newTestHandlerResponseWriter() http.ResponseWriter {
 	return testHandlerResponseWriter{
