@@ -135,7 +135,9 @@ func (s) TestInvalidTlsBuilder(t *testing.T) {
 			msg := json.RawMessage(test.jd)
 			if _, stop, err := tlscreds.NewBundle(msg); err == nil || !strings.HasPrefix(err.Error(), test.wantErrPrefix) {
 				t.Errorf("NewBundle(%s): got error %s, want an error with prefix %s", msg, err, test.wantErrPrefix)
-				stop()
+				if err == nil {
+					stop()
+				}
 			}
 		})
 	}

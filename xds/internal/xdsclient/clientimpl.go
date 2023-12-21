@@ -85,8 +85,5 @@ func (c *clientImpl) close() {
 	c.authorityMu.Unlock()
 	c.serializerClose()
 
-	for _, f := range c.config.XDSServer.Cleanups {
-		f()
-	}
 	c.logger.Infof("Shutdown")
 }

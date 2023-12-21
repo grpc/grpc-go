@@ -1056,11 +1056,11 @@ func TestCredsBuilders(t *testing.T) {
 
 func TestTlsCredsBuilder(t *testing.T) {
 	tls := &tlsCredsBuilder{}
-	if _, stop, err := tls.Build(json.RawMessage(`{}`)); err != nil {
-		t.Errorf("tls.Build() failed with error %s when expected to succeed", err)
-	} else {
-		stop()
+	_, stop, err := tls.Build(json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("tls.Build() failed with error %s when expected to succeed", err)
 	}
+	stop()
 	if _, stop, err := tls.Build(json.RawMessage(`{"ca_certificate_file":"/ca_certificates.pem","refresh_interval": "asdf"}`)); err == nil {
 		t.Errorf("tls.Build() succeeded with an invalid refresh interval, when expected to fail")
 		stop()
