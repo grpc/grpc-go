@@ -106,11 +106,11 @@ func (s) TestValidTlsBuilder(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			msg := json.RawMessage(test.jd)
-			if _, stop, err := tlscreds.NewBundle(msg); err != nil {
-				t.Errorf("NewBundle(%s) returned error %s when expected to succeed", test.jd, err)
-			} else {
-				stop()
+			_, stop, err := tlscreds.NewBundle(msg)
+			if err != nil {
+				t.Fatalf("NewBundle(%s) returned error %s when expected to succeed", test.jd, err)
 			}
+			stop()
 		})
 	}
 }
@@ -133,11 +133,12 @@ func (s) TestInvalidTlsBuilder(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			msg := json.RawMessage(test.jd)
-			if _, stop, err := tlscreds.NewBundle(msg); err == nil || !strings.HasPrefix(err.Error(), test.wantErrPrefix) {
-				t.Errorf("NewBundle(%s): got error %s, want an error with prefix %s", msg, err, test.wantErrPrefix)
-				if err == nil {
+			_, stop, err := tlscreds.NewBundle(msg)
+			if err == nil || !strings.HasPrefix(err.Error(), test.wantErrPrefix) {
+				if stop != nil {
 					stop()
 				}
+				t.Fatalf("NewBundle(%s): got error %s, want an error with prefix %s", msg, err, test.wantErrPrefix)
 			}
 		})
 	}

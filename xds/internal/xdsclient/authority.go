@@ -448,10 +448,6 @@ func (a *authority) close() {
 	a.resourcesMu.Lock()
 	a.closed = true
 	a.resourcesMu.Unlock()
-
-	for _, cleanup := range a.serverCfg.Cleanups {
-		cleanup()
-	}
 }
 
 func (a *authority) watchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) func() {

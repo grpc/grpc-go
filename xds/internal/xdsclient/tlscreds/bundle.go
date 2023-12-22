@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
+	"google.golang.org/grpc/internal/grpcsync"
 )
 
 // bundle is an implementation of credentials.Bundle which implements mTLS
@@ -41,7 +42,9 @@ type bundle struct {
 
 // NewBundle returns a credentials.Bundle which implements mTLS Credentials in xDS
 // Bootstrap File. It delegates certificate loading to a file_watcher provider
-// if either client certificates or server root CA is specified.
+// if either client certificates or server root CA is specified. The second
+// return value is a close func that should be called when the caller no longer
+// needs this bundle.
 // See gRFC A65: github.com/grpc/proposal/blob/master/A65-xds-mtls-creds-in-bootstrap.md
 func NewBundle(jd json.RawMessage) (credentials.Bundle, func(), error) {
 	cfg := &struct {
@@ -78,7 +81,7 @@ func NewBundle(jd json.RawMessage) (credentials.Bundle, func(), error) {
 	}
 	return &bundle{
 		transportCredentials: &reloadingCreds{provider: provider},
-	}, func() { provider.Close() }, nil
+	}, grpcsync.OnceFunc(func() { provider.Close() }), nil
 }
 
 func (t *bundle) TransportCredentials() credentials.TransportCredentials {
@@ -95,15 +98,6 @@ func (t *bundle) NewWithMode(string) (credentials.Bundle, error) {
 	// This bundle has a single mode which only uses TLS transport credentials,
 	// so there is no legitimate case where callers would call NewWithMode.
 	return nil, fmt.Errorf("xDS TLS credentials only support one mode")
-}
-
-// Close releases the underlying provider. Note that credentials.Bundle are
-// not closeable, so users of this type must use a type assertion to call Close.
-func (t *bundle) Close() {
-	cred, ok := t.transportCredentials.(*reloadingCreds)
-	if ok {
-		cred.provider.Close()
-	}
 }
 
 // reloadingCreds is a credentials.TransportCredentials for client

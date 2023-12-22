@@ -46,7 +46,7 @@ func Test(t *testing.T) {
 
 type failingProvider struct{}
 
-func (f failingProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
+func (f failingProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, error) {
 	return nil, errors.New("test error")
 }
 

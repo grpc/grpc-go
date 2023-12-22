@@ -167,7 +167,7 @@ type ServerConfig struct {
 	IgnoreResourceDeletion bool
 
 	// Cleanups are called when the xDS client for this server is closed. Allows
-	// cleaning up resources created specifically for the xDS client.
+	// cleaning up resources created specifically for this ServerConfig.
 	Cleanups []func()
 }
 
