@@ -250,9 +250,6 @@ func copyOf(v []string) []string {
 // is a map, there's no guarantee it's created using our helper functions) and
 // the extra kv pairs (AppendToOutgoingContext doesn't turn them into
 // lowercase).
-//
-// This is intended for gRPC-internal use ONLY. Users should use
-// FromOutgoingContext instead.
 func fromOutgoingContextRaw(ctx context.Context) (MD, [][]string, bool) {
 	raw, ok := ctx.Value(mdOutgoingKey{}).(rawMD)
 	if !ok {

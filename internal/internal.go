@@ -188,8 +188,8 @@ var (
 	ExitIdleModeForTesting any // func(*grpc.ClientConn) error
 
 	ChannelzTurnOffForTesting func()
-  
-  // Gets the function definition from metadata package
+
+	// Gets the function definition from metadata package
 	FromOutgoingContextRaw any // func(context.Context) (metadata.MD, [][]string, bool)
 )
 
