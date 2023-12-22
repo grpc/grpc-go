@@ -79,7 +79,7 @@ func ClientNewPayload(t testpb.PayloadType, size int) *testpb.Payload {
 }
 
 // DoEmptyUnaryCall performs a unary RPC with empty request and response messages.
-func DoEmptyUnaryCall(tc testgrpc.TestServiceClient, ctx context.Context, args ...grpc.CallOption) {
+func DoEmptyUnaryCall(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
 	reply, err := tc.EmptyCall(ctx, &testpb.Empty{}, args...)
 	if err != nil {
 		logger.Fatal("/TestService/EmptyCall RPC failed: ", err)
@@ -90,7 +90,7 @@ func DoEmptyUnaryCall(tc testgrpc.TestServiceClient, ctx context.Context, args .
 }
 
 // DoLargeUnaryCall performs a unary RPC with large payload in the request and response.
-func DoLargeUnaryCall(tc testgrpc.TestServiceClient, ctx context.Context, args ...grpc.CallOption) {
+func DoLargeUnaryCall(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE,
@@ -109,7 +109,7 @@ func DoLargeUnaryCall(tc testgrpc.TestServiceClient, ctx context.Context, args .
 }
 
 // DoClientStreaming performs a client streaming RPC.
-func DoClientStreaming(tc testgrpc.TestServiceClient, ctx context.Context, args ...grpc.CallOption) {
+func DoClientStreaming(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
 	stream, err := tc.StreamingInputCall(ctx, args...)
 	if err != nil {
 		logger.Fatalf("%v.StreamingInputCall(_) = _, %v", tc, err)
@@ -135,7 +135,7 @@ func DoClientStreaming(tc testgrpc.TestServiceClient, ctx context.Context, args 
 }
 
 // DoServerStreaming performs a server streaming RPC.
-func DoServerStreaming(tc testgrpc.TestServiceClient, ctx context.Context, args ...grpc.CallOption) {
+func DoServerStreaming(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
 	respParam := make([]*testpb.ResponseParameters, len(respSizes))
 	for i, s := range respSizes {
 		respParam[i] = &testpb.ResponseParameters{
@@ -179,7 +179,7 @@ func DoServerStreaming(tc testgrpc.TestServiceClient, ctx context.Context, args 
 }
 
 // DoPingPong performs ping-pong style bi-directional streaming RPC.
-func DoPingPong(tc testgrpc.TestServiceClient, ctx context.Context, args ...grpc.CallOption) {
+func DoPingPong(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
 	stream, err := tc.FullDuplexCall(ctx, args...)
 	if err != nil {
 		logger.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
@@ -223,7 +223,7 @@ func DoPingPong(tc testgrpc.TestServiceClient, ctx context.Context, args ...grpc
 }
 
 // DoEmptyStream sets up a bi-directional streaming with zero message.
-func DoEmptyStream(tc testgrpc.TestServiceClient, ctx context.Context, args ...grpc.CallOption) {
+func DoEmptyStream(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
 	stream, err := tc.FullDuplexCall(ctx, args...)
 	if err != nil {
 		logger.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
@@ -237,7 +237,7 @@ func DoEmptyStream(tc testgrpc.TestServiceClient, ctx context.Context, args ...g
 }
 
 // DoTimeoutOnSleepingServer performs an RPC on a sleep server which causes RPC timeout.
-func DoTimeoutOnSleepingServer(tc testgrpc.TestServiceClient, ctx context.Context, args ...grpc.CallOption) {
+func DoTimeoutOnSleepingServer(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
 	ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
 	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx, args...)
@@ -261,7 +261,7 @@ func DoTimeoutOnSleepingServer(tc testgrpc.TestServiceClient, ctx context.Contex
 }
 
 // DoComputeEngineCreds performs a unary RPC with compute engine auth.
-func DoComputeEngineCreds(tc testgrpc.TestServiceClient, ctx context.Context, serviceAccount, oauthScope string) {
+func DoComputeEngineCreds(ctx context.Context, tc testgrpc.TestServiceClient, serviceAccount, oauthScope string) {
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType:   testpb.PayloadType_COMPRESSABLE,
@@ -293,7 +293,7 @@ func getServiceAccountJSONKey(keyFile string) []byte {
 }
 
 // DoServiceAccountCreds performs a unary RPC with service account auth.
-func DoServiceAccountCreds(tc testgrpc.TestServiceClient, ctx context.Context, serviceAccountKeyFile, oauthScope string) {
+func DoServiceAccountCreds(ctx context.Context, tc testgrpc.TestServiceClient, serviceAccountKeyFile, oauthScope string) {
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType:   testpb.PayloadType_COMPRESSABLE,
@@ -318,7 +318,7 @@ func DoServiceAccountCreds(tc testgrpc.TestServiceClient, ctx context.Context, s
 }
 
 // DoJWTTokenCreds performs a unary RPC with JWT token auth.
-func DoJWTTokenCreds(tc testgrpc.TestServiceClient, ctx context.Context, serviceAccountKeyFile string) {
+func DoJWTTokenCreds(ctx context.Context, tc testgrpc.TestServiceClient, serviceAccountKeyFile string) {
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE,
@@ -352,7 +352,7 @@ func GetToken(ctx context.Context, serviceAccountKeyFile string, oauthScope stri
 }
 
 // DoOauth2TokenCreds performs a unary RPC with OAUTH2 token auth.
-func DoOauth2TokenCreds(tc testgrpc.TestServiceClient, ctx context.Context, serviceAccountKeyFile, oauthScope string) {
+func DoOauth2TokenCreds(ctx context.Context, tc testgrpc.TestServiceClient, serviceAccountKeyFile, oauthScope string) {
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType:   testpb.PayloadType_COMPRESSABLE,
@@ -377,7 +377,7 @@ func DoOauth2TokenCreds(tc testgrpc.TestServiceClient, ctx context.Context, serv
 }
 
 // DoPerRPCCreds performs a unary RPC with per RPC OAUTH2 token.
-func DoPerRPCCreds(tc testgrpc.TestServiceClient, ctx context.Context, serviceAccountKeyFile, oauthScope string) {
+func DoPerRPCCreds(ctx context.Context, tc testgrpc.TestServiceClient, serviceAccountKeyFile, oauthScope string) {
 	jsonKey := getServiceAccountJSONKey(serviceAccountKeyFile)
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
@@ -405,7 +405,7 @@ func DoPerRPCCreds(tc testgrpc.TestServiceClient, ctx context.Context, serviceAc
 }
 
 // DoGoogleDefaultCredentials performs an unary RPC with google default credentials
-func DoGoogleDefaultCredentials(tc testgrpc.TestServiceClient, ctx context.Context, defaultServiceAccount string) {
+func DoGoogleDefaultCredentials(ctx context.Context, tc testgrpc.TestServiceClient, defaultServiceAccount string) {
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType:   testpb.PayloadType_COMPRESSABLE,
@@ -424,7 +424,7 @@ func DoGoogleDefaultCredentials(tc testgrpc.TestServiceClient, ctx context.Conte
 }
 
 // DoComputeEngineChannelCredentials performs an unary RPC with compute engine channel credentials
-func DoComputeEngineChannelCredentials(tc testgrpc.TestServiceClient, ctx context.Context, defaultServiceAccount string) {
+func DoComputeEngineChannelCredentials(ctx context.Context, tc testgrpc.TestServiceClient, defaultServiceAccount string) {
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType:   testpb.PayloadType_COMPRESSABLE,
@@ -448,7 +448,7 @@ var testMetadata = metadata.MD{
 }
 
 // DoCancelAfterBegin cancels the RPC after metadata has been sent but before payloads are sent.
-func DoCancelAfterBegin(tc testgrpc.TestServiceClient, ctx context.Context, args ...grpc.CallOption) {
+func DoCancelAfterBegin(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
 	ctx, cancel := context.WithCancel(metadata.NewOutgoingContext(ctx, testMetadata))
 	stream, err := tc.StreamingInputCall(ctx, args...)
 	if err != nil {
@@ -462,7 +462,7 @@ func DoCancelAfterBegin(tc testgrpc.TestServiceClient, ctx context.Context, args
 }
 
 // DoCancelAfterFirstResponse cancels the RPC after receiving the first message from the server.
-func DoCancelAfterFirstResponse(tc testgrpc.TestServiceClient, ctx context.Context, args ...grpc.CallOption) {
+func DoCancelAfterFirstResponse(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
 	ctx, cancel := context.WithCancel(ctx)
 	stream, err := tc.FullDuplexCall(ctx, args...)
 	if err != nil {
@@ -516,7 +516,7 @@ func validateMetadata(header, trailer metadata.MD) {
 }
 
 // DoCustomMetadata checks that metadata is echoed back to the client.
-func DoCustomMetadata(tc testgrpc.TestServiceClient, ctx context.Context, args ...grpc.CallOption) {
+func DoCustomMetadata(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
 	// Testing with UnaryCall.
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, 1)
 	req := &testpb.SimpleRequest{
@@ -578,7 +578,7 @@ func DoCustomMetadata(tc testgrpc.TestServiceClient, ctx context.Context, args .
 }
 
 // DoStatusCodeAndMessage checks that the status code is propagated back to the client.
-func DoStatusCodeAndMessage(tc testgrpc.TestServiceClient, ctx context.Context, args ...grpc.CallOption) {
+func DoStatusCodeAndMessage(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
 	var code int32 = 2
 	msg := "test status message"
 	expectedErr := status.Error(codes.Code(code), msg)
@@ -614,7 +614,7 @@ func DoStatusCodeAndMessage(tc testgrpc.TestServiceClient, ctx context.Context, 
 
 // DoSpecialStatusMessage verifies Unicode and whitespace is correctly processed
 // in status message.
-func DoSpecialStatusMessage(tc testgrpc.TestServiceClient, ctx context.Context, args ...grpc.CallOption) {
+func DoSpecialStatusMessage(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
 	const (
 		code int32  = 2
 		msg  string = "\t\ntest with whitespace\r\nand Unicode BMP ☺ and non-BMP 😈\t\n"
@@ -651,7 +651,7 @@ func DoUnimplementedMethod(cc *grpc.ClientConn, ctx context.Context) {
 
 // DoPickFirstUnary runs multiple RPCs (rpcCount) and checks that all requests
 // are sent to the same backend.
-func DoPickFirstUnary(tc testgrpc.TestServiceClient, ctx context.Context) {
+func DoPickFirstUnary(ctx context.Context, tc testgrpc.TestServiceClient) {
 	const rpcCount = 100
 
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, 1)
@@ -724,9 +724,9 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 // If resetChannel is false, then each RPC will be performed on tc. Otherwise, each RPC will be performed on a new
 // stub that is created with the provided server address and dial options.
 // TODO(mohanli-ml): Create SoakTestOptions as a parameter for this method.
-func DoSoakTest(tc testgrpc.TestServiceClient, ctx context.Context, serverAddr string, dopts []grpc.DialOption, resetChannel bool, soakIterations int, maxFailures int, soakRequestSize int, soakResponseSize int, perIterationMaxAcceptableLatency time.Duration, minTimeBetweenRPCs time.Duration, overallDeadline time.Time) {
+func DoSoakTest(ctx context.Context, cancel context.CancelFunc, tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.DialOption, resetChannel bool, soakIterations int, maxFailures int, soakRequestSize int, soakResponseSize int, perIterationMaxAcceptableLatency time.Duration, minTimeBetweenRPCs time.Duration) {
 	start := time.Now()
-	ctx, cancel := context.WithDeadline(ctx, overallDeadline)
+	var elapsedTime float64
 	defer cancel()
 	iterationsDone := 0
 	totalFailures := 0
@@ -738,7 +738,8 @@ func DoSoakTest(tc testgrpc.TestServiceClient, ctx context.Context, serverAddr s
 	}
 	h := stats.NewHistogram(hopts)
 	for i := 0; i < soakIterations; i++ {
-		if time.Now().After(overallDeadline) {
+		if ctx.Err() != nil {
+			elapsedTime = time.Since(start).Seconds()
 			break
 		}
 		earliestNextStart := time.After(minTimeBetweenRPCs)
@@ -771,7 +772,7 @@ func DoSoakTest(tc testgrpc.TestServiceClient, ctx context.Context, serverAddr s
 	fmt.Fprintf(os.Stderr, "(server_uri: %s) histogram of per-iteration latencies in milliseconds: %s\n", serverAddr, b.String())
 	fmt.Fprintf(os.Stderr, "(server_uri: %s) soak test ran: %d / %d iterations. total failures: %d. max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.\n", serverAddr, iterationsDone, soakIterations, totalFailures, maxFailures)
 	if iterationsDone < soakIterations {
-		logger.Fatalf("(server_uri: %s) soak test consumed all %f seconds of time and quit early, only having ran %d out of desired %d iterations.", serverAddr, overallDeadline.Sub(start).Seconds(), iterationsDone, soakIterations)
+		logger.Fatalf("(server_uri: %s) soak test consumed all %f seconds of time and quit early, only having ran %d out of desired %d iterations.", serverAddr, elapsedTime, iterationsDone, soakIterations)
 	}
 	if totalFailures > maxFailures {
 		logger.Fatalf("(server_uri: %s) soak test total failures: %d exceeds max failures threshold: %d.", serverAddr, totalFailures, maxFailures)
@@ -989,7 +990,7 @@ func (s *testServer) HalfDuplexCall(stream testgrpc.TestService_HalfDuplexCallSe
 
 // DoORCAPerRPCTest performs a unary RPC that enables ORCA per-call reporting
 // and verifies the load report sent back to the LB policy's Done callback.
-func DoORCAPerRPCTest(tc testgrpc.TestServiceClient, ctx context.Context) {
+func DoORCAPerRPCTest(ctx context.Context, tc testgrpc.TestServiceClient) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	orcaRes := &v3orcapb.OrcaLoadReport{}
@@ -1017,7 +1018,7 @@ func DoORCAPerRPCTest(tc testgrpc.TestServiceClient, ctx context.Context) {
 
 // DoORCAOOBTest performs a streaming RPC that enables ORCA OOB reporting and
 // verifies the load report sent to the LB policy's OOB listener.
-func DoORCAOOBTest(tc testgrpc.TestServiceClient, ctx context.Context) {
+func DoORCAOOBTest(ctx context.Context, tc testgrpc.TestServiceClient) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx)

@@ -220,27 +220,27 @@ func performRPCs(gauge *gauge, conn *grpc.ClientConn, selector *weightedRandomTe
 		test := selector.getNextTest()
 		switch test {
 		case "empty_unary":
-			interop.DoEmptyUnaryCall(client, ctx)
+			interop.DoEmptyUnaryCall(ctx, client)
 		case "large_unary":
-			interop.DoLargeUnaryCall(client, ctx)
+			interop.DoLargeUnaryCall(ctx, client)
 		case "client_streaming":
-			interop.DoClientStreaming(client, ctx)
+			interop.DoClientStreaming(ctx, client)
 		case "server_streaming":
-			interop.DoServerStreaming(client, ctx)
+			interop.DoServerStreaming(ctx, client)
 		case "ping_pong":
-			interop.DoPingPong(client, ctx)
+			interop.DoPingPong(ctx, client)
 		case "empty_stream":
-			interop.DoEmptyStream(client, ctx)
+			interop.DoEmptyStream(ctx, client)
 		case "timeout_on_sleeping_server":
-			interop.DoTimeoutOnSleepingServer(client, ctx)
+			interop.DoTimeoutOnSleepingServer(ctx, client)
 		case "cancel_after_begin":
-			interop.DoCancelAfterBegin(client, ctx)
+			interop.DoCancelAfterBegin(ctx, client)
 		case "cancel_after_first_response":
-			interop.DoCancelAfterFirstResponse(client, ctx)
+			interop.DoCancelAfterFirstResponse(ctx, client)
 		case "status_code_and_message":
-			interop.DoStatusCodeAndMessage(client, ctx)
+			interop.DoStatusCodeAndMessage(ctx, client)
 		case "custom_metadata":
-			interop.DoCustomMetadata(client, ctx)
+			interop.DoCustomMetadata(ctx, client)
 		}
 		numCalls++
 		defer func() { atomic.AddInt64(&totalNumCalls, numCalls) }()

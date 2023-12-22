@@ -69,12 +69,12 @@ func largeSimpleRequest() *testpb.SimpleRequest {
 }
 
 // sends two unary calls. The server asserts that the calls use different connections.
-func goaway(tc testgrpc.TestServiceClient, ctx context.Context) {
-	interop.DoLargeUnaryCall(tc, ctx)
+func goaway(ctx context.Context, tc testgrpc.TestServiceClient) {
+	interop.DoLargeUnaryCall(ctx, tc)
 	// sleep to ensure that the client has time to recv the GOAWAY.
 	// TODO(ncteisen): make this less hacky.
 	time.Sleep(1 * time.Second)
-	interop.DoLargeUnaryCall(tc, ctx)
+	interop.DoLargeUnaryCall(ctx, tc)
 }
 
 func rstAfterHeader(tc testgrpc.TestServiceClient) {
@@ -110,19 +110,19 @@ func rstAfterData(tc testgrpc.TestServiceClient) {
 	}
 }
 
-func ping(tc testgrpc.TestServiceClient, ctx context.Context) {
+func ping(ctx context.Context, tc testgrpc.TestServiceClient) {
 	// The server will assert that every ping it sends was ACK-ed by the client.
-	interop.DoLargeUnaryCall(tc, ctx)
+	interop.DoLargeUnaryCall(ctx, tc)
 }
 
-func maxStreams(tc testgrpc.TestServiceClient, ctx context.Context) {
-	interop.DoLargeUnaryCall(tc, ctx)
+func maxStreams(ctx context.Context, tc testgrpc.TestServiceClient) {
+	interop.DoLargeUnaryCall(ctx, tc)
 	var wg sync.WaitGroup
 	for i := 0; i < 15; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			interop.DoLargeUnaryCall(tc, ctx)
+			interop.DoLargeUnaryCall(ctx, tc)
 		}()
 	}
 	wg.Wait()
@@ -142,7 +142,7 @@ func main() {
 	ctx := context.Background()
 	switch *testCase {
 	case "goaway":
-		goaway(tc, ctx)
+		goaway(ctx, tc)
 		logger.Infoln("goaway done")
 	case "rst_after_header":
 		rstAfterHeader(tc)
@@ -154,10 +154,10 @@ func main() {
 		rstAfterData(tc)
 		logger.Infoln("rst_after_data done")
 	case "ping":
-		ping(tc, ctx)
+		ping(ctx, tc)
 		logger.Infoln("ping done")
 	case "max_streams":
-		maxStreams(tc, ctx)
+		maxStreams(ctx, tc)
 		logger.Infoln("max_streams done")
 	default:
 		logger.Fatal("Unsupported test case: ", *testCase)

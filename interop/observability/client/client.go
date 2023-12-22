@@ -61,11 +61,11 @@ func main() {
 	ctx := context.Background()
 	for i := 0; i < *numTimes; i++ {
 		if *testCase == "ping_pong" {
-			interop.DoPingPong(tc, ctx)
+			interop.DoPingPong(ctx, tc)
 		} else if *testCase == "large_unary" {
-			interop.DoLargeUnaryCall(tc, ctx)
+			interop.DoLargeUnaryCall(ctx, tc)
 		} else if *testCase == "custom_metadata" {
-			interop.DoCustomMetadata(tc, ctx)
+			interop.DoCustomMetadata(ctx, tc)
 		} else {
 			log.Fatalf("Invalid test case: %s", *testCase)
 		}

@@ -120,7 +120,9 @@ func main() {
 	for i := range clients {
 		wg.Add(1)
 		go func(c clientConfig) {
-			interop.DoSoakTest(c.tc, ctx, c.uri, c.opts, resetChannel, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, time.Now().Add(time.Duration(*soakOverallTimeoutSeconds)*time.Second))
+			overallDeadline := time.Now().Add(time.Duration(*soakOverallTimeoutSeconds) * time.Second)
+			ctxWithDeadline, cancel := context.WithDeadline(ctx, overallDeadline)
+			interop.DoSoakTest(ctxWithDeadline, cancel, c.tc, c.uri, c.opts, resetChannel, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond)
 			logger.Infof("%s test done for server: %s", *testCase, c.uri)
 			wg.Done()
 		}(clients[i])
