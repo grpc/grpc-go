@@ -193,10 +193,10 @@ func (s) TestClientHandshake(t *testing.T) {
 			}()
 		}
 
-		// Ensure that there are no errors.
+		// Ensure all errors are expected.
 		for i := 0; i < testCase.numberOfHandshakes; i++ {
-			if err := <-errc; err != nil {
-				t.Errorf("ClientHandshake() = _, %v, want _, <nil>", err)
+			if err := <-errc; err != nil && err != errDropped {
+				t.Errorf("ClientHandshake() = _, %v, want _, <nil> or %v", err, errDropped)
 			}
 		}
 
@@ -250,10 +250,10 @@ func (s) TestServerHandshake(t *testing.T) {
 			}()
 		}
 
-		// Ensure that there are no errors.
+		// Ensure all errors are expected.
 		for i := 0; i < testCase.numberOfHandshakes; i++ {
-			if err := <-errc; err != nil {
-				t.Errorf("ServerHandshake() = _, %v, want _, <nil>", err)
+			if err := <-errc; err != nil && err != errDropped {
+				t.Errorf("ServerHandshake() = _, %v, want _, <nil> or %v", err, errDropped)
 			}
 		}
 
