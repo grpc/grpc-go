@@ -2153,10 +2153,10 @@ func (s) TestWriteHeaderConnectionError(t *testing.T) {
 	})
 
 	if len(server.conns) != 1 {
-		t.Fatal("Server must have an active connection for the client.")
+		t.Fatalf("Server has %d connections from the client, want 1", len(server.conns))
 	}
 
-	// Get the server transfort for the connecton to the client
+	// Get the server transport for the connecton to the client.
 	var serverTransport *http2Server
 	server.mu.Lock()
 	for k := range server.conns {
@@ -2168,35 +2168,35 @@ func (s) TestWriteHeaderConnectionError(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cstream1, err := client.NewStream(ctx, &CallHdr{})
+	cstream, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("Client failed to create first stream. Err: %v", err)
 	}
 
-	<-notifyChan // Wait server stream to be established
-	var sstream1 *Stream
-	// Access stream on the server
+	<-notifyChan // Wait server stream to be established.
+	var sstream *Stream
+	// Access stream on the server.
 	serverTransport.mu.Lock()
 	for _, v := range serverTransport.activeStreams {
-		if v.id == cstream1.id {
-			sstream1 = v
+		if v.id == cstream.id {
+			sstream = v
 		}
 	}
 	serverTransport.mu.Unlock()
-	if sstream1 == nil {
-		t.Fatalf("Didn't find stream corresponding to client cstream.id: %v on the server", cstream1.id)
+	if sstream == nil {
+		t.Fatalf("Didn't find stream corresponding to client cstream.id: %v on the server", cstream.id)
 	}
 
 	client.Close(fmt.Errorf("closed manually by test"))
 
-	// Wait server transport to be closed
+	// Wait server transport to be closed.
 	<-serverTransport.done
 
-	// Write header on a closed server transport
-	err = serverTransport.WriteHeader(sstream1, metadata.MD{})
+	// Write header on a closed server transport.
+	err = serverTransport.WriteHeader(sstream, metadata.MD{})
 	st := status.Convert(err)
 	if st.Code() != codes.Unavailable {
-		t.Fatalf("Unailable status expected but got: %v", st.Code().String())
+		t.Fatalf("WriteHeader() failed with status code %s, want %s", st.Code(), codes.Unavailable)
 	}
 }
 
