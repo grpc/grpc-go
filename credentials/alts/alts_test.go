@@ -397,7 +397,7 @@ func establishAltsConnection(t *testing.T, handshakerAddress, serverAddress stri
 		if err == nil {
 			break
 		}
-		if code := status.Code(err); code == codes.Unavailable {
+		if code := status.Code(err); code == codes.Unavailable || code == codes.DeadlineExceeded {
 			// The server is not ready yet. Try again.
 			continue
 		}

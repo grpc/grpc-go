@@ -61,8 +61,6 @@ var (
 	// control number of concurrent created (but not closed) handshakes.
 	clientHandshakes = semaphore.NewWeighted(int64(envconfig.ALTSMaxConcurrentHandshakes))
 	serverHandshakes = semaphore.NewWeighted(int64(envconfig.ALTSMaxConcurrentHandshakes))
-	// errDropped occurs when maxPendingHandshakes is reached.
-	errDropped = errors.New("maximum number of concurrent ALTS handshakes is reached")
 	// errOutOfBound occurs when the handshake service returns a consumed
 	// bytes value larger than the buffer that was passed to it originally.
 	errOutOfBound = errors.New("handshaker service consumed bytes value is out-of-bound")
@@ -156,8 +154,8 @@ func NewServerHandshaker(ctx context.Context, conn *grpc.ClientConn, c net.Conn,
 // ClientHandshake starts and completes a client ALTS handshake for GCP. Once
 // done, ClientHandshake returns a secure connection.
 func (h *altsHandshaker) ClientHandshake(ctx context.Context) (net.Conn, credentials.AuthInfo, error) {
-	if !clientHandshakes.TryAcquire(1) {
-		return nil, nil, errDropped
+	if err := clientHandshakes.Acquire(ctx, 1); err != nil {
+		return nil, nil, err
 	}
 	defer clientHandshakes.Release(1)
 
@@ -209,8 +207,8 @@ func (h *altsHandshaker) ClientHandshake(ctx context.Context) (net.Conn, credent
 // ServerHandshake starts and completes a server ALTS handshake for GCP. Once
 // done, ServerHandshake returns a secure connection.
 func (h *altsHandshaker) ServerHandshake(ctx context.Context) (net.Conn, credentials.AuthInfo, error) {
-	if !serverHandshakes.TryAcquire(1) {
-		return nil, nil, errDropped
+	if err := serverHandshakes.Acquire(ctx, 1); err != nil {
+		return nil, nil, err
 	}
 	defer serverHandshakes.Release(1)
 
