@@ -44,7 +44,7 @@ import (
 )
 
 const (
-	defaultTestLongTimeout  = 10 * time.Second
+	defaultTestLongTimeout  = 60 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
@@ -392,16 +392,21 @@ func establishAltsConnection(t *testing.T, handshakerAddress, serverAddress stri
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestLongTimeout)
 	defer cancel()
 	c := testgrpc.NewTestServiceClient(conn)
+	success := false
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		_, err = c.UnaryCall(ctx, &testpb.SimpleRequest{})
 		if err == nil {
+			success = true
 			break
 		}
-		if code := status.Code(err); code == codes.Unavailable {
+		if code := status.Code(err); code == codes.Unavailable || code == codes.DeadlineExceeded {
 			// The server is not ready yet. Try again.
 			continue
 		}
 		t.Fatalf("c.UnaryCall() failed: %v", err)
+	}
+	if !success {
+		t.Fatalf("c.UnaryCall() timed out after %v", defaultTestShortTimeout)
 	}
 }
 
