@@ -218,12 +218,14 @@ type FilterChainManager struct {
 	conns []net.Conn
 }
 
-// Must not be called concurrently with Conns().
+// AddConn adds the passed connection to the list of Conns in the filter chain
+// manager. Must not be called concurrently with Conns().
 func (fcm *FilterChainManager) AddConn(conn net.Conn) {
 	fcm.conns = append(fcm.conns, conn)
 }
 
-// Must not be called concurrently with AddConn().
+// Conns returns the list of Conns in the filter chain manager. Must not be
+// called concurrently with AddConn().
 func (fcm *FilterChainManager) Conns() []net.Conn {
 	return fcm.conns
 }

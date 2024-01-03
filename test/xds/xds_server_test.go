@@ -20,6 +20,7 @@ package xds_test
 
 import (
 	"context"
+	"io"
 	"net"
 	"strings"
 	"testing"
@@ -179,8 +180,8 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 	// Setup the management server to respond with a listener resource that
-	// specifies a route name to watch, and a RDS resource corresponding to this
-	// route name.
+	// specifies a route name to watch, and no RDS resource corresponding to
+	// this route name.
 	host, port, err := hostPortFromListener(lis)
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
@@ -357,6 +358,9 @@ func (s) TestServingModeChanges(t *testing.T) {
 	if err = stream.CloseSend(); err != nil { // somehow this doesn't send the right EOF signal that closes it...either nondeterministically calls this or doesn't work, can I block on stream ending? I think the former since it takes 30 seconds. Can triage this further post new years once I implement Resource Not Found logic.
 		t.Fatalf("stream.CloseSend() failed: %v, should continue to work due to graceful stop", err)
 	}
+	if _, err = stream.Recv(); err != io.EOF {
+		t.Fatalf("unexpected error: %v, expected an EOF error", err)
+	}
 
 	// after asserting stream can continue - this is sort of the invariant...behavior of graceful close
 	// see expected error code - could tie it into error
@@ -411,9 +415,27 @@ it receives an LDS specifying RDS A (which incoming RPC's will match to). This c
 represented in the Server's state.
 */
 func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
+	// One listener too I think
+	/*managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+	defer cleanup()
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	// Setup the management server to respond with a listener resource that
+	// specifies three route names to watch, and a RDS resources corresponding
+	// to this route names.
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("failed to retrieve host and port of server: %v", err)
+	}*/
+
 	// LDS with RDS A, B, C
+	// Properties of LDS:
 
 	// before all the RDS resources come, Accept() + Close()
+
+
 
 	// LDS for RDS A, B, LDS pointing to RDS a doesn't get matched to, falls back to Def filter chain which specifies RDS B.
 
@@ -433,4 +455,15 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 
 	// eventually just use the route a (how to verify?) - goes back ok
 
-}
+} // for this xDS Resources need ipv4 and ipv6 filter chains
+
+
+// 1/3
+// Figure out stream EOF problem and try and get it working
+
+// Write more e2e tests (I need to pull Easwar's resource not found here) - try
+// and get it working with just ResourceNotFoundRDS (invoke and then eventual error)
+
+
+// Write unit tests (rds handler is set expect constructor could take lis or a callback)
+// lw how to test (immediately goes non serving and accept and close) vs. before, but this tries to get e2e
