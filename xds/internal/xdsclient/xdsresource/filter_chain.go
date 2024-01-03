@@ -23,6 +23,8 @@ import (
 	"net"
 	"unsafe"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
@@ -30,8 +32,6 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 )
 
 const (
@@ -68,8 +68,9 @@ type FilterChain struct {
 	//
 	// Exactly one of RouteConfigName and InlineRouteConfig is set.
 	InlineRouteConfig *RouteConfigUpdate
-	// RC is the routing configuration for this filter chain (LDS + RDS).
-	RC *unsafe.Pointer // *(RoutingConfiguration)
+	// UsableRouteConfiguration is the routing configuration for this filter
+	// chain (LDS + RDS).
+	UsableRouteConfiguration *unsafe.Pointer // *(UsableRouteConfiguration)
 }
 
 // VirtualHostWithInterceptors captures information present in a VirtualHost
@@ -96,23 +97,25 @@ type RouteWithInterceptors struct {
 	Interceptors []resolver.ServerInterceptor
 }
 
-type RoutingConfiguration struct {
+type UsableRouteConfiguration struct {
 	VHS []VirtualHostWithInterceptors
 	Err error
 }
 
 // ConstructUsableRouteConfiguration takes Route Configuration and converts it
 // into matchable route configuration, with instantiated HTTP Filters per route.
-func (fc *FilterChain) ConstructUsableRouteConfiguration(config RouteConfigUpdate) ([]VirtualHostWithInterceptors, error) {
+func (fc *FilterChain) ConstructUsableRouteConfiguration(config RouteConfigUpdate) *UsableRouteConfiguration {
 	vhs := make([]VirtualHostWithInterceptors, len(config.VirtualHosts))
 	for _, vh := range config.VirtualHosts {
 		vhwi, err := fc.convertVirtualHost(vh)
 		if err != nil {
-			return nil, fmt.Errorf("virtual host construction: %v", err)
+			// Non nil if (lds + rds) fails, shouldn't happen since validated by
+			// xDS Client, treat as L7 error but shouldn't happen.
+			return &UsableRouteConfiguration{Err: fmt.Errorf("virtual host construction: %v", err)}
 		}
 		vhs = append(vhs, vhwi)
 	}
-	return vhs, nil
+	return &UsableRouteConfiguration{VHS: vhs}
 }
 
 func (fc *FilterChain) convertVirtualHost(virtualHost *VirtualHost) (VirtualHostWithInterceptors, error) {
@@ -215,10 +218,12 @@ type FilterChainManager struct {
 	conns []net.Conn
 }
 
+// Must not be called concurrently with Conns().
 func (fcm *FilterChainManager) AddConn(conn net.Conn) {
 	fcm.conns = append(fcm.conns, conn)
 }
 
+// Must not be called concurrently with AddConn().
 func (fcm *FilterChainManager) Conns() []net.Conn {
 	return fcm.conns
 }
@@ -601,9 +606,9 @@ func (fcm *FilterChainManager) Validate(f func(fc *FilterChain) error) error {
 }
 
 func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error) {
-	rc := unsafe.Pointer(&RoutingConfiguration{})
+	rc := unsafe.Pointer(&UsableRouteConfiguration{})
 	filterChain := &FilterChain{
-		RC: &rc,
+		UsableRouteConfiguration: &rc,
 	}
 	seenNames := make(map[string]bool, len(filters))
 	seenHCM := false

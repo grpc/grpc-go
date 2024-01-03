@@ -26,33 +26,33 @@ import (
 )
 
 // rdsHandler handles any RDS queries that need to be started for a given server
-// side listeners Filter Chains (i.e. not inline). It persists RDS updates for
-// later use and also determines whether all the RDS updates needed have been
-// received or not.
+// side listeners Filter Chains (i.e. not inline). It persists rdsWatcher
+// updates for later use and also determines whether all the rdsWatcher updates
+// needed have been received or not.
 type rdsHandler struct {
 	xdsC   XDSClient
 	logger *igrpclog.PrefixLogger
 
 	parent *listenerWrapper
 
-	// updates is a map from routeName to RDS update, including RDS resources
-	// and any errors received. If not written in this map, no RDS update for
-	// that route name yet. If update set in value, use that as valid route
-	// configuration for RDS, otherwise treat as an error case and fail at L7
-	// level.
+	// updates is a map from routeName to rdsWatcher update, including
+	// RouteConfiguration resources and any errors received. If not written in
+	// this map, no RouteConfiguration or error for that route name yet. If
+	// update set in value, use that as valid route configuration, otherwise
+	// treat as an error case and fail at L7 level.
 	updates map[string]rdsWatcherUpdate
 
-	cancelsMu sync.Mutex // Protects close reading cancels, since can happen async with write.
-	cancels   map[string]func()
+	mu      sync.Mutex
+	cancels map[string]func()
 }
 
-// newRDSHandler creates a new rdsHandler to watch for RDS resources.
-// listenerWrapper updates the list of route names to watch by calling
-// updateRouteNamesToWatch() upon receipt of new Listener configuration.
-func newRDSHandler(lw *listenerWrapper, xdsC XDSClient, logger *igrpclog.PrefixLogger) *rdsHandler {
+// newRDSHandler creates a new rdsHandler to watch for RouteConfiguration
+// resources. listenerWrapper updates the list of route names to watch by
+// calling updateRouteNamesToWatch() upon receipt of new Listener configuration.
+func newRDSHandler(lw *listenerWrapper) *rdsHandler {
 	return &rdsHandler{
-		xdsC:    xdsC,
-		logger:  logger,
+		xdsC:    lw.xdsC,
+		logger:  lw.logger,
 		parent:  lw,
 		updates: make(map[string]rdsWatcherUpdate),
 		cancels: make(map[string]func()),
@@ -60,26 +60,28 @@ func newRDSHandler(lw *listenerWrapper, xdsC XDSClient, logger *igrpclog.PrefixL
 }
 
 // updateRouteNamesToWatch handles a list of route names to watch for a given
-// server side listener (if a filter chain specifies dynamic RDS configuration).
-// This function handles all the logic with respect to any routes that may have
-// been added or deleted as compared to what was previously present.
+// server side listener (if a filter chain specifies dynamic
+// RouteConfiguration). This function handles all the logic with respect to any
+// routes that may have been added or deleted as compared to what was previously
+// present. Must be called within an xDS Client callback.
 func (rh *rdsHandler) updateRouteNamesToWatch(routeNamesToWatch map[string]bool) {
-	rh.cancelsMu.Lock()
-	defer rh.cancelsMu.Unlock()
-	// Add and start watches for any routes for any new routes in
-	// routeNamesToWatch.
+	rh.mu.Lock()
+	defer rh.mu.Unlock()
+	// Add and start watches for any new routes in routeNamesToWatch.
 	for routeName := range routeNamesToWatch {
 		if _, ok := rh.cancels[routeName]; !ok {
 			// The xDS client keeps a reference to the watcher until the cancel
 			// func is invoked. So, we don't need to keep a reference for fear
 			// of it being garbage collected.
 			w := &rdsWatcher{parent: rh, routeName: routeName}
-			xdsCCancel := xdsresource.WatchRouteConfig(rh.xdsC, routeName, w)
-			// Set bit on cancel function to eat any RDS calls for this watcher
-			// after it has been cancelled.
+			cancel := xdsresource.WatchRouteConfig(rh.xdsC, routeName, w)
+			// Set bit on cancel function to eat any RouteConfiguration calls
+			// for this watcher after it has been cancelled.
 			rh.cancels[routeName] = func() {
-				w.cancelled = true // doesn't race, all of this is sync, accessed in xDS emissions only (LDS and RDS)
-				xdsCCancel()
+				w.mu.Lock()
+				w.cancelled = true
+				w.mu.Unlock()
+				cancel()
 			}
 		}
 	}
@@ -95,11 +97,15 @@ func (rh *rdsHandler) updateRouteNamesToWatch(routeNamesToWatch map[string]bool)
 	}
 }
 
-// determines if all dynamic RDS needed has received configuration or update.
-func (rh *rdsHandler) determineRDSReady() bool {
+// determines if all dynamic RouteConfiguration needed has received
+// configuration or update. Must be called from an xDS Client Callback.
+func (rh *rdsHandler) determineRouteConfigurationReady() bool {
+	// Safe to read cancels because only written to in other parts of xDS Client
+	// Callbacks, which are sync.
 	return len(rh.updates) == len(rh.cancels)
 }
 
+// Must be called from an xDS Client Callback.
 func (rh *rdsHandler) handleRouteUpdate(routeName string, update rdsWatcherUpdate) {
 	rwu, ok := rh.updates[routeName]
 	if !ok {
@@ -116,6 +122,7 @@ func (rh *rdsHandler) handleRouteUpdate(routeName string, update rdsWatcherUpdat
 		rwu.err = update.err
 	} else {
 		rwu.update = update.update
+		rwu.err = nil
 	}
 	rh.updates[routeName] = rwu
 	rh.parent.handleRDSUpdate(routeName, rwu)
@@ -125,8 +132,8 @@ func (rh *rdsHandler) handleRouteUpdate(routeName string, update rdsWatcherUpdat
 // is closed, and it cleans up resources by canceling all the active RDS
 // watches.
 func (rh *rdsHandler) close() {
-	rh.cancelsMu.Lock()
-	defer rh.cancelsMu.Unlock()
+	rh.mu.Lock()
+	defer rh.mu.Unlock()
 	for _, cancel := range rh.cancels {
 		cancel()
 	}
@@ -144,42 +151,46 @@ type rdsWatcher struct {
 	logger    *igrpclog.PrefixLogger
 	routeName string
 
+	mu        sync.Mutex
 	cancelled bool // eats callbacks if true
 }
 
 func (rw *rdsWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData) {
+	rw.mu.Lock()
 	if rw.cancelled {
+		rw.mu.Unlock()
 		return
 	}
+	rw.mu.Unlock()
 	if rw.logger.V(2) {
 		rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, update.Resource)
 	}
-	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{
-		update: &update.Resource,
-	})
+	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{update: &update.Resource})
 }
 
 func (rw *rdsWatcher) OnError(err error) {
+	rw.mu.Lock()
 	if rw.cancelled {
+		rw.mu.Unlock()
 		return
 	}
+	rw.mu.Unlock()
 	if rw.logger.V(2) {
 		rw.logger.Infof("RDS watch for resource %q reported error: %v", rw.routeName, err)
 	}
-	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{
-		err: err,
-	})
+	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: err})
 }
 
 func (rw *rdsWatcher) OnResourceDoesNotExist() {
+	rw.mu.Lock()
 	if rw.cancelled {
+		rw.mu.Unlock()
 		return
 	}
+	rw.mu.Unlock()
 	if rw.logger.V(2) {
 		rw.logger.Infof("RDS watch for resource %q reported resource-does-not-exist error: %v", rw.routeName)
 	}
 	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type RouteConfiguration not found in received response", rw.routeName)
-	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{
-		err: err,
-	})
+	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: err})
 }

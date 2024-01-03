@@ -53,7 +53,7 @@ func (*testService) UnaryCall(context.Context, *testpb.SimpleRequest) (*testpb.S
 
 func (*testService) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallServer) error {
 	for {
-		_, err := stream.Recv()
+		_, err := stream.Recv() // hangs here forever if stream doesn't shut down...doesn't receive EOF without any errors
 		if err == io.EOF {
 			return nil
 		}

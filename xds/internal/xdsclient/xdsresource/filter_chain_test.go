@@ -2735,14 +2735,14 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 			fc := FilterChain{
 				HTTPFilters: test.filters,
 			}
-			vhswi, err := fc.ConstructUsableRouteConfiguration(test.routeConfig)
-			if err != nil {
-				t.Fatalf("Error constructing usable route configuration: %v", err)
+			urc := fc.ConstructUsableRouteConfiguration(test.routeConfig)
+			if urc.Err != nil {
+				t.Fatalf("Error constructing usable route configuration: %v", urc.Err)
 			}
 			// Build out list of errors by iterating through the virtual hosts and routes,
 			// and running the filters in route configurations.
 			var errs []string
-			for _, vh := range vhswi {
+			for _, vh := range urc.VHS {
 				for _, r := range vh.Routes {
 					for _, int := range r.Interceptors {
 						errs = append(errs, int.AllowRPC(context.Background()).Error())

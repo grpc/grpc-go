@@ -349,7 +349,6 @@ type RouteConfigOptions struct {
 	ListenerName string
 	// ClusterSpecifierType determines the cluster specifier type.
 	ClusterSpecifierType RouteConfigClusterSpecifierType
-
 	// ClusterName is name of the cluster resource used when the cluster
 	// specifier type is set to RouteConfigClusterSpecifierTypeCluster.
 	//
@@ -720,126 +719,7 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 // resource to be used on the server side. The returned Listener resource
 // contains a RouteCongiguration resource name that needs to be resolved.
 func DefaultServerListenerWithRouteConfigName(host string, port uint32, secLevel SecurityLevel, routeName string) *v3listenerpb.Listener {
-	hcm := &v3httppb.HttpConnectionManager{
-		RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
-			Rds: &v3httppb.Rds{
-				ConfigSource: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
-				},
-				RouteConfigName: routeName,
-			},
-		},
-		HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
-	}
-	var tlsContext *v3tlspb.DownstreamTlsContext
-	switch secLevel {
-	case SecurityLevelNone:
-	case SecurityLevelTLS:
-		tlsContext = &v3tlspb.DownstreamTlsContext{
-			CommonTlsContext: &v3tlspb.CommonTlsContext{
-				TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-					InstanceName: ServerSideCertProviderInstance,
-				},
-			},
-		}
-	case SecurityLevelMTLS:
-		tlsContext = &v3tlspb.DownstreamTlsContext{
-			RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
-			CommonTlsContext: &v3tlspb.CommonTlsContext{
-				TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-					InstanceName: ServerSideCertProviderInstance,
-				},
-				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-					ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-						InstanceName: ServerSideCertProviderInstance,
-					},
-				},
-			},
-		}
-	}
-
-	var ts *v3corepb.TransportSocket
-	if tlsContext != nil {
-		ts = &v3corepb.TransportSocket{
-			Name: "envoy.transport_sockets.tls",
-			ConfigType: &v3corepb.TransportSocket_TypedConfig{
-				TypedConfig: marshalAny(tlsContext),
-			},
-		}
-	}
-	return &v3listenerpb.Listener{
-		Name: fmt.Sprintf(ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port)))),
-		Address: &v3corepb.Address{
-			Address: &v3corepb.Address_SocketAddress{
-				SocketAddress: &v3corepb.SocketAddress{
-					Address: host,
-					PortSpecifier: &v3corepb.SocketAddress_PortValue{
-						PortValue: port,
-					},
-				},
-			},
-		},
-		FilterChains: []*v3listenerpb.FilterChain{
-			{
-				Name: "v4-wildcard",
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					PrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "0.0.0.0",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: uint32(0),
-							},
-						},
-					},
-					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
-					SourcePrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "0.0.0.0",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: uint32(0),
-							},
-						},
-					},
-				},
-				Filters: []*v3listenerpb.Filter{
-					{
-						Name:       "filter-1",
-						ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: marshalAny(hcm)},
-					},
-				},
-				TransportSocket: ts,
-			},
-			{
-				Name: "v6-wildcard",
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					PrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "::",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: uint32(0),
-							},
-						},
-					},
-					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
-					SourcePrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "::",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: uint32(0),
-							},
-						},
-					},
-				},
-				Filters: []*v3listenerpb.Filter{
-					{
-						Name:       "filter-1",
-						ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: marshalAny(hcm)},
-					},
-				},
-				TransportSocket: ts,
-			},
-		},
-	}
+	return defaultServerListenerCommon(host, port, secLevel, routeName, false)
 }
 
 // RouteConfigNonForwardingTarget returns an xDS RouteConfig resource which

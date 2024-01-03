@@ -40,7 +40,7 @@ import (
 //  2. Implements the XDSHandshakeInfo() method used by the xdsCredentials to
 //     retrieve the configured certificate providers.
 //  3. xDS filter_chain configuration determines security configuration.
-//  4. Dynamically reads routing configuration in RoutingConfiguration(), called
+//  4. Dynamically reads routing configuration in UsableRouteConfiguration(), called
 //     to process incoming RPC's. (LDS + RDS configuration).
 type connWrapper struct {
 	net.Conn
@@ -68,15 +68,14 @@ type connWrapper struct {
 
 	// The virtual hosts with matchable routes and instantiated HTTP Filters per
 	// route, or an error.
-	rc *unsafe.Pointer // *RoutingConfiguration
+	urc *unsafe.Pointer // *xdsresource.UsableRouteConfiguration
 }
 
-// RoutingConfiguration returns the RoutingConfiguration to be used for server
-// side routing. If RoutingConfiguration contains error, fail any RPCs on this
-// Conn with status code UNAVAILABLE.
-func (c *connWrapper) RoutingConfiguration() xdsresource.RoutingConfiguration {
-	uPtr := atomic.LoadPointer(c.rc)
-	return *(*xdsresource.RoutingConfiguration)(uPtr)
+// UsableRouteConfiguration returns the UsableRouteConfiguration to be used for
+// server side routing.
+func (c *connWrapper) UsableRouteConfiguration() xdsresource.UsableRouteConfiguration {
+	uPtr := atomic.LoadPointer(c.urc)
+	return *(*xdsresource.UsableRouteConfiguration)(uPtr)
 }
 
 // SetDeadline makes a copy of the passed in deadline and forwards the call to

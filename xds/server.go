@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -50,7 +49,6 @@ var (
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer {
 		return grpc.NewServer(opts...)
 	}
-	logger = grpclog.Component("xds")
 )
 
 // grpcServer contains methods from grpc.Server which are used by the
@@ -240,15 +238,20 @@ func (s *GRPCServer) GracefulStop() {
 func routeAndProcess(ctx context.Context) error {
 	conn := transport.GetConnection(ctx)
 	cw, ok := conn.(interface {
-		RoutingConfiguration() xdsresource.RoutingConfiguration
+		UsableRouteConfiguration() xdsresource.UsableRouteConfiguration
 	})
 	if !ok {
 		return errors.New("missing virtual hosts in incoming context")
 	}
 
-	rc := cw.RoutingConfiguration()
-	if rc.Err != nil { // Error out at routing l7 level, represents an nack before usable route configuration or resource not found for RDS or error combining LDS + RDS (Shouldn't happen).
-		logger.Errorf("RPC on connection with xDS Configuration error: %v", rc.Err)
+	rc := cw.UsableRouteConfiguration()
+	// Error out at routing l7 level with a status code UNAVAILABLE, represents
+	// an nack before usable route configuration or resource not found for RDS
+	// or error combining LDS + RDS (Shouldn't happen).
+	if rc.Err != nil {
+		if logger.V(2) {
+			logger.Infof("RPC on connection with xDS Configuration error: %v", rc.Err)
+		}
 		return status.Error(codes.Unavailable, "error from xDS configuration for matched route configuration")
 	}
 

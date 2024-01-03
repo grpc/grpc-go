@@ -32,13 +32,13 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var (
@@ -86,8 +86,8 @@ func (s) TestServeLDSRDS(t *testing.T) {
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	serving := grpcsync.NewEvent()
 
+	serving := grpcsync.NewEvent()
 	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
 		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
 		if args.Mode == connectivity.ServingModeServing {
@@ -106,7 +106,11 @@ func (s) TestServeLDSRDS(t *testing.T) {
 			t.Errorf("Serve() failed: %v", err)
 		}
 	}()
-	<-serving.Done()
+	select {
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for the xDS Server to go Serving")
+	case <-serving.Done():
+	}
 
 	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -123,8 +127,7 @@ func (s) TestServeLDSRDS(t *testing.T) {
 	resources = e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener}, // Same lis, so will get eaten by the xDS Client.
-
-		Routes: []*v3routepb.RouteConfiguration{routeConfig},
+		Routes:    []*v3routepb.RouteConfiguration{routeConfig},
 	}
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -136,14 +139,14 @@ func (s) TestServeLDSRDS(t *testing.T) {
 	waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "the incoming RPC matched to a route that was not of action type non forwarding"))
 }
 
-// waitForFailedRPCWithStatusCode makes Unary RPC's until it receives the
+// waitForFailedRPCWithStatusCode makes unary RPC's until it receives the
 // expected status in a polling manner. Fails if the RPC made does not return
 // the expected status before the context expires.
 func waitForFailedRPCWithStatusCode(ctx context.Context, t *testing.T, cc *grpc.ClientConn, sts ...*status.Status) {
 	t.Helper()
 
 	c := testgrpc.NewTestServiceClient(cc)
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 	var err error
 	for {
@@ -318,7 +321,11 @@ func (s) TestServingModeChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-serving.Done()
+	select {
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for the xDS Server to go Serving")
+	case <-serving.Done():
+	}
 
 	// A unary RPC should work once it transitions into serving. (need this same
 	// assertion from LDS resource not found triggering it).
@@ -346,7 +353,8 @@ func (s) TestServingModeChanges(t *testing.T) {
 	if err = stream.Send(&testgrpc.StreamingOutputCallRequest{}); err != nil {
 		t.Fatalf("stream.Send() failed: %v, should continue to work due to graceful stop", err)
 	}
-	if err = stream.CloseSend(); err != nil {
+	// Right test failure is known issue leaks the goroutine of stream.Recv, need to make this deterministic.
+	if err = stream.CloseSend(); err != nil { // somehow this doesn't send the right EOF signal that closes it...either nondeterministically calls this or doesn't work, can I block on stream ending? I think the former since it takes 30 seconds. Can triage this further post new years once I implement Resource Not Found logic.
 		t.Fatalf("stream.CloseSend() failed: %v, should continue to work due to graceful stop", err)
 	}
 

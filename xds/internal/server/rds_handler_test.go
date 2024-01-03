@@ -289,7 +289,7 @@ func (s) TestRDSHandler_SuccessCaseTwoUpdates(t *testing.T) {
 }
 
 // Rather than block on an update from channel, (which syncs eventual consistency)
-// poll until rh.determineRDSReady is true (if so, probably will fail with a mutex),
+// poll until rh.determineRouteConfigurationReady is true (if so, probably will fail with a mutex),
 // the rest I think is fine
 
 // Fix these two unit tests and also cleanup e2e tests
