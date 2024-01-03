@@ -416,7 +416,7 @@ represented in the Server's state.
 */
 func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 	// One listener too I think
-	/*managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -428,16 +428,48 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 	host, port, err := hostPortFromListener(lis)
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
-	}*/
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
 	// LDS with RDS A, B, C
 	// Properties of LDS:
+	// matches to a, b and c no op but need to be specified
 
 	// before all the RDS resources come, Accept() + Close()
 
+	// RDS A ok
+	// RDS B type non forwarding action so expected to fail
+	// RDS C doesn't matter
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// I don't even think need to wait for it to go serving. All you need is to
+	// poll for an RPC to be ok, and then you'll be good.
+
+	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), xds.BootstrapContentsForTesting(bootstrapContents))
+	if err != nil {
+		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
+	}
+	defer server.Stop()
+	testgrpc.RegisterTestServiceServer(server, &testService{})
+	go func() {
+		if err := server.Serve(lis); err != nil {
+			t.Errorf("Serve() failed: %v", err)
+		}
+	}()
+
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+	waitForSuccessfulRPC(ctx, t, cc)
 
 
-	// LDS for RDS A, B, LDS pointing to RDS a doesn't get matched to, falls back to Def filter chain which specifies RDS B.
+	// LDS for RDS A, (def filter chain) B, LDS pointing to RDS a doesn't get matched to, falls back to Def filter chain which specifies RDS B.
+	// rds b like above is wrong type
 
 	// However, RPC's on Conn's corresponding to old LDS can continue (graceful
 	// check, streaming RPC's can continue to work) (graceful close check after)
@@ -448,18 +480,23 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 
 	// puts it on a queue so loses sync guarantee - so poll here for rds behavior
 	// Eventually just the fallback to b - goes unavailable
+	// "NonForwardingAction is expected for all Routes used on server-side; a
+	// route with an inappropriate action causes RPCs matching that route to
+	// fail with UNAVAILABLE." - A36
+	waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "the incoming RPC matched to a route that was not of action type non forwarding"))
+
 
 	// another update lds update a...
 	// lds ipv4 and ipv6 without the appended
 	// send all 3 rds here too...?
 
 	// eventually just use the route a (how to verify?) - goes back ok
+	waitForSuccessfulRPC(ctx, t, cc)
 
 } // for this xDS Resources need ipv4 and ipv6 filter chains
 
 
-// 1/3
-// Figure out stream EOF problem and try and get it working
+// 1/3:
 
 // Write more e2e tests (I need to pull Easwar's resource not found here) - try
 // and get it working with just ResourceNotFoundRDS (invoke and then eventual error)
