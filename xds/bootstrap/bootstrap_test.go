@@ -36,9 +36,9 @@ type testCredsBuilder struct {
 	config json.RawMessage
 }
 
-func (t *testCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, error) {
+func (t *testCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, func(), error) {
 	t.config = config
-	return nil, nil
+	return nil, nil, nil
 }
 
 func (t *testCredsBuilder) Name() string {
@@ -53,7 +53,7 @@ func TestRegisterNew(t *testing.T) {
 
 	const sampleConfig = "sample_config"
 	rawMessage := json.RawMessage(sampleConfig)
-	if _, err := c.Build(rawMessage); err != nil {
+	if _, _, err := c.Build(rawMessage); err != nil {
 		t.Errorf("Build(%v) error = %v, want nil", rawMessage, err)
 	}
 
