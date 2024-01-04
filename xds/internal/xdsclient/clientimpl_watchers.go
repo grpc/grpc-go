@@ -48,17 +48,6 @@ func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, 
 		return func() {}
 	}
 
-	// TODO: replace this with the code does the following when we have
-	// implemented generic watch API on the authority:
-	//  - Parse the resource name and extract the authority.
-	//  - Locate the corresponding authority object and acquire a reference to
-	//    it. If the authority is not found, error out.
-	//  - Call the watchResource() method on the authority.
-	//  - Return a cancel function to cancel the watch on the authority and to
-	//    release the reference.
-
-	// TODO: Make ParseName return an error if parsing fails, and
-	// schedule the OnError callback in that case.
 	n := xdsresource.ParseName(resourceName)
 	a, unref, err := c.findAuthority(n)
 	if err != nil {
@@ -101,5 +90,21 @@ func (r *resourceTypeRegistry) maybeRegister(rType xdsresource.Type) error {
 		return fmt.Errorf("attempt to re-register a resource type implementation for %v", rType.TypeName())
 	}
 	r.types[url] = rType
+	return nil
+}
+
+func (c *clientImpl) triggerResourceNotFoundForTesting(rType xdsresource.Type, resourceName string) error {
+	// Return early if the client is already closed.
+	if c == nil || c.done.HasFired() {
+		return fmt.Errorf("attempt to trigger resource-not-found-error for resource %q of type %q, but client is closed", rType.TypeName(), resourceName)
+	}
+
+	n := xdsresource.ParseName(resourceName)
+	a, unref, err := c.findAuthority(n)
+	if err != nil {
+		return fmt.Errorf("attempt to trigger resource-not-found-error for resource %q of type %q, but authority %q is not found", rType.TypeName(), resourceName, n.Authority)
+	}
+	defer unref()
+	a.handleWatchTimerExpiry(rType, n.String())
 	return nil
 }

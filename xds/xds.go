@@ -78,6 +78,7 @@ func init() {
 		v3statusgrpc.RegisterClientStatusDiscoveryServiceServer(grpcServer, csdss)
 		return csdss.Close, nil
 	})
+
 }
 
 // NewXDSResolverWithConfigForTesting creates a new xDS resolver builder using

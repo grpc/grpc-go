@@ -18,6 +18,35 @@
 
 package server
 
+import (
+	"context"
+	"fmt"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"testing"
+	"time"
+)
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+const (
+	defaultTestTimeout      = 10 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond // For events expdefaultTected to *not* happen.
+)
+
 /*
 import (
 	"context"
@@ -477,3 +506,405 @@ func (s) TestRDSHandler_SuccessCaseSecondUpdateMakesRouteFull(t *testing.T) {
 	waitForResourceNames(ctx, t, rdsNamesCh, []string{})
 }
 */
+
+// switch these tests to assert on rdsReady,
+// and map of errors and updates
+const (
+	listenerName = "listener"
+	clusterName  = "cluster"
+
+	route1 = "route1"
+	route2 = "route2"
+	route3 = "route3"
+	route4 = "route4"
+)
+
+// get these two unit tests and abc e2e test out, resource not found next week ***
+
+// similar test but don't verify the emissions, verify ready?
+
+// how to mock the lw?
+
+// xdsC -> managementServer (configure resources on this...)
+
+func xdsSetupForTest(t *testing.T) (*e2e.ManagementServer, string, chan []string, chan []string, xdsclient.XDSClient) {
+	t.Helper()
+
+	ldsNamesCh := make(chan []string, 1)
+	rdsNamesCh := make(chan []string, 1)
+
+	// Setup the management server to push the requested route configuration
+	// resource names on to a channel for the test to inspect.
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			switch req.GetTypeUrl() {
+			case version.V3ListenerURL: // Waits on the listener, and route config below...
+				select {
+				case <-ldsNamesCh:
+				default:
+				}
+				select {
+				case ldsNamesCh <- req.GetResourceNames():
+				default:
+				}
+			case version.V3RouteConfigURL: // waits on route config names here...
+				select {
+				case <-rdsNamesCh:
+				default:
+				}
+				select {
+				case rdsNamesCh <- req.GetResourceNames():
+				default:
+				}
+			default:
+				return fmt.Errorf("unexpected resources %v of type %q requested", req.GetResourceNames(), req.GetTypeUrl())
+			}
+			return nil
+		},
+		AllowResourceSubset: true,
+	})
+	t.Cleanup(cleanup)
+
+	xdsC, cancel, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cancel)
+
+	return mgmtServer, nodeID, ldsNamesCh, rdsNamesCh, xdsC
+}
+
+
+// xdsSetupFoTests performs the following setup actions:
+//   - spins up an xDS management server
+//   - creates an xDS client with a bootstrap configuration pointing to the above
+//     management server
+//
+// Returns the following:
+// - a reference to the management server
+// - nodeID to use when pushing resources to the management server
+// - a channel to read lds resource names received by the management server
+// - a channel to read rds resource names received by the management server
+// - an xDS client to pass to the rdsHandler under test
+func xdsSetupFoTests(t *testing.T) (*e2e.ManagementServer, string, chan []string, chan []string, xdsclient.XDSClient) {
+	t.Helper()
+
+	ldsNamesCh := make(chan []string, 1)
+	rdsNamesCh := make(chan []string, 1)
+
+	// Setup the management server to push the requested route configuration
+	// resource names on to a channel for the test to inspect.
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			switch req.GetTypeUrl() {
+			case version.V3ListenerURL: // Waits on the listener, and route config below...
+				select {
+				case <-ldsNamesCh:
+				default:
+				}
+				select {
+				case ldsNamesCh <- req.GetResourceNames():
+				default:
+				}
+			case version.V3RouteConfigURL: // waits on route config names here...
+				select {
+				case <-rdsNamesCh:
+				default:
+				}
+				select {
+				case rdsNamesCh <- req.GetResourceNames():
+				default:
+				}
+			default:
+				return fmt.Errorf("unexpected resources %v of type %q requested", req.GetResourceNames(), req.GetTypeUrl())
+			}
+			return nil
+		},
+		AllowResourceSubset: true,
+	})
+	t.Cleanup(cleanup)
+
+	xdsC, cancel, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cancel)
+
+	return mgmtServer, nodeID, ldsNamesCh, rdsNamesCh, xdsC
+}
+
+// Waits for the wantNames to be pushed on to namesCh. Fails the test by calling
+// t.Fatal if the context expires before that.
+func waitForResourceNames(ctx context.Context, t *testing.T, namesCh chan []string, wantNames []string) {
+	t.Helper()
+
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		select {
+		case <-ctx.Done():
+		case gotNames := <-namesCh:
+			if cmp.Equal(gotNames, wantNames, cmpopts.EquateEmpty(), cmpopts.SortSlices(func(s1, s2 string) bool { return s1 < s2 })) {
+				return
+			}
+			t.Logf("Received resource names %v, want %v", gotNames, wantNames)
+		}
+	}
+	t.Fatalf("Timeout waiting for resource to be requested from the management server")
+}
+
+
+// I don't know if you need this...
+func routeConfigResourceForName(name string) *v3routepb.RouteConfiguration {
+	return e2e.RouteConfigResourceWithOptions(e2e.RouteConfigOptions{
+		RouteConfigName:      name,
+		ListenerName:         listenerName,
+		ClusterSpecifierType: e2e.RouteConfigClusterSpecifierTypeCluster,
+		ClusterName:          clusterName,
+	})
+}
+
+var defaultRouteConfigUpdate = xdsresource.RouteConfigUpdate{
+	VirtualHosts: []*xdsresource.VirtualHost{{
+		Domains: []string{listenerName},
+		Routes: []*xdsresource.Route{{
+			Prefix:           newStringP("/"), // where is this and do I even need this helper?
+			ActionType:       xdsresource.RouteActionRoute,
+			WeightedClusters: map[string]xdsresource.WeightedCluster{clusterName: {Weight: 1}},
+		}},
+	}},
+}
+
+func newStringP(s string) *string {
+	return &s
+}
+
+// type noopListener struct {}
+
+// regardless of calling inline or not, it's going to call
+// lw.handleRDSUpdate
+
+// route update is ready is the only thing it really tests
+// updateRouteNamesToWatch is only thing
+
+// determineRouteConfigurationReady()
+// errors and also updates are accounted, can flip and still not
+
+// flip back and forth between error and ok still ready
+
+
+
+// cancels bit
+// eats update for old cancellations, shouldn't callback and count for ready since gets eaten...
+// how to rewrite the unit test for this and plumb stuff in
+
+// test the update map length in the case where updates get eaten...
+
+// it creates route watchers
+// where does it give up route watch ref? I think after cancels for gc
+
+
+
+// cancel bit in updateRouteNamesToWatch also affects
+// cancel length, which affects the logic for ready
+
+
+// closing just cancels all but doesn't delete
+
+
+// need a fake client, I do think the length logic is important to test over
+// updateRouteNamesToWatch iterations
+// just need the fake client invocation for all of these unit tests...
+
+// a b
+// before updating rds a rds b not ready
+// update rds a
+// still not ready
+// update rds b with error
+// ready
+// rds b with ok
+// still ready
+
+// a b c
+// not ready
+// update c - should go ready
+
+// a c
+// should be immedaitely ready
+
+// a d - should not be ready
+// update c - is cancelled so should be eaten (tests cancellation logic) - still not ready
+// update d - should be ready
+
+// I don't think cancellation is important to test and what does that even mean?
+// Can merge with assertion above about update d - if you update c after, should eat, since cancelled
+// and not trigger route updates getting an update, and thus shouldn't be ready
+
+// is there a fake client somewhere I could use?
+
+type testCallbackVerify struct {
+	ch chan callbackStruct// verify it's sent, determiistic, can verify every time (split test cases above into multiple)
+}
+
+type callbackStruct struct {
+	routeName string
+	rwu rdsWatcherUpdate
+}
+
+func (tcv *testCallbackVerify) testCallback(routeName string, rwu rdsWatcherUpdate) {
+	// verify some stuff here...how do I verify
+	tcv.ch <- callbackStruct{routeName: routeName, rwu: rwu}
+
+}
+
+func verifyRouteName(ctx context.Context, t *testing.T, ch chan callbackStruct, want callbackStruct) {
+	t.Helper()
+	select {
+	case got := <-ch:
+		// fail if cmp.Diff doesn't work
+		if diff := cmp.Diff(got.routeName, want.routeName); diff != "" {
+			t.Fatalf("unexpected update received (-got, +want):%v, want: %v", got, want)
+		}
+	case <-ctx.Done():
+		t.Fatalf("timeout waiting for callback")
+	}
+}
+
+// write explanation for what I am testing here...
+func (s) TestRDSHandler(t *testing.T) {
+	mgmtServer, nodeID, _, rdsNamesCh, xdsC := xdsSetupForTest(t) // no lds names
+
+	// needs a lw now - noop? nil would cause a problem
+	// net.Listener
+
+	// Oh interesting can create the management server and the fake xDS Client here...use this
+	// lw will need to be real - verify calls/interface?
+
+	// Construct rds handler using constructor or just directly (do any tests not test with constructor)?
+
+	// mock listener wrapper {
+	//      holds onto a mock xDS Client I can use
+	// }
+
+	ch := make(chan callbackStruct, 1) // cap it to 1, or determinisitic so ok?
+	cs := &testCallbackVerify{
+		ch: ch,
+	}
+	rh := newRDSHandler(cs.testCallback, xdsC, nil) // nil logger ok
+
+	// setup management server with all the info
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Configure the management server with a single route config resource.
+	routeResource1 := routeConfigResourceForName(route1)
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Routes:         []*v3routepb.RouteConfiguration{routeResource1},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+
+	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route2: true})
+
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1, route2})
+
+	verifyRouteName(ctx, t, ch, callbackStruct{routeName: route1})
+
+	// The RDS Handler update should not be ready.
+	if got := rh.determineRouteConfigurationReady(); got != false {
+		t.Fatalf("rh.determineRouteConfigurationReady: %v, want: false", false)
+	}
+
+	// Configure the management server with both route config resources.
+	routeResource2 := routeConfigResourceForName(route2)
+	resources.Routes = []*v3routepb.RouteConfiguration{routeResource1, routeResource2}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	verifyRouteName(ctx, t, ch, callbackStruct{routeName: route2})
+
+	if got := rh.determineRouteConfigurationReady(); got != true {
+		t.Fatalf("rh.determineRouteConfigurationReady: %v, want: true", got)
+	}
+
+
+	// newRDSHandler(/*need to mock a lw it's going to take to - including client and logger now*/)
+
+
+	/*rh := &rdsHandler{
+		xdsC: /*mock xds client here, // need to mock xdsClient to control it talking to rdsHandler
+		parent: /*mock listener wrapper here...,
+	}*/
+
+	// set up management server, make sure send names
+
+	// determinstic how many it will receive
+	// verify := <-ch // need to cap this with timeout
+
+
+
+
+	// rh.handleRouteUpdate() // I could also invoke this directly or invoke indirectly by:
+	// fake client here
+
+	// but wait it invokes the *xdsresource* package
+	// not an xDS Client object
+
+	// cancel := xdsresource.WatchRouteConfig(rh.xdsC, routeName, w)
+
+
+
+
+	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route2: true, route3: true})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1, route2, route3})
+	// It is not all ready yet, should not be true.
+	if got := rh.determineRouteConfigurationReady(); got != false {
+		t.Fatalf("rh.determineRouteConfigurationReady: %v, want: false", got)
+	}
+
+
+	// Configure the management server with both route config resources.
+	routeResource3 := routeConfigResourceForName(route3)
+	resources.Routes = []*v3routepb.RouteConfiguration{routeResource1, routeResource2, routeResource3}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+	verifyRouteName(ctx, t, ch, callbackStruct{routeName: route3})
+
+	if got := rh.determineRouteConfigurationReady(); got != true {
+		t.Fatalf("rh.determineRouteConfigurationReady: %v, want: true", got)
+	}
+	// Update to route 1 and route 2. Should immediately go ready.
+	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route3: true})
+	if got := rh.determineRouteConfigurationReady(); got != true {
+		t.Fatalf("rh.determineRouteConfigurationReady: %v, want: true", got)
+	}
+
+	// Update to route 1 and route 4. No route 4, so should not be ready.
+	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route4: true})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1, route4})
+	if got := rh.determineRouteConfigurationReady(); got != false {
+		t.Fatalf("rh.determineRouteConfigurationReady: %v, want: false", got)
+	}
+	routeResource4 := routeConfigResourceForName(route4)
+	resources.Routes = []*v3routepb.RouteConfiguration{routeResource1, routeResource2, routeResource3, routeResource4}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+	verifyRouteName(ctx, t, ch, callbackStruct{routeName: route4})
+	if got := rh.determineRouteConfigurationReady(); got != true {
+		t.Fatalf("rh.determineRouteConfigurationReady: %v, want: true", got)
+	}
+}
+
+// Clean this test up, write listener wrapper unit test
+// and then abc e2e test
+
+// e2e test problem: how to invoke resource not found from e2e test when Easwar
+// is internal
+
+

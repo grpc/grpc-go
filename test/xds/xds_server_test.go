@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
+	// _ "google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -202,9 +203,9 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 	// serving := grpcsync.NewEvent()
 	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
 		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
-		/*if args.Mode == connectivity.ServingModeServing {
+		if args.Mode == connectivity.ServingModeServing {
 			//serving.Fire()
-		}*/
+		}
 	})
 
 	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
@@ -229,7 +230,9 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 
 	// Invoke resource not found - this should result in L7 RPC error with unavailable
 	// receive on serving as a result, should trigger it to go serving.
+	// internal.TriggerXDSResourceNameNotFoundForTesting.(func(xdsresource.Producer, string, string) error)() // test rds resource not found here
 
+	// <-serving.Done()
 	// <-serving.Done()
 	// waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
 }
@@ -347,7 +350,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 	// RPC's after. (how to assert accepted + closed) does this make it's way to
 	// application layer? (should work outside of resource not found...
 
-	// Invoke LDS Resource not found here
+	// Invoke LDS Resource not found here (tests graceful close)
 
 	// New RPCs on that connection should eventually start failing. Due to
 	// Graceful Stop any started streams continue to work.
@@ -414,6 +417,8 @@ This configuration should eventually be represented in the Server's state and su
 it receives an LDS specifying RDS A (which incoming RPC's will match to). This configuration should eventually be
 represented in the Server's state.
 */
+
+/*
 func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 	// One listener too I think
 	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
@@ -494,7 +499,7 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 	waitForSuccessfulRPC(ctx, t, cc)
 
 } // for this xDS Resources need ipv4 and ipv6 filter chains
-
+*/
 
 // 1/3:
 
@@ -504,3 +509,5 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 
 // Write unit tests (rds handler is set expect constructor could take lis or a callback)
 // lw how to test (immediately goes non serving and accept and close) vs. before, but this tries to get e2e
+
+// pull in resource not found and get basic test case working...

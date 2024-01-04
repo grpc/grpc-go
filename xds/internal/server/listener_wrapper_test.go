@@ -18,6 +18,23 @@
 
 package server
 
+import (
+	"context"
+	"fmt"
+	"net"
+	"strconv"
+	"testing"
+
+	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
+
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter
+)
+
 /*
 
 // Switch these to assert on Ready based off Accept() + Close()
@@ -499,3 +516,164 @@ func (s) TestLisWrapper(t *testing.T) {
 // and has current and pending (but maybe best to test this e2e)
 
 */
+
+// essentially before tested it going ready signal, now it doesn't block
+
+// could still test internal state...i.e. serving and non serving
+// Also test other properties? What other properties happen?
+
+// test mode shifts? Can't really test conn accepts
+// since conn accepts are tested e2e
+
+// listener wrapper tests are weird
+
+// now starts ready and immediately accepts.
+// Tested in e2e but how else?
+
+// what are invaraints to test here?
+
+// I think only thing to test is
+// mode callback - starts in mode non serving
+
+// lds + rds (never transitions into serving)
+// gets the rds (transitions into serving)
+
+type verifyMode struct {
+	modeCh chan connectivity.ServingMode
+}
+
+func (vm *verifyMode) verifyModeCallback(_ net.Addr, mode connectivity.ServingMode, _ error) {
+	// send on a channel of 1...not set initially?
+	vm.modeCh <- mode
+}
+
+func hostPortFromListener(t *testing.T, lis net.Listener) (string, uint32) {
+	t.Helper()
+
+	host, p, err := net.SplitHostPort(lis.Addr().String())
+	if err != nil {
+		t.Fatalf("net.SplitHostPort(%s) failed: %v", lis.Addr().String(), err)
+	}
+	port, err := strconv.ParseInt(p, 10, 32)
+	if err != nil {
+		t.Fatalf("strconv.ParseInt(%s, 10, 32) failed: %v", p, err)
+	}
+	return host, uint32(port)
+}
+
+// test as a result of fake listener? plumb that in or do something else?
+// Creates a local TCP net.Listener and creates a listenerWrapper by passing
+// that and the provided xDS client.
+//
+// Returns the following:
+//   - the ready channel of the listenerWrapper
+//   - host of the listener
+//   - port of the listener
+//   - listener resource name to use when requesting this resource from the
+//     management server
+/*func createListenerWrapper(t *testing.T, xdsC XDSClient) (<-chan struct{}, string, uint32, string) {
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("Failed to create a local TCP listener: %v", err)
+	}
+
+	host, port := hostPortFromListener(t, lis)
+	lisResourceName := fmt.Sprintf(e2e.ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port))))
+	params := ListenerWrapperParams{
+		Listener:             lis,
+		ListenerResourceName: lisResourceName,
+		XDSClient:            xdsC,
+		ModeCallback:         verifyModeCallback, // somehow will need to get a channel/object ref here, rather than pass it through stack local var
+	}
+	l := NewListenerWrapper(params)
+	if l == nil {
+		t.Fatalf("NewListenerWrapper(%+v) returned nil", params)
+	}
+	t.Cleanup(func() { l.Close() })
+	// verify channel for mode changes?
+	return ch, host, port, lisResourceName
+}*/
+
+func (s) TestListenerWrapper(t *testing.T) {
+	mgmtServer, nodeID, ldsResourceNamesCh, rdsResourceNamesCh, xdsC := xdsSetupFoTests(t)
+	// readyCh, host, port, lisResourceName := createListenerWrapper(t, xdsC)
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("Failed to create a local TCP listener: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	modeCh := make(chan connectivity.ServingMode, 1)
+	vm := verifyMode{
+		modeCh: modeCh,
+	}
+	host, port := hostPortFromListener(t, lis)
+	lisResourceName := fmt.Sprintf(e2e.ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port))))
+	params := ListenerWrapperParams{
+		Listener:             lis,
+		ListenerResourceName: lisResourceName,
+		XDSClient:            xdsC,
+		ModeCallback:         vm.verifyModeCallback, // somehow will need to get a channel/object ref here, rather than pass it through stack local var
+	}
+	l := NewListenerWrapper(params)
+	if l == nil {
+		t.Fatalf("NewListenerWrapper(%+v) returned nil", params)
+	}
+	defer l.Close()
+	waitForResourceNames(ctx, t, ldsResourceNamesCh, []string{lisResourceName})
+	/*lw := NewListenerWrapper(ListenerWrapperParams{
+		ModeCallback: func(addr net.Addr, mode connectivity.ServingMode, err error),
+	}/*any params here to test?)*/
+	// this thing is a net listener...how did test get serving mode changes
+
+	// LDS pointing to RDS - not ready (verify no mode update sent)? (verify LDS request gets sent)
+
+	// invoke resource not found - should go ready (optional)
+
+
+	// update rds - should go ready
+	// Configure the management server with a listener resource that specifies
+	// the name of RDS resources that need to be resolved.
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultServerListenerWithRouteConfigName(host, port, e2e.SecurityLevelNone, route1)},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	waitForResourceNames(ctx, t, rdsResourceNamesCh, []string{route1})
+
+	// Verify that there is no message on the ready channel. (no mode change argument)
+	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+
+	select {
+	case mode := <-modeCh:
+		t.Fatalf("received mode change to %v when no mode expected", mode)
+	case <-sCtx.Done():
+	}
+
+	// Configure the management server with the route configuration resource
+	// specified by the listener resource.
+	resources.Routes = []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(route1, lisResourceName, clusterName)}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// mode goes ready
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout waiting for mode change")
+	case mode := <-modeCh:
+		if mode != connectivity.ServingModeServing {
+			t.Fatalf("mode change received: %v, want: %v", mode, connectivity.ServingModeServing)
+		}
+	}
+
+	// invoke lds resource not found - should go unready
+
+}

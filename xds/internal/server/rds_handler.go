@@ -33,7 +33,7 @@ type rdsHandler struct {
 	xdsC   XDSClient
 	logger *igrpclog.PrefixLogger
 
-	parent *listenerWrapper
+	callback func (string, rdsWatcherUpdate)
 
 	// updates is a map from routeName to rdsWatcher update, including
 	// RouteConfiguration resources and any errors received. If not written in
@@ -49,13 +49,13 @@ type rdsHandler struct {
 // newRDSHandler creates a new rdsHandler to watch for RouteConfiguration
 // resources. listenerWrapper updates the list of route names to watch by
 // calling updateRouteNamesToWatch() upon receipt of new Listener configuration.
-func newRDSHandler(lw *listenerWrapper) *rdsHandler {
+func newRDSHandler(cb func (string, rdsWatcherUpdate), xdsC XDSClient, logger *igrpclog.PrefixLogger) *rdsHandler {
 	return &rdsHandler{
-		xdsC:    lw.xdsC,
-		logger:  lw.logger,
-		parent:  lw,
-		updates: make(map[string]rdsWatcherUpdate),
-		cancels: make(map[string]func()),
+		xdsC:     xdsC,
+		logger:   logger,
+		callback: cb,
+		updates:  make(map[string]rdsWatcherUpdate),
+		cancels:  make(map[string]func()),
 	}
 }
 
@@ -125,7 +125,7 @@ func (rh *rdsHandler) handleRouteUpdate(routeName string, update rdsWatcherUpdat
 		rwu.err = nil
 	}
 	rh.updates[routeName] = rwu
-	rh.parent.handleRDSUpdate(routeName, rwu)
+	rh.callback(routeName, rwu)
 }
 
 // close() is meant to be called by wrapped listener when the wrapped listener

@@ -99,7 +99,7 @@ func NewListenerWrapper(params ListenerWrapperParams) net.Listener {
 	lisAddr := lw.Listener.Addr().String()
 	lw.addr, lw.port, _ = net.SplitHostPort(lisAddr)
 
-	lw.rdsHandler = newRDSHandler(lw)
+	lw.rdsHandler = newRDSHandler(lw.handleRDSUpdate, lw.xdsC, lw.logger)
 	lw.cancelWatch = xdsresource.WatchListener(lw.xdsC, lw.name, &ldsWatcher{
 		parent: lw,
 		logger: lw.logger,

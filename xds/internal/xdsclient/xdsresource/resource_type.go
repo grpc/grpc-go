@@ -25,18 +25,20 @@
 package xdsresource
 
 import (
-	"google.golang.org/grpc/xds/internal"
+	"fmt"
+
+	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
 func init() {
-	internal.ResourceTypeMapForTesting = make(map[string]any)
-	internal.ResourceTypeMapForTesting[version.V3ListenerURL] = listenerType
-	internal.ResourceTypeMapForTesting[version.V3RouteConfigURL] = routeConfigType
-	internal.ResourceTypeMapForTesting[version.V3ClusterURL] = clusterType
-	internal.ResourceTypeMapForTesting[version.V3EndpointsURL] = endpointsType
+	xdsinternal.ResourceTypeMapForTesting = make(map[string]any)
+	xdsinternal.ResourceTypeMapForTesting[version.V3ListenerURL] = listenerType
+	xdsinternal.ResourceTypeMapForTesting[version.V3RouteConfigURL] = routeConfigType
+	xdsinternal.ResourceTypeMapForTesting[version.V3ClusterURL] = clusterType
+	xdsinternal.ResourceTypeMapForTesting[version.V3EndpointsURL] = endpointsType
 }
 
 // Producer contains a single method to discover resource configuration from a
@@ -161,4 +163,28 @@ func (r resourceTypeState) TypeName() string {
 
 func (r resourceTypeState) AllResourcesRequiredInSotW() bool {
 	return r.allResourcesRequiredInSotW
+}
+
+func TriggerResourceNotFoundForTesting(p Producer, typeName, resourceName string) error {
+	var typ Type
+	switch typeName {
+	case ListenerResourceTypeName:
+		typ = listenerType
+	case RouteConfigTypeName:
+		typ = routeConfigType
+	case ClusterResourceTypeName:
+		typ = clusterType
+	case EndpointsResourceTypeName:
+		typ = endpointsType
+	default:
+		return fmt.Errorf("unknown type name %q", typeName)
+	}
+
+	// Ensure that p implements triggerResourceNotFoundForTesting, else error out.
+	impl, ok := p.(interface{ triggerResourceNotFoundForTesting(Type, string) error })
+	if !ok {
+		return fmt.Errorf("unsupported operation on the provided xDS client")
+	}
+
+	return impl.triggerResourceNotFoundForTesting(typ, resourceName)
 }
