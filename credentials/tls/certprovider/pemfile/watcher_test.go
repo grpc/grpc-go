@@ -26,8 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
@@ -69,7 +67,7 @@ func compareKeyMaterial(got, want *certprovider.KeyMaterial) error {
 	// library does not provide a way to compare CertPool values. Comparing the
 	// subjects field of the certs in the CertPool seems like a reasonable
 	// approach.
-	if gotR, wantR := got.Roots.Subjects(), want.Roots.Subjects(); !cmp.Equal(gotR, wantR, cmpopts.EquateEmpty()) {
+	if gotR, wantR := got.Roots, want.Roots; !gotR.Equal(wantR) {
 		return fmt.Errorf("keyMaterial roots = %v, want %v", gotR, wantR)
 	}
 	return nil
