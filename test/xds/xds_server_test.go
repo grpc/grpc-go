@@ -237,6 +237,14 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 	// waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
 }
 
+// Clean this test up, write listener wrapper unit test
+// and then abc e2e test
+
+// e2e test problem: how to invoke resource not found from e2e test when Easwar
+// is internal
+
+// rds resource not found l7 failure from system level test.
+
 // Invoke graceful close:
 // graceful close of that rds (test case written below) (rds a to rds b, streams on rds a work) graceful close from resource not
 // found or a new lds taking place of old (how to switch)
@@ -505,7 +513,6 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 
 // Write more e2e tests (I need to pull Easwar's resource not found here) - try
 // and get it working with just ResourceNotFoundRDS (invoke and then eventual error)
-
 
 // Write unit tests (rds handler is set expect constructor could take lis or a callback)
 // lw how to test (immediately goes non serving and accept and close) vs. before, but this tries to get e2e
