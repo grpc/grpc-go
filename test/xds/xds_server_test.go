@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
-	// _ "google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -75,7 +74,7 @@ func (s) TestServeLDSRDS(t *testing.T) {
 	}
 
 	listener := e2e.DefaultServerListenerWithRouteConfigName(host, port, e2e.SecurityLevelNone, "routeName")
-	routeConfig := e2e.RouteConfigNonForwardingTarget("routeName")
+	routeConfig := e2e.RouteConfigNonForwardingAction("routeName")
 
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
@@ -237,30 +236,7 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 	// waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
 }
 
-// Clean this test up, write listener wrapper unit test
-// and then abc e2e test
-
-// e2e test problem: how to invoke resource not found from e2e test when Easwar
-// is internal
-
-// rds resource not found l7 failure from system level test.
-
-// Invoke graceful close:
-// graceful close of that rds (test case written below) (rds a to rds b, streams on rds a work) graceful close from resource not
-// found or a new lds taking place of old (how to switch)
-
-// switching lds to not found causing failures (needs resource not found)
-// switching lds to a failing thing causing it to not match and failures eventually (fail) - another way to trigger graceful close...
-
-// Gets rid of the multiple rdses complicating wrt matching to them, but can still make sure it waits
-
-// *** End new musings
-
-/*
-Serving State changes: Not Serving (before RDS comes in) (Accept() + Close), ->
-Serving -> Not Serving (on specific lis) (triggers a graceful close for
-connections accepted on that lis) -> serving (Test LDS resource not found)
-*/
+// e2e test problem: how to invoke resource not found from e2e test when is internal
 
 // TestServingModeChanges tests the Server's logic as it transitions from Not
 // Ready to Ready, then to Not Ready. Before it goes Ready, connections should
@@ -321,8 +297,8 @@ func (s) TestServingModeChanges(t *testing.T) {
 	}
 	defer cc.Close()
 
-	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...) // pass a wrapped cc here? ***
-	routeConfig := e2e.RouteConfigNonForwardingTarget("routeName")
+	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...)
+	routeConfig := e2e.RouteConfigNonForwardingAction("routeName")
 	resources = e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener},
@@ -365,8 +341,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 	if err = stream.Send(&testgrpc.StreamingOutputCallRequest{}); err != nil {
 		t.Fatalf("stream.Send() failed: %v, should continue to work due to graceful stop", err)
 	}
-	// Right test failure is known issue leaks the goroutine of stream.Recv, need to make this deterministic.
-	if err = stream.CloseSend(); err != nil { // somehow this doesn't send the right EOF signal that closes it...either nondeterministically calls this or doesn't work, can I block on stream ending? I think the former since it takes 30 seconds. Can triage this further post new years once I implement Resource Not Found logic.
+	if err = stream.CloseSend(); err != nil {
 		t.Fatalf("stream.CloseSend() failed: %v, should continue to work due to graceful stop", err)
 	}
 	if _, err = stream.Recv(); err != io.EOF {
@@ -391,53 +366,25 @@ func (s) TestServingModeChanges(t *testing.T) {
 
 }
 
-/*
-Basic multiple updates test case:
-(LDS + Inline) (xDS resources can be used that have already had)
-
-// when continuing to use above...how to verify uses old configuration?
-
-
-(LDS + Dynamic), should continue to use above before switching over to this (only when new RDS comes in)
-
-// clients should reconnect and have the new configuration apply - does this ever signal an RPC error?
-// maybe could plumb in something in LDS that would cause an RPC to fail, such as an LDS that doesn't match that client anymore
-
-// if no matching filter chain, closes the conn (how does this get reported to the application layer?)
-// polling for a failing RPC waits until it finishes gracefully closing right, sync point until it starts closing conns...or does it hit immediately because new rpc
-// that assertion might conflate with a new stream, so coulddd use mode change no but it doesn't change mode just starts failing RPC's
-
-// assert certain statuses in these RPC's
-
-*/
-
-/*
-Multiple updates should immediately switch over
-// before getting all 3 rpcs accept and close at that point
-// Can test rds 1 rds 2 rds 3 (wait until all 3 rds have been received to successfully go serving).
-// rds (fc won't match) 1 (def filter chain) 2 (should immediately serve)
-// rds (fc normal) rds 1 - should go back to rds 1 immediately (is there a way to immediately check or should it poll and that's good enough?)
-
-TestMultipleUpdatesImmediatelySwitch tests the case where you get an LDS specifying RDS A, B, and C (with A being matched to).
-The Server should be in not serving until it receives all 3 RDS Configurations,
-and then transition into serving. Afterward, it receives an LDS specifying RDS A, B (with B being matched to).
-This configuration should eventually be represented in the Server's state and subsequent RPC's. After,
-it receives an LDS specifying RDS A (which incoming RPC's will match to). This configuration should eventually be
-represented in the Server's state.
-*/
-
-/*
+// TestMultipleUpdatesImmediatelySwitch tests the case where you get an LDS
+// specifying RDS A, B, and C (with A being matched to). The Server should be in
+// not serving until it receives all 3 RDS Configurations, and then transition
+// into serving. RPCs will match to RDS A and work properly. Afterward, it
+// receives an LDS specifying RDS A, B. The Filter Chain pointing to RDS A
+// doesn't get matched, and the Default Filter Chain pointing to RDS B does get
+// matched. RDS B is of the wrong route type for server side, so RPC's are
+// expected to eventually fail with that information. However, any RPC's on the
+// old configration should be allowed to complete due to the transition being
+// graceful stop.After, it receives an LDS specifying RDS A (which incoming
+// RPC's will match to). This configuration should eventually be represented in
+// the Server's state, and RPCs should proceed successfully.
 func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
-	// One listener too I think
 	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
-	// Setup the management server to respond with a listener resource that
-	// specifies three route names to watch, and a RDS resources corresponding
-	// to this route names.
 	host, port, err := hostPortFromListener(lis)
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
@@ -445,23 +392,18 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// LDS with RDS A, B, C
-	// Properties of LDS:
-	// matches to a, b and c no op but need to be specified
-
-	// before all the RDS resources come, Accept() + Close()
-
-	// RDS A ok
-	// RDS B type non forwarding action so expected to fail
-	// RDS C doesn't matter
+	// Setup the management server to respond with a listener resource that
+	// specifies three route names to watch.
+	ldsResource := e2e.ListenerResourceThreeRouteResources(host, port, e2e.SecurityLevelNone, "routeName")
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{ldsResource},
+		SkipValidation: true,
+	}
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-
-	// I don't even think need to wait for it to go serving. All you need is to
-	// poll for an RPC to be ok, and then you'll be good.
-
-	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), xds.BootstrapContentsForTesting(bootstrapContents))
+	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
@@ -478,43 +420,90 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
-	waitForSuccessfulRPC(ctx, t, cc)
 
+	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...)
 
-	// LDS for RDS A, (def filter chain) B, LDS pointing to RDS a doesn't get matched to, falls back to Def filter chain which specifies RDS B.
-	// rds b like above is wrong type
+	routeConfig1 := e2e.RouteConfigNonForwardingAction("routeName")
+	routeConfig2 := e2e.RouteConfigFilterAction("routeName2")
+	routeConfig3 := e2e.RouteConfigFilterAction("routeName3")
+	resources = e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{ldsResource},
+		Routes:         []*v3routepb.RouteConfiguration{routeConfig1, routeConfig2, routeConfig3},
+		SkipValidation: true,
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+	pollForSuccessfulRPC(ctx, t, cc)
 
-	// However, RPC's on Conn's corresponding to old LDS can continue (graceful
-	// check, streaming RPC's can continue to work) (graceful close check after)
-	//
+	c := testgrpc.NewTestServiceClient(cc)
+	stream, err := c.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("cc.FullDuplexCall failed: %f", err)
+	}
+	if err = stream.Send(&testgrpc.StreamingOutputCallRequest{}); err != nil {
+		t.Fatalf("stream.Send() failed: %v, should continue to work due to graceful stop", err)
+	}
 
-	// lds update filterChainWontMatch(a) filterChainDef(b)
-	// send all 3 route configs alongside in the operation
+	// Configure with LDS with a filter chain that doesn't get matched to and a
+	// default filter chain that matches to RDS A.
+	ldsResource = e2e.ListenerResourceFallbackToDefault(host, port, e2e.SecurityLevelNone)
+	resources = e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{ldsResource},
+		Routes:         []*v3routepb.RouteConfiguration{routeConfig1, routeConfig2, routeConfig3},
+		SkipValidation: true,
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatalf("error updating management server: %v", err)
+	}
 
-	// puts it on a queue so loses sync guarantee - so poll here for rds behavior
-	// Eventually just the fallback to b - goes unavailable
+	// xDS is eventually consistent. So simply poll for the new change to be
+	// reflected.
 	// "NonForwardingAction is expected for all Routes used on server-side; a
 	// route with an inappropriate action causes RPCs matching that route to
 	// fail with UNAVAILABLE." - A36
 	waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "the incoming RPC matched to a route that was not of action type non forwarding"))
 
+	// Stream should be allowed to continue on the old working configuration -
+	// as it on a connection that is gracefully closed (old FCM/LDS
+	// Configuration which is allowed to continue).
+	if err = stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() failed: %v, should continue to work due to graceful stop", err)
+	}
+	if _, err = stream.Recv(); err != io.EOF {
+		t.Fatalf("unexpected error: %v, expected an EOF error", err)
+	}
 
-	// another update lds update a...
-	// lds ipv4 and ipv6 without the appended
-	// send all 3 rds here too...?
+	ldsResource = e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone, "routeName")
+	resources = e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{ldsResource},
+		Routes:         []*v3routepb.RouteConfiguration{routeConfig1, routeConfig2, routeConfig3},
+		SkipValidation: true,
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		print("management server error")
+		t.Fatal(err)
+	}
 
-	// eventually just use the route a (how to verify?) - goes back ok
-	waitForSuccessfulRPC(ctx, t, cc)
+	pollForSuccessfulRPC(ctx, t, cc)
+}
 
-} // for this xDS Resources need ipv4 and ipv6 filter chains
-*/
-
-// 1/3:
-
-// Write more e2e tests (I need to pull Easwar's resource not found here) - try
-// and get it working with just ResourceNotFoundRDS (invoke and then eventual error)
-
-// Write unit tests (rds handler is set expect constructor could take lis or a callback)
-// lw how to test (immediately goes non serving and accept and close) vs. before, but this tries to get e2e
-
-// pull in resource not found and get basic test case working...
+func pollForSuccessfulRPC(ctx context.Context, t *testing.T, cc *grpc.ClientConn) {
+	t.Helper()
+	c := testgrpc.NewTestServiceClient(cc)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("timeout waiting for RPCs to succeed")
+		case <-ticker.C:
+			if _, err := c.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+				return
+			}
+		}
+	}
+}
