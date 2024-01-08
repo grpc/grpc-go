@@ -356,7 +356,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 	}
 
 	// New RPCs on that connection should eventually start failing.
-	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...) // TODO: This assertion doesn't work due to bug in handleWatchExpirationTimer.
+	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...)
 }
 
 // TestMultipleUpdatesImmediatelySwitch tests the case where you get an LDS

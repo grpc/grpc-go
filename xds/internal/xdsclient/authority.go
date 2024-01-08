@@ -528,12 +528,13 @@ func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName 
 
 	switch state.wState {
 	case watchStateRequested:
-
-		// This is the only state where we need to handle the timer expiry by
-		// invoking appropriate watch callbacks. This is handled outside the
-		// switch. TODO: I think this is a bug. This eats resource not found.
-		// Even on received LDS and CDS.
-
+	case watchStateReceived:
+		// If you receive a state of the world xDS resource (LDS or CDS) you can
+		// invoke resource not found and not eat call since resource not found
+		// can override resource received in state of the world.
+		if rType.TypeName() != xdsresource.ListenerResourceTypeName && rType.TypeName() != xdsresource.ClusterResourceTypeName {
+			return
+		}
 	case watchStateCanceled:
 		return
 	default:
