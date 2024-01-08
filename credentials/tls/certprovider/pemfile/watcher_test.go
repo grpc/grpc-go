@@ -61,12 +61,6 @@ func compareKeyMaterial(got, want *certprovider.KeyMaterial) error {
 		}
 	}
 
-	// x509.CertPool contains only unexported fields some of which contain other
-	// unexported fields. So usage of cmp.AllowUnexported() or
-	// cmpopts.IgnoreUnexported() does not help us much here. Also, the standard
-	// library does not provide a way to compare CertPool values. Comparing the
-	// subjects field of the certs in the CertPool seems like a reasonable
-	// approach.
 	if gotR, wantR := got.Roots, want.Roots; !gotR.Equal(wantR) {
 		return fmt.Errorf("keyMaterial roots = %v, want %v", gotR, wantR)
 	}
