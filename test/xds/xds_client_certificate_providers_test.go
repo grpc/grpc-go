@@ -199,7 +199,7 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Make an RPC and ensure that expected error is returned.
-	wantErr := fmt.Sprintf("identitiy certificate provider instance name %q missing in bootstrap configuration", e2e.ClientSideCertProviderInstance)
+	wantErr := fmt.Sprintf("identity certificate provider instance name %q missing in bootstrap configuration", e2e.ClientSideCertProviderInstance)
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("EmptyCall() failed: %v, wantCode: %s, wantErr: %s", err, codes.Unavailable, wantErr)
@@ -356,7 +356,7 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	}
 
 	// Make an RPC to be routed to cluster3 and verify that it fails.
-	const wantErr = `identitiy certificate provider instance name "non-existent-certificate-provider-instance-name" missing in bootstrap configuration`
+	const wantErr = `identity certificate provider instance name "non-existent-certificate-provider-instance-name" missing in bootstrap configuration`
 	if _, err := client.FullDuplexCall(ctx); status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("FullDuplexCall failed: %v, wantCode: %s, wantErr: %s", err, codes.Unavailable, wantErr)
 	}
