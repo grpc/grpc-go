@@ -108,4 +108,3 @@ func (c *clientImpl) triggerResourceNotFoundForTesting(rType xdsresource.Type, r
 	a.handleWatchTimerExpiry(rType, n.String())
 	return nil
 }
-// honestly this could take a string, string and convert it itself.

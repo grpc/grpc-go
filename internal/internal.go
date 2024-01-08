@@ -189,13 +189,8 @@ var (
 	// the associated watch timer fires. For testing purposes, having this
 	// function makes events more predictable than relying on timer events.
 	TriggerXDSResourceNameNotFoundForTesting any // func(func(xdsresource.Type, string), string, string) error
-	// TriggerXDSResourceNameNotFoundForTesting triggers the resource-not-found
-	// error for a given resource type and name through an xDS Server. This is
-	// usually triggered when the associated watch timer fires. For testing
-	// purposes, having this function makes events more predictable than relying
-	// on timer events.
-	TriggerXDSResourceNameNotFoundForTestingServer any // func(*xds.GRPCServer, string, string) error
-
+	// TriggerXDSResourceNotFoundClient invokes the testing xDS Client singleton
+	// to invoke resource not found for a resource type name and resource name.
 	TriggerXDSResourceNameNotFoundClient any // func(string, string) error
 )
 

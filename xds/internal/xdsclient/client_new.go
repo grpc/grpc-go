@@ -23,14 +23,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/cache"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 // New returns a new xDS client configured by the bootstrap file specified in env
@@ -108,30 +108,14 @@ func init() {
 
 var (
 	singletonClientForTestingMu sync.Mutex
-	singletonClientForTesting *clientRefCounted // might need a mutex
+	singletonClientForTesting   *clientRefCounted
 )
 
 func triggerXDSResourceNameNotFoundClient(resourceType, resourceName string) error {
 	singletonClientForTestingMu.Lock()
 	c := singletonClientForTesting
 	singletonClientForTestingMu.Unlock()
-	/*var typ xdsresource.Type
-	switch resourceType {
-	case xdsresource.ListenerResourceTypeName:
-		typ = listenerType
-	case xdsresource.RouteConfigTypeName:
-		typ = routeConfigType
-	case ClusterResourceTypeName:
-		typ = clusterType
-	case EndpointsResourceTypeName:
-		typ = endpointsType
-	default:
-		return fmt.Errorf("unknown type name %q", typeName)
-	}*/
-	// I think there's no singleton...doesn't work since doesn't get cleaned up
-	// I need to leave this around somewhere
 	return internal.TriggerXDSResourceNameNotFoundForTesting.(func(func(xdsresource.Type, string) error, string, string) error)(c.clientImpl.triggerResourceNotFoundForTesting, resourceType, resourceName)
-	// singletonClient.triggerResourceNotFoundForTesting()
 }
 
 // NewWithBootstrapContentsForTesting returns an xDS client for this config,
@@ -153,7 +137,7 @@ func NewWithBootstrapContentsForTesting(contents []byte) (XDSClient, func(), err
 	}
 	contents = bytes.TrimSpace(buf.Bytes())
 
-	c, err := getOrMakeClientForTesting(contents) // seperate from global singleton
+	c, err := getOrMakeClientForTesting(contents)
 	if err != nil {
 		return nil, nil, err
 	}

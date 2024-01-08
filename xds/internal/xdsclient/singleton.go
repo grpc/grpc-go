@@ -29,18 +29,11 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
-
 const (
 	defaultWatchExpiryTimeout         = 15 * time.Second
 	defaultIdleAuthorityDeleteTimeout = 5 * time.Minute
 )
-/*
-func singletonClientRef() any/*xdsresource.Producer { // can import xdsresource since doesn't create cycle
-	singletonMu.Lock()
-	defer singletonMu.Unlock()
-	return singletonClient // will it return the correct underlying struct type...
-} // plumb this through internal - can access internal ref since shares same path name
-*/
+
 var (
 	// This is the client returned by New(). It contains one client implementation,
 	// and maintains the refcount.
@@ -98,7 +91,6 @@ func newRefCountedWithConfig(fallbackConfig *bootstrap.Config) (XDSClient, func(
 	if err != nil {
 		return nil, nil, err
 	}
-	print("setting singleton client") // does it not get here in tests?
 	singletonClient = &clientRefCounted{clientImpl: c, refCount: 1}
 	singletonClientImplCreateHook()
 

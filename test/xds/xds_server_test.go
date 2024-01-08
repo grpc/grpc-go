@@ -154,8 +154,11 @@ func waitForFailedRPCWithStatusCode(ctx context.Context, t *testing.T, cc *grpc.
 	for {
 		select {
 		case <-ctx.Done():
-			print("failure")
-			t.Fatalf("failure when waiting for RPCs to fail with certain status %v: %v. most recent error received from RPC: %v", sts, ctx.Err(), err.Error())
+			var errString string
+			if err != nil {
+				errString = err.Error()
+			}
+			t.Fatalf("failure when waiting for RPCs to fail with certain status %v: %v. most recent error received from RPC: %v", sts, ctx.Err(), errString)
 		case <-ticker.C:
 			_, err = c.EmptyCall(ctx, &testpb.Empty{})
 			for _, st := range sts {
@@ -229,28 +232,15 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 
 	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...)
 
-	// Invoke resource not found - this should result in L7 RPC error with unavailable
-	// receive on serving as a result, should trigger it to go serving.
-	// internal.TriggerXDSResourceNameNotFoundForTesting.(func(xdsresource.Producer, string, string) error)() // test rds resource not found here
-	// internal trigger xds resource not found on xDS Server
-
-	// Problem: you only have server ref, not client, how to plumb signal all the way down
-	// typecast it to a certain, server only has a certain interface of the xDS Client
-
-	// Need to plumb two strings downward - type and name...server only has interface
-	/*singletonClient := internal.SingletonClientRef.(func() any)()
-
-	if err := internal.TriggerXDSResourceNameNotFoundForTesting.(func (any, string, string) error)(singletonClient, "RouteConfigResource", "routeName"); err != nil {
-		t.Fatalf("Failed to trigger resource name not found for testing: %v", err)
-	}*/
-	if err := internal.TriggerXDSResourceNameNotFoundClient.(func (string, string) error)("RouteConfigResource", "routeName"); err != nil {
+	// Invoke resource not found - this should result in L7 RPC error with
+	// unavailable receive on serving as a result, should trigger it to go
+	// serving.
+	if err := internal.TriggerXDSResourceNameNotFoundClient.(func(string, string) error)("RouteConfigResource", "routeName"); err != nil {
 		t.Fatalf("Failed to trigger resource name not found for testing: %v", err)
 	}
-	<-serving.Done() // perhaps select on this...
+	<-serving.Done()
 	waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
 }
-
-// e2e test problem: how to invoke resource not found from e2e test when is internal
 
 // TestServingModeChanges tests the Server's logic as it transitions from Not
 // Ready to Ready, then to Not Ready. Before it goes Ready, connections should
@@ -349,7 +339,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 	// application layer? (should work outside of resource not found...
 
 	// Invoke LDS Resource not found here (tests graceful close)
-	if err := internal.TriggerXDSResourceNameNotFoundClient.(func (string, string) error)("ListenerResource", listener.GetName()); err != nil {
+	if err := internal.TriggerXDSResourceNameNotFoundClient.(func(string, string) error)("ListenerResource", listener.GetName()); err != nil {
 		t.Fatalf("Failed to trigger resource name not found for testing: %v", err)
 	}
 
@@ -365,23 +355,8 @@ func (s) TestServingModeChanges(t *testing.T) {
 		t.Fatalf("unexpected error: %v, expected an EOF error", err)
 	}
 
-	// after asserting stream can continue - this is sort of the invariant...behavior of graceful close
-	// see expected error code - could tie it into error
-	/*
-	   If the connection is gracefully closed (and no new connection can be made)
-	   you'll just get UNAVAILABLE + connection refused or no addresses or failed to
-	   handshake or something
-	*/
-	// eventually this will hit right...
-	// waitForFailedRPC(ctx, t, cc)
-	// waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, ""/*error string here as Doug was describing - is there a way to describe this?*/))
-	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...)
-
-	// any new connections Accept() + Close() (triggers an error)
-	// try and make an rpc, fail (see earlier for more logic...) (maybe it uses wait for failed RPC like earlier - wait for failed RPC is already a helper)
-
-	// not serving on a specific lis and one client conn, so state changes are scoped to this singular client conn...
-
+	// New RPCs on that connection should eventually start failing.
+	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...) // TODO: This assertion doesn't work due to bug in handleWatchExpirationTimer.
 }
 
 // TestMultipleUpdatesImmediatelySwitch tests the case where you get an LDS
@@ -502,7 +477,6 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 		SkipValidation: true,
 	}
 	if err := managementServer.Update(ctx, resources); err != nil {
-		print("management server error")
 		t.Fatal(err)
 	}
 

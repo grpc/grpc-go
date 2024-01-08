@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -41,12 +40,6 @@ import (
 )
 
 const serverPrefix = "[xds-server %p] "
-
-func init() {
-	internal.TriggerXDSResourceNameNotFoundForTestingServer = func (xdsS *GRPCServer, typeName, resourceName string) error {
-		return xdsS.triggerResourceNotFoundForTesting(typeName, resourceName)
-	}
-}
 
 var (
 	// These new functions will be overridden in unit tests.
@@ -173,10 +166,6 @@ func (s *GRPCServer) RegisterService(sd *grpc.ServiceDesc, ss any) {
 // Service names include the package names, in the form of <package>.<service>.
 func (s *GRPCServer) GetServiceInfo() map[string]grpc.ServiceInfo {
 	return s.gs.GetServiceInfo()
-}
-
-func (s *GRPCServer) triggerResourceNotFoundForTesting(typeName, resourceName string) error {
-	return internal.TriggerXDSResourceNameNotFoundForTesting.(func(any, string, string) error)(s.xdsC, typeName, resourceName)
 }
 
 // Serve gets the underlying gRPC server to accept incoming connections on the

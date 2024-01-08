@@ -45,7 +45,6 @@ import (
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"                 // Register the router filter.
 	_ "google.golang.org/grpc/xds/internal/resolver"                          // Register the xds_resolver.
 	_ "google.golang.org/grpc/xds/internal/xdsclient/xdslbregistry/converter" // Register the xDS LB Registry Converters.
-	// _ "google.golang.org/grpc/xds/internal/xdsclient/xdsresource"             // Register for testing.
 
 	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
