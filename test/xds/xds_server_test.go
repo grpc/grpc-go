@@ -20,6 +20,7 @@ package xds_test
 
 import (
 	"context"
+	"google.golang.org/grpc/internal"
 	"io"
 	"net"
 	"strings"
@@ -199,7 +200,7 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	// serving := grpcsync.NewEvent()
+	serving := grpcsync.NewEvent()
 	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
 		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
 		if args.Mode == connectivity.ServingModeServing {
@@ -230,10 +231,22 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 	// Invoke resource not found - this should result in L7 RPC error with unavailable
 	// receive on serving as a result, should trigger it to go serving.
 	// internal.TriggerXDSResourceNameNotFoundForTesting.(func(xdsresource.Producer, string, string) error)() // test rds resource not found here
+	// internal trigger xds resource not found on xDS Server
 
-	// <-serving.Done()
-	// <-serving.Done()
-	// waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
+	// Problem: you only have server ref, not client, how to plumb signal all the way down
+	// typecast it to a certain, server only has a certain interface of the xDS Client
+
+	// Need to plumb two strings downward - type and name...server only has interface
+	/*singletonClient := internal.SingletonClientRef.(func() any)()
+
+	if err := internal.TriggerXDSResourceNameNotFoundForTesting.(func (any, string, string) error)(singletonClient, "RouteConfigResource", "routeName"); err != nil {
+		t.Fatalf("Failed to trigger resource name not found for testing: %v", err)
+	}*/
+	if err := internal.TriggerXDSResourceNameNotFoundClient.(func (string, string) error)("RouteConfigResource", "routeName"); err != nil {
+		t.Fatalf("Failed to trigger resource name not found for testing: %v", err)
+	}
+	<-serving.Done()
+	waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
 }
 
 // e2e test problem: how to invoke resource not found from e2e test when is internal

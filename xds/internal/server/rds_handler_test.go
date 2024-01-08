@@ -143,10 +143,6 @@ func routeConfigResourceForName(name string) *v3routepb.RouteConfiguration {
 	})
 }
 
-func newStringP(s string) *string {
-	return &s
-}
-
 type testCallbackVerify struct {
 	ch chan callbackStruct
 }

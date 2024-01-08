@@ -182,8 +182,8 @@ func filterChainWontMatch(routeName string, addressPrefix string, srcPorts []uin
 	}
 }
 
-// ListenerResourceThreeResources returns a listener resource that points to
-// three route configurations. Only the filter chain that points to the first
+// ListenerResourceThreeRouteResources returns a listener resource that points
+// to three route configurations. Only the filter chain that points to the first
 // route config can be matched to.
 func ListenerResourceThreeRouteResources(host string, port uint32, secLevel SecurityLevel, routeName string) *v3listenerpb.Listener {
 	lis := defaultServerListenerCommon(host, port, secLevel, routeName, false)

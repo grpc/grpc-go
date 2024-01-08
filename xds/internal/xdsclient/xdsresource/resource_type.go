@@ -26,6 +26,7 @@ package xdsresource
 
 import (
 	"fmt"
+	"google.golang.org/grpc/internal"
 
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -39,6 +40,8 @@ func init() {
 	xdsinternal.ResourceTypeMapForTesting[version.V3RouteConfigURL] = routeConfigType
 	xdsinternal.ResourceTypeMapForTesting[version.V3ClusterURL] = clusterType
 	xdsinternal.ResourceTypeMapForTesting[version.V3EndpointsURL] = endpointsType
+
+	internal.TriggerXDSResourceNameNotFoundForTesting = triggerResourceNotFoundForTesting
 }
 
 // Producer contains a single method to discover resource configuration from a
@@ -165,7 +168,16 @@ func (r resourceTypeState) AllResourcesRequiredInSotW() bool {
 	return r.allResourcesRequiredInSotW
 }
 
-func TriggerResourceNotFoundForTesting(p Producer, typeName, resourceName string) error {
+type resourceNotFoundForTesting interface {
+	triggerResourceNotFoundForTesting(rType Type, resourceName string) error
+}
+
+func triggerResourceNotFoundForTesting(p Producer, typeName, resourceName string) error {
+	/*producer, ok := p.(Producer)
+	if !ok {
+		return fmt.Errorf("p is not a producer")
+	}*/
+	print("ok producer")
 	var typ Type
 	switch typeName {
 	case ListenerResourceTypeName:
@@ -180,11 +192,26 @@ func TriggerResourceNotFoundForTesting(p Producer, typeName, resourceName string
 		return fmt.Errorf("unknown type name %q", typeName)
 	}
 
+	/*_, ok = producer.(interface{BootstrapConfig() *bootstrap.Config})
+	if !ok {
+		return fmt.Errorf("Doesn't implement bootstrap config")
+	}
+
+	// so implements xDS Client
+
+	_, ok = producer.(interface{incrRef() int32})
+	if !ok {
+		return fmt.Errorf("Doesn't implement incrRef")
+	}*/
+
+	print("checking if producer implements interface")
 	// Ensure that p implements triggerResourceNotFoundForTesting, else error out.
-	impl, ok := p.(interface{ triggerResourceNotFoundForTesting(Type, string) error })
+	impl, ok := p.(resourceNotFoundForTesting)
 	if !ok {
 		return fmt.Errorf("unsupported operation on the provided xDS client")
 	}
 
 	return impl.triggerResourceNotFoundForTesting(typ, resourceName)
 }
+
+// Can I grab singleton client ref...

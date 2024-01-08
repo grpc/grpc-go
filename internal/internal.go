@@ -188,7 +188,15 @@ var (
 	// error for a given resource type and name. This is usually triggered when
 	// the associated watch timer fires. For testing purposes, having this
 	// function makes events more predictable than relying on timer events.
-	TriggerXDSResourceNameNotFoundForTesting any // func(xdsresource.Producer, string, string) error
+	TriggerXDSResourceNameNotFoundForTesting any // func(any, string, string) error
+	// TriggerXDSResourceNameNotFoundForTesting triggers the resource-not-found
+	// error for a given resource type and name through an xDS Server. This is
+	// usually triggered when the associated watch timer fires. For testing
+	// purposes, having this function makes events more predictable than relying
+	// on timer events.
+	TriggerXDSResourceNameNotFoundForTestingServer any // func(*xds.GRPCServer, string, string) error
+
+	TriggerXDSResourceNameNotFoundClient any // func(string, string) error
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.
