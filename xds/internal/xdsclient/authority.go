@@ -528,13 +528,8 @@ func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName 
 
 	switch state.wState {
 	case watchStateRequested:
-	case watchStateReceived:
-		// If you receive a state of the world xDS resource (LDS or CDS) you can
-		// invoke resource not found and not eat call since resource not found
-		// can override resource received in state of the world.
-		if rType.TypeName() != xdsresource.ListenerResourceTypeName && rType.TypeName() != xdsresource.ClusterResourceTypeName {
-			return
-		}
+		// This is the only state where we need to handle the timer expiry by
+		// invoking appropriate watch callbacks. This is handled outside the switch.
 	case watchStateCanceled:
 		return
 	default:
@@ -545,6 +540,27 @@ func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName 
 	state.wState = watchStateTimeout
 	// With the watch timer firing, it is safe to assume that the resource does
 	// not exist on the management server.
+	state.cache = nil
+	state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
+	for watcher := range state.watchers {
+		watcher := watcher
+		a.serializer.Schedule(func(context.Context) { watcher.OnResourceDoesNotExist() })
+	}
+}
+
+func (a *authority) triggerResourceNotFoundForTesting(rType xdsresource.Type, resourceName string) {
+	a.resourcesMu.Lock()
+	defer a.resourcesMu.Unlock()
+
+	if a.closed {
+		return
+	}
+	resourceStates := a.resources[rType]
+	state, ok := resourceStates[resourceName]
+	if !ok {
+		a.logger.Warningf("Watch for non-existent resource %q of type %s timed out", resourceName, rType.TypeName())
+	}
+	state.wState = watchStateTimeout
 	state.cache = nil
 	state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
 	for watcher := range state.watchers {

@@ -105,6 +105,6 @@ func (c *clientImpl) triggerResourceNotFoundForTesting(rType xdsresource.Type, r
 		return fmt.Errorf("attempt to trigger resource-not-found-error for resource %q of type %q, but authority %q is not found", rType.TypeName(), resourceName, n.Authority)
 	}
 	defer unref()
-	a.handleWatchTimerExpiry(rType, n.String())
+	a.triggerResourceNotFoundForTesting(rType, n.String())
 	return nil
 }
