@@ -23,6 +23,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"sync"
 	"time"
 
@@ -100,6 +102,38 @@ func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout, autho
 	return cl, grpcsync.OnceFunc(cl.close), nil
 }
 
+func init() {
+	internal.TriggerXDSResourceNameNotFoundClient = triggerXDSResourceNameNotFoundClient
+}
+
+var (
+	singletonClientForTestingMu sync.Mutex
+	singletonClientForTesting *clientRefCounted // might need a mutex
+)
+
+func triggerXDSResourceNameNotFoundClient(resourceType, resourceName string) error {
+	singletonClientForTestingMu.Lock()
+	c := singletonClientForTesting
+	singletonClientForTestingMu.Unlock()
+	/*var typ xdsresource.Type
+	switch resourceType {
+	case xdsresource.ListenerResourceTypeName:
+		typ = listenerType
+	case xdsresource.RouteConfigTypeName:
+		typ = routeConfigType
+	case ClusterResourceTypeName:
+		typ = clusterType
+	case EndpointsResourceTypeName:
+		typ = endpointsType
+	default:
+		return fmt.Errorf("unknown type name %q", typeName)
+	}*/
+	// I think there's no singleton...doesn't work since doesn't get cleaned up
+	// I need to leave this around somewhere
+	return internal.TriggerXDSResourceNameNotFoundForTesting.(func(func(xdsresource.Type, string) error, string, string) error)(c.clientImpl.triggerResourceNotFoundForTesting, resourceType, resourceName)
+	// singletonClient.triggerResourceNotFoundForTesting()
+}
+
 // NewWithBootstrapContentsForTesting returns an xDS client for this config,
 // separate from the global singleton.
 //
@@ -119,16 +153,20 @@ func NewWithBootstrapContentsForTesting(contents []byte) (XDSClient, func(), err
 	}
 	contents = bytes.TrimSpace(buf.Bytes())
 
-	c, err := getOrMakeClientForTesting(contents)
+	c, err := getOrMakeClientForTesting(contents) // seperate from global singleton
 	if err != nil {
 		return nil, nil, err
 	}
+	singletonClientForTestingMu.Lock()
+	singletonClientForTesting = c
+	singletonClientForTestingMu.Unlock()
 	return c, grpcsync.OnceFunc(func() {
 		clientsMu.Lock()
 		defer clientsMu.Unlock()
 		if c.decrRef() == 0 {
 			c.close()
 			delete(clients, string(contents))
+			singletonClientForTesting = nil
 		}
 	}), nil
 }

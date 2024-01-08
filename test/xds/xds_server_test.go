@@ -20,7 +20,6 @@ package xds_test
 
 import (
 	"context"
-	"google.golang.org/grpc/internal"
 	"io"
 	"net"
 	"strings"
@@ -31,6 +30,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -154,6 +154,7 @@ func waitForFailedRPCWithStatusCode(ctx context.Context, t *testing.T, cc *grpc.
 	for {
 		select {
 		case <-ctx.Done():
+			print("failure")
 			t.Fatalf("failure when waiting for RPCs to fail with certain status %v: %v. most recent error received from RPC: %v", sts, ctx.Err(), err.Error())
 		case <-ticker.C:
 			_, err = c.EmptyCall(ctx, &testpb.Empty{})
@@ -204,7 +205,7 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
 		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
 		if args.Mode == connectivity.ServingModeServing {
-			//serving.Fire()
+			serving.Fire()
 		}
 	})
 
@@ -245,7 +246,7 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 	if err := internal.TriggerXDSResourceNameNotFoundClient.(func (string, string) error)("RouteConfigResource", "routeName"); err != nil {
 		t.Fatalf("Failed to trigger resource name not found for testing: %v", err)
 	}
-	<-serving.Done()
+	<-serving.Done() // perhaps select on this...
 	waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
 }
 
@@ -348,6 +349,9 @@ func (s) TestServingModeChanges(t *testing.T) {
 	// application layer? (should work outside of resource not found...
 
 	// Invoke LDS Resource not found here (tests graceful close)
+	if err := internal.TriggerXDSResourceNameNotFoundClient.(func (string, string) error)("ListenerResource", listener.GetName()); err != nil {
+		t.Fatalf("Failed to trigger resource name not found for testing: %v", err)
+	}
 
 	// New RPCs on that connection should eventually start failing. Due to
 	// Graceful Stop any started streams continue to work.
@@ -371,6 +375,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 	// eventually this will hit right...
 	// waitForFailedRPC(ctx, t, cc)
 	// waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, ""/*error string here as Doug was describing - is there a way to describe this?*/))
+	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...)
 
 	// any new connections Accept() + Close() (triggers an error)
 	// try and make an rpc, fail (see earlier for more logic...) (maybe it uses wait for failed RPC like earlier - wait for failed RPC is already a helper)

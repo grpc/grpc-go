@@ -41,6 +41,7 @@ func init() {
 	xdsinternal.ResourceTypeMapForTesting[version.V3ClusterURL] = clusterType
 	xdsinternal.ResourceTypeMapForTesting[version.V3EndpointsURL] = endpointsType
 
+	print("registering xds resource name not found for testing")
 	internal.TriggerXDSResourceNameNotFoundForTesting = triggerResourceNotFoundForTesting
 }
 
@@ -172,7 +173,7 @@ type resourceNotFoundForTesting interface {
 	triggerResourceNotFoundForTesting(rType Type, resourceName string) error
 }
 
-func triggerResourceNotFoundForTesting(p Producer, typeName, resourceName string) error {
+func triggerResourceNotFoundForTesting(cb func (Type, string) error, typeName, resourceName string) error {
 	/*producer, ok := p.(Producer)
 	if !ok {
 		return fmt.Errorf("p is not a producer")
@@ -206,12 +207,12 @@ func triggerResourceNotFoundForTesting(p Producer, typeName, resourceName string
 
 	print("checking if producer implements interface")
 	// Ensure that p implements triggerResourceNotFoundForTesting, else error out.
-	impl, ok := p.(resourceNotFoundForTesting)
+	/*impl, ok := p.(resourceNotFoundForTesting)
 	if !ok {
 		return fmt.Errorf("unsupported operation on the provided xDS client")
-	}
+	}*/
 
-	return impl.triggerResourceNotFoundForTesting(typ, resourceName)
+	return cb(typ, resourceName)
 }
 
 // Can I grab singleton client ref...
