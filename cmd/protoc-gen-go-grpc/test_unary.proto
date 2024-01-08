@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option go_package = "testdata/proto";
+
+package main;
+
+message EventRequest {
+  bytes content = 1;
+}
+
+message EventResponse {
+  bytes content = 1;
+}
+
+service BlogPostService {
+  rpc addBlogPost(EventRequest) returns (EventResponse) {}
+}
