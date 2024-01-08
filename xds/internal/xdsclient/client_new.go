@@ -150,7 +150,9 @@ func NewWithBootstrapContentsForTesting(contents []byte) (XDSClient, func(), err
 		if c.decrRef() == 0 {
 			c.close()
 			delete(clients, string(contents))
+			singletonClientForTestingMu.Lock()
 			singletonClientForTesting = nil
+			singletonClientForTestingMu.Unlock()
 		}
 	}), nil
 }
