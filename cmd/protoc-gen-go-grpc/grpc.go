@@ -173,6 +173,8 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	g.P("// Requires gRPC-Go v1.32.0 or later.")
 	g.P("const _ = ", grpcPackage.Ident("SupportPackageIsVersion7")) // When changing, update version number above.
 	g.P()
+	genRegisteredMethod(g)
+	g.P()
 	for _, service := range file.Services {
 		genService(gen, file, g, service)
 	}
@@ -309,6 +311,7 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 		g.P(deprecationComment)
 	}
 	g.P("func (c *", unexport(service.GoName), "Client) ", clientSignature(g, method), "{")
+	g.P("opts := append(opts, RegisteredMethodCallOption{EmptyCallOption: grpc.EmptyCallOption})")
 	if !method.Desc.IsStreamingServer() && !method.Desc.IsStreamingClient() {
 		g.P("out := new(", method.Output.GoIdent, ")")
 		g.P(`err := c.cc.Invoke(ctx, `, fmSymbol, `, in, out, opts...)`)
@@ -533,3 +536,9 @@ func genLeadingComments(g *protogen.GeneratedFile, loc protoreflect.SourceLocati
 const deprecationComment = "// Deprecated: Do not use."
 
 func unexport(s string) string { return strings.ToLower(s[:1]) + s[1:] }
+
+func genRegisteredMethod(g *protogen.GeneratedFile) {
+	g.P("type RegisteredMethodCallOption struct {")
+	g.P("    grpc.EmptyCallOption")
+	g.P("}")
+}
