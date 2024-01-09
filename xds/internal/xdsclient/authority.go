@@ -369,7 +369,7 @@ func (a *authority) startWatchTimersLocked(rType xdsresource.Type, resourceNames
 				continue
 			}
 			state.wTimer = time.AfterFunc(a.watchExpiryTimeout, func() {
-				a.handleWatchTimerExpiry(rType, resourceName)
+				a.handleWatchTimerExpiry(rType, resourceName, state)
 			})
 			state.wState = watchStateRequested
 		}
@@ -511,19 +511,13 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 	}
 }
 
-func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName string) {
+func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName string, state *resourceState) {
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 
 	if a.closed {
 		return
 	}
-	resourceStates := a.resources[rType]
-	state, ok := resourceStates[resourceName]
-	if !ok {
-		a.logger.Warningf("Watch for non-existent resource %q of type %s timed out", resourceName, rType.TypeName())
-	}
-
 	a.logger.Warningf("Watch for resource %q of type %s timed out", resourceName, rType.TypeName())
 
 	switch state.wState {
@@ -560,7 +554,9 @@ func (a *authority) triggerResourceNotFoundForTesting(rType xdsresource.Type, re
 	if !ok {
 		return
 	}
-	if state.wState == watchStateCanceled {
+	// if watchStateTimeout already triggered resource not found above from
+	// normal watch expiry.
+	if state.wState == watchStateCanceled || state.wState == watchStateTimeout {
 		return
 	}
 	state.wState = watchStateTimeout
