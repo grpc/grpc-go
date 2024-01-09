@@ -186,7 +186,6 @@ GetSuffixMatch
 GetTlsCertificateCertificateProviderInstance
 GetValidationContextCertificateProviderInstance
 XXXXX TODO: Remove the below deprecation usages:
-CloseNotifier
 Roots.Subjects
 XXXXX PleaseIgnoreUnused'
 
