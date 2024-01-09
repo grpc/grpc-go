@@ -2152,13 +2152,14 @@ func (s) TestWriteHeaderConnectionError(t *testing.T) {
 		return false, nil
 	})
 
+	server.mu.Lock()
+
 	if len(server.conns) != 1 {
 		t.Fatalf("Server has %d connections from the client, want 1", len(server.conns))
 	}
 
 	// Get the server transport for the connecton to the client.
 	var serverTransport *http2Server
-	server.mu.Lock()
 	for k := range server.conns {
 		serverTransport = k.(*http2Server)
 	}
@@ -2173,7 +2174,7 @@ func (s) TestWriteHeaderConnectionError(t *testing.T) {
 		t.Fatalf("Client failed to create first stream. Err: %v", err)
 	}
 
-	<-notifyChan // Wait server stream to be established.
+	<-notifyChan // Wait for server stream to be established.
 	var sstream *Stream
 	// Access stream on the server.
 	serverTransport.mu.Lock()
@@ -2189,7 +2190,7 @@ func (s) TestWriteHeaderConnectionError(t *testing.T) {
 
 	client.Close(fmt.Errorf("closed manually by test"))
 
-	// Wait server transport to be closed.
+	// Wait for server transport to be closed.
 	<-serverTransport.done
 
 	// Write header on a closed server transport.
