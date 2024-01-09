@@ -558,7 +558,7 @@ func (a *authority) triggerResourceNotFoundForTesting(rType xdsresource.Type, re
 	resourceStates := a.resources[rType]
 	state, ok := resourceStates[resourceName]
 	if !ok {
-		a.logger.Warningf("Watch for non-existent resource %q of type %s timed out", resourceName, rType.TypeName())
+		return
 	}
 	if state.wState == watchStateCanceled {
 		return
