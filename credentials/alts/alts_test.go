@@ -400,7 +400,8 @@ func establishAltsConnection(t *testing.T, handshakerAddress, serverAddress stri
 			break
 		}
 		if code := status.Code(err); code == codes.Unavailable || code == codes.DeadlineExceeded {
-			// The server is not ready yet. Try again.
+			// The server is not ready yet or there were too many concurrent handshakes.
+			// Try again.
 			continue
 		}
 		t.Fatalf("c.UnaryCall() failed: %v", err)
