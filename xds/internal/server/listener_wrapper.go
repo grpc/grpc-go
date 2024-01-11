@@ -24,9 +24,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/connectivity"
@@ -229,12 +227,12 @@ func (l *listenerWrapper) handleRDSUpdate(routeName string, rcu rdsWatcherUpdate
 				continue
 			}
 			if rcu.err != nil && rcu.update == nil { // Either NACK before update, or resource not found triggers this conditional.
-				atomic.StorePointer(fc.UsableRouteConfiguration, unsafe.Pointer(&xdsresource.UsableRouteConfiguration{
+				fc.UsableRouteConfiguration.Store(&xdsresource.UsableRouteConfiguration{
 					Err: rcu.err,
-				}))
+				})
 				continue
 			}
-			atomic.StorePointer(fc.UsableRouteConfiguration, unsafe.Pointer(fc.ConstructUsableRouteConfiguration(*rcu.update)))
+			fc.UsableRouteConfiguration.Store(fc.ConstructUsableRouteConfiguration(*rcu.update))
 		}
 	}
 	if l.rdsHandler.determineRouteConfigurationReady() {
@@ -249,17 +247,15 @@ func (l *listenerWrapper) handleRDSUpdate(routeName string, rcu rdsWatcherUpdate
 func (l *listenerWrapper) instantiateFilterChainRoutingConfigurationsLocked() {
 	for _, fc := range l.activeFilterChainManager.FilterChains() {
 		if fc.InlineRouteConfig != nil {
-			atomic.StorePointer(fc.UsableRouteConfiguration, unsafe.Pointer(fc.ConstructUsableRouteConfiguration(*fc.InlineRouteConfig))) // Can't race with an RPC coming in but no harm making atomic.
+			fc.UsableRouteConfiguration.Store(fc.ConstructUsableRouteConfiguration(*fc.InlineRouteConfig)) // Can't race with an RPC coming in but no harm making atomic.
 			continue
 		} // Inline configuration constructed once here, will remain for lifetime of filter chain.
 		rcu := l.rdsHandler.updates[fc.RouteConfigName]
 		if rcu.err != nil && rcu.update == nil {
-			atomic.StorePointer(fc.UsableRouteConfiguration, unsafe.Pointer(&xdsresource.UsableRouteConfiguration{
-				Err: rcu.err,
-			}))
+			fc.UsableRouteConfiguration.Store(&xdsresource.UsableRouteConfiguration{Err: rcu.err})
 			continue
 		}
-		atomic.StorePointer(fc.UsableRouteConfiguration, unsafe.Pointer(fc.ConstructUsableRouteConfiguration(*rcu.update))) // Can't race with an RPC coming in but no harm making atomic.
+		fc.UsableRouteConfiguration.Store(fc.ConstructUsableRouteConfiguration(*rcu.update)) // Can't race with an RPC coming in but no harm making atomic.
 	}
 }
 

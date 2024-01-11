@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/internal"
@@ -106,15 +107,10 @@ func init() {
 	internal.TriggerXDSResourceNameNotFoundClient = triggerXDSResourceNameNotFoundClient
 }
 
-var (
-	singletonClientForTestingMu sync.Mutex
-	singletonClientForTesting   *clientRefCounted
-)
+var singletonClientForTesting = atomic.Pointer[clientRefCounted]{}
 
 func triggerXDSResourceNameNotFoundClient(resourceType, resourceName string) error {
-	singletonClientForTestingMu.Lock()
-	c := singletonClientForTesting
-	singletonClientForTestingMu.Unlock()
+	c := singletonClientForTesting.Load()
 	return internal.TriggerXDSResourceNameNotFoundForTesting.(func(func(xdsresource.Type, string) error, string, string) error)(c.clientImpl.triggerResourceNotFoundForTesting, resourceType, resourceName)
 }
 
@@ -141,18 +137,14 @@ func NewWithBootstrapContentsForTesting(contents []byte) (XDSClient, func(), err
 	if err != nil {
 		return nil, nil, err
 	}
-	singletonClientForTestingMu.Lock()
-	singletonClientForTesting = c
-	singletonClientForTestingMu.Unlock()
+	singletonClientForTesting.Store(c)
 	return c, grpcsync.OnceFunc(func() {
 		clientsMu.Lock()
 		defer clientsMu.Unlock()
 		if c.decrRef() == 0 {
 			c.close()
 			delete(clients, string(contents))
-			singletonClientForTestingMu.Lock()
-			singletonClientForTesting = nil
-			singletonClientForTestingMu.Unlock()
+			singletonClientForTesting.Store(nil)
 		}
 	}), nil
 }

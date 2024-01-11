@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"unsafe"
+	"sync/atomic"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
@@ -70,7 +70,7 @@ type FilterChain struct {
 	InlineRouteConfig *RouteConfigUpdate
 	// UsableRouteConfiguration is the routing configuration for this filter
 	// chain (LDS + RDS).
-	UsableRouteConfiguration *unsafe.Pointer // *(UsableRouteConfiguration)
+	UsableRouteConfiguration *atomic.Pointer[UsableRouteConfiguration]
 }
 
 // VirtualHostWithInterceptors captures information present in a VirtualHost
@@ -614,10 +614,11 @@ func (fcm *FilterChainManager) Validate(f func(fc *FilterChain) error) error {
 }
 
 func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error) {
-	rc := unsafe.Pointer(&UsableRouteConfiguration{})
+	rc := &UsableRouteConfiguration{}
 	filterChain := &FilterChain{
-		UsableRouteConfiguration: &rc,
+		UsableRouteConfiguration: &atomic.Pointer[UsableRouteConfiguration]{},
 	}
+	filterChain.UsableRouteConfiguration.Store(rc)
 	seenNames := make(map[string]bool, len(filters))
 	seenHCM := false
 	for _, filter := range filters {

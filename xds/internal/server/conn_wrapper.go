@@ -24,7 +24,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
@@ -68,14 +67,13 @@ type connWrapper struct {
 
 	// The virtual hosts with matchable routes and instantiated HTTP Filters per
 	// route, or an error.
-	urc *unsafe.Pointer // *xdsresource.UsableRouteConfiguration
+	urc *atomic.Pointer[xdsresource.UsableRouteConfiguration]
 }
 
 // UsableRouteConfiguration returns the UsableRouteConfiguration to be used for
 // server side routing.
 func (c *connWrapper) UsableRouteConfiguration() xdsresource.UsableRouteConfiguration {
-	uPtr := atomic.LoadPointer(c.urc)
-	return *(*xdsresource.UsableRouteConfiguration)(uPtr)
+	return *c.urc.Load()
 }
 
 // SetDeadline makes a copy of the passed in deadline and forwards the call to
