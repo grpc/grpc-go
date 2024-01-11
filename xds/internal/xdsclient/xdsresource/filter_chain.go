@@ -215,18 +215,24 @@ type FilterChainManager struct {
 	RouteConfigNames map[string]bool
 
 	// Persisted to gracefully close once filter chain manager no longer active.
-	conns []net.Conn
+	conns []DrainConn
+}
+
+// DrainConn is an interface which specifies a Drain method.
+type DrainConn interface {
+	// Drain gracefully closes the Connection.
+	Drain()
 }
 
 // AddConn adds the passed connection to the list of Conns in the filter chain
 // manager. Must not be called concurrently with Conns().
-func (fcm *FilterChainManager) AddConn(conn net.Conn) {
+func (fcm *FilterChainManager) AddConn(conn DrainConn) {
 	fcm.conns = append(fcm.conns, conn)
 }
 
 // Conns returns the list of Conns in the filter chain manager. Must not be
 // called concurrently with AddConn().
-func (fcm *FilterChainManager) Conns() []net.Conn {
+func (fcm *FilterChainManager) Conns() []DrainConn {
 	return fcm.conns
 }
 

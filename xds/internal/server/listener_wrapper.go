@@ -187,7 +187,7 @@ func (l *listenerWrapper) handleLDSUpdate(update xdsresource.ListenerUpdate) {
 
 // maybeUpdateFilterChains swaps in the pending filter chain manager to the
 // active one if the pending filter chain manager is present. If a swap occurs,
-// it also  drains (gracefully stops) any connections that were accepted on the
+// it also drains (gracefully stops) any connections that were accepted on the
 // old active filter chain manager, and puts this listener in state SERVING.
 // Must be called within an xDS Client Callback.
 func (l *listenerWrapper) maybeUpdateFilterChains() {
@@ -202,7 +202,7 @@ func (l *listenerWrapper) maybeUpdateFilterChains() {
 	// gracefully shut down with a grace period of 10 minutes for long-lived
 	// RPC's, such that clients will reconnect and have the updated
 	// configuration apply." - A36
-	var connsToClose []net.Conn
+	var connsToClose []xdsresource.DrainConn
 	if l.activeFilterChainManager != nil { // If there is a filter chain manager to clean up.
 		connsToClose = l.activeFilterChainManager.Conns()
 	}
@@ -210,9 +210,12 @@ func (l *listenerWrapper) maybeUpdateFilterChains() {
 	l.pendingFilterChainManager = nil
 	l.instantiateFilterChainRoutingConfigurationsLocked()
 	l.mu.Unlock()
-	for _, conn := range connsToClose {
-		conn.(*connWrapper).drain()
-	}
+	go func() {
+		for _, conn := range connsToClose {
+			conn.Drain()
+		}
+	}()
+
 }
 
 // handleRDSUpdate rebuilds any routing configuration server side for any filter
@@ -221,7 +224,7 @@ func (l *listenerWrapper) maybeUpdateFilterChains() {
 func (l *listenerWrapper) handleRDSUpdate(routeName string, rcu rdsWatcherUpdate) {
 	// Update any filter chains that point to this route configuration.
 	if l.activeFilterChainManager != nil {
-		for _, fc := range l.activeFilterChainManager.FilterChains() { // v4 and v6 filter chains...why doesn't this update the first time?
+		for _, fc := range l.activeFilterChainManager.FilterChains() {
 			if fc.RouteConfigName != routeName {
 				continue
 			}
@@ -373,9 +376,12 @@ func (l *listenerWrapper) switchModeLocked(newMode connectivity.ServingMode, err
 	}
 	l.mode = newMode
 	if l.mode == connectivity.ServingModeNotServing {
-		for _, conn := range l.activeFilterChainManager.Conns() {
-			conn.(*connWrapper).drain()
-		}
+		connsToClose := l.activeFilterChainManager.Conns()
+		go func() {
+			for _, conn := range connsToClose {
+				conn.Drain()
+			}
+		}()
 	}
 	// The XdsServer API will allow applications to register a "serving state"
 	// callback to be invoked when the server begins serving and when the

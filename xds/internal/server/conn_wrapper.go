@@ -131,7 +131,9 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	return xdsinternal.NewHandshakeInfo(c.rootProvider, c.identityProvider, nil, secCfg.RequireClientCert), nil
 }
 
-func (c *connWrapper) Callback(st transport.ServerTransport) {
+// PassServerTransport drains the passed in ServerTransportif draining is set,
+// or persists it to be drained once drained is called.
+func (c *connWrapper) PassServerTransport(st transport.ServerTransport) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.draining {
@@ -141,7 +143,9 @@ func (c *connWrapper) Callback(st transport.ServerTransport) {
 	}
 }
 
-func (c *connWrapper) drain() {
+// Drain drains the associated ServerTransport, or sets draining to true so it
+// will be drained after it is created.
+func (c *connWrapper) Drain() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.st == nil {

@@ -76,10 +76,10 @@ func (rh *rdsHandler) updateRouteNamesToWatch(routeNamesToWatch map[string]bool)
 			w := &rdsWatcher{parent: rh, routeName: routeName}
 			cancel := xdsresource.WatchRouteConfig(rh.xdsC, routeName, w)
 			// Set bit on cancel function to eat any RouteConfiguration calls
-			// for this watcher after it has been cancelled.
+			// for this watcher after it has been canceled.
 			rh.cancels[routeName] = func() {
 				w.mu.Lock()
-				w.cancelled = true
+				w.canceled = true
 				w.mu.Unlock()
 				cancel()
 			}
@@ -107,10 +107,7 @@ func (rh *rdsHandler) determineRouteConfigurationReady() bool {
 
 // Must be called from an xDS Client Callback.
 func (rh *rdsHandler) handleRouteUpdate(routeName string, update rdsWatcherUpdate) {
-	rwu, ok := rh.updates[routeName]
-	if !ok {
-		rwu = rdsWatcherUpdate{}
-	}
+	rwu := rh.updates[routeName]
 
 	if update.err != nil {
 		if xdsresource.ErrType(update.err) == xdsresource.ErrorTypeResourceNotFound {
@@ -121,8 +118,7 @@ func (rh *rdsHandler) handleRouteUpdate(routeName string, update rdsWatcherUpdat
 		// Write error.
 		rwu.err = update.err
 	} else {
-		rwu.update = update.update
-		rwu.err = nil
+		rwu = update
 	}
 	rh.updates[routeName] = rwu
 	rh.callback(routeName, rwu)
@@ -151,13 +147,13 @@ type rdsWatcher struct {
 	logger    *igrpclog.PrefixLogger
 	routeName string
 
-	mu        sync.Mutex
-	cancelled bool // eats callbacks if true
+	mu       sync.Mutex
+	canceled bool // eats callbacks if true
 }
 
 func (rw *rdsWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData) {
 	rw.mu.Lock()
-	if rw.cancelled {
+	if rw.canceled {
 		rw.mu.Unlock()
 		return
 	}
@@ -170,7 +166,7 @@ func (rw *rdsWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData) {
 
 func (rw *rdsWatcher) OnError(err error) {
 	rw.mu.Lock()
-	if rw.cancelled {
+	if rw.canceled {
 		rw.mu.Unlock()
 		return
 	}
@@ -183,7 +179,7 @@ func (rw *rdsWatcher) OnError(err error) {
 
 func (rw *rdsWatcher) OnResourceDoesNotExist() {
 	rw.mu.Lock()
-	if rw.cancelled {
+	if rw.canceled {
 		rw.mu.Unlock()
 		return
 	}

@@ -172,6 +172,69 @@ func waitForFailedRPCWithStatusCode(ctx context.Context, t *testing.T, cc *grpc.
 }
 
 // TestResourceNotFoundRDS tests the case where an LDS points to an RDS which
+// returns an RDS Resource which is NACKed. This should trigger server should
+// move to serving, successfully Accept Connections, and fail at the L7 level
+// with a certain error message.
+func (s) TestRDSNack(t *testing.T) {
+	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+	defer cleanup()
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	// Setup the management server to respond with a listener resource that
+	// specifies a route name to watch, and no RDS resource corresponding to
+	// this route name.
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("failed to retrieve host and port of server: %v", err)
+	}
+
+	listener := e2e.DefaultServerListenerWithRouteConfigName(host, port, e2e.SecurityLevelNone, "routeName")
+	routeConfig := e2e.RouteConfigNoRouteMatch("routeName")
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listener},
+		Routes:         []*v3routepb.RouteConfiguration{routeConfig},
+		SkipValidation: true,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+	serving := grpcsync.NewEvent()
+	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
+		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
+		if args.Mode == connectivity.ServingModeServing {
+			serving.Fire()
+		}
+	})
+
+	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
+	if err != nil {
+		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
+	}
+	defer server.Stop()
+	testgrpc.RegisterTestServiceServer(server, &testService{})
+	go func() {
+		if err := server.Serve(lis); err != nil {
+			t.Errorf("Serve() failed: %v", err)
+		}
+	}()
+
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	<-serving.Done()
+	waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
+}
+
+// TestResourceNotFoundRDS tests the case where an LDS points to an RDS which
 // returns resource not found. Before getting the resource not found, the xDS
 // Server has not received all configuration needed, so it should Accept and
 // Close any new connections. After it has received the resource not found

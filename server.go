@@ -930,7 +930,7 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 	}
 
 	if cc, ok := rawConn.(transport.CallbackConn); ok {
-		cc.Callback(st)
+		cc.PassServerTransport(st)
 	}
 
 	if !s.addConn(lisAddr, st) {

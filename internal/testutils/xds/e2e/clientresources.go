@@ -788,8 +788,23 @@ func DefaultServerListenerWithRouteConfigName(host string, port uint32, secLevel
 	return defaultServerListenerCommon(host, port, secLevel, routeName, false)
 }
 
+// RouteConfigNoRouteMatch returns an xDS RouteConfig resource which a route
+// with no route match. This will be NACKed by the xDS Client.
+func RouteConfigNoRouteMatch(routeName string) *v3routepb.RouteConfiguration {
+	return &v3routepb.RouteConfiguration{
+		Name: routeName,
+		VirtualHosts: []*v3routepb.VirtualHost{{
+			// This "*" string matches on any incoming authority. This is to ensure any
+			// incoming RPC matches to Route_NonForwardingAction and will proceed as
+			// normal.
+			Domains: []string{"*"},
+			Routes: []*v3routepb.Route{{
+				Action: &v3routepb.Route_NonForwardingAction{},
+			}}}}}
+}
+
 // RouteConfigNonForwardingAction returns an xDS RouteConfig resource which
-// specifies to route to a route specfying non forwarding action. This is
+// specifies to route to a route specifying non forwarding action. This is
 // intended to be used on the server side for RDS requests, and corresponds to
 // the inline route configuration in DefaultServerListener.
 func RouteConfigNonForwardingAction(routeName string) *v3routepb.RouteConfiguration {
