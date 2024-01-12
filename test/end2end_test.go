@@ -3901,6 +3901,28 @@ func (s) TestClientRequestBodyErrorCloseAfterLength(t *testing.T) {
 	}
 }
 
+func testClientInvalidStreamID(t *testing.T, e env) {
+	te := newTest(t, e)
+	ts := &funcServer{streamingInputCall: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+		_, err := stream.Recv()
+		return err
+	}}
+	te.startServer(ts)
+	defer te.tearDown()
+	te.withServerTester(func(st *serverTester) {
+		st.writeHeadersGRPC(2, "/grpc.testing.TestService/StreamingInputCall", true)
+		st.writeData(2, true, []byte{0, 0, 0, 0, 5})
+		// Reads the frame?
+		st.wantAnyFrame()
+	})
+}
+
+func (s) TestClientInvalidStreamID(t *testing.T) {
+	for _, e := range listTestEnv() {
+		testClientInvalidStreamID(t, e)
+	}
+}
+
 func testClientRequestBodyErrorCloseAfterLength(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.declareLogNoise("Server.processUnaryRPC failed to write status")
