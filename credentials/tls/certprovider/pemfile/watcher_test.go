@@ -64,7 +64,7 @@ func compareKeyMaterial(got, want *certprovider.KeyMaterial) error {
 	if gotR, wantR := got.Roots, want.Roots; !gotR.Equal(wantR) {
 		return fmt.Errorf("keyMaterial roots = %v, want %v", gotR, wantR)
 	}
-	
+
 	return nil
 }
 
