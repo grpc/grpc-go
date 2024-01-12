@@ -129,7 +129,7 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	return xdsinternal.NewHandshakeInfo(c.rootProvider, c.identityProvider, nil, secCfg.RequireClientCert), nil
 }
 
-// PassServerTransport drains the passed in ServerTransportif draining is set,
+// PassServerTransport drains the passed in ServerTransport if draining is set,
 // or persists it to be drained once drained is called.
 func (c *connWrapper) PassServerTransport(st transport.ServerTransport) {
 	c.mu.Lock()

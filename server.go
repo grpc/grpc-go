@@ -929,7 +929,9 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 		return
 	}
 
-	if cc, ok := rawConn.(transport.CallbackConn); ok {
+	if cc, ok := rawConn.(interface {
+		PassServerTransport(transport.ServerTransport)
+	}); ok {
 		cc.PassServerTransport(st)
 	}
 

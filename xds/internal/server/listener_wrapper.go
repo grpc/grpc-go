@@ -140,6 +140,8 @@ type listenerWrapper struct {
 	mode connectivity.ServingMode
 	// Filter chain manager currently serving.
 	activeFilterChainManager *xdsresource.FilterChainManager
+	// conns accepted with configuration from activeFilterChainManager.
+	conns []*connWrapper
 
 	// These fields are read/written to in the context of xDS updates, which are
 	// guaranteed to be emitted synchronously from the xDS Client. Thus, they do
@@ -200,9 +202,10 @@ func (l *listenerWrapper) maybeUpdateFilterChains() {
 	// gracefully shut down with a grace period of 10 minutes for long-lived
 	// RPC's, such that clients will reconnect and have the updated
 	// configuration apply." - A36
-	var connsToClose []xdsresource.DrainConn
+	var connsToClose []*connWrapper
 	if l.activeFilterChainManager != nil { // If there is a filter chain manager to clean up.
-		connsToClose = l.activeFilterChainManager.Conns()
+		connsToClose = l.conns
+		l.conns = nil
 	}
 	l.activeFilterChainManager = l.pendingFilterChainManager
 	l.pendingFilterChainManager = nil
@@ -226,13 +229,13 @@ func (l *listenerWrapper) handleRDSUpdate(routeName string, rcu rdsWatcherUpdate
 			if fc.RouteConfigName != routeName {
 				continue
 			}
-			if rcu.err != nil && rcu.update == nil { // Either NACK before update, or resource not found triggers this conditional.
+			if rcu.err != nil && rcu.data == nil { // Either NACK before update, or resource not found triggers this conditional.
 				fc.UsableRouteConfiguration.Store(&xdsresource.UsableRouteConfiguration{
 					Err: rcu.err,
 				})
 				continue
 			}
-			fc.UsableRouteConfiguration.Store(fc.ConstructUsableRouteConfiguration(*rcu.update))
+			fc.UsableRouteConfiguration.Store(fc.ConstructUsableRouteConfiguration(*rcu.data))
 		}
 	}
 	if l.rdsHandler.determineRouteConfigurationReady() {
@@ -251,11 +254,11 @@ func (l *listenerWrapper) instantiateFilterChainRoutingConfigurationsLocked() {
 			continue
 		} // Inline configuration constructed once here, will remain for lifetime of filter chain.
 		rcu := l.rdsHandler.updates[fc.RouteConfigName]
-		if rcu.err != nil && rcu.update == nil {
+		if rcu.err != nil && rcu.data == nil {
 			fc.UsableRouteConfiguration.Store(&xdsresource.UsableRouteConfiguration{Err: rcu.err})
 			continue
 		}
-		fc.UsableRouteConfiguration.Store(fc.ConstructUsableRouteConfiguration(*rcu.update)) // Can't race with an RPC coming in but no harm making atomic.
+		fc.UsableRouteConfiguration.Store(fc.ConstructUsableRouteConfiguration(*rcu.data)) // Can't race with an RPC coming in but no harm making atomic.
 	}
 }
 
@@ -338,7 +341,7 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			continue
 		}
 		cw := &connWrapper{Conn: conn, filterChain: fc, parent: l, urc: fc.UsableRouteConfiguration}
-		l.activeFilterChainManager.AddConn(cw)
+		l.conns = append(l.conns, cw)
 		l.mu.RUnlock()
 		return cw, nil
 	}
@@ -372,7 +375,8 @@ func (l *listenerWrapper) switchModeLocked(newMode connectivity.ServingMode, err
 	}
 	l.mode = newMode
 	if l.mode == connectivity.ServingModeNotServing {
-		connsToClose := l.activeFilterChainManager.Conns()
+		connsToClose := l.conns
+		l.conns = nil
 		go func() {
 			for _, conn := range connsToClose {
 				conn.Drain()

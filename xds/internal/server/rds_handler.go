@@ -109,15 +109,11 @@ func (rh *rdsHandler) determineRouteConfigurationReady() bool {
 func (rh *rdsHandler) handleRouteUpdate(routeName string, update rdsWatcherUpdate) {
 	rwu := rh.updates[routeName]
 
-	if update.err != nil {
-		if xdsresource.ErrType(update.err) == xdsresource.ErrorTypeResourceNotFound {
-			// Clear update. This will cause future RPCs on connections which
-			// use this route configuration to fail with UNAVAILABLE.
-			rwu.update = nil
-		}
-		// Write error.
-		rwu.err = update.err
-	} else {
+	// Accept the new update if any of the following are true:
+	// 1. we had no valid update data.
+	// 2. the update is valid.
+	// 3. the update error is ResourceNotFound.
+	if rwu.data == nil || update.err == nil || xdsresource.ErrType(update.err) == xdsresource.ErrorTypeResourceNotFound {
 		rwu = update
 	}
 	rh.updates[routeName] = rwu
@@ -136,8 +132,8 @@ func (rh *rdsHandler) close() {
 }
 
 type rdsWatcherUpdate struct {
-	update *xdsresource.RouteConfigUpdate
-	err    error
+	data *xdsresource.RouteConfigUpdate
+	err  error
 }
 
 // rdsWatcher implements the xdsresource.RouteConfigWatcher interface and is
@@ -161,7 +157,7 @@ func (rw *rdsWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData) {
 	if rw.logger.V(2) {
 		rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, update.Resource)
 	}
-	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{update: &update.Resource})
+	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{data: &update.Resource})
 }
 
 func (rw *rdsWatcher) OnError(err error) {

@@ -1288,15 +1288,6 @@ func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, eo
 	})
 }
 
-// CallbackConn is a conn with a callback function.
-type CallbackConn interface {
-	// PassServerTransport passes a ServerTransport to the callback Conn. This
-	// is called in the grpc layer after a ServerTransport for a connection has
-	// successfully been created, if this method exists on the accepted
-	// connection.
-	PassServerTransport(ServerTransport)
-}
-
 func (t *http2Server) Drain(debugData string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
