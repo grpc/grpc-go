@@ -171,10 +171,10 @@ func waitForFailedRPCWithStatusCode(ctx context.Context, t *testing.T, cc *grpc.
 	}
 }
 
-// TestResourceNotFoundRDS tests the case where an LDS points to an RDS which
-// returns an RDS Resource which is NACKed. This should trigger server should
-// move to serving, successfully Accept Connections, and fail at the L7 level
-// with a certain error message.
+// TestResourceNack tests the case where an LDS points to an RDS which returns
+// an RDS Resource which is NACKed. This should trigger server should move to
+// serving, successfully Accept Connections, and fail at the L7 level with a
+// certain error message.
 func (s) TestRDSNack(t *testing.T) {
 	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
@@ -297,11 +297,24 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 
 	// Invoke resource not found - this should result in L7 RPC error with
 	// unavailable receive on serving as a result, should trigger it to go
-	// serving.
-	if err := internal.TriggerXDSResourceNameNotFoundClient.(func(string, string) error)("RouteConfigResource", "routeName"); err != nil {
-		t.Fatalf("Failed to trigger resource name not found for testing: %v", err)
+	// serving. Poll as watch might not be started yet to trigger resource not
+	// found.
+	for {
+		if err := internal.TriggerXDSResourceNameNotFoundClient.(func(string, string) error)("RouteConfigResource", "routeName"); err != nil {
+			t.Fatalf("Failed to trigger resource name not found for testing: %v", err)
+		}
+		var servingDone bool
+		select {
+		case <-serving.Done():
+			servingDone = true
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for serving mode to go serving")
+		default:
+		}
+		if servingDone {
+			break
+		}
 	}
-	<-serving.Done()
 	waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
 }
 
