@@ -189,7 +189,7 @@ var (
 
 	ChannelzTurnOffForTesting func()
 
-	// Gets the function definition from metadata package
+	// FromOutgoingContextRaw returns the un-merged, intermediary contents of metadata.rawMD. 
 	FromOutgoingContextRaw any // func(context.Context) (metadata.MD, [][]string, bool)
 )
 
