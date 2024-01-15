@@ -29,6 +29,7 @@ import (
 	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/protoadapt"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/runtime/protoimpl"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -306,7 +307,7 @@ func (s) TestConvertUnknownError(t *testing.T) {
 func (s) TestStatus_ErrorDetails(t *testing.T) {
 	tests := []struct {
 		code    codes.Code
-		details []proto.Message
+		details []protoadapt.MessageV1
 	}{
 		{
 			code:    codes.NotFound,
@@ -314,7 +315,7 @@ func (s) TestStatus_ErrorDetails(t *testing.T) {
 		},
 		{
 			code: codes.NotFound,
-			details: []proto.Message{
+			details: []protoadapt.MessageV1{
 				&epb.ResourceInfo{
 					ResourceType: "book",
 					ResourceName: "projects/1234/books/5678",
@@ -324,7 +325,7 @@ func (s) TestStatus_ErrorDetails(t *testing.T) {
 		},
 		{
 			code: codes.Internal,
-			details: []proto.Message{
+			details: []protoadapt.MessageV1{
 				&epb.DebugInfo{
 					StackEntries: []string{
 						"first stack",
@@ -335,7 +336,7 @@ func (s) TestStatus_ErrorDetails(t *testing.T) {
 		},
 		{
 			code: codes.Unavailable,
-			details: []proto.Message{
+			details: []protoadapt.MessageV1{
 				&epb.RetryInfo{
 					RetryDelay: &durationpb.Duration{Seconds: 60},
 				},
@@ -355,7 +356,7 @@ func (s) TestStatus_ErrorDetails(t *testing.T) {
 		}
 		details := s.Details()
 		for i := range details {
-			if !proto.Equal(details[i].(protoreflect.ProtoMessage), tc.details[i]) {
+			if !proto.Equal(details[i].(protoreflect.ProtoMessage), tc.details[i].(protoreflect.ProtoMessage)) {
 				t.Fatalf("(%v).Details()[%d] = %+v, want %+v", str(s), i, details[i], tc.details[i])
 			}
 		}
