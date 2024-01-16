@@ -1035,7 +1035,7 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 	// connection for the RPC to go out on initially, and that the TCP connection will shut down strictly after
 	// the RPC has been started on it.
 	<-rpcStartedOnServer
-	ss.S.Stop()
+	go ss.S.Stop()
 	// The precise behavior of this test is subject to raceyness around the timing
 	// of when TCP packets are sent from client to server, and when we tell the
 	// server to stop, so we need to account for both possible error messages.

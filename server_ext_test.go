@@ -185,3 +185,73 @@ func (s) TestStreamWorkers_GracefulStopAndStop(t *testing.T) {
 
 	ss.S.GracefulStop()
 }
+
+func (s) TestHandlersReturnBeforeStop(t *testing.T) {
+	started := grpcsync.NewEvent()
+	blockCalls := grpcsync.NewEvent()
+
+	// This stub server does not properly respect the stream context, so it will
+	// not exit when the context is canceled.
+	ss := stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			started.Fire()
+			<-blockCalls.Done()
+			return nil
+		},
+	}
+	if err := ss.Start([]grpc.ServerOption{grpc.MaxConcurrentStreams(1)}); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Start one RPC to the server.
+	ctx1, cancel1 := context.WithCancel(ctx)
+	_, err := ss.Client.FullDuplexCall(ctx1)
+	if err != nil {
+		t.Fatal("Error staring call:", err)
+	}
+
+	// Wait for the handler to be invoked.
+	select {
+	case <-started.Done():
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for RPC to start on server.")
+	}
+
+	// Cancel it on the client.  The server handler will still be running.
+	cancel1()
+
+	// Close the connection.  This might be sufficient to allow the server to
+	// return if it doesn't properly wait for outstanding method handlers to
+	// return.
+	ss.CC.Close()
+
+	// Try to Stop() the server, which should block indefinitely (until
+	// blockCalls is fired).
+	stopped := grpcsync.NewEvent()
+	go func() {
+		ss.S.Stop()
+		stopped.Fire()
+	}()
+
+	// Wait 100ms and ensure stopped does not fire.
+	select {
+	case <-stopped.Done():
+		trace := make([]byte, 4096)
+		trace = trace[0:runtime.Stack(trace, true)]
+		blockCalls.Fire()
+		t.Fatalf("Server returned from Stop() illegally.  Stack trace:\n%v", string(trace))
+	case <-time.After(100 * time.Millisecond):
+		// Success; unblock the call and wait for stopped.
+		blockCalls.Fire()
+	}
+
+	select {
+	case <-stopped.Done():
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for second RPC to start on server.")
+	}
+}

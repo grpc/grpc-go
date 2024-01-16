@@ -1009,10 +1009,13 @@ func (s *Server) serveStreams(ctx context.Context, st transport.ServerTransport,
 	}()
 
 	streamQuota := newHandlerQuota(s.opts.maxConcurrentStreams)
+	wg := &sync.WaitGroup{}
 	st.HandleStreams(ctx, func(stream *transport.Stream) {
+		wg.Add(1)
 		streamQuota.acquire()
 		f := func() {
 			defer streamQuota.release()
+			defer wg.Done()
 			s.handleStream(st, stream)
 		}
 
@@ -1026,6 +1029,7 @@ func (s *Server) serveStreams(ctx context.Context, st transport.ServerTransport,
 		}
 		go f()
 	})
+	wg.Wait()
 }
 
 var _ http.Handler = (*Server)(nil)

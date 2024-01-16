@@ -228,7 +228,14 @@ func (f *fakeORCAService) close() {
 
 func (f *fakeORCAService) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportRequest, stream v3orcaservicegrpc.OpenRcaService_StreamCoreMetricsServer) error {
 	f.reqCh <- req
-	for resp := range f.respCh {
+	for {
+		var resp any
+		select {
+		case resp = <-f.respCh:
+		case <-stream.Context().Done():
+			return stream.Context().Err()
+		}
+
 		if err, ok := resp.(error); ok {
 			return err
 		}
@@ -245,7 +252,6 @@ func (f *fakeORCAService) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportR
 			return err
 		}
 	}
-	return nil
 }
 
 // TestProducerBackoff verifies that the ORCA producer applies the proper
