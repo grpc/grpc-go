@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 
@@ -94,6 +95,7 @@ func (s) TestListenerWrapper(t *testing.T) {
 	waitForResourceNames(ctx, t, ldsResourceNamesCh, []string{lisResourceName})
 	// Configure the management server with a listener resource that specifies
 	// the name of RDS resources that need to be resolved.
+	listener := e2e.DefaultServerListenerWithRouteConfigName(host, port, e2e.SecurityLevelNone, route1)
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Listeners:      []*v3listenerpb.Listener{e2e.DefaultServerListenerWithRouteConfigName(host, port, e2e.SecurityLevelNone, route1)},
@@ -121,7 +123,7 @@ func (s) TestListenerWrapper(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Mode should go ready.
+	// Mode should go serving.
 	select {
 	case <-ctx.Done():
 		t.Fatalf("timeout waiting for mode change")
@@ -131,5 +133,17 @@ func (s) TestListenerWrapper(t *testing.T) {
 		}
 	}
 
-	// TODO: invoke lds resource not found - should go back to non serving.
+	// Invoke lds resource not found - should go back to non serving.
+	if err := internal.TriggerXDSResourceNameNotFoundClient.(func(string, string) error)("ListenerResource", listener.GetName()); err != nil {
+		t.Fatalf("Failed to trigger resource name not found for testing: %v", err)
+	}
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout waiting for mode change")
+	case mode := <-modeCh:
+		if mode != connectivity.ServingModeNotServing {
+			t.Fatalf("mode change received: %v, want: %v", mode, connectivity.ServingModeNotServing)
+		}
+	}
+
 }

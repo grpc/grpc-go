@@ -231,7 +231,7 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	}
 	defer cc.Close()
 
-	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...)
+	waitForFailedRPCWithStatus(ctx, t, cc, errAcceptAndClose)
 }
 
 // Tests the case where the bootstrap configuration contains one certificate
@@ -477,5 +477,5 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	}
 	defer cc2.Close()
 
-	waitForFailedRPCWithStatusCode(ctx, t, cc2, errAcceptAndClose...)
+	waitForFailedRPCWithStatus(ctx, t, cc2, errAcceptAndClose)
 }

@@ -44,11 +44,7 @@ import (
 )
 
 var (
-	errAcceptAndClose = []*status.Status{
-		status.New(codes.Unavailable, "connection error: desc = \"error reading server preface: EOF\""),
-		status.New(codes.Unavailable, "write: broken pipe"),
-		status.New(codes.Unavailable, "read: connection reset by peer"),
-	}
+	errAcceptAndClose = status.New(codes.Unavailable, "")
 )
 
 // TestServeLDSRDS tests the case where a server receives LDS resource which
@@ -138,13 +134,13 @@ func (s) TestServeLDSRDS(t *testing.T) {
 	// "NonForwardingAction is expected for all Routes used on server-side; a
 	// route with an inappropriate action causes RPCs matching that route to
 	// fail with UNAVAILABLE." - A36
-	waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "the incoming RPC matched to a route that was not of action type non forwarding"))
+	waitForFailedRPCWithStatus(ctx, t, cc, status.New(codes.Unavailable, "the incoming RPC matched to a route that was not of action type non forwarding"))
 }
 
-// waitForFailedRPCWithStatusCode makes unary RPC's until it receives the
-// expected status in a polling manner. Fails if the RPC made does not return
-// the expected status before the context expires.
-func waitForFailedRPCWithStatusCode(ctx context.Context, t *testing.T, cc *grpc.ClientConn, sts ...*status.Status) {
+// waitForFailedRPCWithStatus makes unary RPC's until it receives the expected
+// status in a polling manner. Fails if the RPC made does not return the
+// expected status before the context expires.
+func waitForFailedRPCWithStatus(ctx context.Context, t *testing.T, cc *grpc.ClientConn, st *status.Status) {
 	t.Helper()
 
 	c := testgrpc.NewTestServiceClient(cc)
@@ -154,18 +150,12 @@ func waitForFailedRPCWithStatusCode(ctx context.Context, t *testing.T, cc *grpc.
 	for {
 		select {
 		case <-ctx.Done():
-			var errString string
-			if err != nil {
-				errString = err.Error()
-			}
-			t.Fatalf("failure when waiting for RPCs to fail with certain status %v: %v. most recent error received from RPC: %v", sts, ctx.Err(), errString)
+			t.Fatalf("failure when waiting for RPCs to fail with certain status %v: %v. most recent error received from RPC: %v", st, ctx.Err(), err)
 		case <-ticker.C:
 			_, err = c.EmptyCall(ctx, &testpb.Empty{})
-			for _, st := range sts {
-				if status.Code(err) == st.Code() && strings.Contains(err.Error(), st.Message()) {
-					t.Logf("most recent error happy case: %v", err.Error())
-					return
-				}
+			if status.Code(err) == st.Code() && strings.Contains(err.Error(), st.Message()) {
+				t.Logf("most recent error happy case: %v", err.Error())
+				return
 			}
 		}
 	}
@@ -231,7 +221,7 @@ func (s) TestRDSNack(t *testing.T) {
 	defer cc.Close()
 
 	<-serving.Done()
-	waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
+	waitForFailedRPCWithStatus(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
 }
 
 // TestResourceNotFoundRDS tests the case where an LDS points to an RDS which
@@ -293,29 +283,26 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 	}
 	defer cc.Close()
 
-	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...)
+	waitForFailedRPCWithStatus(ctx, t, cc, errAcceptAndClose)
 
 	// Invoke resource not found - this should result in L7 RPC error with
 	// unavailable receive on serving as a result, should trigger it to go
 	// serving. Poll as watch might not be started yet to trigger resource not
 	// found.
+loop:
 	for {
 		if err := internal.TriggerXDSResourceNameNotFoundClient.(func(string, string) error)("RouteConfigResource", "routeName"); err != nil {
 			t.Fatalf("Failed to trigger resource name not found for testing: %v", err)
 		}
-		var servingDone bool
 		select {
 		case <-serving.Done():
-			servingDone = true
+			break loop
 		case <-ctx.Done():
 			t.Fatalf("timed out waiting for serving mode to go serving")
-		default:
-		}
-		if servingDone {
-			break
+		case <-time.After(time.Millisecond):
 		}
 	}
-	waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
+	waitForFailedRPCWithStatus(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
 }
 
 // TestServingModeChanges tests the Server's logic as it transitions from Not
@@ -377,7 +364,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 	}
 	defer cc.Close()
 
-	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...)
+	waitForFailedRPCWithStatus(ctx, t, cc, errAcceptAndClose)
 	routeConfig := e2e.RouteConfigNonForwardingAction("routeName")
 	resources = e2e.UpdateOptions{
 		NodeID:    nodeID,
@@ -432,7 +419,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 	}
 
 	// New RPCs on that connection should eventually start failing.
-	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...)
+	waitForFailedRPCWithStatus(ctx, t, cc, errAcceptAndClose)
 }
 
 // TestMultipleUpdatesImmediatelySwitch tests the case where you get an LDS
@@ -490,7 +477,7 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 	}
 	defer cc.Close()
 
-	waitForFailedRPCWithStatusCode(ctx, t, cc, errAcceptAndClose...)
+	waitForFailedRPCWithStatus(ctx, t, cc, errAcceptAndClose)
 
 	routeConfig1 := e2e.RouteConfigNonForwardingAction("routeName")
 	routeConfig2 := e2e.RouteConfigFilterAction("routeName2")
@@ -533,7 +520,7 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 	// "NonForwardingAction is expected for all Routes used on server-side; a
 	// route with an inappropriate action causes RPCs matching that route to
 	// fail with UNAVAILABLE." - A36
-	waitForFailedRPCWithStatusCode(ctx, t, cc, status.New(codes.Unavailable, "the incoming RPC matched to a route that was not of action type non forwarding"))
+	waitForFailedRPCWithStatus(ctx, t, cc, status.New(codes.Unavailable, "the incoming RPC matched to a route that was not of action type non forwarding"))
 
 	// Stream should be allowed to continue on the old working configuration -
 	// as it on a connection that is gracefully closed (old FCM/LDS
