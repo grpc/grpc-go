@@ -185,8 +185,6 @@ GetSafeRegexMatch
 GetSuffixMatch
 GetTlsCertificateCertificateProviderInstance
 GetValidationContextCertificateProviderInstance
-XXXXX TODO: Remove the below deprecation usages:
-Roots.Subjects
 XXXXX PleaseIgnoreUnused'
 
 echo SUCCESS
