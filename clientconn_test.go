@@ -815,8 +815,8 @@ func (s) TestGetClientConnTarget(t *testing.T) {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
 	defer cc.Close()
-	if cc.Target() != addr {
-		t.Fatalf("Target() = %s, want %s", cc.Target(), addr)
+	if cc.Target() != "passthrough:///"+addr {
+		t.Fatalf("Target() = %s, want %s", cc.Target(), "passthrough:///"+addr)
 	}
 }
 

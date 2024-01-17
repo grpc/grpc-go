@@ -283,7 +283,7 @@ func (t Target) Endpoint() string {
 
 // String returns a string representation of Target.
 func (t Target) String() string {
-	return t.URL.String()
+	return t.URL.Scheme + "://" + t.URL.Host + "/" + t.Endpoint()
 }
 
 // Builder creates a resolver that will be used to watch name resolution updates.
