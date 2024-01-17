@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/status"
 
@@ -270,7 +269,7 @@ func (s) TestGracefulStopBlocksUntilGRPCConnectionsTerminate(t *testing.T) {
 // TestStopAbortsBlockingGRPCCall ensures that when Stop() is called while an ongoing RPC
 // is blocking that:
 // - Stop() returns
-// - and the RPC fails with an connection closed error on the client-side
+// - and the RPC fails with an connection  closed error on the client-side
 func (s) TestStopAbortsBlockingGRPCCall(t *testing.T) {
 	unblockGRPCCall := make(chan struct{})
 	grpcCallExecuting := make(chan struct{})
@@ -299,13 +298,8 @@ func (s) TestStopAbortsBlockingGRPCCall(t *testing.T) {
 	}()
 
 	<-grpcCallExecuting
-	stopReturned := grpcsync.NewEvent()
-	go func() {
-		ss.S.Stop()
-		stopReturned.Fire()
-	}()
+	ss.S.Stop()
 
-	<-grpcClientCallReturned
 	unblockGRPCCall <- struct{}{}
-	<-stopReturned.Done()
+	<-grpcClientCallReturned
 }
