@@ -22,10 +22,12 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -36,8 +38,9 @@ import (
 //     key material from the certificate providers.
 //  2. Implements the XDSHandshakeInfo() method used by the xdsCredentials to
 //     retrieve the configured certificate providers.
-//  3. xDS filter_chain matching logic to select appropriate security
-//     configuration for the incoming connection.
+//  3. xDS filter_chain configuration determines security configuration.
+//  4. Dynamically reads routing configuration in UsableRouteConfiguration(), called
+//     to process incoming RPC's. (LDS + RDS configuration).
 type connWrapper struct {
 	net.Conn
 
@@ -58,14 +61,19 @@ type connWrapper struct {
 	deadlineMu sync.Mutex
 	deadline   time.Time
 
+	mu       sync.Mutex
+	st       transport.ServerTransport
+	draining bool
+
 	// The virtual hosts with matchable routes and instantiated HTTP Filters per
-	// route.
-	virtualHosts []xdsresource.VirtualHostWithInterceptors
+	// route, or an error.
+	urc *atomic.Pointer[xdsresource.UsableRouteConfiguration]
 }
 
-// VirtualHosts returns the virtual hosts to be used for server side routing.
-func (c *connWrapper) VirtualHosts() []xdsresource.VirtualHostWithInterceptors {
-	return c.virtualHosts
+// UsableRouteConfiguration returns the UsableRouteConfiguration to be used for
+// server side routing.
+func (c *connWrapper) UsableRouteConfiguration() xdsresource.UsableRouteConfiguration {
+	return *c.urc.Load()
 }
 
 // SetDeadline makes a copy of the passed in deadline and forwards the call to
@@ -119,6 +127,30 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	c.rootProvider = rp
 
 	return xdsinternal.NewHandshakeInfo(c.rootProvider, c.identityProvider, nil, secCfg.RequireClientCert), nil
+}
+
+// PassServerTransport drains the passed in ServerTransport if draining is set,
+// or persists it to be drained once drained is called.
+func (c *connWrapper) PassServerTransport(st transport.ServerTransport) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.draining {
+		st.Drain("draining")
+	} else {
+		c.st = st
+	}
+}
+
+// Drain drains the associated ServerTransport, or sets draining to true so it
+// will be drained after it is created.
+func (c *connWrapper) Drain() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.st == nil {
+		c.draining = true
+	} else {
+		c.st.Drain("draining")
+	}
 }
 
 // Close closes the providers and the underlying connection.
