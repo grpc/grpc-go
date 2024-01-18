@@ -21,6 +21,7 @@ package xds_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"testing"
@@ -50,6 +51,29 @@ func (*testService) UnaryCall(context.Context, *testpb.SimpleRequest) (*testpb.S
 	return &testpb.SimpleResponse{}, nil
 }
 
+func (*testService) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallServer) error {
+	for {
+		_, err := stream.Recv() // hangs here forever if stream doesn't shut down...doesn't receive EOF without any errors
+		if err == io.EOF {
+			return nil
+		}
+	}
+}
+
+func testModeChangeServerOption(t *testing.T) grpc.ServerOption {
+	// Create a server option to get notified about serving mode changes. We don't
+	// do anything other than throwing a log entry here. But this is required,
+	// since the server code emits a log entry at the default level (which is
+	// ERROR) if no callback is registered for serving mode changes. Our
+	// testLogger fails the test if there is any log entry at ERROR level. It does
+	// provide an ExpectError()  method, but that takes a string and it would be
+	// painful to construct the exact error message expected here. Instead this
+	// works just fine.
+	return xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
+		t.Logf("Serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
+	})
+}
+
 // setupGRPCServer performs the following:
 //   - spin up an xDS-enabled gRPC server, configure it with xdsCredentials and
 //     register the test service on it
@@ -69,20 +93,8 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func
 		t.Fatal(err)
 	}
 
-	// Create a server option to get notified about serving mode changes. We don't
-	// do anything other than throwing a log entry here. But this is required,
-	// since the server code emits a log entry at the default level (which is
-	// ERROR) if no callback is registered for serving mode changes. Our
-	// testLogger fails the test if there is any log entry at ERROR level. It does
-	// provide an ExpectError()  method, but that takes a string and it would be
-	// painful to construct the exact error message expected here. Instead this
-	// works just fine.
-	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
-		t.Logf("Serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
-	})
-
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
-	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
+	server, err := xds.NewGRPCServer(grpc.Creds(creds), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}

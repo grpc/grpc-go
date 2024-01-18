@@ -93,7 +93,6 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				// Return w without its Flush method
 				type onlyCloseNotifier interface {
 					http.ResponseWriter
-					http.CloseNotifier
 				}
 				return struct{ onlyCloseNotifier }{w.(onlyCloseNotifier)}
 			},
@@ -196,7 +195,6 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 		rrec := httptest.NewRecorder()
 		rw := http.ResponseWriter(testHandlerResponseWriter{
 			ResponseRecorder: rrec,
-			closeNotify:      make(chan bool, 1),
 		})
 
 		if tt.modrw != nil {
@@ -227,16 +225,13 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 
 type testHandlerResponseWriter struct {
 	*httptest.ResponseRecorder
-	closeNotify chan bool
 }
 
-func (w testHandlerResponseWriter) CloseNotify() <-chan bool { return w.closeNotify }
-func (w testHandlerResponseWriter) Flush()                   {}
+func (w testHandlerResponseWriter) Flush() {}
 
 func newTestHandlerResponseWriter() http.ResponseWriter {
 	return testHandlerResponseWriter{
 		ResponseRecorder: httptest.NewRecorder(),
-		closeNotify:      make(chan bool, 1),
 	}
 }
 

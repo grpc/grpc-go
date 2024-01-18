@@ -74,9 +74,6 @@ func init() {
 		return srv.isRegisteredMethod(method)
 	}
 	internal.ServerFromContext = serverFromContext
-	internal.DrainServerTransports = func(srv *Server, addr string) {
-		srv.drainServerTransports(addr)
-	}
 	internal.AddGlobalServerOptions = func(opt ...ServerOption) {
 		globalServerOptions = append(globalServerOptions, opt...)
 	}
@@ -144,7 +141,8 @@ type Server struct {
 	channelzID *channelz.Identifier
 	czData     *channelzData
 
-	serverWorkerChannel chan func()
+	serverWorkerChannel      chan func()
+	serverWorkerChannelClose func()
 }
 
 type serverOptions struct {
@@ -623,13 +621,12 @@ func (s *Server) serverWorker() {
 // connections to reduce the time spent overall on runtime.morestack.
 func (s *Server) initServerWorkers() {
 	s.serverWorkerChannel = make(chan func())
+	s.serverWorkerChannelClose = grpcsync.OnceFunc(func() {
+		close(s.serverWorkerChannel)
+	})
 	for i := uint32(0); i < s.opts.numServerWorkers; i++ {
 		go s.serverWorker()
 	}
-}
-
-func (s *Server) stopServerWorkers() {
-	close(s.serverWorkerChannel)
 }
 
 // NewServer creates a gRPC server which has no service registered and has not
@@ -932,6 +929,12 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 		return
 	}
 
+	if cc, ok := rawConn.(interface {
+		PassServerTransport(transport.ServerTransport)
+	}); ok {
+		cc.PassServerTransport(st)
+	}
+
 	if !s.addConn(lisAddr, st) {
 		return
 	}
@@ -939,15 +942,6 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 		s.serveStreams(context.Background(), st, rawConn)
 		s.removeConn(lisAddr, st)
 	}()
-}
-
-func (s *Server) drainServerTransports(addr string) {
-	s.mu.Lock()
-	conns := s.conns[addr]
-	for st := range conns {
-		st.Drain("")
-	}
-	s.mu.Unlock()
 }
 
 // newHTTP2Transport sets up a http/2 transport (using the
@@ -1898,14 +1892,18 @@ func (s *Server) stop(graceful bool) {
 		s.closeServerTransportsLocked()
 	}
 
-	if s.opts.numServerWorkers > 0 {
-		s.stopServerWorkers()
-	}
-
 	for len(s.conns) != 0 {
 		s.cv.Wait()
 	}
 	s.conns = nil
+
+	if s.opts.numServerWorkers > 0 {
+		// Closing the channel (only once, via grpcsync.OnceFunc) after all the
+		// connections have been closed above ensures that there are no
+		// goroutines executing the callback passed to st.HandleStreams (where
+		// the channel is written to).
+		s.serverWorkerChannelClose()
+	}
 
 	if s.events != nil {
 		s.events.Finish()

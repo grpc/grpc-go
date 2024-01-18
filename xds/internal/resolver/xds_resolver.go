@@ -25,7 +25,6 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
@@ -140,23 +139,6 @@ func (r *xdsResolver) sanityChecksOnBootstrapConfig(target resolver.Target, opts
 		// This is never expected to happen after a successful xDS client
 		// creation. Defensive programming.
 		return "", fmt.Errorf("xds: bootstrap configuration is empty")
-	}
-
-	// If xDS credentials were specified by the user, but the bootstrap config
-	// does not contain any certificate providers, it is better to fail right
-	// now rather than failing when attempting to create certificate providers
-	// after receiving an CDS response with security configuration.
-	var creds credentials.TransportCredentials
-	switch {
-	case opts.DialCreds != nil:
-		creds = opts.DialCreds
-	case opts.CredsBundle != nil:
-		creds = opts.CredsBundle.TransportCredentials()
-	}
-	if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
-		if len(bootstrapConfig.CertProviderConfigs) == 0 {
-			return "", fmt.Errorf("xds: use of xDS credentials is specified, but certificate_providers config missing in bootstrap file")
-		}
 	}
 
 	// Find the client listener template to use from the bootstrap config:
