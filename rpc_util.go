@@ -189,6 +189,13 @@ type EmptyCallOption struct{}
 func (EmptyCallOption) before(*callInfo) error      { return nil }
 func (EmptyCallOption) after(*callInfo, *csAttempt) {}
 
+// RegisteredMethodCallOption is a call option that specifies that a call comes
+// from a registered method.
+type RegisteredMethodCallOption struct{}
+
+func (RegisteredMethodCallOption) before(*callInfo) error      { return nil }
+func (RegisteredMethodCallOption) after(*callInfo, *csAttempt) {}
+
 // Header returns a CallOptions that retrieves the header metadata
 // for a unary RPC.
 func Header(md *metadata.MD) CallOption {
