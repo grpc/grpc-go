@@ -1325,10 +1325,8 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	for streamID, stream := range t.activeStreams {
 		if streamID > id && streamID <= upperLimit {
 			// The stream was unprocessed by the server.
-			if streamID > id && streamID <= upperLimit {
-				atomic.StoreUint32(&stream.unprocessed, 1)
-				streamsToClose = append(streamsToClose, stream)
-			}
+			atomic.StoreUint32(&stream.unprocessed, 1)
+			streamsToClose = append(streamsToClose, stream)
 		}
 	}
 	t.mu.Unlock()
