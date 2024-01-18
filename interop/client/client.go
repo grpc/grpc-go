@@ -269,6 +269,7 @@ func main() {
 	tc := testgrpc.NewTestServiceClient(conn)
 	overallDeadline := time.Now().Add(time.Duration(*soakOverallTimeoutSeconds) * time.Second)
 	ctxWithDeadline, cancel := context.WithDeadline(ctx, overallDeadline)
+	defer cancel()
 	switch *testCase {
 	case "empty_unary":
 		interop.DoEmptyUnaryCall(ctx, tc)
@@ -359,11 +360,9 @@ func main() {
 		logger.Infoln("PickFirstUnary done")
 	case "rpc_soak":
 		interop.DoSoakTest(ctxWithDeadline, tc, serverAddr, opts, false /* resetChannel */, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond)
-		cancel()
 		logger.Infoln("RpcSoak done")
 	case "channel_soak":
 		interop.DoSoakTest(ctxWithDeadline, tc, serverAddr, opts, true /* resetChannel */, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond)
-		cancel()
 		logger.Infoln("ChannelSoak done")
 	case "orca_per_rpc":
 		interop.DoORCAPerRPCTest(ctx, tc)
