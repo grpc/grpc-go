@@ -136,7 +136,8 @@ type Server struct {
 	quit               *grpcsync.Event
 	done               *grpcsync.Event
 	channelzRemoveOnce sync.Once
-	serveWG            sync.WaitGroup // counts active Serve goroutines for GracefulStop
+	serveWG            sync.WaitGroup // counts active Serve goroutines for Stop/GracefulStop
+	handlersWG         sync.WaitGroup // counts active method handler goroutines
 
 	channelzID *channelz.Identifier
 	czData     *channelzData
@@ -173,6 +174,7 @@ type serverOptions struct {
 	headerTableSize       *uint32
 	numServerWorkers      uint32
 	recvBufferPool        SharedBufferPool
+	waitForHandlers       bool
 }
 
 var defaultServerOptions = serverOptions{
@@ -567,6 +569,21 @@ func NumStreamWorkers(numServerWorkers uint32) ServerOption {
 	// number of CPUs available is most performant; requires thorough testing.
 	return newFuncServerOption(func(o *serverOptions) {
 		o.numServerWorkers = numServerWorkers
+	})
+}
+
+// WaitForHandlers cause Stop to wait until all outstanding method handlers have
+// exited before returning.  If false, Stop will return as soon as all
+// connections have closed, but method handlers may still be running. By
+// default, Stop does not wait for method handlers to return.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func WaitForHandlers(w bool) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.waitForHandlers = w
 	})
 }
 
@@ -1004,9 +1021,11 @@ func (s *Server) serveStreams(ctx context.Context, st transport.ServerTransport,
 
 	streamQuota := newHandlerQuota(s.opts.maxConcurrentStreams)
 	st.HandleStreams(ctx, func(stream *transport.Stream) {
+		s.handlersWG.Add(1)
 		streamQuota.acquire()
 		f := func() {
 			defer streamQuota.release()
+			defer s.handlersWG.Done()
 			s.handleStream(st, stream)
 		}
 
@@ -1903,6 +1922,10 @@ func (s *Server) stop(graceful bool) {
 		// goroutines executing the callback passed to st.HandleStreams (where
 		// the channel is written to).
 		s.serverWorkerChannelClose()
+	}
+
+	if graceful || s.opts.waitForHandlers {
+		s.handlersWG.Wait()
 	}
 
 	if s.events != nil {
