@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -392,9 +393,10 @@ func establishAltsConnection(t *testing.T, handshakerAddress, serverAddress stri
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestLongTimeout)
 	defer cancel()
 	c := testgrpc.NewTestServiceClient(conn)
+	var peer peer.Peer
 	success := false
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		_, err = c.UnaryCall(ctx, &testpb.SimpleRequest{})
+		_, err = c.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.Peer(&peer))
 		if err == nil {
 			success = true
 			break
@@ -408,6 +410,16 @@ func establishAltsConnection(t *testing.T, handshakerAddress, serverAddress stri
 	}
 	if !success {
 		t.Fatalf("c.UnaryCall() timed out after %v", defaultTestShortTimeout)
+	}
+	if got, want := peer.AuthInfo.AuthType(), "alts"; got != want {
+		t.Errorf("authInfo.AuthType() = %s, want = %s", got, want)
+	}
+	authInfo, err := AuthInfoFromPeer(&peer)
+	if err != nil {
+		t.Errorf("AuthInfoFromPeer failed: %v", err)
+	}
+	if got, want := authInfo.ApplicationProtocol(), "grpc"; got != want {
+		t.Errorf("authInfo.ApplicationProtocol() = %s, want = %s", got, want)
 	}
 }
 
