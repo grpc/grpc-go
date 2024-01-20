@@ -411,6 +411,10 @@ func establishAltsConnection(t *testing.T, handshakerAddress, serverAddress stri
 	if !success {
 		t.Fatalf("c.UnaryCall() timed out after %v", defaultTestShortTimeout)
 	}
+
+	// Check that peer.AuthInfo was populated with an ALTS AuthInfo
+	// instance. As a sanity check, also verify that the AuthType() and
+	// ApplicationProtocol() have the expected values.
 	if got, want := peer.AuthInfo.AuthType(), "alts"; got != want {
 		t.Errorf("authInfo.AuthType() = %s, want = %s", got, want)
 	}
