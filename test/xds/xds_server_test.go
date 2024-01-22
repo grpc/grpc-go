@@ -408,7 +408,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 
 	// New RPCs on that connection should eventually start failing. Due to
 	// Graceful Stop any started streams continue to work.
-	if err = stream.Send(&testgrpc.StreamingOutputCallRequest{}); err != nil {
+	if err = stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
 		t.Fatalf("stream.Send() failed: %v, should continue to work due to graceful stop", err)
 	}
 	if err = stream.CloseSend(); err != nil {
@@ -498,7 +498,7 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cc.FullDuplexCall failed: %f", err)
 	}
-	if err = stream.Send(&testgrpc.StreamingOutputCallRequest{}); err != nil {
+	if err = stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
 		t.Fatalf("stream.Send() failed: %v, should continue to work due to graceful stop", err)
 	}
 
