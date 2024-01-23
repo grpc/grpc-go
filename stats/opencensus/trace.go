@@ -40,8 +40,9 @@ type traceInfo struct {
 func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
 	// TODO: get consensus on whether this method name of "s.m" is correct.
 	mn := "Attempt." + strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
-	// Returned context is ignored because will populate context with data
-	// that wraps the span instead.
+	// Returned context is ignored because will populate context with data that
+	// wraps the span instead. Don't set span kind client on this attempt span
+	// to prevent backend from prepending span name with "Sent.".
 	_, span := trace.StartSpan(ctx, mn, trace.WithSampler(csh.to.TS))
 
 	tcBin := propagation.Binary(span.SpanContext())
@@ -98,9 +99,11 @@ func populateSpan(ctx context.Context, rs stats.RPCStats, ti *traceInfo) {
 			trace.BoolAttribute("Client", rs.Client),
 			trace.BoolAttribute("FailFast", rs.FailFast),
 		)
+	case *stats.PickerUpdated:
+		span.Annotate(nil, "Delayed LB pick complete")
 	case *stats.InPayload:
 		// message id - "must be calculated as two different counters starting
-		// from 1 one for sent messages and one for received messages."
+		// from one for sent messages and one for received messages."
 		mi := atomic.AddUint32(&ti.countRecvMsg, 1)
 		span.AddMessageReceiveEvent(int64(mi), int64(rs.Length), int64(rs.CompressedLength))
 	case *stats.OutPayload:

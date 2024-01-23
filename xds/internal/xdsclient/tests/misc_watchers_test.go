@@ -47,12 +47,55 @@ var (
 	routeConfigResourceType = internal.ResourceTypeMapForTesting[version.V3RouteConfigURL].(xdsresource.Type)
 )
 
+// This route configuration watcher registers two watches corresponding to the
+// names passed in at creation time on a valid update.
+type testRouteConfigWatcher struct {
+	client           xdsclient.XDSClient
+	name1, name2     string
+	rcw1, rcw2       *routeConfigWatcher
+	cancel1, cancel2 func()
+	updateCh         *testutils.Channel
+}
+
+func newTestRouteConfigWatcher(client xdsclient.XDSClient, name1, name2 string) *testRouteConfigWatcher {
+	return &testRouteConfigWatcher{
+		client:   client,
+		name1:    name1,
+		name2:    name2,
+		rcw1:     newRouteConfigWatcher(),
+		rcw2:     newRouteConfigWatcher(),
+		updateCh: testutils.NewChannel(),
+	}
+}
+
+func (rw *testRouteConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData) {
+	rw.updateCh.Send(routeConfigUpdateErrTuple{update: update.Resource})
+
+	rw.cancel1 = xdsresource.WatchRouteConfig(rw.client, rw.name1, rw.rcw1)
+	rw.cancel2 = xdsresource.WatchRouteConfig(rw.client, rw.name2, rw.rcw2)
+}
+
+func (rw *testRouteConfigWatcher) OnError(err error) {
+	// When used with a go-control-plane management server that continuously
+	// resends resources which are NACKed by the xDS client, using a `Replace()`
+	// here and in OnResourceDoesNotExist() simplifies tests which will have
+	// access to the most recently received error.
+	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: err})
+}
+
+func (rw *testRouteConfigWatcher) OnResourceDoesNotExist() {
+	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "RouteConfiguration not found in received response")})
+}
+
+func (rw *testRouteConfigWatcher) cancel() {
+	rw.cancel1()
+	rw.cancel2()
+}
+
 // TestWatchCallAnotherWatch tests the scenario where a watch is registered for
 // a resource, and more watches are registered from the first watch's callback.
 // The test verifies that this scenario does not lead to a deadlock.
 func (s) TestWatchCallAnotherWatch(t *testing.T) {
-	overrideFedEnvVar(t)
-
 	// Start an xDS management server and set the option to allow it to respond
 	// to requests which only specify a subset of the configured resources.
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
@@ -80,32 +123,20 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	// Start a watch for one route configuration resource. From the watch
-	// callback of the first resource, register two more watches (one for the
-	// same resource name, which would be satisfied from the cache, and another
-	// for a different resource name, which would be satisfied from the server).
-	updateCh1 := testutils.NewChannel()
-	updateCh2 := testutils.NewChannel()
-	updateCh3 := testutils.NewChannel()
-	rdsCancel1 := client.WatchRouteConfig(rdsName, func(u xdsresource.RouteConfigUpdate, err error) {
-		updateCh1.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
-
-		// Watch for the same resource name.
-		rdsCancel2 := client.WatchRouteConfig(rdsName, func(u xdsresource.RouteConfigUpdate, err error) {
-			updateCh2.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
-		})
-		t.Cleanup(rdsCancel2)
-		// Watch for a different resource name.
-		rdsCancel3 := client.WatchRouteConfig(rdsNameNewStyle, func(u xdsresource.RouteConfigUpdate, err error) {
-			updateCh3.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
-		})
-		t.Cleanup(rdsCancel3)
-	})
-	t.Cleanup(rdsCancel1)
+	// Create a route configuration watcher that registers two more watches from
+	// the OnUpdate callback:
+	// - one for the same resource name as this watch, which would be
+	//   satisfied from xdsClient cache
+	// - the other for a different resource name, which would be
+	//   satisfied from the server
+	rw := newTestRouteConfigWatcher(client, rdsName, rdsNameNewStyle)
+	defer rw.cancel()
+	rdsCancel := xdsresource.WatchRouteConfig(client, rdsName, rw)
+	defer rdsCancel()
 
 	// Verify the contents of the received update for the all watchers.
-	wantUpdate12 := xdsresource.RouteConfigUpdateErrTuple{
-		Update: xdsresource.RouteConfigUpdate{
+	wantUpdate12 := routeConfigUpdateErrTuple{
+		update: xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{
 				{
 					Domains: []string{ldsName},
@@ -120,8 +151,8 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 			},
 		},
 	}
-	wantUpdate3 := xdsresource.RouteConfigUpdateErrTuple{
-		Update: xdsresource.RouteConfigUpdate{
+	wantUpdate3 := routeConfigUpdateErrTuple{
+		update: xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{
 				{
 					Domains: []string{ldsNameNewStyle},
@@ -136,13 +167,13 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 			},
 		},
 	}
-	if err := verifyRouteConfigUpdate(ctx, updateCh1, wantUpdate12); err != nil {
+	if err := verifyRouteConfigUpdate(ctx, rw.updateCh, wantUpdate12); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyRouteConfigUpdate(ctx, updateCh2, wantUpdate12); err != nil {
+	if err := verifyRouteConfigUpdate(ctx, rw.rcw1.updateCh, wantUpdate12); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyRouteConfigUpdate(ctx, updateCh3, wantUpdate3); err != nil {
+	if err := verifyRouteConfigUpdate(ctx, rw.rcw2.updateCh, wantUpdate3); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -152,8 +183,6 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 //
 // It also verifies the same behavior holds after a stream restart.
 func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
-	overrideFedEnvVar(t)
-
 	// Create a restartable listener which can close existing connections.
 	l, err := testutils.LocalTCPListener()
 	if err != nil {

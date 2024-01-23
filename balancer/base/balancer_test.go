@@ -19,7 +19,9 @@
 package base
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
@@ -38,11 +40,15 @@ func (c *testClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewS
 
 func (c *testClientConn) UpdateState(balancer.State) {}
 
-type testSubConn struct{}
+type testSubConn struct {
+	updateState func(balancer.SubConnState)
+}
 
 func (sc *testSubConn) UpdateAddresses(addresses []resolver.Address) {}
 
 func (sc *testSubConn) Connect() {}
+
+func (sc *testSubConn) Shutdown() {}
 
 func (sc *testSubConn) GetOrBuildProducer(balancer.ProducerBuilder) (balancer.Producer, func()) {
 	return nil, nil
@@ -59,7 +65,11 @@ func (p *testPickBuilder) Build(info PickerBuildInfo) balancer.Picker {
 }
 
 func TestBaseBalancerReserveAttributes(t *testing.T) {
-	var v = func(info PickerBuildInfo) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	validated := make(chan struct{}, 1)
+	v := func(info PickerBuildInfo) {
+		defer func() { validated <- struct{}{} }()
 		for _, sc := range info.ReadySCs {
 			if sc.Address.Addr == "1.1.1.1" {
 				if sc.Address.Attributes == nil {
@@ -78,8 +88,8 @@ func TestBaseBalancerReserveAttributes(t *testing.T) {
 	}
 	pickBuilder := &testPickBuilder{validate: v}
 	b := (&baseBuilder{pickerBuilder: pickBuilder}).Build(&testClientConn{
-		newSubConn: func(addrs []resolver.Address, _ balancer.NewSubConnOptions) (balancer.SubConn, error) {
-			return &testSubConn{}, nil
+		newSubConn: func(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+			return &testSubConn{updateState: opts.StateListener}, nil
 		},
 	}, balancer.BuildOptions{}).(*baseBalancer)
 
@@ -91,8 +101,18 @@ func TestBaseBalancerReserveAttributes(t *testing.T) {
 			},
 		},
 	})
+	select {
+	case <-validated:
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for UpdateClientConnState to call picker.Build")
+	}
 
 	for sc := range b.scStates {
-		b.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready, ConnectionError: nil})
+		sc.(*testSubConn).updateState(balancer.SubConnState{ConnectivityState: connectivity.Ready, ConnectionError: nil})
+		select {
+		case <-validated:
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for UpdateClientConnState to call picker.Build")
+		}
 	}
 }

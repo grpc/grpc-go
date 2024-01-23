@@ -508,7 +508,7 @@ type fakeCertProviderBuilder struct{}
 
 // ParseConfig expects input in JSON format containing a map from string to
 // string, with a single entry and mapKey being "configKey".
-func (b *fakeCertProviderBuilder) ParseConfig(cfg interface{}) (*certprovider.BuildableConfig, error) {
+func (b *fakeCertProviderBuilder) ParseConfig(cfg any) (*certprovider.BuildableConfig, error) {
 	config, ok := cfg.(json.RawMessage)
 	if !ok {
 		return nil, fmt.Errorf("fakeCertProviderBuilder received config of type %T, want []byte", config)
@@ -975,10 +975,6 @@ func TestNewConfigWithFederation(t *testing.T) {
 		},
 	}
 
-	oldFederationSupport := envconfig.XDSFederation
-	envconfig.XDSFederation = true
-	defer func() { envconfig.XDSFederation = oldFederationSupport }()
-
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testNewConfigWithFileNameEnv(t, test.name, test.wantErr, test.wantConfig)
@@ -1012,30 +1008,53 @@ func TestServerConfigMarshalAndUnmarshal(t *testing.T) {
 }
 
 func TestDefaultBundles(t *testing.T) {
-	if c := bootstrap.GetCredentials("google_default"); c == nil {
-		t.Errorf(`bootstrap.GetCredentials("google_default") credential is nil, want non-nil`)
-	}
+	tests := []string{"google_default", "insecure", "tls"}
 
-	if c := bootstrap.GetCredentials("insecure"); c == nil {
-		t.Errorf(`bootstrap.GetCredentials("insecure") credential is nil, want non-nil`)
+	for _, typename := range tests {
+		t.Run(typename, func(t *testing.T) {
+			if c := bootstrap.GetCredentials(typename); c == nil {
+				t.Errorf(`bootstrap.GetCredentials(%s) credential is nil, want non-nil`, typename)
+			}
+		})
 	}
 }
 
 func TestCredsBuilders(t *testing.T) {
-	b := &googleDefaultCredsBuilder{}
-	if _, err := b.Build(nil); err != nil {
-		t.Errorf("googleDefaultCredsBuilder.Build failed: %v", err)
-	}
-	if got, want := b.Name(), "google_default"; got != want {
-		t.Errorf("googleDefaultCredsBuilder.Name = %v, want %v", got, want)
-	}
-
-	i := &insecureCredsBuilder{}
-	if _, err := i.Build(nil); err != nil {
-		t.Errorf("insecureCredsBuilder.Build failed: %v", err)
+	tests := []struct {
+		typename string
+		builder  bootstrap.Credentials
+	}{
+		{"google_default", &googleDefaultCredsBuilder{}},
+		{"insecure", &insecureCredsBuilder{}},
+		{"tls", &tlsCredsBuilder{}},
 	}
 
-	if got, want := i.Name(), "insecure"; got != want {
-		t.Errorf("insecureCredsBuilder.Name = %v, want %v", got, want)
+	for _, test := range tests {
+		t.Run(test.typename, func(t *testing.T) {
+			if got, want := test.builder.Name(), test.typename; got != want {
+				t.Errorf("%T.Name = %v, want %v", test.builder, got, want)
+			}
+
+			_, stop, err := test.builder.Build(nil)
+			if err != nil {
+				t.Fatalf("%T.Build failed: %v", test.builder, err)
+			}
+			stop()
+		})
 	}
+}
+
+func TestTlsCredsBuilder(t *testing.T) {
+	tls := &tlsCredsBuilder{}
+	_, stop, err := tls.Build(json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("tls.Build() failed with error %s when expected to succeed", err)
+	}
+	stop()
+
+	if _, stop, err := tls.Build(json.RawMessage(`{"ca_certificate_file":"/ca_certificates.pem","refresh_interval": "asdf"}`)); err == nil {
+		t.Errorf("tls.Build() succeeded with an invalid refresh interval, when expected to fail")
+		stop()
+	}
+	// package internal/xdsclient/tlscreds has tests for config validity.
 }

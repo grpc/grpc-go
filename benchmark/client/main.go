@@ -136,7 +136,12 @@ func main() {
 func buildConnections(ctx context.Context) []*grpc.ClientConn {
 	ccs := make([]*grpc.ClientConn, *numConn)
 	for i := range ccs {
-		ccs[i] = benchmark.NewClientConnWithContext(ctx, "localhost:"+*port, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+		ccs[i] = benchmark.NewClientConnWithContext(ctx, "localhost:"+*port,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithBlock(),
+			grpc.WithWriteBufferSize(128*1024),
+			grpc.WithReadBufferSize(128*1024),
+		)
 	}
 	return ccs
 }

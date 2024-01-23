@@ -32,8 +32,7 @@ const (
 
 var (
 	// Compile time interface checks.
-	_ Type         = endpointsResourceType{}
-	_ ResourceData = &EndpointsResourceData{}
+	_ Type = endpointsResourceType{}
 
 	// Singleton instantiation of the resource type implementation.
 	endpointsType = endpointsResourceType{

@@ -65,8 +65,6 @@ var (
 // Returns two listeners used by the default and non-default management servers
 // respectively, and the xDS client and its close function.
 func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.Duration) (*testutils.ListenerWrapper, *testutils.ListenerWrapper, xdsclient.XDSClient, func()) {
-	overrideFedEnvVar(t)
-
 	// Create listener wrappers which notify on to a channel whenever a new
 	// connection is accepted. We use this to track the number of transports
 	// used by the xDS client.
@@ -143,14 +141,15 @@ func (s) TestAuthorityShare(t *testing.T) {
 	}
 
 	// Request the first resource. Verify that a new transport is created.
-	cdsCancel1 := client.WatchCluster(authorityTestResourceName11, func(u xdsresource.ClusterUpdate, err error) {})
+	watcher := noopClusterWatcher{}
+	cdsCancel1 := xdsresource.WatchCluster(client, authorityTestResourceName11, watcher)
 	defer cdsCancel1()
 	if _, err := lis.NewConnCh.Receive(ctx); err != nil {
 		t.Fatalf("Timed out when waiting for a new transport to be created to the management server: %v", err)
 	}
 
 	// Request the second resource. Verify that no new transport is created.
-	cdsCancel2 := client.WatchCluster(authorityTestResourceName12, func(u xdsresource.ClusterUpdate, err error) {})
+	cdsCancel2 := xdsresource.WatchCluster(client, authorityTestResourceName12, watcher)
 	defer cdsCancel2()
 	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
@@ -159,7 +158,7 @@ func (s) TestAuthorityShare(t *testing.T) {
 	}
 
 	// Request the third resource. Verify that no new transport is created.
-	cdsCancel3 := client.WatchCluster(authorityTestResourceName2, func(u xdsresource.ClusterUpdate, err error) {})
+	cdsCancel3 := xdsresource.WatchCluster(client, authorityTestResourceName2, watcher)
 	defer cdsCancel3()
 	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
@@ -179,7 +178,8 @@ func (s) TestAuthorityIdleTimeout(t *testing.T) {
 	defer close()
 
 	// Request the first resource. Verify that a new transport is created.
-	cdsCancel1 := client.WatchCluster(authorityTestResourceName11, func(u xdsresource.ClusterUpdate, err error) {})
+	watcher := noopClusterWatcher{}
+	cdsCancel1 := xdsresource.WatchCluster(client, authorityTestResourceName11, watcher)
 	val, err := lis.NewConnCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timed out when waiting for a new transport to be created to the management server: %v", err)
@@ -187,7 +187,7 @@ func (s) TestAuthorityIdleTimeout(t *testing.T) {
 	conn := val.(*testutils.ConnWrapper)
 
 	// Request the second resource. Verify that no new transport is created.
-	cdsCancel2 := client.WatchCluster(authorityTestResourceName12, func(u xdsresource.ClusterUpdate, err error) {})
+	cdsCancel2 := xdsresource.WatchCluster(client, authorityTestResourceName12, watcher)
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := lis.NewConnCh.Receive(sCtx); err != context.DeadlineExceeded {
@@ -225,7 +225,8 @@ func (s) TestAuthorityClientClose(t *testing.T) {
 
 	// Request the first resource. Verify that a new transport is created to the
 	// default management server.
-	cdsCancel1 := client.WatchCluster(authorityTestResourceName11, func(u xdsresource.ClusterUpdate, err error) {})
+	watcher := noopClusterWatcher{}
+	cdsCancel1 := xdsresource.WatchCluster(client, authorityTestResourceName11, watcher)
 	val, err := lisDefault.NewConnCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timed out when waiting for a new transport to be created to the management server: %v", err)
@@ -235,7 +236,7 @@ func (s) TestAuthorityClientClose(t *testing.T) {
 	// Request another resource which is served by the non-default authority.
 	// Verify that a new transport is created to the non-default management
 	// server.
-	client.WatchCluster(authorityTestResourceName3, func(u xdsresource.ClusterUpdate, err error) {})
+	xdsresource.WatchCluster(client, authorityTestResourceName3, watcher)
 	val, err = lisNonDefault.NewConnCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timed out when waiting for a new transport to be created to the management server: %v", err)
@@ -272,7 +273,8 @@ func (s) TestAuthorityRevive(t *testing.T) {
 	defer close()
 
 	// Request the first resource. Verify that a new transport is created.
-	cdsCancel1 := client.WatchCluster(authorityTestResourceName11, func(u xdsresource.ClusterUpdate, err error) {})
+	watcher := noopClusterWatcher{}
+	cdsCancel1 := xdsresource.WatchCluster(client, authorityTestResourceName11, watcher)
 	val, err := lis.NewConnCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timed out when waiting for a new transport to be created to the management server: %v", err)
@@ -284,7 +286,7 @@ func (s) TestAuthorityRevive(t *testing.T) {
 
 	// Request the second resource. Verify that no new transport is created.
 	// This should move the authority out of the idle cache.
-	cdsCancel2 := client.WatchCluster(authorityTestResourceName12, func(u xdsresource.ClusterUpdate, err error) {})
+	cdsCancel2 := xdsresource.WatchCluster(client, authorityTestResourceName12, watcher)
 	defer cdsCancel2()
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()

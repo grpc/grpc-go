@@ -227,7 +227,7 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 	// Configure the management server with appropriate resources.
 	apiListener := &v3listenerpb.ApiListener{
 		ApiListener: func() *anypb.Any {
-			return testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+			return testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 				RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
 					Rds: &v3httppb.Rds{
 						ConfigSource: &v3corepb.ConfigSource{

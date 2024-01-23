@@ -109,7 +109,7 @@ func (s) TestLookupFailure(t *testing.T) {
 // respond within the configured rpc timeout.
 func (s) TestLookupDeadlineExceeded(t *testing.T) {
 	// A unary interceptor which returns a status error with DeadlineExceeded.
-	interceptor := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	interceptor := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 		return nil, status.Error(codes.DeadlineExceeded, "deadline exceeded")
 	}
 
@@ -191,7 +191,7 @@ func (f *testPerRPCCredentials) RequireTransportSecurity() bool {
 
 // Unary server interceptor which validates if the RPC contains call credentials
 // which match `perRPCCredsData
-func callCredsValidatingServerInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+func callCredsValidatingServerInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.PermissionDenied, "didn't find metadata in context")

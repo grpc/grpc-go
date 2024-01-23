@@ -1,0 +1,14 @@
+[ ca ]
+default_ca = my_ca
+
+[ my_ca ]
+default_md = sha256
+database = provider_index.txt
+crlnumber = provider_crlnumber.txt
+default_crl_days = 30
+default_crl_hours = 1
+crl_extensions = crl_ext
+
+[crl_ext]
+# Authority Key Identifier extension
+authorityKeyIdentifier=keyid:always,issuer:always
