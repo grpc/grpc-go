@@ -135,6 +135,72 @@ func marshalAny(m proto.Message) *anypb.Any {
 	return a
 }
 
+// filterChainWontMatch returns a filter chain that won't match if running the
+// test locally.
+func filterChainWontMatch(routeName string, addressPrefix string, srcPorts []uint32) *v3listenerpb.FilterChain {
+	hcm := &v3httppb.HttpConnectionManager{
+		RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+			Rds: &v3httppb.Rds{
+				ConfigSource: &v3corepb.ConfigSource{
+					ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+				},
+				RouteConfigName: routeName,
+			},
+		},
+		HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
+	}
+	return &v3listenerpb.FilterChain{
+		Name: routeName + "-wont-match",
+		FilterChainMatch: &v3listenerpb.FilterChainMatch{
+			PrefixRanges: []*v3corepb.CidrRange{
+				{
+					AddressPrefix: addressPrefix,
+					PrefixLen: &wrapperspb.UInt32Value{
+						Value: uint32(0),
+					},
+				},
+			},
+			SourceType:  v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+			SourcePorts: srcPorts,
+			SourcePrefixRanges: []*v3corepb.CidrRange{
+				{
+					AddressPrefix: addressPrefix,
+					PrefixLen: &wrapperspb.UInt32Value{
+						Value: uint32(0),
+					},
+				},
+			},
+		},
+		Filters: []*v3listenerpb.Filter{
+			{
+				Name:       "filter-1",
+				ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: marshalAny(hcm)},
+			},
+		},
+	}
+}
+
+// ListenerResourceThreeRouteResources returns a listener resource that points
+// to three route configurations. Only the filter chain that points to the first
+// route config can be matched to.
+func ListenerResourceThreeRouteResources(host string, port uint32, secLevel SecurityLevel, routeName string) *v3listenerpb.Listener {
+	lis := defaultServerListenerCommon(host, port, secLevel, routeName, false)
+	lis.FilterChains = append(lis.FilterChains, filterChainWontMatch("routeName2", "1.1.1.1", []uint32{1}))
+	lis.FilterChains = append(lis.FilterChains, filterChainWontMatch("routeName3", "2.2.2.2", []uint32{2}))
+	return lis
+}
+
+// ListenerResourceFallbackToDefault returns a listener resource that contains a
+// filter chain that will never get chosen to process traffic and a default
+// filter chain. The default filter chain points to routeName2.
+func ListenerResourceFallbackToDefault(host string, port uint32, secLevel SecurityLevel) *v3listenerpb.Listener {
+	lis := defaultServerListenerCommon(host, port, secLevel, "", false)
+	lis.FilterChains = nil
+	lis.FilterChains = append(lis.FilterChains, filterChainWontMatch("routeName", "1.1.1.1", []uint32{1}))
+	lis.DefaultFilterChain = filterChainWontMatch("routeName2", "2.2.2.2", []uint32{2})
+	return lis
+}
+
 // DefaultServerListener returns a basic xds Listener resource to be used on the
 // server side. The returned Listener resource contains an inline route
 // configuration with the name of routeName.
@@ -288,13 +354,6 @@ func defaultServerListenerCommon(host string, port uint32, secLevel SecurityLeve
 	}
 }
 
-// DefaultServerListenerWithRouteConfigName returns a basic xds Listener
-// resource to be used on the server side. The returned Listener resource
-// contains a RouteCongiguration resource name that needs to be resolved.
-func DefaultServerListenerWithRouteConfigName(host string, port uint32, secLevel SecurityLevel, routeName string) *v3listenerpb.Listener {
-	return defaultServerListenerCommon(host, port, secLevel, routeName, false)
-}
-
 // HTTPFilter constructs an xds HttpFilter with the provided name and config.
 func HTTPFilter(name string, config proto.Message) *v3httppb.HttpFilter {
 	return &v3httppb.HttpFilter{
@@ -354,7 +413,6 @@ type RouteConfigOptions struct {
 	ListenerName string
 	// ClusterSpecifierType determines the cluster specifier type.
 	ClusterSpecifierType RouteConfigClusterSpecifierType
-
 	// ClusterName is name of the cluster resource used when the cluster
 	// specifier type is set to RouteConfigClusterSpecifierTypeCluster.
 	//
@@ -719,4 +777,66 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 		}
 	}
 	return cla
+}
+
+// DefaultServerListenerWithRouteConfigName returns a basic xds Listener
+// resource to be used on the server side. The returned Listener resource
+// contains a RouteCongiguration resource name that needs to be resolved.
+func DefaultServerListenerWithRouteConfigName(host string, port uint32, secLevel SecurityLevel, routeName string) *v3listenerpb.Listener {
+	return defaultServerListenerCommon(host, port, secLevel, routeName, false)
+}
+
+// RouteConfigNoRouteMatch returns an xDS RouteConfig resource which a route
+// with no route match. This will be NACKed by the xDS Client.
+func RouteConfigNoRouteMatch(routeName string) *v3routepb.RouteConfiguration {
+	return &v3routepb.RouteConfiguration{
+		Name: routeName,
+		VirtualHosts: []*v3routepb.VirtualHost{{
+			// This "*" string matches on any incoming authority. This is to ensure any
+			// incoming RPC matches to Route_NonForwardingAction and will proceed as
+			// normal.
+			Domains: []string{"*"},
+			Routes: []*v3routepb.Route{{
+				Action: &v3routepb.Route_NonForwardingAction{},
+			}}}}}
+}
+
+// RouteConfigNonForwardingAction returns an xDS RouteConfig resource which
+// specifies to route to a route specifying non forwarding action. This is
+// intended to be used on the server side for RDS requests, and corresponds to
+// the inline route configuration in DefaultServerListener.
+func RouteConfigNonForwardingAction(routeName string) *v3routepb.RouteConfiguration {
+	return &v3routepb.RouteConfiguration{
+		Name: routeName,
+		VirtualHosts: []*v3routepb.VirtualHost{{
+			// This "*" string matches on any incoming authority. This is to ensure any
+			// incoming RPC matches to Route_NonForwardingAction and will proceed as
+			// normal.
+			Domains: []string{"*"},
+			Routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+				},
+				Action: &v3routepb.Route_NonForwardingAction{},
+			}}}}}
+}
+
+// RouteConfigFilterAction returns an xDS RouteConfig resource which specifies
+// to route to a route specifying route filter action. Since this is not type
+// non forwarding action, this should fail requests that match to this server
+// side.
+func RouteConfigFilterAction(routeName string) *v3routepb.RouteConfiguration {
+	return &v3routepb.RouteConfiguration{
+		Name: routeName,
+		VirtualHosts: []*v3routepb.VirtualHost{{
+			// This "*" string matches on any incoming authority. This is to
+			// ensure any incoming RPC matches to Route_Route and will fail with
+			// UNAVAILABLE.
+			Domains: []string{"*"},
+			Routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+				},
+				Action: &v3routepb.Route_FilterAction{},
+			}}}}}
 }
