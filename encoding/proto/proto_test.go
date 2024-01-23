@@ -25,11 +25,11 @@ import (
 
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/test/codec_perf"
+	pb "google.golang.org/grpc/test/codec_perf"
 )
 
 func marshalAndUnmarshal(t *testing.T, codec encoding.Codec, expectedBody []byte) {
-	p := &codec_perf.Buffer{}
+	p := &pb.Buffer{}
 	p.Body = expectedBody
 
 	marshalledBytes, err := codec.Marshal(p)
@@ -99,8 +99,8 @@ func (s) TestStaggeredMarshalAndUnmarshalUsingSamePool(t *testing.T) {
 	expectedBody1 := []byte{1, 2, 3}
 	expectedBody2 := []byte{4, 5, 6}
 
-	proto1 := codec_perf.Buffer{Body: expectedBody1}
-	proto2 := codec_perf.Buffer{Body: expectedBody2}
+	proto1 := pb.Buffer{Body: expectedBody1}
+	proto2 := pb.Buffer{Body: expectedBody2}
 
 	var m1, m2 []byte
 	var err error
