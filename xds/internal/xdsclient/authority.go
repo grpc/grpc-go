@@ -83,6 +83,7 @@ type authority struct {
 	// actual state of the resource.
 	resourcesMu sync.Mutex
 	resources   map[xdsresource.Type]map[string]*resourceState
+	closed      bool
 }
 
 // authorityArgs is a convenience struct to wrap arguments required to create a
@@ -443,6 +444,10 @@ func (a *authority) unrefLocked() int {
 
 func (a *authority) close() {
 	a.transport.Close()
+
+	a.resourcesMu.Lock()
+	a.closed = true
+	a.resourcesMu.Unlock()
 }
 
 func (a *authority) watchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) func() {
@@ -507,9 +512,13 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 }
 
 func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName string, state *resourceState) {
-	a.logger.Warningf("Watch for resource %q of type %s timed out", resourceName, rType.TypeName())
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
+
+	if a.closed {
+		return
+	}
+	a.logger.Warningf("Watch for resource %q of type %s timed out", resourceName, rType.TypeName())
 
 	switch state.wState {
 	case watchStateRequested:
@@ -525,6 +534,32 @@ func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName 
 	state.wState = watchStateTimeout
 	// With the watch timer firing, it is safe to assume that the resource does
 	// not exist on the management server.
+	state.cache = nil
+	state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
+	for watcher := range state.watchers {
+		watcher := watcher
+		a.serializer.Schedule(func(context.Context) { watcher.OnResourceDoesNotExist() })
+	}
+}
+
+func (a *authority) triggerResourceNotFoundForTesting(rType xdsresource.Type, resourceName string) {
+	a.resourcesMu.Lock()
+	defer a.resourcesMu.Unlock()
+
+	if a.closed {
+		return
+	}
+	resourceStates := a.resources[rType]
+	state, ok := resourceStates[resourceName]
+	if !ok {
+		return
+	}
+	// if watchStateTimeout already triggered resource not found above from
+	// normal watch expiry.
+	if state.wState == watchStateCanceled || state.wState == watchStateTimeout {
+		return
+	}
+	state.wState = watchStateTimeout
 	state.cache = nil
 	state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
 	for watcher := range state.watchers {

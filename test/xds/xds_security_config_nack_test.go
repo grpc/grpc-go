@@ -53,7 +53,7 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 			securityConfig: &v3corepb.TransportSocket{
 				Name: "envoy.transport_sockets.tls",
 				ConfigType: &v3corepb.TransportSocket_TypedConfig{
-					TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+					TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 						CommonTlsContext: &v3tlspb.CommonTlsContext{
 							TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 								InstanceName: missingIdentityProviderInstance,
@@ -76,7 +76,7 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 			securityConfig: &v3corepb.TransportSocket{
 				Name: "envoy.transport_sockets.tls",
 				ConfigType: &v3corepb.TransportSocket_TypedConfig{
-					TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+					TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 						CommonTlsContext: &v3tlspb.CommonTlsContext{
 							TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 								InstanceName: missingIdentityProviderInstance,
@@ -99,7 +99,7 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 			securityConfig: &v3corepb.TransportSocket{
 				Name: "envoy.transport_sockets.tls",
 				ConfigType: &v3corepb.TransportSocket_TypedConfig{
-					TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+					TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 						CommonTlsContext: &v3tlspb.CommonTlsContext{
 							TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 								InstanceName: e2e.ServerSideCertProviderInstance,
@@ -122,7 +122,7 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 			securityConfig: &v3corepb.TransportSocket{
 				Name: "envoy.transport_sockets.tls",
 				ConfigType: &v3corepb.TransportSocket_TypedConfig{
-					TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+					TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
 						CommonTlsContext: &v3tlspb.CommonTlsContext{
 							TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 								InstanceName: e2e.ServerSideCertProviderInstance,
@@ -169,7 +169,7 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 			})
 
 			// Create an inbound xDS listener resource for the server side.
-			inboundLis := e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS)
+			inboundLis := e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS, "routeName")
 			for _, fc := range inboundLis.GetFilterChains() {
 				fc.TransportSocket = test.securityConfig
 			}
@@ -227,7 +227,7 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 			securityConfig: &v3corepb.TransportSocket{
 				Name: "envoy.transport_sockets.tls",
 				ConfigType: &v3corepb.TransportSocket_TypedConfig{
-					TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+					TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 						CommonTlsContext: &v3tlspb.CommonTlsContext{
 							TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 								InstanceName: missingIdentityProviderInstance,
@@ -250,7 +250,7 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 			securityConfig: &v3corepb.TransportSocket{
 				Name: "envoy.transport_sockets.tls",
 				ConfigType: &v3corepb.TransportSocket_TypedConfig{
-					TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+					TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 						CommonTlsContext: &v3tlspb.CommonTlsContext{
 							TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 								InstanceName: missingIdentityProviderInstance,
@@ -273,7 +273,7 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 			securityConfig: &v3corepb.TransportSocket{
 				Name: "envoy.transport_sockets.tls",
 				ConfigType: &v3corepb.TransportSocket_TypedConfig{
-					TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+					TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 						CommonTlsContext: &v3tlspb.CommonTlsContext{
 							TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 								InstanceName: e2e.ClientSideCertProviderInstance,
@@ -296,7 +296,7 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 			securityConfig: &v3corepb.TransportSocket{
 				Name: "envoy.transport_sockets.tls",
 				ConfigType: &v3corepb.TransportSocket_TypedConfig{
-					TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+					TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 						CommonTlsContext: &v3tlspb.CommonTlsContext{
 							TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 								InstanceName: e2e.ClientSideCertProviderInstance,

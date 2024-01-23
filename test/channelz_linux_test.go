@@ -16,10 +16,6 @@
  *
  */
 
-// The test in this file should be run in an environment that has go1.10 or later,
-// as the function SyscallConn() (required to get socket option) was
-// introduced to net.TCPListener in go1.10.
-
 package test
 
 import (
@@ -39,8 +35,6 @@ func (s) TestCZSocketMetricsSocketOption(t *testing.T) {
 }
 
 func testCZSocketMetricsSocketOption(t *testing.T, e env) {
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()

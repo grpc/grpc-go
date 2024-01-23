@@ -44,11 +44,11 @@ type StaticInterceptor struct {
 // NewStatic returns a new StaticInterceptor from a static authorization policy
 // JSON string.
 func NewStatic(authzPolicy string) (*StaticInterceptor, error) {
-	rbacs, err := translatePolicy(authzPolicy)
+	rbacs, policyName, err := translatePolicy(authzPolicy)
 	if err != nil {
 		return nil, err
 	}
-	chainEngine, err := rbac.NewChainEngine(rbacs)
+	chainEngine, err := rbac.NewChainEngine(rbacs, policyName)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func NewStatic(authzPolicy string) (*StaticInterceptor, error) {
 // UnaryInterceptor intercepts incoming Unary RPC requests.
 // Only authorized requests are allowed to pass. Otherwise, an unauthorized
 // error is returned to the client.
-func (i *StaticInterceptor) UnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func (i *StaticInterceptor) UnaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	err := i.engines.IsAuthorized(ctx)
 	if err != nil {
 		if status.Code(err) == codes.PermissionDenied {
@@ -75,7 +75,7 @@ func (i *StaticInterceptor) UnaryInterceptor(ctx context.Context, req interface{
 // StreamInterceptor intercepts incoming Stream RPC requests.
 // Only authorized requests are allowed to pass. Otherwise, an unauthorized
 // error is returned to the client.
-func (i *StaticInterceptor) StreamInterceptor(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func (i *StaticInterceptor) StreamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	err := i.engines.IsAuthorized(ss.Context())
 	if err != nil {
 		if status.Code(err) == codes.PermissionDenied {
@@ -166,13 +166,13 @@ func (i *FileWatcherInterceptor) Close() {
 // UnaryInterceptor intercepts incoming Unary RPC requests.
 // Only authorized requests are allowed to pass. Otherwise, an unauthorized
 // error is returned to the client.
-func (i *FileWatcherInterceptor) UnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func (i *FileWatcherInterceptor) UnaryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	return ((*StaticInterceptor)(atomic.LoadPointer(&i.internalInterceptor))).UnaryInterceptor(ctx, req, info, handler)
 }
 
 // StreamInterceptor intercepts incoming Stream RPC requests.
 // Only authorized requests are allowed to pass. Otherwise, an unauthorized
 // error is returned to the client.
-func (i *FileWatcherInterceptor) StreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func (i *FileWatcherInterceptor) StreamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	return ((*StaticInterceptor)(atomic.LoadPointer(&i.internalInterceptor))).StreamInterceptor(srv, ss, info, handler)
 }

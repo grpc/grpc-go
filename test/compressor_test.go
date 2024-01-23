@@ -27,12 +27,10 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -109,13 +107,13 @@ func testCompressOK(t *testing.T, e env) {
 		ResponseSize: respSize,
 		Payload:      payload,
 	}
-	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("something", "something"))
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("something", "something"))
 	if _, err := tc.UnaryCall(ctx, req); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	// Streaming RPC
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -168,13 +166,13 @@ func testIdentityEncoding(t *testing.T, e env) {
 		ResponseSize: 10,
 		Payload:      payload,
 	}
-	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("something", "something"))
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("something", "something"))
 	if _, err := tc.UnaryCall(ctx, req); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	// Streaming RPC
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx, grpc.UseCompressor("identity"))
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -292,6 +290,7 @@ func (s) TestSetSendCompressorSuccess(t *testing.T) {
 	for _, tt := range []struct {
 		name                string
 		desc                string
+		payload             *testpb.Payload
 		dialOpts            []grpc.DialOption
 		resCompressor       string
 		wantCompressInvokes int32
@@ -299,12 +298,21 @@ func (s) TestSetSendCompressorSuccess(t *testing.T) {
 		{
 			name:                "identity_request_and_gzip_response",
 			desc:                "request is uncompressed and response is gzip compressed",
+			payload:             &testpb.Payload{Body: []byte("payload")},
 			resCompressor:       "gzip",
 			wantCompressInvokes: 1,
 		},
 		{
+			name:                "identity_request_and_empty_response",
+			desc:                "request is uncompressed and response is gzip compressed",
+			payload:             nil,
+			resCompressor:       "gzip",
+			wantCompressInvokes: 0,
+		},
+		{
 			name:          "gzip_request_and_identity_response",
 			desc:          "request is gzip compressed and response is uncompressed with identity",
+			payload:       &testpb.Payload{Body: []byte("payload")},
 			resCompressor: "identity",
 			dialOpts: []grpc.DialOption{
 				// Use WithCompressor instead of UseCompressor to avoid counting
@@ -316,24 +324,26 @@ func (s) TestSetSendCompressorSuccess(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Run("unary", func(t *testing.T) {
-				testUnarySetSendCompressorSuccess(t, tt.resCompressor, tt.wantCompressInvokes, tt.dialOpts)
+				testUnarySetSendCompressorSuccess(t, tt.payload, tt.resCompressor, tt.wantCompressInvokes, tt.dialOpts)
 			})
 
 			t.Run("stream", func(t *testing.T) {
-				testStreamSetSendCompressorSuccess(t, tt.resCompressor, tt.wantCompressInvokes, tt.dialOpts)
+				testStreamSetSendCompressorSuccess(t, tt.payload, tt.resCompressor, tt.wantCompressInvokes, tt.dialOpts)
 			})
 		})
 	}
 }
 
-func testUnarySetSendCompressorSuccess(t *testing.T, resCompressor string, wantCompressInvokes int32, dialOpts []grpc.DialOption) {
+func testUnarySetSendCompressorSuccess(t *testing.T, payload *testpb.Payload, resCompressor string, wantCompressInvokes int32, dialOpts []grpc.DialOption) {
 	wc := setupGzipWrapCompressor(t)
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			if err := grpc.SetSendCompressor(ctx, resCompressor); err != nil {
 				return nil, err
 			}
-			return &testpb.Empty{}, nil
+			return &testpb.SimpleResponse{
+				Payload: payload,
+			}, nil
 		},
 	}
 	if err := ss.Start(nil, dialOpts...); err != nil {
@@ -344,7 +354,7 @@ func testUnarySetSendCompressorSuccess(t *testing.T, resCompressor string, wantC
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("Unexpected unary call error, got: %v, want: nil", err)
 	}
 
@@ -354,7 +364,7 @@ func testUnarySetSendCompressorSuccess(t *testing.T, resCompressor string, wantC
 	}
 }
 
-func testStreamSetSendCompressorSuccess(t *testing.T, resCompressor string, wantCompressInvokes int32, dialOpts []grpc.DialOption) {
+func testStreamSetSendCompressorSuccess(t *testing.T, payload *testpb.Payload, resCompressor string, wantCompressInvokes int32, dialOpts []grpc.DialOption) {
 	wc := setupGzipWrapCompressor(t)
 	ss := &stubserver.StubServer{
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -366,7 +376,9 @@ func testStreamSetSendCompressorSuccess(t *testing.T, resCompressor string, want
 				return err
 			}
 
-			return stream.Send(&testpb.StreamingOutputCallResponse{})
+			return stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: payload,
+			})
 		},
 	}
 	if err := ss.Start(nil, dialOpts...); err != nil {
@@ -399,23 +411,6 @@ func testStreamSetSendCompressorSuccess(t *testing.T, resCompressor string, want
 func (s) TestUnregisteredSetSendCompressorFailure(t *testing.T) {
 	resCompressor := "snappy2"
 	wantErr := status.Error(codes.Unknown, "unable to set send compressor: compressor not registered \"snappy2\"")
-
-	t.Run("unary", func(t *testing.T) {
-		testUnarySetSendCompressorFailure(t, resCompressor, wantErr)
-	})
-
-	t.Run("stream", func(t *testing.T) {
-		testStreamSetSendCompressorFailure(t, resCompressor, wantErr)
-	})
-}
-
-func (s) TestUnadvertisedSetSendCompressorFailure(t *testing.T) {
-	// Disable client compressor advertisement.
-	defer func(b bool) { envconfig.AdvertiseCompressors = b }(envconfig.AdvertiseCompressors)
-	envconfig.AdvertiseCompressors = false
-
-	resCompressor := "gzip"
-	wantErr := status.Error(codes.Unknown, "unable to set send compressor: client does not support compressor \"gzip\"")
 
 	t.Run("unary", func(t *testing.T) {
 		testUnarySetSendCompressorFailure(t, resCompressor, wantErr)
@@ -543,6 +538,9 @@ func (s) TestStreamSetSendCompressorAfterHeaderSendFailure(t *testing.T) {
 }
 
 func (s) TestClientSupportedCompressors(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	for _, tt := range []struct {
 		desc string
 		ctx  context.Context
@@ -550,12 +548,12 @@ func (s) TestClientSupportedCompressors(t *testing.T) {
 	}{
 		{
 			desc: "No additional grpc-accept-encoding header",
-			ctx:  context.Background(),
+			ctx:  ctx,
 			want: []string{"gzip"},
 		},
 		{
 			desc: "With additional grpc-accept-encoding header",
-			ctx: metadata.AppendToOutgoingContext(context.Background(),
+			ctx: metadata.AppendToOutgoingContext(ctx,
 				"grpc-accept-encoding", "test-compressor-1",
 				"grpc-accept-encoding", "test-compressor-2",
 			),
@@ -563,7 +561,7 @@ func (s) TestClientSupportedCompressors(t *testing.T) {
 		},
 		{
 			desc: "With additional empty grpc-accept-encoding header",
-			ctx: metadata.AppendToOutgoingContext(context.Background(),
+			ctx: metadata.AppendToOutgoingContext(ctx,
 				"grpc-accept-encoding", "",
 			),
 			want: []string{"gzip"},
@@ -589,10 +587,7 @@ func (s) TestClientSupportedCompressors(t *testing.T) {
 			}
 			defer ss.Stop()
 
-			ctx, cancel := context.WithTimeout(tt.ctx, defaultTestTimeout)
-			defer cancel()
-
-			_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
+			_, err := ss.Client.EmptyCall(tt.ctx, &testpb.Empty{})
 			if err != nil {
 				t.Fatalf("Unexpected unary call error, got: %v, want: nil", err)
 			}
@@ -628,13 +623,13 @@ func testCompressorRegister(t *testing.T, e env) {
 		ResponseSize: respSize,
 		Payload:      payload,
 	}
-	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("something", "something"))
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("something", "something"))
 	if _, err := tc.UnaryCall(ctx, req); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	// Streaming RPC
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -693,7 +688,7 @@ func (s) TestGzipBadChecksum(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	p, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1024))

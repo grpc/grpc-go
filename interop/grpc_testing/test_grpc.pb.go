@@ -898,8 +898,181 @@ var LoadBalancerStatsService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	XdsUpdateHealthService_SetServing_FullMethodName    = "/grpc.testing.XdsUpdateHealthService/SetServing"
-	XdsUpdateHealthService_SetNotServing_FullMethodName = "/grpc.testing.XdsUpdateHealthService/SetNotServing"
+	HookService_Hook_FullMethodName              = "/grpc.testing.HookService/Hook"
+	HookService_SetReturnStatus_FullMethodName   = "/grpc.testing.HookService/SetReturnStatus"
+	HookService_ClearReturnStatus_FullMethodName = "/grpc.testing.HookService/ClearReturnStatus"
+)
+
+// HookServiceClient is the client API for HookService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type HookServiceClient interface {
+	// Sends a request that will "hang" until the return status is set by a call
+	// to a SetReturnStatus
+	Hook(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
+	// Sets a return status for pending and upcoming calls to Hook
+	SetReturnStatus(ctx context.Context, in *SetReturnStatusRequest, opts ...grpc.CallOption) (*Empty, error)
+	// Clears the return status. Incoming calls to Hook will "hang"
+	ClearReturnStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
+}
+
+type hookServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewHookServiceClient(cc grpc.ClientConnInterface) HookServiceClient {
+	return &hookServiceClient{cc}
+}
+
+func (c *hookServiceClient) Hook(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, HookService_Hook_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hookServiceClient) SetReturnStatus(ctx context.Context, in *SetReturnStatusRequest, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, HookService_SetReturnStatus_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hookServiceClient) ClearReturnStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, HookService_ClearReturnStatus_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// HookServiceServer is the server API for HookService service.
+// All implementations must embed UnimplementedHookServiceServer
+// for forward compatibility
+type HookServiceServer interface {
+	// Sends a request that will "hang" until the return status is set by a call
+	// to a SetReturnStatus
+	Hook(context.Context, *Empty) (*Empty, error)
+	// Sets a return status for pending and upcoming calls to Hook
+	SetReturnStatus(context.Context, *SetReturnStatusRequest) (*Empty, error)
+	// Clears the return status. Incoming calls to Hook will "hang"
+	ClearReturnStatus(context.Context, *Empty) (*Empty, error)
+	mustEmbedUnimplementedHookServiceServer()
+}
+
+// UnimplementedHookServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedHookServiceServer struct {
+}
+
+func (UnimplementedHookServiceServer) Hook(context.Context, *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Hook not implemented")
+}
+func (UnimplementedHookServiceServer) SetReturnStatus(context.Context, *SetReturnStatusRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetReturnStatus not implemented")
+}
+func (UnimplementedHookServiceServer) ClearReturnStatus(context.Context, *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ClearReturnStatus not implemented")
+}
+func (UnimplementedHookServiceServer) mustEmbedUnimplementedHookServiceServer() {}
+
+// UnsafeHookServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to HookServiceServer will
+// result in compilation errors.
+type UnsafeHookServiceServer interface {
+	mustEmbedUnimplementedHookServiceServer()
+}
+
+func RegisterHookServiceServer(s grpc.ServiceRegistrar, srv HookServiceServer) {
+	s.RegisterService(&HookService_ServiceDesc, srv)
+}
+
+func _HookService_Hook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HookServiceServer).Hook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HookService_Hook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HookServiceServer).Hook(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HookService_SetReturnStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetReturnStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HookServiceServer).SetReturnStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HookService_SetReturnStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HookServiceServer).SetReturnStatus(ctx, req.(*SetReturnStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HookService_ClearReturnStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HookServiceServer).ClearReturnStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HookService_ClearReturnStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HookServiceServer).ClearReturnStatus(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// HookService_ServiceDesc is the grpc.ServiceDesc for HookService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var HookService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "grpc.testing.HookService",
+	HandlerType: (*HookServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Hook",
+			Handler:    _HookService_Hook_Handler,
+		},
+		{
+			MethodName: "SetReturnStatus",
+			Handler:    _HookService_SetReturnStatus_Handler,
+		},
+		{
+			MethodName: "ClearReturnStatus",
+			Handler:    _HookService_ClearReturnStatus_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "grpc/testing/test.proto",
+}
+
+const (
+	XdsUpdateHealthService_SetServing_FullMethodName      = "/grpc.testing.XdsUpdateHealthService/SetServing"
+	XdsUpdateHealthService_SetNotServing_FullMethodName   = "/grpc.testing.XdsUpdateHealthService/SetNotServing"
+	XdsUpdateHealthService_SendHookRequest_FullMethodName = "/grpc.testing.XdsUpdateHealthService/SendHookRequest"
 )
 
 // XdsUpdateHealthServiceClient is the client API for XdsUpdateHealthService service.
@@ -908,6 +1081,7 @@ const (
 type XdsUpdateHealthServiceClient interface {
 	SetServing(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
 	SetNotServing(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
+	SendHookRequest(ctx context.Context, in *HookRequest, opts ...grpc.CallOption) (*HookResponse, error)
 }
 
 type xdsUpdateHealthServiceClient struct {
@@ -936,12 +1110,22 @@ func (c *xdsUpdateHealthServiceClient) SetNotServing(ctx context.Context, in *Em
 	return out, nil
 }
 
+func (c *xdsUpdateHealthServiceClient) SendHookRequest(ctx context.Context, in *HookRequest, opts ...grpc.CallOption) (*HookResponse, error) {
+	out := new(HookResponse)
+	err := c.cc.Invoke(ctx, XdsUpdateHealthService_SendHookRequest_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // XdsUpdateHealthServiceServer is the server API for XdsUpdateHealthService service.
 // All implementations must embed UnimplementedXdsUpdateHealthServiceServer
 // for forward compatibility
 type XdsUpdateHealthServiceServer interface {
 	SetServing(context.Context, *Empty) (*Empty, error)
 	SetNotServing(context.Context, *Empty) (*Empty, error)
+	SendHookRequest(context.Context, *HookRequest) (*HookResponse, error)
 	mustEmbedUnimplementedXdsUpdateHealthServiceServer()
 }
 
@@ -954,6 +1138,9 @@ func (UnimplementedXdsUpdateHealthServiceServer) SetServing(context.Context, *Em
 }
 func (UnimplementedXdsUpdateHealthServiceServer) SetNotServing(context.Context, *Empty) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetNotServing not implemented")
+}
+func (UnimplementedXdsUpdateHealthServiceServer) SendHookRequest(context.Context, *HookRequest) (*HookResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendHookRequest not implemented")
 }
 func (UnimplementedXdsUpdateHealthServiceServer) mustEmbedUnimplementedXdsUpdateHealthServiceServer() {
 }
@@ -1005,6 +1192,24 @@ func _XdsUpdateHealthService_SetNotServing_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _XdsUpdateHealthService_SendHookRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HookRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(XdsUpdateHealthServiceServer).SendHookRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: XdsUpdateHealthService_SendHookRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(XdsUpdateHealthServiceServer).SendHookRequest(ctx, req.(*HookRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // XdsUpdateHealthService_ServiceDesc is the grpc.ServiceDesc for XdsUpdateHealthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1019,6 +1224,10 @@ var XdsUpdateHealthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetNotServing",
 			Handler:    _XdsUpdateHealthService_SetNotServing_Handler,
+		},
+		{
+			MethodName: "SendHookRequest",
+			Handler:    _XdsUpdateHealthService_SendHookRequest_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

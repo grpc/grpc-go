@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancerload"
 	"google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/channelz"
@@ -47,6 +48,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
+
 // StreamHandler defines the handler called by gRPC server to complete the
 // execution of a streaming RPC.
 //
@@ -54,7 +57,7 @@ import (
 // status package, or be one of the context errors. Otherwise, gRPC will use
 // codes.Unknown as the status code and err.Error() as the status message of the
 // RPC.
-type StreamHandler func(srv interface{}, stream ServerStream) error
+type StreamHandler func(srv any, stream ServerStream) error
 
 // StreamDesc represents a streaming RPC service's method specification.  Used
 // on the server when registering services and on the client when initiating
@@ -79,9 +82,9 @@ type Stream interface {
 	// Deprecated: See ClientStream and ServerStream documentation instead.
 	Context() context.Context
 	// Deprecated: See ClientStream and ServerStream documentation instead.
-	SendMsg(m interface{}) error
+	SendMsg(m any) error
 	// Deprecated: See ClientStream and ServerStream documentation instead.
-	RecvMsg(m interface{}) error
+	RecvMsg(m any) error
 }
 
 // ClientStream defines the client-side behavior of a streaming RPC.
@@ -90,7 +93,9 @@ type Stream interface {
 // status package.
 type ClientStream interface {
 	// Header returns the header metadata received from the server if there
-	// is any. It blocks if the metadata is not ready to read.
+	// is any. It blocks if the metadata is not ready to read.  If the metadata
+	// is nil and the error is also nil, then the stream was terminated without
+	// headers, and the status can be discovered by calling RecvMsg.
 	Header() (metadata.MD, error)
 	// Trailer returns the trailer metadata from the server, if there is any.
 	// It must only be called after stream.CloseAndRecv has returned, or
@@ -123,7 +128,10 @@ type ClientStream interface {
 	// calling RecvMsg on the same stream at the same time, but it is not safe
 	// to call SendMsg on the same stream in different goroutines. It is also
 	// not safe to call CloseSend concurrently with SendMsg.
-	SendMsg(m interface{}) error
+	//
+	// It is not safe to modify the message after calling SendMsg. Tracing
+	// libraries and stats handlers may use the message lazily.
+	SendMsg(m any) error
 	// RecvMsg blocks until it receives a message into m or the stream is
 	// done. It returns io.EOF when the stream completes successfully. On
 	// any other error, the stream is aborted and the error contains the RPC
@@ -132,7 +140,7 @@ type ClientStream interface {
 	// It is safe to have a goroutine calling SendMsg and another goroutine
 	// calling RecvMsg on the same stream at the same time, but it is not
 	// safe to call RecvMsg on the same stream in different goroutines.
-	RecvMsg(m interface{}) error
+	RecvMsg(m any) error
 }
 
 // NewStream creates a new Stream for the client side. This is typically
@@ -168,7 +176,17 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 }
 
 func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
-	if md, added, ok := metadata.FromOutgoingContextRaw(ctx); ok {
+	// Start tracking the RPC for idleness purposes. This is where a stream is
+	// created for both streaming and unary RPCs, and hence is a good place to
+	// track active RPC count.
+	if err := cc.idlenessMgr.OnCallBegin(); err != nil {
+		return nil, err
+	}
+	// Add a calloption, to decrement the active call count, that gets executed
+	// when the RPC completes.
+	opts = append([]CallOption{OnFinish(func(error) { cc.idlenessMgr.OnCallEnd() })}, opts...)
+
+	if md, added, ok := metadataFromOutgoingContextRaw(ctx); ok {
 		// validate md
 		if err := imetadata.Validate(md); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
@@ -425,7 +443,7 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 		ctx = trace.NewContext(ctx, trInfo.tr)
 	}
 
-	if cs.cc.parsedTarget.URL.Scheme == "xds" {
+	if cs.cc.parsedTarget.URL.Scheme == internal.GRPCResolverSchemeExtraMetadata {
 		// Add extra metadata (metadata that will be added by transport) to context
 		// so the balancer can see them.
 		ctx = grpcutil.WithExtraMetadata(ctx, metadata.Pairs(
@@ -469,7 +487,7 @@ func (a *csAttempt) newStream() error {
 	// It is safe to overwrite the csAttempt's context here, since all state
 	// maintained in it are local to the attempt. When the attempt has to be
 	// retried, a new instance of csAttempt will be created.
-	if a.pickResult.Metatada != nil {
+	if a.pickResult.Metadata != nil {
 		// We currently do not have a function it the metadata package which
 		// merges given metadata with existing metadata in a context. Existing
 		// function `AppendToOutgoingContext()` takes a variadic argument of key
@@ -479,7 +497,7 @@ func (a *csAttempt) newStream() error {
 		// in a form passable to AppendToOutgoingContext(), or create a version
 		// of AppendToOutgoingContext() that accepts a metadata.MD.
 		md, _ := metadata.FromOutgoingContext(a.ctx)
-		md = metadata.Join(md, a.pickResult.Metatada)
+		md = metadata.Join(md, a.pickResult.Metadata)
 		a.ctx = metadata.NewOutgoingContext(a.ctx, md)
 	}
 
@@ -499,7 +517,7 @@ func (a *csAttempt) newStream() error {
 		return toRPCErr(nse.Err)
 	}
 	a.s = s
-	a.p = &parser{r: s}
+	a.p = &parser{r: s, recvBufferPool: a.cs.cc.dopts.recvBufferPool}
 	return nil
 }
 
@@ -780,23 +798,24 @@ func (cs *clientStream) withRetry(op func(a *csAttempt) error, onSuccess func())
 
 func (cs *clientStream) Header() (metadata.MD, error) {
 	var m metadata.MD
-	noHeader := false
 	err := cs.withRetry(func(a *csAttempt) error {
 		var err error
 		m, err = a.s.Header()
-		if err == transport.ErrNoHeaders {
-			noHeader = true
-			return nil
-		}
 		return toRPCErr(err)
 	}, cs.commitAttemptLocked)
 
-	if err != nil {
-		cs.finish(err)
-		return nil, err
+	if m == nil && err == nil {
+		// The stream ended with success.  Finish the clientStream.
+		err = io.EOF
 	}
 
-	if len(cs.binlogs) != 0 && !cs.serverHeaderBinlogged && !noHeader {
+	if err != nil {
+		cs.finish(err)
+		// Do not return the error.  The user should get it by calling Recv().
+		return nil, nil
+	}
+
+	if len(cs.binlogs) != 0 && !cs.serverHeaderBinlogged && m != nil {
 		// Only log if binary log is on and header has not been logged, and
 		// there is actually headers to log.
 		logEntry := &binarylog.ServerHeader{
@@ -812,6 +831,7 @@ func (cs *clientStream) Header() (metadata.MD, error) {
 			binlog.Log(cs.ctx, logEntry)
 		}
 	}
+
 	return m, nil
 }
 
@@ -852,7 +872,7 @@ func (cs *clientStream) bufferForRetryLocked(sz int, op func(a *csAttempt) error
 	cs.buffer = append(cs.buffer, op)
 }
 
-func (cs *clientStream) SendMsg(m interface{}) (err error) {
+func (cs *clientStream) SendMsg(m any) (err error) {
 	defer func() {
 		if err != nil && err != io.EOF {
 			// Call finish on the client stream for errors generated by this SendMsg
@@ -896,7 +916,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	return err
 }
 
-func (cs *clientStream) RecvMsg(m interface{}) error {
+func (cs *clientStream) RecvMsg(m any) error {
 	if len(cs.binlogs) != 0 && !cs.serverHeaderBinlogged {
 		// Call Header() to binary log header if it's not already logged.
 		cs.Header()
@@ -920,24 +940,6 @@ func (cs *clientStream) RecvMsg(m interface{}) error {
 	if err != nil || !cs.desc.ServerStreams {
 		// err != nil or non-server-streaming indicates end of stream.
 		cs.finish(err)
-
-		if len(cs.binlogs) != 0 {
-			// finish will not log Trailer. Log Trailer here.
-			logEntry := &binarylog.ServerTrailer{
-				OnClientSide: true,
-				Trailer:      cs.Trailer(),
-				Err:          err,
-			}
-			if logEntry.Err == io.EOF {
-				logEntry.Err = nil
-			}
-			if peer, ok := peer.FromContext(cs.Context()); ok {
-				logEntry.PeerAddr = peer.Addr
-			}
-			for _, binlog := range cs.binlogs {
-				binlog.Log(cs.ctx, logEntry)
-			}
-		}
 	}
 	return err
 }
@@ -993,18 +995,30 @@ func (cs *clientStream) finish(err error) {
 			}
 		}
 	}
+
 	cs.mu.Unlock()
-	// For binary logging. only log cancel in finish (could be caused by RPC ctx
-	// canceled or ClientConn closed). Trailer will be logged in RecvMsg.
-	//
-	// Only one of cancel or trailer needs to be logged. In the cases where
-	// users don't call RecvMsg, users must have already canceled the RPC.
-	if len(cs.binlogs) != 0 && status.Code(err) == codes.Canceled {
-		c := &binarylog.Cancel{
-			OnClientSide: true,
-		}
-		for _, binlog := range cs.binlogs {
-			binlog.Log(cs.ctx, c)
+	// Only one of cancel or trailer needs to be logged.
+	if len(cs.binlogs) != 0 {
+		switch err {
+		case errContextCanceled, errContextDeadline, ErrClientConnClosing:
+			c := &binarylog.Cancel{
+				OnClientSide: true,
+			}
+			for _, binlog := range cs.binlogs {
+				binlog.Log(cs.ctx, c)
+			}
+		default:
+			logEntry := &binarylog.ServerTrailer{
+				OnClientSide: true,
+				Trailer:      cs.Trailer(),
+				Err:          err,
+			}
+			if peer, ok := peer.FromContext(cs.Context()); ok {
+				logEntry.PeerAddr = peer.Addr
+			}
+			for _, binlog := range cs.binlogs {
+				binlog.Log(cs.ctx, logEntry)
+			}
 		}
 	}
 	if err == nil {
@@ -1020,7 +1034,7 @@ func (cs *clientStream) finish(err error) {
 	cs.cancel()
 }
 
-func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte) error {
+func (a *csAttempt) sendMsg(m any, hdr, payld, data []byte) error {
 	cs := a.cs
 	if a.trInfo != nil {
 		a.mu.Lock()
@@ -1047,7 +1061,7 @@ func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte) error {
 	return nil
 }
 
-func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
+func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 	cs := a.cs
 	if len(a.statsHandlers) != 0 && payInfo == nil {
 		payInfo = &payloadInfo{}
@@ -1262,17 +1276,22 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 		return nil, err
 	}
 	as.s = s
-	as.p = &parser{r: s}
+	as.p = &parser{r: s, recvBufferPool: ac.dopts.recvBufferPool}
 	ac.incrCallsStarted()
 	if desc != unaryStreamDesc {
-		// Listen on cc and stream contexts to cleanup when the user closes the
-		// ClientConn or cancels the stream context.  In all other cases, an error
-		// should already be injected into the recv buffer by the transport, which
-		// the client will eventually receive, and then we will cancel the stream's
-		// context in clientStream.finish.
+		// Listen on stream context to cleanup when the stream context is
+		// canceled.  Also listen for the addrConn's context in case the
+		// addrConn is closed or reconnects to a different address.  In all
+		// other cases, an error should already be injected into the recv
+		// buffer by the transport, which the client will eventually receive,
+		// and then we will cancel the stream's context in
+		// addrConnStream.finish.
 		go func() {
+			ac.mu.Lock()
+			acCtx := ac.ctx
+			ac.mu.Unlock()
 			select {
-			case <-ac.ctx.Done():
+			case <-acCtx.Done():
 				as.finish(status.Error(codes.Canceled, "grpc: the SubConn is closing"))
 			case <-ctx.Done():
 				as.finish(toRPCErr(ctx.Err()))
@@ -1335,7 +1354,7 @@ func (as *addrConnStream) Context() context.Context {
 	return as.s.Context()
 }
 
-func (as *addrConnStream) SendMsg(m interface{}) (err error) {
+func (as *addrConnStream) SendMsg(m any) (err error) {
 	defer func() {
 		if err != nil && err != io.EOF {
 			// Call finish on the client stream for errors generated by this SendMsg
@@ -1380,7 +1399,7 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 	return nil
 }
 
-func (as *addrConnStream) RecvMsg(m interface{}) (err error) {
+func (as *addrConnStream) RecvMsg(m any) (err error) {
 	defer func() {
 		if err != nil || !as.desc.ServerStreams {
 			// err != nil or non-server-streaming indicates end of stream.
@@ -1499,7 +1518,7 @@ type ServerStream interface {
 	//
 	// It is not safe to modify the message after calling SendMsg. Tracing
 	// libraries and stats handlers may use the message lazily.
-	SendMsg(m interface{}) error
+	SendMsg(m any) error
 	// RecvMsg blocks until it receives a message into m or the stream is
 	// done. It returns io.EOF when the client has performed a CloseSend. On
 	// any non-EOF error, the stream is aborted and the error contains the
@@ -1508,7 +1527,7 @@ type ServerStream interface {
 	// It is safe to have a goroutine calling SendMsg and another goroutine
 	// calling RecvMsg on the same stream at the same time, but it is not
 	// safe to call RecvMsg on the same stream in different goroutines.
-	RecvMsg(m interface{}) error
+	RecvMsg(m any) error
 }
 
 // serverStream implements a server side Stream.
@@ -1589,7 +1608,7 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 	ss.s.SetTrailer(md)
 }
 
-func (ss *serverStream) SendMsg(m interface{}) (err error) {
+func (ss *serverStream) SendMsg(m any) (err error) {
 	defer func() {
 		if ss.trInfo != nil {
 			ss.mu.Lock()
@@ -1597,7 +1616,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 				if err == nil {
 					ss.trInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
 				} else {
-					ss.trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+					ss.trInfo.tr.LazyLog(&fmtStringer{"%v", []any{err}}, true)
 					ss.trInfo.tr.SetError()
 				}
 			}
@@ -1664,7 +1683,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	return nil
 }
 
-func (ss *serverStream) RecvMsg(m interface{}) (err error) {
+func (ss *serverStream) RecvMsg(m any) (err error) {
 	defer func() {
 		if ss.trInfo != nil {
 			ss.mu.Lock()
@@ -1672,7 +1691,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 				if err == nil {
 					ss.trInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
 				} else if err != io.EOF {
-					ss.trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+					ss.trInfo.tr.LazyLog(&fmtStringer{"%v", []any{err}}, true)
 					ss.trInfo.tr.SetError()
 				}
 			}
@@ -1744,7 +1763,7 @@ func MethodFromServerStream(stream ServerStream) (string, bool) {
 // prepareMsg returns the hdr, payload and data
 // using the compressors passed or using the
 // passed preparedmsg
-func prepareMsg(m interface{}, codec baseCodec, cp Compressor, comp encoding.Compressor) (hdr, payload, data []byte, err error) {
+func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor) (hdr, payload, data []byte, err error) {
 	if preparedMsg, ok := m.(*PreparedMsg); ok {
 		return preparedMsg.hdr, preparedMsg.payload, preparedMsg.encodedData, nil
 	}

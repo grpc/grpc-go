@@ -40,10 +40,6 @@ import (
 // blocking. The test verifies that closing the ClientConn unblocks the RPC with
 // the expected error code.
 func (s) TestClientConnClose_WithPendingRPC(t *testing.T) {
-	// Initialize channelz. Used to determine pending RPC count.
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	defer czCleanupWrapper(czCleanup, t)
-
 	r := manual.NewBuilderWithScheme("whatever")
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {

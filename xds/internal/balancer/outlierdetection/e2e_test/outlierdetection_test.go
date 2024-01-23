@@ -107,7 +107,9 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 	for _, addr := range addrs {
 		wantAddrCount[addr.Addr]++
 	}
+	gotAddrCount := make(map[string]int)
 	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
+		gotAddrCount = make(map[string]int)
 		// Perform 3 iterations.
 		var iterations [][]string
 		for i := 0; i < 3; i++ {
@@ -122,7 +124,6 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 			iterations = append(iterations, iteration)
 		}
 		// Ensure the the first iteration contains all addresses in addrs.
-		gotAddrCount := make(map[string]int)
 		for _, addr := range iterations[0] {
 			gotAddrCount[addr]++
 		}
@@ -135,7 +136,7 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 		}
 		return nil
 	}
-	return fmt.Errorf("timeout when waiting for roundrobin distribution of RPCs across addresses: %v", addrs)
+	return fmt.Errorf("timeout when waiting for roundrobin distribution of RPCs across addresses: %v; got: %v", addrs, gotAddrCount)
 }
 
 // TestOutlierDetectionAlgorithmsE2E tests the Outlier Detection Success Rate
@@ -159,9 +160,9 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
   "loadBalancingConfig": [
     {
       "outlier_detection_experimental": {
-        "interval": 50000000,
-		"baseEjectionTime": 100000000,
-		"maxEjectionTime": 300000000000,
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
+		"maxEjectionTime": "300s",
 		"maxEjectionPercent": 33,
 		"successRateEjection": {
 			"stdevFactor": 50,
@@ -182,9 +183,9 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
   "loadBalancingConfig": [
     {
       "outlier_detection_experimental": {
-        "interval": 50000000,
-		"baseEjectionTime": 100000000,
-		"maxEjectionTime": 300000000000,
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
+		"maxEjectionTime": "300s",
 		"maxEjectionPercent": 33,
 		"failurePercentageEjection": {
 			"threshold": 50,
@@ -277,9 +278,9 @@ func (s) TestNoopConfiguration(t *testing.T) {
   "loadBalancingConfig": [
     {
       "outlier_detection_experimental": {
-        "interval": 50000000,
-		"baseEjectionTime": 100000000,
-		"maxEjectionTime": 300000000000,
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
+		"maxEjectionTime": "300s",
 		"maxEjectionPercent": 33,
         "childPolicy": [{"round_robin": {}}]
       }
@@ -325,9 +326,9 @@ func (s) TestNoopConfiguration(t *testing.T) {
   "loadBalancingConfig": [
     {
       "outlier_detection_experimental": {
-        "interval": 50000000,
-		"baseEjectionTime": 100000000,
-		"maxEjectionTime": 300000000000,
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
+		"maxEjectionTime": "300s",
 		"maxEjectionPercent": 33,
 		"failurePercentageEjection": {
 			"threshold": 50,
