@@ -3918,6 +3918,10 @@ func testClientInvalidStreamID(t *testing.T, e env) {
 	})
 }
 
+// Client must always send a streamID in odd numbers according to
+// https://httpwg.org/specs/rfc7540.html#StreamIdentifiers. This test
+// makes sure that the transport throws an error when the client streamID is
+// even.
 func (s) TestClientInvalidStreamID(t *testing.T) {
 	for _, e := range listTestEnv() {
 		if e.httpHandler {
