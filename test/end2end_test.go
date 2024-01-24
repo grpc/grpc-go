@@ -3912,14 +3912,17 @@ func testClientInvalidStreamID(t *testing.T, e env) {
 	te.withServerTester(func(st *serverTester) {
 		st.writeHeadersGRPC(2, "/grpc.testing.TestService/StreamingInputCall", true)
 		_, err := st.fr.ReadFrame()
-		if err != nil {
-			fmt.Println(err)
+		if err == nil {
+			t.Fatalf("Error expected when Client StreamID is even %v", err)
 		}
 	})
 }
 
 func (s) TestClientInvalidStreamID(t *testing.T) {
 	for _, e := range listTestEnv() {
+		if e.httpHandler {
+			continue
+		}
 		testClientInvalidStreamID(t, e)
 	}
 }
