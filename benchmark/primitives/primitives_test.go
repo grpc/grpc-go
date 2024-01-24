@@ -367,7 +367,7 @@ func BenchmarkInterfaceTypeAssertion(b *testing.B) {
 	runInterfaceTypeAssertion(b, myFooer{})
 }
 
-func runInterfaceTypeAssertion(b *testing.B, fer interface{}) {
+func runInterfaceTypeAssertion(b *testing.B, fer any) {
 	x := 0
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -386,7 +386,7 @@ func BenchmarkStructTypeAssertion(b *testing.B) {
 	runStructTypeAssertion(b, myFooer{})
 }
 
-func runStructTypeAssertion(b *testing.B, fer interface{}) {
+func runStructTypeAssertion(b *testing.B, fer any) {
 	x := 0
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -422,6 +422,45 @@ func BenchmarkRLockUnlock(b *testing.B) {
 		}
 		for ; i > 0; i-- {
 			mu.RUnlock()
+		}
+	})
+}
+
+type ifNop interface {
+	nop()
+}
+
+type alwaysNop struct{}
+
+func (alwaysNop) nop() {}
+
+type concreteNop struct {
+	isNop atomic.Bool
+	i     int
+}
+
+func (c *concreteNop) nop() {
+	if c.isNop.Load() {
+		return
+	}
+	c.i++
+}
+
+func BenchmarkInterfaceNop(b *testing.B) {
+	n := ifNop(alwaysNop{})
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			n.nop()
+		}
+	})
+}
+
+func BenchmarkConcreteNop(b *testing.B) {
+	n := &concreteNop{}
+	n.isNop.Store(true)
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			n.nop()
 		}
 	})
 }

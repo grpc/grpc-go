@@ -60,8 +60,8 @@ func labelsToMonitoringLabels(labels map[string]string) *stackdriver.Labels {
 	return sdLabels
 }
 
-func labelsToTraceAttributes(labels map[string]string) map[string]interface{} {
-	ta := make(map[string]interface{}, len(labels))
+func labelsToTraceAttributes(labels map[string]string) map[string]any {
+	ta := make(map[string]any, len(labels))
 	for k, v := range labels {
 		ta[k] = v
 	}

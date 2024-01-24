@@ -104,7 +104,13 @@ func (rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 	}
 	lb.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-experimental-lb %p] ", lb))
 	lb.dataCache = newDataCache(maxCacheSize, lb.logger)
-	lb.bg = balancergroup.New(cc, opts, lb, lb.logger)
+	lb.bg = balancergroup.New(balancergroup.Options{
+		CC:                      cc,
+		BuildOpts:               opts,
+		StateAggregator:         lb,
+		Logger:                  lb.logger,
+		SubBalancerCloseTimeout: time.Duration(0), // Disable caching of removed child policies
+	})
 	lb.bg.Start()
 	go lb.run()
 	return lb
@@ -436,7 +442,7 @@ func (b *rlsBalancer) ResolverError(err error) {
 }
 
 func (b *rlsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	b.bg.UpdateSubConnState(sc, state)
+	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
 func (b *rlsBalancer) Close() {

@@ -202,6 +202,33 @@ func (s) TestFromErrorWrapped(t *testing.T) {
 	}
 }
 
+type customErrorNilStatus struct {
+}
+
+func (c customErrorNilStatus) Error() string {
+	return "test"
+}
+
+func (c customErrorNilStatus) GRPCStatus() *Status {
+	return nil
+}
+
+func (s) TestFromErrorImplementsInterfaceReturnsOKStatus(t *testing.T) {
+	err := customErrorNilStatus{}
+	s, ok := FromError(err)
+	if ok || s.Code() != codes.Unknown || s.Message() != err.Error() {
+		t.Fatalf("FromError(%v) = %v, %v; want <Code()=%s, Message()=%q, Err()!=nil>, true", err, s, ok, codes.Unknown, err.Error())
+	}
+}
+
+func (s) TestFromErrorImplementsInterfaceReturnsOKStatusWrapped(t *testing.T) {
+	err := fmt.Errorf("wrapping: %w", customErrorNilStatus{})
+	s, ok := FromError(err)
+	if ok || s.Code() != codes.Unknown || s.Message() != err.Error() {
+		t.Fatalf("FromError(%v) = %v, %v; want <Code()=%s, Message()=%q, Err()!=nil>, true", err, s, ok, codes.Unknown, err.Error())
+	}
+}
+
 func (s) TestFromErrorImplementsInterfaceWrapped(t *testing.T) {
 	const code, message = codes.Internal, "test description"
 	err := fmt.Errorf("wrapped error: %w", customError{Code: code, Message: message})
@@ -350,7 +377,7 @@ func (s) TestStatus_WithDetails_Fail(t *testing.T) {
 func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 	tests := []struct {
 		s *Status
-		i []interface{}
+		i []any
 	}{
 		{
 			nil,
@@ -362,7 +389,7 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 		},
 		{
 			New(codes.OK, ""),
-			[]interface{}{},
+			[]any{},
 		},
 		{
 			FromProto(&spb.Status{
@@ -379,7 +406,7 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 					}),
 				},
 			}),
-			[]interface{}{
+			[]any{
 				errors.New(`message type url "" is invalid`),
 				&epb.ResourceInfo{
 					ResourceType: "book",

@@ -24,7 +24,6 @@ package alts
 import (
 	"context"
 	"reflect"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -32,6 +31,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/alts/internal/handshaker"
 	"google.golang.org/grpc/credentials/alts/internal/handshaker/service"
 	altsgrpc "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
@@ -40,16 +40,25 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
 const (
-	defaultTestLongTimeout  = 10 * time.Second
+	defaultTestLongTimeout  = 60 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
 type s struct {
 	grpctest.Tester
+}
+
+func init() {
+	// The vmOnGCP global variable MUST be forced to true. Otherwise, if
+	// this test is run anywhere except on a GCP VM, then an ALTS handshake
+	// will immediately fail.
+	once.Do(func() {})
+	vmOnGCP = true
 }
 
 func Test(t *testing.T) {
@@ -309,22 +318,31 @@ func (s) TestCheckRPCVersions(t *testing.T) {
 // server, where both client and server offload to a local, fake handshaker
 // service.
 func (s) TestFullHandshake(t *testing.T) {
-	// If GOMAXPROCS is set to less than 2, do not run this test. This test
-	// requires at least 2 goroutines to succeed (one goroutine where a
-	// server listens, another goroutine where a client runs).
-	if runtime.GOMAXPROCS(0) < 2 {
-		return
-	}
+	// Start the fake handshaker service and the server.
+	var wait sync.WaitGroup
+	defer wait.Wait()
+	stopHandshaker, handshakerAddress := startFakeHandshakerService(t, &wait)
+	defer stopHandshaker()
+	stopServer, serverAddress := startServer(t, handshakerAddress, &wait)
+	defer stopServer()
 
-	// The vmOnGCP global variable MUST be reset to true after the client
-	// or server credentials have been created, but before the ALTS
-	// handshake begins. If vmOnGCP is not reset and this test is run
-	// anywhere except for a GCP VM, then the ALTS handshake will
-	// immediately fail.
-	once.Do(func() {
-		vmOnGCP = true
-	})
-	vmOnGCP = true
+	// Ping the server, authenticating with ALTS.
+	establishAltsConnection(t, handshakerAddress, serverAddress)
+
+	// Close open connections to the fake handshaker service.
+	if err := service.CloseForTesting(); err != nil {
+		t.Errorf("service.CloseForTesting() failed: %v", err)
+	}
+}
+
+// TestConcurrentHandshakes performs a several, concurrent ALTS handshakes
+// between a test client and server, where both client and server offload to a
+// local, fake handshaker service.
+func (s) TestConcurrentHandshakes(t *testing.T) {
+	// Set the max number of concurrent handshakes to 3, so that we can
+	// test the handshaker behavior when handshakes are queued by
+	// performing more than 3 concurrent handshakes (specifically, 10).
+	handshaker.ResetConcurrentHandshakeSemaphoreForTesting(3)
 
 	// Start the fake handshaker service and the server.
 	var wait sync.WaitGroup
@@ -335,26 +353,15 @@ func (s) TestFullHandshake(t *testing.T) {
 	defer stopServer()
 
 	// Ping the server, authenticating with ALTS.
-	clientCreds := NewClientCreds(&ClientOptions{HandshakerServiceAddress: handshakerAddress})
-	conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(clientCreds))
-	if err != nil {
-		t.Fatalf("grpc.Dial(%v) failed: %v", serverAddress, err)
+	var waitForConnections sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		waitForConnections.Add(1)
+		go func() {
+			establishAltsConnection(t, handshakerAddress, serverAddress)
+			waitForConnections.Done()
+		}()
 	}
-	defer conn.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestLongTimeout)
-	defer cancel()
-	c := testgrpc.NewTestServiceClient(conn)
-	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		_, err = c.UnaryCall(ctx, &testpb.SimpleRequest{})
-		if err == nil {
-			break
-		}
-		if code := status.Code(err); code == codes.Unavailable {
-			// The server is not ready yet. Try again.
-			continue
-		}
-		t.Fatalf("c.UnaryCall() failed: %v", err)
-	}
+	waitForConnections.Wait()
 
 	// Close open connections to the fake handshaker service.
 	if err := service.CloseForTesting(); err != nil {
@@ -373,6 +380,50 @@ func versions(minMajor, minMinor, maxMajor, maxMinor uint32) *altspb.RpcProtocol
 	return &altspb.RpcProtocolVersions{
 		MinRpcVersion: version(minMajor, minMinor),
 		MaxRpcVersion: version(maxMajor, maxMinor),
+	}
+}
+
+func establishAltsConnection(t *testing.T, handshakerAddress, serverAddress string) {
+	clientCreds := NewClientCreds(&ClientOptions{HandshakerServiceAddress: handshakerAddress})
+	conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(clientCreds))
+	if err != nil {
+		t.Fatalf("grpc.Dial(%v) failed: %v", serverAddress, err)
+	}
+	defer conn.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestLongTimeout)
+	defer cancel()
+	c := testgrpc.NewTestServiceClient(conn)
+	var peer peer.Peer
+	success := false
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		_, err = c.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.Peer(&peer))
+		if err == nil {
+			success = true
+			break
+		}
+		if code := status.Code(err); code == codes.Unavailable || code == codes.DeadlineExceeded {
+			// The server is not ready yet or there were too many concurrent handshakes.
+			// Try again.
+			continue
+		}
+		t.Fatalf("c.UnaryCall() failed: %v", err)
+	}
+	if !success {
+		t.Fatalf("c.UnaryCall() timed out after %v", defaultTestShortTimeout)
+	}
+
+	// Check that peer.AuthInfo was populated with an ALTS AuthInfo
+	// instance. As a sanity check, also verify that the AuthType() and
+	// ApplicationProtocol() have the expected values.
+	if got, want := peer.AuthInfo.AuthType(), "alts"; got != want {
+		t.Errorf("authInfo.AuthType() = %s, want = %s", got, want)
+	}
+	authInfo, err := AuthInfoFromPeer(&peer)
+	if err != nil {
+		t.Errorf("AuthInfoFromPeer failed: %v", err)
+	}
+	if got, want := authInfo.ApplicationProtocol(), "grpc"; got != want {
+		t.Errorf("authInfo.ApplicationProtocol() = %s, want = %s", got, want)
 	}
 }
 

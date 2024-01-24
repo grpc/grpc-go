@@ -17,18 +17,25 @@
  */
 
 // Binary server is an interop server.
+//
+// See interop test case descriptions [here].
+//
+// [here]: https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md
 package main
 
 import (
 	"flag"
 	"net"
 	"strconv"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/interop"
+	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/testdata"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -56,7 +63,7 @@ func main() {
 		logger.Fatalf("failed to listen: %v", err)
 	}
 	logger.Infof("interop server listening on %v", lis.Addr())
-	var opts []grpc.ServerOption
+	opts := []grpc.ServerOption{orca.CallMetricsServerOption(nil)}
 	if *useTLS {
 		if *certFile == "" {
 			*certFile = testdata.Path("server1.pem")
@@ -78,6 +85,13 @@ func main() {
 		opts = append(opts, grpc.Creds(altsTC))
 	}
 	server := grpc.NewServer(opts...)
-	testgrpc.RegisterTestServiceServer(server, interop.NewTestServer())
+	metricsRecorder := orca.NewServerMetricsRecorder()
+	sopts := orca.ServiceOptions{
+		MinReportingInterval:  time.Second,
+		ServerMetricsProvider: metricsRecorder,
+	}
+	internal.ORCAAllowAnyMinReportingInterval.(func(*orca.ServiceOptions))(&sopts)
+	orca.Register(server, sopts)
+	testgrpc.RegisterTestServiceServer(server, interop.NewTestServer(interop.NewTestServerOptions{MetricsRecorder: metricsRecorder}))
 	server.Serve(lis)
 }

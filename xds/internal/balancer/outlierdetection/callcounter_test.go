@@ -38,19 +38,19 @@ func (b1 *bucket) Equal(b2 *bucket) bool {
 	return b1.numFailures == b2.numFailures
 }
 
-func (cc1 *callCounter) Equal(cc2 *callCounter) bool {
-	if cc1 == nil && cc2 == nil {
+func (cc *callCounter) Equal(cc2 *callCounter) bool {
+	if cc == nil && cc2 == nil {
 		return true
 	}
-	if (cc1 != nil) != (cc2 != nil) {
+	if (cc != nil) != (cc2 != nil) {
 		return false
 	}
-	ab1 := (*bucket)(atomic.LoadPointer(&cc1.activeBucket))
+	ab1 := (*bucket)(atomic.LoadPointer(&cc.activeBucket))
 	ab2 := (*bucket)(atomic.LoadPointer(&cc2.activeBucket))
 	if !ab1.Equal(ab2) {
 		return false
 	}
-	return cc1.inactiveBucket.Equal(cc2.inactiveBucket)
+	return cc.inactiveBucket.Equal(cc2.inactiveBucket)
 }
 
 // TestClear tests that clear on the call counter clears (everything set to 0)
