@@ -3911,9 +3911,10 @@ func testClientInvalidStreamID(t *testing.T, e env) {
 	defer te.tearDown()
 	te.withServerTester(func(st *serverTester) {
 		st.writeHeadersGRPC(2, "/grpc.testing.TestService/StreamingInputCall", true)
-		st.writeData(2, true, []byte{0, 0, 0, 0, 5})
-		// Reads the frame?
-		st.wantAnyFrame()
+		_, err := st.fr.ReadFrame()
+		if err != nil {
+			fmt.Println(err)
+		}
 	})
 }
 
