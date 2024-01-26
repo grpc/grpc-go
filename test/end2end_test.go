@@ -677,7 +677,6 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 		return lis
 	}
 
-	fmt.Println("starting server")
 	go s.Serve(lis)
 	return lis
 }
@@ -866,7 +865,6 @@ func (te *test) declareLogNoise(phrases ...string) {
 }
 
 func (te *test) withServerTester(fn func(st *serverTester)) {
-	// Client connection on the address where server is listening.
 	c, err := te.e.dialer(te.srvAddr, 10*time.Second)
 	if err != nil {
 		te.t.Fatal(err)
@@ -3916,13 +3914,10 @@ func (s) TestClientInvalidStreamID(t *testing.T) {
 		_, err := stream.Recv()
 		return err
 	}}
-	// Starts the server
 	te.startServer(ts)
 	defer te.tearDown()
 	serverTesterFunc := func(st *serverTester) {
-		// This is stream initiated by the client
 		st.writeHeadersGRPC(2, "/grpc.testing.TestService/StreamingInputCall", true)
-		// Wait for the server crash.
 		_, err := st.fr.ReadFrame()
 		// TODO: Assert the error.
 		if err == nil {
