@@ -60,6 +60,9 @@ import (
 	_ "google.golang.org/grpc/credentials/tls/certprovider/pemfile" // Register the file watcher certificate provider plugin.
 )
 
+// A randomKey which is used to represent an attribute passed via the resolver.
+type randomKey struct{}
+
 // testCCWrapper wraps a balancer.ClientConn and intercepts NewSubConn and
 // returns the xDS handshake info back to the test for inspection.
 type testCCWrapper struct {
@@ -80,6 +83,10 @@ func (tcc *testCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.New
 	hi := getHI(addrs[0].Attributes)
 	if hi == nil {
 		return nil, fmt.Errorf("NewSubConn got address without xDS handshake info")
+	}
+	val := addrs[0].Attributes.Value(randomKey{})
+	if val == nil || val != 1 {
+		return nil, fmt.Errorf("NewSubConn missing expected resolver attribute")
 	}
 
 	sc, err := tcc.ClientConn.NewSubConn(addrs, opts)
@@ -154,7 +161,7 @@ func setupForSecurityTests(t *testing.T, bootstrapContents []byte, clientCreds, 
 			}]
 		}`, clusterName)
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	state := xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient)
+	state := xdsclient.SetClient(resolver.State{ServiceConfig: scpr, Attributes: attributes.New(randomKey{}, 1)}, xdsClient)
 	r.InitialState(state)
 
 	// Create a ClientConn with the specified transport credentials.

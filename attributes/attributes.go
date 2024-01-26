@@ -70,6 +70,33 @@ func (a *Attributes) Value(key any) any {
 	return a.m[key]
 }
 
+// Merge returns a new Attributes containing the union of keys and values 
+// associated with two Attributes. If the same key appears multiple times, the 
+// last value overwrites all previous values for that key. To remove an
+// existing key, use a nil value.  Value should not be modified later.
+func (a *Attributes) Merge(b *Attributes) *Attributes {
+	totalLen := 0
+	if a != nil {
+		totalLen += len(a.m)
+	}
+	if b != nil {
+		totalLen += len(b.m)
+	}
+	c := &Attributes{m: make(map[any]any, totalLen)}
+	if a != nil {
+		for k, v := range a.m {
+			c.m[k] = v
+		}
+	}
+	if b != nil {
+		for k, v := range b.m {
+			c.m[k] = v
+		}
+	}
+
+	return c
+}
+
 // Equal returns whether a and o are equivalent.  If 'Equal(o any) bool' is
 // implemented for a value in the attributes, it is called to determine if the
 // value matches the one stored in the other attributes.  If Equal is not

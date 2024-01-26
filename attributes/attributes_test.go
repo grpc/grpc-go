@@ -126,3 +126,51 @@ func TestNotEqual(t *testing.T) {
 		t.Fatalf("%+v.Equals(%+v) = true; want false", a3, a1)
 	}
 }
+
+func TestMerge(t *testing.T) {
+	type keyOne struct{}
+	type keyTwo struct{}
+	tests := []struct {
+		name string
+		a    *attributes.Attributes
+		b    *attributes.Attributes
+		want *attributes.Attributes
+	}{
+		{
+			name: "a_nil",
+			a:    nil,
+			b:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			want: attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+		},
+		{
+			name: "b_nil",
+			a:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			b:    nil,
+			want: attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+		},
+		{
+			name: "overwrite_a",
+			a:    attributes.New(keyOne{}, 1),
+			b:    attributes.New(keyOne{}, 2).WithValue(keyTwo{}, stringVal{s: "two"}),
+			want: attributes.New(keyOne{}, 2).WithValue(keyTwo{}, stringVal{s: "two"}),
+		},
+		{
+			name: "retain_missing",
+			a:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			b:    attributes.New(keyOne{}, 2),
+			want: attributes.New(keyOne{}, 2).WithValue(keyTwo{}, stringVal{s: "two"}),
+		},
+		{
+			name: "disjoint",
+			a:    attributes.New(keyOne{}, 1),
+			b:    attributes.New(keyTwo{}, stringVal{s: "two"}),
+			want: attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+		},
+	}
+
+	for _, test := range tests {
+		if got := test.a.Merge(test.b); !got.Equal(test.want) {
+			t.Errorf("a.Merge(b) = %v, want %v", got, test.want)
+		}
+	}
+}

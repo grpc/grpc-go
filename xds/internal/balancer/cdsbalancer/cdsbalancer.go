@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
@@ -287,6 +288,7 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 		}
 		b.xdsClient = c
 	}
+	b.ccw.resolverAttr = state.ResolverState.Attributes
 	b.logger.Infof("Received balancer config update: %s", pretty.ToJSON(state.BalancerConfig))
 
 	// The errors checked here should ideally never happen because the
@@ -657,7 +659,9 @@ func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []cluste
 type ccWrapper struct {
 	balancer.ClientConn
 
-	xdsHIPtr *unsafe.Pointer
+	// Attributes from the resolver that have to be propagated further.
+	resolverAttr *attributes.Attributes
+	xdsHIPtr     *unsafe.Pointer
 }
 
 // NewSubConn intercepts NewSubConn() calls from the child policy and adds an
@@ -666,6 +670,11 @@ type ccWrapper struct {
 func (ccw *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
+		// First merge the resolver attributes if any and the add the handshake
+		// attributes.
+		if ccw.resolverAttr != nil {
+			addr.Attributes = addr.Attributes.Merge(ccw.resolverAttr)
+		}
 		newAddrs[i] = xdsinternal.SetHandshakeInfo(addr, ccw.xdsHIPtr)
 	}
 
@@ -677,6 +686,11 @@ func (ccw *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubC
 func (ccw *ccWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
+		// First merge the resolver attributes if any and the add the handshake
+		// attributes.
+		if ccw.resolverAttr != nil {
+			addr.Attributes = addr.Attributes.Merge(ccw.resolverAttr)
+		}
 		newAddrs[i] = xdsinternal.SetHandshakeInfo(addr, ccw.xdsHIPtr)
 	}
 	ccw.ClientConn.UpdateAddresses(sc, newAddrs)
