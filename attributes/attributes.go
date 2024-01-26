@@ -45,7 +45,7 @@ func New(key, value any) *Attributes {
 	return &Attributes{m: map[any]any{key: value}}
 }
 
-// WithValue returns a new Attributes containing the previous keys and values
+// WithValue returns a new Attribute containing the previous keys and values
 // and the new key/value pair.  If the same key appears multiple times, the
 // last value overwrites all previous values for that key.  To remove an
 // existing key, use a nil value.  value should not be modified later.
@@ -70,8 +70,8 @@ func (a *Attributes) Value(key any) any {
 	return a.m[key]
 }
 
-// Merge returns a new Attributes containing the union of keys and values 
-// associated with two Attributes. If the same key appears multiple times, the 
+// Merge returns a new Attributes containing the union of keys and values
+// associated with two Attributes. If the same key appears multiple times, the
 // last value overwrites all previous values for that key. To remove an
 // existing key, use a nil value.  Value should not be modified later.
 func (a *Attributes) Merge(b *Attributes) *Attributes {
