@@ -444,7 +444,7 @@ func str(s *Status) string {
 func mustMarshalAny(msg proto.Message) *anypb.Any {
 	any, err := anypb.New(msg)
 	if err != nil {
-		panic(fmt.Sprintf("ptypes.MarshalAny(%+v) failed: %v", msg, err))
+		panic(fmt.Sprintf("anypb.New(%+v) failed: %v", msg, err))
 	}
 	return any
 }

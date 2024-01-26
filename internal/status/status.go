@@ -31,11 +31,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/golang/protobuf/ptypes"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/protoadapt"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // Status represents an RPC status code, message, and details.  It is immutable
@@ -138,7 +138,7 @@ func (s *Status) WithDetails(details ...protoadapt.MessageV1) (*Status, error) {
 	// s.Code() != OK implies that s.Proto() != nil.
 	p := s.Proto()
 	for _, detail := range details {
-		any, err := ptypes.MarshalAny(detail)
+		any, err := anypb.New(protoadapt.MessageV2Of(detail))
 		if err != nil {
 			return nil, err
 		}
