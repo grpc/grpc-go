@@ -677,6 +677,7 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 		return lis
 	}
 
+	fmt.Println("starting server")
 	go s.Serve(lis)
 	return lis
 }
@@ -865,6 +866,7 @@ func (te *test) declareLogNoise(phrases ...string) {
 }
 
 func (te *test) withServerTester(fn func(st *serverTester)) {
+	// Client connection on the address where server is listening.
 	c, err := te.e.dialer(te.srvAddr, 10*time.Second)
 	if err != nil {
 		te.t.Fatal(err)
@@ -3901,34 +3903,33 @@ func (s) TestClientRequestBodyErrorCloseAfterLength(t *testing.T) {
 	}
 }
 
-func testClientInvalidStreamID(t *testing.T, e env) {
-	te := newTest(t, e)
+// Tests gRPC server's behavior when a gRPC client sends a frame with an invalid
+// streamID. Per [HTTP/2 spec]: Streams initiated by a client MUST use
+// odd-numbered stream identifiers. This test sets up a test server and send a
+// header frame with stream ID of 2. The test asserts that a subsequent read on
+// the transport throws an error.
+//
+// [HTTP/2 spec]: https://httpwg.org/specs/rfc7540.html#StreamIdentifiers
+func (s) TestClientInvalidStreamID(t *testing.T) {
+	te := newTest(t, tcpClearEnv)
 	ts := &funcServer{streamingInputCall: func(stream testgrpc.TestService_StreamingInputCallServer) error {
 		_, err := stream.Recv()
 		return err
 	}}
+	// Starts the server
 	te.startServer(ts)
 	defer te.tearDown()
-	te.withServerTester(func(st *serverTester) {
+	serverTesterFunc := func(st *serverTester) {
+		// This is stream initiated by the client
 		st.writeHeadersGRPC(2, "/grpc.testing.TestService/StreamingInputCall", true)
+		// Wait for the server crash.
 		_, err := st.fr.ReadFrame()
+		// TODO: Assert the error.
 		if err == nil {
 			t.Fatalf("Error expected when Client StreamID is even %v", err)
 		}
-	})
-}
-
-// Client must always send a streamID in odd numbers according to
-// https://httpwg.org/specs/rfc7540.html#StreamIdentifiers. This test
-// makes sure that the transport throws an error when the client streamID is
-// even.
-func (s) TestClientInvalidStreamID(t *testing.T) {
-	for _, e := range listTestEnv() {
-		if e.httpHandler {
-			continue
-		}
-		testClientInvalidStreamID(t, e)
 	}
+	te.withServerTester(serverTesterFunc)
 }
 
 func testClientRequestBodyErrorCloseAfterLength(t *testing.T, e env) {
