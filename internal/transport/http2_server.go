@@ -636,10 +636,6 @@ func (t *http2Server) HandleStreams(ctx context.Context, handle func(*Stream)) {
 				}
 				continue
 			}
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				t.Close(err)
-				return
-			}
 			t.Close(err)
 			return
 		}
