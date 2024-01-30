@@ -220,7 +220,7 @@ func TestBuildXDS(t *testing.T) {
 			}
 			wantConfig := &bootstrap.Config{
 				XDSServer: wantServerConfig,
-				ClientDefaultListenerResourceNameTemplate: "xdstp://traffic-director-c2p.xds.googleapis.com/envoy.config.listener.v3.Listener/%s",
+				ClientDefaultListenerResourceNameTemplate: "%s",
 				Authorities: map[string]*bootstrap.Authority{
 					"traffic-director-c2p.xds.googleapis.com": {
 						XDSServer: wantServerConfig,
