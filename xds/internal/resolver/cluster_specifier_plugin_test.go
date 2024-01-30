@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/balancer"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -34,7 +33,7 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
-	protov2 "google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -97,7 +96,7 @@ func (testClusterSpecifierPlugin) ParseClusterSpecifierConfig(cfg proto.Message)
 		return nil, fmt.Errorf("testClusterSpecifierPlugin: error parsing config %v: got type %T, want *anypb.Any", cfg, cfg)
 	}
 	lbCfg := new(wrapperspb.StringValue)
-	if err := anypb.UnmarshalTo(anyp, lbCfg, protov2.UnmarshalOptions{}); err != nil {
+	if err := anypb.UnmarshalTo(anyp, lbCfg, proto.UnmarshalOptions{}); err != nil {
 		return nil, fmt.Errorf("testClusterSpecifierPlugin: error parsing config %v: %v", cfg, err)
 	}
 	return []map[string]any{{"csp_experimental": cspBalancerConfig{ArbitraryField: lbCfg.GetValue()}}}, nil

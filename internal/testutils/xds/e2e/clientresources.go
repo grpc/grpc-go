@@ -23,11 +23,10 @@ import (
 	"net"
 	"strconv"
 
-	"google.golang.org/protobuf/protoadapt"
-
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -39,7 +38,6 @@ import (
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 )
 
 const (
@@ -130,7 +128,7 @@ func DefaultClientListener(target, routeName string) *v3listenerpb.Listener {
 }
 
 func marshalAny(m proto.Message) *anypb.Any {
-	a, err := anypb.New(protoadapt.MessageV2Of(m))
+	a, err := anypb.New(m)
 	if err != nil {
 		panic(fmt.Sprintf("anypb.New(%+v) failed: %v", m, err))
 	}

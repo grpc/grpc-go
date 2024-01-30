@@ -24,14 +24,16 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
-	apb "github.com/golang/protobuf/ptypes/any"
-	dpb "github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"
 	cpb "google.golang.org/genproto/googleapis/rpc/code"
 	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/protoadapt"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/runtime/protoimpl"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
@@ -73,7 +75,7 @@ func (s) TestFromToProto(t *testing.T) {
 	s := &spb.Status{
 		Code:    int32(codes.Internal),
 		Message: "test test test",
-		Details: []*apb.Any{{TypeUrl: "foo", Value: []byte{3, 2, 1}}},
+		Details: []*anypb.Any{{TypeUrl: "foo", Value: []byte{3, 2, 1}}},
 	}
 
 	err := FromProto(s)
@@ -148,7 +150,7 @@ func (s) TestFromErrorOK(t *testing.T) {
 type customError struct {
 	Code    codes.Code
 	Message string
-	Details []*apb.Any
+	Details []*anypb.Any
 }
 
 func (c customError) Error() string {
@@ -165,7 +167,7 @@ func (c customError) GRPCStatus() *Status {
 
 func (s) TestFromErrorImplementsInterface(t *testing.T) {
 	code, message := codes.Internal, "test description"
-	details := []*apb.Any{{
+	details := []*anypb.Any{{
 		TypeUrl: "testUrl",
 		Value:   []byte("testValue"),
 	}}
@@ -305,7 +307,7 @@ func (s) TestConvertUnknownError(t *testing.T) {
 func (s) TestStatus_ErrorDetails(t *testing.T) {
 	tests := []struct {
 		code    codes.Code
-		details []proto.Message
+		details []protoadapt.MessageV1
 	}{
 		{
 			code:    codes.NotFound,
@@ -313,7 +315,7 @@ func (s) TestStatus_ErrorDetails(t *testing.T) {
 		},
 		{
 			code: codes.NotFound,
-			details: []proto.Message{
+			details: []protoadapt.MessageV1{
 				&epb.ResourceInfo{
 					ResourceType: "book",
 					ResourceName: "projects/1234/books/5678",
@@ -323,7 +325,7 @@ func (s) TestStatus_ErrorDetails(t *testing.T) {
 		},
 		{
 			code: codes.Internal,
-			details: []proto.Message{
+			details: []protoadapt.MessageV1{
 				&epb.DebugInfo{
 					StackEntries: []string{
 						"first stack",
@@ -334,9 +336,9 @@ func (s) TestStatus_ErrorDetails(t *testing.T) {
 		},
 		{
 			code: codes.Unavailable,
-			details: []proto.Message{
+			details: []protoadapt.MessageV1{
 				&epb.RetryInfo{
-					RetryDelay: &dpb.Duration{Seconds: 60},
+					RetryDelay: &durationpb.Duration{Seconds: 60},
 				},
 				&epb.ResourceInfo{
 					ResourceType: "book",
@@ -354,7 +356,7 @@ func (s) TestStatus_ErrorDetails(t *testing.T) {
 		}
 		details := s.Details()
 		for i := range details {
-			if !proto.Equal(details[i].(proto.Message), tc.details[i]) {
+			if !proto.Equal(details[i].(protoreflect.ProtoMessage), tc.details[i].(protoreflect.ProtoMessage)) {
 				t.Fatalf("(%v).Details()[%d] = %+v, want %+v", str(s), i, details[i], tc.details[i])
 			}
 		}
@@ -394,7 +396,7 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 		{
 			FromProto(&spb.Status{
 				Code: int32(cpb.Code_CANCELLED),
-				Details: []*apb.Any{
+				Details: []*anypb.Any{
 					{
 						TypeUrl: "",
 						Value:   []byte{},
@@ -407,7 +409,7 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 				},
 			}),
 			[]any{
-				errors.New(`message type url "" is invalid`),
+				protoimpl.X.NewError("invalid empty type URL"),
 				&epb.ResourceInfo{
 					ResourceType: "book",
 					ResourceName: "projects/1234/books/5678",
@@ -439,10 +441,10 @@ func str(s *Status) string {
 }
 
 // mustMarshalAny converts a protobuf message to an any.
-func mustMarshalAny(msg proto.Message) *apb.Any {
-	any, err := ptypes.MarshalAny(msg)
+func mustMarshalAny(msg proto.Message) *anypb.Any {
+	any, err := anypb.New(msg)
 	if err != nil {
-		panic(fmt.Sprintf("ptypes.MarshalAny(%+v) failed: %v", msg, err))
+		panic(fmt.Sprintf("anypb.New(%+v) failed: %v", msg, err))
 	}
 	return any
 }

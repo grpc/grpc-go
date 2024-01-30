@@ -24,14 +24,17 @@ import (
 	"time"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v1udpaudpatypepb "github.com/cncf/udpa/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
@@ -44,9 +47,6 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
-	anypb "github.com/golang/protobuf/ptypes/any"
-	spb "github.com/golang/protobuf/ptypes/struct"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 
 	_ "google.golang.org/grpc/xds/internal/httpfilter/rbac"   // Register the RBAC HTTP filter.
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
@@ -1826,9 +1826,9 @@ var clientOnlyCustomFilterConfig = &anypb.Any{
 // This custom filter uses the old TypedStruct message from the cncf/udpa repo.
 var customFilterOldTypedStructConfig = &v1udpaudpatypepb.TypedStruct{
 	TypeUrl: "custom.filter",
-	Value: &spb.Struct{
-		Fields: map[string]*spb.Value{
-			"foo": {Kind: &spb.Value_StringValue{StringValue: "bar"}},
+	Value: &structpb.Struct{
+		Fields: map[string]*structpb.Value{
+			"foo": {Kind: &structpb.Value_StringValue{StringValue: "bar"}},
 		},
 	},
 }
@@ -1836,9 +1836,9 @@ var customFilterOldTypedStructConfig = &v1udpaudpatypepb.TypedStruct{
 // This custom filter uses the new TypedStruct message from the cncf/xds repo.
 var customFilterNewTypedStructConfig = &v3xdsxdstypepb.TypedStruct{
 	TypeUrl: "custom.filter",
-	Value: &spb.Struct{
-		Fields: map[string]*spb.Value{
-			"foo": {Kind: &spb.Value_StringValue{StringValue: "bar"}},
+	Value: &structpb.Struct{
+		Fields: map[string]*structpb.Value{
+			"foo": {Kind: &structpb.Value_StringValue{StringValue: "bar"}},
 		},
 	},
 }

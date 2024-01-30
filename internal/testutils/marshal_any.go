@@ -20,8 +20,7 @@ package testutils
 import (
 	"testing"
 
-	"github.com/golang/protobuf/proto"
-	"google.golang.org/protobuf/protoadapt"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -30,7 +29,7 @@ import (
 func MarshalAny(t *testing.T, m proto.Message) *anypb.Any {
 	t.Helper()
 
-	a, err := anypb.New(protoadapt.MessageV2Of(m))
+	a, err := anypb.New(m)
 	if err != nil {
 		t.Fatalf("Failed to marshal proto %+v into an Any: %v", m, err)
 	}

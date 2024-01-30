@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -39,6 +38,7 @@ import (
 	"google.golang.org/grpc/xds/csds"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -393,7 +393,7 @@ func checkClientStatusResponse(stream v3statuspbgrpc.ClientStatusDiscoveryServic
 	}
 
 	if n := len(resp.Config); n != 1 {
-		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(resp))
+		return fmt.Errorf("got %d configs, want 1: %v", n, prototext.Format(resp))
 	}
 
 	if diff := cmp.Diff(resp.Config[0].GenericXdsConfigs, want, cmpOpts); diff != "" {
@@ -456,6 +456,6 @@ func (s) TestCSDSNoXDSClient(t *testing.T) {
 		t.Fatalf("Failed to recv ClientStatusResponse: %v", err)
 	}
 	if n := len(r.Config); n != 0 {
-		t.Fatalf("got %d configs, want 0: %v", n, proto.MarshalTextString(r))
+		t.Fatalf("got %d configs, want 0: %v", n, prototext.Format(r))
 	}
 }

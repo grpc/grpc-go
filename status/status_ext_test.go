@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -34,6 +33,8 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/protoadapt"
 
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -48,7 +49,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func errWithDetails(t *testing.T, s *status.Status, details ...proto.Message) error {
+func errWithDetails(t *testing.T, s *status.Status, details ...protoadapt.MessageV1) error {
 	t.Helper()
 	res, err := s.WithDetails(details...)
 	if err != nil {
