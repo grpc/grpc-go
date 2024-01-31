@@ -33,89 +33,89 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	BlogPostService_AddBlogPost_FullMethodName = "/main.BlogPostService/addBlogPost"
+	UnaryService_UnaryMethod_FullMethodName = "/main.UnaryService/unaryMethod"
 )
 
-// BlogPostServiceClient is the client API for BlogPostService service.
+// UnaryServiceClient is the client API for UnaryService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type BlogPostServiceClient interface {
-	AddBlogPost(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (*EventResponse, error)
+type UnaryServiceClient interface {
+	UnaryMethod(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (*EventResponse, error)
 }
 
-type blogPostServiceClient struct {
+type unaryServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewBlogPostServiceClient(cc grpc.ClientConnInterface) BlogPostServiceClient {
-	return &blogPostServiceClient{cc}
+func NewUnaryServiceClient(cc grpc.ClientConnInterface) UnaryServiceClient {
+	return &unaryServiceClient{cc}
 }
 
-func (c *blogPostServiceClient) AddBlogPost(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (*EventResponse, error) {
+func (c *unaryServiceClient) UnaryMethod(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (*EventResponse, error) {
 	out := new(EventResponse)
-	err := c.cc.Invoke(ctx, BlogPostService_AddBlogPost_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, UnaryService_UnaryMethod_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// BlogPostServiceServer is the server API for BlogPostService service.
-// All implementations must embed UnimplementedBlogPostServiceServer
+// UnaryServiceServer is the server API for UnaryService service.
+// All implementations must embed UnimplementedUnaryServiceServer
 // for forward compatibility
-type BlogPostServiceServer interface {
-	AddBlogPost(context.Context, *EventRequest) (*EventResponse, error)
-	mustEmbedUnimplementedBlogPostServiceServer()
+type UnaryServiceServer interface {
+	UnaryMethod(context.Context, *EventRequest) (*EventResponse, error)
+	mustEmbedUnimplementedUnaryServiceServer()
 }
 
-// UnimplementedBlogPostServiceServer must be embedded to have forward compatible implementations.
-type UnimplementedBlogPostServiceServer struct {
+// UnimplementedUnaryServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedUnaryServiceServer struct {
 }
 
-func (UnimplementedBlogPostServiceServer) AddBlogPost(context.Context, *EventRequest) (*EventResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method AddBlogPost not implemented")
+func (UnimplementedUnaryServiceServer) UnaryMethod(context.Context, *EventRequest) (*EventResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnaryMethod not implemented")
 }
-func (UnimplementedBlogPostServiceServer) mustEmbedUnimplementedBlogPostServiceServer() {}
+func (UnimplementedUnaryServiceServer) mustEmbedUnimplementedUnaryServiceServer() {}
 
-// UnsafeBlogPostServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to BlogPostServiceServer will
+// UnsafeUnaryServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to UnaryServiceServer will
 // result in compilation errors.
-type UnsafeBlogPostServiceServer interface {
-	mustEmbedUnimplementedBlogPostServiceServer()
+type UnsafeUnaryServiceServer interface {
+	mustEmbedUnimplementedUnaryServiceServer()
 }
 
-func RegisterBlogPostServiceServer(s grpc.ServiceRegistrar, srv BlogPostServiceServer) {
-	s.RegisterService(&BlogPostService_ServiceDesc, srv)
+func RegisterUnaryServiceServer(s grpc.ServiceRegistrar, srv UnaryServiceServer) {
+	s.RegisterService(&UnaryService_ServiceDesc, srv)
 }
 
-func _BlogPostService_AddBlogPost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _UnaryService_UnaryMethod_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(EventRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(BlogPostServiceServer).AddBlogPost(ctx, in)
+		return srv.(UnaryServiceServer).UnaryMethod(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: BlogPostService_AddBlogPost_FullMethodName,
+		FullMethod: UnaryService_UnaryMethod_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BlogPostServiceServer).AddBlogPost(ctx, req.(*EventRequest))
+		return srv.(UnaryServiceServer).UnaryMethod(ctx, req.(*EventRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// BlogPostService_ServiceDesc is the grpc.ServiceDesc for BlogPostService service.
+// UnaryService_ServiceDesc is the grpc.ServiceDesc for UnaryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var BlogPostService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "main.BlogPostService",
-	HandlerType: (*BlogPostServiceServer)(nil),
+var UnaryService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "main.UnaryService",
+	HandlerType: (*UnaryServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "addBlogPost",
-			Handler:    _BlogPostService_AddBlogPost_Handler,
+			MethodName: "unaryMethod",
+			Handler:    _UnaryService_UnaryMethod_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

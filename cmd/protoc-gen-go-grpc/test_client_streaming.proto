@@ -26,6 +26,6 @@ message EventResponse {
   bytes content = 1;
 }
 
-service UnaryService {
-  rpc unaryMethod(EventRequest) returns (EventResponse) {}
+service ClientStreamingService {
+  rpc clientMethod(stream EventRequest) returns (EventResponse) {}
 }
