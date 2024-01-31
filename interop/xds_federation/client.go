@@ -120,8 +120,7 @@ func main() {
 	for i := range clients {
 		wg.Add(1)
 		go func(c clientConfig) {
-			overallDeadline := time.Now().Add(time.Duration(*soakOverallTimeoutSeconds) * time.Second)
-			ctxWithDeadline, cancel := context.WithDeadline(ctx, overallDeadline)
+			ctxWithDeadline, cancel := context.WithTimeout(ctx, time.Duration(*soakOverallTimeoutSeconds)*time.Second)
 			defer cancel()
 			interop.DoSoakTest(ctxWithDeadline, c.tc, c.uri, c.opts, resetChannel, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond)
 			logger.Infof("%s test done for server: %s", *testCase, c.uri)

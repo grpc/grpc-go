@@ -389,8 +389,8 @@ func DoPerRPCCreds(ctx context.Context, tc testgrpc.TestServiceClient, serviceAc
 	}
 	token := GetToken(ctx, serviceAccountKeyFile, oauthScope)
 	kv := map[string]string{"authorization": token.Type() + " " + token.AccessToken}
-	outCtx := metadata.NewOutgoingContext(ctx, metadata.MD{"authorization": []string{kv["authorization"]}})
-	reply, err := tc.UnaryCall(outCtx, req)
+	ctx = metadata.NewOutgoingContext(ctx, metadata.MD{"authorization": []string{kv["authorization"]}})
+	reply, err := tc.UnaryCall(ctx, req)
 	if err != nil {
 		logger.Fatal("/TestService/UnaryCall RPC failed: ", err)
 	}
@@ -524,11 +524,11 @@ func DoCustomMetadata(ctx context.Context, tc testgrpc.TestServiceClient, args .
 		ResponseSize: int32(1),
 		Payload:      pl,
 	}
-	outCtx := metadata.NewOutgoingContext(ctx, customMetadata)
+	ctx = metadata.NewOutgoingContext(ctx, customMetadata)
 	var header, trailer metadata.MD
 	args = append(args, grpc.Header(&header), grpc.Trailer(&trailer))
 	reply, err := tc.UnaryCall(
-		outCtx,
+		ctx,
 		req,
 		args...,
 	)
@@ -543,7 +543,7 @@ func DoCustomMetadata(ctx context.Context, tc testgrpc.TestServiceClient, args .
 	validateMetadata(header, trailer)
 
 	// Testing with FullDuplex.
-	stream, err := tc.FullDuplexCall(outCtx, args...)
+	stream, err := tc.FullDuplexCall(ctx, args...)
 	if err != nil {
 		logger.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}

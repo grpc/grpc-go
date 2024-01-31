@@ -267,8 +267,7 @@ func main() {
 	}
 	defer conn.Close()
 	tc := testgrpc.NewTestServiceClient(conn)
-	overallDeadline := time.Now().Add(time.Duration(*soakOverallTimeoutSeconds) * time.Second)
-	ctxWithDeadline, cancel := context.WithDeadline(ctx, overallDeadline)
+	ctxWithDeadline, cancel := context.WithTimeout(ctx, time.Duration(*soakOverallTimeoutSeconds)*time.Second)
 	defer cancel()
 	switch *testCase {
 	case "empty_unary":
