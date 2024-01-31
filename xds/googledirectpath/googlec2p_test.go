@@ -223,7 +223,8 @@ func TestBuildXDS(t *testing.T) {
 				ClientDefaultListenerResourceNameTemplate: "%s",
 				Authorities: map[string]*bootstrap.Authority{
 					"traffic-director-c2p.xds.googleapis.com": {
-						XDSServer: wantServerConfig,
+						XDSServer:                          wantServerConfig,
+						ClientListenerResourceNameTemplate: "xdstp://traffic-director-c2p.xds.googleapis.com/envoy.config.listener.v3.Listener/%s",
 					},
 				},
 				NodeProto: wantNode,
