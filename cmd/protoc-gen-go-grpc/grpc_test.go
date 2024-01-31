@@ -26,6 +26,11 @@ func TestProtocBinary(t *testing.T) {
 		}
 	})
 
+	protocPath, err := exec.LookPath("protoc")
+	if err != nil {
+		t.Fatalf("protoc not found in PATH: %v", err)
+	}
+
 	for _, spec := range []struct {
 		protoFile string
 	}{
@@ -42,7 +47,7 @@ func TestProtocBinary(t *testing.T) {
 			protoFile: "test_bidirectional_streaming.proto",
 		},
 	} {
-		command := exec.Command("protoc", "--go-grpc_out="+tmpDir, spec.protoFile)
+		command := exec.Command(protocPath, "--go-grpc_out="+tmpDir, spec.protoFile)
 		command.Dir = workingDir
 
 		if err := command.Run(); err != nil {
