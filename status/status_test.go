@@ -422,7 +422,7 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 		for i, d := range details {
 			// s.Deatils can either contain an error or a proto message.  We
 			// want to do a compare the proto message for an Equal match, and
-			// for errors only check for presense.
+			// for errors only check for presence.
 			if _, ok := d.(error); ok {
 				if (d != nil) != (tc.want[i] != nil) {
 					t.Fatalf("s.Details()[%v] was %v; want %v", i, d, tc.want[i])
