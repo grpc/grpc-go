@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	cpb "google.golang.org/genproto/googleapis/rpc/code"
 	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
@@ -417,9 +418,20 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		got := tc.s.Details()
-		if (got != nil) != (tc.want != nil) {
-			t.Fatalf("(%v).Details() = %+v, want %+v", str(tc.s), got, tc.want)
+		details := tc.s.Details()
+		for i, d := range details {
+			// s.Deatils can either contain an error or a proto message.  We
+			// want to do a compare the proto message for an Equal match, and
+			// for errors only check for presense.
+			if _, ok := d.(error); ok {
+				if (d != nil) != (tc.want != nil) {
+					t.Fatalf("asdasdas")
+				}
+				continue
+			}
+			if !cmp.Equal(d, tc.want[i], cmp.Comparer(proto.Equal)) {
+				t.Fatalf("%v", d)
+			}
 		}
 	}
 }
