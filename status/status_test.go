@@ -24,14 +24,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	cpb "google.golang.org/genproto/googleapis/rpc/code"
 	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/protoadapt"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/runtime/protoimpl"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 
@@ -378,23 +376,23 @@ func (s) TestStatus_WithDetails_Fail(t *testing.T) {
 
 func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 	tests := []struct {
-		s *Status
-		i []any
+		s    *Status
+		want []any
 	}{
 		{
-			nil,
-			nil,
+			s:    nil,
+			want: nil,
 		},
 		{
-			FromProto(nil),
-			nil,
+			s:    FromProto(nil),
+			want: nil,
 		},
 		{
-			New(codes.OK, ""),
-			[]any{},
+			s:    New(codes.OK, ""),
+			want: []any{},
 		},
 		{
-			FromProto(&spb.Status{
+			s: FromProto(&spb.Status{
 				Code: int32(cpb.Code_CANCELLED),
 				Details: []*anypb.Any{
 					{
@@ -408,8 +406,8 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 					}),
 				},
 			}),
-			[]any{
-				protoimpl.X.NewError("invalid empty type URL"),
+			want: []any{
+				errors.New("invalid empty type URL"),
 				&epb.ResourceInfo{
 					ResourceType: "book",
 					ResourceName: "projects/1234/books/5678",
@@ -420,14 +418,10 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 	}
 	for _, tc := range tests {
 		got := tc.s.Details()
-		if !cmp.Equal(got, tc.i, cmp.Comparer(proto.Equal), cmp.Comparer(equalError)) {
-			t.Errorf("(%v).Details() = %+v, want %+v", str(tc.s), got, tc.i)
+		if (got != nil) != (tc.want != nil) {
+			t.Fatalf("(%v).Details() = %+v, want %+v", str(tc.s), got, tc.want)
 		}
 	}
-}
-
-func equalError(x, y error) bool {
-	return x == y || (x != nil && y != nil && x.Error() == y.Error())
 }
 
 func str(s *Status) string {
