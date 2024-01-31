@@ -28,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/alts/internal/handshaker"
@@ -40,11 +39,13 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
-	defaultTestLongTimeout  = 10 * time.Second
+	defaultTestLongTimeout  = 60 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
@@ -392,16 +393,37 @@ func establishAltsConnection(t *testing.T, handshakerAddress, serverAddress stri
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestLongTimeout)
 	defer cancel()
 	c := testgrpc.NewTestServiceClient(conn)
+	var peer peer.Peer
+	success := false
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		_, err = c.UnaryCall(ctx, &testpb.SimpleRequest{})
+		_, err = c.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.Peer(&peer))
 		if err == nil {
+			success = true
 			break
 		}
-		if code := status.Code(err); code == codes.Unavailable {
-			// The server is not ready yet. Try again.
+		if code := status.Code(err); code == codes.Unavailable || code == codes.DeadlineExceeded {
+			// The server is not ready yet or there were too many concurrent handshakes.
+			// Try again.
 			continue
 		}
 		t.Fatalf("c.UnaryCall() failed: %v", err)
+	}
+	if !success {
+		t.Fatalf("c.UnaryCall() timed out after %v", defaultTestShortTimeout)
+	}
+
+	// Check that peer.AuthInfo was populated with an ALTS AuthInfo
+	// instance. As a sanity check, also verify that the AuthType() and
+	// ApplicationProtocol() have the expected values.
+	if got, want := peer.AuthInfo.AuthType(), "alts"; got != want {
+		t.Errorf("authInfo.AuthType() = %s, want = %s", got, want)
+	}
+	authInfo, err := AuthInfoFromPeer(&peer)
+	if err != nil {
+		t.Errorf("AuthInfoFromPeer failed: %v", err)
+	}
+	if got, want := authInfo.ApplicationProtocol(), "grpc"; got != want {
+		t.Errorf("authInfo.ApplicationProtocol() = %s, want = %s", got, want)
 	}
 }
 
