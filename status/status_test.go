@@ -424,13 +424,13 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 			// want to do a compare the proto message for an Equal match, and
 			// for errors only check for presense.
 			if _, ok := d.(error); ok {
-				if (d != nil) != (tc.want != nil) {
-					t.Fatalf("asdasdas")
+				if (d != nil) != (tc.want[i] != nil) {
+					t.Fatalf("s.Details()[%v] was %v; want %v", i, d, tc.want[i])
 				}
 				continue
 			}
 			if !cmp.Equal(d, tc.want[i], cmp.Comparer(proto.Equal)) {
-				t.Fatalf("%v", d)
+				t.Fatalf("s.Details()[%v] was %v; want %v", i, d, tc.want[i])
 			}
 		}
 	}
