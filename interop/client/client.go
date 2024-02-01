@@ -349,10 +349,10 @@ func main() {
 		interop.DoCustomMetadata(ctx, tc)
 		logger.Infoln("CustomMetadata done")
 	case "unimplemented_method":
-		interop.DoUnimplementedMethod(conn, ctx)
+		interop.DoUnimplementedMethod(ctx, conn)
 		logger.Infoln("UnimplementedMethod done")
 	case "unimplemented_service":
-		interop.DoUnimplementedService(testgrpc.NewUnimplementedServiceClient(conn), ctx)
+		interop.DoUnimplementedService(ctx, testgrpc.NewUnimplementedServiceClient(conn))
 		logger.Infoln("UnimplementedService done")
 	case "pick_first_unary":
 		interop.DoPickFirstUnary(ctx, tc)
