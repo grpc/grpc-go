@@ -1013,6 +1013,7 @@ func (s *Server) serveStreams(ctx context.Context, st transport.ServerTransport,
 	}
 
 	defer func() {
+		time.Sleep(time.Second)
 		st.Close(errors.New("finished serving streams for the server transport"))
 		for _, sh := range s.opts.statsHandlers {
 			sh.HandleConn(ctx, &stats.ConnEnd{})
