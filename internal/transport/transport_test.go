@@ -2592,3 +2592,20 @@ func TestConnectionError_Unwrap(t *testing.T) {
 		t.Error("ConnectionError does not unwrap")
 	}
 }
+
+func TestServerOperateHeaderOnEvenStreamID(t *testing.T) {
+	hf := &http2.HeadersFrame{FrameHeader: http2.FrameHeader{StreamID: 2}}
+	metaHeaderFrame := &http2.MetaHeadersFrame{HeadersFrame: hf}
+	s := http2Server{}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	err := s.operateHeaders(ctx, metaHeaderFrame, nil)
+	if err == nil {
+		t.Fatalf("Error expected on the even stream ID. got %v", err)
+	}
+	possibleErrMsg := "received an illegal stream id: 2"
+	if !strings.Contains(err.Error(), possibleErrMsg) {
+		t.Fatalf("Expected partial error message: %v, got %v", possibleErrMsg, err.Error())
+	}
+	defer cancel()
+
+}
