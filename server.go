@@ -31,6 +31,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -66,6 +67,8 @@ const (
 	listenerAddressForServeHTTP = "listenerAddressForServeHTTP"
 )
 
+var goAwayTimeout = 1 * time.Second
+
 func init() {
 	internal.GetServerCredentials = func(srv *Server) credentials.TransportCredentials {
 		return srv.opts.creds
@@ -83,6 +86,10 @@ func init() {
 	internal.BinaryLogger = binaryLogger
 	internal.JoinServerOptions = newJoinServerOption
 	internal.RecvBufferPool = recvBufferPool
+
+	if testing.Testing() {
+		goAwayTimeout = 0
+	}
 }
 
 var statusOK = status.New(codes.OK, "")
@@ -1013,7 +1020,7 @@ func (s *Server) serveStreams(ctx context.Context, st transport.ServerTransport,
 	}
 
 	defer func() {
-		time.Sleep(2 * time.Second)
+		time.Sleep(goAwayTimeout)
 		st.Close(errors.New("finished serving streams for the server transport"))
 		for _, sh := range s.opts.statsHandlers {
 			sh.HandleConn(ctx, &stats.ConnEnd{})
