@@ -1020,6 +1020,10 @@ func (s *Server) serveStreams(ctx context.Context, st transport.ServerTransport,
 	}
 
 	defer func() {
+		// The client might not be done reading all the data, which at this point
+		// is stored in the kernel TCP buffer, yet. If we close the connection right away
+		// the client will get RST and the request will fail. Delay closing for 1 sec.
+		// See more details in https://github.com/grpc/grpc-go/pull/6957
 		time.Sleep(goAwayTimeout)
 		st.Close(errors.New("finished serving streams for the server transport"))
 		for _, sh := range s.opts.statsHandlers {
