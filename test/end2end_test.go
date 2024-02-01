@@ -3910,18 +3910,17 @@ func (s) TestClientRequestBodyErrorCloseAfterLength(t *testing.T) {
 // [HTTP/2 spec]: https://httpwg.org/specs/rfc7540.html#StreamIdentifiers
 func (s) TestClientInvalidStreamID(t *testing.T) {
 	te := newTest(t, tcpClearEnv)
-	ts := &funcServer{streamingInputCall: func(stream testgrpc.TestService_StreamingInputCallServer) error {
-		_, err := stream.Recv()
-		return err
-	}}
-	te.startServer(ts)
+	te.startServer(nil)
 	defer te.tearDown()
 	serverTesterFunc := func(st *serverTester) {
 		st.writeHeadersGRPC(2, "/grpc.testing.TestService/StreamingInputCall", true)
 		_, err := st.fr.ReadFrame()
-		// TODO: Assert the error.
 		if err == nil {
 			t.Fatalf("Error expected when Client StreamID is even %v", err)
+		}
+		possibleErrMsg := "received an illegal stream id: 2"
+		if !strings.Contains(err.Error(), possibleErrMsg) {
+			t.Fatalf("Expected invalid stream ID error but got: %v", err.Error())
 		}
 	}
 	te.withServerTester(serverTesterFunc)
