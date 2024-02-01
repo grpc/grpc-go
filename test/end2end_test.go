@@ -3915,12 +3915,8 @@ func (s) TestClientInvalidStreamID(t *testing.T) {
 	serverTesterFunc := func(st *serverTester) {
 		st.writeHeadersGRPC(2, "/grpc.testing.TestService/StreamingInputCall", true)
 		_, err := st.fr.ReadFrame()
-		if err == nil {
+		if err != io.EOF {
 			t.Fatalf("Error expected when Client StreamID is even %v", err)
-		}
-		possibleErrMsg := "received an illegal stream id: 2"
-		if !strings.Contains(err.Error(), possibleErrMsg) {
-			t.Fatalf("Expected invalid stream ID error but got: %v", err.Error())
 		}
 	}
 	te.withServerTester(serverTesterFunc)
