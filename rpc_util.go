@@ -189,7 +189,14 @@ type EmptyCallOption struct{}
 func (EmptyCallOption) before(*callInfo) error      { return nil }
 func (EmptyCallOption) after(*callInfo, *csAttempt) {}
 
-// RegisteredMethodCallOption is a call option that specifies that a call comes
+// RegisteredMethod returns a CallOption which specifies that a call comes from
+// a registered method. This does nothing functionally, but serves as a signal
+// to other code.
+func RegisteredMethod() CallOption {
+	return RegisteredMethodCallOption{}
+}
+
+// RegisteredMethodCallOption is a CallOption that specifies that a call comes
 // from a registered method.
 type RegisteredMethodCallOption struct{}
 
