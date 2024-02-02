@@ -634,7 +634,7 @@ func DoSpecialStatusMessage(ctx context.Context, tc testgrpc.TestServiceClient, 
 }
 
 // DoUnimplementedService attempts to call a method from an unimplemented service.
-func DoUnimplementedService(tc testgrpc.UnimplementedServiceClient, ctx context.Context) {
+func DoUnimplementedService(ctx context.Context, tc testgrpc.UnimplementedServiceClient) {
 	_, err := tc.UnimplementedCall(ctx, &testpb.Empty{})
 	if status.Code(err) != codes.Unimplemented {
 		logger.Fatalf("%v.UnimplementedCall() = _, %v, want _, %v", tc, status.Code(err), codes.Unimplemented)
@@ -642,7 +642,7 @@ func DoUnimplementedService(tc testgrpc.UnimplementedServiceClient, ctx context.
 }
 
 // DoUnimplementedMethod attempts to call an unimplemented method.
-func DoUnimplementedMethod(cc *grpc.ClientConn, ctx context.Context) {
+func DoUnimplementedMethod(ctx context.Context, cc *grpc.ClientConn) {
 	var req, reply proto.Message
 	if err := cc.Invoke(ctx, "/grpc.testing.TestService/UnimplementedCall", req, reply); err == nil || status.Code(err) != codes.Unimplemented {
 		logger.Fatalf("ClientConn.Invoke(_, _, _, _, _) = %v, want error code %s", err, codes.Unimplemented)

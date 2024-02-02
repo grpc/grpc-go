@@ -31,7 +31,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/protoadapt"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/runtime/protoimpl"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 
@@ -378,23 +377,23 @@ func (s) TestStatus_WithDetails_Fail(t *testing.T) {
 
 func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 	tests := []struct {
-		s *Status
-		i []any
+		s    *Status
+		want []any
 	}{
 		{
-			nil,
-			nil,
+			s:    nil,
+			want: nil,
 		},
 		{
-			FromProto(nil),
-			nil,
+			s:    FromProto(nil),
+			want: nil,
 		},
 		{
-			New(codes.OK, ""),
-			[]any{},
+			s:    New(codes.OK, ""),
+			want: []any{},
 		},
 		{
-			FromProto(&spb.Status{
+			s: FromProto(&spb.Status{
 				Code: int32(cpb.Code_CANCELLED),
 				Details: []*anypb.Any{
 					{
@@ -408,8 +407,8 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 					}),
 				},
 			}),
-			[]any{
-				protoimpl.X.NewError("invalid empty type URL"),
+			want: []any{
+				errors.New("invalid empty type URL"),
 				&epb.ResourceInfo{
 					ResourceType: "book",
 					ResourceName: "projects/1234/books/5678",
@@ -419,15 +418,25 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		got := tc.s.Details()
-		if !cmp.Equal(got, tc.i, cmp.Comparer(proto.Equal), cmp.Comparer(equalError)) {
-			t.Errorf("(%v).Details() = %+v, want %+v", str(tc.s), got, tc.i)
+		details := tc.s.Details()
+		if len(details) != len(tc.want) {
+			t.Fatalf("len(s.Details()) = %v, want = %v.", len(details), len(tc.want))
+		}
+		for i, d := range details {
+			// s.Details can either contain an error or a proto message.  We
+			// want to do a compare the proto message for an Equal match, and
+			// for errors only check for presence.
+			if _, ok := d.(error); ok {
+				if (d != nil) != (tc.want[i] != nil) {
+					t.Fatalf("s.Details()[%v] was %v; want %v", i, d, tc.want[i])
+				}
+				continue
+			}
+			if !cmp.Equal(d, tc.want[i], cmp.Comparer(proto.Equal)) {
+				t.Fatalf("s.Details()[%v] was %v; want %v", i, d, tc.want[i])
+			}
 		}
 	}
-}
-
-func equalError(x, y error) bool {
-	return x == y || (x != nil && y != nil && x.Error() == y.Error())
 }
 
 func str(s *Status) string {
