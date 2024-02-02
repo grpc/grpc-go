@@ -37,8 +37,7 @@ if [[ "$1" = "-install" ]]; then
   go install \
     golang.org/x/tools/cmd/goimports \
     honnef.co/go/tools/cmd/staticcheck \
-    github.com/client9/misspell/cmd/misspell \
-    google.golang.org/grpc/cmd/protoc-gen-go-grpc
+    github.com/client9/misspell/cmd/misspell
   popd
   if [[ -z "${VET_SKIP_PROTO}" ]]; then
     if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
