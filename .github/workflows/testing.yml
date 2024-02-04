@@ -105,14 +105,12 @@ jobs:
       # (where we run a reduced set of tests).
       - name: Run tests
         if: matrix.type == 'tests'
+        env:
+          VET_BUILD_GO_PROTOC: 1
         run: |
+          unset VET_SKIP_PROTO
           ./vet.sh -install
-          protoc --version && bin/protoc --version
-          echo $PATH
-          which protoc
-          command -v protoc    
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-          protoc --version && bin/protoc --version
+          protoc --version
           go version
           go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc/...
           cd "${GITHUB_WORKSPACE}"

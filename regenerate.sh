@@ -29,7 +29,7 @@ mkdir -p ${GOBIN}
 echo "remove existing generated files"
 # grpc_testing_not_regenerate/*.pb.go is not re-generated,
 # see grpc_testing_not_regenerate/README.md for details.
-rm -f $(find . -name '*.pb.go' | grep -v 'grpc_testing_not_regenerate')
+rm -f $(find . -name '*.pb.go' | grep -v -e 'grpc_testing_not_regenerate' -e 'cmd/protoc-gen-go-grpc')
 
 echo "go install google.golang.org/protobuf/cmd/protoc-gen-go"
 (cd test/tools && go install google.golang.org/protobuf/cmd/protoc-gen-go)

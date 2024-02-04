@@ -26,6 +26,6 @@ message EventResponse {
   bytes content = 1;
 }
 
-service BidirectionalStreamingService {
-  rpc bidirectionalMethod(stream EventRequest) returns (stream EventResponse) {}
+service ClientStreamingService {
+  rpc clientMethod(stream EventRequest) returns (EventResponse) {}
 }

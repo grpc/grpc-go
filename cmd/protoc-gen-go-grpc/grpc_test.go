@@ -1,3 +1,21 @@
+/*
+ *
+ * Copyright 2024 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package main
 
 import (
@@ -47,27 +65,33 @@ func TestProtocBinary(t *testing.T) {
 			protoFile: "test_bidirectional_streaming.proto",
 		},
 	} {
-		command := exec.Command(protocPath, "--go-grpc_out="+tmpDir, spec.protoFile)
+		protoFilePath := "./proto/" + spec.protoFile
+		if _, err := os.Stat(protoFilePath); os.IsNotExist(err) {
+			t.Fatalf("proto file %s does not exist", protoFilePath)
+		}
+
+		command := exec.Command(protocPath, "--go-grpc_out="+tmpDir, protoFilePath)
 		command.Dir = workingDir
 
-		if err := command.Run(); err != nil {
-			t.Fatalf("failed to execute protoc: %v", err)
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("failed to execute command protoc: %v\n%s", err, output)
 		}
 
 		pbgoFile := strings.Replace(spec.protoFile, ".proto", "_grpc.pb.go", 1)
 
 		testPluginContent, err := os.ReadFile(tmpDir + "/testdata/proto/" + pbgoFile)
 		if err != nil {
-			t.Errorf("Error while reading proto file generated from test: %s", err)
+			t.Errorf("error while reading proto file generated from test: %s", err)
 		}
 
 		protocPluginContent, err := os.ReadFile("./testdata/proto/" + pbgoFile)
 		if err != nil {
-			t.Errorf("Error while reading proto file generated from protoc command: %s", err)
+			t.Errorf("error while reading proto file generated from protoc command: %s", err)
 		}
 
 		if !reflect.DeepEqual(testPluginContent, protocPluginContent) {
-			t.Errorf("Error generated go test stubs are not equal")
+			t.Errorf("error generated go test stubs are not equal")
 		}
 	}
 }
