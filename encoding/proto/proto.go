@@ -50,7 +50,7 @@ func (codec) Marshal(v any) ([]byte, error) {
 func (codec) Unmarshal(data []byte, v any) error {
 	vv := messageV2Of(v)
 	if vv == nil {
-		return fmt.Errorf("failed to marshal, message is %T, want proto.Message", v)
+		return fmt.Errorf("failed to unmarshal, message is %T, want proto.Message", v)
 	}
 
 	return proto.Unmarshal(data, vv)
