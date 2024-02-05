@@ -24,9 +24,28 @@
 package dns
 
 import (
+	"time"
+
 	"google.golang.org/grpc/internal/resolver/dns"
 	"google.golang.org/grpc/resolver"
 )
+
+// SetResolvingTimeout sets the maximum duration for DNS resolution requests.
+//
+// This function updates the global `ResolvingTimeout` variable, which specifies
+// how long a DNS resolution attempt will wait before it is canceled.
+//
+// It is recommended to call this function at application startup, before any
+// gRPC calls are made. Modifying this value after initialization is not
+// thread-safe.
+//
+// The default value is 10 seconds. Setting the timeout too low may result
+// in premature timeouts during resolution, while setting it too high may
+// lead to unnecessary delays in service discovery. Choose a value appropriate
+// for your specific needs and network environment.
+func SetResolvingTimeout(timeout time.Duration) {
+	dns.ResolvingTimeout = timeout
+}
 
 // NewBuilder creates a dnsBuilder which is used to factory DNS resolvers.
 //
