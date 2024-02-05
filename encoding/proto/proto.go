@@ -39,13 +39,8 @@ func init() {
 type codec struct{}
 
 func (codec) Marshal(v any) ([]byte, error) {
-	var vv proto.Message
-	switch v := v.(type) {
-	case protoadapt.MessageV1:
-		vv = protoadapt.MessageV2Of(v)
-	case protoadapt.MessageV2:
-		vv = v
-	default:
+	vv := messageV2Of(v)
+	if vv == nil {
 		return nil, fmt.Errorf("failed to marshal, message is %T, want proto.Message", v)
 	}
 
@@ -53,17 +48,23 @@ func (codec) Marshal(v any) ([]byte, error) {
 }
 
 func (codec) Unmarshal(data []byte, v any) error {
-	var vv proto.Message
-	switch v := v.(type) {
-	case protoadapt.MessageV1:
-		vv = protoadapt.MessageV2Of(v)
-	case protoadapt.MessageV2:
-		vv = v
-	default:
-		return fmt.Errorf("failed to unmarshal, message is %T, want proto.Message", v)
+	vv := messageV2Of(v)
+	if vv == nil {
+		return fmt.Errorf("failed to marshal, message is %T, want proto.Message", v)
 	}
 
 	return proto.Unmarshal(data, vv)
+}
+
+func messageV2Of(v any) proto.Message {
+	switch v := v.(type) {
+	case protoadapt.MessageV1:
+		return protoadapt.MessageV2Of(v)
+	case protoadapt.MessageV2:
+		return v
+	}
+
+	return nil
 }
 
 func (codec) Name() string {
