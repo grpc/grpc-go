@@ -883,7 +883,7 @@ func (cc *ClientConn) channelzMetric() *channelz.ChannelInternalMetric {
 	}
 }
 
-// Target returns the canonicalized target string of the ClientConn.
+// Target returns the canonical target string of the ClientConn.
 //
 // # Experimental
 //

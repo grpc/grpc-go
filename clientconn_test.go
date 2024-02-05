@@ -820,14 +820,19 @@ func (s) TestClientConn_Target(t *testing.T) {
 			targetWant: "dns://a.server.com/google.com",
 		},
 		{
-			name:       "canonicalized-target-not-specified",
+			name:       "canonical-target-not-specified",
 			addr:       "no.scheme",
 			targetWant: "passthrough:///no.scheme",
 		},
 		{
-			name:       "canonicalized-target-nonexistent",
+			name:       "canonical-target-nonexistent",
 			addr:       "nonexist:///non.existent",
 			targetWant: "passthrough:///nonexist:///non.existent",
+		},
+		{
+			name:       "canonical-target-add-colon-slash",
+			addr:       "dns:hostname:port",
+			targetWant: "dns:///hostname:port",
 		},
 	}
 	for _, test := range tests {
