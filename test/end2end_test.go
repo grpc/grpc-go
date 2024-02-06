@@ -3909,17 +3909,26 @@ func (s) TestClientRequestBodyErrorCloseAfterLength(t *testing.T) {
 //
 // [HTTP/2 spec]: https://httpwg.org/specs/rfc7540.html#StreamIdentifiers
 func (s) TestClientInvalidStreamID(t *testing.T) {
-	te := newTest(t, tcpClearEnv)
-	te.startServer(nil)
-	defer te.tearDown()
-	serverTesterFunc := func(st *serverTester) {
-		st.writeHeadersGRPC(2, "/grpc.testing.TestService/StreamingInputCall", true)
-		_, err := st.fr.ReadFrame()
-		if err != io.EOF {
-			t.Fatalf("Error expected when Client StreamID is even %v", err)
-		}
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
 	}
-	te.withServerTester(serverTesterFunc)
+	defer lis.Close()
+	s := grpc.NewServer()
+	defer s.Stop()
+	go s.Serve(lis)
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	st := newServerTesterFromConn(t, conn)
+	st.greet()
+	st.writeHeadersGRPC(2, "/grpc.testing.TestService/StreamingInputCall", true)
+	_, err = st.fr.ReadFrame()
+	if err != io.EOF {
+		t.Fatalf("Error expected when Client StreamID is even %v", err)
+	}
 }
 
 func testClientRequestBodyErrorCloseAfterLength(t *testing.T, e env) {
