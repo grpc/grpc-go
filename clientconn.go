@@ -290,12 +290,12 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 // addTraceEvent is a helper method to add a trace event on the channel. If the
 // channel is a nested one, the same event is also added on the parent channel.
 func (cc *ClientConn) addTraceEvent(msg string) {
-	ted := &channelz.TraceEventDesc{
+	ted := &channelz.TraceEvent{
 		Desc:     fmt.Sprintf("Channel %s", msg),
 		Severity: channelz.CtInfo,
 	}
 	if cc.dopts.channelzParent != nil {
-		ted.Parent = &channelz.TraceEventDesc{
+		ted.Parent = &channelz.TraceEvent{
 			Desc:     fmt.Sprintf("Nested channel(id:%d) %s", cc.channelz.ID, msg),
 			Severity: channelz.CtInfo,
 		}
@@ -838,10 +838,10 @@ func (cc *ClientConn) newAddrConnLocked(addrs []resolver.Address, opts balancer.
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 
-	channelz.AddTraceEvent(logger, ac.channelz, 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, ac.channelz, 0, &channelz.TraceEvent{
 		Desc:     "Subchannel created",
 		Severity: channelz.CtInfo,
-		Parent: &channelz.TraceEventDesc{
+		Parent: &channelz.TraceEvent{
 			Desc:     fmt.Sprintf("Subchannel(id:%d) created", ac.channelz.ID),
 			Severity: channelz.CtInfo,
 		},
@@ -1557,10 +1557,10 @@ func (ac *addrConn) tearDown(err error) {
 		curTr.GracefulClose()
 		ac.mu.Lock()
 	}
-	channelz.AddTraceEvent(logger, ac.channelz, 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, ac.channelz, 0, &channelz.TraceEvent{
 		Desc:     "Subchannel deleted",
 		Severity: channelz.CtInfo,
-		Parent: &channelz.TraceEventDesc{
+		Parent: &channelz.TraceEvent{
 			Desc:     fmt.Sprintf("Subchannel(id:%d) deleted", ac.channelz.ID),
 			Severity: channelz.CtInfo,
 		},

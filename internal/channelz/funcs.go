@@ -129,7 +129,7 @@ func RegisterChannel(parent *Channel, ref string) *Channel {
 		nestedChans: make(map[int64]string),
 		subChans:    make(map[int64]string),
 		Parent:      parent,
-		trace:       &ChannelTrace{CreationTime: time.Now(), Events: make([]*TraceEvent, 0, getMaxTraceEntry())},
+		trace:       &ChannelTrace{CreationTime: time.Now(), Events: make([]*traceEvent, 0, getMaxTraceEntry())},
 	}
 	db.addChannel(id, cn, isTopChannel, cn.getParentID())
 	return cn
@@ -153,7 +153,7 @@ func RegisterSubChannel(pid int64, ref string) *SubChannel {
 		ID:      id,
 		sockets: make(map[int64]string),
 		parent:  db.channels[pid],
-		trace:   &ChannelTrace{CreationTime: time.Now(), Events: make([]*TraceEvent, 0, getMaxTraceEntry())},
+		trace:   &ChannelTrace{CreationTime: time.Now(), Events: make([]*traceEvent, 0, getMaxTraceEntry())},
 	}
 	db.addSubChannel(id, sc, pid)
 	return sc

@@ -28,7 +28,7 @@ var logger = grpclog.Component("channelz")
 
 // Info logs and adds a trace event if channelz is on.
 func Info(l grpclog.DepthLoggerV2, e Entity, args ...any) {
-	AddTraceEvent(l, e, 1, &TraceEventDesc{
+	AddTraceEvent(l, e, 1, &TraceEvent{
 		Desc:     fmt.Sprint(args...),
 		Severity: CtInfo,
 	})
@@ -36,7 +36,7 @@ func Info(l grpclog.DepthLoggerV2, e Entity, args ...any) {
 
 // Infof logs and adds a trace event if channelz is on.
 func Infof(l grpclog.DepthLoggerV2, e Entity, format string, args ...any) {
-	AddTraceEvent(l, e, 1, &TraceEventDesc{
+	AddTraceEvent(l, e, 1, &TraceEvent{
 		Desc:     fmt.Sprintf(format, args...),
 		Severity: CtInfo,
 	})
@@ -44,7 +44,7 @@ func Infof(l grpclog.DepthLoggerV2, e Entity, format string, args ...any) {
 
 // Warning logs and adds a trace event if channelz is on.
 func Warning(l grpclog.DepthLoggerV2, e Entity, args ...any) {
-	AddTraceEvent(l, e, 1, &TraceEventDesc{
+	AddTraceEvent(l, e, 1, &TraceEvent{
 		Desc:     fmt.Sprint(args...),
 		Severity: CtWarning,
 	})
@@ -52,7 +52,7 @@ func Warning(l grpclog.DepthLoggerV2, e Entity, args ...any) {
 
 // Warningf logs and adds a trace event if channelz is on.
 func Warningf(l grpclog.DepthLoggerV2, e Entity, format string, args ...any) {
-	AddTraceEvent(l, e, 1, &TraceEventDesc{
+	AddTraceEvent(l, e, 1, &TraceEvent{
 		Desc:     fmt.Sprintf(format, args...),
 		Severity: CtWarning,
 	})
@@ -60,7 +60,7 @@ func Warningf(l grpclog.DepthLoggerV2, e Entity, format string, args ...any) {
 
 // Error logs and adds a trace event if channelz is on.
 func Error(l grpclog.DepthLoggerV2, e Entity, args ...any) {
-	AddTraceEvent(l, e, 1, &TraceEventDesc{
+	AddTraceEvent(l, e, 1, &TraceEvent{
 		Desc:     fmt.Sprint(args...),
 		Severity: CtError,
 	})
@@ -68,7 +68,7 @@ func Error(l grpclog.DepthLoggerV2, e Entity, args ...any) {
 
 // Errorf logs and adds a trace event if channelz is on.
 func Errorf(l grpclog.DepthLoggerV2, e Entity, format string, args ...any) {
-	AddTraceEvent(l, e, 1, &TraceEventDesc{
+	AddTraceEvent(l, e, 1, &TraceEvent{
 		Desc:     fmt.Sprintf(format, args...),
 		Severity: CtError,
 	})

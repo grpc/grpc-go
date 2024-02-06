@@ -58,21 +58,18 @@ func (c *Channel) id() int64 {
 }
 
 func (c *Channel) SubChans() map[int64]string {
-	//////////// TODO
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	return copyMap(c.subChans)
 }
 
 func (c *Channel) NestedChans() map[int64]string {
-	//////////// TODO
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	return copyMap(c.nestedChans)
 }
 
 func (c *Channel) Trace() *ChannelTrace {
-	///////////// TODO
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	return c.trace.copy()

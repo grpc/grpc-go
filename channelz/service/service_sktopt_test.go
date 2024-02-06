@@ -59,7 +59,7 @@ func (s) TestGetSocketOptions(t *testing.T) {
 	czServer := channelz.RegisterServer("test svr")
 	defer channelz.RemoveEntry(czServer.ID)
 	for i, s := range ss {
-		ids[i] = channelz.RegisterSocket(&channelz.Socket{RefName: fmt.Sprint(i), Parent: czServer, SocketOptions: s.SocketOptions})
+		ids[i] = channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, RefName: fmt.Sprint(i), Parent: czServer, SocketOptions: s.SocketOptions})
 		defer channelz.RemoveEntry(ids[i].ID)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

@@ -50,8 +50,8 @@ func getMaxTraceEntry() int {
 	return int(i)
 }
 
-// TraceEvent represent a single trace event
-type TraceEvent struct {
+// traceEvent is an internal representation of a single trace event
+type traceEvent struct {
 	// Desc is a simple description of the trace event.
 	Desc string
 	// Severity states the severity of this trace event.
@@ -68,24 +68,35 @@ type TraceEvent struct {
 	RefType RefChannelType
 }
 
+// TraceEvent is what the caller of AddTraceEvent should provide to describe the
+// event to be added to the channel trace.
+//
+// The Parent field is optional. It is used for an event that will be recorded
+// in the entity's parent trace.
+type TraceEvent struct {
+	Desc     string
+	Severity Severity
+	Parent   *TraceEvent
+}
+
 type ChannelTrace struct {
 	cm           *channelMap
 	clearCalled  bool
 	CreationTime time.Time
 	EventNum     int64
 	mu           sync.Mutex
-	Events       []*TraceEvent
+	Events       []*traceEvent
 }
 
 func (c *ChannelTrace) copy() *ChannelTrace {
 	return &ChannelTrace{
 		CreationTime: c.CreationTime,
 		EventNum:     c.EventNum,
-		Events:       append(([]*TraceEvent)(nil), c.Events...),
+		Events:       append(([]*traceEvent)(nil), c.Events...),
 	}
 }
 
-func (c *ChannelTrace) append(e *TraceEvent) {
+func (c *ChannelTrace) append(e *traceEvent) {
 	c.mu.Lock()
 	if len(c.Events) == getMaxTraceEntry() {
 		del := c.Events[0]
@@ -168,22 +179,11 @@ func (r RefChannelType) String() string {
 	return refChannelTypeToString[r]
 }
 
-// TraceEventDesc is what the caller of AddTraceEvent should provide to describe
-// the event to be added to the channel trace.
-//
-// The Parent field is optional. It is used for an event that will be recorded
-// in the entity's parent trace.
-type TraceEventDesc struct {
-	Desc     string
-	Severity Severity
-	Parent   *TraceEventDesc
-}
-
 // AddTraceEvent adds trace related to the entity with specified id, using the
 // provided TraceEventDesc.
 //
 // If channelz is not turned ON, this will simply log the event descriptions.
-func AddTraceEvent(l grpclog.DepthLoggerV2, e Entity, depth int, desc *TraceEventDesc) {
+func AddTraceEvent(l grpclog.DepthLoggerV2, e Entity, depth int, desc *TraceEvent) {
 	// Log only the trace description associated with the bottom most entity.
 	d := fmt.Sprintf("[%s]%s", e, desc.Desc)
 	switch desc.Severity {

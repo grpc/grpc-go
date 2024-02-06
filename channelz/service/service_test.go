@@ -319,26 +319,26 @@ func (s) TestGetChannel(t *testing.T) {
 	refNames := []string{"top channel 1", "nested channel 1", "sub channel 2", "nested channel 3"}
 	cids := make([]*channelz.Channel, 3)
 	cids[0] = channelz.RegisterChannel(nil, refNames[0])
-	channelz.AddTraceEvent(logger, cids[0], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, cids[0], 0, &channelz.TraceEvent{
 		Desc:     "Channel Created",
 		Severity: channelz.CtInfo,
 	})
 
 	cids[1] = channelz.RegisterChannel(cids[0], refNames[1])
-	channelz.AddTraceEvent(logger, cids[1], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, cids[1], 0, &channelz.TraceEvent{
 		Desc:     "Channel Created",
 		Severity: channelz.CtInfo,
-		Parent: &channelz.TraceEventDesc{
+		Parent: &channelz.TraceEvent{
 			Desc:     fmt.Sprintf("Nested Channel(id:%d) created", cids[1].ID),
 			Severity: channelz.CtInfo,
 		},
 	})
 
 	subChan := channelz.RegisterSubChannel(cids[0].ID, refNames[2])
-	channelz.AddTraceEvent(logger, subChan, 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, subChan, 0, &channelz.TraceEvent{
 		Desc:     "SubChannel Created",
 		Severity: channelz.CtInfo,
-		Parent: &channelz.TraceEventDesc{
+		Parent: &channelz.TraceEvent{
 			Desc:     fmt.Sprintf("SubChannel(id:%d) created", subChan.ID),
 			Severity: channelz.CtInfo,
 		},
@@ -346,19 +346,19 @@ func (s) TestGetChannel(t *testing.T) {
 	defer channelz.RemoveEntry(subChan.ID)
 
 	cids[2] = channelz.RegisterChannel(cids[1], refNames[3])
-	channelz.AddTraceEvent(logger, cids[2], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, cids[2], 0, &channelz.TraceEvent{
 		Desc:     "Channel Created",
 		Severity: channelz.CtInfo,
-		Parent: &channelz.TraceEventDesc{
+		Parent: &channelz.TraceEvent{
 			Desc:     fmt.Sprintf("Nested Channel(id:%d) created", cids[2].ID),
 			Severity: channelz.CtInfo,
 		},
 	})
-	channelz.AddTraceEvent(logger, cids[0], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, cids[0], 0, &channelz.TraceEvent{
 		Desc:     fmt.Sprintf("Channel Connectivity change to %v", connectivity.Ready),
 		Severity: channelz.CtInfo,
 	})
-	channelz.AddTraceEvent(logger, cids[0], 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, cids[0], 0, &channelz.TraceEvent{
 		Desc:     "Resolver returns an empty address list",
 		Severity: channelz.CtWarning,
 	})
@@ -428,16 +428,16 @@ func (s) TestGetSubChannel(t *testing.T) {
 	refNames := []string{"top channel 1", "sub channel 1", "socket 1", "socket 2"}
 	chann := channelz.RegisterChannel(nil, refNames[0])
 	defer channelz.RemoveEntry(chann.ID)
-	channelz.AddTraceEvent(logger, chann, 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, chann, 0, &channelz.TraceEvent{
 		Desc:     "Channel Created",
 		Severity: channelz.CtInfo,
 	})
 	subChan := channelz.RegisterSubChannel(chann.ID, refNames[1])
 	defer channelz.RemoveEntry(subChan.ID)
-	channelz.AddTraceEvent(logger, subChan, 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, subChan, 0, &channelz.TraceEvent{
 		Desc:     subchanCreated,
 		Severity: channelz.CtInfo,
-		Parent: &channelz.TraceEventDesc{
+		Parent: &channelz.TraceEvent{
 			Desc:     fmt.Sprintf("Nested Channel(id:%d) created", chann.ID),
 			Severity: channelz.CtInfo,
 		},
@@ -446,11 +446,11 @@ func (s) TestGetSubChannel(t *testing.T) {
 	defer channelz.RemoveEntry(skt1.ID)
 	skt2 := channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, Parent: subChan, RefName: refNames[3]})
 	defer channelz.RemoveEntry(skt2.ID)
-	channelz.AddTraceEvent(logger, subChan, 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, subChan, 0, &channelz.TraceEvent{
 		Desc:     subchanConnectivityChange,
 		Severity: channelz.CtInfo,
 	})
-	channelz.AddTraceEvent(logger, subChan, 0, &channelz.TraceEventDesc{
+	channelz.AddTraceEvent(logger, subChan, 0, &channelz.TraceEvent{
 		Desc:     subChanPickNewAddress,
 		Severity: channelz.CtInfo,
 	})

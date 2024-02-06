@@ -183,7 +183,7 @@ func (c *channelMap) deleteEntry(id int64) entry {
 	return &dummyEntry{idNotFound: id}
 }
 
-func (c *channelMap) traceEvent(id int64, desc *TraceEventDesc) {
+func (c *channelMap) traceEvent(id int64, desc *TraceEvent) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	child := c.findEntry(id)
@@ -191,7 +191,7 @@ func (c *channelMap) traceEvent(id int64, desc *TraceEventDesc) {
 	if !ok {
 		return
 	}
-	childTC.getChannelTrace().append(&TraceEvent{Desc: desc.Desc, Severity: desc.Severity, Timestamp: time.Now()})
+	childTC.getChannelTrace().append(&traceEvent{Desc: desc.Desc, Severity: desc.Severity, Timestamp: time.Now()})
 	if desc.Parent != nil {
 		parent := c.findEntry(child.getParentID())
 		var chanType RefChannelType
@@ -202,7 +202,7 @@ func (c *channelMap) traceEvent(id int64, desc *TraceEventDesc) {
 			chanType = RefSubChannel
 		}
 		if parentTC, ok := parent.(tracedChannel); ok {
-			parentTC.getChannelTrace().append(&TraceEvent{
+			parentTC.getChannelTrace().append(&traceEvent{
 				Desc:      desc.Parent.Desc,
 				Severity:  desc.Parent.Severity,
 				Timestamp: time.Now(),
