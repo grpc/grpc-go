@@ -2606,7 +2606,7 @@ func TestServerOperateHeaderFailOnEvenStreamID(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	err := s.operateHeaders(ctx, metaHeaderFrame, nil)
-	want := "received an illegal stream id: 2"
+	want := "received an illegal stream id: 2. headers frame: [FrameHeader DATA stream=2 len=0]"
 	if got := err.Error(); got != want {
 		t.Fatalf("http2Server.operateHeaders() returned err: %v; want: %v", got, want)
 	}
