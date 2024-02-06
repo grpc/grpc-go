@@ -487,6 +487,20 @@ func TestVerifyCrl(t *testing.T) {
 			cert:    makeChain(t, testdata.Path("crl/unrevoked.pem"))[1],
 			errWant: "verification failure",
 		},
+		{
+			desc:    "Fail Tampered content",
+			crl:     loadCRL(t, testdata.Path("crl/provider_crl_empty_wrong_content.pem")),
+			certs:   makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem")),
+			cert:    makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem"))[0],
+			errWant: "No certificates",
+		},
+		{
+			desc:    "Fail CRL by malicious CA",
+			crl:     loadCRL(t, testdata.Path("crl/provider_malicious_crl_empty.pem")),
+			certs:   makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem")),
+			cert:    makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem"))[0],
+			errWant: "verification error",
+		},
 	}
 
 	for _, tt := range verifyTests {

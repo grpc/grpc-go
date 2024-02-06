@@ -757,6 +757,21 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverVType:            CertVerification,
 			serverExpectError:      true,
 		},
+		// Client: set valid credentials with the revocation config
+		// Server: set valid credentials with the revocation config
+		// Expected Behavior: fail, because CRL is issued by some malicious CA
+		{
+			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; Client uses CRL; mutualTLS",
+			clientCert:             []tls.Certificate{cs.ClientCert3},
+			clientGetRoot:          getRootCAsForClientCRL,
+			clientVerifyFunc:       clientVerifyFuncGood,
+			clientVType:            CertVerification,
+			clientRevocationConfig: makeStaticCRLProvider(testdata.Path("crl/provider_crl_empty.pem")),
+			serverMutualTLS:        true,
+			serverCert:             []tls.Certificate{cs.ServerCert3},
+			serverGetRoot:          getRootCAsForServerCRL,
+			serverVType:            CertVerification,
+		},
 	} {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
