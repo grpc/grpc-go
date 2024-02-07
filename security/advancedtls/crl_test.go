@@ -471,14 +471,14 @@ func TestVerifyCrl(t *testing.T) {
 			crl:     loadCRL(t, testdata.Path("crl/3.crl")),
 			certs:   makeChain(t, testdata.Path("crl/unrevoked.pem")),
 			cert:    makeChain(t, testdata.Path("crl/revokedInt.pem"))[1],
-			errWant: "No certificates mached",
+			errWant: "No certificates matched",
 		},
 		{
 			desc:    "Fail no certs",
 			crl:     loadCRL(t, testdata.Path("crl/1.crl")),
 			certs:   []*x509.Certificate{},
 			cert:    makeChain(t, testdata.Path("crl/unrevoked.pem"))[1],
-			errWant: "No certificates mached",
+			errWant: "No certificates matched",
 		},
 		{
 			desc:    "Fail Tampered signature",
@@ -500,6 +500,13 @@ func TestVerifyCrl(t *testing.T) {
 			certs:   makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem")),
 			cert:    makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem"))[0],
 			errWant: "verification error",
+		},
+		{
+			desc:    "Fail KeyUsage without cRLSign bit",
+			crl:     loadCRL(t, testdata.Path("crl/provider_malicious_crl_empty.pem")),
+			certs:   makeChain(t, testdata.Path("crl/provider_malicious_client_trust_cert.pem")),
+			cert:    makeChain(t, testdata.Path("crl/provider_malicious_client_trust_cert.pem"))[0],
+			errWant: "trust anchor can't be used",
 		},
 	}
 
@@ -662,7 +669,6 @@ func setupTLSConn(t *testing.T) (net.Listener, *x509.Certificate, *ecdsa.Private
 }
 
 // TestVerifyConnection will setup a client/server connection and check revocation in the real TLS dialer
-// TODO add CRL provider tests here?
 func TestVerifyConnection(t *testing.T) {
 	lis, cert, key := setupTLSConn(t)
 	defer func() {

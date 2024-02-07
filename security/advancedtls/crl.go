@@ -552,21 +552,16 @@ func verifyCRL(crl *CRL, rawIssuer []byte, chain []*x509.Certificate) error {
 		// "Conforming CRL issuers MUST use the key identifier method, and MUST
 		// include this extension in all CRLs issued."
 		// So, this is much simpler than RFC4158 and should be compatible.
-		str1 := cryptobyte.String(c.SubjectKeyId)
-		fmt.Println("SubjectKeyId =", str1)
-		str2 := cryptobyte.String(crl.authorityKeyID)
-		fmt.Println("SubjectKeyId =", str2)
-		str3 := cryptobyte.String(c.RawSubject)
-		fmt.Println("SubjectKeyId =", str3)
-		str4 := cryptobyte.String(crl.rawIssuer)
-		fmt.Println("SubjectKeyId =", str4)
-
 		if bytes.Equal(c.SubjectKeyId, crl.authorityKeyID) && bytes.Equal(c.RawSubject, crl.rawIssuer) {
+			// RFC5280, 6.3.3 (f) Key usage and cRLSign bit.
+			if c.KeyUsage != 0 && c.KeyUsage&x509.KeyUsageCRLSign == 0 {
+				return fmt.Errorf("verifyCRL: The trust anchor can't be used for issuing CRLs")
+			}
 			// RFC5280, 6.3.3 (g) Validate signature.
 			return crl.certList.CheckSignatureFrom(c)
 		}
 	}
-	return fmt.Errorf("verifyCRL: No certificates mached CRL issuer (%v)", crl.certList.Issuer)
+	return fmt.Errorf("verifyCRL: No certificates matched CRL issuer (%v)", crl.certList.Issuer)
 }
 
 // pemType is the type of a PEM encoded CRL.

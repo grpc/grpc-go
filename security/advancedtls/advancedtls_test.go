@@ -381,14 +381,14 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		return &GetRootCAsResults{TrustCerts: cs.ServerTrust3}, nil
 	}
 
-	makeStaticCRLProvider := func(crlPath string) *RevocationConfig {
+	makeStaticCRLProvider := func(crlPath string, allowUndetermined bool) *RevocationConfig {
 		rawCRL, err := os.ReadFile(crlPath)
 		if err != nil {
 			t.Fatalf("readFile(%v) failed err = %v", crlPath, err)
 		}
 		cRLProvider := NewStaticCRLProvider([][]byte{rawCRL})
 		return &RevocationConfig{
-			AllowUndetermined: true,
+			AllowUndetermined: allowUndetermined,
 			CRLProvider:       cRLProvider,
 		}
 	}
@@ -735,7 +735,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientGetRoot:          getRootCAsForClientCRL,
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVType:            CertVerification,
-			clientRevocationConfig: makeStaticCRLProvider(testdata.Path("crl/provider_crl_empty.pem")),
+			clientRevocationConfig: makeStaticCRLProvider(testdata.Path("crl/provider_crl_empty.pem"), true),
 			serverMutualTLS:        true,
 			serverCert:             []tls.Certificate{cs.ServerCert3},
 			serverGetRoot:          getRootCAsForServerCRL,
@@ -750,7 +750,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientGetRoot:          getRootCAsForClientCRL,
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVType:            CertVerification,
-			clientRevocationConfig: makeStaticCRLProvider(testdata.Path("crl/provider_crl_server_revoked.pem")),
+			clientRevocationConfig: makeStaticCRLProvider(testdata.Path("crl/provider_crl_server_revoked.pem"), true),
 			serverMutualTLS:        true,
 			serverCert:             []tls.Certificate{cs.ServerCert3},
 			serverGetRoot:          getRootCAsForServerCRL,
@@ -759,18 +759,20 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		},
 		// Client: set valid credentials with the revocation config
 		// Server: set valid credentials with the revocation config
-		// Expected Behavior: fail, because CRL is issued by some malicious CA
+		// Expected Behavior: fail, because CRL is issued by the malicious CA. It
+		// can't be properly processed, and we don't allow RevocationUndetermined.
 		{
 			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; Client uses CRL; mutualTLS",
 			clientCert:             []tls.Certificate{cs.ClientCert3},
 			clientGetRoot:          getRootCAsForClientCRL,
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVType:            CertVerification,
-			clientRevocationConfig: makeStaticCRLProvider(testdata.Path("crl/provider_crl_empty.pem")),
+			clientRevocationConfig: makeStaticCRLProvider(testdata.Path("crl/provider_malicious_crl_empty.pem"), false),
 			serverMutualTLS:        true,
 			serverCert:             []tls.Certificate{cs.ServerCert3},
 			serverGetRoot:          getRootCAsForServerCRL,
 			serverVType:            CertVerification,
+			serverExpectError:      true,
 		},
 	} {
 		test := test
