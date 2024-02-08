@@ -103,3 +103,19 @@ func (r *resourceTypeRegistry) maybeRegister(rType xdsresource.Type) error {
 	r.types[url] = rType
 	return nil
 }
+
+func (c *clientImpl) triggerResourceNotFoundForTesting(rType xdsresource.Type, resourceName string) error {
+	// Return early if the client is already closed.
+	if c == nil || c.done.HasFired() {
+		return fmt.Errorf("attempt to trigger resource-not-found-error for resource %q of type %q, but client is closed", rType.TypeName(), resourceName)
+	}
+
+	n := xdsresource.ParseName(resourceName)
+	a, unref, err := c.findAuthority(n)
+	if err != nil {
+		return fmt.Errorf("attempt to trigger resource-not-found-error for resource %q of type %q, but authority %q is not found", rType.TypeName(), resourceName, n.Authority)
+	}
+	defer unref()
+	a.triggerResourceNotFoundForTesting(rType, n.String())
+	return nil
+}

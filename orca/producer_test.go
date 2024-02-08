@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -36,6 +35,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	v3orcaservicegrpc "github.com/cncf/xds/go/xds/service/orca/v3"
@@ -228,7 +228,14 @@ func (f *fakeORCAService) close() {
 
 func (f *fakeORCAService) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportRequest, stream v3orcaservicegrpc.OpenRcaService_StreamCoreMetricsServer) error {
 	f.reqCh <- req
-	for resp := range f.respCh {
+	for {
+		var resp any
+		select {
+		case resp = <-f.respCh:
+		case <-stream.Context().Done():
+			return stream.Context().Err()
+		}
+
 		if err, ok := resp.(error); ok {
 			return err
 		}
@@ -245,7 +252,6 @@ func (f *fakeORCAService) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportR
 			return err
 		}
 	}
-	return nil
 }
 
 // TestProducerBackoff verifies that the ORCA producer applies the proper

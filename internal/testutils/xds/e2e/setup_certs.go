@@ -98,7 +98,7 @@ func CreateClientTLSCredentials(t *testing.T) credentials.TransportCredentials {
 
 // CreateServerTLSCredentials creates server-side TLS transport credentials
 // using certificate and key files from testdata/x509 directory.
-func CreateServerTLSCredentials(t *testing.T) credentials.TransportCredentials {
+func CreateServerTLSCredentials(t *testing.T, clientAuth tls.ClientAuthType) credentials.TransportCredentials {
 	t.Helper()
 
 	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
@@ -114,7 +114,7 @@ func CreateServerTLSCredentials(t *testing.T) credentials.TransportCredentials {
 		t.Fatal("Failed to append certificates")
 	}
 	return credentials.NewTLS(&tls.Config{
-		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientAuth:   clientAuth,
 		Certificates: []tls.Certificate{cert},
 		ClientCAs:    ca,
 	})

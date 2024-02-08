@@ -41,7 +41,7 @@ if [[ "$1" = "-install" ]]; then
   popd
   if [[ -z "${VET_SKIP_PROTO}" ]]; then
     if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
-      PROTOBUF_VERSION=22.0 # a.k.a v4.22.0 in pb.go files.
+      PROTOBUF_VERSION=25.2 # a.k.a. v4.22.0 in pb.go files.
       PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
       pushd /home/runner/go
       wget https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/${PROTOC_FILENAME}
@@ -185,9 +185,6 @@ GetSafeRegexMatch
 GetSuffixMatch
 GetTlsCertificateCertificateProviderInstance
 GetValidationContextCertificateProviderInstance
-XXXXX TODO: Remove the below deprecation usages:
-CloseNotifier
-Roots.Subjects
 XXXXX PleaseIgnoreUnused'
 
 echo SUCCESS
