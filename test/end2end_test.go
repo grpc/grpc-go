@@ -3928,7 +3928,6 @@ func (s) TestClientInvalidStreamID(t *testing.T) {
 	frame, err := st.fr.ReadFrame()
 	switch frame := frame.(type) {
 	case *http2.GoAwayFrame:
-		// do nothing since GoAwayFrame is expected.
 		if frame.ErrCode != http2.ErrCodeProtocol {
 			t.Fatalf("GoAway Frame received with code %v, want code: http.ErrCodeProtocol", frame.ErrCode)
 		}
