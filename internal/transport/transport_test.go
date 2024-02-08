@@ -2592,22 +2592,3 @@ func TestConnectionError_Unwrap(t *testing.T) {
 		t.Error("ConnectionError does not unwrap")
 	}
 }
-
-// Test gRPC server's operateHeaders on a header with even stream ID.
-// Per [HTTP/2 spec]: Streams initiated by a client MUST use
-// odd-numbered stream identifiers. When received even stream ID, the
-// operateHeader returns error instead of writing the frame to the transport.
-//
-// [HTTP/2 spec]: https://httpwg.org/specs/rfc7540.html#StreamIdentifiers
-func TestServerOperateHeaderFailOnEvenStreamID(t *testing.T) {
-	hf := &http2.HeadersFrame{FrameHeader: http2.FrameHeader{StreamID: 2}}
-	metaHeaderFrame := &http2.MetaHeadersFrame{HeadersFrame: hf}
-	s := http2Server{}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	err := s.operateHeaders(ctx, metaHeaderFrame, nil)
-	want := "received an illegal stream id: 2. headers frame: [FrameHeader DATA stream=2 len=0]"
-	if got := err.Error(); got != want {
-		t.Fatalf("http2Server.operateHeaders() returned err: %v; want: %v", got, want)
-	}
-}

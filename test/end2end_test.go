@@ -3925,9 +3925,15 @@ func (s) TestClientInvalidStreamID(t *testing.T) {
 	st := newServerTesterFromConn(t, conn)
 	st.greet()
 	st.writeHeadersGRPC(2, "/grpc.testing.TestService/StreamingInputCall", true)
-	_, err = st.fr.ReadFrame()
-	if err != io.EOF {
-		t.Fatalf("Error expected when Client StreamID is even %v", err)
+	frame, err := st.fr.ReadFrame()
+	switch frame := frame.(type) {
+	case *http2.GoAwayFrame:
+		// do nothing since GoAwayFrame is expected.
+		if frame.ErrCode != http2.ErrCodeProtocol {
+			t.Fatalf("GoAway Frame received with code %v, want code: http.ErrCodeProtocol", frame.ErrCode)
+		}
+	default:
+		t.Fatalf("want: GoAwayFrame. got: %v", frame)
 	}
 }
 
