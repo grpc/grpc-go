@@ -3927,9 +3927,9 @@ func (s) TestClientInvalidStreamID(t *testing.T) {
 	st.writeHeadersGRPC(2, "/grpc.testing.TestService/StreamingInputCall", true)
 	goAwayFrame := st.wantGoAway(http2.ErrCodeProtocol)
 	got := string(goAwayFrame.DebugData()[:])
-	want := "received an illegal stream id: 2"
+	want := "received an illegal stream id: 2. headers frame: [FrameHeader HEADERS flags=END_STREAM|END_HEADERS stream=2 len=60]"
 	if got != want {
-		t.Fatalf("Debug data received from stream %v, want: %v", got, want)
+		t.Fatalf("Error received: %v, want: %v", got, want)
 	}
 }
 
