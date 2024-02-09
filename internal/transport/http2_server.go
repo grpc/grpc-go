@@ -324,6 +324,17 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
 		t.loopy.run()
 		close(t.loopyWriterDone)
+		// Wait 1 second before closing the connection, or when the reader is
+		// done (i.e. the client already closed the connection or a connection
+		// error occurred).  This avoids the potential problem where there is
+		// unread data on the receive side of the connection, which, if closed,
+		// would lead to a TCP RST instead of FIN, and the client encountering
+		// errors.  For more info: https://github.com/grpc/grpc-go/issues/5358
+		select {
+		case <-t.readerDone:
+		case <-time.After(time.Second):
+		}
+		t.conn.Close()
 	}()
 	go t.keepalive()
 	return t, nil
@@ -609,8 +620,8 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 // traceCtx attaches trace to ctx and returns the new context.
 func (t *http2Server) HandleStreams(ctx context.Context, handle func(*Stream)) {
 	defer func() {
-		<-t.loopyWriterDone
 		close(t.readerDone)
+		<-t.loopyWriterDone
 	}()
 	for {
 		t.controlBuf.throttle()
@@ -1325,6 +1336,7 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 		if err := t.framer.fr.WriteGoAway(sid, g.code, g.debugData); err != nil {
 			return false, err
 		}
+		t.framer.writer.Flush()
 		if retErr != nil {
 			return false, retErr
 		}
@@ -1345,7 +1357,7 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 		return false, err
 	}
 	go func() {
-		timer := time.NewTimer(time.Minute)
+		timer := time.NewTimer(5 * time.Second)
 		defer timer.Stop()
 		select {
 		case <-t.drainEvent.Done():

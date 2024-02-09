@@ -452,6 +452,10 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	go func() {
 		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger)
 		t.loopy.run()
+		// Immediately close the connection, as the loopy writer returns when
+		// there are no more active streams and we were draining (the server
+		// sent a GOAWAY).
+		t.conn.Close()
 		close(t.writerDone)
 	}()
 	return t, nil
