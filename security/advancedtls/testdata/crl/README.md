@@ -59,6 +59,8 @@ We need to generate the following artifacts for testing CRL provider:
 * client cert signed by server CA
 * empty crl file
 * crl file containing information about revoked server cert
+* crl file by 'malicious' CA which contains the same issuer with original CA 
+
 
 Please find the related commands below.
 
@@ -79,6 +81,7 @@ $ openssl x509 -req -in provider_new_cert.csr -out provider_client_cert.pem -CA 
 
 Here is the content of `provider_extensions.conf` -
 ```
+[extensions]
 subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid,issuer
 basicConstraints = CA:FALSE
@@ -116,4 +119,14 @@ cert are below.
 $ openssl ca -gencrl -keyfile provider_client_trust_key.pem -cert provider_client_trust_cert.pem -out provider_crl_empty.pem -config provider_crl.cnf
 $ openssl ca -revoke provider_server_cert.pem -keyfile provider_client_trust_key.pem -cert provider_client_trust_cert.pem -config provider_crl.cnf
 $ openssl ca -gencrl -keyfile provider_client_trust_key.pem -cert provider_client_trust_cert.pem -out provider_crl_server_revoked.pem -config provider_crl.cnf
+```
+
+The commands to generate CRL file by 'malicious' CA are below.
+```
+$ openssl genrsa -out provider_malicious_client_trust_key.pem 4096
+$ SKI=$(openssl x509 -in provider_client_trust_cert.pem -noout -text | awk '/Subject Key Identifier/ {getline; print $1;}') 
+$ sed -i "s/subjectKeyIdentifier = X/subjectKeyIdentifier = $SKI/g" provider_extensions.conf
+$ openssl req -new -key provider_malicious_client_trust_key.pem -out cert_malicious_request.csr -subj "/C=US/ST=CA/L=SVL/O=Internet Widgits Pty Ltd" -config provider_extensions.conf
+$ openssl x509 -req -in cert_malicious_request.csr -signkey provider_malicious_client_trust_key.pem -out provider_malicious_client_trust_cert.pem -days 365 -extfile provider_extensions.conf -extensions extensions
+$ openssl ca -gencrl -keyfile provider_malicious_client_trust_key.pem -cert provider_malicious_client_trust_cert.pem -out provider_malicious_crl_empty.pem -config provider_crl.cnf
 ```

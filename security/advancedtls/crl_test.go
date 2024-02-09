@@ -441,9 +441,12 @@ func TestGetIssuerCRLCache(t *testing.T) {
 }
 
 func TestVerifyCrl(t *testing.T) {
-	tampered := loadCRL(t, testdata.Path("crl/1.crl"))
+	tamperedSignature := loadCRL(t, testdata.Path("crl/1.crl"))
 	// Change the signature so it won't verify
-	tampered.certList.Signature[0]++
+	tamperedSignature.certList.Signature[0]++
+	tamperedContent := loadCRL(t, testdata.Path("crl/provider_crl_empty.pem"))
+	// Change the content so it won't find a match
+	tamperedContent.rawIssuer[0]++
 
 	verifyTests := []struct {
 		desc    string
@@ -482,14 +485,14 @@ func TestVerifyCrl(t *testing.T) {
 		},
 		{
 			desc:    "Fail Tampered signature",
-			crl:     tampered,
+			crl:     tamperedSignature,
 			certs:   makeChain(t, testdata.Path("crl/unrevoked.pem")),
 			cert:    makeChain(t, testdata.Path("crl/unrevoked.pem"))[1],
 			errWant: "verification failure",
 		},
 		{
 			desc:    "Fail Tampered content",
-			crl:     loadCRL(t, testdata.Path("crl/provider_crl_empty_wrong_content.pem")),
+			crl:     tamperedContent,
 			certs:   makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem")),
 			cert:    makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem"))[0],
 			errWant: "No certificates",

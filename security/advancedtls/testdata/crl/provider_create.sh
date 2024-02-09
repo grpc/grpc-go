@@ -72,5 +72,35 @@ openssl ca -gencrl                       \
   -out provider_crl_server_revoked.pem   \
   -config provider_crl.cnf
 
+openssl genrsa                                      \
+  -out provider_malicious_client_trust_key.pem 4096
+
+SKI=$(openssl x509 -in provider_client_trust_cert.pem \
+  -noout                                              \
+  -text                                               \
+  | awk '/Subject Key Identifier/ {getline; print $1;}')
+
+sed -i "s/subjectKeyIdentifier = hash/subjectKeyIdentifier = $SKI/g" \
+  provider_extensions.conf
+
+openssl req -new                                       \
+  -key provider_malicious_client_trust_key.pem         \
+  -out cert_malicious_request.csr                      \
+  -subj "/C=US/ST=CA/L=SVL/O=Internet Widgits Pty Ltd" \
+  -config provider_extensions.conf
+
+openssl x509 -req                                  \
+  -in cert_malicious_request.csr                   \
+  -signkey provider_malicious_client_trust_key.pem \
+  -out provider_malicious_client_trust_cert.pem    \
+  -days 3650                                       \
+  -extfile provider_extensions.conf                \
+  -extensions extensions
+
+openssl ca -gencrl                                 \
+  -keyfile provider_malicious_client_trust_key.pem \
+  -cert provider_malicious_client_trust_cert.pem   \
+  -out provider_malicious_crl_empty.pem            \
+  -config provider_crl.cnf
 
 rm *.csr
