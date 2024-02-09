@@ -322,19 +322,24 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	go func() {
 		t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger)
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
-		t.loopy.run()
+		err := t.loopy.run()
 		close(t.loopyWriterDone)
-		// Wait 1 second before closing the connection, or when the reader is
-		// done (i.e. the client already closed the connection or a connection
-		// error occurred).  This avoids the potential problem where there is
-		// unread data on the receive side of the connection, which, if closed,
-		// would lead to a TCP RST instead of FIN, and the client encountering
-		// errors.  For more info: https://github.com/grpc/grpc-go/issues/5358
-		select {
-		case <-t.readerDone:
-		case <-time.After(time.Second):
+		if !isIOError(err) {
+			// Close the connection if a non-I/O error occurs (for I/O errors
+			// the reader will also encounter the error and close).  Wait 1
+			// second before closing the connection, or when the reader is done
+			// (i.e. the client already closed the connection or a connection
+			// error occurred).  This avoids the potential problem where there
+			// is unread data on the receive side of the connection, which, if
+			// closed, would lead to a TCP RST instead of FIN, and the client
+			// encountering errors.  For more info:
+			// https://github.com/grpc/grpc-go/issues/5358
+			select {
+			case <-t.readerDone:
+			case <-time.After(time.Second):
+			}
+			t.conn.Close()
 		}
-		t.conn.Close()
 	}()
 	go t.keepalive()
 	return t, nil
