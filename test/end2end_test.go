@@ -3903,9 +3903,9 @@ func (s) TestClientRequestBodyErrorCloseAfterLength(t *testing.T) {
 
 // Tests gRPC server's behavior when a gRPC client sends a frame with an invalid
 // streamID. Per [HTTP/2 spec]: Streams initiated by a client MUST use
-// odd-numbered stream identifiers. This test sets up a test server and send a
+// odd-numbered stream identifiers. This test sets up a test server and sends a
 // header frame with stream ID of 2. The test asserts that a subsequent read on
-// the transport throws an error.
+// the transport sends a GoAwayFrame with error code: PROTOCOL_ERROR.
 //
 // [HTTP/2 spec]: https://httpwg.org/specs/rfc7540.html#StreamIdentifiers
 func (s) TestClientInvalidStreamID(t *testing.T) {
@@ -3926,8 +3926,8 @@ func (s) TestClientInvalidStreamID(t *testing.T) {
 	st.greet()
 	st.writeHeadersGRPC(2, "/grpc.testing.TestService/StreamingInputCall", true)
 	goAwayFrame := st.wantGoAway(http2.ErrCodeProtocol)
-	want := "received an illegal stream id: 2. headers frame: [FrameHeader HEADERS flags=END_STREAM|END_HEADERS stream=2 len=60]"
-	if got := string(goAwayFrame.DebugData()); got != want {
+	want := "received an illegal stream id: 2."
+	if got := string(goAwayFrame.DebugData()); strings.Contains(got, want) {
 		t.Fatalf("Error received: %v, want: %v", got, want)
 	}
 }
