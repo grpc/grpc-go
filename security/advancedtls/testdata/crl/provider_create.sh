@@ -103,4 +103,7 @@ openssl ca -gencrl                                 \
   -out provider_malicious_crl_empty.pem            \
   -config provider_crl.cnf
 
+sed -i "s/subjectKeyIdentifier = .*/subjectKeyIdentifier = hash/g" \
+  provider_extensions.conf
+
 rm *.csr

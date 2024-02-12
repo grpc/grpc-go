@@ -509,7 +509,7 @@ func TestVerifyCrl(t *testing.T) {
 			crl:     loadCRL(t, testdata.Path("crl/provider_malicious_crl_empty.pem")),
 			certs:   makeChain(t, testdata.Path("crl/provider_malicious_client_trust_cert.pem")),
 			cert:    makeChain(t, testdata.Path("crl/provider_malicious_client_trust_cert.pem"))[0],
-			errWant: "trust anchor can't be used",
+			errWant: "certificate can't be used",
 		},
 	}
 

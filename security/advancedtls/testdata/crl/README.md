@@ -121,7 +121,9 @@ $ openssl ca -revoke provider_server_cert.pem -keyfile provider_client_trust_key
 $ openssl ca -gencrl -keyfile provider_client_trust_key.pem -cert provider_client_trust_cert.pem -out provider_crl_server_revoked.pem -config provider_crl.cnf
 ```
 
-The commands to generate CRL file by 'malicious' CA are below.
+The commands to generate CRL file by 'malicious' CA are below. Note that we use
+Subject Key Identifier from previously generated provider_client_trust_cert.pem
+to generate malicious certs / CRL.
 ```
 $ openssl genrsa -out provider_malicious_client_trust_key.pem 4096
 $ SKI=$(openssl x509 -in provider_client_trust_cert.pem -noout -text | awk '/Subject Key Identifier/ {getline; print $1;}') 

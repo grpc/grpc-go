@@ -313,8 +313,9 @@ func fetchCRL(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revocat
 
 // checkCert checks a single certificate against the CRL defined in the
 // certificate. It will fetch and verify the CRL(s) defined in the root
-// directory (or a CRLProvider) specified by cfg. If we can't load any valid
-// authoritative CRL files, the status is RevocationUndetermined.
+// directory (or a CRLProvider) specified by cfg. If we can't load (and verify -
+// see verifyCRL) any valid authoritative CRL files, the status is
+// RevocationUndetermined.
 // c is the certificate to check.
 // crlVerifyCrt is the group of possible certificates to verify the crl.
 func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) RevocationStatus {
@@ -323,8 +324,8 @@ func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revoca
 		// We couldn't load any valid CRL files for the certificate, so we don't
 		// know if it's RevocationUnrevoked or not. This is not necessarily a
 		// problem - it's not invalid to have no CRLs if you don't have any
-		// revocations for an issuer. It also might be an indication of CRL file to
-		// be invalid.
+		// revocations for an issuer. It also might be an indication that the CRL
+		// file to is invalid.
 		// We just return RevocationUndetermined and there is a setting for the user
 		// to control the handling of that.
 		grpclogLogger.Warningf("fetchCRL() err = %v", err)
@@ -555,7 +556,7 @@ func verifyCRL(crl *CRL, rawIssuer []byte, chain []*x509.Certificate) error {
 		if bytes.Equal(c.SubjectKeyId, crl.authorityKeyID) && bytes.Equal(c.RawSubject, crl.rawIssuer) {
 			// RFC5280, 6.3.3 (f) Key usage and cRLSign bit.
 			if c.KeyUsage != 0 && c.KeyUsage&x509.KeyUsageCRLSign == 0 {
-				return fmt.Errorf("verifyCRL: The trust anchor can't be used for issuing CRLs")
+				return fmt.Errorf("verifyCRL: The certificate can't be used for issuing CRLs")
 			}
 			// RFC5280, 6.3.3 (g) Validate signature.
 			return crl.certList.CheckSignatureFrom(c)
