@@ -55,4 +55,4 @@ The context returned from
   this context.
 
 NOTE: The [stats](https://pkg.go.dev/google.golang.org/grpc/stats) package should only be used for network monitoring purposes,  
-and not as an alternative to [interceptors](https://github.com/grpc/grpc-go/blob/master/examples/features/metadata).
+and not as an alternative to [interceptor](https://github.com/grpc/grpc-go/blob/master/examples/features/interceptor).
