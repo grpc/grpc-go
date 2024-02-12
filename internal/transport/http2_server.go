@@ -642,7 +642,7 @@ func (t *http2Server) HandleStreams(ctx context.Context, handle func(*Stream)) {
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
 			if err := t.operateHeaders(ctx, frame, handle); err != nil {
-				// Any error processing client headers,e.g. invalid stream ID,
+				// Any error processing client headers, e.g. invalid stream ID,
 				// is considered a protocol violation.
 				t.controlBuf.put(&goAway{
 					code:      http2.ErrCodeProtocol,
