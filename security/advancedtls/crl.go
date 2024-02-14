@@ -285,7 +285,7 @@ func fetchIssuerCRL(rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg Revo
 		return nil, fmt.Errorf("fetchCRL() failed: %v", err)
 	}
 
-	if err := verifyCRL(crl, rawIssuer, crlVerifyCrt); err != nil {
+	if err := verifyCRL(crl, crlVerifyCrt); err != nil {
 		return nil, fmt.Errorf("verifyCRL() failed: %v", err)
 	}
 	if cfg.Cache != nil {
@@ -303,24 +303,31 @@ func fetchCRL(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revocat
 		if crl == nil {
 			return nil, fmt.Errorf("no CRL found for certificate's issuer")
 		}
+		if err := verifyCRL(crl, crlVerifyCrt); err != nil {
+			return nil, fmt.Errorf("verifyCRL() failed: %v", err)
+		}
 		return crl, nil
 	}
 	return fetchIssuerCRL(c.RawIssuer, crlVerifyCrt, cfg)
 }
 
-// checkCert checks a single certificate against the CRL defined in the certificate.
-// It will fetch and verify the CRL(s) defined in the root directory specified by cfg.
-// If we can't load any authoritative CRL files, the status is RevocationUndetermined.
+// checkCert checks a single certificate against the CRL defined in the
+// certificate. It will fetch and verify the CRL(s) defined in the root
+// directory (or a CRLProvider) specified by cfg. If we can't load (and verify -
+// see verifyCRL) any valid authoritative CRL files, the status is
+// RevocationUndetermined.
 // c is the certificate to check.
 // crlVerifyCrt is the group of possible certificates to verify the crl.
 func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) RevocationStatus {
 	crl, err := fetchCRL(c, crlVerifyCrt, cfg)
 	if err != nil {
-		// We couldn't load any CRL files for the certificate, so we don't know
-		// if it's RevocationUnrevoked or not.  This is not necessarily a
+		// We couldn't load any valid CRL files for the certificate, so we don't
+		// know if it's RevocationUnrevoked or not. This is not necessarily a
 		// problem - it's not invalid to have no CRLs if you don't have any
-		// revocations for an issuer. We just return RevocationUndetermined and
-		// there is a setting for the user to control the handling of that.
+		// revocations for an issuer. It also might be an indication that the CRL
+		// file is invalid.
+		// We just return RevocationUndetermined and there is a setting for the user
+		// to control the handling of that.
 		grpclogLogger.Warningf("fetchCRL() err = %v", err)
 		return RevocationUndetermined
 	}
@@ -534,8 +541,8 @@ func fetchCRLOpenSSLHashDir(rawIssuer []byte, cfg RevocationConfig) (*CRL, error
 	return parsedCRL, nil
 }
 
-func verifyCRL(crl *CRL, rawIssuer []byte, chain []*x509.Certificate) error {
-	// RFC5280, 6.3.3 (f) Obtain and validateate the certification path for the issuer of the complete CRL
+func verifyCRL(crl *CRL, chain []*x509.Certificate) error {
+	// RFC5280, 6.3.3 (f) Obtain and validate the certification path for the issuer of the complete CRL
 	// We intentionally limit our CRLs to be signed with the same certificate path as the certificate
 	// so we can use the chain from the connection.
 
@@ -547,11 +554,15 @@ func verifyCRL(crl *CRL, rawIssuer []byte, chain []*x509.Certificate) error {
 		// include this extension in all CRLs issued."
 		// So, this is much simpler than RFC4158 and should be compatible.
 		if bytes.Equal(c.SubjectKeyId, crl.authorityKeyID) && bytes.Equal(c.RawSubject, crl.rawIssuer) {
+			// RFC5280, 6.3.3 (f) Key usage and cRLSign bit.
+			if c.KeyUsage != 0 && c.KeyUsage&x509.KeyUsageCRLSign == 0 {
+				return fmt.Errorf("verifyCRL: The certificate can't be used for issuing CRLs")
+			}
 			// RFC5280, 6.3.3 (g) Validate signature.
 			return crl.certList.CheckSignatureFrom(c)
 		}
 	}
-	return fmt.Errorf("verifyCRL: No certificates mached CRL issuer (%v)", crl.certList.Issuer)
+	return fmt.Errorf("verifyCRL: No certificates matched CRL issuer (%v)", crl.certList.Issuer)
 }
 
 // pemType is the type of a PEM encoded CRL.
