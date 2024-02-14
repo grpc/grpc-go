@@ -189,19 +189,20 @@ type EmptyCallOption struct{}
 func (EmptyCallOption) before(*callInfo) error      { return nil }
 func (EmptyCallOption) after(*callInfo, *csAttempt) {}
 
-// RegisteredMethod returns a CallOption which specifies that a call comes from
-// a registered method. This does nothing functionally, but serves as a signal
-// to other code.
-func RegisteredMethod() CallOption {
-	return RegisteredMethodCallOption{}
+// StaticMethod returns a CallOption which specifies that a call is being made
+// to a method that is static, which the method is known at compile time and
+// doesn't change at runtime. This can be used as a signal to stats plugins that
+// this method is safe to include as a key to a measurement.
+func StaticMethod() CallOption {
+	return StaticMethodCallOption{}
 }
 
-// RegisteredMethodCallOption is a CallOption that specifies that a call comes
-// from a registered method.
-type RegisteredMethodCallOption struct{}
+// StaticMethodCallOption is a CallOption that specifies that a call comes
+// from a static method.
+type StaticMethodCallOption struct{}
 
-func (RegisteredMethodCallOption) before(*callInfo) error      { return nil }
-func (RegisteredMethodCallOption) after(*callInfo, *csAttempt) {}
+func (StaticMethodCallOption) before(*callInfo) error      { return nil }
+func (StaticMethodCallOption) after(*callInfo, *csAttempt) {}
 
 // Header returns a CallOptions that retrieves the header metadata
 // for a unary RPC.
