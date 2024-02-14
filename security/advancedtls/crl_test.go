@@ -515,7 +515,7 @@ func TestVerifyCrl(t *testing.T) {
 
 	for _, tt := range verifyTests {
 		t.Run(tt.desc, func(t *testing.T) {
-			err := verifyCRL(tt.crl, tt.cert.RawIssuer, tt.certs)
+			err := verifyCRL(tt.crl, tt.certs)
 			switch {
 			case tt.errWant == "" && err != nil:
 				t.Errorf("Valid CRL did not verify err = %v", err)

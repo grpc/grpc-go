@@ -285,7 +285,7 @@ func fetchIssuerCRL(rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg Revo
 		return nil, fmt.Errorf("fetchCRL() failed: %v", err)
 	}
 
-	if err := verifyCRL(crl, rawIssuer, crlVerifyCrt); err != nil {
+	if err := verifyCRL(crl, crlVerifyCrt); err != nil {
 		return nil, fmt.Errorf("verifyCRL() failed: %v", err)
 	}
 	if cfg.Cache != nil {
@@ -303,7 +303,7 @@ func fetchCRL(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revocat
 		if crl == nil {
 			return nil, fmt.Errorf("no CRL found for certificate's issuer")
 		}
-		if err := verifyCRL(crl, nil, crlVerifyCrt); err != nil {
+		if err := verifyCRL(crl, crlVerifyCrt); err != nil {
 			return nil, fmt.Errorf("verifyCRL() failed: %v", err)
 		}
 		return crl, nil
@@ -325,7 +325,7 @@ func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revoca
 		// know if it's RevocationUnrevoked or not. This is not necessarily a
 		// problem - it's not invalid to have no CRLs if you don't have any
 		// revocations for an issuer. It also might be an indication that the CRL
-		// file to is invalid.
+		// file is invalid.
 		// We just return RevocationUndetermined and there is a setting for the user
 		// to control the handling of that.
 		grpclogLogger.Warningf("fetchCRL() err = %v", err)
@@ -541,7 +541,7 @@ func fetchCRLOpenSSLHashDir(rawIssuer []byte, cfg RevocationConfig) (*CRL, error
 	return parsedCRL, nil
 }
 
-func verifyCRL(crl *CRL, rawIssuer []byte, chain []*x509.Certificate) error {
+func verifyCRL(crl *CRL, chain []*x509.Certificate) error {
 	// RFC5280, 6.3.3 (f) Obtain and validate the certification path for the issuer of the complete CRL
 	// We intentionally limit our CRLs to be signed with the same certificate path as the certificate
 	// so we can use the chain from the connection.

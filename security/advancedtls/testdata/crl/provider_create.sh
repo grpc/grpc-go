@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # The script contains a sequence of commands described in README.md
+# Generate client/server self signed CAs and certs.
 openssl req -x509                                                      \
   -newkey rsa:4096                                                     \
   -keyout provider_server_trust_key.pem                                \
@@ -51,9 +52,13 @@ openssl x509 -req                      \
   -sha256                              \
   -extfile provider_extensions.conf
 
+# Generate files need for CRL issuing.
+
 echo "1000" > provider_crlnumber.txt
 
 touch provider_index.txt
+
+# Generate two CRLs.
 
 openssl ca -gencrl                       \
   -keyfile provider_client_trust_key.pem \
@@ -72,15 +77,17 @@ openssl ca -gencrl                       \
   -out provider_crl_server_revoked.pem   \
   -config provider_crl.cnf
 
+# Generate malicious CRLs.
+
 openssl genrsa                                      \
   -out provider_malicious_client_trust_key.pem 4096
 
-SKI=$(openssl x509 -in provider_client_trust_cert.pem \
+SubjectKeyIdentifier=$(openssl x509 -in provider_client_trust_cert.pem \
   -noout                                              \
   -text                                               \
   | awk '/Subject Key Identifier/ {getline; print $1;}')
 
-sed -i "s/subjectKeyIdentifier = hash/subjectKeyIdentifier = $SKI/g" \
+sed -i "s/subjectKeyIdentifier = hash/subjectKeyIdentifier = $SubjectKeyIdentifier/g" \
   provider_extensions.conf
 
 openssl req -new                                       \
