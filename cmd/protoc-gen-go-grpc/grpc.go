@@ -309,7 +309,7 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 		g.P(deprecationComment)
 	}
 	g.P("func (c *", unexport(service.GoName), "Client) ", clientSignature(g, method), "{")
-	g.P("opts := append([]", grpcPackage.Ident("CallOption"), "{", grpcPackage.Ident("RegisteredMethod()"), "}, opts...)")
+	g.P("opts := append([]", grpcPackage.Ident("CallOption"), "{", grpcPackage.Ident("StaticMethod()"), "}, opts...)")
 	if !method.Desc.IsStreamingServer() && !method.Desc.IsStreamingClient() {
 		g.P("out := new(", method.Output.GoIdent, ")")
 		g.P(`err := c.cc.Invoke(ctx, `, fmSymbol, `, in, out, opts...)`)
