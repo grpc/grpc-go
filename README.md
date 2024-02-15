@@ -4,9 +4,10 @@
 [![GoReportCard](https://goreportcard.com/badge/grpc/grpc-go)](https://goreportcard.com/report/github.com/grpc/grpc-go)
 [![codecov](https://codecov.io/gh/grpc/grpc-go/graph/badge.svg)](https://codecov.io/gh/grpc/grpc-go)
 
-Welcome to the Go implementation of gRPC, a high-performance, open-source RPC framework designed with mobile and HTTP/2 in mind.
+Welcome to the Go implementation of gRPC, a high-performance, open-source RPC framework designed with mobile and HTTP/2 in mind. 
 Whether you're seeking a comprehensive understanding of gRPC or eager to get started right away, 
-you'll find all the information you need in the Go gRPC documentation or by diving straight into the quick start guide. Happy coding!
+you'll find all the information you need in the <a href="https://grpc.io/docs/languages/go">Go gRPC documentation</a> 
+or by diving straight into the <a href="https://grpc.io/docs/languages/go/quickstart">quick start guide</a>. Happy coding!
 
 ## Prerequisites
 
