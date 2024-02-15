@@ -281,7 +281,7 @@ func (t Target) Endpoint() string {
 	return strings.TrimPrefix(endpoint, "/")
 }
 
-// String returns a canonical string representation of Target.
+// String returns the canonical string representation of Target.
 func (t Target) String() string {
 	return t.URL.Scheme + "://" + t.URL.Host + "/" + t.Endpoint()
 }
