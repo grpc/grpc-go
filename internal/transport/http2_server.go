@@ -334,9 +334,11 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 			// closed, would lead to a TCP RST instead of FIN, and the client
 			// encountering errors.  For more info:
 			// https://github.com/grpc/grpc-go/issues/5358
+			timer := time.NewTimer(time.Second)
+			defer timer.Stop()
 			select {
 			case <-t.readerDone:
-			case <-time.After(time.Second):
+			case <-timer.C:
 			}
 			t.conn.Close()
 		}
