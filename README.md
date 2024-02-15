@@ -11,7 +11,7 @@ or by diving straight into the <a href="https://grpc.io/docs/languages/go/quicks
 
 ## Prerequisites
 
-- **[Go][]**: any one of the **three latest major** [releases][go-releases].
+- **[Go][]**: Ensure you have one of the three latest major releases of Go installed. For details, check the <a href="https://golang.org/doc/devel/release.html">official Go releases</a>.
 
 ## Installation
 
