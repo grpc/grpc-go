@@ -808,15 +808,44 @@ func (s) TestMethodConfigDefaultService(t *testing.T) {
 	}
 }
 
-func (s) TestGetClientConnTarget(t *testing.T) {
-	addr := "nonexist:///non.existent"
-	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+func (s) TestClientConn_Target(t *testing.T) {
+	tests := []struct {
+		name       string
+		addr       string
+		targetWant string
+	}{
+		{
+			name:       "normal-case",
+			addr:       "dns://a.server.com/google.com",
+			targetWant: "dns://a.server.com/google.com",
+		},
+		{
+			name:       "canonical-target-not-specified",
+			addr:       "no.scheme",
+			targetWant: "passthrough:///no.scheme",
+		},
+		{
+			name:       "canonical-target-nonexistent",
+			addr:       "nonexist:///non.existent",
+			targetWant: "passthrough:///nonexist:///non.existent",
+		},
+		{
+			name:       "canonical-target-add-colon-slash",
+			addr:       "dns:hostname:port",
+			targetWant: "dns:///hostname:port",
+		},
 	}
-	defer cc.Close()
-	if cc.Target() != addr {
-		t.Fatalf("Target() = %s, want %s", cc.Target(), addr)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cc, err := Dial(test.addr, WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", test.addr, err)
+			}
+			defer cc.Close()
+			if cc.Target() != test.targetWant {
+				t.Fatalf("Target() = %s, want %s", cc.Target(), test.targetWant)
+			}
+		})
 	}
 }
 

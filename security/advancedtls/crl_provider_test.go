@@ -142,7 +142,7 @@ func (s) TestFileWatcherCRLProviderConfig(t *testing.T) {
 // that it’s correctly processed. Additionally, we also check if number of
 // invocations of custom callback is correct.
 func (s) TestFileWatcherCRLProvider(t *testing.T) {
-	const nonCRLFilesUnderCRLDirectory = 15
+	const nonCRLFilesUnderCRLDirectory = 17
 	nonCRLFilesSet := make(map[string]struct{})
 	customCallback := func(err error) {
 		if strings.Contains(err.Error(), "BUILD") {

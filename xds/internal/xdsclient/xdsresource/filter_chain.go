@@ -96,6 +96,8 @@ type RouteWithInterceptors struct {
 	Interceptors []resolver.ServerInterceptor
 }
 
+// UsableRouteConfiguration contains a matchable route configuration, with
+// instantiated HTTP Filters per route.
 type UsableRouteConfiguration struct {
 	VHS []VirtualHostWithInterceptors
 	Err error
@@ -504,6 +506,7 @@ func (fcm *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePre
 	return nil
 }
 
+// FilterChains returns the filter chains for this filter chain manager.
 func (fcm *FilterChainManager) FilterChains() []*FilterChain {
 	return fcm.fcs
 }
