@@ -51,15 +51,6 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 	}
 	tests := []testCase{
 		{
-			name: "http/1.1",
-			req: &http.Request{
-				ProtoMajor: 1,
-				ProtoMinor: 1,
-			},
-			wantErr:     "gRPC requires HTTP/2",
-			wantErrCode: http.StatusBadRequest,
-		},
-		{
 			name: "bad method",
 			req: &http.Request{
 				ProtoMajor: 2,
@@ -67,7 +58,7 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				Header:     http.Header{},
 			},
 			wantErr:     `invalid gRPC request method "GET"`,
-			wantErrCode: http.StatusBadRequest,
+			wantErrCode: http.StatusMethodNotAllowed,
 		},
 		{
 			name: "bad content type",
@@ -80,6 +71,17 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 			},
 			wantErr:     `invalid gRPC request content-type "application/foo"`,
 			wantErrCode: http.StatusUnsupportedMediaType,
+		},
+		{
+			name: "http/1.1",
+			req: &http.Request{
+				ProtoMajor: 1,
+				ProtoMinor: 1,
+				Method:     "POST",
+				Header:     http.Header{"Content-Type": []string{"application/grpc"}},
+			},
+			wantErr:     "gRPC requires HTTP/2",
+			wantErrCode: http.StatusHTTPVersionNotSupported,
 		},
 		{
 			name: "not flusher",
