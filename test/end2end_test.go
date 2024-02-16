@@ -3932,6 +3932,34 @@ func (s) TestClientInvalidStreamID(t *testing.T) {
 	}
 }
 
+// TestInvalidStreamIDSmallerThanPrevious tests the server sends a GOAWAY frame
+// with error code: PROTOCOL_ERROR when the streamID of the current frame is
+// lower than the previous frames.
+func (s) TestInvalidStreamIDSmallerThanPrevious(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+	s := grpc.NewServer()
+	defer s.Stop()
+	go s.Serve(lis)
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	st := newServerTesterFromConn(t, conn)
+	st.greet()
+	st.writeHeadersGRPC(3, "/grpc.testing.TestService/StreamingInputCall", false)
+	st.writeHeadersGRPC(1, "/grpc.testing.TestService/StreamingInputCall", true)
+	goAwayFrame := st.wantGoAway(http2.ErrCodeProtocol)
+	want := "received an illegal stream id: 1"
+	if got := string(goAwayFrame.DebugData()); !strings.Contains(got, want) {
+		t.Fatalf("Error received: %v, want: %v", got, want)
+	}
+}
+
 func testClientRequestBodyErrorCloseAfterLength(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.declareLogNoise("Server.processUnaryRPC failed to write status")
