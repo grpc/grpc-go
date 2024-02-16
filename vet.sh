@@ -41,6 +41,7 @@ if [[ "$1" = "-install" ]]; then
   popd
   if [[ -z "${VET_SKIP_PROTO}" ]]; then
     if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
+      # Build protoc-gen-go-grpc binary, ensuring it is available in the CI/CD pipeline runner path.
       if [[ -n "${VET_BUILD_GO_PROTOC}" ]]; then
         pushd cmd/protoc-gen-go-grpc
         go build -o /home/runner/go/bin .

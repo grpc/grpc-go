@@ -37,8 +37,6 @@ jobs:
   # Run the main gRPC-Go tests.
   tests:
     # Proto checks are run in the above job.
-    env:
-      VET_SKIP_PROTO: 1
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -98,6 +96,8 @@ jobs:
 
       # Only run vet for 'vet' runs.
       - name: Run vet.sh
+        env:
+          VET_SKIP_PROTO: 1
         if: matrix.type == 'vet'
         run: ./vet.sh -install && ./vet.sh
 
@@ -108,7 +108,6 @@ jobs:
         env:
           VET_BUILD_GO_PROTOC: 1
         run: |
-          unset VET_SKIP_PROTO
           ./vet.sh -install
           protoc --version
           go version
