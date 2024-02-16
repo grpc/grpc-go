@@ -2119,7 +2119,7 @@ func ClientSupportedCompressors(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("failed to fetch the stream from the given context %v", ctx)
 	}
 
-	return strings.Split(stream.ClientAdvertisedCompressors(), ","), nil
+	return stream.ClientAdvertisedCompressors(), nil
 }
 
 // SetTrailer sets the trailer metadata that will be sent when an RPC returns.
@@ -2159,7 +2159,7 @@ func (c *channelzServer) ChannelzMetric() *channelz.ServerInternalMetric {
 
 // validateSendCompressor returns an error when given compressor name cannot be
 // handled by the server or the client based on the advertised compressors.
-func validateSendCompressor(name, clientCompressors string) error {
+func validateSendCompressor(name string, clientCompressors []string) error {
 	if name == encoding.Identity {
 		return nil
 	}
@@ -2168,7 +2168,7 @@ func validateSendCompressor(name, clientCompressors string) error {
 		return fmt.Errorf("compressor not registered %q", name)
 	}
 
-	for _, c := range strings.Split(clientCompressors, ",") {
+	for _, c := range clientCompressors {
 		if c == name {
 			return nil // found match
 		}
