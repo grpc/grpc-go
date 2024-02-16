@@ -3951,7 +3951,8 @@ func (s) TestInvalidStreamIDSmallerThanPrevious(t *testing.T) {
 	}
 	st := newServerTesterFromConn(t, conn)
 	st.greet()
-	st.writeHeadersGRPC(3, "/grpc.testing.TestService/StreamingInputCall", false)
+	st.writeHeadersGRPC(3, "/grpc.testing.TestService/StreamingInputCall", true)
+	st.wantAnyFrame()
 	st.writeHeadersGRPC(1, "/grpc.testing.TestService/StreamingInputCall", true)
 	goAwayFrame := st.wantGoAway(http2.ErrCodeProtocol)
 	want := "received an illegal stream id: 1"
