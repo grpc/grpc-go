@@ -3928,7 +3928,7 @@ func (s) TestClientInvalidStreamID(t *testing.T) {
 	goAwayFrame := st.wantGoAway(http2.ErrCodeProtocol)
 	want := "received an illegal stream id: 2."
 	if got := string(goAwayFrame.DebugData()); !strings.Contains(got, want) {
-		t.Fatalf("Error received: %v, want: %v", got, want)
+		t.Fatalf(" Received: %v, Expected error message to contain: %v.", got, want)
 	}
 }
 
