@@ -566,6 +566,13 @@ func (s) TestClientSupportedCompressors(t *testing.T) {
 			),
 			want: []string{"gzip"},
 		},
+		{
+			desc: "With additional grpc-accept-encoding header with spaces between values",
+			ctx: metadata.AppendToOutgoingContext(ctx,
+				"grpc-accept-encoding", "identity, deflate",
+			),
+			want: []string{"gzip", "identity", "deflate"},
+		},
 	} {
 		t.Run(tt.desc, func(t *testing.T) {
 			ss := &stubserver.StubServer{
