@@ -39,6 +39,7 @@ import (
 	dnsinternal "google.golang.org/grpc/internal/resolver/dns/internal"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
+	dnspublic "google.golang.org/grpc/resolver/dns"
 	"google.golang.org/grpc/serviceconfig"
 
 	_ "google.golang.org/grpc" // To initialize internal.ParseServiceConfig
@@ -1212,6 +1213,35 @@ func (s) TestReportError(t *testing.T) {
 			if !strings.Contains(err.Error(), "hostLookup error") {
 				t.Fatalf(`ReportError(err=%v) called; want err contains "hostLookupError"`, err)
 			}
+		}
+	}
+}
+
+// Test verifies that when the DNS resolver gets timeout error when net.Resolver
+// takes too long to resolve a target.
+func (s) TestResolveTimeout(t *testing.T) {
+	// Set DNS resolving timeout to 7ms
+	dnspublic.SetResolvingTimeout(7 * time.Millisecond)
+
+	// Time to run test this should not longer than 10s.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// We are trying to resolve hostname which takes infinity time to resolve.
+	const target = "infinity"
+	tr := &testNetResolver{}
+	tr.UpdateHostLookupTable(map[string][]string{target: {"1.2.3.4"}})
+	overrideNetResolver(t, tr)
+
+	r, _, errCh := buildResolverWithTestClientConn(t, target)
+	r.ResolveNow(resolver.ResolveNowOptions{})
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for an error from the resolver")
+	case err := <-errCh:
+		if err == nil || !strings.Contains(err.Error(), "hostLookup timeout") {
+			t.Fatalf(`we expect to see timed out error`)
 		}
 	}
 }

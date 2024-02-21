@@ -107,9 +107,7 @@ type dnsBuilder struct{}
 
 // Build creates and starts a DNS resolver that watches the name resolution of
 // the target.
-func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (
-	resolver.Resolver, error,
-) {
+func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	host, port, err := parseTarget(target.Endpoint(), defaultPort)
 	if err != nil {
 		return nil, err
@@ -325,12 +323,10 @@ func (d *dnsResolver) lookupHost(ctx context.Context) ([]resolver.Address, error
 }
 
 func (d *dnsResolver) lookup() (*resolver.State, error) {
-	ctxSRV, cancelSRV := context.WithTimeout(d.ctx, ResolvingTimeout)
-	defer cancelSRV()
-	srv, srvErr := d.lookupSRV(ctxSRV)
-	ctxHost, cancelHost := context.WithTimeout(d.ctx, ResolvingTimeout)
-	defer cancelHost()
-	addrs, hostErr := d.lookupHost(ctxHost)
+	ctx, cancel := context.WithTimeout(d.ctx, ResolvingTimeout)
+	defer cancel()
+	srv, srvErr := d.lookupSRV(ctx)
+	addrs, hostErr := d.lookupHost(ctx)
 	if hostErr != nil && (srvErr != nil || len(srv) == 0) {
 		return nil, hostErr
 	}
@@ -340,9 +336,7 @@ func (d *dnsResolver) lookup() (*resolver.State, error) {
 		state = grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: srv})
 	}
 	if !d.disableServiceConfig {
-		ctxTXT, cancelTXT := context.WithTimeout(d.ctx, ResolvingTimeout)
-		defer cancelTXT()
-		state.ServiceConfig = d.lookupTXT(ctxTXT)
+		state.ServiceConfig = d.lookupTXT(ctx)
 	}
 	return &state, nil
 }
