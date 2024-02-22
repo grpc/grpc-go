@@ -119,6 +119,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		endpoint = target.URL.Opaque
 	}
 	endpoint = strings.TrimPrefix(endpoint, "/")
+	r.dataplaneAuthority = endpoint
 	r.ldsResourceName = bootstrap.PopulateResourceTemplate(template, endpoint)
 	r.listenerWatcher = newListenerWatcher(r.ldsResourceName, r)
 	return r, nil
@@ -189,6 +190,8 @@ type xdsResolver struct {
 	// cancelling the context passed to the serializer.
 	serializer       *grpcsync.CallbackSerializer
 	serializerCancel context.CancelFunc
+
+	dataplaneAuthority string
 
 	ldsResourceName     string
 	listenerWatcher     *listenerWatcher
@@ -413,7 +416,7 @@ func (r *xdsResolver) onResolutionComplete() {
 }
 
 func (r *xdsResolver) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdate) {
-	matchVh := xdsresource.FindBestMatchingVirtualHost(r.ldsResourceName, update.VirtualHosts)
+	matchVh := xdsresource.FindBestMatchingVirtualHost(r.dataplaneAuthority, update.VirtualHosts)
 	if matchVh == nil {
 		r.onError(fmt.Errorf("no matching virtual host found for %q", r.ldsResourceName))
 		return

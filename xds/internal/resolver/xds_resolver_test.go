@@ -116,6 +116,59 @@ func (s) TestResolverBuilder_AuthorityNotDefinedInBootstrap(t *testing.T) {
 	}
 }
 
+// // Tests the case where the specified dial target contains an authority that is
+// // not specified in the bootstrap file. Verifies that the resolver.Build method
+// // fails with the expected error string.
+// func (s) TestResolverBuilder_ParsesDataplaneAuthorityCorrectly(t *testing.T) {
+// 	bootstrapCleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
+// 		NodeID:    "node-id",
+// 		ServerURI: "dummy-management-server",
+// 		Authorities: map[string]string{
+// 			"something-authority": "dummy-management-server-address",
+// 		},
+// 	})
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	defer bootstrapCleanup()
+
+// 	builder := resolver.Get(xdsresolver.Scheme)
+// 	if builder == nil {
+// 		t.Fatalf("Scheme %q is not registered", xdsresolver.Scheme)
+// 	}
+
+// 	tests := []struct {
+// 		targetURL              string
+// 		wantDataPlaneAuthority string
+// 	}{
+// 		{
+// 			targetURL:              "xds:///target",
+// 			wantDataPlaneAuthority: "target",
+// 		},
+// 		{
+// 			targetURL:              "xds://something-authority/target",
+// 			wantDataPlaneAuthority: "target",
+// 		},
+// 	}
+
+// 	for i, tt := range tests {
+// 		t.Run(fmt.Sprintf("case-%d", i), func(t *testing.T) {
+// 			target := resolver.Target{URL: *testutils.MustParseURL(tt.targetURL)}
+
+// 			r, err := builder.Build(target, &testutils.ResolverClientConn{Logger: t}, resolver.BuildOptions{})
+// 			if err != nil {
+// 				t.Fatalf("xds Resolver Build(%v): %v", target, err)
+// 			}
+// 			r.Close()
+
+// 			if r.(*iresolver.xdsResolver).dataplaneAuthority != tt.wantDataPlaneAuthority {
+// 				t.Fatalf("xds Resolver Build(%v) returned DataPlaneAuthority: %v, want: %v", target, r.(*iresolver.Resolver).DataPlaneAuthority(), tt.wantDataPlaneAuthority)
+// 			}
+// 		})
+// 	}
+
+// }
+
 // Test builds an xDS resolver and verifies that the resource name specified in
 // the discovery request matches expectations.
 func (s) TestResolverResourceName(t *testing.T) {
