@@ -418,7 +418,7 @@ func (r *xdsResolver) onResolutionComplete() {
 func (r *xdsResolver) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdate) {
 	matchVh := xdsresource.FindBestMatchingVirtualHost(r.dataplaneAuthority, update.VirtualHosts)
 	if matchVh == nil {
-		r.onError(fmt.Errorf("no matching virtual host found for %q", r.ldsResourceName))
+		r.onError(fmt.Errorf("no matching virtual host found for %q", r.dataplaneAuthority))
 		return
 	}
 	r.currentRouteConfig = update

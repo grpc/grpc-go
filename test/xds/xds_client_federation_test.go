@@ -140,6 +140,76 @@ func (s) TestClientSideFederation(t *testing.T) {
 	}
 }
 
+// TestClientSideFederationWithTDOM tests that federation is supported with new
+// xdstp style names with TD Open Mesh (TDOM) Authority. TD Open Mesh Authority
+// currently only support new style for LDS. So, this test only tests the new
+// style for LDS resources and the old style for other resources.
+func (s) TestClientSideFederationWithTDOM(t *testing.T) {
+	// Start a management server as TDOM authority.
+	const tdomAuth = "traffic-director-global.xds.googleapis.com"
+	tdomAuthServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
+	if err != nil {
+		t.Fatalf("Failed to spin up the xDS management server: %v", err)
+	}
+	t.Cleanup(tdomAuthServer.Stop)
+
+	// Create a bootstrap file in a temporary directory.
+	nodeID := uuid.New().String()
+	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
+		NodeID:    nodeID,
+		ServerURI: tdomAuthServer.Address,
+		ClientDefaultListenerResourceNameTemplate: fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%%s", tdomAuth),
+		Authorities: map[string]string{tdomAuth: tdomAuthServer.Address},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap file: %v", err)
+	}
+
+	resolverBuilder := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))
+	resolver, err := resolverBuilder(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	const serviceName = "my-service-client-side-xds"
+	// LDS is new style name.
+	ldsName := fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%s", tdomAuth, serviceName)
+	// All other resources are with old style name.
+	rdsName := "route-" + serviceName
+	cdsName := "cluster-" + serviceName
+	edsName := "endpoints-" + serviceName
+
+	resourceUpdate := e2e.UpdateOptions{
+		NodeID: nodeID,
+		// This has only RDS and EDS.
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
+		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, serviceName, cdsName)},
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(cdsName, edsName, e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		SkipValidation: true,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := tdomAuthServer.Update(ctx, resourceUpdate); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+}
+
 // TestFederation_UnknownAuthorityInDialTarget tests the case where a ClientConn
 // is created with a dial target containing an authority which is not specified
 // in the bootstrap configuration. The test verifies that RPCs on the ClientConn
@@ -232,7 +302,7 @@ func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
-		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, ldsName, "cluster-"+serviceName)},
+		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, serviceName, "cluster-"+serviceName)},
 		SkipValidation: true, // This update has only LDS and RDS resources.
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
