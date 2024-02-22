@@ -302,7 +302,7 @@ func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
-		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, serviceName, "cluster-"+serviceName)},
+		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, ldsName, "cluster-"+serviceName)},
 		SkipValidation: true, // This update has only LDS and RDS resources.
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
