@@ -68,12 +68,11 @@ func (s) TestRecvBufferPoolStream(t *testing.T) {
 				FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 					for i := 0; i < reqCount; i++ {
 						preparedMsg := &grpc.PreparedMsg{}
-						err := preparedMsg.Encode(stream, &testgrpc.StreamingOutputCallResponse{
+						if err := preparedMsg.Encode(stream, &testgrpc.StreamingOutputCallResponse{
 							Payload: &testgrpc.Payload{
 								Body: []byte{'0' + uint8(i)},
 							},
-						})
-						if err != nil {
+						}); err != nil {
 							return err
 						}
 						stream.SendMsg(preparedMsg)
@@ -83,7 +82,6 @@ func (s) TestRecvBufferPoolStream(t *testing.T) {
 			}
 
 			pool := &checkBufferPool{}
-
 			sopts := []grpc.ServerOption{experimental.RecvBufferPool(pool)}
 			dopts := []grpc.DialOption{experimental.WithRecvBufferPool(pool)}
 			if err := ss.Start(sopts, dopts...); err != nil {
@@ -96,7 +94,7 @@ func (s) TestRecvBufferPoolStream(t *testing.T) {
 
 			stream, err := ss.Client.FullDuplexCall(ctx, tc.callOpts...)
 			if err != nil {
-				t.Fatalf("ss.Client.FullDuplexCall failed: %f", err)
+				t.Fatalf("ss.Client.FullDuplexCall failed: %v", err)
 			}
 
 			var ngot int
@@ -160,7 +158,6 @@ func (s) TestRecvBufferPoolUnary(t *testing.T) {
 			}
 
 			pool := &checkBufferPool{}
-
 			sopts := []grpc.ServerOption{experimental.RecvBufferPool(pool)}
 			dopts := []grpc.DialOption{experimental.WithRecvBufferPool(pool)}
 			if err := ss.Start(sopts, dopts...); err != nil {
@@ -173,7 +170,7 @@ func (s) TestRecvBufferPoolUnary(t *testing.T) {
 
 			const reqCount = 10
 			for i := 0; i < reqCount; i++ {
-				_, err := ss.Client.UnaryCall(
+				if _, err := ss.Client.UnaryCall(
 					ctx,
 					&testgrpc.SimpleRequest{
 						Payload: &testgrpc.Payload{
@@ -181,9 +178,8 @@ func (s) TestRecvBufferPoolUnary(t *testing.T) {
 						},
 					},
 					tc.callOpts...,
-				)
-				if err != nil {
-					t.Fatalf("ss.Client.UnaryCall failed: %f", err)
+				); err != nil {
+					t.Fatalf("ss.Client.UnaryCall failed: %v", err)
 				}
 			}
 

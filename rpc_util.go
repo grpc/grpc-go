@@ -795,7 +795,8 @@ func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize 
 			// will read more data if available.
 			// +MinRead so ReadFrom will not reallocate if size is correct.
 			//
-			// TODO: If we ensure that the buffer size is the same as the DecompressedSize, we can also utilize the recv buffer pool here.
+			// TODO: If we ensure that the buffer size is the same as the DecompressedSize,
+			// we can also utilize the recv buffer pool here.
 			buf := bytes.NewBuffer(make([]byte, 0, size+bytes.MinRead))
 			bytesRead, err := buf.ReadFrom(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
 			return buf.Bytes(), int(bytesRead), err
