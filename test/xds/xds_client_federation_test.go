@@ -182,8 +182,7 @@ func (s) TestClientSideFederationWithTDOM(t *testing.T) {
 	edsName := "endpoints-" + serviceName
 
 	resourceUpdate := e2e.UpdateOptions{
-		NodeID: nodeID,
-		// This has only RDS and EDS.
+		NodeID:         nodeID,
 		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
 		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, serviceName, cdsName)},
 		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(cdsName, edsName, e2e.SecurityLevelNone)},
