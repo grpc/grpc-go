@@ -4,7 +4,6 @@ go 1.19
 
 require (
 	github.com/cespare/xxhash/v2 v2.2.0
-	github.com/cncf/udpa/go v0.0.0-20220112060539-c52dc94e7fbe
 	github.com/cncf/xds/go v0.0.0-20231128003011-0fa0005c9caa
 	github.com/envoyproxy/go-control-plane v0.12.0
 	github.com/golang/glog v1.2.0
