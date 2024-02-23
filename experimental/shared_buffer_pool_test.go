@@ -185,7 +185,7 @@ func (s) TestRecvBufferPoolUnary(t *testing.T) {
 
 			const bufferCount = reqCount * 2 // req + resp
 			if len(pool.puts) != bufferCount {
-				t.Fatalf("Expected 10 buffers to be returned to the pool, got %d", len(pool.puts))
+				t.Fatalf("Expected %d buffers to be returned to the pool, got %d", bufferCount, len(pool.puts))
 			}
 		})
 	}
