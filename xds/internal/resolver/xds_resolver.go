@@ -191,11 +191,12 @@ type xdsResolver struct {
 	serializer       *grpcsync.CallbackSerializer
 	serializerCancel context.CancelFunc
 
-	// Per [A47] the authority used for the data plane connections (which is
+	// Per [A47], the authority used for the data plane connections (which is
 	// also used to select the VirtualHost within the xDS RouteConfiguration)
-	// will continue to be the last path component of the xds URI used to create
-	// the gRPC channel (i.e., the part following the last / character, or the
-	// entire path if the path contains no / character).
+	// will continue to be the path component of the `xds` URI used to create
+	// the gRPC channel, stripping off the leading `/` if any.  (Any remaining
+	// `/` characters will be percent-encoded, as is normal when determining the
+	// data plane authority from the gRPC target URI.).
 	//
 	// [A47]: https://github.com/grpc/proposal/blob/master/A47-xds-federation.md
 	dataplaneAuthority string
