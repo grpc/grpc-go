@@ -50,10 +50,6 @@ var (
 
 // The following vars are overridden from tests.
 var (
-	// MinResolutionRate is the minimum rate at which re-resolutions are
-	// allowed. This helps to prevent excessive re-resolution.
-	MinResolutionRate = 30 * time.Second
-
 	// TimeAfterFunc is used by the DNS resolver to wait for the given duration
 	// to elapse. In non-test code, this is implemented by time.After.  In test
 	// code, this can be used to control the amount of time the resolver is
