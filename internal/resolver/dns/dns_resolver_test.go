@@ -70,9 +70,9 @@ func overrideNetResolver(t *testing.T, r *testNetResolver) {
 
 // Override the DNS Min Res Rate used by the resolver.
 func overrideResolutionRate(t *testing.T, d time.Duration) {
-	origMinResRate := dnsinternal.MinResolutionRate
-	dnsinternal.MinResolutionRate = d
-	t.Cleanup(func() { dnsinternal.MinResolutionRate = origMinResRate })
+	origMinResRate := dns.MinResolutionRate
+	dns.MinResolutionRate = d
+	t.Cleanup(func() { dns.MinResolutionRate = origMinResRate })
 }
 
 // Override the timer used by the DNS resolver to fire after a duration of d.
@@ -1256,5 +1256,37 @@ func (s) TestResolveTimeout(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "context deadline exceeded") {
 			t.Fatalf(`Expected to see Timeout error; got: %v`, err)
 		}
+	}
+}
+
+// Test verifies that changing [MinResolutionRate] variable correctly effects
+// the resolution behaviour
+func (s) TestMinResolutionRate(t *testing.T) {
+	const target = "foo.bar.com"
+
+	overrideResolutionRate(t, 1*time.Millisecond)
+	tr := &testNetResolver{
+		hostLookupTable: map[string][]string{
+			"foo.bar.com": {"1.2.3.4", "5.6.7.8"},
+		},
+		txtLookupTable: map[string][]string{
+			"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+		},
+	}
+	overrideNetResolver(t, tr)
+
+	r, stateCh, _ := buildResolverWithTestClientConn(t, target)
+
+	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
+	wantSC := scJSON
+
+	for i := 0; i < 5; i++ {
+		// set context timeout slightly higher than the resolution rate to make sure resolutions
+		// happen successfully
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+
+		verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
+		r.ResolveNow(resolver.ResolveNowOptions{})
 	}
 }
