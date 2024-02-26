@@ -119,7 +119,8 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		endpoint = target.URL.Opaque
 	}
 	endpoint = strings.TrimPrefix(endpoint, "/")
-	// TODO(https://github.com/grpc/grpc-go/issues/7002): Check if dataplaneAuthority is URL encoded (including /'s). If not, encode it.
+	// TODO(https://github.com/grpc/grpc-go/issues/7002): Check if
+	// dataplaneAuthority is URL encoded (including /'s). If not, encode it.
 	r.dataplaneAuthority = endpoint
 	r.ldsResourceName = bootstrap.PopulateResourceTemplate(template, endpoint)
 	r.listenerWatcher = newListenerWatcher(r.ldsResourceName, r)
