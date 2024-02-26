@@ -119,6 +119,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		endpoint = target.URL.Opaque
 	}
 	endpoint = strings.TrimPrefix(endpoint, "/")
+	// TODO(https://github.com/grpc/grpc-go/issues/7002): Check if dataplaneAuthority is URL encoded (including /'s). If not, encode it.
 	r.dataplaneAuthority = endpoint
 	r.ldsResourceName = bootstrap.PopulateResourceTemplate(template, endpoint)
 	r.listenerWatcher = newListenerWatcher(r.ldsResourceName, r)
@@ -191,14 +192,9 @@ type xdsResolver struct {
 	serializer       *grpcsync.CallbackSerializer
 	serializerCancel context.CancelFunc
 
-	// Per [A47], the authority used for the data plane connections (which is
-	// also used to select the VirtualHost within the xDS RouteConfiguration)
-	// will continue to be the path component of the `xds` URI used to create
-	// the gRPC channel, stripping off the leading `/` if any.  (Any remaining
-	// `/` characters will be percent-encoded, as is normal when determining the
-	// data plane authority from the gRPC target URI.).
-	//
-	// [A47]: https://github.com/grpc/proposal/blob/master/A47-xds-federation.md
+	// dataplaneAuthority is the authority used for the data plane connections,
+	// which is also used to select the VirtualHost within the xDS
+	// RouteConfiguration.
 	dataplaneAuthority string
 
 	ldsResourceName     string
