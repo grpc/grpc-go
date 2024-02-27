@@ -120,9 +120,9 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		endpoint = target.URL.Opaque
 	}
 	endpoint = strings.TrimPrefix(endpoint, "/")
+	r.dataplaneAuthority = url.PathEscape(endpoint)
 	r.ldsResourceName = bootstrap.PopulateResourceTemplate(template, endpoint)
 	r.listenerWatcher = newListenerWatcher(r.ldsResourceName, r)
-	r.dataplaneAuthority = url.PathEscape(endpoint)
 	return r, nil
 }
 
