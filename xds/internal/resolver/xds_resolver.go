@@ -22,6 +22,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync/atomic"
 
@@ -119,11 +120,9 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		endpoint = target.URL.Opaque
 	}
 	endpoint = strings.TrimPrefix(endpoint, "/")
-	// TODO(https://github.com/grpc/grpc-go/issues/7002): Check if
-	// dataplaneAuthority is URL encoded (including /'s). If not, encode it.
-	r.dataplaneAuthority = endpoint
 	r.ldsResourceName = bootstrap.PopulateResourceTemplate(template, endpoint)
 	r.listenerWatcher = newListenerWatcher(r.ldsResourceName, r)
+	r.dataplaneAuthority = url.PathEscape(endpoint)
 	return r, nil
 }
 
@@ -195,7 +194,8 @@ type xdsResolver struct {
 
 	// dataplaneAuthority is the authority used for the data plane connections,
 	// which is also used to select the VirtualHost within the xDS
-	// RouteConfiguration.
+	// RouteConfiguration.  This string is %-encoded to match with VirtualHost
+	// Domain in xDS RouteConfiguration.
 	dataplaneAuthority string
 
 	ldsResourceName     string
