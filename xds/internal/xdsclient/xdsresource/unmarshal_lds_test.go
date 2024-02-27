@@ -36,7 +36,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	v1udpaudpatypepb "github.com/cncf/udpa/go/udpa/type/v1"
+	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -1824,7 +1824,7 @@ var clientOnlyCustomFilterConfig = &anypb.Any{
 }
 
 // This custom filter uses the old TypedStruct message from the cncf/udpa repo.
-var customFilterOldTypedStructConfig = &v1udpaudpatypepb.TypedStruct{
+var customFilterOldTypedStructConfig = &v1xdsudpatypepb.TypedStruct{
 	TypeUrl: "custom.filter",
 	Value: &structpb.Struct{
 		Fields: map[string]*structpb.Value{
