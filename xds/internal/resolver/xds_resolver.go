@@ -194,8 +194,8 @@ type xdsResolver struct {
 
 	// dataplaneAuthority is the authority used for the data plane connections,
 	// which is also used to select the VirtualHost within the xDS
-	// RouteConfiguration.  This string is %-encoded to match with VirtualHost
-	// Domain in xDS RouteConfiguration.
+	// RouteConfiguration.  This is %-encoded to match with VirtualHost Domain
+	// in xDS RouteConfiguration.
 	dataplaneAuthority string
 
 	ldsResourceName     string
