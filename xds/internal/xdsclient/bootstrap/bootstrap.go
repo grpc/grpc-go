@@ -29,7 +29,6 @@ import (
 	"strings"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	"github.com/golang/protobuf/jsonpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
@@ -40,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/tlscreds"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -470,13 +470,13 @@ func newConfigFromContents(data []byte) (*Config, error) {
 	}
 
 	var node *v3corepb.Node
-	m := jsonpb.Unmarshaler{AllowUnknownFields: true}
+	m := protojson.UnmarshalOptions{DiscardUnknown: true}
 	for k, v := range jsonData {
 		switch k {
 		case "node":
 			node = &v3corepb.Node{}
-			if err := m.Unmarshal(bytes.NewReader(v), node); err != nil {
-				return nil, fmt.Errorf("xds: jsonpb.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
+			if err := m.Unmarshal(v, node); err != nil {
+				return nil, fmt.Errorf("xds: protojson.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 		case "xds_servers":
 			servers, err := unmarshalJSONServerConfigSlice(v)

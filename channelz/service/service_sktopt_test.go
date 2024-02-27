@@ -37,8 +37,8 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	durpb "github.com/golang/protobuf/ptypes/duration"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 func init() {
@@ -47,12 +47,11 @@ func init() {
 	protoToSocketOpt = protoToSocketOption
 }
 
-func convertToDuration(d *durpb.Duration) (sec int64, usec int64) {
+func convertToDuration(d *durationpb.Duration) (sec int64, usec int64) {
 	if d != nil {
-		if dur, err := ptypes.Duration(d); err == nil {
-			sec = int64(int64(dur) / 1e9)
-			usec = (int64(dur) - sec*1e9) / 1e3
-		}
+		dur := d.AsDuration()
+		sec = int64(int64(dur) / 1e9)
+		usec = (int64(dur) - sec*1e9) / 1e3
 	}
 	return
 }
