@@ -22,7 +22,6 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 	"sync/atomic"
 
@@ -120,7 +119,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		endpoint = target.URL.Opaque
 	}
 	endpoint = strings.TrimPrefix(endpoint, "/")
-	r.dataplaneAuthority = url.PathEscape(endpoint)
+	r.dataplaneAuthority = opts.Authority
 	r.ldsResourceName = bootstrap.PopulateResourceTemplate(template, endpoint)
 	r.listenerWatcher = newListenerWatcher(r.ldsResourceName, r)
 	return r, nil

@@ -140,26 +140,27 @@ func (s) TestClientSideFederation(t *testing.T) {
 	}
 }
 
-// TestClientSideFederationWithTDOM tests that federation is supported with new
-// xdstp style names with TD Open Mesh (TDOM) Authority. TD Open Mesh Authority
-// currently only support new style for LDS. So, this test only tests the new
-// style for LDS resources and the old style for other resources.
-func (s) TestClientSideFederationWithTDOM(t *testing.T) {
-	// Start a management server as TDOM authority.
-	const tdomAuth = "traffic-director-global.xds.googleapis.com"
-	tdomAuthServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
+// TestClientSideFederationWithOnlyXDSTPStyleLDS tests that federation is supported
+// with new xdstp style names for LDS only while using the old style for other
+// resources. This test in addition also checks that when service name contains
+// escapable characters (in this case a `/`), we encode it for looking up
+// VirtualHosts in xDS RouteConfigurtion.
+func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
+	// Start a management server as a sophisticated authority.
+	const authority = "traffic-manager.xds.notgoogleapis.com"
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
 	}
-	t.Cleanup(tdomAuthServer.Stop)
+	t.Cleanup(mgmtServer.Stop)
 
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
 		NodeID:    nodeID,
-		ServerURI: tdomAuthServer.Address,
-		ClientDefaultListenerResourceNameTemplate: fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%%s", tdomAuth),
-		Authorities: map[string]string{tdomAuth: tdomAuthServer.Address},
+		ServerURI: mgmtServer.Address,
+		ClientDefaultListenerResourceNameTemplate: fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%%s", authority),
+		Authorities: map[string]string{authority: mgmtServer.Address},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
@@ -173,18 +174,28 @@ func (s) TestClientSideFederationWithTDOM(t *testing.T) {
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
-	const serviceName = "my-service-client-side-xds"
-	// LDS is new style name.
-	ldsName := fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%s", tdomAuth, serviceName)
+	serviceName := "my-service-client-side-xds/2nd component"
+	specialEscapedServiceName := "my-service-client-side-xds/2nd%20component"
+	fullyEscapedServiceName := "my-service-client-side-xds%2F2nd%20component"
+
+	// LDS is new style name. Since the LDS resource name is prefixed with
+	// xdstp, the string will be %-encoded excluding '/'s. See
+	// bootstrap.PopulateResourceTemplate()
+	ldsName := fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%s", authority, specialEscapedServiceName)
+
 	// All other resources are with old style name.
 	rdsName := "route-" + serviceName
 	cdsName := "cluster-" + serviceName
 	edsName := "endpoints-" + serviceName
 
+	// RouteConfiguration will has one entry in []VirutalHosts that contains the
+	// "fully" escaped service name in []Domains. This is to assert that gRPC
+	// uses the escaped service name to lookup VirtualHosts. RDS is also with
+	// old style name.
 	resourceUpdate := e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
-		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, serviceName, cdsName)},
+		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, fullyEscapedServiceName, cdsName)},
 		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(cdsName, edsName, e2e.SecurityLevelNone)},
 		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
 		SkipValidation: true,
@@ -192,7 +203,7 @@ func (s) TestClientSideFederationWithTDOM(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := tdomAuthServer.Update(ctx, resourceUpdate); err != nil {
+	if err := mgmtServer.Update(ctx, resourceUpdate); err != nil {
 		t.Fatal(err)
 	}
 

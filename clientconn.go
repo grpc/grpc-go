@@ -1771,6 +1771,10 @@ func parseTarget(target string) (resolver.Target, error) {
 	return resolver.Target{URL: *u}, nil
 }
 
+// encodeAuthority escapes the authority string based on valid chars defined in
+// [Section 3.2 of RFC3986].
+//
+// [Section 3.2 of RFC3986]: https://datatracker.ietf.org/doc/html/rfc3986#section-3.2
 func encodeAuthority(authority string) string {
 	const upperhex = "0123456789ABCDEF"
 
