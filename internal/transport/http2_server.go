@@ -322,8 +322,26 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	go func() {
 		t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger)
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
-		t.loopy.run()
+		err := t.loopy.run()
 		close(t.loopyWriterDone)
+		if !isIOError(err) {
+			// Close the connection if a non-I/O error occurs (for I/O errors
+			// the reader will also encounter the error and close).  Wait 1
+			// second before closing the connection, or when the reader is done
+			// (i.e. the client already closed the connection or a connection
+			// error occurred).  This avoids the potential problem where there
+			// is unread data on the receive side of the connection, which, if
+			// closed, would lead to a TCP RST instead of FIN, and the client
+			// encountering errors.  For more info:
+			// https://github.com/grpc/grpc-go/issues/5358
+			timer := time.NewTimer(time.Second)
+			defer timer.Stop()
+			select {
+			case <-t.readerDone:
+			case <-timer.C:
+			}
+			t.conn.Close()
+		}
 	}()
 	go t.keepalive()
 	return t, nil
@@ -609,8 +627,8 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 // traceCtx attaches trace to ctx and returns the new context.
 func (t *http2Server) HandleStreams(ctx context.Context, handle func(*Stream)) {
 	defer func() {
-		<-t.loopyWriterDone
 		close(t.readerDone)
+		<-t.loopyWriterDone
 	}()
 	for {
 		t.controlBuf.throttle()
@@ -642,8 +660,14 @@ func (t *http2Server) HandleStreams(ctx context.Context, handle func(*Stream)) {
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
 			if err := t.operateHeaders(ctx, frame, handle); err != nil {
-				t.Close(err)
-				break
+				// Any error processing client headers, e.g. invalid stream ID,
+				// is considered a protocol violation.
+				t.controlBuf.put(&goAway{
+					code:      http2.ErrCodeProtocol,
+					debugData: []byte(err.Error()),
+					closeConn: err,
+				})
+				continue
 			}
 		case *http2.DataFrame:
 			t.handleData(frame)
@@ -1325,6 +1349,7 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 		if err := t.framer.fr.WriteGoAway(sid, g.code, g.debugData); err != nil {
 			return false, err
 		}
+		t.framer.writer.Flush()
 		if retErr != nil {
 			return false, retErr
 		}
@@ -1345,7 +1370,7 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 		return false, err
 	}
 	go func() {
-		timer := time.NewTimer(time.Minute)
+		timer := time.NewTimer(5 * time.Second)
 		defer timer.Stop()
 		select {
 		case <-t.drainEvent.Done():

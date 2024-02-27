@@ -441,9 +441,12 @@ func TestGetIssuerCRLCache(t *testing.T) {
 }
 
 func TestVerifyCrl(t *testing.T) {
-	tampered := loadCRL(t, testdata.Path("crl/1.crl"))
+	tamperedSignature := loadCRL(t, testdata.Path("crl/1.crl"))
 	// Change the signature so it won't verify
-	tampered.certList.Signature[0]++
+	tamperedSignature.certList.Signature[0]++
+	tamperedContent := loadCRL(t, testdata.Path("crl/provider_crl_empty.pem"))
+	// Change the content so it won't find a match
+	tamperedContent.rawIssuer[0]++
 
 	verifyTests := []struct {
 		desc    string
@@ -471,27 +474,48 @@ func TestVerifyCrl(t *testing.T) {
 			crl:     loadCRL(t, testdata.Path("crl/3.crl")),
 			certs:   makeChain(t, testdata.Path("crl/unrevoked.pem")),
 			cert:    makeChain(t, testdata.Path("crl/revokedInt.pem"))[1],
-			errWant: "No certificates mached",
+			errWant: "No certificates matched",
 		},
 		{
 			desc:    "Fail no certs",
 			crl:     loadCRL(t, testdata.Path("crl/1.crl")),
 			certs:   []*x509.Certificate{},
 			cert:    makeChain(t, testdata.Path("crl/unrevoked.pem"))[1],
-			errWant: "No certificates mached",
+			errWant: "No certificates matched",
 		},
 		{
 			desc:    "Fail Tampered signature",
-			crl:     tampered,
+			crl:     tamperedSignature,
 			certs:   makeChain(t, testdata.Path("crl/unrevoked.pem")),
 			cert:    makeChain(t, testdata.Path("crl/unrevoked.pem"))[1],
 			errWant: "verification failure",
+		},
+		{
+			desc:    "Fail Tampered content",
+			crl:     tamperedContent,
+			certs:   makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem")),
+			cert:    makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem"))[0],
+			errWant: "No certificates",
+		},
+		{
+			desc:    "Fail CRL by malicious CA",
+			crl:     loadCRL(t, testdata.Path("crl/provider_malicious_crl_empty.pem")),
+			certs:   makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem")),
+			cert:    makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem"))[0],
+			errWant: "verification error",
+		},
+		{
+			desc:    "Fail KeyUsage without cRLSign bit",
+			crl:     loadCRL(t, testdata.Path("crl/provider_malicious_crl_empty.pem")),
+			certs:   makeChain(t, testdata.Path("crl/provider_malicious_client_trust_cert.pem")),
+			cert:    makeChain(t, testdata.Path("crl/provider_malicious_client_trust_cert.pem"))[0],
+			errWant: "certificate can't be used",
 		},
 	}
 
 	for _, tt := range verifyTests {
 		t.Run(tt.desc, func(t *testing.T) {
-			err := verifyCRL(tt.crl, tt.cert.RawIssuer, tt.certs)
+			err := verifyCRL(tt.crl, tt.certs)
 			switch {
 			case tt.errWant == "" && err != nil:
 				t.Errorf("Valid CRL did not verify err = %v", err)
@@ -648,7 +672,6 @@ func setupTLSConn(t *testing.T) (net.Listener, *x509.Certificate, *ecdsa.Private
 }
 
 // TestVerifyConnection will setup a client/server connection and check revocation in the real TLS dialer
-// TODO add CRL provider tests here?
 func TestVerifyConnection(t *testing.T) {
 	lis, cert, key := setupTLSConn(t)
 	defer func() {
