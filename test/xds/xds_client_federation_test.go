@@ -174,28 +174,33 @@ func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
-	serviceName := "my-service-client-side-xds/2nd component"
-	specialEscapedServiceName := "my-service-client-side-xds/2nd%20component"
-	fullyEscapedServiceName := "my-service-client-side-xds%2F2nd%20component"
-
-	// LDS is new style name. Since the LDS resource name is prefixed with
-	// xdstp, the string will be %-encoded excluding '/'s. See
-	// bootstrap.PopulateResourceTemplate()
-	ldsName := fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%s", authority, specialEscapedServiceName)
+	// serviceName with escapable characters - ' ', and '/'.
+	const serviceName = "my-service-client-side-xds/2nd component"
 
 	// All other resources are with old style name.
 	rdsName := "route-" + serviceName
 	cdsName := "cluster-" + serviceName
 	edsName := "endpoints-" + serviceName
 
-	// RouteConfiguration will has one entry in []VirutalHosts that contains the
-	// "fully" escaped service name in []Domains. This is to assert that gRPC
-	// uses the escaped service name to lookup VirtualHosts. RDS is also with
-	// old style name.
+	// Resource update sent to go-control-plane mgmt server.
 	resourceUpdate := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
-		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, fullyEscapedServiceName, cdsName)},
+		NodeID: nodeID,
+		Listeners: func() []*v3listenerpb.Listener {
+			// LDS is new style xdstp name. Since the LDS resource name is prefixed
+			// with xdstp, the string will be %-encoded excluding '/'s. See
+			// bootstrap.PopulateResourceTemplate().
+			const specialEscapedServiceName = "my-service-client-side-xds/2nd%20component" // same as bootstrap.percentEncode(serviceName)
+			ldsName := fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%s", authority, specialEscapedServiceName)
+			return []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)}
+		}(),
+		Routes: func() []*v3routepb.RouteConfiguration {
+			// RouteConfiguration will has one entry in []VirutalHosts that contains the
+			// "fully" escaped service name in []Domains. This is to assert that gRPC
+			// uses the escaped service name to lookup VirtualHosts. RDS is also with
+			// old style name.
+			const fullyEscapedServiceName = "my-service-client-side-xds%2F2nd%20component" // same as url.PathEscape(serviceName)
+			return []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, fullyEscapedServiceName, cdsName)}
+		}(),
 		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(cdsName, edsName, e2e.SecurityLevelNone)},
 		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
 		SkipValidation: true,

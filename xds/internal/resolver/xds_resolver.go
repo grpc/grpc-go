@@ -22,7 +22,6 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync/atomic"
 
 	"google.golang.org/grpc/internal"
@@ -114,13 +113,8 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	if err != nil {
 		return nil, err
 	}
-	endpoint := target.URL.Path
-	if endpoint == "" {
-		endpoint = target.URL.Opaque
-	}
-	endpoint = strings.TrimPrefix(endpoint, "/")
 	r.dataplaneAuthority = opts.Authority
-	r.ldsResourceName = bootstrap.PopulateResourceTemplate(template, endpoint)
+	r.ldsResourceName = bootstrap.PopulateResourceTemplate(template, target.Endpoint())
 	r.listenerWatcher = newListenerWatcher(r.ldsResourceName, r)
 	return r, nil
 }
