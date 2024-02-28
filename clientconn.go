@@ -117,8 +117,8 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 	}, nil
 }
 
-// newClient returns a new client in idle mode.
-func newClient(target string, opts ...DialOption) (conn *ClientConn, err error) {
+// NewClient returns a new client in idle mode.
+func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target: target,
 		conns:  make(map[*addrConn]struct{}),
