@@ -42,12 +42,7 @@ type testNetResolver struct {
 func (tr *testNetResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
 	if tr.lookupHostCh != nil {
 		if err := tr.lookupHostCh.SendContext(ctx, nil); nil != err {
-			return nil, &net.DNSError{
-				Err:         "hostLookup timeout",
-				Name:        host,
-				Server:      "fake",
-				IsTemporary: true,
-			}
+			return nil, err
 		}
 	}
 

@@ -1233,7 +1233,7 @@ func (s) TestResolveTimeout(t *testing.T) {
 	overrideResolveTimeoutDuration(t, timeoutDur)
 
 	// context with a bit larger
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// We are trying to resolve hostname which takes infinity time to resolve.
@@ -1249,23 +1249,13 @@ func (s) TestResolveTimeout(t *testing.T) {
 
 	// block testNetResolver.testNetResolver until timeout
 	_ = tr.lookupHostCh.SendContext(ctx, nil)
-	_, stateCh, errCh := buildResolverWithTestClientConn(t, target)
-
-	// wait until timeout
-	<-ctx.Done()
-
-	// unblock testNetResolver.lookupHostCh channel
-	if _, ok := tr.lookupHostCh.ReceiveOrFail(); !ok {
-		t.Fatalf("failed for lookup() call.")
-	}
-
+	_, _, errCh := buildResolverWithTestClientConn(t, target)
 	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for the DNS resolver to timeout")
 	case err := <-errCh:
-		if err == nil || !strings.Contains(err.Error(), "hostLookup timeout") {
+		if err == nil || !strings.Contains(err.Error(), "context deadline exceeded") {
 			t.Fatalf(`We expect to see timed out error`)
 		}
-
-	case <-stateCh:
-		t.Fatalf(`We expect to see timed out error`)
 	}
 }

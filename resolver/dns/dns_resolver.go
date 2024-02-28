@@ -37,7 +37,7 @@ import (
 // It must be called only at application startup, before any gRPC calls are made.
 // Modifying this value after initialization is not thread-safe.
 //
-// The default value is 10 seconds. Setting the timeout too low may result
+// The default value is 30 seconds. Setting the timeout too low may result
 // in premature timeouts during resolution, while setting it too high may
 // lead to unnecessary delays in service discovery. Choose a value appropriate
 // for your specific needs and network environment.
