@@ -4,11 +4,11 @@ go 1.19
 
 require (
 	google.golang.org/grpc v1.62.0
-	google.golang.org/grpc/gcp/observability v0.0.0-20230214181353-f4feddb37523
+	google.golang.org/grpc/gcp/observability v1.0.1
 )
 
 require (
-	cloud.google.com/go v0.112.0 // indirect
+	cloud.google.com/go v0.112.1 // indirect
 	cloud.google.com/go/compute v1.24.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/logging v1.9.0 // indirect
