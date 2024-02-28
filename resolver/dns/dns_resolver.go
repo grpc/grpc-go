@@ -34,7 +34,7 @@ import (
 //
 // This function affects the global timeout used by all channels using the DNS name resolver scheme.
 //
-// It must be called only at application startup, before any  gRPC calls are made.
+// It must be called only at application startup, before any gRPC calls are made.
 // Modifying this value after initialization is not thread-safe.
 //
 // The default value is 10 seconds. Setting the timeout too low may result

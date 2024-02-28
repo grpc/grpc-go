@@ -21,9 +21,7 @@ package dns_test
 import (
 	"context"
 	"net"
-	"strings"
 	"sync"
-	"time"
 
 	"google.golang.org/grpc/internal/testutils"
 )
@@ -43,29 +41,18 @@ type testNetResolver struct {
 
 func (tr *testNetResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
 	if tr.lookupHostCh != nil {
-		tr.lookupHostCh.Send(nil)
+		if err := tr.lookupHostCh.SendContext(ctx, nil); nil != err {
+			return nil, &net.DNSError{
+				Err:         "hostLookup timeout",
+				Name:        host,
+				Server:      "fake",
+				IsTemporary: true,
+			}
+		}
 	}
 
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
-
-	// trigger a timeout if the host name contains "infinity"
-	if strings.Contains(host, "infinity") {
-		<-time.After(88 * time.Millisecond)
-	}
-
-	// return timeout error if context reached its deadline
-	select {
-	case <-ctx.Done():
-		return nil, &net.DNSError{
-			Err:         "hostLookup timeout",
-			Name:        host,
-			Server:      "fake",
-			IsTemporary: true,
-		}
-
-	default:
-	}
 
 	if addrs, ok := tr.hostLookupTable[host]; ok {
 		return addrs, nil

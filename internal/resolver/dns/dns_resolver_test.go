@@ -1217,31 +1217,55 @@ func (s) TestReportError(t *testing.T) {
 	}
 }
 
+// Override the default dns.ResolvingTimeout with a test duration.
+func overrideResolveTimeoutDuration(t *testing.T, dur time.Duration) {
+	origDur := dns.ResolvingTimeout
+	dnspublic.SetResolvingTimeout(dur)
+
+	t.Cleanup(func() { dnspublic.SetResolvingTimeout(origDur) })
+}
+
 // Test verifies that when the DNS resolver gets timeout error when net.Resolver
 // takes too long to resolve a target.
 func (s) TestResolveTimeout(t *testing.T) {
-	// Set DNS resolving timeout to 7ms
-	dnspublic.SetResolvingTimeout(7 * time.Millisecond)
+	// Set DNS resolving timeout duration to 7ms
+	timeoutDur := 7 * time.Millisecond
+	overrideResolveTimeoutDuration(t, timeoutDur)
 
-	// Time to run test this should not longer than 10s.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	// context with a bit larger
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
 	// We are trying to resolve hostname which takes infinity time to resolve.
 	const target = "infinity"
-	tr := &testNetResolver{}
-	tr.UpdateHostLookupTable(map[string][]string{target: {"1.2.3.4"}})
+
+	// Define a testNetResolver with lookupHostCh, an unbuffered channel,
+	// so we can block the resolver until reaching timeout.
+	tr := &testNetResolver{
+		lookupHostCh:    testutils.NewChannel(),
+		hostLookupTable: map[string][]string{target: {"1.2.3.4"}},
+	}
 	overrideNetResolver(t, tr)
 
-	r, _, errCh := buildResolverWithTestClientConn(t, target)
-	r.ResolveNow(resolver.ResolveNowOptions{})
+	// block testNetResolver.testNetResolver until timeout
+	_ = tr.lookupHostCh.SendContext(ctx, nil)
+	_, stateCh, errCh := buildResolverWithTestClientConn(t, target)
+
+	// wait until timeout
+	<-ctx.Done()
+
+	// unblock testNetResolver.lookupHostCh channel
+	if _, ok := tr.lookupHostCh.ReceiveOrFail(); !ok {
+		t.Fatalf("failed for lookup() call.")
+	}
 
 	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for an error from the resolver")
 	case err := <-errCh:
 		if err == nil || !strings.Contains(err.Error(), "hostLookup timeout") {
-			t.Fatalf(`we expect to see timed out error`)
+			t.Fatalf(`We expect to see timed out error`)
 		}
+
+	case <-stateCh:
+		t.Fatalf(`We expect to see timed out error`)
 	}
 }
