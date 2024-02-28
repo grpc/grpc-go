@@ -808,15 +808,47 @@ func (s) TestMethodConfigDefaultService(t *testing.T) {
 	}
 }
 
-func (s) TestGetClientConnTarget(t *testing.T) {
-	addr := "nonexist:///non.existent"
-	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+func (s) TestClientConnCanonicalTarget(t *testing.T) {
+	tests := []struct {
+		name                string
+		addr                string
+		canonicalTargetWant string
+	}{
+		{
+			name:                "normal-case",
+			addr:                "dns://a.server.com/google.com",
+			canonicalTargetWant: "dns://a.server.com/google.com",
+		},
+		{
+			name:                "canonical-target-not-specified",
+			addr:                "no.scheme",
+			canonicalTargetWant: "passthrough:///no.scheme",
+		},
+		{
+			name:                "canonical-target-nonexistent",
+			addr:                "nonexist:///non.existent",
+			canonicalTargetWant: "passthrough:///nonexist:///non.existent",
+		},
+		{
+			name:                "canonical-target-add-colon-slash",
+			addr:                "dns:hostname:port",
+			canonicalTargetWant: "dns:///hostname:port",
+		},
 	}
-	defer cc.Close()
-	if cc.Target() != addr {
-		t.Fatalf("Target() = %s, want %s", cc.Target(), addr)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cc, err := Dial(test.addr, WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", test.addr, err)
+			}
+			defer cc.Close()
+			if cc.Target() != test.addr {
+				t.Fatalf("Target() = %s, want %s", cc.Target(), test.addr)
+			}
+			if cc.CanonicalTarget() != test.canonicalTargetWant {
+				t.Fatalf("CanonicalTarget() = %s, want %s", cc.CanonicalTarget(), test.canonicalTargetWant)
+			}
+		})
 	}
 }
 

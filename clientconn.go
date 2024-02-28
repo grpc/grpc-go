@@ -893,6 +893,16 @@ func (cc *ClientConn) Target() string {
 	return cc.target
 }
 
+// CanonicalTarget returns the canonical target string of the ClientConn.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+// release.
+func (cc *ClientConn) CanonicalTarget() string {
+	return cc.parsedTarget.String()
+}
+
 func (cc *ClientConn) incrCallsStarted() {
 	atomic.AddInt64(&cc.czData.callsStarted, 1)
 	atomic.StoreInt64(&cc.czData.lastCallStartedTime, time.Now().UnixNano())
