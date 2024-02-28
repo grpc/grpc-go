@@ -884,21 +884,11 @@ func (cc *ClientConn) channelzMetric() *channelz.ChannelInternalMetric {
 }
 
 // Target returns the target string of the ClientConn.
-//
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
 func (cc *ClientConn) Target() string {
 	return cc.target
 }
 
 // CanonicalTarget returns the canonical target string of the ClientConn.
-//
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-// release.
 func (cc *ClientConn) CanonicalTarget() string {
 	return cc.parsedTarget.String()
 }
