@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	google.golang.org/grpc v1.62.0
-	google.golang.org/grpc/examples v0.0.0-20230323213306-0fdfd40215dc
+	google.golang.org/grpc/examples v0.0.0-20240228191527-27c5d98b9494
 	google.golang.org/grpc/gcp/observability v1.0.1
 )
 

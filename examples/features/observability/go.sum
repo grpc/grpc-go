@@ -202,8 +202,8 @@ google.golang.org/grpc v1.27.0/go.mod h1:qbnxyOmOxrQa7FizSgH+ReBfzJrCY1pSN7KXBS8
 google.golang.org/grpc v1.33.2/go.mod h1:JMHMWHQWaTccqQQlmk3MJZS+GWXOdAesneDmEnv2fbc=
 google.golang.org/grpc v1.62.0 h1:HQKZ/fa1bXkX1oFOvSjmZEUL8wLSaZTjCcLAlmZRtdk=
 google.golang.org/grpc v1.62.0/go.mod h1:IWTG0VlJLCh1SkC58F7np9ka9mx/WNkjl4PGJaiq+QE=
-google.golang.org/grpc/examples v0.0.0-20230323213306-0fdfd40215dc h1:H58v4RmBwciuKpwU6NFUn3w2hPZNL78HedaJUitCdpI=
-google.golang.org/grpc/examples v0.0.0-20230323213306-0fdfd40215dc/go.mod h1:EXfxRt8PpWkTFBAXaWXB0Xgb1S/FFBXvFRry0nr2bHQ=
+google.golang.org/grpc/examples v0.0.0-20240228191527-27c5d98b9494 h1:+K8L+s4YeTM9ztxb5dpHazna2ib24QVP6YFEljpy9Gs=
+google.golang.org/grpc/examples v0.0.0-20240228191527-27c5d98b9494/go.mod h1:FV3d8gNcSIz/RlqiBrGwCTm1/2XV1A1sCMl18qMHjyU=
 google.golang.org/grpc/gcp/observability v1.0.1 h1:2IQ7szW1gobfZaS/sDSAu2uxO0V/aTryMZvlcyqKqQA=
 google.golang.org/grpc/gcp/observability v1.0.1/go.mod h1:yM0UcrYRMe/B+Nu0mDXeTJNDyIMJRJnzuxqnJMz7Ewk=
 google.golang.org/grpc/stats/opencensus v1.0.0 h1:evSYcRZaSToQp+borzWE52+03joezZeXcKJvZDfkUJA=
