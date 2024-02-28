@@ -53,9 +53,9 @@ func ToJSON(e any) string {
 		return string(ret)
 	}
 
-	ret, err := json.MarshalIndent(ee, "", jsonIndent)
+	ret, err := json.MarshalIndent(e, "", jsonIndent)
 	if err != nil {
-		return fmt.Sprintf("%+v", ee)
+		return fmt.Sprintf("%+v", e)
 	}
 	return string(ret)
 }
