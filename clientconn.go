@@ -208,7 +208,7 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 // https://github.com/grpc/grpc/blob/master/doc/naming.md.
 // e.g. to use dns resolver, a "dns:///" prefix should be applied to the target.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
-	cc, err := newClient(target, opts...)
+	cc, err := NewClient(target, opts...)
 	if err != nil {
 		return nil, err
 	}
