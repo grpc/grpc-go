@@ -281,9 +281,9 @@ func (t Target) Endpoint() string {
 	return strings.TrimPrefix(endpoint, "/")
 }
 
-// String returns the canonical string representation of Target.
+// String returns a string representation of Target.
 func (t Target) String() string {
-	return t.URL.Scheme + "://" + t.URL.Host + "/" + t.Endpoint()
+	return t.URL.String()
 }
 
 // Builder creates a resolver that will be used to watch name resolution updates.

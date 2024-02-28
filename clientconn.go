@@ -883,14 +883,14 @@ func (cc *ClientConn) channelzMetric() *channelz.ChannelInternalMetric {
 	}
 }
 
-// Target returns the canonical target string of the ClientConn.
+// Target returns the target string of the ClientConn.
 //
 // # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func (cc *ClientConn) Target() string {
-	return cc.parsedTarget.String()
+	return cc.target
 }
 
 func (cc *ClientConn) incrCallsStarted() {
@@ -1744,6 +1744,7 @@ func (cc *ClientConn) parseTargetAndFindResolver() error {
 	defScheme := resolver.GetDefaultScheme()
 	channelz.Infof(logger, cc.channelzID, "fallback to scheme %q", defScheme)
 	canonicalTarget := defScheme + ":///" + cc.target
+
 	parsedTarget, err = parseTarget(canonicalTarget)
 	if err != nil {
 		channelz.Infof(logger, cc.channelzID, "dial target %q parse failed: %v", canonicalTarget, err)
