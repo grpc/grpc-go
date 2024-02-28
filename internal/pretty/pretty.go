@@ -34,37 +34,37 @@ const jsonIndent = "  "
 //
 // If marshal fails, it falls back to fmt.Sprintf("%+v").
 func ToJSON(e any) string {
-	switch ee := e.(type) {
-	case protoadapt.MessageV1:
-		mm := protojson.MarshalOptions{Indent: jsonIndent}
-		ret, err := mm.Marshal(protoadapt.MessageV2Of(ee))
-		if err != nil {
-			// This may fail for proto.Anys, e.g. for xDS v2, LDS, the v2
-			// messages are not imported, and this will fail because the message
-			// is not found.
-			return fmt.Sprintf("%+v", ee)
-		}
-		return string(ret)
-	case protoadapt.MessageV2:
-		mm := protojson.MarshalOptions{
-			Multiline: true,
-			Indent:    jsonIndent,
-		}
-		ret, err := mm.Marshal(ee)
-		if err != nil {
-			// This may fail for proto.Anys, e.g. for xDS v2, LDS, the v2
-			// messages are not imported, and this will fail because the message
-			// is not found.
-			return fmt.Sprintf("%+v", ee)
-		}
-		return string(ret)
-	default:
-		ret, err := json.MarshalIndent(ee, "", jsonIndent)
-		if err != nil {
-			return fmt.Sprintf("%+v", ee)
-		}
-		return string(ret)
+	var ret []byte
+	var err error
+
+	mm := protojson.MarshalOptions{
+		Indent:    jsonIndent,
+		Multiline: true,
 	}
+
+	if ee, ok := e.(protoadapt.MessageV1); ok {
+		e = protoadapt.MessageV2Of(ee)
+	}
+
+	switch ee := e.(type) {
+	case protoadapt.MessageV2:
+		ret, err = mm.Marshal(ee)
+
+		if err != nil {
+			// This may fail for proto.Anys, e.g. for xDS v2, LDS, the v2
+			// messages are not imported, and this will fail because the message
+			// is not found.
+			return fmt.Sprintf("%+v", ee)
+		}
+	default:
+		ret, err = json.MarshalIndent(ee, "", jsonIndent)
+
+		if err != nil {
+			return fmt.Sprintf("%+v", ee)
+		}
+	}
+
+	return string(ret)
 }
 
 // FormatJSON formats the input json bytes with indentation.
