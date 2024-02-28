@@ -178,9 +178,9 @@ func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 	const serviceName = "my-service-client-side-xds/2nd component"
 
 	// All other resources are with old style name.
-	rdsName := "route-" + serviceName
-	cdsName := "cluster-" + serviceName
-	edsName := "endpoints-" + serviceName
+	const rdsName = "route-" + serviceName
+	const cdsName = "cluster-" + serviceName
+	const edsName = "endpoints-" + serviceName
 
 	// Resource update sent to go-control-plane mgmt server.
 	resourceUpdate := e2e.UpdateOptions{
