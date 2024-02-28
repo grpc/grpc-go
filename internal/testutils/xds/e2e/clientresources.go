@@ -365,11 +365,11 @@ func HTTPFilter(name string, config proto.Message) *v3httppb.HttpFilter {
 }
 
 // DefaultRouteConfig returns a basic xds RouteConfig resource.
-func DefaultRouteConfig(routeName, ldsTarget, clusterName string) *v3routepb.RouteConfiguration {
+func DefaultRouteConfig(routeName, vhDomain, clusterName string) *v3routepb.RouteConfiguration {
 	return &v3routepb.RouteConfiguration{
 		Name: routeName,
 		VirtualHosts: []*v3routepb.VirtualHost{{
-			Domains: []string{ldsTarget},
+			Domains: []string{vhDomain},
 			Routes: []*v3routepb.Route{{
 				Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
 				Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
