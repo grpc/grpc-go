@@ -1746,7 +1746,7 @@ func (cc *ClientConn) parseTargetAndFindResolver() error {
 	// scheme, except when a custom dialer is specified in which case, we should
 	// always use passthrough scheme. For either case, we need to respect any overridden
 	// global defaults set by the user.
-	defScheme := resolver.GetDefaultSchemeOrDns()
+	defScheme := resolver.GetDefaultSchemeOrDNS()
 	if cc.dopts.eagerConnect {
 		defScheme = resolver.GetDefaultSchemeOrPassthrough()
 	}

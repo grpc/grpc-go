@@ -84,10 +84,10 @@ func GetDefaultSchemeOrPassthrough() string {
 	return defaultScheme
 }
 
-// GetDefaultSchemeOrDns gets the default scheme that will be used, if no scheme was overridden,
+// GetDefaultSchemeOrDNS gets the default scheme that will be used, if no scheme was overridden,
 // defaults to the "dns" scheme. This is the default scheme when calling NewClient to generate a
 // new client connection.
-func GetDefaultSchemeOrDns() string {
+func GetDefaultSchemeOrDNS() string {
 	if defaultScheme == "" {
 		return dnsScheme
 	}
