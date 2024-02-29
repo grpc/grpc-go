@@ -208,6 +208,10 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 // https://github.com/grpc/grpc/blob/master/doc/naming.md.
 // e.g. to use dns resolver, a "dns:///" prefix should be applied to the target.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
+	// At the end of this method, we kick the channel out of idle, rather than waiting for the first rpc.
+	// The eagerConnect option is used to tell the ClientChannel that DialContext was called to make
+	// this channel, and hence tries to connect immediately.
+	opts = append(opts, WithEagerConnect())
 	cc, err := NewClient(target, opts...)
 	if err != nil {
 		return nil, err
@@ -1740,8 +1744,13 @@ func (cc *ClientConn) parseTargetAndFindResolver() error {
 	// We are here because the user's dial target did not contain a scheme or
 	// specified an unregistered scheme. We should fallback to the default
 	// scheme, except when a custom dialer is specified in which case, we should
-	// always use passthrough scheme.
-	defScheme := resolver.GetDefaultScheme()
+	// always use passthrough scheme. For either case, we need to respect any overridden
+	// global defaults set by the user.
+	defScheme := resolver.GetDefaultSchemeOrDns()
+	if cc.dopts.eagerConnect {
+		defScheme = resolver.GetDefaultSchemeOrPassthrough()
+	}
+
 	channelz.Infof(logger, cc.channelzID, "fallback to scheme %q", defScheme)
 	canonicalTarget := defScheme + ":///" + cc.target
 

@@ -79,6 +79,7 @@ type dialOptions struct {
 	resolvers                   []resolver.Builder
 	idleTimeout                 time.Duration
 	recvBufferPool              SharedBufferPool
+	eagerConnect                bool
 }
 
 // DialOption configures how we set up the connection.
@@ -484,6 +485,15 @@ func FailOnNonTempDialError(f bool) DialOption {
 func WithUserAgent(s string) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.UserAgent = s + " " + grpcUA
+	})
+}
+
+// WithEagerConnect tells the ClientConnection that the connection was created directly
+// with either Dial or DialContext, meaning that the connection is automatically put into
+// a connecting state.
+func WithEagerConnect() DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.eagerConnect = true
 	})
 }
 

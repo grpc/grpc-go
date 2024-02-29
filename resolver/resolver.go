@@ -36,7 +36,9 @@ var (
 	// m is a map from scheme to resolver builder.
 	m = make(map[string]Builder)
 	// defaultScheme is the default scheme to use.
-	defaultScheme = "passthrough"
+	defaultScheme     = ""
+	passthroughScheme = "passthrough"
+	dnsScheme         = "dns"
 )
 
 // TODO(bar) install dns resolver in init(){}.
@@ -72,8 +74,23 @@ func SetDefaultScheme(scheme string) {
 	defaultScheme = scheme
 }
 
-// GetDefaultScheme gets the default scheme that will be used.
-func GetDefaultScheme() string {
+// GetDefaultSchemeOrPassthrough gets the default scheme that will be used, if no scheme was
+// overridden, defaults to the "passthrough" scheme. This scheme is used when directly calling
+// the Dial method to create a client connection.
+func GetDefaultSchemeOrPassthrough() string {
+	if defaultScheme == "" {
+		return passthroughScheme
+	}
+	return defaultScheme
+}
+
+// GetDefaultSchemeOrDns gets the default scheme that will be used, if no scheme was overriden,
+// defaults to the "dns" scheme. This is the default scheme when calling NewClient to generate a
+// new client connection.
+func GetDefaultSchemeOrDns() string {
+	if defaultScheme == "" {
+		return dnsScheme
+	}
 	return defaultScheme
 }
 

@@ -195,13 +195,13 @@ func parseRLSProto(rlsProto *rlspb.RouteLookupConfig) (*lbConfig, error) {
 	parsedTarget, err := url.Parse(lookupService)
 	if err != nil {
 		// url.Parse() fails if scheme is missing. Retry with default scheme.
-		parsedTarget, err = url.Parse(resolver.GetDefaultScheme() + ":///" + lookupService)
+		parsedTarget, err = url.Parse(resolver.GetDefaultSchemeOrPassthrough() + ":///" + lookupService)
 		if err != nil {
 			return nil, fmt.Errorf("rls: invalid target URI in lookup_service %s", lookupService)
 		}
 	}
 	if parsedTarget.Scheme == "" {
-		parsedTarget.Scheme = resolver.GetDefaultScheme()
+		parsedTarget.Scheme = resolver.GetDefaultSchemeOrPassthrough()
 	}
 	if resolver.Get(parsedTarget.Scheme) == nil {
 		return nil, fmt.Errorf("rls: unregistered scheme in lookup_service %s", lookupService)
