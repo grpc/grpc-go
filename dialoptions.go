@@ -79,7 +79,7 @@ type dialOptions struct {
 	resolvers                   []resolver.Builder
 	idleTimeout                 time.Duration
 	recvBufferPool              SharedBufferPool
-	eagerConnect                bool
+	defScheme                   string
 }
 
 // DialOption configures how we set up the connection.
@@ -488,15 +488,6 @@ func WithUserAgent(s string) DialOption {
 	})
 }
 
-// WithEagerConnect tells the ClientConnection that the connection was created directly
-// with either Dial or DialContext, meaning that the connection is automatically put into
-// a connecting state.
-func WithEagerConnect() DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.eagerConnect = true
-	})
-}
-
 // WithKeepaliveParams returns a DialOption that specifies keepalive parameters
 // for the client transport.
 func WithKeepaliveParams(kp keepalive.ClientParameters) DialOption {
@@ -641,7 +632,7 @@ func withHealthCheckFunc(f internal.HealthChecker) DialOption {
 	})
 }
 
-func defaultDialOptions() dialOptions {
+func defaultDialOptions(defScheme string) dialOptions {
 	return dialOptions{
 		copts: transport.ConnectOptions{
 			ReadBufferSize:  defaultReadBufSize,
@@ -653,6 +644,7 @@ func defaultDialOptions() dialOptions {
 		healthCheckFunc: internal.HealthCheckFunc,
 		idleTimeout:     30 * time.Minute,
 		recvBufferPool:  nopBufferPool{},
+		defScheme:       defScheme,
 	}
 }
 

@@ -117,12 +117,11 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 	}, nil
 }
 
-// NewClient returns a new client in idle mode.
-func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) {
+func newClient(target, defaultScheme string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target: target,
 		conns:  make(map[*addrConn]struct{}),
-		dopts:  defaultDialOptions(),
+		dopts:  defaultDialOptions(defaultScheme),
 		czData: new(channelzData),
 	}
 
@@ -191,6 +190,11 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	return cc, nil
 }
 
+// NewClient returns a new client in idle mode.
+func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) {
+	return newClient(target, "dns", opts...)
+}
+
 // DialContext creates a client connection to the given target. By default, it's
 // a non-blocking dial (the function won't wait for connections to be
 // established, and connecting happens in the background). To make it a blocking
@@ -211,8 +215,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	// At the end of this method, we kick the channel out of idle, rather than waiting for the first rpc.
 	// The eagerConnect option is used to tell the ClientChannel that DialContext was called to make
 	// this channel, and hence tries to connect immediately.
-	opts = append(opts, WithEagerConnect())
-	cc, err := NewClient(target, opts...)
+	cc, err := newClient(target, "passthrough", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1746,9 +1749,9 @@ func (cc *ClientConn) parseTargetAndFindResolver() error {
 	// scheme, except when a custom dialer is specified in which case, we should
 	// always use passthrough scheme. For either case, we need to respect any overridden
 	// global defaults set by the user.
-	defScheme := resolver.GetDefaultSchemeOrDNS()
-	if cc.dopts.eagerConnect {
-		defScheme = resolver.GetDefaultSchemeOrPassthrough()
+	defScheme := cc.dopts.defScheme
+	if defScheme == "" || internal.UserSetDefaultScheme {
+		defScheme = resolver.GetDefaultScheme()
 	}
 
 	channelz.Infof(logger, cc.channelzID, "fallback to scheme %q", defScheme)

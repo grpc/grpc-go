@@ -23,6 +23,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/internal"
 	"net"
 	"net/url"
 	"strings"
@@ -36,9 +37,7 @@ var (
 	// m is a map from scheme to resolver builder.
 	m = make(map[string]Builder)
 	// defaultScheme is the default scheme to use.
-	defaultScheme     = ""
-	passthroughScheme = "passthrough"
-	dnsScheme         = "dns"
+	defaultScheme = "dns"
 )
 
 // TODO(bar) install dns resolver in init(){}.
@@ -65,32 +64,19 @@ func Get(scheme string) Builder {
 }
 
 // SetDefaultScheme sets the default scheme that will be used. The default
-// default scheme is "passthrough".
+// scheme is "dns".
 //
 // NOTE: this function must only be called during initialization time (i.e. in
 // an init() function), and is not thread-safe. The scheme set last overrides
 // previously set values.
 func SetDefaultScheme(scheme string) {
+	internal.UserSetDefaultScheme = true
 	defaultScheme = scheme
 }
 
-// GetDefaultSchemeOrPassthrough gets the default scheme that will be used, if no scheme was
-// overridden, defaults to the "passthrough" scheme. This scheme is used when directly calling
-// the Dial method to create a client connection.
-func GetDefaultSchemeOrPassthrough() string {
-	if defaultScheme == "" {
-		return passthroughScheme
-	}
-	return defaultScheme
-}
-
-// GetDefaultSchemeOrDNS gets the default scheme that will be used, if no scheme was overridden,
-// defaults to the "dns" scheme. This is the default scheme when calling NewClient to generate a
-// new client connection.
-func GetDefaultSchemeOrDNS() string {
-	if defaultScheme == "" {
-		return dnsScheme
-	}
+// GetDefaultScheme gets the default scheme that will be used, if no scheme was
+// overridden, defaults to the "dns" scheme.
+func GetDefaultScheme() string {
 	return defaultScheme
 }
 
