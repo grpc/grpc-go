@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 type s struct {
@@ -68,8 +69,8 @@ func (s) TestRecvBufferPoolStream(t *testing.T) {
 				FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 					for i := 0; i < reqCount; i++ {
 						preparedMsg := &grpc.PreparedMsg{}
-						if err := preparedMsg.Encode(stream, &testgrpc.StreamingOutputCallResponse{
-							Payload: &testgrpc.Payload{
+						if err := preparedMsg.Encode(stream, &testpb.StreamingOutputCallResponse{
+							Payload: &testpb.Payload{
 								Body: []byte{'0' + uint8(i)},
 							},
 						}); err != nil {
@@ -148,9 +149,9 @@ func (s) TestRecvBufferPoolUnary(t *testing.T) {
 			const largeSize = 1024
 
 			ss := &stubserver.StubServer{
-				UnaryCallF: func(ctx context.Context, in *testgrpc.SimpleRequest) (*testgrpc.SimpleResponse, error) {
-					return &testgrpc.SimpleResponse{
-						Payload: &testgrpc.Payload{
+				UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					return &testpb.SimpleResponse{
+						Payload: &testpb.Payload{
 							Body: make([]byte, largeSize),
 						},
 					}, nil
@@ -172,8 +173,8 @@ func (s) TestRecvBufferPoolUnary(t *testing.T) {
 			for i := 0; i < reqCount; i++ {
 				if _, err := ss.Client.UnaryCall(
 					ctx,
-					&testgrpc.SimpleRequest{
-						Payload: &testgrpc.Payload{
+					&testpb.SimpleRequest{
+						Payload: &testpb.Payload{
 							Body: make([]byte, largeSize),
 						},
 					},
