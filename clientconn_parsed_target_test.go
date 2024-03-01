@@ -34,7 +34,7 @@ import (
 )
 
 func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
-	defScheme := resolver.GetDefaultScheme()
+	defScheme := "passthrough"
 	tests := []struct {
 		target     string
 		wantParsed resolver.Target
@@ -93,7 +93,7 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 }
 
 func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
-	defScheme := resolver.GetDefaultScheme()
+	defScheme := "passthrough"
 	tests := []struct {
 		target            string
 		wantParsed        resolver.Target
