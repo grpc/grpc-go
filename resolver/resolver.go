@@ -23,7 +23,6 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc/internal"
 	"net"
 	"net/url"
 	"strings"
@@ -70,7 +69,6 @@ func Get(scheme string) Builder {
 // an init() function), and is not thread-safe. The scheme set last overrides
 // previously set values.
 func SetDefaultScheme(scheme string) {
-	internal.UserSetDefaultScheme = true
 	defaultScheme = scheme
 }
 

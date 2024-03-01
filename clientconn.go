@@ -712,6 +712,7 @@ func init() {
 	internal.ExitIdleModeForTesting = func(cc *ClientConn) error {
 		return cc.idlenessMgr.ExitIdleMode()
 	}
+	internal.UserSetDefaultScheme = resolver.GetDefaultScheme() != "dns"
 }
 
 func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
