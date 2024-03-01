@@ -41,7 +41,7 @@ type testNetResolver struct {
 
 func (tr *testNetResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
 	if tr.lookupHostCh != nil {
-		if err := tr.lookupHostCh.SendContext(ctx, nil); nil != err {
+		if err := tr.lookupHostCh.SendContext(ctx, nil); err != nil {
 			return nil, err
 		}
 	}

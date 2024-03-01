@@ -1225,7 +1225,7 @@ func overrideResolveTimeoutDuration(t *testing.T, dur time.Duration) {
 	t.Cleanup(func() { dnspublic.SetResolvingTimeout(origDur) })
 }
 
-// Test verifies that when the DNS resolver gets timeout error when net.Resolver
+// Test verifies that the DNS resolver gets timeout error when net.Resolver
 // takes too long to resolve a target.
 func (s) TestResolveTimeout(t *testing.T) {
 	// Set DNS resolving timeout duration to 7ms
@@ -1242,13 +1242,11 @@ func (s) TestResolveTimeout(t *testing.T) {
 	// Define a testNetResolver with lookupHostCh, an unbuffered channel,
 	// so we can block the resolver until reaching timeout.
 	tr := &testNetResolver{
-		lookupHostCh:    testutils.NewChannel(),
+		lookupHostCh:    testutils.NewChannelWithSize(0),
 		hostLookupTable: map[string][]string{target: {"1.2.3.4"}},
 	}
 	overrideNetResolver(t, tr)
 
-	// block testNetResolver.testNetResolver until timeout
-	_ = tr.lookupHostCh.SendContext(ctx, nil)
 	_, _, errCh := buildResolverWithTestClientConn(t, target)
 	select {
 	case <-ctx.Done():
