@@ -24,6 +24,8 @@
 package dns
 
 import (
+	"time"
+
 	"google.golang.org/grpc/internal/resolver/dns"
 	"google.golang.org/grpc/resolver"
 )
@@ -33,4 +35,13 @@ import (
 // Deprecated: import grpc and use resolver.Get("dns") instead.
 func NewBuilder() resolver.Builder {
 	return dns.NewBuilder()
+}
+
+// SetMinResolutionRate sets the default minimum rate at which DNS re-resolutions are
+// allowed. This helps to prevent excessive re-resolution.
+//
+// Using this option overwrites the default [MinResolutionRate] specified
+// in the internal dns resolver package.
+func SetMinResolutionRate(d time.Duration) {
+	dns.MinResolutionRate = d
 }
