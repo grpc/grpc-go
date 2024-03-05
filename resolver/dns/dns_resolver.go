@@ -32,15 +32,16 @@ import (
 
 // SetResolvingTimeout sets the maximum duration for DNS resolution requests.
 //
-// This function affects the global timeout used by all channels using the DNS name resolver scheme.
+// This function affects the global timeout used by all channels using the DNS
+// name resolver scheme.
 //
-// It must be called only at application startup, before any gRPC calls are made.
-// Modifying this value after initialization is not thread-safe.
+// It must be called only at application startup, before any gRPC calls are
+// made. Modifying this value after initialization is not thread-safe.
 //
-// The default value is 30 seconds. Setting the timeout too low may result
-// in premature timeouts during resolution, while setting it too high may
-// lead to unnecessary delays in service discovery. Choose a value appropriate
-// for your specific needs and network environment.
+// The default value is 30 seconds. Setting the timeout too low may result in
+// premature timeouts during resolution, while setting it too high may lead to
+// unnecessary delays in service discovery. Choose a value appropriate for your
+// specific needs and network environment.
 func SetResolvingTimeout(timeout time.Duration) {
 	dns.ResolvingTimeout = timeout
 }

@@ -1219,6 +1219,8 @@ func (s) TestReportError(t *testing.T) {
 
 // Override the default dns.ResolvingTimeout with a test duration.
 func overrideResolveTimeoutDuration(t *testing.T, dur time.Duration) {
+	t.Helper()
+
 	origDur := dns.ResolvingTimeout
 	dnspublic.SetResolvingTimeout(dur)
 
@@ -1232,7 +1234,6 @@ func (s) TestResolveTimeout(t *testing.T) {
 	timeoutDur := 7 * time.Millisecond
 	overrideResolveTimeoutDuration(t, timeoutDur)
 
-	// context with a bit larger
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1253,7 +1254,7 @@ func (s) TestResolveTimeout(t *testing.T) {
 		t.Fatal("Timeout when waiting for the DNS resolver to timeout")
 	case err := <-errCh:
 		if err == nil || !strings.Contains(err.Error(), "context deadline exceeded") {
-			t.Fatalf(`We expect to see timed out error`)
+			t.Fatalf(`Expected to see Timeout error; got: %v`, err)
 		}
 	}
 }
