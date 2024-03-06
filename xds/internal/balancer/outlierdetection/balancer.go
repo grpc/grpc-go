@@ -168,7 +168,7 @@ type outlierDetectionBalancer struct {
 	done           *grpcsync.Event
 	cc             balancer.ClientConn
 	logger         *grpclog.PrefixLogger
-	channelzParent *channelz.Channel
+	channelzParent channelz.Identifier
 
 	// childMu guards calls into child (to uphold the balancer.Balancer API
 	// guarantee of synchronous calls).

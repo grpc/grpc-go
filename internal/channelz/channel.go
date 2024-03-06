@@ -46,6 +46,10 @@ type Channel struct {
 	ChannelMetrics ChannelMetrics
 }
 
+// Implemented to make Channel implement the Identifier interface used for
+// nesting.
+func (c *Channel) channelzIdentifier() {}
+
 func (c *Channel) String() string {
 	if c.Parent == nil {
 		return fmt.Sprintf("Channel #%d", c.ID)

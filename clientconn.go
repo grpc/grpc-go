@@ -424,7 +424,8 @@ func (cc *ClientConn) validateTransportCredentials() error {
 //
 // Doesn't grab cc.mu as this method is expected to be called only at Dial time.
 func (cc *ClientConn) channelzRegistration(target string) {
-	cc.channelz = channelz.RegisterChannel(cc.dopts.channelzParent, target)
+	parentChannel, _ := cc.dopts.channelzParent.(*channelz.Channel)
+	cc.channelz = channelz.RegisterChannel(parentChannel, target)
 	cc.addTraceEvent("created")
 }
 

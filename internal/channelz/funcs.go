@@ -218,3 +218,11 @@ func (i *IDGenerator) Reset() {
 func (i *IDGenerator) genID() int64 {
 	return atomic.AddInt64(&i.id, 1)
 }
+
+// Identifier is an opaque channelz identifier used to expose channelz symbols
+// outside of grpc.  Currently only implemented by Channel since no other
+// types require exposure outside grpc.
+type Identifier interface {
+	Entity
+	channelzIdentifier()
+}
