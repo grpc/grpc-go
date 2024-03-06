@@ -712,7 +712,6 @@ func init() {
 	internal.ExitIdleModeForTesting = func(cc *ClientConn) error {
 		return cc.idlenessMgr.ExitIdleMode()
 	}
-	internal.UserSetDefaultScheme = resolver.GetDefaultScheme() != "dns"
 }
 
 func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
@@ -1751,7 +1750,7 @@ func (cc *ClientConn) parseTargetAndFindResolver() error {
 	// always use passthrough scheme. For either case, we need to respect any overridden
 	// global defaults set by the user.
 	defScheme := cc.dopts.defScheme
-	if defScheme == "" || internal.UserSetDefaultScheme {
+	if internal.UserSetDefaultScheme {
 		defScheme = resolver.GetDefaultScheme()
 	}
 

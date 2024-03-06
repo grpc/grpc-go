@@ -20,10 +20,10 @@ package google
 
 import (
 	"context"
+	"google.golang.org/grpc/internal/xds"
 	"testing"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal"
 	icredentials "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/resolver"
 )
@@ -31,7 +31,7 @@ import (
 func (s) TestIsDirectPathCluster(t *testing.T) {
 	c := func(cluster string) context.Context {
 		return icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
-			Attributes: internal.SetXDSHandshakeClusterName(resolver.Address{}, cluster).Attributes,
+			Attributes: xds.SetXDSHandshakeClusterName(resolver.Address{}, cluster).Attributes,
 		})
 	}
 

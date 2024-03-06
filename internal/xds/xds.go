@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package internal
+package xds
 
 import (
 	"google.golang.org/grpc/attributes"
