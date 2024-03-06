@@ -41,7 +41,9 @@ type testNetResolver struct {
 
 func (tr *testNetResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
 	if tr.lookupHostCh != nil {
-		tr.lookupHostCh.Send(nil)
+		if err := tr.lookupHostCh.SendContext(ctx, nil); err != nil {
+			return nil, err
+		}
 	}
 
 	tr.mu.Lock()
@@ -50,6 +52,7 @@ func (tr *testNetResolver) LookupHost(ctx context.Context, host string) ([]strin
 	if addrs, ok := tr.hostLookupTable[host]; ok {
 		return addrs, nil
 	}
+
 	return nil, &net.DNSError{
 		Err:         "hostLookup error",
 		Name:        host,
