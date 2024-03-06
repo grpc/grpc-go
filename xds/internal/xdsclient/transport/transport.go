@@ -363,7 +363,7 @@ func (t *Transport) send(ctx context.Context) {
 	// The xDS protocol only requires that we send the node proto in the first
 	// discovery request on every stream. Sending the node proto in every
 	// request message wastes CPU resources on the client and the server.
-	sentNodeProto := true
+	sentNodeProto := false
 	for {
 		select {
 		case <-ctx.Done():
