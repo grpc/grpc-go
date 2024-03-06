@@ -20,12 +20,12 @@ package google
 
 import (
 	"context"
-	"google.golang.org/grpc/internal/xds"
 	"net"
 	"net/url"
 	"strings"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal/xds"
 )
 
 const cfeClusterNamePrefix = "google_cfe_"
