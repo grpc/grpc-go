@@ -20,13 +20,13 @@ package google
 
 import (
 	"context"
-	"google.golang.org/grpc/internal/xds"
 	"net"
 	"testing"
 
 	"google.golang.org/grpc/credentials"
 	icredentials "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/resolver"
 )
 

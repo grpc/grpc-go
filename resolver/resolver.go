@@ -23,13 +23,13 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc/internal"
 	"net"
 	"net/url"
 	"strings"
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/serviceconfig"
 )
 

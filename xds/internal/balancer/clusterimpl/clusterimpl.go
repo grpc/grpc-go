@@ -26,7 +26,6 @@ package clusterimpl
 import (
 	"encoding/json"
 	"fmt"
-	"google.golang.org/grpc/internal/xds"
 	"sync"
 	"sync/atomic"
 
@@ -37,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	xdsinternal "google.golang.org/grpc/xds/internal"
