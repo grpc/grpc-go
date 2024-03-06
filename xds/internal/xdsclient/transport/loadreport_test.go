@@ -24,6 +24,7 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/xds/internal/testutils"
@@ -33,6 +34,22 @@ import (
 
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
+)
+
+const (
+	testLocality1 = `{"region":"test-region1"}`
+	testLocality2 = `{"region":"test-region2"}`
+	testKey1      = "test-key1"
+	testKey2      = "test-key2"
+)
+
+var (
+	toleranceCmpOpt   = cmpopts.EquateApprox(0, 1e-5)
+	ignoreOrderCmpOpt = protocmp.FilterField(&v3endpointpb.ClusterStats{}, "upstream_locality_stats",
+		cmpopts.SortSlices(func(a, b protocmp.Message) bool {
+			return a.String() < b.String()
+		}),
+	)
 )
 
 func (s) TestReportLoad(t *testing.T) {
@@ -74,6 +91,13 @@ func (s) TestReportLoad(t *testing.T) {
 
 	// Push some loads on the received store.
 	store1.PerCluster("cluster1", "eds1").CallDropped("test")
+	store1.PerCluster("cluster1", "eds1").CallStarted(testLocality1)
+	store1.PerCluster("cluster1", "eds1").CallServerLoad(testLocality1, testKey1, 3.14)
+	store1.PerCluster("cluster1", "eds1").CallServerLoad(testLocality1, testKey1, 2.718)
+	store1.PerCluster("cluster1", "eds1").CallFinished(testLocality1, nil)
+	store1.PerCluster("cluster1", "eds1").CallStarted(testLocality2)
+	store1.PerCluster("cluster1", "eds1").CallServerLoad(testLocality2, testKey2, 1.618)
+	store1.PerCluster("cluster1", "eds1").CallFinished(testLocality2, nil)
 
 	// Ensure the initial request is received.
 	req, err := mgmtServer.LRSRequestChan.Receive(ctx)
@@ -115,8 +139,23 @@ func (s) TestReportLoad(t *testing.T) {
 		ClusterServiceName:   "eds1",
 		TotalDroppedRequests: 1,
 		DroppedRequests:      []*v3endpointpb.ClusterStats_DroppedRequests{{Category: "test", DroppedCount: 1}},
+		UpstreamLocalityStats: []*v3endpointpb.UpstreamLocalityStats{
+			{
+				Locality: &v3corepb.Locality{Region: "test-region1"},
+				LoadMetricStats: []*v3endpointpb.EndpointLoadMetricStats{
+					// TotalMetricValue is the aggregation of 3.14 + 2.718 = 5.858
+					{MetricName: testKey1, NumRequestsFinishedWithMetric: 2, TotalMetricValue: 5.858}},
+				TotalSuccessfulRequests: 1,
+			},
+			{
+				Locality: &v3corepb.Locality{Region: "test-region2"},
+				LoadMetricStats: []*v3endpointpb.EndpointLoadMetricStats{
+					{MetricName: testKey2, NumRequestsFinishedWithMetric: 1, TotalMetricValue: 1.618}},
+				TotalSuccessfulRequests: 1,
+			},
+		},
 	}
-	if diff := cmp.Diff(wantLoad, gotLoad[0], protocmp.Transform()); diff != "" {
+	if diff := cmp.Diff(wantLoad, gotLoad[0], protocmp.Transform(), toleranceCmpOpt, ignoreOrderCmpOpt); diff != "" {
 		t.Fatalf("Unexpected diff in LRS request (-got, +want):\n%s", diff)
 	}
 

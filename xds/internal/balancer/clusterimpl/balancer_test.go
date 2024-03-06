@@ -43,6 +43,8 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
+
+	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 )
 
 const (
@@ -51,6 +53,9 @@ const (
 
 	testClusterName = "test-cluster"
 	testServiceName = "test-eds-service"
+
+	testNamedMetricsKey1 = "test-named1"
+	testNamedMetricsKey2 = "test-named2"
 )
 
 var (
@@ -68,6 +73,7 @@ var (
 		cmpopts.EquateEmpty(),
 		cmpopts.IgnoreFields(load.Data{}, "ReportInterval"),
 	}
+	toleranceCmpOpt = cmpopts.EquateApprox(0, 1e-5)
 )
 
 type s struct {
@@ -629,7 +635,10 @@ func (s) TestLoadReporting(t *testing.T) {
 			if gotSCSt.SubConn != sc1 {
 				return fmt.Errorf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
 			}
-			gotSCSt.Done(balancer.DoneInfo{})
+			lr := &v3orcapb.OrcaLoadReport{
+				NamedMetrics: map[string]float64{testNamedMetricsKey1: 3.14, testNamedMetricsKey2: 2.718},
+			}
+			gotSCSt.Done(balancer.DoneInfo{ServerLoad: lr})
 		}
 		for i := 0; i < errorCount; i++ {
 			gotSCSt, err := p.Pick(balancer.PickInfo{})
@@ -671,7 +680,13 @@ func (s) TestLoadReporting(t *testing.T) {
 	if reqStats.InProgress != 0 {
 		t.Errorf("got inProgress %v, want %v", reqStats.InProgress, 0)
 	}
-
+	wantLoadStats := map[string]load.ServerLoadData{
+		testNamedMetricsKey1: {Count: 5, Sum: 15.7},  // aggregation of 5 * 3.14 = 15.7
+		testNamedMetricsKey2: {Count: 5, Sum: 13.59}, // aggregation of 5 * 2.718 = 13.59
+	}
+	if diff := cmp.Diff(wantLoadStats, localityData.LoadStats, toleranceCmpOpt); diff != "" {
+		t.Errorf("localityData.LoadStats returned unexpected diff (-want +got):\n%s", diff)
+	}
 	b.Close()
 	if err := xdsC.WaitForCancelReportLoad(ctx); err != nil {
 		t.Fatalf("unexpected error waiting form load report to be canceled: %v", err)
