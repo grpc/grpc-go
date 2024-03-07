@@ -79,7 +79,7 @@ type dialOptions struct {
 	resolvers                   []resolver.Builder
 	idleTimeout                 time.Duration
 	recvBufferPool              SharedBufferPool
-	defScheme                   string
+	defaultScheme               string
 }
 
 // DialOption configures how we set up the connection.
@@ -632,7 +632,7 @@ func withHealthCheckFunc(f internal.HealthChecker) DialOption {
 	})
 }
 
-func defaultDialOptions(defScheme string) dialOptions {
+func defaultDialOptions() dialOptions {
 	return dialOptions{
 		copts: transport.ConnectOptions{
 			ReadBufferSize:  defaultReadBufSize,
@@ -644,7 +644,7 @@ func defaultDialOptions(defScheme string) dialOptions {
 		healthCheckFunc: internal.HealthCheckFunc,
 		idleTimeout:     30 * time.Minute,
 		recvBufferPool:  nopBufferPool{},
-		defScheme:       defScheme,
+		defaultScheme:   "dns",
 	}
 }
 
@@ -656,6 +656,14 @@ func defaultDialOptions(defScheme string) dialOptions {
 func withMinConnectDeadline(f func() time.Duration) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.minConnectTimeout = f
+	})
+}
+
+// withDefaultScheme is used to allow Dial to use "passthrough" as the default
+// name resolver, while NewClient uses "dns" otherwise.
+func withDefaultScheme(s string) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.defaultScheme = s
 	})
 }
 
