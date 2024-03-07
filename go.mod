@@ -7,7 +7,7 @@ require (
 	github.com/cncf/xds/go v0.0.0-20231128003011-0fa0005c9caa
 	github.com/envoyproxy/go-control-plane v0.12.0
 	github.com/golang/glog v1.2.0
-	github.com/golang/protobuf v1.5.3
+	github.com/golang/protobuf v1.5.4
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.6.0
 	golang.org/x/net v0.21.0
@@ -15,7 +15,7 @@ require (
 	golang.org/x/sync v0.6.0
 	golang.org/x/sys v0.17.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240227224415-6ceb2ff114de
-	google.golang.org/protobuf v1.32.0
+	google.golang.org/protobuf v1.33.0
 )
 
 require (
