@@ -31,12 +31,12 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	xdsinternal "google.golang.org/grpc/xds/internal"
@@ -359,7 +359,7 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 	newAddrs := make([]resolver.Address, len(addrs))
 	var lID xdsinternal.LocalityID
 	for i, addr := range addrs {
-		newAddrs[i] = internal.SetXDSHandshakeClusterName(addr, clusterName)
+		newAddrs[i] = xds.SetXDSHandshakeClusterName(addr, clusterName)
 		lID = xdsinternal.GetLocalityID(newAddrs[i])
 	}
 	var sc balancer.SubConn
@@ -384,7 +384,7 @@ func (b *clusterImplBalancer) UpdateAddresses(sc balancer.SubConn, addrs []resol
 	newAddrs := make([]resolver.Address, len(addrs))
 	var lID xdsinternal.LocalityID
 	for i, addr := range addrs {
-		newAddrs[i] = internal.SetXDSHandshakeClusterName(addr, clusterName)
+		newAddrs[i] = xds.SetXDSHandshakeClusterName(addr, clusterName)
 		lID = xdsinternal.GetLocalityID(newAddrs[i])
 	}
 	if scw, ok := sc.(*scWrapper); ok {

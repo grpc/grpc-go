@@ -28,34 +28,87 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils"
-
 	"google.golang.org/grpc/resolver"
 )
 
+func generateTarget(scheme string, target string) resolver.Target {
+	return resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", scheme, target))}
+}
+
+// This is here just in case another test calls the SetDefaultScheme method.
+func resetInitialResolverState() {
+	resolver.SetDefaultScheme("passthrough")
+	internal.UserSetDefaultScheme = false
+}
+
 func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
-	defScheme := resolver.GetDefaultScheme()
+	resetInitialResolverState()
+	dialScheme := resolver.GetDefaultScheme()
+	newClientScheme := "dns"
 	tests := []struct {
-		target     string
-		wantParsed resolver.Target
+		target             string
+		wantDialParse      resolver.Target
+		wantNewClientParse resolver.Target
 	}{
 		// No scheme is specified.
-		{target: "://a/b", wantParsed: resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "://a/b"))}},
-		{target: "a//b", wantParsed: resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "a//b"))}},
+		{
+			target:             "://a/b",
+			wantDialParse:      generateTarget(dialScheme, "://a/b"),
+			wantNewClientParse: generateTarget(newClientScheme, "://a/b"),
+		},
+		{
+			target:             "a//b",
+			wantDialParse:      generateTarget(dialScheme, "a//b"),
+			wantNewClientParse: generateTarget(newClientScheme, "a//b"),
+		},
 
 		// An unregistered scheme is specified.
-		{target: "a:///", wantParsed: resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "a:///"))}},
-		{target: "a:b", wantParsed: resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "a:b"))}},
+		{
+			target:             "a:///",
+			wantDialParse:      generateTarget(dialScheme, "a:///"),
+			wantNewClientParse: generateTarget(newClientScheme, "a:///"),
+		},
+		{
+			target:             "a:b",
+			wantDialParse:      generateTarget(dialScheme, "a:b"),
+			wantNewClientParse: generateTarget(newClientScheme, "a:b"),
+		},
 
 		// A registered scheme is specified.
-		{target: "dns://a.server.com/google.com", wantParsed: resolver.Target{URL: *testutils.MustParseURL("dns://a.server.com/google.com")}},
-		{target: "unix-abstract:/ a///://::!@#$%25^&*()b", wantParsed: resolver.Target{URL: *testutils.MustParseURL("unix-abstract:/ a///://::!@#$%25^&*()b")}},
-		{target: "unix-abstract:passthrough:abc", wantParsed: resolver.Target{URL: *testutils.MustParseURL("unix-abstract:passthrough:abc")}},
-		{target: "passthrough:///unix:///a/b/c", wantParsed: resolver.Target{URL: *testutils.MustParseURL("passthrough:///unix:///a/b/c")}},
+		{
+			target:             "dns://a.server.com/google.com",
+			wantDialParse:      resolver.Target{URL: *testutils.MustParseURL("dns://a.server.com/google.com")},
+			wantNewClientParse: resolver.Target{URL: *testutils.MustParseURL("dns://a.server.com/google.com")},
+		},
+		{
+			target:             "unix-abstract:/ a///://::!@#$%25^&*()b",
+			wantDialParse:      resolver.Target{URL: *testutils.MustParseURL("unix-abstract:/ a///://::!@#$%25^&*()b")},
+			wantNewClientParse: resolver.Target{URL: *testutils.MustParseURL("unix-abstract:/ a///://::!@#$%25^&*()b")},
+		},
+		{
+			target:             "unix-abstract:passthrough:abc",
+			wantDialParse:      resolver.Target{URL: *testutils.MustParseURL("unix-abstract:passthrough:abc")},
+			wantNewClientParse: resolver.Target{URL: *testutils.MustParseURL("unix-abstract:passthrough:abc")},
+		},
+		{
+			target:             "passthrough:///unix:///a/b/c",
+			wantDialParse:      resolver.Target{URL: *testutils.MustParseURL("passthrough:///unix:///a/b/c")},
+			wantNewClientParse: resolver.Target{URL: *testutils.MustParseURL("passthrough:///unix:///a/b/c")},
+		},
 
 		// Cases for `scheme:absolute-path`.
-		{target: "dns:/a/b/c", wantParsed: resolver.Target{URL: *testutils.MustParseURL("dns:/a/b/c")}},
-		{target: "unregistered:/a/b/c", wantParsed: resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "unregistered:/a/b/c"))}},
+		{
+			target:             "dns:/a/b/c",
+			wantDialParse:      resolver.Target{URL: *testutils.MustParseURL("dns:/a/b/c")},
+			wantNewClientParse: resolver.Target{URL: *testutils.MustParseURL("dns:/a/b/c")},
+		},
+		{
+			target:             "unregistered:/a/b/c",
+			wantDialParse:      generateTarget(dialScheme, "unregistered:/a/b/c"),
+			wantNewClientParse: generateTarget(newClientScheme, "unregistered:/a/b/c"),
+		},
 	}
 
 	for _, test := range tests {
@@ -66,8 +119,18 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 			}
 			defer cc.Close()
 
-			if !cmp.Equal(cc.parsedTarget, test.wantParsed) {
-				t.Errorf("cc.parsedTarget for dial target %q = %+v, want %+v", test.target, cc.parsedTarget, test.wantParsed)
+			if !cmp.Equal(cc.parsedTarget, test.wantDialParse) {
+				t.Errorf("cc.parsedTarget for dial target %q = %+v, want %+v", test.target, cc.parsedTarget, test.wantDialParse)
+			}
+
+			cc, err = NewClient(test.target, WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				t.Fatalf("NewClient(%q) failed: %v", test.target, err)
+			}
+			defer cc.Close()
+
+			if !cmp.Equal(cc.parsedTarget, test.wantNewClientParse) {
+				t.Errorf("cc.parsedTarget for newClient target %q = %+v, want %+v", test.target, cc.parsedTarget, test.wantNewClientParse)
 			}
 		})
 	}
@@ -93,6 +156,7 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 }
 
 func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
+	resetInitialResolverState()
 	defScheme := resolver.GetDefaultScheme()
 	tests := []struct {
 		target            string

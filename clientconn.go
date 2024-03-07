@@ -117,12 +117,11 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 	}, nil
 }
 
-// newClient returns a new client in idle mode.
-func newClient(target string, opts ...DialOption) (conn *ClientConn, err error) {
+func newClient(target, defaultScheme string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target: target,
 		conns:  make(map[*addrConn]struct{}),
-		dopts:  defaultDialOptions(),
+		dopts:  defaultDialOptions(defaultScheme),
 		czData: new(channelzData),
 	}
 
@@ -191,6 +190,11 @@ func newClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	return cc, nil
 }
 
+// NewClient returns a new client in idle mode.
+func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) {
+	return newClient(target, "dns", opts...)
+}
+
 // DialContext creates a client connection to the given target. By default, it's
 // a non-blocking dial (the function won't wait for connections to be
 // established, and connecting happens in the background). To make it a blocking
@@ -208,7 +212,8 @@ func newClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 // https://github.com/grpc/grpc/blob/master/doc/naming.md.
 // e.g. to use dns resolver, a "dns:///" prefix should be applied to the target.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
-	cc, err := newClient(target, opts...)
+	// At the end of this method, we kick the channel out of idle, rather than waiting for the first rpc.
+	cc, err := newClient(target, "passthrough", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1740,8 +1745,13 @@ func (cc *ClientConn) parseTargetAndFindResolver() error {
 	// We are here because the user's dial target did not contain a scheme or
 	// specified an unregistered scheme. We should fallback to the default
 	// scheme, except when a custom dialer is specified in which case, we should
-	// always use passthrough scheme.
-	defScheme := resolver.GetDefaultScheme()
+	// always use passthrough scheme. For either case, we need to respect any overridden
+	// global defaults set by the user.
+	defScheme := cc.dopts.defScheme
+	if internal.UserSetDefaultScheme {
+		defScheme = resolver.GetDefaultScheme()
+	}
+
 	channelz.Infof(logger, cc.channelzID, "fallback to scheme %q", defScheme)
 	canonicalTarget := defScheme + ":///" + cc.target
 

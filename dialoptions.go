@@ -79,6 +79,7 @@ type dialOptions struct {
 	resolvers                   []resolver.Builder
 	idleTimeout                 time.Duration
 	recvBufferPool              SharedBufferPool
+	defScheme                   string
 }
 
 // DialOption configures how we set up the connection.
@@ -631,7 +632,7 @@ func withHealthCheckFunc(f internal.HealthChecker) DialOption {
 	})
 }
 
-func defaultDialOptions() dialOptions {
+func defaultDialOptions(defScheme string) dialOptions {
 	return dialOptions{
 		copts: transport.ConnectOptions{
 			ReadBufferSize:  defaultReadBufSize,
@@ -643,6 +644,7 @@ func defaultDialOptions() dialOptions {
 		healthCheckFunc: internal.HealthCheckFunc,
 		idleTimeout:     30 * time.Minute,
 		recvBufferPool:  nopBufferPool{},
+		defScheme:       defScheme,
 	}
 }
 
