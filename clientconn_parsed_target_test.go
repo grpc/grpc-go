@@ -28,8 +28,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils"
-
 	"google.golang.org/grpc/resolver"
 )
 
@@ -37,7 +37,14 @@ func generateTarget(scheme string, target string) resolver.Target {
 	return resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", scheme, target))}
 }
 
+// This is here just in case another test calls the SetDefaultScheme method.
+func resetInitialResolverState() {
+	resolver.SetDefaultScheme("passthrough")
+	internal.UserSetDefaultScheme = false
+}
+
 func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
+	resetInitialResolverState()
 	dialScheme := resolver.GetDefaultScheme()
 	newClientScheme := "dns"
 	tests := []struct {
@@ -149,6 +156,7 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 }
 
 func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
+	resetInitialResolverState()
 	defScheme := resolver.GetDefaultScheme()
 	tests := []struct {
 		target            string

@@ -213,8 +213,6 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 // e.g. to use dns resolver, a "dns:///" prefix should be applied to the target.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	// At the end of this method, we kick the channel out of idle, rather than waiting for the first rpc.
-	// The eagerConnect option is used to tell the ClientChannel that DialContext was called to make
-	// this channel, and hence tries to connect immediately.
 	cc, err := newClient(target, "passthrough", opts...)
 	if err != nil {
 		return nil, err
