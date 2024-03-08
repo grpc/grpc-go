@@ -101,11 +101,6 @@ const (
 	defaultReadBufSize  = 32 * 1024
 )
 
-// Dial creates a client connection to the given target.
-func Dial(target string, opts ...DialOption) (*ClientConn, error) {
-	return DialContext(context.Background(), target, opts...)
-}
-
 type defaultConfigSelector struct {
 	sc *ServiceConfig
 }
@@ -117,11 +112,22 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 	}, nil
 }
 
-func newClient(target, defaultScheme string, opts ...DialOption) (conn *ClientConn, err error) {
+// NewClient creates a new gRPC "channel" for the target URI provided.  No I/O
+// is performed.  Use of the ClientConn for RPCs will automatically cause it to
+// connect.  Connect may be used to manually create a connection, but for most
+// users this is unnecessary.
+//
+// The target name syntax is defined in
+// https://github.com/grpc/grpc/blob/master/doc/naming.md.  e.g. to use dns
+// resolver, a "dns:///" prefix should be applied to the target.
+//
+// The DialOptions returned by WithBlock, WithTimeout, and
+// WithReturnConnectionError are ignored by this function.
+func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target: target,
 		conns:  make(map[*addrConn]struct{}),
-		dopts:  defaultDialOptions(defaultScheme),
+		dopts:  defaultDialOptions(),
 		czData: new(channelzData),
 	}
 
@@ -190,45 +196,36 @@ func newClient(target, defaultScheme string, opts ...DialOption) (conn *ClientCo
 	return cc, nil
 }
 
-// NewClient returns a new client in idle mode.
-func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) {
-	return newClient(target, "dns", opts...)
+// Dial calls DialContext(context.Background(), target, opts...).
+//
+// Deprecated: use NewClient instead.  Will be supported throughout 1.x.
+func Dial(target string, opts ...DialOption) (*ClientConn, error) {
+	return DialContext(context.Background(), target, opts...)
 }
 
-// DialContext creates a client connection to the given target. By default, it's
-// a non-blocking dial (the function won't wait for connections to be
-// established, and connecting happens in the background). To make it a blocking
-// dial, use WithBlock() dial option.
+// DialContext calls NewClient and then exits idle mode.  If WithBlock(true) is
+// used, it calls Connect and WaitForStateChange until either the context
+// expires or the state of the ClientConn is Ready.
 //
-// In the non-blocking case, the ctx does not act against the connection. It
-// only controls the setup steps.
+// One subtle difference between NewClient and Dial and DialContext is that the
+// former uses "dns" as the default name resolver, while the latter use
+// "passthrough" for backward compatibility.  This distinction should not matter
+// to most users, but could matter to legacy users that specify a custom dialer
+// and expect it to receive the target string directly.
 //
-// In the blocking case, ctx can be used to cancel or expire the pending
-// connection. Once this function returns, the cancellation and expiration of
-// ctx will be noop. Users should call ClientConn.Close to terminate all the
-// pending operations after this function returns.
-//
-// The target name syntax is defined in
-// https://github.com/grpc/grpc/blob/master/doc/naming.md.
-// e.g. to use dns resolver, a "dns:///" prefix should be applied to the target.
+// Deprecated: use NewClient instead.  Will be supported throughout 1.x.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
-	// At the end of this method, we kick the channel out of idle, rather than waiting for the first rpc.
-	cc, err := newClient(target, "passthrough", opts...)
+	// At the end of this method, we kick the channel out of idle, rather than
+	// waiting for the first rpc.
+	opts = append([]DialOption{withDefaultScheme("passthrough")}, opts...)
+	cc, err := NewClient(target, opts...)
 	if err != nil {
 		return nil, err
 	}
 
 	// We start the channel off in idle mode, but kick it out of idle now,
-	// instead of waiting for the first RPC. Other gRPC implementations do wait
-	// for the first RPC to kick the channel out of idle. But doing so would be
-	// a major behavior change for our users who are used to seeing the channel
-	// active after Dial.
-	//
-	// Taking this approach of kicking it out of idle at the end of this method
-	// allows us to share the code between channel creation and exiting idle
-	// mode. This will also make it easy for us to switch to starting the
-	// channel off in idle, i.e. by making newClient exported.
-
+	// instead of waiting for the first RPC.  This is the legacy behavior of
+	// Dial.
 	defer func() {
 		if err != nil {
 			cc.Close()
@@ -712,15 +709,15 @@ func init() {
 	}
 }
 
-func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
+func (cc *ClientConn) maybeApplyDefaultServiceConfig() {
 	if cc.sc != nil {
-		cc.applyServiceConfigAndBalancer(cc.sc, nil, addrs)
+		cc.applyServiceConfigAndBalancer(cc.sc, nil)
 		return
 	}
 	if cc.dopts.defaultServiceConfig != nil {
-		cc.applyServiceConfigAndBalancer(cc.dopts.defaultServiceConfig, &defaultConfigSelector{cc.dopts.defaultServiceConfig}, addrs)
+		cc.applyServiceConfigAndBalancer(cc.dopts.defaultServiceConfig, &defaultConfigSelector{cc.dopts.defaultServiceConfig})
 	} else {
-		cc.applyServiceConfigAndBalancer(emptyServiceConfig, &defaultConfigSelector{emptyServiceConfig}, addrs)
+		cc.applyServiceConfigAndBalancer(emptyServiceConfig, &defaultConfigSelector{emptyServiceConfig})
 	}
 }
 
@@ -738,7 +735,7 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 		// May need to apply the initial service config in case the resolver
 		// doesn't support service configs, or doesn't provide a service config
 		// with the new addresses.
-		cc.maybeApplyDefaultServiceConfig(nil)
+		cc.maybeApplyDefaultServiceConfig()
 
 		cc.balancerWrapper.resolverError(err)
 
@@ -750,9 +747,9 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 	var ret error
 	if cc.dopts.disableServiceConfig {
 		channelz.Infof(logger, cc.channelzID, "ignoring service config from resolver (%v) and applying the default because service config is disabled", s.ServiceConfig)
-		cc.maybeApplyDefaultServiceConfig(s.Addresses)
+		cc.maybeApplyDefaultServiceConfig()
 	} else if s.ServiceConfig == nil {
-		cc.maybeApplyDefaultServiceConfig(s.Addresses)
+		cc.maybeApplyDefaultServiceConfig()
 		// TODO: do we need to apply a failing LB policy if there is no
 		// default, per the error handling design?
 	} else {
@@ -765,7 +762,7 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 			} else {
 				configSelector = &defaultConfigSelector{sc}
 			}
-			cc.applyServiceConfigAndBalancer(sc, configSelector, s.Addresses)
+			cc.applyServiceConfigAndBalancer(sc, configSelector)
 		} else {
 			ret = balancer.ErrBadResolverState
 			if cc.sc == nil {
@@ -1072,7 +1069,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method st
 	})
 }
 
-func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSelector iresolver.ConfigSelector, addrs []resolver.Address) {
+func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSelector iresolver.ConfigSelector) {
 	if sc == nil {
 		// should never reach here.
 		return
@@ -1747,7 +1744,7 @@ func (cc *ClientConn) parseTargetAndFindResolver() error {
 	// scheme, except when a custom dialer is specified in which case, we should
 	// always use passthrough scheme. For either case, we need to respect any overridden
 	// global defaults set by the user.
-	defScheme := cc.dopts.defScheme
+	defScheme := cc.dopts.defaultScheme
 	if internal.UserSetDefaultScheme {
 		defScheme = resolver.GetDefaultScheme()
 	}
