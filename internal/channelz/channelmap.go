@@ -31,12 +31,13 @@ type entry interface {
 	addChild(id int64, e entry)
 	// deleteChild deletes a child with channelz id to be id from child list
 	deleteChild(id int64)
-	// triggerDelete tries to delete self from channelz database. However, if child
-	// list is not empty, then deletion from the database is on hold until the last
-	// child is deleted from database.
+	// triggerDelete tries to delete self from channelz database. However, if
+	// child list is not empty, then deletion from the database is on hold until
+	// the last child is deleted from database.
 	triggerDelete()
-	// deleteSelfIfReady check whether triggerDelete() has been called before, and whether child
-	// list is now empty. If both conditions are met, then delete self from database.
+	// deleteSelfIfReady check whether triggerDelete() has been called before,
+	// and whether child list is now empty. If both conditions are met, then
+	// delete self from database.
 	deleteSelfIfReady()
 	// getParentID returns parent ID of the entry. 0 value parent ID means no parent.
 	getParentID() int64
@@ -44,9 +45,13 @@ type entry interface {
 }
 
 // channelMap is the storage data structure for channelz.
-// Methods of channelMap can be divided in two two categories with respect to locking.
+//
+// Methods of channelMap can be divided in two two categories with respect to
+// locking.
+//
 // 1. Methods acquire the global lock.
 // 2. Methods that can only be called when global lock is held.
+//
 // A second type of method need always to be called inside a first type of method.
 type channelMap struct {
 	mu               sync.RWMutex
@@ -359,14 +364,15 @@ func (d *dummyEntry) String() string {
 func (d *dummyEntry) ID() int64 { return d.idNotFound }
 
 func (d *dummyEntry) addChild(id int64, e entry) {
-	// Note: It is possible for a normal program to reach here under race condition.
-	// For example, there could be a race between ClientConn.Close() info being propagated
-	// to addrConn and http2Client. ClientConn.Close() cancel the context and result
-	// in http2Client to error. The error info is then caught by transport monitor
-	// and before addrConn.tearDown() is called in side ClientConn.Close(). Therefore,
-	// the addrConn will create a new transport. And when registering the new transport in
-	// channelz, its parent addrConn could have already been torn down and deleted
-	// from channelz tracking, and thus reach the code here.
+	// Note: It is possible for a normal program to reach here under race
+	// condition.  For example, there could be a race between ClientConn.Close()
+	// info being propagated to addrConn and http2Client. ClientConn.Close()
+	// cancel the context and result in http2Client to error. The error info is
+	// then caught by transport monitor and before addrConn.tearDown() is called
+	// in side ClientConn.Close(). Therefore, the addrConn will create a new
+	// transport. And when registering the new transport in channelz, its parent
+	// addrConn could have already been torn down and deleted from channelz
+	// tracking, and thus reach the code here.
 	logger.Infof("attempt to add child of type %T with id %d to a parent (id=%d) that doesn't currently exist", e, id, d.idNotFound)
 }
 

@@ -28,8 +28,6 @@ package service
 
 import (
 	"context"
-	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
@@ -44,64 +42,57 @@ import (
 )
 
 func (s) TestGetSocketOptions(t *testing.T) {
-	ss := []*channelz.Socket{
-		{
-			SocketOptions: &channelz.SocketOptionData{
-				Linger:      &unix.Linger{Onoff: 1, Linger: 2},
-				RecvTimeout: &unix.Timeval{Sec: 10, Usec: 1},
-				SendTimeout: &unix.Timeval{},
-				TCPInfo:     &unix.TCPInfo{State: 1},
-			},
+	ss := &channelz.Socket{
+		SocketOptions: &channelz.SocketOptionData{
+			Linger:      &unix.Linger{Onoff: 1, Linger: 2},
+			RecvTimeout: &unix.Timeval{Sec: 10, Usec: 1},
+			SendTimeout: &unix.Timeval{},
+			TCPInfo:     &unix.TCPInfo{State: 1},
 		},
 	}
 	svr := newCZServer()
-	ids := make([]*channelz.Socket, len(ss))
 	czServer := channelz.RegisterServer("test svr")
 	defer channelz.RemoveEntry(czServer.ID)
-	for i, s := range ss {
-		ids[i] = channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, RefName: fmt.Sprint(i), Parent: czServer, SocketOptions: s.SocketOptions})
-		defer channelz.RemoveEntry(ids[i].ID)
-	}
+	id := channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, RefName: "0", Parent: czServer, SocketOptions: ss.SocketOptions})
+	defer channelz.RemoveEntry(id.ID)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	for i := range ss {
-		resp, _ := svr.GetSocket(ctx, &channelzpb.GetSocketRequest{SocketId: ids[i].ID})
-		{
-			got, want := resp.GetSocket().GetRef(), &channelzpb.SocketRef{SocketId: ids[i].ID, Name: strconv.Itoa(i)}
-			if diff := cmp.Diff(got, want, protocmp.Transform()); diff != "" {
-				t.Fatal("resp.GetSocket() ref (-got +want): ", diff)
-			}
+	resp, _ := svr.GetSocket(ctx, &channelzpb.GetSocketRequest{SocketId: id.ID})
+	{
+		got, want := resp.GetSocket().GetRef(), &channelzpb.SocketRef{SocketId: id.ID, Name: "0"}
+		if diff := cmp.Diff(got, want, protocmp.Transform()); diff != "" {
+			t.Fatal("resp.GetSocket() ref (-got +want): ", diff)
 		}
-		{
-			got := resp.GetSocket().GetData().GetOption()
-			want := []*channelzpb.SocketOption{{
-				Name: "SO_LINGER",
-				Additional: testutils.MarshalAny(
-					t,
-					&channelzpb.SocketOptionLinger{Active: true, Duration: durationpb.New(2 * time.Second)},
-				),
-			}, {
-				Name: "SO_RCVTIMEO",
-				Additional: testutils.MarshalAny(
-					t,
-					&channelzpb.SocketOptionTimeout{Duration: durationpb.New(10*time.Second + time.Microsecond)},
-				),
-			}, {
-				Name: "SO_SNDTIMEO",
-				Additional: testutils.MarshalAny(
-					t,
-					&channelzpb.SocketOptionTimeout{Duration: durationpb.New(0)},
-				),
-			}, {
-				Name: "TCP_INFO",
-				Additional: testutils.MarshalAny(
-					t,
-					&channelzpb.SocketOptionTcpInfo{TcpiState: 1},
-				),
-			}}
-			if diff := cmp.Diff(got, want, protocmp.Transform()); diff != "" {
-				t.Fatal("resp.GetSocket() options (-got +want): ", diff)
-			}
+	}
+	{
+		got := resp.GetSocket().GetData().GetOption()
+		want := []*channelzpb.SocketOption{{
+			Name: "SO_LINGER",
+			Additional: testutils.MarshalAny(
+				t,
+				&channelzpb.SocketOptionLinger{Active: true, Duration: durationpb.New(2 * time.Second)},
+			),
+		}, {
+			Name: "SO_RCVTIMEO",
+			Additional: testutils.MarshalAny(
+				t,
+				&channelzpb.SocketOptionTimeout{Duration: durationpb.New(10*time.Second + time.Microsecond)},
+			),
+		}, {
+			Name: "SO_SNDTIMEO",
+			Additional: testutils.MarshalAny(
+				t,
+				&channelzpb.SocketOptionTimeout{Duration: durationpb.New(0)},
+			),
+		}, {
+			Name: "TCP_INFO",
+			Additional: testutils.MarshalAny(
+				t,
+				&channelzpb.SocketOptionTcpInfo{TcpiState: 1},
+			),
+		}}
+		if diff := cmp.Diff(got, want, protocmp.Transform()); diff != "" {
+			t.Fatal("resp.GetSocket() options (-got +want): ", diff)
 		}
 	}
 }
