@@ -308,7 +308,7 @@ func (s) TestBalancerSwitch_RoundRobinToGRPCLB(t *testing.T) {
 }
 
 // TestBalancerSwitch_grpclbNotRegistered tests the scenario where the grpclb
-// balancer is not registered. Verifies that the ClientConn fallbacks to the
+// balancer is not registered. Verifies that the ClientConn falls back to the
 // default LB policy or the LB policy specified in the service config, and that
 // addresses of type "grpclb" are filtered out.
 func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
