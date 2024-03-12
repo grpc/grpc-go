@@ -176,6 +176,7 @@ UpdateAddresses is deprecated:
 UpdateSubConnState is deprecated:
 balancer.ErrTransientFailure is deprecated:
 grpc/reflection/v1alpha/reflection.proto
+SwitchTo is deprecated:
 XXXXX xDS deprecated fields we support
 .ExactMatch
 .PrefixMatch

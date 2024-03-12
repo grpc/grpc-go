@@ -483,7 +483,3 @@ func newBool(b bool) *bool {
 func newDuration(b time.Duration) *time.Duration {
 	return &b
 }
-
-func newString(b string) *string {
-	return &b
-}

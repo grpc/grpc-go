@@ -37,6 +37,9 @@ func ChildName(l serviceconfig.LoadBalancingConfig) string {
 	return l.(*lbConfig).childBuilder.Name()
 }
 
+// ParseConfig parses a child config list and returns a LB config for the
+// gracefulswitch Balancer.
+//
 // cfg is expected to be a json.RawMessage containing a JSON array of LB policy
 // names + configs as the format of the "loadBalancingConfig" field in
 // ServiceConfig.  It returns a type that should be passed to
