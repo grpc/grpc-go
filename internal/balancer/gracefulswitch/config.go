@@ -27,6 +27,8 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
+var logger = grpclog.Component("gracefulswitch")
+
 type lbConfig struct {
 	serviceconfig.LoadBalancingConfig
 
@@ -66,7 +68,7 @@ func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error)
 		parser, ok := builder.(balancer.ConfigParser)
 		if !ok {
 			if string(jsonCfg) != "{}" {
-				grpclog.Warningf("non-empty balancer configuration %q, but balancer does not implement ParseConfig", string(jsonCfg))
+				logger.Warningf("non-empty balancer configuration %q, but balancer does not implement ParseConfig", string(jsonCfg))
 				return &lbConfig{childBuilder: builder, childConfig: nil}, nil
 			}
 			// This is a valid child with no config.
