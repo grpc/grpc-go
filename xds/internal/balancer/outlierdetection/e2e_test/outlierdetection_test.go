@@ -123,7 +123,7 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 			}
 			iterations = append(iterations, iteration)
 		}
-		// Ensure the the first iteration contains all addresses in addrs.
+		// Ensure the first iteration contains all addresses in addrs.
 		for _, addr := range iterations[0] {
 			gotAddrCount[addr]++
 		}
