@@ -67,7 +67,7 @@ var (
 	errConnDrain = errors.New("grpc: the connection is drained")
 	// errConnClosing indicates that the connection is closing.
 	errConnClosing = errors.New("grpc: the connection is closing")
-	// errConnIdling indicates the the connection is being closed as the channel
+	// errConnIdling indicates the connection is being closed as the channel
 	// is moving to an idle mode due to inactivity.
 	errConnIdling = errors.New("grpc: the connection is closing due to channel idleness")
 	// invalidDefaultServiceConfigErrPrefix is used to prefix the json parsing error for the default
