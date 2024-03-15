@@ -417,10 +417,10 @@ func (cc *ClientConn) validateTransportCredentials() error {
 }
 
 // channelzRegistration registers the newly created ClientConn with channelz and
-// stores the returned identifier in `cc.channelzID` and `cc.csMgr.channelzID`.
-// A channelz trace event is emitted for ClientConn creation. If the newly
-// created ClientConn is a nested one, i.e a valid parent ClientConn ID is
-// specified via a dial option, the trace event is also added to the parent.
+// stores the returned identifier in `cc.channelz`.  A channelz trace event is
+// emitted for ClientConn creation. If the newly created ClientConn is a nested
+// one, i.e a valid parent ClientConn ID is specified via a dial option, the
+// trace event is also added to the parent.
 //
 // Doesn't grab cc.mu as this method is expected to be called only at Dial time.
 func (cc *ClientConn) channelzRegistration(target string) {
@@ -492,10 +492,10 @@ func getChainStreamer(interceptors []StreamClientInterceptor, curr int, finalStr
 }
 
 // newConnectivityStateManager creates an connectivityStateManager with
-// the specified id.
-func newConnectivityStateManager(ctx context.Context, id *channelz.Channel) *connectivityStateManager {
+// the specified channel.
+func newConnectivityStateManager(ctx context.Context, channel *channelz.Channel) *connectivityStateManager {
 	return &connectivityStateManager{
-		channelz: id,
+		channelz: channel,
 		pubSub:   grpcsync.NewPubSub(ctx),
 	}
 }
@@ -1548,16 +1548,6 @@ func (ac *addrConn) tearDown(err error) {
 	ac.cancel()
 	ac.curAddr = resolver.Address{}
 
-	if err == errConnDrain && curTr != nil {
-		// GracefulClose(...) may be executed multiple times when
-		// i) receiving multiple GoAway frames from the server; or
-		// ii) there are concurrent name resolver/Balancer triggered
-		// address removal and GoAway.
-		// We have to unlock and re-lock here because GracefulClose => Close => onClose, which requires locking ac.mu.
-		ac.mu.Unlock()
-		curTr.GracefulClose()
-		ac.mu.Lock()
-	}
 	channelz.AddTraceEvent(logger, ac.channelz, 0, &channelz.TraceEvent{
 		Desc:     "Subchannel deleted",
 		Severity: channelz.CtInfo,
@@ -1632,34 +1622,6 @@ func (rt *retryThrottler) successfulRPC() {
 		rt.tokens = rt.max
 	}
 }
-
-/*
-func (c *channelzChannel) ChannelzMetric() *channelz.ChannelInternalMetric {
-	cc := c.cc
-	return &channelz.ChannelInternalMetric{
-		State:                    cc.GetState(),
-		Target:                   cc.target,
-		CallsStarted:             atomic.LoadInt64(&cc.czData.callsStarted),
-		CallsSucceeded:           atomic.LoadInt64(&cc.czData.callsSucceeded),
-		CallsFailed:              atomic.LoadInt64(&cc.czData.callsFailed),
-		LastCallStartedTimestamp: time.Unix(0, atomic.LoadInt64(&cc.czData.lastCallStartedTime)),
-	}
-}
-
-func (ac *addrConn) ChannelzMetric() *channelz.ChannelInternalMetric {
-	ac.mu.Lock()
-	addr := ac.curAddr.Addr
-	ac.mu.Unlock()
-	return &channelz.ChannelInternalMetric{
-		State:                    ac.getState(),
-		Target:                   addr,
-		CallsStarted:             atomic.LoadInt64(&ac.czData.callsStarted),
-		CallsSucceeded:           atomic.LoadInt64(&ac.czData.callsSucceeded),
-		CallsFailed:              atomic.LoadInt64(&ac.czData.callsFailed),
-		LastCallStartedTimestamp: time.Unix(0, atomic.LoadInt64(&ac.czData.lastCallStartedTime)),
-	}
-}
-*/
 
 func (ac *addrConn) incrCallsStarted() {
 	ac.channelz.ChannelMetrics.CallsStarted.Add(1)
