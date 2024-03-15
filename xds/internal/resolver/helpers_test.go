@@ -21,6 +21,7 @@ package resolver_test
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -104,7 +105,9 @@ func buildResolverForTarget(t *testing.T, target resolver.Target) (chan resolver
 		}
 	}
 	tcc := &testutils.ResolverClientConn{Logger: t, UpdateStateF: updateStateF, ReportErrorF: reportErrorF}
-	r, err := builder.Build(target, tcc, resolver.BuildOptions{})
+	r, err := builder.Build(target, tcc, resolver.BuildOptions{
+		Authority: url.PathEscape(target.Endpoint()),
+	})
 	if err != nil {
 		t.Fatalf("Failed to build xDS resolver for target %q: %v", target, err)
 	}

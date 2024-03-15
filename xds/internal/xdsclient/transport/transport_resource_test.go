@@ -21,6 +21,7 @@ package transport_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -215,5 +216,195 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("Received unexpected resources. Diff (-got, +want):\n%s", diff)
 			}
 		})
+	}
+}
+
+func (s) TestEmptyListenerResourceOnStreamRestart(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	mgmtServer, cleanup := startFakeManagementServer(t)
+	defer cleanup()
+	t.Logf("Started xDS management server on %s", mgmtServer.Address)
+	nodeProto := &v3corepb.Node{Id: uuid.New().String()}
+	tr, err := transport.New(transport.Options{
+		ServerCfg: *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
+		OnRecvHandler: func(update transport.ResourceUpdate) error {
+			return nil
+		},
+		OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No onSend handling.
+		OnErrorHandler: func(error) {},                                      // No stream error handling.
+		Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.
+		NodeProto:      nodeProto,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create xDS transport: %v", err)
+	}
+	defer tr.Close()
+
+	// Send a request for a listener resource.
+	const resource = "some-resource"
+	tr.SendRequest(version.V3ListenerURL, []string{resource})
+
+	// Ensure the proper request was sent.
+	val, err := mgmtServer.XDSRequestChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Error waiting for mgmt server response: %v", err)
+	}
+	wantReq := &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
+		Node:          nodeProto,
+		ResourceNames: []string{resource},
+		TypeUrl:       "type.googleapis.com/envoy.config.listener.v3.Listener",
+	}}
+	gotReq := val.(*fakeserver.Request)
+	if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
+		t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+	}
+
+	// Remove the subscription by requesting an empty list.
+	tr.SendRequest(version.V3ListenerURL, []string{})
+
+	// Ensure the proper request was sent.
+	val, err = mgmtServer.XDSRequestChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Error waiting for mgmt server response: %v", err)
+	}
+	wantReq = &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
+		ResourceNames: []string{},
+		TypeUrl:       "type.googleapis.com/envoy.config.listener.v3.Listener",
+	}}
+	gotReq = val.(*fakeserver.Request)
+	if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
+		t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+	}
+
+	// Cause the stream to restart.
+	mgmtServer.XDSResponseChan <- &fakeserver.Response{Err: errors.New("go away")}
+
+	// Ensure no request is sent since there are no resources.
+	ctxShort, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer cancel()
+	if got, err := mgmtServer.XDSRequestChan.Receive(ctxShort); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("mgmt server received request: %v; wanted DeadlineExceeded error", got)
+	}
+
+	tr.SendRequest(version.V3ListenerURL, []string{resource})
+
+	// Ensure the proper request was sent with the node proto.
+	val, err = mgmtServer.XDSRequestChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Error waiting for mgmt server response: %v", err)
+	}
+	wantReq = &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
+		Node:          nodeProto,
+		ResourceNames: []string{resource},
+		TypeUrl:       "type.googleapis.com/envoy.config.listener.v3.Listener",
+	}}
+	gotReq = val.(*fakeserver.Request)
+	if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
+		t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+	}
+
+}
+
+func (s) TestEmptyClusterResourceOnStreamRestartWithListener(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	mgmtServer, cleanup := startFakeManagementServer(t)
+	defer cleanup()
+	t.Logf("Started xDS management server on %s", mgmtServer.Address)
+	nodeProto := &v3corepb.Node{Id: uuid.New().String()}
+	tr, err := transport.New(transport.Options{
+		ServerCfg: *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
+		OnRecvHandler: func(update transport.ResourceUpdate) error {
+			return nil
+		},
+		OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No onSend handling.
+		OnErrorHandler: func(error) {},                                      // No stream error handling.
+		Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.
+		NodeProto:      nodeProto,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create xDS transport: %v", err)
+	}
+	defer tr.Close()
+
+	// Send a request for a listener resource.
+	const resource = "some-resource"
+	tr.SendRequest(version.V3ListenerURL, []string{resource})
+
+	// Ensure the proper request was sent.
+	val, err := mgmtServer.XDSRequestChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Error waiting for mgmt server response: %v", err)
+	}
+	wantReq := &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
+		Node:          nodeProto,
+		ResourceNames: []string{resource},
+		TypeUrl:       "type.googleapis.com/envoy.config.listener.v3.Listener",
+	}}
+	gotReq := val.(*fakeserver.Request)
+	if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
+		t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+	}
+
+	// Send a request for a cluster resource.
+	tr.SendRequest(version.V3ClusterURL, []string{resource})
+
+	// Ensure the proper request was sent.
+	val, err = mgmtServer.XDSRequestChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Error waiting for mgmt server response: %v", err)
+	}
+	wantReq = &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
+		ResourceNames: []string{resource},
+		TypeUrl:       "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+	}}
+	gotReq = val.(*fakeserver.Request)
+	if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
+		t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+	}
+
+	// Remove the cluster subscription by requesting an empty list.
+	tr.SendRequest(version.V3ClusterURL, []string{})
+
+	// Ensure the proper request was sent.
+	val, err = mgmtServer.XDSRequestChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Error waiting for mgmt server response: %v", err)
+	}
+	wantReq = &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
+		ResourceNames: []string{},
+		TypeUrl:       "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+	}}
+	gotReq = val.(*fakeserver.Request)
+	if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
+		t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+	}
+
+	// Cause the stream to restart.
+	mgmtServer.XDSResponseChan <- &fakeserver.Response{Err: errors.New("go away")}
+
+	// Ensure the proper LDS request was sent.
+	val, err = mgmtServer.XDSRequestChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Error waiting for mgmt server response: %v", err)
+	}
+	wantReq = &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
+		Node:          nodeProto,
+		ResourceNames: []string{resource},
+		TypeUrl:       "type.googleapis.com/envoy.config.listener.v3.Listener",
+	}}
+	gotReq = val.(*fakeserver.Request)
+	if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
+		t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+	}
+
+	// Ensure no cluster request is sent since there are no cluster resources.
+	ctxShort, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer cancel()
+	if got, err := mgmtServer.XDSRequestChan.Receive(ctxShort); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("mgmt server received request: %v; wanted DeadlineExceeded error", got)
 	}
 }

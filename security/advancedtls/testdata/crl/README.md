@@ -49,8 +49,8 @@ Certificate chain where the leaf is revoked
 
 ## Test Data for testing CRL providers functionality
 
-To generate test data please follow the steps below or run provider_create.sh 
-script. All the files have `provider_` prefix.
+To generate test data please run provider_create.sh script. All the files have 
+`provider_` prefix.
 
 We need to generate the following artifacts for testing CRL provider:
 * server self signed CA cert
@@ -59,61 +59,34 @@ We need to generate the following artifacts for testing CRL provider:
 * client cert signed by server CA
 * empty crl file
 * crl file containing information about revoked server cert
+* crl file by 'malicious' CA which contains the same issuer with original CA 
 
-Please find the related commands below.
 
-* Generate self signed CAs
-```
-$ openssl req -x509 -newkey rsa:4096 -keyout provider_server_trust_key.pem -out provider_server_trust_cert.pem -days 365 -subj "/C=US/ST=VA/O=Internet Widgits Pty Ltd/CN=foo.bar.hoo.ca.com" -nodes
-$ openssl req -x509 -newkey rsa:4096 -keyout provider_client_trust_key.pem -out provider_client_trust_cert.pem -days 365 -subj "/C=US/ST=CA/L=SVL/O=Internet Widgits Pty Ltd" -nodes
-```
+All the commands are provided in provider_create.sh script. Please find the 
+description below.
 
-* Generate client and server certs signed by CAs
-```
-$ openssl req -newkey rsa:4096 -keyout provider_server_cert.key -out provider_new_cert.csr -nodes -subj "/C=US/ST=CA/L=DUMMYCITY/O=Internet Widgits Pty Ltd/CN=foo.bar.com" -sha256
-$ openssl x509 -req -in provider_new_cert.csr -out provider_server_cert.pem -CA provider_client_trust_cert.pem -CAkey provider_client_trust_key.pem -CAcreateserial -days 3650 -sha256 -extfile provider_extensions.conf
+1. The first two commands generate self signed CAs for client and server:
+   - provider_server_trust_key.pem 
+   - provider_server_trust_cert.pem 
+   - provider_client_trust_key.pem 
+   - provider_client_trust_cert.pem 
 
-$ openssl req -newkey rsa:4096 -keyout provider_client_cert.key -out provider_new_cert.csr -nodes -subj "/C=US/ST=CA/O=Internet Widgits Pty Ltd/CN=foo.bar.hoo.com" -sha256
-$ openssl x509 -req -in provider_new_cert.csr -out provider_client_cert.pem -CA provider_server_trust_cert.pem -CAkey provider_server_trust_key.pem -CAcreateserial -days 3650 -sha256 -extfile provider_extensions.conf
-```
+2. Generate client and server certs signed by the CAs above:
+   - provider_server_cert.pem 
+   - provider_client_cert.pem
 
-Here is the content of `provider_extensions.conf` -
-```
-subjectKeyIdentifier = hash
-authorityKeyIdentifier = keyid,issuer
-basicConstraints = CA:FALSE
-keyUsage = digitalSignature, keyEncipherment
-```
+3. The next 2 commands create 2 files needed for CRL issuing:
+   - provider_crlnumber.txt
+   - provider_index.txt
 
-* Generate CRLs
-  For CRL generation we need 2 more files called `index.txt` and `crlnumber.txt`:
-```
-$ echo "1000" > provider_crlnumber.txt
-$ touch provider_index.txt
-```
-Also we need another config `provider_crl.cnf` -
-```
-[ ca ]
-default_ca = my_ca
+4. The next 3 commands generate an empty CRL file and a CRL file containing 
+revoked server cert:
+   - provider_crl_empty.pem 
+   - provider_crl_server_revoked.pem 
 
-[ my_ca ]
-crl = crl.pem
-default_md = sha256
-database = provider_index.txt
-crlnumber = provider_crlnumber.txt
-default_crl_days = 30
-default_crl_hours = 1
-crl_extensions = crl_ext
-
-[crl_ext]
-# Authority Key Identifier extension
-authorityKeyIdentifier=keyid:always,issuer:always
-```
-
-The commands to generate empty CRL file and CRL file containing revoked server
-cert are below.
-```
-$ openssl ca -gencrl -keyfile provider_client_trust_key.pem -cert provider_client_trust_cert.pem -out provider_crl_empty.pem -config provider_crl.cnf
-$ openssl ca -revoke provider_server_cert.pem -keyfile provider_client_trust_key.pem -cert provider_client_trust_cert.pem -config provider_crl.cnf
-$ openssl ca -gencrl -keyfile provider_client_trust_key.pem -cert provider_client_trust_cert.pem -out provider_crl_server_revoked.pem -config provider_crl.cnf
-```
+5. The final section contains commands to generate CRL file by 'malicious' CA. 
+Note that we use Subject Key Identifier from previously created 
+provider_client_trust_cert.pem to generate malicious certs / CRL.
+   - provider_malicious_client_trust_key.pem
+   - provider_malicious_client_trust_cert.pem 
+   - provider_malicious_crl_empty.pem

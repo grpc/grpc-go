@@ -22,7 +22,6 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync/atomic"
 
 	"google.golang.org/grpc/internal"
@@ -114,12 +113,8 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	if err != nil {
 		return nil, err
 	}
-	endpoint := target.URL.Path
-	if endpoint == "" {
-		endpoint = target.URL.Opaque
-	}
-	endpoint = strings.TrimPrefix(endpoint, "/")
-	r.ldsResourceName = bootstrap.PopulateResourceTemplate(template, endpoint)
+	r.dataplaneAuthority = opts.Authority
+	r.ldsResourceName = bootstrap.PopulateResourceTemplate(template, target.Endpoint())
 	r.listenerWatcher = newListenerWatcher(r.ldsResourceName, r)
 	return r, nil
 }
@@ -189,6 +184,12 @@ type xdsResolver struct {
 	// cancelling the context passed to the serializer.
 	serializer       *grpcsync.CallbackSerializer
 	serializerCancel context.CancelFunc
+
+	// dataplaneAuthority is the authority used for the data plane connections,
+	// which is also used to select the VirtualHost within the xDS
+	// RouteConfiguration.  This is %-encoded to match with VirtualHost Domain
+	// in xDS RouteConfiguration.
+	dataplaneAuthority string
 
 	ldsResourceName     string
 	listenerWatcher     *listenerWatcher
@@ -413,9 +414,9 @@ func (r *xdsResolver) onResolutionComplete() {
 }
 
 func (r *xdsResolver) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdate) {
-	matchVh := xdsresource.FindBestMatchingVirtualHost(r.ldsResourceName, update.VirtualHosts)
+	matchVh := xdsresource.FindBestMatchingVirtualHost(r.dataplaneAuthority, update.VirtualHosts)
 	if matchVh == nil {
-		r.onError(fmt.Errorf("no matching virtual host found for %q", r.ldsResourceName))
+		r.onError(fmt.Errorf("no matching virtual host found for %q", r.dataplaneAuthority))
 		return
 	}
 	r.currentRouteConfig = update
