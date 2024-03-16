@@ -30,7 +30,6 @@ import (
 	"net/url"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/googlecloud"
@@ -39,9 +38,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
-	"google.golang.org/protobuf/types/known/structpb"
-
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 
 	_ "google.golang.org/grpc/xds" // To register xds resolvers and balancers.
 )
@@ -106,25 +102,20 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	if balancerName == "" {
 		balancerName = tdURL
 	}
-	serverConfig, err := bootstrap.ServerConfigFromJSON([]byte(fmt.Sprintf(`
+
+	node := newNode(<-zoneCh, <-ipv6CapableCh)
+	xdsServer := newXdsServer(balancerName)
+	authorities := newAuthorities(xdsServer)
+
+	config, err := bootstrap.NewConfigFromContents([]byte(fmt.Sprintf(`
 	{
-		"server_uri": "%s",
-		"channel_creds": [{"type": "google_default"}],
-		"server_features": ["xds_v3", "ignore_resource_deletion", "xds.config.resource-in-sotw"]
-	}`, balancerName)))
+		"xds_servers": [%s],
+	    "authorities": %s,
+		"node": %s
+	}`, xdsServer, authorities, node)))
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to build bootstrap configuration: %v", err)
-	}
-	config := &bootstrap.Config{
-		XDSServer: serverConfig,
-		ClientDefaultListenerResourceNameTemplate: "%s",
-		Authorities: map[string]*bootstrap.Authority{
-			c2pAuthority: {
-				XDSServer:                          serverConfig,
-				ClientListenerResourceNameTemplate: fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%%s", c2pAuthority),
-			},
-		},
-		NodeProto: newNode(<-zoneCh, <-ipv6CapableCh),
 	}
 
 	// Create singleton xds client with this config. The xds client will be
@@ -166,30 +157,41 @@ func (r *c2pResolver) Close() {
 	r.clientCloseFunc()
 }
 
-var ipv6EnabledMetadata = &structpb.Struct{
-	Fields: map[string]*structpb.Value{
-		ipv6CapableMetadataName: structpb.NewBoolValue(true),
-	},
-}
-
 var id = fmt.Sprintf("C2P-%d", grpcrand.Int())
 
-// newNode makes a copy of defaultNode, and populate it's Metadata and
-// Locality fields.
-func newNode(zone string, ipv6Capable bool) *v3corepb.Node {
-	ret := &v3corepb.Node{
-		// Not all required fields are set in defaultNote. Metadata will be set
-		// if ipv6 is enabled. Locality will be set to the value from metadata.
-		Id:                   id,
-		UserAgentName:        gRPCUserAgentName,
-		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-		ClientFeatures:       []string{clientFeatureNoOverprovisioning},
-	}
-	ret.Locality = &v3corepb.Locality{Zone: zone}
+func newNode(zone string, ipv6Capable bool) string {
+	metadata := ""
 	if ipv6Capable {
-		ret.Metadata = ipv6EnabledMetadata
+		metadata = fmt.Sprintf(`, "metadata":  { "%s": true }`, ipv6CapableMetadataName)
 	}
-	return ret
+
+	return fmt.Sprintf(`
+	{
+		"id": "%s",
+		"locality": {
+			"zone": "%s"
+		}
+		%s
+	}`, id, zone, metadata)
+}
+
+func newAuthorities(xdsServer string) string {
+	return fmt.Sprintf(`
+	{
+		"%s": {
+			"xds_servers": [%s]
+		}
+	}
+	`, c2pAuthority, xdsServer)
+}
+
+func newXdsServer(balancerName string) string {
+	return fmt.Sprintf(`
+	{
+		"server_uri": "%s",
+		"channel_creds": [{"type": "google_default"}],
+		"server_features": ["xds_v3", "ignore_resource_deletion"]
+	}`, balancerName)
 }
 
 // runDirectPath returns whether this resolver should use direct path.

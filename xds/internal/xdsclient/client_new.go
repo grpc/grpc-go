@@ -163,7 +163,7 @@ func getOrMakeClientForTesting(config []byte) (*clientRefCounted, error) {
 		return c, nil
 	}
 
-	bcfg, err := bootstrap.NewConfigFromContentsForTesting(config)
+	bcfg, err := bootstrap.NewConfigFromContents(config)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap config %s: %v", string(config), err)
 	}
