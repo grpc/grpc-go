@@ -299,14 +299,14 @@ type server struct {
 	conns      map[ServerTransport]net.Conn
 	h          *testStreamHandler
 	ready      chan struct{}
-	channelz   *channelz.Server
+	channelzID *channelz.Identifier
 }
 
 func newTestServer() *server {
 	return &server{
 		startedErr: make(chan error, 1),
 		ready:      make(chan struct{}),
-		channelz:   channelz.RegisterServer("test server"),
+		channelzID: channelz.NewIdentifierForTesting(channelz.RefServer, time.Now().Unix(), nil),
 	}
 }
 
@@ -421,7 +421,7 @@ func (s *server) addr() string {
 
 func setUpServerOnly(t *testing.T, port int, sc *ServerConfig, ht hType) *server {
 	server := newTestServer()
-	sc.ChannelzParent = server.channelz
+	sc.ChannelzParentID = server.channelzID
 	go server.start(t, port, sc, ht)
 	server.wait(t, 2*time.Second)
 	return server
@@ -434,8 +434,7 @@ func setUp(t *testing.T, port int, ht hType) (*server, *http2Client, func()) {
 func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts ConnectOptions) (*server, *http2Client, func()) {
 	server := setUpServerOnly(t, port, sc, ht)
 	addr := resolver.Address{Addr: "localhost:" + server.port}
-	copts.ChannelzParent = channelz.RegisterSubChannel(-1, "test channel")
-	t.Cleanup(func() { channelz.RemoveEntry(copts.ChannelzParent.ID) })
+	copts.ChannelzParentID = channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil)
 
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	ct, connErr := NewClientTransport(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {})
@@ -1321,9 +1320,7 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 	connectCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	time.AfterFunc(100*time.Millisecond, cancel)
 
-	parent := channelz.RegisterSubChannel(-1, "test channel")
-	copts := ConnectOptions{ChannelzParent: parent}
-	defer channelz.RemoveEntry(parent.ID)
+	copts := ConnectOptions{ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil)}
 	_, err = NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err == nil {
 		t.Fatalf("NewClientTransport() returned successfully; wanted error")
@@ -1414,9 +1411,7 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	defer cancel()
 
-	parent := channelz.RegisterSubChannel(-1, "test channel")
-	defer channelz.RemoveEntry(parent.ID)
-	copts := ConnectOptions{ChannelzParent: parent}
+	copts := ConnectOptions{ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil)}
 	ct, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
@@ -2425,9 +2420,8 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 
 	copts := ConnectOptions{
 		TransportCredentials: creds,
-		ChannelzParent:       channelz.RegisterSubChannel(-1, "test subchannel"),
+		ChannelzParentID:     channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
 	}
-	defer channelz.RemoveEntry(copts.ChannelzParent.ID)
 	tr, err := NewClientTransport(ctx, context.Background(), addr, copts, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("NewClientTransport(): %v", err)
@@ -2466,10 +2460,9 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 	}
 
 	copts := ConnectOptions{
-		Dialer:         dialer,
-		ChannelzParent: channelz.RegisterSubChannel(-1, "test subchannel"),
+		Dialer:           dialer,
+		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
 	}
-	defer channelz.RemoveEntry(copts.ChannelzParent.ID)
 	tr, err := NewClientTransport(ctx, context.Background(), addr, copts, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("NewClientTransport(): %v", err)

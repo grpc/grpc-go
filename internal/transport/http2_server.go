@@ -118,7 +118,8 @@ type http2Server struct {
 	idle time.Time
 
 	// Fields below are for channelz metric collection.
-	channelz   *channelz.Socket
+	channelzID *channelz.Identifier
+	czData     *channelzData
 	bufferPool *bufferPool
 
 	connectionID uint64
@@ -261,24 +262,9 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		idle:              time.Now(),
 		kep:               kep,
 		initialWindowSize: iwz,
+		czData:            new(channelzData),
 		bufferPool:        newBufferPool(),
 	}
-	var czSecurity credentials.ChannelzSecurityValue
-	if au, ok := authInfo.(credentials.ChannelzSecurityInfo); ok {
-		czSecurity = au.GetSecurityValue()
-	}
-	t.channelz = channelz.RegisterSocket(
-		&channelz.Socket{
-			SocketType:       channelz.SocketTypeNormal,
-			Parent:           config.ChannelzParent,
-			SocketMetrics:    channelz.SocketMetrics{},
-			EphemeralMetrics: t.socketMetrics,
-			LocalAddr:        t.peer.LocalAddr,
-			RemoteAddr:       t.peer.Addr,
-			SocketOptions:    channelz.GetSocketOption(t.conn),
-			Security:         czSecurity,
-		},
-	)
 	t.logger = prefixLoggerForServerTransport(t)
 
 	t.controlBuf = newControlBuffer(t.done)
@@ -287,6 +273,10 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 			bdp:               initialWindowSize,
 			updateFlowControl: t.updateFlowControl,
 		}
+	}
+	t.channelzID, err = channelz.RegisterNormalSocket(t, config.ChannelzParentID, fmt.Sprintf("%s -> %s", t.peer.Addr, t.peer.LocalAddr))
+	if err != nil {
+		return nil, err
 	}
 
 	t.connectionID = atomic.AddUint64(&serverConnectionCounter, 1)
@@ -604,8 +594,8 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	}
 	t.mu.Unlock()
 	if channelz.IsOn() {
-		t.channelz.SocketMetrics.StreamsStarted.Add(1)
-		t.channelz.SocketMetrics.LastRemoteStreamCreatedTimestamp.Store(time.Now().UnixNano())
+		atomic.AddInt64(&t.czData.streamsStarted, 1)
+		atomic.StoreInt64(&t.czData.lastStreamCreatedTime, time.Now().UnixNano())
 	}
 	s.requestRead = func(n int) {
 		t.adjustWindow(s, uint32(n))
@@ -1213,7 +1203,7 @@ func (t *http2Server) keepalive() {
 			}
 			if !outstandingPing {
 				if channelz.IsOn() {
-					t.channelz.SocketMetrics.KeepAlivesSent.Add(1)
+					atomic.AddInt64(&t.czData.kpCount, 1)
 				}
 				t.controlBuf.put(p)
 				kpTimeoutLeft = t.kp.Timeout
@@ -1253,7 +1243,7 @@ func (t *http2Server) Close(err error) {
 	if err := t.conn.Close(); err != nil && t.logger.V(logLevel) {
 		t.logger.Infof("Error closing underlying net.Conn during Close: %v", err)
 	}
-	channelz.RemoveEntry(t.channelz.ID)
+	channelz.RemoveEntry(t.channelzID)
 	// Cancel all active streams.
 	for _, s := range streams {
 		s.cancel()
@@ -1274,9 +1264,9 @@ func (t *http2Server) deleteStream(s *Stream, eosReceived bool) {
 
 	if channelz.IsOn() {
 		if eosReceived {
-			t.channelz.SocketMetrics.StreamsSucceeded.Add(1)
+			atomic.AddInt64(&t.czData.streamsSucceeded, 1)
 		} else {
-			t.channelz.SocketMetrics.StreamsFailed.Add(1)
+			atomic.AddInt64(&t.czData.streamsFailed, 1)
 		}
 	}
 }
@@ -1393,21 +1383,38 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 	return false, nil
 }
 
-func (t *http2Server) socketMetrics() *channelz.EphemeralSocketMetrics {
-	return &channelz.EphemeralSocketMetrics{
-		LocalFlowControlWindow:  int64(t.fc.getSize()),
-		RemoteFlowControlWindow: t.getOutFlowWindow(),
+func (t *http2Server) ChannelzMetric() *channelz.SocketInternalMetric {
+	s := channelz.SocketInternalMetric{
+		StreamsStarted:                   atomic.LoadInt64(&t.czData.streamsStarted),
+		StreamsSucceeded:                 atomic.LoadInt64(&t.czData.streamsSucceeded),
+		StreamsFailed:                    atomic.LoadInt64(&t.czData.streamsFailed),
+		MessagesSent:                     atomic.LoadInt64(&t.czData.msgSent),
+		MessagesReceived:                 atomic.LoadInt64(&t.czData.msgRecv),
+		KeepAlivesSent:                   atomic.LoadInt64(&t.czData.kpCount),
+		LastRemoteStreamCreatedTimestamp: time.Unix(0, atomic.LoadInt64(&t.czData.lastStreamCreatedTime)),
+		LastMessageSentTimestamp:         time.Unix(0, atomic.LoadInt64(&t.czData.lastMsgSentTime)),
+		LastMessageReceivedTimestamp:     time.Unix(0, atomic.LoadInt64(&t.czData.lastMsgRecvTime)),
+		LocalFlowControlWindow:           int64(t.fc.getSize()),
+		SocketOptions:                    channelz.GetSocketOption(t.conn),
+		LocalAddr:                        t.peer.LocalAddr,
+		RemoteAddr:                       t.peer.Addr,
+		// RemoteName :
 	}
+	if au, ok := t.peer.AuthInfo.(credentials.ChannelzSecurityInfo); ok {
+		s.Security = au.GetSecurityValue()
+	}
+	s.RemoteFlowControlWindow = t.getOutFlowWindow()
+	return &s
 }
 
 func (t *http2Server) IncrMsgSent() {
-	t.channelz.SocketMetrics.MessagesSent.Add(1)
-	t.channelz.SocketMetrics.LastMessageSentTimestamp.Add(1)
+	atomic.AddInt64(&t.czData.msgSent, 1)
+	atomic.StoreInt64(&t.czData.lastMsgSentTime, time.Now().UnixNano())
 }
 
 func (t *http2Server) IncrMsgRecv() {
-	t.channelz.SocketMetrics.MessagesReceived.Add(1)
-	t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Add(1)
+	atomic.AddInt64(&t.czData.msgRecv, 1)
+	atomic.StoreInt64(&t.czData.lastMsgRecvTime, time.Now().UnixNano())
 }
 
 func (t *http2Server) getOutFlowWindow() int64 {

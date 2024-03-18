@@ -33,9 +33,6 @@ func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
 }
 
 func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {
-	if skopts == nil {
-		return nil
-	}
 	var opts []*channelzpb.SocketOption
 	if skopts.Linger != nil {
 		additional, err := anypb.New(&channelzpb.SocketOptionLinger{

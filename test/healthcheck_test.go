@@ -787,25 +787,23 @@ func (s) TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 		if len(cm) == 0 {
 			return false, errors.New("channelz.GetTopChannels return 0 top channel")
 		}
-		subChans := cm[0].SubChans()
-		if len(subChans) == 0 {
+		if len(cm[0].SubChans) == 0 {
 			return false, errors.New("there is 0 subchannel")
 		}
 		var id int64
-		for k := range subChans {
+		for k := range cm[0].SubChans {
 			id = k
 			break
 		}
 		scm := channelz.GetSubChannel(id)
-		if scm == nil {
-			return false, errors.New("nil subchannel returned")
+		if scm == nil || scm.ChannelData == nil {
+			return false, errors.New("nil subchannel metric or nil subchannel metric ChannelData returned")
 		}
 		// exponential backoff retry may result in more than one health check call.
-		cstart, csucc, cfail := scm.ChannelMetrics.CallsStarted.Load(), scm.ChannelMetrics.CallsSucceeded.Load(), scm.ChannelMetrics.CallsFailed.Load()
-		if cstart > 0 && csucc > 0 && cfail == 0 {
+		if scm.ChannelData.CallsStarted > 0 && scm.ChannelData.CallsSucceeded > 0 && scm.ChannelData.CallsFailed == 0 {
 			return true, nil
 		}
-		return false, fmt.Errorf("got %d CallsStarted, %d CallsSucceeded %d CallsFailed, want >0 >0 =0", cstart, csucc, cfail)
+		return false, fmt.Errorf("got %d CallsStarted, %d CallsSucceeded, want >0 >0", scm.ChannelData.CallsStarted, scm.ChannelData.CallsSucceeded)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -836,25 +834,23 @@ func (s) TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 		if len(cm) == 0 {
 			return false, errors.New("channelz.GetTopChannels return 0 top channel")
 		}
-		subChans := cm[0].SubChans()
-		if len(subChans) == 0 {
+		if len(cm[0].SubChans) == 0 {
 			return false, errors.New("there is 0 subchannel")
 		}
 		var id int64
-		for k := range subChans {
+		for k := range cm[0].SubChans {
 			id = k
 			break
 		}
 		scm := channelz.GetSubChannel(id)
-		if scm == nil {
-			return false, errors.New("nil subchannel returned")
+		if scm == nil || scm.ChannelData == nil {
+			return false, errors.New("nil subchannel metric or nil subchannel metric ChannelData returned")
 		}
 		// exponential backoff retry may result in more than one health check call.
-		cstart, cfail, csucc := scm.ChannelMetrics.CallsStarted.Load(), scm.ChannelMetrics.CallsFailed.Load(), scm.ChannelMetrics.CallsSucceeded.Load()
-		if cstart > 0 && cfail > 0 && csucc == 0 {
+		if scm.ChannelData.CallsStarted > 0 && scm.ChannelData.CallsFailed > 0 && scm.ChannelData.CallsSucceeded == 0 {
 			return true, nil
 		}
-		return false, fmt.Errorf("got %d CallsStarted, %d CallsFailed, %d CallsSucceeded, want >0, >0", cstart, cfail, csucc)
+		return false, fmt.Errorf("got %d CallsStarted, %d CallsFailed, want >0, >0", scm.ChannelData.CallsStarted, scm.ChannelData.CallsFailed)
 	}); err != nil {
 		t.Fatal(err)
 	}

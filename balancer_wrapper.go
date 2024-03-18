@@ -72,13 +72,13 @@ func newCCBalancerWrapper(cc *ClientConn) *ccBalancerWrapper {
 	ccb := &ccBalancerWrapper{
 		cc: cc,
 		opts: balancer.BuildOptions{
-			DialCreds:       cc.dopts.copts.TransportCredentials,
-			CredsBundle:     cc.dopts.copts.CredsBundle,
-			Dialer:          cc.dopts.copts.Dialer,
-			Authority:       cc.authority,
-			CustomUserAgent: cc.dopts.copts.UserAgent,
-			ChannelzParent:  cc.channelz,
-			Target:          cc.parsedTarget,
+			DialCreds:        cc.dopts.copts.TransportCredentials,
+			CredsBundle:      cc.dopts.copts.CredsBundle,
+			Dialer:           cc.dopts.copts.Dialer,
+			Authority:        cc.authority,
+			CustomUserAgent:  cc.dopts.copts.UserAgent,
+			ChannelzParentID: cc.channelzID,
+			Target:           cc.parsedTarget,
 		},
 		serializer:       grpcsync.NewCallbackSerializer(ctx),
 		serializerCancel: cancel,
@@ -155,14 +155,14 @@ func (ccb *ccBalancerWrapper) switchTo(name string) {
 func (ccb *ccBalancerWrapper) buildLoadBalancingPolicy(name string) {
 	builder := balancer.Get(name)
 	if builder == nil {
-		channelz.Warningf(logger, ccb.cc.channelz, "Channel switches to new LB policy %q, since the specified LB policy %q was not registered", PickFirstBalancerName, name)
+		channelz.Warningf(logger, ccb.cc.channelzID, "Channel switches to new LB policy %q, since the specified LB policy %q was not registered", PickFirstBalancerName, name)
 		builder = newPickfirstBuilder()
 	} else {
-		channelz.Infof(logger, ccb.cc.channelz, "Channel switches to new LB policy %q", name)
+		channelz.Infof(logger, ccb.cc.channelzID, "Channel switches to new LB policy %q", name)
 	}
 
 	if err := ccb.balancer.SwitchTo(builder); err != nil {
-		channelz.Errorf(logger, ccb.cc.channelz, "Channel failed to build new LB policy %q: %v", name, err)
+		channelz.Errorf(logger, ccb.cc.channelzID, "Channel failed to build new LB policy %q: %v", name, err)
 		return
 	}
 	ccb.curBalancerName = builder.Name()
@@ -175,7 +175,7 @@ func (ccb *ccBalancerWrapper) close() {
 	ccb.mu.Lock()
 	ccb.closed = true
 	ccb.mu.Unlock()
-	channelz.Info(logger, ccb.cc.channelz, "ccBalancerWrapper: closing")
+	channelz.Info(logger, ccb.cc.channelzID, "ccBalancerWrapper: closing")
 	ccb.serializer.Schedule(func(context.Context) {
 		if ccb.balancer == nil {
 			return
@@ -212,7 +212,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 	}
 	ac, err := ccb.cc.newAddrConnLocked(addrs, opts)
 	if err != nil {
-		channelz.Warningf(logger, ccb.cc.channelz, "acBalancerWrapper: NewSubConn: failed to newAddrConn: %v", err)
+		channelz.Warningf(logger, ccb.cc.channelzID, "acBalancerWrapper: NewSubConn: failed to newAddrConn: %v", err)
 		return nil, err
 	}
 	acbw := &acBalancerWrapper{
@@ -304,7 +304,7 @@ func (acbw *acBalancerWrapper) updateState(s connectivity.State, err error) {
 }
 
 func (acbw *acBalancerWrapper) String() string {
-	return fmt.Sprintf("SubConn(id:%d)", acbw.ac.channelz.ID)
+	return fmt.Sprintf("SubConn(id:%d)", acbw.ac.channelzID.Int())
 }
 
 func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {

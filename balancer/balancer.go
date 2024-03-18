@@ -232,8 +232,8 @@ type BuildOptions struct {
 	// implementations which do not communicate with a remote load balancer
 	// server can ignore this field.
 	Authority string
-	// ChannelzParent is the parent ClientConn's channelz channel.
-	ChannelzParent channelz.Identifier
+	// ChannelzParentID is the parent ClientConn's channelz ID.
+	ChannelzParentID *channelz.Identifier
 	// CustomUserAgent is the custom user agent set on the parent ClientConn.
 	// The balancer should set the same custom user agent if it creates a
 	// ClientConn.

@@ -550,9 +550,7 @@ func setup(t *testing.T) (*outlierDetectionBalancer, *testutils.BalancerClientCo
 		t.Fatalf("balancer.Get(%q) returned nil", Name)
 	}
 	tcc := testutils.NewBalancerClientConn(t)
-	ch := channelz.RegisterChannel(nil, "test channel")
-	t.Cleanup(func() { channelz.RemoveEntry(ch.ID) })
-	odB := builder.Build(tcc, balancer.BuildOptions{ChannelzParent: ch})
+	odB := builder.Build(tcc, balancer.BuildOptions{ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefChannel, time.Now().Unix(), nil)})
 	return odB.(*outlierDetectionBalancer), tcc, odB.Close
 }
 

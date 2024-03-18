@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -490,13 +491,13 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 	// Setup the stub balancer such that we can read the build options passed to
 	// it in the UpdateClientConnState method.
 	bOpts := balancer.BuildOptions{
-		DialCreds:       insecure.NewCredentials(),
-		ChannelzParent:  channelz.RegisterChannel(nil, "test channel"),
-		CustomUserAgent: userAgent,
+		DialCreds:        insecure.NewCredentials(),
+		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefChannel, 1234, nil),
+		CustomUserAgent:  userAgent,
 	}
 	stub.Register(balancerName, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
-			if bd.BuildOptions.DialCreds != bOpts.DialCreds || bd.BuildOptions.ChannelzParent != bOpts.ChannelzParent || bd.BuildOptions.CustomUserAgent != bOpts.CustomUserAgent {
+			if !cmp.Equal(bd.BuildOptions, bOpts) {
 				return fmt.Errorf("buildOptions in child balancer: %v, want %v", bd, bOpts)
 			}
 			return nil
