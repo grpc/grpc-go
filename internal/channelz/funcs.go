@@ -108,13 +108,13 @@ func GetServer(id int64) *Server {
 }
 
 // RegisterChannel registers the given channel c in the channelz database with
-// ref as its reference name, and adds it to the child list of its parent.
-// parent == nil means no parent.
+// target as its target and reference name, and adds it to the child list of its
+// parent.  parent == nil means no parent.
 //
 // Returns a unique channelz identifier assigned to this channel.
 //
 // If channelz is not turned ON, the channelz database is not mutated.
-func RegisterChannel(parent *Channel, ref string) *Channel {
+func RegisterChannel(parent *Channel, target string) *Channel {
 	id := IDGen.genID()
 
 	if !IsOn() {
@@ -125,12 +125,13 @@ func RegisterChannel(parent *Channel, ref string) *Channel {
 
 	cn := &Channel{
 		ID:          id,
-		RefName:     ref,
+		RefName:     target,
 		nestedChans: make(map[int64]string),
 		subChans:    make(map[int64]string),
 		Parent:      parent,
 		trace:       &ChannelTrace{CreationTime: time.Now(), Events: make([]*traceEvent, 0, getMaxTraceEntry())},
 	}
+	cn.ChannelMetrics.Target.Store(&target)
 	db.addChannel(id, cn, isTopChannel, cn.getParentID())
 	return cn
 }

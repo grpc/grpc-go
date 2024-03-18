@@ -529,6 +529,7 @@ func (csm *connectivityStateManager) updateState(state connectivity.State) {
 		return
 	}
 	csm.state = state
+	csm.channelz.ChannelMetrics.State.Store(&state)
 	csm.pubSub.Publish(state)
 
 	channelz.Infof(logger, csm.channelz, "Channel Connectivity change to %v", state)
