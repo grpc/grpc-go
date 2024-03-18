@@ -100,6 +100,37 @@ func (s) TestCZServerRegistrationAndDeletion(t *testing.T) {
 	}
 }
 
+func (s) TestCZGetChannel(t *testing.T) {
+	e := tcpClearRREnv
+	e.balancer = ""
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	r := manual.NewBuilderWithScheme("whatever")
+	addrs := []resolver.Address{{Addr: te.srvAddr}}
+	r.InitialState(resolver.State{Addresses: addrs})
+	te.resolverScheme = r.Scheme()
+	te.clientConn(grpc.WithResolvers(r))
+	defer te.tearDown()
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tcs, _ := channelz.GetTopChannels(0, 0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
+		}
+		target := tcs[0].ChannelMetrics.Target.Load()
+		wantTarget := "whatever:///" + te.srvAddr
+		if target == nil || *target != wantTarget {
+			return false, fmt.Errorf("Got channelz target=%v; want %q", target, wantTarget)
+		}
+		state := tcs[0].ChannelMetrics.State.Load()
+		if state == nil || *state != connectivity.Ready {
+			return false, fmt.Errorf("Got channelz state=%v; want %q", state, connectivity.Ready)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func (s) TestCZGetServer(t *testing.T) {
 	e := tcpClearRREnv
 	te := newTest(t, e)
