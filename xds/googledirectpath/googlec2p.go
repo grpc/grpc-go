@@ -120,7 +120,8 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 		ClientDefaultListenerResourceNameTemplate: "%s",
 		Authorities: map[string]*bootstrap.Authority{
 			c2pAuthority: {
-				XDSServer: serverConfig,
+				XDSServer:                          serverConfig,
+				ClientListenerResourceNameTemplate: fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%%s", c2pAuthority),
 			},
 		},
 		NodeProto: newNode(<-zoneCh, <-ipv6CapableCh),
