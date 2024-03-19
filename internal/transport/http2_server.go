@@ -673,9 +673,9 @@ func (t *http2Server) HandleStreams(ctx context.Context, handle func(*Stream)) {
 				// Any error processing client headers, e.g. invalid stream ID,
 				// is considered a protocol violation.
 				t.controlBuf.put(&goAway{
-					code:      http2.ErrCodeProtocol,
-					debugData: []byte(err.Error()),
-					closeConn: err,
+					code:         http2.ErrCodeProtocol,
+					debugData:    []byte(err.Error()),
+					closeConnErr: err,
 				})
 				continue
 			}
@@ -920,7 +920,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 
 	if t.pingStrikes > maxPingStrikes {
 		// Send goaway and close the connection.
-		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConn: errors.New("got too many pings from the client")})
+		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConnErr: errors.New("got too many pings from the client")})
 	}
 }
 
@@ -1350,7 +1350,7 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 		// Stop accepting more streams now.
 		t.state = draining
 		sid := t.maxStreamID
-		retErr := g.closeConn
+		retErr := g.closeConnErr
 		if len(t.activeStreams) == 0 {
 			retErr = errors.New("second GOAWAY written and no active streams left to process")
 		}
