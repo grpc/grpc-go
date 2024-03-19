@@ -53,7 +53,7 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 func main() {
 	// Turn on global telemetry for the whole binary. If a configuration is
 	// specified, any created gRPC Client Conn's or Servers will emit telemetry
-	// data according the the configuration.
+	// data according the configuration.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 	err := observability.Start(ctx)

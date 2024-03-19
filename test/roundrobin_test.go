@@ -128,7 +128,7 @@ func (s) TestRoundRobin_AddressesRemoved(t *testing.T) {
 // TestRoundRobin_NewAddressWhileBlocking tests the case where round_robin is
 // configured on a channel, things are working as expected and then a resolver
 // updates removes all addresses. An RPC attempted at this point in time will be
-// blocked because there are no valid backends. This test verifies that when new
+// blocked because there are no valid ¡ds. This test verifies that when new
 // backends are added, the RPC is able to complete.
 func (s) TestRoundRobin_NewAddressWhileBlocking(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -163,8 +163,8 @@ func (s) TestRoundRobin_NewAddressWhileBlocking(t *testing.T) {
 		if len(tcs) != 1 {
 			t.Fatalf("there should only be one top channel, not %d", len(tcs))
 		}
-		started := tcs[0].ChannelData.CallsStarted
-		completed := tcs[0].ChannelData.CallsSucceeded + tcs[0].ChannelData.CallsFailed
+		started := tcs[0].ChannelMetrics.CallsStarted.Load()
+		completed := tcs[0].ChannelMetrics.CallsSucceeded.Load() + tcs[0].ChannelMetrics.CallsFailed.Load()
 		if (started - completed) == 1 {
 			break
 		}

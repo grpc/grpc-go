@@ -68,7 +68,7 @@ type dialOptions struct {
 	binaryLogger                binarylog.Logger
 	copts                       transport.ConnectOptions
 	callOptions                 []CallOption
-	channelzParentID            *channelz.Identifier
+	channelzParent              channelz.Identifier
 	disableServiceConfig        bool
 	disableRetry                bool
 	disableHealthCheck          bool
@@ -554,9 +554,9 @@ func WithAuthority(a string) DialOption {
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func WithChannelzParentID(id *channelz.Identifier) DialOption {
+func WithChannelzParentID(c channelz.Identifier) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.channelzParentID = id
+		o.channelzParent = c
 	})
 }
 

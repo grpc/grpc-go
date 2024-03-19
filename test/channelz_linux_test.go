@@ -47,12 +47,13 @@ func testCZSocketMetricsSocketOption(t *testing.T, e env) {
 	if len(ss) != 1 {
 		t.Fatalf("There should be one server, not %d", len(ss))
 	}
-	if len(ss[0].ListenSockets) != 1 {
-		t.Fatalf("There should be one listen socket, not %d", len(ss[0].ListenSockets))
+	skts := ss[0].ListenSockets()
+	if len(skts) != 1 {
+		t.Fatalf("There should be one listen socket, not %d", len(skts))
 	}
-	for id := range ss[0].ListenSockets {
+	for id := range skts {
 		sm := channelz.GetSocket(id)
-		if sm == nil || sm.SocketData == nil || sm.SocketData.SocketOptions == nil {
+		if sm == nil || sm.SocketOptions == nil {
 			t.Fatalf("Unable to get server listen socket options")
 		}
 	}
@@ -60,7 +61,7 @@ func testCZSocketMetricsSocketOption(t *testing.T, e env) {
 	if len(ns) != 1 {
 		t.Fatalf("There should be one server normal socket, not %d", len(ns))
 	}
-	if ns[0] == nil || ns[0].SocketData == nil || ns[0].SocketData.SocketOptions == nil {
+	if ns[0] == nil || ns[0].SocketOptions == nil {
 		t.Fatalf("Unable to get server normal socket options")
 	}
 
@@ -68,25 +69,27 @@ func testCZSocketMetricsSocketOption(t *testing.T, e env) {
 	if len(tchan) != 1 {
 		t.Fatalf("There should only be one top channel, not %d", len(tchan))
 	}
-	if len(tchan[0].SubChans) != 1 {
-		t.Fatalf("There should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
+	subChans := tchan[0].SubChans()
+	if len(subChans) != 1 {
+		t.Fatalf("There should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(subChans))
 	}
 	var id int64
-	for id = range tchan[0].SubChans {
+	for id = range subChans {
 		break
 	}
 	sc := channelz.GetSubChannel(id)
 	if sc == nil {
 		t.Fatalf("There should only be one socket under subchannel %d, not 0", id)
 	}
-	if len(sc.Sockets) != 1 {
-		t.Fatalf("There should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
+	skts = sc.Sockets()
+	if len(skts) != 1 {
+		t.Fatalf("There should only be one socket under subchannel %d, not %d", sc.ID, len(skts))
 	}
-	for id = range sc.Sockets {
+	for id = range skts {
 		break
 	}
 	skt := channelz.GetSocket(id)
-	if skt == nil || skt.SocketData == nil || skt.SocketData.SocketOptions == nil {
+	if skt == nil || skt.SocketOptions == nil {
 		t.Fatalf("Unable to get client normal socket options")
 	}
 }

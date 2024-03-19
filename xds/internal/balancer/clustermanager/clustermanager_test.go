@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
 	"google.golang.org/grpc/internal/testutils"
@@ -482,9 +481,8 @@ func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	// it in the UpdateClientConnState method.
 	ccsCh := testutils.NewChannel()
 	bOpts := balancer.BuildOptions{
-		DialCreds:        insecure.NewCredentials(),
-		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefChannel, 1234, nil),
-		CustomUserAgent:  userAgent,
+		DialCreds:       insecure.NewCredentials(),
+		CustomUserAgent: userAgent,
 	}
 	stub.Register(t.Name(), stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {

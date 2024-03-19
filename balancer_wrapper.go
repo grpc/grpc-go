@@ -72,13 +72,13 @@ func newCCBalancerWrapper(cc *ClientConn) *ccBalancerWrapper {
 	ccb := &ccBalancerWrapper{
 		cc: cc,
 		opts: balancer.BuildOptions{
-			DialCreds:        cc.dopts.copts.TransportCredentials,
-			CredsBundle:      cc.dopts.copts.CredsBundle,
-			Dialer:           cc.dopts.copts.Dialer,
-			Authority:        cc.authority,
-			CustomUserAgent:  cc.dopts.copts.UserAgent,
-			ChannelzParentID: cc.channelzID,
-			Target:           cc.parsedTarget,
+			DialCreds:       cc.dopts.copts.TransportCredentials,
+			CredsBundle:     cc.dopts.copts.CredsBundle,
+			Dialer:          cc.dopts.copts.Dialer,
+			Authority:       cc.authority,
+			CustomUserAgent: cc.dopts.copts.UserAgent,
+			ChannelzParent:  cc.channelz,
+			Target:          cc.parsedTarget,
 		},
 		serializer:       grpcsync.NewCallbackSerializer(ctx),
 		serializerCancel: cancel,
@@ -100,7 +100,7 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 		name := gracefulswitch.ChildName(ccs.BalancerConfig)
 		if ccb.curBalancerName != name {
 			ccb.curBalancerName = name
-			channelz.Infof(logger, ccb.cc.channelzID, "Channel switches to new LB policy %q", name)
+			channelz.Infof(logger, ccb.cc.channelz, "Channel switches to new LB policy %q", name)
 		}
 		err := ccb.balancer.UpdateClientConnState(*ccs)
 		if logger.V(2) && err != nil {
@@ -132,7 +132,7 @@ func (ccb *ccBalancerWrapper) close() {
 	ccb.mu.Lock()
 	ccb.closed = true
 	ccb.mu.Unlock()
-	channelz.Info(logger, ccb.cc.channelzID, "ccBalancerWrapper: closing")
+	channelz.Info(logger, ccb.cc.channelz, "ccBalancerWrapper: closing")
 	ccb.serializer.Schedule(func(context.Context) {
 		if ccb.balancer == nil {
 			return
@@ -169,7 +169,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 	}
 	ac, err := ccb.cc.newAddrConnLocked(addrs, opts)
 	if err != nil {
-		channelz.Warningf(logger, ccb.cc.channelzID, "acBalancerWrapper: NewSubConn: failed to newAddrConn: %v", err)
+		channelz.Warningf(logger, ccb.cc.channelz, "acBalancerWrapper: NewSubConn: failed to newAddrConn: %v", err)
 		return nil, err
 	}
 	acbw := &acBalancerWrapper{
@@ -261,7 +261,7 @@ func (acbw *acBalancerWrapper) updateState(s connectivity.State, err error) {
 }
 
 func (acbw *acBalancerWrapper) String() string {
-	return fmt.Sprintf("SubConn(id:%d)", acbw.ac.channelzID.Int())
+	return fmt.Sprintf("SubConn(id:%d)", acbw.ac.channelz.ID)
 }
 
 func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
