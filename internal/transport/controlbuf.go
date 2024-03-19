@@ -340,11 +340,9 @@ func (c *controlBuffer) executeAndPut(f func(it any) bool, it cbItem) (bool, err
 	var wakeUp bool
 	c.mu.Lock()
 	if c.err != nil {
-		fmt.Printf("ControlBUf already have error %v: ", c.err)
 		c.mu.Unlock()
 		return false, c.err
 	}
-	fmt.Println("Success putting the goaway")
 	if f != nil {
 		if !f(it) { // f wasn't successful
 			c.mu.Unlock()
@@ -544,7 +542,6 @@ func (l *loopyWriter) run() (err error) {
 		if l.logger.V(logLevel) {
 			l.logger.Infof("loopyWriter exiting with error: %v", err)
 		}
-		l.logger.Infof("loopyWriter exiting with error: %v", err)
 		if !isIOError(err) {
 			l.framer.writer.Flush()
 		}

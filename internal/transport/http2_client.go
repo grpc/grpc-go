@@ -118,10 +118,6 @@ type http2Client struct {
 	nextID                uint32
 	registeredCompressors string
 
-	// goAwaySent is initialised with http2Client and fired when client
-	// transport is shutdown
-	goAwaySent *grpcsync.Event
-
 	// Do not access controlBuf with mu held.
 	mu            sync.Mutex // guard the following variables
 	state         transportState
@@ -331,7 +327,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		registeredCompressors: grpcutil.RegisteredCompressors(),
 		address:               addr,
 		conn:                  conn,
-		goAwaySent:            grpcsync.NewEvent(),
 		remoteAddr:            conn.RemoteAddr(),
 		localAddr:             conn.LocalAddr(),
 		authInfo:              authInfo,
@@ -417,7 +412,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		if err == nil {
 			err = <-readerErrCh
 		}
-		t.logger.Infof("Defer: Got error as %v", err)
 		if err != nil {
 			t.Close(err)
 		}
@@ -529,7 +523,6 @@ func (t *http2Client) getPeer() *peer.Peer {
 // in draining mode.
 func (t *http2Client) outgoingGoAwayHandler(g *goAway) (bool, error) {
 	// Send out a GOAWAY frame so server is aware of client transport shutdown
-	t.logger.Infof("Sending goaway")
 	if err := t.framer.fr.WriteGoAway(math.MaxUint32, http2.ErrCodeNo, g.debugData); err != nil {
 		return false, err
 	}
@@ -1010,9 +1003,10 @@ func (t *http2Client) Close(err error) {
 		t.kpDormancyCond.Signal()
 	}
 	t.mu.Unlock()
-	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte("GOAWAY from client"), closeConnErr: errors.New("graceful_shutdown")})
-	<-t.writerDone
-	t.logger.Infof("Writer done")
+	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte("graceful_shutdown"), closeConnErr: errors.New("graceful_shutdown")})
+	if t.loopy != nil {
+		<-t.writerDone
+	}
 	t.cancel()
 	t.conn.Close()
 	channelz.RemoveEntry(t.channelz.ID)
