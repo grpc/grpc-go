@@ -96,7 +96,7 @@ func (gsb *Balancer) balancerCurrentOrPending(bw *balancerWrapper) bool {
 // Graceful Switch Balancer implements.
 //
 // Deprecated: use ParseConfig and pass a parsed config to UpdateClientConnState
-// to cause the Balancer to automatically change to the new child.
+// to cause the Balancer to automatically change to the new child when necessary.
 func (gsb *Balancer) SwitchTo(builder balancer.Builder) error {
 	_, err := gsb.switchTo(builder)
 	return err
@@ -164,7 +164,8 @@ func (gsb *Balancer) latestBalancer() *balancerWrapper {
 //
 // If the state's BalancerConfig is the config returned by a call to
 // gracefulswitch.ParseConfig, then this function will automatically SwitchTo
-// the balancer indicated by the config before forwarding its config to it.
+// the balancer indicated by the config before forwarding its config to it, if
+// necessary.
 func (gsb *Balancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	// The resolver data is only relevant to the most recent LB Policy.
 	balToUpdate := gsb.latestBalancer()

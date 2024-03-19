@@ -49,9 +49,9 @@ func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error)
 	if err := json.Unmarshal(cfg, &lbCfg); err != nil {
 		return nil, err
 	}
-	for _, e := range lbCfg {
+	for i, e := range lbCfg {
 		if len(e) != 1 {
-			return nil, fmt.Errorf("expected a JSON struct with one entry; received: %v", e)
+			return nil, fmt.Errorf("expected a JSON struct with one entry; received entry %v at index %d", e, i)
 		}
 
 		var name string
