@@ -110,7 +110,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	{
 		"server_uri": "%s",
 		"channel_creds": [{"type": "google_default"}],
-		"server_features": ["xds_v3", "ignore_resource_deletion"]
+		"server_features": ["xds_v3", "ignore_resource_deletion", "xds.config.resource-in-sotw"]
 	}`, balancerName)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to build bootstrap configuration: %v", err)
@@ -120,7 +120,8 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 		ClientDefaultListenerResourceNameTemplate: "%s",
 		Authorities: map[string]*bootstrap.Authority{
 			c2pAuthority: {
-				XDSServer: serverConfig,
+				XDSServer:                          serverConfig,
+				ClientListenerResourceNameTemplate: fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%%s", c2pAuthority),
 			},
 		},
 		NodeProto: newNode(<-zoneCh, <-ipv6CapableCh),
