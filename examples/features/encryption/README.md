@@ -1,7 +1,6 @@
 # Encryption
 
-The example for encryption includes two individual examples for TLS and ALTS
-encryption mechanism respectively.
+The example for encryption includes three individual examples for TLS, ALTS and mTLS encryption mechanism respectively.
 
 ## Try it
 
@@ -35,7 +34,7 @@ In our example, we use the public/private keys created ahead:
 * "ca_cert.pem" contains the certificate (certificate authority)
 that can verify the server's certificate.
 
-On server side, we provide the paths to "server.pem" and "server.key" to
+On server side, we provide the paths to "server_cert.pem" and "server_key.pem" to
 configure TLS and create the server credential using
 [`credentials.NewServerTLSFromFile`](https://godoc.org/google.golang.org/grpc/credentials#NewServerTLSFromFile).
 
