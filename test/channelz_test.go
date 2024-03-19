@@ -131,6 +131,43 @@ func (s) TestCZGetChannel(t *testing.T) {
 	}
 }
 
+func (s) TestCZGetSubChannel(t *testing.T) {
+	e := tcpClearRREnv
+	e.balancer = ""
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	r := manual.NewBuilderWithScheme("whatever")
+	addrs := []resolver.Address{{Addr: te.srvAddr}}
+	r.InitialState(resolver.State{Addresses: addrs})
+	te.resolverScheme = r.Scheme()
+	te.clientConn(grpc.WithResolvers(r))
+	defer te.tearDown()
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tcs, _ := channelz.GetTopChannels(0, 0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
+		}
+		scs := tcs[0].SubChans()
+		if len(scs) != 1 {
+			return false, fmt.Errorf("there should be one subchannel, not %d", len(scs))
+		}
+		var scid int64
+		for scid = range scs {
+		}
+		sc := channelz.GetSubChannel(scid)
+		if sc == nil {
+			return false, fmt.Errorf("subchannel with id %v is nil", scid)
+		}
+		state := sc.ChannelMetrics.State.Load()
+		if state == nil || *state != connectivity.Ready {
+			return false, fmt.Errorf("Got subchannel state=%v; want %q", state, connectivity.Ready)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func (s) TestCZGetServer(t *testing.T) {
 	e := tcpClearRREnv
 	te := newTest(t, e)

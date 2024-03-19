@@ -1204,6 +1204,7 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	close(ac.stateChan)
 	ac.stateChan = make(chan struct{})
 	ac.state = s
+	ac.channelz.ChannelMetrics.State.Store(&s)
 	if lastErr == nil {
 		channelz.Infof(logger, ac.channelz, "Subchannel Connectivity change to %v", s)
 	} else {
