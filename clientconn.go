@@ -692,6 +692,7 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 var emptyServiceConfig *ServiceConfig
 
 func init() {
+	balancer.Register(pickfirstBuilder{})
 	cfg := parseServiceConfig("{}")
 	if cfg.Err != nil {
 		panic(fmt.Sprintf("impossible error parsing empty service config: %v", cfg.Err))
@@ -777,7 +778,7 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 
 	var balCfg serviceconfig.LoadBalancingConfig
 	if cc.sc != nil && cc.sc.lbConfig != nil {
-		balCfg = cc.sc.lbConfig.cfg
+		balCfg = cc.sc.lbConfig
 	}
 	bw := cc.balancerWrapper
 	cc.mu.Unlock()
@@ -1074,17 +1075,6 @@ func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSel
 	} else {
 		cc.retryThrottler.Store((*retryThrottler)(nil))
 	}
-
-	var newBalancerName string
-	if cc.sc == nil || (cc.sc.lbConfig == nil && cc.sc.LB == nil) {
-		// No service config or no LB policy specified in config.
-		newBalancerName = PickFirstBalancerName
-	} else if cc.sc.lbConfig != nil {
-		newBalancerName = cc.sc.lbConfig.name
-	} else { // cc.sc.LB != nil
-		newBalancerName = *cc.sc.LB
-	}
-	cc.balancerWrapper.switchTo(newBalancerName)
 }
 
 func (cc *ClientConn) resolveNow(o resolver.ResolveNowOptions) {
