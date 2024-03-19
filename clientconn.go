@@ -1204,12 +1204,14 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	close(ac.stateChan)
 	ac.stateChan = make(chan struct{})
 	ac.state = s
+	ac.channelz.ChannelMetrics.State.Store(&s)
 	if lastErr == nil {
 		channelz.Infof(logger, ac.channelz, "Subchannel Connectivity change to %v", s)
 	} else {
 		channelz.Infof(logger, ac.channelz, "Subchannel Connectivity change to %v, last error: %s", s, lastErr)
 	}
 	ac.acbw.updateState(s, lastErr)
+
 }
 
 // adjustParams updates parameters used to create transports upon
