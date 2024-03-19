@@ -2664,3 +2664,105 @@ func TestConnectionError_Unwrap(t *testing.T) {
 		t.Error("ConnectionError does not unwrap")
 	}
 }
+
+// Test that a transport level client shutdown successfully sends a GOAWAY frame
+// to underlying connection.
+func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
+	// Create a server.
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening: %v", err)
+	}
+	defer lis.Close()
+	// The success channel verifies that the server's reader goroutine received
+	// a GOAWAY frame from the client.
+	success := testutils.NewChannel()
+	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+	defer cancel()
+	// Launch the server.
+	go func() {
+		sconn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Error while accepting: %v", err)
+		}
+		defer func(sconn net.Conn) {
+			err := sconn.Close()
+			if err != nil {
+				return
+			}
+		}(sconn)
+		if _, err := io.ReadFull(sconn, make([]byte, len(clientPreface))); err != nil {
+			t.Errorf("Error while writing settings ack: %v", err)
+			return
+		}
+		sfr := http2.NewFramer(sconn, sconn)
+		if err := sfr.WriteSettings(); err != nil {
+			t.Errorf("Error while writing settings %v", err)
+			return
+		}
+		if err := sfr.WriteSettingsAck(); err != nil {
+			t.Errorf("Error while writing settings ack %v", err)
+			return
+		}
+
+		// Read frames off the wire. Should expect to see a GOAWAY frame after
+		// the client closes.
+		for {
+			frame, err := sfr.ReadFrame()
+			if err != nil {
+				return
+			}
+			t.Logf("Received frame: %v", frame)
+			switch fr := frame.(type) {
+			case *http2.SettingsFrame:
+				// Do nothing. A settings frame is expected from client preface.
+			case *http2.GoAwayFrame:
+				// Records that the server successfully received a GOAWAY frame.
+				goAwayFrame := fr
+				if goAwayFrame.ErrCode == http2.ErrCodeNo && string(goAwayFrame.DebugData()) == "graceful_stop" {
+					t.Logf("Received goAway frame from client")
+					success.Send(nil)
+				} else {
+					success.Send(errors.New("the server received a frame other than settings or GOAWAY"))
+				}
+				return
+			default:
+				// The client should have sent any frame other than GOAWAY or settings.
+				t.Logf("the server received a frame other than settings or GOAWAY")
+				success.Send(errors.New("the server received a frame other than settings or GOAWAY"))
+				return
+			}
+		}
+	}()
+
+	dialer := func(ctx context.Context, addr string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	}
+	copts := ConnectOptions{
+		Dialer:         dialer,
+		ChannelzParent: channelz.RegisterSubChannel(-1, "test subchannel"),
+	}
+	ct, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	if err != nil {
+		t.Fatalf("Error while creating client transport: %v", err)
+	}
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo.Small",
+	}
+	s1, err1 := ct.NewStream(connectCtx, callHdr)
+	if err1 != nil {
+		t.Fatalf("failed to open stream: %v", err1)
+	}
+	if s1.id != 1 {
+		t.Fatalf("wrong stream id: %d", s1.id)
+	}
+	ct.Close(errors.New("manually closed by client"))
+	t.Logf("Closed the client connection")
+	e, err := success.Receive(connectCtx)
+	if e != nil || err != nil {
+		t.Fatalf("Error in frame received: %v. Error receiving from channel: %v", e, err)
+	} else {
+		t.Logf("Server received the GOAWAY from client")
+	}
+}
