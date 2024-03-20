@@ -337,7 +337,7 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	serviceDescVar := service.GoName + "_ServiceDesc"
 	g.P("stream, err := c.cc.NewStream(ctx, &", serviceDescVar, ".Streams[", index, `], `, fmSymbol, `, opts...)`)
 	g.P("if err != nil { return nil, err }")
-	g.P("x := &", streamType, "{stream}")
+	g.P("x := &", streamType, "{ClientStream: stream}")
 	if !method.Desc.IsStreamingClient() {
 		g.P("if err := x.ClientStream.SendMsg(in); err != nil { return nil, err }")
 		g.P("if err := x.ClientStream.CloseSend(); err != nil { return nil, err }")
@@ -501,9 +501,9 @@ func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	if !method.Desc.IsStreamingClient() {
 		g.P("m := new(", method.Input.GoIdent, ")")
 		g.P("if err := stream.RecvMsg(m); err != nil { return err }")
-		g.P("return srv.(", service.GoName, "Server).", method.GoName, "(m, &", streamType, "{stream})")
+		g.P("return srv.(", service.GoName, "Server).", method.GoName, "(m, &", streamType, "{ServerStream: stream})")
 	} else {
-		g.P("return srv.(", service.GoName, "Server).", method.GoName, "(&", streamType, "{stream})")
+		g.P("return srv.(", service.GoName, "Server).", method.GoName, "(&", streamType, "{ServerStream: stream})")
 	}
 	g.P("}")
 	g.P()

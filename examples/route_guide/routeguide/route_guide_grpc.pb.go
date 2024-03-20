@@ -92,7 +92,7 @@ func (c *routeGuideClient) ListFeatures(ctx context.Context, in *Rectangle, opts
 	if err != nil {
 		return nil, err
 	}
-	x := &experimental.StreamClientImpl[Rectangle, Feature]{stream}
+	x := &experimental.StreamClientImpl[Rectangle, Feature]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func (c *routeGuideClient) RecordRoute(ctx context.Context, opts ...grpc.CallOpt
 	if err != nil {
 		return nil, err
 	}
-	x := &experimental.StreamClientImpl[Point, RouteSummary]{stream}
+	x := &experimental.StreamClientImpl[Point, RouteSummary]{ClientStream: stream}
 	return x, nil
 }
 
@@ -120,7 +120,7 @@ func (c *routeGuideClient) RouteChat(ctx context.Context, opts ...grpc.CallOptio
 	if err != nil {
 		return nil, err
 	}
-	x := &experimental.StreamClientImpl[RouteNote, RouteNote]{stream}
+	x := &experimental.StreamClientImpl[RouteNote, RouteNote]{ClientStream: stream}
 	return x, nil
 }
 
@@ -209,19 +209,19 @@ func _RouteGuide_ListFeatures_Handler(srv interface{}, stream grpc.ServerStream)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(RouteGuideServer).ListFeatures(m, &experimental.StreamServerImpl[Rectangle, Feature]{stream})
+	return srv.(RouteGuideServer).ListFeatures(m, &experimental.StreamServerImpl[Rectangle, Feature]{ServerStream: stream})
 }
 
 type RouteGuide_ListFeaturesServer = experimental.ServerStreamServer[Feature]
 
 func _RouteGuide_RecordRoute_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(RouteGuideServer).RecordRoute(&experimental.StreamServerImpl[Point, RouteSummary]{stream})
+	return srv.(RouteGuideServer).RecordRoute(&experimental.StreamServerImpl[Point, RouteSummary]{ServerStream: stream})
 }
 
 type RouteGuide_RecordRouteServer = experimental.ClientStreamServer[Point, RouteSummary]
 
 func _RouteGuide_RouteChat_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(RouteGuideServer).RouteChat(&experimental.StreamServerImpl[RouteNote, RouteNote]{stream})
+	return srv.(RouteGuideServer).RouteChat(&experimental.StreamServerImpl[RouteNote, RouteNote]{ServerStream: stream})
 }
 
 type RouteGuide_RouteChatServer = experimental.BidiStreamServer[RouteNote, RouteNote]
