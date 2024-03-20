@@ -20,7 +20,6 @@ package transport
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -408,14 +407,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	// returning from this function.
 	readerErrCh := make(chan error, 1)
 	go t.reader(readerErrCh)
-	defer func() {
-		if err == nil {
-			err = <-readerErrCh
-		}
-		if err != nil {
-			t.Close(err)
-		}
-	}()
 
 	// Send connection preface to server.
 	n, err := t.conn.Write(clientPreface)
@@ -471,6 +462,14 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		}
 		close(t.writerDone)
 	}()
+	defer func() {
+		if err == nil {
+			err = <-readerErrCh
+		}
+		if err != nil {
+			t.Close(err)
+		}
+	}()
 	return t, nil
 }
 
@@ -519,10 +518,9 @@ func (t *http2Client) getPeer() *peer.Peer {
 	}
 }
 
-// Handles outgoing GoAway and returns true if loopy needs to put itself
-// in draining mode.
+// OutgoingGoAwayHandler writes GOAWAY to the connection.  Always returns (false, err) as we want the GoAway
+// to be the last frame loopy writes to the transport.
 func (t *http2Client) outgoingGoAwayHandler(g *goAway) (bool, error) {
-	// Send out a GOAWAY frame so server is aware of client transport shutdown
 	if err := t.framer.fr.WriteGoAway(math.MaxUint32, http2.ErrCodeNo, g.debugData); err != nil {
 		return false, err
 	}
@@ -1003,9 +1001,16 @@ func (t *http2Client) Close(err error) {
 		t.kpDormancyCond.Signal()
 	}
 	t.mu.Unlock()
-	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte("graceful_shutdown"), closeConnErr: errors.New("graceful_shutdown")})
-	if t.loopy != nil {
-		<-t.writerDone
+	// The HTTP/2 spec mentions that a GOAWAY frame should be sent before a connection close. If this close() function
+	// ever starts to take in an HTTP/2 error code the peer will be able to get more information about the reason
+	// behind the connection close.
+	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(fmt.Sprintf("client shutdown with: %v", err)), closeConnErr: err})
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	select {
+	case <-t.writerDone:
+	case <-ctx.Done():
+		t.logger.Infof("Context timed out")
 	}
 	t.cancel()
 	t.conn.Close()
