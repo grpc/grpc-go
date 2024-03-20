@@ -141,7 +141,7 @@ func (s) TestHeaderListSizeDialOptionServerOption(t *testing.T) {
 		t.Fatalf("Unexpected s.opts.MaxHeaderListSizeDialOption.MaxHeaderListSize: %d != %d", clientHeaderListSize, maxHeaderListSize)
 	}
 	serverHeaderListSize := MaxHeaderListSize(maxHeaderListSize)
-	if serverHeaderListSize.(*MaxHeaderListSizeServerOption).MaxHeaderListSize != maxHeaderListSize {
+	if serverHeaderListSize.(MaxHeaderListSizeServerOption).MaxHeaderListSize != maxHeaderListSize {
 		t.Fatalf("Unexpected s.opts.MaxHeaderListSizeDialOption.MaxHeaderListSize: %d != %d", serverHeaderListSize, maxHeaderListSize)
 	}
 }

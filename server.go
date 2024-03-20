@@ -541,7 +541,7 @@ func (o MaxHeaderListSizeServerOption) apply(so *serverOptions) {
 // MaxHeaderListSize returns a ServerOption that sets the max (uncompressed) size
 // of header list that the server is prepared to accept.
 func MaxHeaderListSize(s uint32) ServerOption {
-	return &MaxHeaderListSizeServerOption{
+	return MaxHeaderListSizeServerOption{
 		MaxHeaderListSize: s,
 	}
 }
