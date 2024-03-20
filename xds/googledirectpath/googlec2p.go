@@ -30,7 +30,6 @@ import (
 	"net/url"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/googlecloud"
@@ -167,19 +166,15 @@ func newNodeConfig(zone string, ipv6Capable bool) string {
 	if ipv6Capable {
 		metadata = fmt.Sprintf(`, "metadata":  { "%s": true }`, ipv6CapableMetadataName)
 	}
+
 	return fmt.Sprintf(`
 	{
 		"id": "%s",
-		"user_agent_name": "%s",
-		"UserAgentVersionType": {
-			"userAgentVersion": "%s"
-		},
-		"client_features": ["%s", "%s"],
 		"locality": {
 			"zone": "%s"
 		}
 		%s
-	}`, id, gRPCUserAgentName, grpc.Version, clientFeatureNoOverprovisioning, clientFeatureResourceWrapper, zone, metadata)
+	}`, id, zone, metadata)
 }
 
 func newAuthoritiesConfig(xdsServer string) string {
