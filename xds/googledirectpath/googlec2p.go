@@ -112,7 +112,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	config, err := bootstrap.NewConfigFromContents([]byte(fmt.Sprintf(`
 	{
 		"xds_servers": [%s],
-		"client_default_listener_resource_name_template": "%%s"
+		"client_default_listener_resource_name_template": "%%s",
 		"authorities": %s,
 		"node": %s
 	}`, xdsServerCfg, authoritiesCfg, nodeCfg)))
@@ -174,7 +174,7 @@ func newNodeConfig(zone string, ipv6Capable bool) string {
 		"UserAgentVersionType": {
 			"userAgentVersion": "%s"
 		},
-		"client_features": ["%s", "%s"] 
+		"client_features": ["%s", "%s"],
 		"locality": {
 			"zone": "%s"
 		}
