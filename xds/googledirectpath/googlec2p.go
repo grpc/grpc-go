@@ -27,10 +27,10 @@ package googledirectpath
 
 import (
 	"fmt"
-	"google.golang.org/grpc"
 	"net/url"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/googlecloud"
