@@ -565,7 +565,7 @@ func newConfigFromContents(data []byte) (*Config, error) {
 	}
 	node.UserAgentName = gRPCUserAgentName
 	node.UserAgentVersionType = &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version}
-	node.ClientFeatures = append(node.ClientFeatures, clientFeatureNoOverprovisioning, clientFeatureResourceWrapper)
+	node.ClientFeatures = AppendIfNotPresent(node.ClientFeatures, clientFeatureNoOverprovisioning, clientFeatureResourceWrapper)
 	config.NodeProto = node
 
 	logger.Debugf("Bootstrap config for creating xds-client: %v", pretty.ToJSON(config))

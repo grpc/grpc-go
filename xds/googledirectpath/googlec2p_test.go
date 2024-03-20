@@ -199,7 +199,7 @@ func TestBuildXDS(t *testing.T) {
 				Locality:             &v3corepb.Locality{Zone: testZone},
 				UserAgentName:        gRPCUserAgentName,
 				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-				ClientFeatures:       []string{clientFeatureNoOverprovisioning},
+				ClientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
 			}
 			if tt.ipv6 {
 				wantNode.Metadata = &structpb.Struct{
