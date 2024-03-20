@@ -460,6 +460,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 			// after draining any remaining incoming data.
 			t.conn.Close()
 		}
+		t.logger.Infof("Closing writerDone channel")
 		close(t.writerDone)
 	}()
 	defer func() {
@@ -1005,13 +1006,7 @@ func (t *http2Client) Close(err error) {
 	// ever starts to take in an HTTP/2 error code the peer will be able to get more information about the reason
 	// behind the connection close.
 	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(fmt.Sprintf("client shutdown with: %v", err)), closeConnErr: err})
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	select {
-	case <-t.writerDone:
-	case <-ctx.Done():
-		t.logger.Infof("Context timed out")
-	}
+	<-t.writerDone
 	t.cancel()
 	t.conn.Close()
 	channelz.RemoveEntry(t.channelz.ID)
