@@ -27,6 +27,7 @@ package googledirectpath
 
 import (
 	"fmt"
+	"google.golang.org/grpc"
 	"net/url"
 	"time"
 
@@ -53,6 +54,7 @@ const (
 
 	gRPCUserAgentName               = "gRPC Go"
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
+	clientFeatureResourceWrapper    = "xds.config.resource-in-sotw"
 	ipv6CapableMetadataName         = "TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE"
 
 	logPrefix = "[google-c2p-resolver]"
@@ -98,21 +100,22 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	go func() { zoneCh <- getZone(httpReqTimeout) }()
 	go func() { ipv6CapableCh <- getIPv6Capable(httpReqTimeout) }()
 
-	balancerName := envconfig.C2PResolverTestOnlyTrafficDirectorURI
-	if balancerName == "" {
-		balancerName = tdURL
+	xdsServerURI := envconfig.C2PResolverTestOnlyTrafficDirectorURI
+	if xdsServerURI == "" {
+		xdsServerURI = tdURL
 	}
 
-	node := newNode(<-zoneCh, <-ipv6CapableCh)
-	xdsServer := newXdsServer(balancerName)
-	authorities := newAuthorities(xdsServer)
+	nodeCfg := newNodeConfig(<-zoneCh, <-ipv6CapableCh)
+	xdsServerCfg := newXdsServerConfig(xdsServerURI)
+	authoritiesCfg := newAuthoritiesConfig(xdsServerCfg)
 
 	config, err := bootstrap.NewConfigFromContents([]byte(fmt.Sprintf(`
 	{
 		"xds_servers": [%s],
-	    "authorities": %s,
+		"client_default_listener_resource_name_template": "%%s"
+		"authorities": %s,
 		"node": %s
-	}`, xdsServer, authorities, node)))
+	}`, xdsServerCfg, authoritiesCfg, nodeCfg)))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to build bootstrap configuration: %v", err)
@@ -159,23 +162,27 @@ func (r *c2pResolver) Close() {
 
 var id = fmt.Sprintf("C2P-%d", grpcrand.Int())
 
-func newNode(zone string, ipv6Capable bool) string {
+func newNodeConfig(zone string, ipv6Capable bool) string {
 	metadata := ""
 	if ipv6Capable {
 		metadata = fmt.Sprintf(`, "metadata":  { "%s": true }`, ipv6CapableMetadataName)
 	}
-
 	return fmt.Sprintf(`
 	{
 		"id": "%s",
+		"user_agent_name": "%s",
+		"UserAgentVersionType": {
+			"userAgentVersion": "%s"
+		},
+		"client_features": ["%s", "%s"] 
 		"locality": {
 			"zone": "%s"
 		}
 		%s
-	}`, id, zone, metadata)
+	}`, id, gRPCUserAgentName, grpc.Version, clientFeatureNoOverprovisioning, clientFeatureResourceWrapper, zone, metadata)
 }
 
-func newAuthorities(xdsServer string) string {
+func newAuthoritiesConfig(xdsServer string) string {
 	return fmt.Sprintf(`
 	{
 		"%s": {
@@ -185,13 +192,13 @@ func newAuthorities(xdsServer string) string {
 	`, c2pAuthority, xdsServer)
 }
 
-func newXdsServer(balancerName string) string {
+func newXdsServerConfig(xdsServerURI string) string {
 	return fmt.Sprintf(`
 	{
 		"server_uri": "%s",
 		"channel_creds": [{"type": "google_default"}],
-		"server_features": ["xds_v3", "ignore_resource_deletion"]
-	}`, balancerName)
+		"server_features": ["xds_v3", "ignore_resource_deletion", "xds.config.resource-in-sotw"]
+	}`, xdsServerURI)
 }
 
 // runDirectPath returns whether this resolver should use direct path.
