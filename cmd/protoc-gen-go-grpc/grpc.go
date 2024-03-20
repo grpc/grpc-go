@@ -52,6 +52,10 @@ func (serviceGenerateHelper) formatFullMethodSymbol(service *protogen.Service, m
 }
 
 func (serviceGenerateHelper) genFullMethods(g *protogen.GeneratedFile, service *protogen.Service) {
+	if len(service.Methods) == 0 {
+		return
+	}
+
 	g.P("const (")
 	for _, method := range service.Methods {
 		fmSymbol := helper.formatFullMethodSymbol(service, method)
