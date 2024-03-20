@@ -49,7 +49,7 @@ const (
 // RPC call.
 func (s) TestUnaryClientInterceptor_ContextValuePropagation(t *testing.T) {
 	errCh := testutils.NewChannel()
-	unaryInt := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	unaryInt := func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
 			errCh.Send(fmt.Errorf("unaryInt got %q in context.Val, want %q", got, parentCtxVal))
 		}
@@ -86,7 +86,7 @@ func (s) TestUnaryClientInterceptor_ContextValuePropagation(t *testing.T) {
 // as well as the ones specified by prior interceptors in the chain.
 func (s) TestChainUnaryClientInterceptor_ContextValuePropagation(t *testing.T) {
 	errCh := testutils.NewChannel()
-	firstInt := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	firstInt := func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
 			errCh.SendContext(ctx, fmt.Errorf("first interceptor got %q in context.Val, want %q", got, parentCtxVal))
 		}
@@ -100,7 +100,7 @@ func (s) TestChainUnaryClientInterceptor_ContextValuePropagation(t *testing.T) {
 		return invoker(firstCtx, method, req, reply, cc, opts...)
 	}
 
-	secondInt := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	secondInt := func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
 			errCh.SendContext(ctx, fmt.Errorf("second interceptor got %q in context.Val, want %q", got, parentCtxVal))
 		}
@@ -114,7 +114,7 @@ func (s) TestChainUnaryClientInterceptor_ContextValuePropagation(t *testing.T) {
 		return invoker(secondCtx, method, req, reply, cc, opts...)
 	}
 
-	lastInt := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	lastInt := func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
 			errCh.SendContext(ctx, fmt.Errorf("last interceptor got %q in context.Val, want %q", got, parentCtxVal))
 		}
@@ -158,7 +158,7 @@ func (s) TestChainUnaryClientInterceptor_ContextValuePropagation(t *testing.T) {
 // specified by interceptors in the chain.
 func (s) TestChainOnBaseUnaryClientInterceptor_ContextValuePropagation(t *testing.T) {
 	errCh := testutils.NewChannel()
-	baseInt := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	baseInt := func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
 			errCh.SendContext(ctx, fmt.Errorf("base interceptor got %q in context.Val, want %q", got, parentCtxVal))
 		}
@@ -169,7 +169,7 @@ func (s) TestChainOnBaseUnaryClientInterceptor_ContextValuePropagation(t *testin
 		return invoker(baseCtx, method, req, reply, cc, opts...)
 	}
 
-	chainInt := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	chainInt := func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
 			errCh.SendContext(ctx, fmt.Errorf("chain interceptor got %q in context.Val, want %q", got, parentCtxVal))
 		}

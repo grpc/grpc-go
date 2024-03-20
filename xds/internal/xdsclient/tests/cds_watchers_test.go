@@ -41,6 +41,41 @@ import (
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
 
+type noopClusterWatcher struct{}
+
+func (noopClusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData) {}
+func (noopClusterWatcher) OnError(err error)                                {}
+func (noopClusterWatcher) OnResourceDoesNotExist()                          {}
+
+type clusterUpdateErrTuple struct {
+	update xdsresource.ClusterUpdate
+	err    error
+}
+
+type clusterWatcher struct {
+	updateCh *testutils.Channel
+}
+
+func newClusterWatcher() *clusterWatcher {
+	return &clusterWatcher{updateCh: testutils.NewChannel()}
+}
+
+func (cw *clusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData) {
+	cw.updateCh.Send(clusterUpdateErrTuple{update: update.Resource})
+}
+
+func (cw *clusterWatcher) OnError(err error) {
+	// When used with a go-control-plane management server that continuously
+	// resends resources which are NACKed by the xDS client, using a `Replace()`
+	// here and in OnResourceDoesNotExist() simplifies tests which will have
+	// access to the most recently received error.
+	cw.updateCh.Replace(clusterUpdateErrTuple{err: err})
+}
+
+func (cw *clusterWatcher) OnResourceDoesNotExist() {
+	cw.updateCh.Replace(clusterUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response")})
+}
+
 // badClusterResource returns a cluster resource for the given name which
 // contains a config_source_specifier for the `lrs_server` field which is not
 // set to `self`, and hence is expected to be NACKed by the client.
@@ -59,19 +94,19 @@ const wantClusterNACKErr = "unsupported config_source_specifier"
 //
 // Returns an error if no update is received before the context deadline expires
 // or the received update does not match the expected one.
-func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate xdsresource.ClusterUpdateErrTuple) error {
+func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate clusterUpdateErrTuple) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for a cluster resource from the management server: %v", err)
 	}
-	got := u.(xdsresource.ClusterUpdateErrTuple)
-	if wantUpdate.Err != nil {
-		if gotType, wantType := xdsresource.ErrType(got.Err), xdsresource.ErrType(wantUpdate.Err); gotType != wantType {
+	got := u.(clusterUpdateErrTuple)
+	if wantUpdate.err != nil {
+		if gotType, wantType := xdsresource.ErrType(got.err), xdsresource.ErrType(wantUpdate.err); gotType != wantType {
 			return fmt.Errorf("received update with error type %v, want %v", gotType, wantType)
 		}
 	}
-	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicyJSON")}
-	if diff := cmp.Diff(wantUpdate.Update, got.Update, cmpOpts...); diff != "" {
+	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy")}
+	if diff := cmp.Diff(wantUpdate.update, got.update, cmpOpts...); diff != "" {
 		return fmt.Errorf("received unepected diff in the cluster resource update: (-want, got):\n%s", diff)
 	}
 	return nil
@@ -109,7 +144,7 @@ func (s) TestCDSWatch(t *testing.T) {
 		watchedResource        *v3clusterpb.Cluster // The resource being watched.
 		updatedWatchedResource *v3clusterpb.Cluster // The watched resource after an update.
 		notWatchedResource     *v3clusterpb.Cluster // A resource which is not being watched.
-		wantUpdate             xdsresource.ClusterUpdateErrTuple
+		wantUpdate             clusterUpdateErrTuple
 	}{
 		{
 			desc:                   "old style resource",
@@ -117,8 +152,8 @@ func (s) TestCDSWatch(t *testing.T) {
 			watchedResource:        e2e.DefaultCluster(cdsName, edsName, e2e.SecurityLevelNone),
 			updatedWatchedResource: e2e.DefaultCluster(cdsName, "new-eds-resource", e2e.SecurityLevelNone),
 			notWatchedResource:     e2e.DefaultCluster("unsubscribed-cds-resource", edsName, e2e.SecurityLevelNone),
-			wantUpdate: xdsresource.ClusterUpdateErrTuple{
-				Update: xdsresource.ClusterUpdate{
+			wantUpdate: clusterUpdateErrTuple{
+				update: xdsresource.ClusterUpdate{
 					ClusterName:    cdsName,
 					EDSServiceName: edsName,
 				},
@@ -130,8 +165,8 @@ func (s) TestCDSWatch(t *testing.T) {
 			watchedResource:        e2e.DefaultCluster(cdsNameNewStyle, edsNameNewStyle, e2e.SecurityLevelNone),
 			updatedWatchedResource: e2e.DefaultCluster(cdsNameNewStyle, "new-eds-resource", e2e.SecurityLevelNone),
 			notWatchedResource:     e2e.DefaultCluster("unsubscribed-cds-resource", edsNameNewStyle, e2e.SecurityLevelNone),
-			wantUpdate: xdsresource.ClusterUpdateErrTuple{
-				Update: xdsresource.ClusterUpdate{
+			wantUpdate: clusterUpdateErrTuple{
+				update: xdsresource.ClusterUpdate{
 					ClusterName:    cdsNameNewStyle,
 					EDSServiceName: edsNameNewStyle,
 				},
@@ -141,7 +176,6 @@ func (s) TestCDSWatch(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			overrideFedEnvVar(t)
 			mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 			defer cleanup()
 
@@ -154,10 +188,8 @@ func (s) TestCDSWatch(t *testing.T) {
 
 			// Register a watch for a cluster resource and have the watch
 			// callback push the received update on to a channel.
-			updateCh := testutils.NewChannel()
-			cdsCancel := client.WatchCluster(test.resourceName, func(u xdsresource.ClusterUpdate, err error) {
-				updateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-			})
+			cw := newClusterWatcher()
+			cdsCancel := xdsresource.WatchCluster(client, test.resourceName, cw)
 
 			// Configure the management server to return a single cluster
 			// resource, corresponding to the one we registered a watch for.
@@ -173,7 +205,7 @@ func (s) TestCDSWatch(t *testing.T) {
 			}
 
 			// Verify the contents of the received update.
-			if err := verifyClusterUpdate(ctx, updateCh, test.wantUpdate); err != nil {
+			if err := verifyClusterUpdate(ctx, cw.updateCh, test.wantUpdate); err != nil {
 				t.Fatal(err)
 			}
 
@@ -187,7 +219,7 @@ func (s) TestCDSWatch(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyNoClusterUpdate(ctx, updateCh); err != nil {
+			if err := verifyNoClusterUpdate(ctx, cw.updateCh); err != nil {
 				t.Fatal(err)
 			}
 
@@ -202,7 +234,7 @@ func (s) TestCDSWatch(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyNoClusterUpdate(ctx, updateCh); err != nil {
+			if err := verifyNoClusterUpdate(ctx, cw.updateCh); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -228,22 +260,22 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 		resourceName           string
 		watchedResource        *v3clusterpb.Cluster // The resource being watched.
 		updatedWatchedResource *v3clusterpb.Cluster // The watched resource after an update.
-		wantUpdateV1           xdsresource.ClusterUpdateErrTuple
-		wantUpdateV2           xdsresource.ClusterUpdateErrTuple
+		wantUpdateV1           clusterUpdateErrTuple
+		wantUpdateV2           clusterUpdateErrTuple
 	}{
 		{
 			desc:                   "old style resource",
 			resourceName:           cdsName,
 			watchedResource:        e2e.DefaultCluster(cdsName, edsName, e2e.SecurityLevelNone),
 			updatedWatchedResource: e2e.DefaultCluster(cdsName, "new-eds-resource", e2e.SecurityLevelNone),
-			wantUpdateV1: xdsresource.ClusterUpdateErrTuple{
-				Update: xdsresource.ClusterUpdate{
+			wantUpdateV1: clusterUpdateErrTuple{
+				update: xdsresource.ClusterUpdate{
 					ClusterName:    cdsName,
 					EDSServiceName: edsName,
 				},
 			},
-			wantUpdateV2: xdsresource.ClusterUpdateErrTuple{
-				Update: xdsresource.ClusterUpdate{
+			wantUpdateV2: clusterUpdateErrTuple{
+				update: xdsresource.ClusterUpdate{
 					ClusterName:    cdsName,
 					EDSServiceName: "new-eds-resource",
 				},
@@ -254,14 +286,14 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			resourceName:           cdsNameNewStyle,
 			watchedResource:        e2e.DefaultCluster(cdsNameNewStyle, edsNameNewStyle, e2e.SecurityLevelNone),
 			updatedWatchedResource: e2e.DefaultCluster(cdsNameNewStyle, "new-eds-resource", e2e.SecurityLevelNone),
-			wantUpdateV1: xdsresource.ClusterUpdateErrTuple{
-				Update: xdsresource.ClusterUpdate{
+			wantUpdateV1: clusterUpdateErrTuple{
+				update: xdsresource.ClusterUpdate{
 					ClusterName:    cdsNameNewStyle,
 					EDSServiceName: edsNameNewStyle,
 				},
 			},
-			wantUpdateV2: xdsresource.ClusterUpdateErrTuple{
-				Update: xdsresource.ClusterUpdate{
+			wantUpdateV2: clusterUpdateErrTuple{
+				update: xdsresource.ClusterUpdate{
 					ClusterName:    cdsNameNewStyle,
 					EDSServiceName: "new-eds-resource",
 				},
@@ -271,7 +303,6 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			overrideFedEnvVar(t)
 			mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 			defer cleanup()
 
@@ -284,15 +315,11 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 
 			// Register two watches for the same cluster resource and have the
 			// callbacks push the received updates on to a channel.
-			updateCh1 := testutils.NewChannel()
-			cdsCancel1 := client.WatchCluster(test.resourceName, func(u xdsresource.ClusterUpdate, err error) {
-				updateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-			})
+			cw1 := newClusterWatcher()
+			cdsCancel1 := xdsresource.WatchCluster(client, test.resourceName, cw1)
 			defer cdsCancel1()
-			updateCh2 := testutils.NewChannel()
-			cdsCancel2 := client.WatchCluster(test.resourceName, func(u xdsresource.ClusterUpdate, err error) {
-				updateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-			})
+			cw2 := newClusterWatcher()
+			cdsCancel2 := xdsresource.WatchCluster(client, test.resourceName, cw2)
 
 			// Configure the management server to return a single cluster
 			// resource, corresponding to the one we registered watches for.
@@ -308,10 +335,10 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			}
 
 			// Verify the contents of the received update.
-			if err := verifyClusterUpdate(ctx, updateCh1, test.wantUpdateV1); err != nil {
+			if err := verifyClusterUpdate(ctx, cw1.updateCh, test.wantUpdateV1); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyClusterUpdate(ctx, updateCh2, test.wantUpdateV1); err != nil {
+			if err := verifyClusterUpdate(ctx, cw2.updateCh, test.wantUpdateV1); err != nil {
 				t.Fatal(err)
 			}
 
@@ -322,10 +349,10 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyNoClusterUpdate(ctx, updateCh1); err != nil {
+			if err := verifyNoClusterUpdate(ctx, cw1.updateCh); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyNoClusterUpdate(ctx, updateCh2); err != nil {
+			if err := verifyNoClusterUpdate(ctx, cw2.updateCh); err != nil {
 				t.Fatal(err)
 			}
 
@@ -339,10 +366,10 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyClusterUpdate(ctx, updateCh1, test.wantUpdateV2); err != nil {
+			if err := verifyClusterUpdate(ctx, cw1.updateCh, test.wantUpdateV2); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyNoClusterUpdate(ctx, updateCh2); err != nil {
+			if err := verifyNoClusterUpdate(ctx, cw2.updateCh); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -356,7 +383,6 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 // the management server containing both resources results in the invocation of
 // all watch callbacks.
 func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
-	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
@@ -369,23 +395,17 @@ func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 
 	// Register two watches for the same cluster resource and have the
 	// callbacks push the received updates on to a channel.
-	updateCh1 := testutils.NewChannel()
-	cdsCancel1 := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw1 := newClusterWatcher()
+	cdsCancel1 := xdsresource.WatchCluster(client, cdsName, cw1)
 	defer cdsCancel1()
-	updateCh2 := testutils.NewChannel()
-	cdsCancel2 := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw2 := newClusterWatcher()
+	cdsCancel2 := xdsresource.WatchCluster(client, cdsName, cw2)
 	defer cdsCancel2()
 
 	// Register the third watch for a different cluster resource, and push the
 	// received updates onto a channel.
-	updateCh3 := testutils.NewChannel()
-	cdsCancel3 := client.WatchCluster(cdsNameNewStyle, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh3.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw3 := newClusterWatcher()
+	cdsCancel3 := xdsresource.WatchCluster(client, cdsNameNewStyle, cw3)
 	defer cdsCancel3()
 
 	// Configure the management server to return two cluster resources,
@@ -405,25 +425,25 @@ func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	}
 
 	// Verify the contents of the received update for the all watchers.
-	wantUpdate12 := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate12 := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    cdsName,
 			EDSServiceName: edsName,
 		},
 	}
-	wantUpdate3 := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate3 := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    cdsNameNewStyle,
 			EDSServiceName: edsNameNewStyle,
 		},
 	}
-	if err := verifyClusterUpdate(ctx, updateCh1, wantUpdate12); err != nil {
+	if err := verifyClusterUpdate(ctx, cw1.updateCh, wantUpdate12); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyClusterUpdate(ctx, updateCh2, wantUpdate12); err != nil {
+	if err := verifyClusterUpdate(ctx, cw2.updateCh, wantUpdate12); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyClusterUpdate(ctx, updateCh3, wantUpdate3); err != nil {
+	if err := verifyClusterUpdate(ctx, cw3.updateCh, wantUpdate3); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -433,7 +453,6 @@ func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 // watch callback is invoked with the contents from the cache, instead of a
 // request being sent to the management server.
 func (s) TestCDSWatch_ResourceCaching(t *testing.T) {
-	overrideFedEnvVar(t)
 	firstRequestReceived := false
 	firstAckReceived := grpcsync.NewEvent()
 	secondRequestReceived := grpcsync.NewEvent()
@@ -466,10 +485,8 @@ func (s) TestCDSWatch_ResourceCaching(t *testing.T) {
 
 	// Register a watch for a cluster resource and have the watch
 	// callback push the received update on to a channel.
-	updateCh1 := testutils.NewChannel()
-	cdsCancel1 := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw1 := newClusterWatcher()
+	cdsCancel1 := xdsresource.WatchCluster(client, cdsName, cw1)
 	defer cdsCancel1()
 
 	// Configure the management server to return a single cluster
@@ -486,13 +503,13 @@ func (s) TestCDSWatch_ResourceCaching(t *testing.T) {
 	}
 
 	// Verify the contents of the received update.
-	wantUpdate := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    cdsName,
 			EDSServiceName: edsName,
 		},
 	}
-	if err := verifyClusterUpdate(ctx, updateCh1, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, cw1.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -503,12 +520,10 @@ func (s) TestCDSWatch_ResourceCaching(t *testing.T) {
 
 	// Register another watch for the same resource. This should get the update
 	// from the cache.
-	updateCh2 := testutils.NewChannel()
-	cdsCancel2 := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw2 := newClusterWatcher()
+	cdsCancel2 := xdsresource.WatchCluster(client, cdsName, cw2)
 	defer cdsCancel2()
-	if err := verifyClusterUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, cw2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 	// No request should get sent out as part of this watch.
@@ -526,7 +541,6 @@ func (s) TestCDSWatch_ResourceCaching(t *testing.T) {
 // verifies that the watch callback is invoked with an error once the
 // watchExpiryTimer fires.
 func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
-	overrideFedEnvVar(t)
 	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
@@ -544,10 +558,8 @@ func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 
 	// Register a watch for a resource which is expected to be invoked with an
 	// error after the watch expiry timer fires.
-	updateCh := testutils.NewChannel()
-	cdsCancel := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw := newClusterWatcher()
+	cdsCancel := xdsresource.WatchCluster(client, cdsName, cw)
 	defer cdsCancel()
 
 	// Wait for the watch expiry timer to fire.
@@ -557,7 +569,7 @@ func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	wantErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")
-	if err := verifyClusterUpdate(ctx, updateCh, xdsresource.ClusterUpdateErrTuple{Err: wantErr}); err != nil {
+	if err := verifyClusterUpdate(ctx, cw.updateCh, clusterUpdateErrTuple{err: wantErr}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -567,7 +579,6 @@ func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 // verifies that the behavior associated with the expiry timer (i.e, callback
 // invocation with error) does not take place.
 func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
-	overrideFedEnvVar(t)
 	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
@@ -587,10 +598,8 @@ func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 
 	// Register a watch for a cluster resource and have the watch
 	// callback push the received update on to a channel.
-	updateCh := testutils.NewChannel()
-	cdsCancel := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw := newClusterWatcher()
+	cdsCancel := xdsresource.WatchCluster(client, cdsName, cw)
 	defer cdsCancel()
 
 	// Configure the management server to return a single cluster resource,
@@ -607,20 +616,20 @@ func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	}
 
 	// Verify the contents of the received update.
-	wantUpdate := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    cdsName,
 			EDSServiceName: edsName,
 		},
 	}
-	if err := verifyClusterUpdate(ctx, updateCh, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, cw.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
 	// Wait for the watch expiry timer to fire, and verify that the callback is
 	// not invoked.
 	<-time.After(defaultTestWatchExpiryTimeout)
-	if err := verifyNoClusterUpdate(ctx, updateCh); err != nil {
+	if err := verifyNoClusterUpdate(ctx, cw.updateCh); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -635,8 +644,8 @@ func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 //  2. An update to other resource should result in the invocation of the watch
 //     callback associated with that resource.  It should not result in the
 //     invocation of the watch callback associated with the deleted resource.
-func (s) TesCDSWatch_ResourceRemoved(t *testing.T) {
-	overrideFedEnvVar(t)
+func (s) TestCDSWatch_ResourceRemoved(t *testing.T) {
+	t.Skip("Disabled; see https://github.com/grpc/grpc-go/issues/6781")
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
@@ -650,16 +659,12 @@ func (s) TesCDSWatch_ResourceRemoved(t *testing.T) {
 	// Register two watches for two cluster resources and have the
 	// callbacks push the received updates on to a channel.
 	resourceName1 := cdsName
-	updateCh1 := testutils.NewChannel()
-	cdsCancel1 := client.WatchCluster(resourceName1, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw1 := newClusterWatcher()
+	cdsCancel1 := xdsresource.WatchCluster(client, resourceName1, cw1)
 	defer cdsCancel1()
 	resourceName2 := cdsNameNewStyle
-	updateCh2 := testutils.NewChannel()
-	cdsCancel2 := client.WatchCluster(resourceName2, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw2 := newClusterWatcher()
+	cdsCancel2 := xdsresource.WatchCluster(client, resourceName1, cw2)
 	defer cdsCancel2()
 
 	// Configure the management server to return two cluster resources,
@@ -679,22 +684,22 @@ func (s) TesCDSWatch_ResourceRemoved(t *testing.T) {
 	}
 
 	// Verify the contents of the received update for both watchers.
-	wantUpdate1 := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate1 := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    resourceName1,
 			EDSServiceName: edsName,
 		},
 	}
-	wantUpdate2 := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate2 := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    resourceName2,
 			EDSServiceName: edsNameNewStyle,
 		},
 	}
-	if err := verifyClusterUpdate(ctx, updateCh1, wantUpdate1); err != nil {
+	if err := verifyClusterUpdate(ctx, cw1.updateCh, wantUpdate1); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyClusterUpdate(ctx, updateCh2, wantUpdate2); err != nil {
+	if err := verifyClusterUpdate(ctx, cw2.updateCh, wantUpdate2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -710,10 +715,10 @@ func (s) TesCDSWatch_ResourceRemoved(t *testing.T) {
 
 	// The first watcher should receive a resource removed error, while the
 	// second watcher should not receive an update.
-	if err := verifyClusterUpdate(ctx, updateCh1, xdsresource.ClusterUpdateErrTuple{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")}); err != nil {
+	if err := verifyClusterUpdate(ctx, cw1.updateCh, clusterUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")}); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyNoClusterUpdate(ctx, updateCh2); err != nil {
+	if err := verifyNoClusterUpdate(ctx, cw2.updateCh); err != nil {
 		t.Fatal(err)
 	}
 
@@ -727,16 +732,16 @@ func (s) TesCDSWatch_ResourceRemoved(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
-	if err := verifyNoClusterUpdate(ctx, updateCh1); err != nil {
+	if err := verifyNoClusterUpdate(ctx, cw1.updateCh); err != nil {
 		t.Fatal(err)
 	}
-	wantUpdate := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    resourceName2,
 			EDSServiceName: "new-eds-resource",
 		},
 	}
-	if err := verifyClusterUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, cw2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -745,7 +750,6 @@ func (s) TesCDSWatch_ResourceRemoved(t *testing.T) {
 // server is NACK'ed by the xdsclient. The test verifies that the error is
 // propagated to the watcher.
 func (s) TestCDSWatch_NACKError(t *testing.T) {
-	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
@@ -758,12 +762,8 @@ func (s) TestCDSWatch_NACKError(t *testing.T) {
 
 	// Register a watch for a cluster resource and have the watch
 	// callback push the received update on to a channel.
-	updateCh := testutils.NewChannel()
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	cdsCancel := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh.SendContext(ctx, xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw := newClusterWatcher()
+	cdsCancel := xdsresource.WatchCluster(client, cdsName, cw)
 	defer cdsCancel()
 
 	// Configure the management server to return a single cluster resource
@@ -773,16 +773,18 @@ func (s) TestCDSWatch_NACKError(t *testing.T) {
 		Clusters:       []*v3clusterpb.Cluster{badClusterResource(cdsName, edsName, e2e.SecurityLevelNone)},
 		SkipValidation: true,
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
 	// Verify that the expected error is propagated to the watcher.
-	u, err := updateCh.Receive(ctx)
+	u, err := cw.updateCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("timeout when waiting for a cluster resource from the management server: %v", err)
 	}
-	gotErr := u.(xdsresource.ClusterUpdateErrTuple).Err
+	gotErr := u.(clusterUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantClusterNACKErr) {
 		t.Fatalf("update received with error: %v, want %q", gotErr, wantClusterNACKErr)
 	}
@@ -794,7 +796,6 @@ func (s) TestCDSWatch_NACKError(t *testing.T) {
 // to the valid resource receive the update, while watchers corresponding to the
 // invalid resource receive an error.
 func (s) TestCDSWatch_PartialValid(t *testing.T) {
-	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
@@ -808,19 +809,13 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 	// Register two watches for cluster resources. The first watch is expected
 	// to receive an error because the received resource is NACK'ed. The second
 	// watch is expected to get a good update.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	badResourceName := cdsName
-	updateCh1 := testutils.NewChannel()
-	cdsCancel1 := client.WatchCluster(badResourceName, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh1.SendContext(ctx, xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw1 := newClusterWatcher()
+	cdsCancel1 := xdsresource.WatchCluster(client, badResourceName, cw1)
 	defer cdsCancel1()
 	goodResourceName := cdsNameNewStyle
-	updateCh2 := testutils.NewChannel()
-	cdsCancel2 := client.WatchCluster(goodResourceName, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh2.SendContext(ctx, xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw2 := newClusterWatcher()
+	cdsCancel2 := xdsresource.WatchCluster(client, goodResourceName, cw2)
 	defer cdsCancel2()
 
 	// Configure the management server with two cluster resources. One of these
@@ -832,30 +827,32 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 			e2e.DefaultCluster(goodResourceName, edsName, e2e.SecurityLevelNone)},
 		SkipValidation: true,
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
 	// Verify that the expected error is propagated to the watcher which is
 	// watching the bad resource.
-	u, err := updateCh1.Receive(ctx)
+	u, err := cw1.updateCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("timeout when waiting for a cluster resource from the management server: %v", err)
 	}
-	gotErr := u.(xdsresource.ClusterUpdateErrTuple).Err
+	gotErr := u.(clusterUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantClusterNACKErr) {
 		t.Fatalf("update received with error: %v, want %q", gotErr, wantClusterNACKErr)
 	}
 
 	// Verify that the watcher watching the good resource receives a good
 	// update.
-	wantUpdate := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    goodResourceName,
 			EDSServiceName: edsName,
 		},
 	}
-	if err := verifyClusterUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, cw2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -868,7 +865,6 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 // expected to wait for the watch timeout to expire before concluding that the
 // resource does not exist on the server
 func (s) TestCDSWatch_PartialResponse(t *testing.T) {
-	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
@@ -882,16 +878,12 @@ func (s) TestCDSWatch_PartialResponse(t *testing.T) {
 	// Register two watches for two cluster resources and have the
 	// callbacks push the received updates on to a channel.
 	resourceName1 := cdsName
-	updateCh1 := testutils.NewChannel()
-	cdsCancel1 := client.WatchCluster(resourceName1, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw1 := newClusterWatcher()
+	cdsCancel1 := xdsresource.WatchCluster(client, resourceName1, cw1)
 	defer cdsCancel1()
 	resourceName2 := cdsNameNewStyle
-	updateCh2 := testutils.NewChannel()
-	cdsCancel2 := client.WatchCluster(resourceName2, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
-	})
+	cw2 := newClusterWatcher()
+	cdsCancel2 := xdsresource.WatchCluster(client, resourceName2, cw2)
 	defer cdsCancel2()
 
 	// Configure the management server to return only one of the two cluster
@@ -908,18 +900,18 @@ func (s) TestCDSWatch_PartialResponse(t *testing.T) {
 	}
 
 	// Verify the contents of the received update for first watcher.
-	wantUpdate1 := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate1 := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    resourceName1,
 			EDSServiceName: edsName,
 		},
 	}
-	if err := verifyClusterUpdate(ctx, updateCh1, wantUpdate1); err != nil {
+	if err := verifyClusterUpdate(ctx, cw1.updateCh, wantUpdate1); err != nil {
 		t.Fatal(err)
 	}
 
 	// Verify that the second watcher does not get an update with an error.
-	if err := verifyNoClusterUpdate(ctx, updateCh2); err != nil {
+	if err := verifyNoClusterUpdate(ctx, cw2.updateCh); err != nil {
 		t.Fatal(err)
 	}
 
@@ -938,19 +930,19 @@ func (s) TestCDSWatch_PartialResponse(t *testing.T) {
 	}
 
 	// Verify the contents of the received update for the second watcher.
-	wantUpdate2 := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate2 := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    resourceName2,
 			EDSServiceName: edsNameNewStyle,
 		},
 	}
-	if err := verifyClusterUpdate(ctx, updateCh2, wantUpdate2); err != nil {
+	if err := verifyClusterUpdate(ctx, cw2.updateCh, wantUpdate2); err != nil {
 		t.Fatal(err)
 	}
 
 	// Verify that the first watcher gets no update, as the first resource did
 	// not change.
-	if err := verifyNoClusterUpdate(ctx, updateCh1); err != nil {
+	if err := verifyNoClusterUpdate(ctx, cw1.updateCh); err != nil {
 		t.Fatal(err)
 	}
 }

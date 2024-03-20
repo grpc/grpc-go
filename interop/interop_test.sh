@@ -45,6 +45,26 @@ pass () {
     echo "$(tput setaf 2) $(date): $1 $(tput sgr 0)"
 }
 
+withTimeout () {
+    timer=$1
+    shift
+
+    # Run command in the background.
+    cmd=$(printf '%q ' "$@")
+    eval "$cmd" &
+    wpid=$!
+    # Kill after $timer seconds.
+    sleep $timer && kill $wpid &
+    kpid=$!
+    # Wait for the background thread.
+    wait $wpid
+    res=$?
+    # Kill the killer pid in case it's still running.
+    kill $kpid || true
+    wait $kpid || true
+    return $res
+}
+
 # Don't run some tests that need a special environment:
 #  "google_default_credentials"
 #  "compute_engine_channel_credentials"
@@ -70,6 +90,8 @@ CASES=(
   "custom_metadata"
   "unimplemented_method"
   "unimplemented_service"
+  "orca_per_rpc"
+  "orca_oob"
 )
 
 # Build server
@@ -96,7 +118,12 @@ for case in ${CASES[@]}; do
     echo "$(tput setaf 4) $(date): testing: ${case} $(tput sgr 0)"
 
     CLIENT_LOG="$(mktemp)"
-    if ! GRPC_GO_LOG_SEVERITY_LEVEL=info timeout 20 go run ./interop/client --use_tls --server_host_override=foo.test.google.fr --use_test_ca --test_case="${case}" &> $CLIENT_LOG; then
+    if ! GRPC_GO_LOG_SEVERITY_LEVEL=info withTimeout 20 go run ./interop/client \
+         --use_tls \
+         --server_host_override=foo.test.google.fr \
+         --use_test_ca --test_case="${case}" \
+         --service_config_json='{ "loadBalancingConfig": [{ "test_backend_metrics_load_balancer": {} }]}' \
+       &> $CLIENT_LOG; then
         fail "FAIL: test case ${case}
         got server log:
         $(cat $SERVER_LOG)

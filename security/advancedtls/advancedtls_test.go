@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"testing"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -371,6 +372,27 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	getRootCAsForServerBad := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return nil, fmt.Errorf("bad root certificate reloading")
 	}
+
+	getRootCAsForClientCRL := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
+		return &GetRootCAsResults{TrustCerts: cs.ClientTrust3}, nil
+	}
+
+	getRootCAsForServerCRL := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
+		return &GetRootCAsResults{TrustCerts: cs.ServerTrust3}, nil
+	}
+
+	makeStaticCRLRevocationConfig := func(crlPath string, allowUndetermined bool) *RevocationConfig {
+		rawCRL, err := os.ReadFile(crlPath)
+		if err != nil {
+			t.Fatalf("readFile(%v) failed err = %v", crlPath, err)
+		}
+		cRLProvider := NewStaticCRLProvider([][]byte{rawCRL})
+		return &RevocationConfig{
+			AllowUndetermined: allowUndetermined,
+			CRLProvider:       cRLProvider,
+		}
+	}
+
 	cache, err := lru.New(5)
 	if err != nil {
 		t.Fatalf("lru.New: err = %v", err)
@@ -682,7 +704,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		},
 		// Client: set valid credentials with the revocation config
 		// Server: set valid credentials with the revocation config
-		// Expected Behavior: success, because non of the certificate chains sent in the connection are revoked
+		// Expected Behavior: success, because none of the certificate chains sent in the connection are revoked
 		{
 			desc:             "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; mutualTLS",
 			clientCert:       []tls.Certificate{cs.ClientCert1},
@@ -703,6 +725,54 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				AllowUndetermined: true,
 				Cache:             cache,
 			},
+		},
+		// Client: set valid credentials with the revocation config
+		// Server: set valid credentials with the revocation config
+		// Expected Behavior: success, because none of the certificate chains sent in the connection are revoked
+		{
+			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; Client uses CRL; mutualTLS",
+			clientCert:             []tls.Certificate{cs.ClientCertForCRL},
+			clientGetRoot:          getRootCAsForClientCRL,
+			clientVerifyFunc:       clientVerifyFuncGood,
+			clientVType:            CertVerification,
+			clientRevocationConfig: makeStaticCRLRevocationConfig(testdata.Path("crl/provider_crl_empty.pem"), true),
+			serverMutualTLS:        true,
+			serverCert:             []tls.Certificate{cs.ServerCertForCRL},
+			serverGetRoot:          getRootCAsForServerCRL,
+			serverVType:            CertVerification,
+		},
+		// Client: set valid credentials with the revocation config
+		// Server: set revoked credentials with the revocation config
+		// Expected Behavior: fail, server creds are revoked
+		{
+			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets revoked cert; Client uses CRL; mutualTLS",
+			clientCert:             []tls.Certificate{cs.ClientCertForCRL},
+			clientGetRoot:          getRootCAsForClientCRL,
+			clientVerifyFunc:       clientVerifyFuncGood,
+			clientVType:            CertVerification,
+			clientRevocationConfig: makeStaticCRLRevocationConfig(testdata.Path("crl/provider_crl_server_revoked.pem"), true),
+			serverMutualTLS:        true,
+			serverCert:             []tls.Certificate{cs.ServerCertForCRL},
+			serverGetRoot:          getRootCAsForServerCRL,
+			serverVType:            CertVerification,
+			serverExpectError:      true,
+		},
+		// Client: set valid credentials with the revocation config
+		// Server: set valid credentials with the revocation config
+		// Expected Behavior: fail, because CRL is issued by the malicious CA. It
+		// can't be properly processed, and we don't allow RevocationUndetermined.
+		{
+			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; Client uses CRL; mutualTLS",
+			clientCert:             []tls.Certificate{cs.ClientCertForCRL},
+			clientGetRoot:          getRootCAsForClientCRL,
+			clientVerifyFunc:       clientVerifyFuncGood,
+			clientVType:            CertVerification,
+			clientRevocationConfig: makeStaticCRLRevocationConfig(testdata.Path("crl/provider_malicious_crl_empty.pem"), false),
+			serverMutualTLS:        true,
+			serverCert:             []tls.Certificate{cs.ServerCertForCRL},
+			serverGetRoot:          getRootCAsForServerCRL,
+			serverVType:            CertVerification,
+			serverExpectError:      true,
 		},
 	} {
 		test := test
@@ -889,7 +959,7 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 				ServerName:        test.serverName,
 				SupportedCurves:   []tls.CurveID{tls.CurveP256},
 				SupportedPoints:   []uint8{pointFormatUncompressed},
-				SupportedVersions: []uint16{tls.VersionTLS10},
+				SupportedVersions: []uint16{tls.VersionTLS12},
 			}
 			gotCertificate, err := serverConfig.GetCertificate(clientHello)
 			if err != nil {

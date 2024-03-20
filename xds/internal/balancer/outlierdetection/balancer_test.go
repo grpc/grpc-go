@@ -37,7 +37,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
-	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -68,7 +68,20 @@ func (s) TestParseConfig(t *testing.T) {
 	})
 
 	parser := bb{}
-
+	const (
+		defaultInterval                       = iserviceconfig.Duration(10 * time.Second)
+		defaultBaseEjectionTime               = iserviceconfig.Duration(30 * time.Second)
+		defaultMaxEjectionTime                = iserviceconfig.Duration(300 * time.Second)
+		defaultMaxEjectionPercent             = 10
+		defaultSuccessRateStdevFactor         = 1900
+		defaultEnforcingSuccessRate           = 100
+		defaultSuccessRateMinimumHosts        = 5
+		defaultSuccessRateRequestVolume       = 100
+		defaultFailurePercentageThreshold     = 85
+		defaultEnforcingFailurePercentage     = 0
+		defaultFailurePercentageMinimumHosts  = 5
+		defaultFailurePercentageRequestVolume = 50
+	)
 	tests := []struct {
 		name    string
 		input   string
@@ -76,9 +89,8 @@ func (s) TestParseConfig(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "noop-lb-config",
+			name: "no-fields-set-should-get-default",
 			input: `{
-				"interval": 9223372036854775807,
 				"childPolicy": [
 				{
 					"xds_cluster_impl_experimental": {
@@ -88,8 +100,39 @@ func (s) TestParseConfig(t *testing.T) {
 				]
 			}`,
 			wantCfg: &LBConfig{
-				Interval: math.MaxInt64,
-				ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Interval:           defaultInterval,
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    defaultMaxEjectionTime,
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+
+		{
+			name: "some-top-level-fields-set",
+			input: `{
+				"interval": "15s",
+				"maxEjectionTime": "350s",
+				"childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			// Should get set fields + defaults for unset fields.
+			wantCfg: &LBConfig{
+				Interval:           iserviceconfig.Duration(15 * time.Second),
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    iserviceconfig.Duration(350 * time.Second),
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				ChildPolicy: &iserviceconfig.BalancerConfig{
 					Name: "xds_cluster_impl_experimental",
 					Config: &clusterimpl.LBConfig{
 						Cluster: "test_cluster",
@@ -98,11 +141,257 @@ func (s) TestParseConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "good-lb-config",
+			name: "success-rate-ejection-present-but-no-fields",
 			input: `{
-				"interval": 10000000000,
-				"baseEjectionTime": 30000000000,
-				"maxEjectionTime": 300000000000,
+				"successRateEjection": {},
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			// Should get defaults of success-rate-ejection struct.
+			wantCfg: &LBConfig{
+				Interval:           defaultInterval,
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    defaultMaxEjectionTime,
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				SuccessRateEjection: &SuccessRateEjection{
+					StdevFactor:           defaultSuccessRateStdevFactor,
+					EnforcementPercentage: defaultEnforcingSuccessRate,
+					MinimumHosts:          defaultSuccessRateMinimumHosts,
+					RequestVolume:         defaultSuccessRateRequestVolume,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+		{
+			name: "success-rate-ejection-present-partially-set",
+			input: `{
+				"successRateEjection": {
+					"stdevFactor": 1000,
+					"minimumHosts": 5
+				},
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			// Should get set fields + defaults for others in success rate
+			// ejection layer.
+			wantCfg: &LBConfig{
+				Interval:           defaultInterval,
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    defaultMaxEjectionTime,
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				SuccessRateEjection: &SuccessRateEjection{
+					StdevFactor:           1000,
+					EnforcementPercentage: defaultEnforcingSuccessRate,
+					MinimumHosts:          5,
+					RequestVolume:         defaultSuccessRateRequestVolume,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+		{
+			name: "success-rate-ejection-present-fully-set",
+			input: `{
+				"successRateEjection": {
+					"stdevFactor": 1000,
+					"enforcementPercentage": 50,
+					"minimumHosts": 5,
+					"requestVolume": 50
+				},
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			wantCfg: &LBConfig{
+				Interval:           defaultInterval,
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    defaultMaxEjectionTime,
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				SuccessRateEjection: &SuccessRateEjection{
+					StdevFactor:           1000,
+					EnforcementPercentage: 50,
+					MinimumHosts:          5,
+					RequestVolume:         50,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+		{
+			name: "failure-percentage-ejection-present-but-no-fields",
+			input: `{
+				"failurePercentageEjection": {},
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			// Should get defaults of failure percentage ejection layer.
+			wantCfg: &LBConfig{
+				Interval:           defaultInterval,
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    defaultMaxEjectionTime,
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				FailurePercentageEjection: &FailurePercentageEjection{
+					Threshold:             defaultFailurePercentageThreshold,
+					EnforcementPercentage: defaultEnforcingFailurePercentage,
+					MinimumHosts:          defaultFailurePercentageMinimumHosts,
+					RequestVolume:         defaultFailurePercentageRequestVolume,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+		{
+			name: "failure-percentage-ejection-present-partially-set",
+			input: `{
+				"failurePercentageEjection": {
+					"threshold": 80,
+					"minimumHosts": 10
+				},
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			// Should get set fields + defaults for others in success rate
+			// ejection layer.
+			wantCfg: &LBConfig{
+				Interval:           defaultInterval,
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    defaultMaxEjectionTime,
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				FailurePercentageEjection: &FailurePercentageEjection{
+					Threshold:             80,
+					EnforcementPercentage: defaultEnforcingFailurePercentage,
+					MinimumHosts:          10,
+					RequestVolume:         defaultFailurePercentageRequestVolume,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+		{
+			name: "failure-percentage-ejection-present-fully-set",
+			input: `{
+				"failurePercentageEjection": {
+					"threshold": 80,
+					"enforcementPercentage": 100,
+					"minimumHosts": 10,
+					"requestVolume": 40
+                },
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			wantCfg: &LBConfig{
+				Interval:           defaultInterval,
+				BaseEjectionTime:   defaultBaseEjectionTime,
+				MaxEjectionTime:    defaultMaxEjectionTime,
+				MaxEjectionPercent: defaultMaxEjectionPercent,
+				FailurePercentageEjection: &FailurePercentageEjection{
+					Threshold:             80,
+					EnforcementPercentage: 100,
+					MinimumHosts:          10,
+					RequestVolume:         40,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+		{ // to make sure zero values aren't overwritten by defaults
+			name: "lb-config-every-field-set-zero-value",
+			input: `{
+				"interval": "0s",
+				"baseEjectionTime": "0s",
+				"maxEjectionTime": "0s",
+				"maxEjectionPercent": 0,
+				"successRateEjection": {
+					"stdevFactor": 0,
+					"enforcementPercentage": 0,
+					"minimumHosts": 0,
+					"requestVolume": 0
+				},
+				"failurePercentageEjection": {
+					"threshold": 0,
+					"enforcementPercentage": 0,
+					"minimumHosts": 0,
+					"requestVolume": 0
+				},
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			wantCfg: &LBConfig{
+				SuccessRateEjection:       &SuccessRateEjection{},
+				FailurePercentageEjection: &FailurePercentageEjection{},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
+		},
+		{
+			name: "lb-config-every-field-set",
+			input: `{
+				"interval": "10s",
+				"baseEjectionTime": "30s",
+				"maxEjectionTime": "300s",
 				"maxEjectionPercent": 10,
 				"successRateEjection": {
 					"stdevFactor": 1900,
@@ -125,9 +414,9 @@ func (s) TestParseConfig(t *testing.T) {
 				]
 			}`,
 			wantCfg: &LBConfig{
-				Interval:           10 * time.Second,
-				BaseEjectionTime:   30 * time.Second,
-				MaxEjectionTime:    300 * time.Second,
+				Interval:           iserviceconfig.Duration(10 * time.Second),
+				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
 				MaxEjectionPercent: 10,
 				SuccessRateEjection: &SuccessRateEjection{
 					StdevFactor:           1900,
@@ -141,7 +430,7 @@ func (s) TestParseConfig(t *testing.T) {
 					MinimumHosts:          5,
 					RequestVolume:         50,
 				},
-				ChildPolicy: &internalserviceconfig.BalancerConfig{
+				ChildPolicy: &iserviceconfig.BalancerConfig{
 					Name: "xds_cluster_impl_experimental",
 					Config: &clusterimpl.LBConfig{
 						Cluster: "test_cluster",
@@ -151,18 +440,18 @@ func (s) TestParseConfig(t *testing.T) {
 		},
 		{
 			name:    "interval-is-negative",
-			input:   `{"interval": -10}`,
-			wantErr: "OutlierDetectionLoadBalancingConfig.interval = -10ns; must be >= 0",
+			input:   `{"interval": "-10s"}`,
+			wantErr: "OutlierDetectionLoadBalancingConfig.interval = -10s; must be >= 0",
 		},
 		{
 			name:    "base-ejection-time-is-negative",
-			input:   `{"baseEjectionTime": -10}`,
-			wantErr: "OutlierDetectionLoadBalancingConfig.base_ejection_time = -10ns; must be >= 0",
+			input:   `{"baseEjectionTime": "-10s"}`,
+			wantErr: "OutlierDetectionLoadBalancingConfig.base_ejection_time = -10s; must be >= 0",
 		},
 		{
 			name:    "max-ejection-time-is-negative",
-			input:   `{"maxEjectionTime": -10}`,
-			wantErr: "OutlierDetectionLoadBalancingConfig.max_ejection_time = -10ns; must be >= 0",
+			input:   `{"maxEjectionTime": "-10s"}`,
+			wantErr: "OutlierDetectionLoadBalancingConfig.max_ejection_time = -10s; must be >= 0",
 		},
 		{
 			name:    "max-ejection-percent-is-greater-than-100",
@@ -197,31 +486,8 @@ func (s) TestParseConfig(t *testing.T) {
 			wantErr: "OutlierDetectionLoadBalancingConfig.FailurePercentageEjection.enforcement_percentage = 150; must be <= 100",
 		},
 		{
-			name: "child-policy-not-present",
-			input: `{
-				"interval": 10000000000,
-				"baseEjectionTime": 30000000000,
-				"maxEjectionTime": 300000000000,
-				"maxEjectionPercent": 10,
-				"successRateEjection": {
-					"stdevFactor": 1900,
-					"enforcementPercentage": 100,
-					"minimumHosts": 5,
-					"requestVolume": 100
-				},
-				"failurePercentageEjection": {
-					"threshold": 85,
-					"enforcementPercentage": 5,
-					"minimumHosts": 5,
-					"requestVolume": 50
-				}
-			}`,
-			wantErr: "OutlierDetectionLoadBalancingConfig.child_policy must be present",
-		},
-		{
 			name: "child-policy-present-but-parse-error",
 			input: `{
-				"interval": 9223372036854775807,
 				"childPolicy": [
 				{
 					"errParseConfigBalancer": {
@@ -235,7 +501,6 @@ func (s) TestParseConfig(t *testing.T) {
 		{
 			name: "no-supported-child-policy",
 			input: `{
-				"interval": 9223372036854775807,
 				"childPolicy": [
 				{
 					"doesNotExistBalancer": {
@@ -245,26 +510,6 @@ func (s) TestParseConfig(t *testing.T) {
 			]
 			}`,
 			wantErr: "invalid loadBalancingConfig: no supported policies found",
-		},
-		{
-			name: "child-policy",
-			input: `{
-				"childPolicy": [
-				{
-					"xds_cluster_impl_experimental": {
-						"cluster": "test_cluster"
-					}
-				}
-			]
-			}`,
-			wantCfg: &LBConfig{
-				ChildPolicy: &internalserviceconfig.BalancerConfig{
-					Name: "xds_cluster_impl_experimental",
-					Config: &clusterimpl.LBConfig{
-						Cluster: "test_cluster",
-					},
-				},
-			},
 		},
 	}
 	for _, test := range tests {
@@ -298,14 +543,16 @@ type subConnWithState struct {
 	state balancer.SubConnState
 }
 
-func setup(t *testing.T) (*outlierDetectionBalancer, *testutils.TestClientConn, func()) {
+func setup(t *testing.T) (*outlierDetectionBalancer, *testutils.BalancerClientConn, func()) {
 	t.Helper()
 	builder := balancer.Get(Name)
 	if builder == nil {
 		t.Fatalf("balancer.Get(%q) returned nil", Name)
 	}
-	tcc := testutils.NewTestClientConn(t)
-	odB := builder.Build(tcc, balancer.BuildOptions{ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefChannel, time.Now().Unix(), nil)})
+	tcc := testutils.NewBalancerClientConn(t)
+	ch := channelz.RegisterChannel(nil, "test channel")
+	t.Cleanup(func() { channelz.RemoveEntry(ch.ID) })
+	odB := builder.Build(tcc, balancer.BuildOptions{ChannelzParent: ch})
 	return odB.(*outlierDetectionBalancer), tcc, odB.Close
 }
 
@@ -362,8 +609,7 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	// it's first update.
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			Interval: math.MaxInt64,
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name() + "child1",
 				Config: bc,
 			},
@@ -386,7 +632,7 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
 			Interval: math.MaxInt64,
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name() + "child2",
 				Config: emptyChildConfig{},
 			},
@@ -441,11 +687,15 @@ func (s) TestUpdateAddresses(t *testing.T) {
 	var err error
 	stub.Register(t.Name(), stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
-			scw1, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address1"}}, balancer.NewSubConnOptions{})
+			scw1, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address1"}}, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) { scsCh.Send(subConnWithState{sc: scw1, state: state}) },
+			})
 			if err != nil {
 				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
-			scw2, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address2"}}, balancer.NewSubConnOptions{})
+			scw2, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address2"}}, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) { scsCh.Send(subConnWithState{sc: scw2, state: state}) },
+			})
 			if err != nil {
 				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
@@ -457,12 +707,7 @@ func (s) TestUpdateAddresses(t *testing.T) {
 			})
 			return nil
 		},
-		UpdateSubConnState: func(_ *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-			scsCh.Send(subConnWithState{
-				sc:    sc,
-				state: state,
-			})
-		}})
+	})
 
 	od, tcc, cleanup := setup(t)
 	defer cleanup()
@@ -475,9 +720,9 @@ func (s) TestUpdateAddresses(t *testing.T) {
 			},
 		},
 		BalancerConfig: &LBConfig{
-			Interval:           10 * time.Second,
-			BaseEjectionTime:   30 * time.Second,
-			MaxEjectionTime:    300 * time.Second,
+			Interval:           iserviceconfig.Duration(10 * time.Second),
+			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
 			MaxEjectionPercent: 10,
 			FailurePercentageEjection: &FailurePercentageEjection{
 				Threshold:             50,
@@ -485,7 +730,7 @@ func (s) TestUpdateAddresses(t *testing.T) {
 				MinimumHosts:          2,
 				RequestVolume:         3,
 			},
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -522,8 +767,8 @@ func (s) TestUpdateAddresses(t *testing.T) {
 			pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
 		}
 		od.intervalTimerAlgorithm()
-		// verify UpdateSubConnState() got called with TRANSIENT_FAILURE for
-		// child with address that was ejected.
+		// verify StateListener() got called with TRANSIENT_FAILURE for child
+		// with address that was ejected.
 		gotSCWS, err := scsCh.Receive(ctx)
 		if err != nil {
 			t.Fatalf("Error waiting for Sub Conn update: %v", err)
@@ -546,8 +791,7 @@ func (s) TestUpdateAddresses(t *testing.T) {
 		t.Fatal("timeout while waiting for a UpdateState call on the ClientConn")
 	case <-tcc.UpdateAddressesAddrsCh:
 	}
-	// Verify scw1 got ejected (UpdateSubConnState called with TRANSIENT
-	// FAILURE).
+	// Verify scw1 got ejected (StateListener called with TRANSIENT_FAILURE).
 	gotSCWS, err := scsCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Error waiting for Sub Conn update: %v", err)
@@ -565,7 +809,7 @@ func (s) TestUpdateAddresses(t *testing.T) {
 		{Addr: "address1"},
 		{Addr: "address2"},
 	})
-	// Verify scw1 got unejected (UpdateSubConnState called with recent state).
+	// Verify scw1 got unejected (StateListener called with recent state).
 	gotSCWS, err = scsCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Error waiting for Sub Conn update: %v", err)
@@ -594,7 +838,7 @@ func (s) TestUpdateAddresses(t *testing.T) {
 	// Update scw1 back to a single address, which is ejected. This should cause
 	// the SubConn to be re-ejected.
 	od.UpdateAddresses(scw1, []resolver.Address{{Addr: "address2"}})
-	// Verify scw1 got ejected (UpdateSubConnState called with TRANSIENT FAILURE).
+	// Verify scw1 got ejected (StateListener called with TRANSIENT FAILURE).
 	gotSCWS, err = scsCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Error waiting for Sub Conn update: %v", err)
@@ -608,7 +852,7 @@ func (s) TestUpdateAddresses(t *testing.T) {
 }
 
 func scwsEqual(gotSCWS subConnWithState, wantSCWS subConnWithState) error {
-	if !cmp.Equal(gotSCWS, wantSCWS, cmp.AllowUnexported(subConnWithState{}, testutils.TestSubConn{}, subConnWrapper{}, addressInfo{}), cmpopts.IgnoreFields(subConnWrapper{}, "scUpdateCh")) {
+	if gotSCWS.sc != wantSCWS.sc || !cmp.Equal(gotSCWS.state, wantSCWS.state, cmp.AllowUnexported(subConnWrapper{}, addressInfo{}), cmpopts.IgnoreFields(subConnWrapper{}, "scUpdateCh")) {
 		return fmt.Errorf("received SubConnState: %+v, want %+v", gotSCWS, wantSCWS)
 	}
 	return nil
@@ -651,14 +895,14 @@ func (s) TestDurationOfInterval(t *testing.T) {
 
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			Interval: 8 * time.Second,
+			Interval: iserviceconfig.Duration(8 * time.Second),
 			SuccessRateEjection: &SuccessRateEjection{
 				StdevFactor:           1900,
 				EnforcementPercentage: 100,
 				MinimumHosts:          5,
 				RequestVolume:         100,
 			},
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -691,14 +935,14 @@ func (s) TestDurationOfInterval(t *testing.T) {
 	// interval timer of ~4 seconds.
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			Interval: 9 * time.Second,
+			Interval: iserviceconfig.Duration(9 * time.Second),
 			SuccessRateEjection: &SuccessRateEjection{
 				StdevFactor:           1900,
 				EnforcementPercentage: 100,
 				MinimumHosts:          5,
 				RequestVolume:         100,
 			},
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -718,8 +962,8 @@ func (s) TestDurationOfInterval(t *testing.T) {
 	// interval timer at all due to it being a no-op.
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			Interval: 10 * time.Second,
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			Interval: iserviceconfig.Duration(10 * time.Second),
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -750,15 +994,21 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 	var err error
 	stub.Register(t.Name(), stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
-			scw1, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address1"}}, balancer.NewSubConnOptions{})
+			scw1, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address1"}}, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) { scsCh.Send(subConnWithState{sc: scw1, state: state}) },
+			})
 			if err != nil {
 				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
-			scw2, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address2"}}, balancer.NewSubConnOptions{})
+			scw2, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address2"}}, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) { scsCh.Send(subConnWithState{sc: scw2, state: state}) },
+			})
 			if err != nil {
 				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
-			scw3, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address3"}}, balancer.NewSubConnOptions{})
+			scw3, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address3"}}, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) { scsCh.Send(subConnWithState{sc: scw3, state: state}) },
+			})
 			if err != nil {
 				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
@@ -769,12 +1019,6 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				},
 			})
 			return nil
-		},
-		UpdateSubConnState: func(_ *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-			scsCh.Send(subConnWithState{
-				sc:    sc,
-				state: state,
-			})
 		},
 	})
 
@@ -793,8 +1037,8 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 		},
 		BalancerConfig: &LBConfig{
 			Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
-			BaseEjectionTime:   30 * time.Second,
-			MaxEjectionTime:    300 * time.Second,
+			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
 			MaxEjectionPercent: 10,
 			FailurePercentageEjection: &FailurePercentageEjection{
 				Threshold:             50,
@@ -802,7 +1046,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				MinimumHosts:          3,
 				RequestVolume:         3,
 			},
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -831,8 +1075,8 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 
 		od.intervalTimerAlgorithm()
 
-		// verify no UpdateSubConnState() call on the child, as no addresses got
-		// ejected (ejected address will cause an UpdateSubConnState call).
+		// verify no StateListener() call on the child, as no addresses got
+		// ejected (ejected address will cause an StateListener call).
 		sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		defer cancel()
 		if _, err := scsCh.Receive(sCtx); err == nil {
@@ -841,7 +1085,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 
 		// Since no addresses are ejected, a SubConn update should forward down
 		// to the child.
-		od.UpdateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
+		od.updateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
 			ConnectivityState: connectivity.Connecting,
 		})
 
@@ -903,7 +1147,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 		// that address should not be forwarded downward. These SubConn updates
 		// will be cached to update the child sometime in the future when the
 		// address gets unejected.
-		od.UpdateSubConnState(pi.SubConn, balancer.SubConnState{
+		od.updateSubConnState(pi.SubConn, balancer.SubConnState{
 			ConnectivityState: connectivity.Connecting,
 		})
 		sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -960,25 +1204,25 @@ func (s) TestEjectFailureRate(t *testing.T) {
 			if scw1 != nil { // UpdateClientConnState was already called, no need to recreate SubConns.
 				return nil
 			}
-			scw1, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address1"}}, balancer.NewSubConnOptions{})
+			scw1, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address1"}}, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) { scsCh.Send(subConnWithState{sc: scw1, state: state}) },
+			})
 			if err != nil {
 				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
-			scw2, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address2"}}, balancer.NewSubConnOptions{})
+			scw2, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address2"}}, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) { scsCh.Send(subConnWithState{sc: scw2, state: state}) },
+			})
 			if err != nil {
 				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
-			scw3, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address3"}}, balancer.NewSubConnOptions{})
+			scw3, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address3"}}, balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) { scsCh.Send(subConnWithState{sc: scw3, state: state}) },
+			})
 			if err != nil {
 				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
 			return nil
-		},
-		UpdateSubConnState: func(_ *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-			scsCh.Send(subConnWithState{
-				sc:    sc,
-				state: state,
-			})
 		},
 	})
 
@@ -997,8 +1241,8 @@ func (s) TestEjectFailureRate(t *testing.T) {
 		},
 		BalancerConfig: &LBConfig{
 			Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
-			BaseEjectionTime:   30 * time.Second,
-			MaxEjectionTime:    300 * time.Second,
+			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
 			MaxEjectionPercent: 10,
 			SuccessRateEjection: &SuccessRateEjection{
 				StdevFactor:           500,
@@ -1006,7 +1250,7 @@ func (s) TestEjectFailureRate(t *testing.T) {
 				MinimumHosts:          3,
 				RequestVolume:         3,
 			},
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -1071,8 +1315,8 @@ func (s) TestEjectFailureRate(t *testing.T) {
 		// should eject address that always errored.
 		od.intervalTimerAlgorithm()
 
-		// verify UpdateSubConnState() got called with TRANSIENT_FAILURE for
-		// child in address that was ejected.
+		// verify StateListener() got called with TRANSIENT_FAILURE for child
+		// in address that was ejected.
 		gotSCWS, err := scsCh.Receive(ctx)
 		if err != nil {
 			t.Fatalf("Error waiting for Sub Conn update: %v", err)
@@ -1103,10 +1347,10 @@ func (s) TestEjectFailureRate(t *testing.T) {
 			},
 			BalancerConfig: &LBConfig{
 				Interval:           math.MaxInt64,
-				BaseEjectionTime:   30 * time.Second,
-				MaxEjectionTime:    300 * time.Second,
+				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
 				MaxEjectionPercent: 10,
-				ChildPolicy: &internalserviceconfig.BalancerConfig{
+				ChildPolicy: &iserviceconfig.BalancerConfig{
 					Name:   t.Name(),
 					Config: emptyChildConfig{},
 				},
@@ -1143,11 +1387,6 @@ func (s) TestConcurrentOperations(t *testing.T) {
 				t.Error("ResolverError was called after Close(), which breaks the balancer API")
 			}
 		},
-		UpdateSubConnState: func(*stub.BalancerData, balancer.SubConn, balancer.SubConnState) {
-			if closed.HasFired() {
-				t.Error("UpdateSubConnState was called after Close(), which breaks the balancer API")
-			}
-		},
 		Close: func(*stub.BalancerData) {
 			closed.Fire()
 		},
@@ -1173,8 +1412,8 @@ func (s) TestConcurrentOperations(t *testing.T) {
 		},
 		BalancerConfig: &LBConfig{
 			Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
-			BaseEjectionTime:   30 * time.Second,
-			MaxEjectionTime:    300 * time.Second,
+			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
 			MaxEjectionPercent: 10,
 			SuccessRateEjection: &SuccessRateEjection{ // Have both Success Rate and Failure Percentage to step through all the interval timer code
 				StdevFactor:           500,
@@ -1188,7 +1427,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 				MinimumHosts:          3,
 				RequestVolume:         3,
 			},
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -1294,7 +1533,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		od.RemoveSubConn(scw1)
+		scw1.Shutdown()
 	}()
 
 	wg.Add(1)
@@ -1311,7 +1550,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 		},
 		BalancerConfig: &LBConfig{
 			Interval: math.MaxInt64,
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},
 			},
@@ -1320,7 +1559,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 
 	// Call balancer.Balancers synchronously in this goroutine, upholding the
 	// balancer.Balancer API guarantee.
-	od.UpdateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
+	od.updateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
 		ConnectivityState: connectivity.Connecting,
 	})
 	od.ResolverError(errors.New("some error"))

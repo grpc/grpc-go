@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
@@ -54,10 +53,6 @@ import (
 // - CDS: old style, no authority (default authority)
 // - EDS: new style, in a different authority
 func (s) TestClientSideFederation(t *testing.T) {
-	oldXDSFederation := envconfig.XDSFederation
-	envconfig.XDSFederation = true
-	defer func() { envconfig.XDSFederation = oldXDSFederation }()
-
 	// Start a management server as the default authority.
 	serverDefaultAuth, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
@@ -145,15 +140,96 @@ func (s) TestClientSideFederation(t *testing.T) {
 	}
 }
 
+// TestClientSideFederationWithOnlyXDSTPStyleLDS tests that federation is
+// supported with new xdstp style names for LDS only while using the old style
+// for other resources. This test in addition also checks that when service name
+// contains escapable characters, we "fully" encode it for looking up
+// VirtualHosts in xDS RouteConfigurtion.
+func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
+	// Start a management server as a sophisticated authority.
+	const authority = "traffic-manager.xds.notgoogleapis.com"
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
+	if err != nil {
+		t.Fatalf("Failed to spin up the xDS management server: %v", err)
+	}
+	t.Cleanup(mgmtServer.Stop)
+
+	// Create a bootstrap file in a temporary directory.
+	nodeID := uuid.New().String()
+	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
+		NodeID:    nodeID,
+		ServerURI: mgmtServer.Address,
+		ClientDefaultListenerResourceNameTemplate: fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%%s", authority),
+		Authorities: map[string]string{authority: mgmtServer.Address},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap file: %v", err)
+	}
+
+	resolverBuilder := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))
+	resolver, err := resolverBuilder(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	// serviceName with escapable characters - ' ', and '/'.
+	const serviceName = "my-service-client-side-xds/2nd component"
+
+	// All other resources are with old style name.
+	const rdsName = "route-" + serviceName
+	const cdsName = "cluster-" + serviceName
+	const edsName = "endpoints-" + serviceName
+
+	// Resource update sent to go-control-plane mgmt server.
+	resourceUpdate := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Listeners: func() []*v3listenerpb.Listener {
+			// LDS is new style xdstp name. Since the LDS resource name is prefixed
+			// with xdstp, the string will be %-encoded excluding '/'s. See
+			// bootstrap.PopulateResourceTemplate().
+			const specialEscapedServiceName = "my-service-client-side-xds/2nd%20component" // same as bootstrap.percentEncode(serviceName)
+			ldsName := fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%s", authority, specialEscapedServiceName)
+			return []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)}
+		}(),
+		Routes: func() []*v3routepb.RouteConfiguration {
+			// RouteConfiguration will has one entry in []VirutalHosts that contains the
+			// "fully" escaped service name in []Domains. This is to assert that gRPC
+			// uses the escaped service name to lookup VirtualHosts. RDS is also with
+			// old style name.
+			const fullyEscapedServiceName = "my-service-client-side-xds%2F2nd%20component" // same as url.PathEscape(serviceName)
+			return []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, fullyEscapedServiceName, cdsName)}
+		}(),
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(cdsName, edsName, e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		SkipValidation: true,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resourceUpdate); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+}
+
 // TestFederation_UnknownAuthorityInDialTarget tests the case where a ClientConn
 // is created with a dial target containing an authority which is not specified
 // in the bootstrap configuration. The test verifies that RPCs on the ClientConn
 // fail with an appropriate error.
 func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
-	oldXDSFederation := envconfig.XDSFederation
-	envconfig.XDSFederation = true
-	defer func() { envconfig.XDSFederation = oldXDSFederation }()
-
 	// Setting up the management server is not *really* required for this test
 	// case. All we need is a bootstrap configuration which does not contain the
 	// authority mentioned in the dial target. But setting up the management
@@ -197,7 +273,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 
 	target = fmt.Sprintf("xds://unknown-authority/%s", serviceName)
 	t.Logf("Dialing target %q with unknown authority which is expected to fail", target)
-	const wantErr = `authority "unknown-authority" is not found in the bootstrap file`
+	wantErr := fmt.Sprintf("authority \"unknown-authority\" specified in dial target %q is not found in the bootstrap file", target)
 	_, err = grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("grpc.Dial(%q) returned %v, want: %s", target, err, wantErr)
@@ -209,10 +285,6 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 // with an authority which is not specified in the bootstrap configuration. The
 // test verifies that RPCs fail with an appropriate error.
 func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
-	oldXDSFederation := envconfig.XDSFederation
-	envconfig.XDSFederation = true
-	defer func() { envconfig.XDSFederation = oldXDSFederation }()
-
 	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)

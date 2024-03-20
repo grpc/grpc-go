@@ -32,17 +32,19 @@ import (
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/resolver"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
+
+	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 )
 
 const (
@@ -51,6 +53,9 @@ const (
 
 	testClusterName = "test-cluster"
 	testServiceName = "test-eds-service"
+
+	testNamedMetricsKey1 = "test-named1"
+	testNamedMetricsKey2 = "test-named2"
 )
 
 var (
@@ -68,6 +73,7 @@ var (
 		cmpopts.EquateEmpty(),
 		cmpopts.IgnoreFields(load.Data{}, "ReportInterval"),
 	}
+	toleranceCmpOpt = cmpopts.EquateApprox(0, 1e-5)
 )
 
 type s struct {
@@ -92,7 +98,7 @@ func (s) TestDropByCategory(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
@@ -128,13 +134,13 @@ func (s) TestDropByCategory(t *testing.T) {
 	}
 
 	sc1 := <-cc.NewSubConnCh
-	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	// This should get the connecting picker.
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 		t.Fatal(err.Error())
 	}
 
-	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
 
 	const rpcCount = 20
@@ -148,7 +154,7 @@ func (s) TestDropByCategory(t *testing.T) {
 				}
 				continue
 			}
-			if err != nil || !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			if err != nil || gotSCSt.SubConn != sc1 {
 				return fmt.Errorf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
 			}
 			if gotSCSt.Done != nil {
@@ -215,7 +221,7 @@ func (s) TestDropByCategory(t *testing.T) {
 				}
 				continue
 			}
-			if err != nil || !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			if err != nil || gotSCSt.SubConn != sc1 {
 				return fmt.Errorf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
 			}
 			if gotSCSt.Done != nil {
@@ -251,7 +257,7 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
@@ -283,13 +289,13 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 	}
 
 	sc1 := <-cc.NewSubConnCh
-	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	// This should get the connecting picker.
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 		t.Fatal(err.Error())
 	}
 
-	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
 	const rpcCount = 100
 	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
@@ -363,7 +369,7 @@ func (s) TestPickerUpdateAfterClose(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 
 	// Create a stub balancer which waits for the cluster_impl policy to be
@@ -374,19 +380,24 @@ func (s) TestPickerUpdateAfterClose(t *testing.T) {
 	stub.Register(childPolicyName, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			// Create a subConn which will be used later on to test the race
-			// between UpdateSubConnState() and Close().
-			bd.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{})
+			// between StateListener() and Close().
+			sc, err := bd.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{
+				StateListener: func(balancer.SubConnState) {
+					go func() {
+						// Wait for Close() to be called on the parent policy before
+						// sending the picker update.
+						<-closeCh
+						bd.ClientConn.UpdateState(balancer.State{
+							Picker: base.NewErrPicker(errors.New("dummy error picker")),
+						})
+					}()
+				},
+			})
+			if err != nil {
+				return err
+			}
+			sc.Connect()
 			return nil
-		},
-		UpdateSubConnState: func(bd *stub.BalancerData, _ balancer.SubConn, _ balancer.SubConnState) {
-			go func() {
-				// Wait for Close() to be called on the parent policy before
-				// sending the picker update.
-				<-closeCh
-				bd.ClientConn.UpdateState(balancer.State{
-					Picker: base.NewErrPicker(errors.New("dummy error picker")),
-				})
-			}()
 		},
 	})
 
@@ -410,7 +421,7 @@ func (s) TestPickerUpdateAfterClose(t *testing.T) {
 	// that we use as the child policy will not send a picker update until the
 	// parent policy is closed.
 	sc1 := <-cc.NewSubConnCh
-	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	b.Close()
 	close(closeCh)
 
@@ -431,7 +442,7 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
@@ -449,7 +460,7 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 	}
 
 	sc1 := <-cc.NewSubConnCh
-	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	// This should get the connecting picker.
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 		t.Fatal(err.Error())
@@ -459,12 +470,12 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 	if got, want := addrs1[0].Addr, testBackendAddrs[0].Addr; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
-	cn, ok := internal.GetXDSHandshakeClusterName(addrs1[0].Attributes)
+	cn, ok := xds.GetXDSHandshakeClusterName(addrs1[0].Attributes)
 	if !ok || cn != testClusterName {
 		t.Fatalf("sc is created with addr with cluster name %v, %v, want cluster name %v", cn, ok, testClusterName)
 	}
 
-	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
 		t.Fatal(err.Error())
@@ -490,7 +501,7 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	// New addresses should have the new cluster name.
-	cn2, ok := internal.GetXDSHandshakeClusterName(addrs2[0].Attributes)
+	cn2, ok := xds.GetXDSHandshakeClusterName(addrs2[0].Attributes)
 	if !ok || cn2 != testClusterName2 {
 		t.Fatalf("sc is created with addr with cluster name %v, %v, want cluster name %v", cn2, ok, testClusterName2)
 	}
@@ -506,7 +517,7 @@ func (s) TestReResolution(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
@@ -524,13 +535,13 @@ func (s) TestReResolution(t *testing.T) {
 	}
 
 	sc1 := <-cc.NewSubConnCh
-	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	// This should get the connecting picker.
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 		t.Fatal(err.Error())
 	}
 
-	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	// This should get the transient failure picker.
 	if err := cc.WaitForErrPicker(ctx); err != nil {
 		t.Fatal(err.Error())
@@ -543,13 +554,13 @@ func (s) TestReResolution(t *testing.T) {
 		t.Fatalf("timeout waiting for ResolveNow()")
 	}
 
-	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
 		t.Fatal(err.Error())
 	}
 
-	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	// This should get the transient failure picker.
 	if err := cc.WaitForErrPicker(ctx); err != nil {
 		t.Fatal(err.Error())
@@ -573,7 +584,7 @@ func (s) TestLoadReporting(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
@@ -608,27 +619,30 @@ func (s) TestLoadReporting(t *testing.T) {
 	}
 
 	sc1 := <-cc.NewSubConnCh
-	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	// This should get the connecting picker.
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 		t.Fatal(err.Error())
 	}
 
-	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
 	const successCount = 5
 	const errorCount = 5
 	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
 		for i := 0; i < successCount; i++ {
 			gotSCSt, err := p.Pick(balancer.PickInfo{})
-			if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			if gotSCSt.SubConn != sc1 {
 				return fmt.Errorf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
 			}
-			gotSCSt.Done(balancer.DoneInfo{})
+			lr := &v3orcapb.OrcaLoadReport{
+				NamedMetrics: map[string]float64{testNamedMetricsKey1: 3.14, testNamedMetricsKey2: 2.718},
+			}
+			gotSCSt.Done(balancer.DoneInfo{ServerLoad: lr})
 		}
 		for i := 0; i < errorCount; i++ {
 			gotSCSt, err := p.Pick(balancer.PickInfo{})
-			if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			if gotSCSt.SubConn != sc1 {
 				return fmt.Errorf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
 			}
 			gotSCSt.Done(balancer.DoneInfo{Err: fmt.Errorf("error")})
@@ -666,7 +680,13 @@ func (s) TestLoadReporting(t *testing.T) {
 	if reqStats.InProgress != 0 {
 		t.Errorf("got inProgress %v, want %v", reqStats.InProgress, 0)
 	}
-
+	wantLoadStats := map[string]load.ServerLoadData{
+		testNamedMetricsKey1: {Count: 5, Sum: 15.7},  // aggregation of 5 * 3.14 = 15.7
+		testNamedMetricsKey2: {Count: 5, Sum: 13.59}, // aggregation of 5 * 2.718 = 13.59
+	}
+	if diff := cmp.Diff(wantLoadStats, localityData.LoadStats, toleranceCmpOpt); diff != "" {
+		t.Errorf("localityData.LoadStats returned unexpected diff (-want +got):\n%s", diff)
+	}
 	b.Close()
 	if err := xdsC.WaitForCancelReportLoad(ctx); err != nil {
 		t.Fatalf("unexpected error waiting form load report to be canceled: %v", err)
@@ -687,7 +707,7 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 

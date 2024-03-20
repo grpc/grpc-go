@@ -467,3 +467,83 @@ func TestHeaderSuffixMatcherMatch(t *testing.T) {
 		})
 	}
 }
+
+func TestHeaderStringMatch(t *testing.T) {
+	tests := []struct {
+		name   string
+		key    string
+		sm     StringMatcher
+		invert bool
+		md     metadata.MD
+		want   bool
+	}{
+		{
+			name: "should-match",
+			key:  "th",
+			sm: StringMatcher{
+				exactMatch: newStringP("tv"),
+			},
+			invert: false,
+			md:     metadata.Pairs("th", "tv"),
+			want:   true,
+		},
+		{
+			name: "not match",
+			key:  "th",
+			sm: StringMatcher{
+				containsMatch: newStringP("tv"),
+			},
+			invert: false,
+			md:     metadata.Pairs("th", "not-match"),
+			want:   false,
+		},
+		{
+			name: "invert string match",
+			key:  "th",
+			sm: StringMatcher{
+				containsMatch: newStringP("tv"),
+			},
+			invert: true,
+			md:     metadata.Pairs("th", "not-match"),
+			want:   true,
+		},
+		{
+			name: "header missing",
+			key:  "th",
+			sm: StringMatcher{
+				containsMatch: newStringP("tv"),
+			},
+			invert: false,
+			md:     metadata.Pairs("not-specified-key", "not-match"),
+			want:   false,
+		},
+		{
+			name: "header missing invert true",
+			key:  "th",
+			sm: StringMatcher{
+				containsMatch: newStringP("tv"),
+			},
+			invert: true,
+			md:     metadata.Pairs("not-specified-key", "not-match"),
+			want:   false,
+		},
+		{
+			name: "header empty string invert",
+			key:  "th",
+			sm: StringMatcher{
+				containsMatch: newStringP("tv"),
+			},
+			invert: true,
+			md:     metadata.Pairs("th", ""),
+			want:   true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			hsm := NewHeaderStringMatcher(test.key, test.sm, test.invert)
+			if got := hsm.Match(test.md); got != test.want {
+				t.Errorf("match() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}

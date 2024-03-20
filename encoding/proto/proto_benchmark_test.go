@@ -22,9 +22,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/encoding"
-	"google.golang.org/grpc/test/codec_perf"
+	"google.golang.org/protobuf/proto"
+
+	pb "google.golang.org/grpc/test/codec_perf"
 )
 
 func setupBenchmarkProtoCodecInputs(payloadBaseSize uint32) []proto.Message {
@@ -40,7 +41,7 @@ func setupBenchmarkProtoCodecInputs(payloadBaseSize uint32) []proto.Message {
 	protoStructs := make([]proto.Message, 0)
 
 	for _, p := range payloadSuffixes {
-		ps := &codec_perf.Buffer{}
+		ps := &pb.Buffer{}
 		ps.Body = append(payloadBase, p...)
 		protoStructs = append(protoStructs, ps)
 	}
@@ -91,7 +92,7 @@ func fastMarshalAndUnmarshal(codec encoding.Codec, protoStruct proto.Message, b 
 	if err != nil {
 		b.Errorf("codec.Marshal(_) returned an error")
 	}
-	res := codec_perf.Buffer{}
+	res := pb.Buffer{}
 	if err := codec.Unmarshal(marshaledBytes, &res); err != nil {
 		b.Errorf("codec.Unmarshal(_) returned an error")
 	}

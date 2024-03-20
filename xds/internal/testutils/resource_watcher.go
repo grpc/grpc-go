@@ -24,7 +24,7 @@ import "google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 // used to receive updates on watches registered with the xDS client, when using
 // the resource-type agnostic WatchResource API.
 //
-// Tests can the channels provided by this tyep to get access to updates and
+// Tests can use the channels provided by this type to get access to updates and
 // errors sent by the xDS client.
 type TestResourceWatcher struct {
 	// UpdateCh is the channel on which xDS client updates are delivered.

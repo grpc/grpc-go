@@ -50,8 +50,8 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 
-	durationpb "github.com/golang/protobuf/ptypes/duration"
 	lbgrpc "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -973,7 +973,7 @@ func (s) TestGRPCLB_FallBackWithNoServerAddress(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		defer cancel()
 		if err := resolveNowCh.SendContext(ctx, nil); err != nil {
-			t.Error("timeout when attemping to send on resolverNowCh")
+			t.Error("timeout when attempting to send on resolverNowCh")
 		}
 	}
 
@@ -1430,11 +1430,11 @@ func runAndCheckStats(t *testing.T, drop bool, statsChan chan *lbpb.ClientStats,
 	}
 	defer cc.Close()
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
+	rstate := resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)}
+	r.UpdateState(grpclbstate.Set(rstate, &grpclbstate.State{BalancerAddresses: []resolver.Address{{
 		Addr:       tss.lbAddr,
-		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
-	}}})
+	}}}))
 
 	runRPCs(cc)
 	end := time.Now().Add(time.Second)

@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -39,6 +38,7 @@ import (
 	"google.golang.org/grpc/xds/csds"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -192,19 +192,19 @@ func (s) TestCSDS(t *testing.T) {
 	listenerAnys := make([]*anypb.Any, len(ldsTargets))
 	for i := range ldsTargets {
 		listeners[i] = e2e.DefaultClientListener(ldsTargets[i], rdsTargets[i])
-		listenerAnys[i] = testutils.MarshalAny(listeners[i])
+		listenerAnys[i] = testutils.MarshalAny(t, listeners[i])
 	}
 	routes := make([]*v3routepb.RouteConfiguration, len(rdsTargets))
 	routeAnys := make([]*anypb.Any, len(rdsTargets))
 	for i := range rdsTargets {
 		routes[i] = e2e.DefaultRouteConfig(rdsTargets[i], ldsTargets[i], cdsTargets[i])
-		routeAnys[i] = testutils.MarshalAny(routes[i])
+		routeAnys[i] = testutils.MarshalAny(t, routes[i])
 	}
 	clusters := make([]*v3clusterpb.Cluster, len(cdsTargets))
 	clusterAnys := make([]*anypb.Any, len(cdsTargets))
 	for i := range cdsTargets {
 		clusters[i] = e2e.DefaultCluster(cdsTargets[i], edsTargets[i], e2e.SecurityLevelNone)
-		clusterAnys[i] = testutils.MarshalAny(clusters[i])
+		clusterAnys[i] = testutils.MarshalAny(t, clusters[i])
 	}
 	endpoints := make([]*v3endpointpb.ClusterLoadAssignment, len(edsTargets))
 	endpointAnys := make([]*anypb.Any, len(edsTargets))
@@ -212,7 +212,7 @@ func (s) TestCSDS(t *testing.T) {
 	ports := []uint32{123, 456}
 	for i := range edsTargets {
 		endpoints[i] = e2e.DefaultEndpoint(edsTargets[i], ips[i], ports[i:i+1])
-		endpointAnys[i] = testutils.MarshalAny(endpoints[i])
+		endpointAnys[i] = testutils.MarshalAny(t, endpoints[i])
 	}
 
 	// Register watches on the xDS client for two resources of each type.
@@ -393,7 +393,7 @@ func checkClientStatusResponse(stream v3statuspbgrpc.ClientStatusDiscoveryServic
 	}
 
 	if n := len(resp.Config); n != 1 {
-		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(resp))
+		return fmt.Errorf("got %d configs, want 1: %v", n, prototext.Format(resp))
 	}
 
 	if diff := cmp.Diff(resp.Config[0].GenericXdsConfigs, want, cmpOpts); diff != "" {
@@ -456,6 +456,6 @@ func (s) TestCSDSNoXDSClient(t *testing.T) {
 		t.Fatalf("Failed to recv ClientStatusResponse: %v", err)
 	}
 	if n := len(r.Config); n != 0 {
-		t.Fatalf("got %d configs, want 0: %v", n, proto.MarshalTextString(r))
+		t.Fatalf("got %d configs, want 0: %v", n, prototext.Format(r))
 	}
 }
