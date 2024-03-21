@@ -41,11 +41,9 @@ if [[ "$1" = "-install" ]]; then
   popd
   if [[ -z "${VET_SKIP_PROTO}" ]]; then
     if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
-      PROTOBUF_VERSION=25.2 # a.k.a. v4.22.0 in pb.go files.
-      PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
+      source ./protoc_installer.sh
       pushd /home/runner/go
-      wget https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/${PROTOC_FILENAME}
-      unzip ${PROTOC_FILENAME}
+      download_protoc
       bin/protoc --version
       popd
     elif not which protoc > /dev/null; then
