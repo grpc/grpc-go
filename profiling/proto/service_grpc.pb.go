@@ -57,9 +57,9 @@ func NewProfilingClient(cc grpc.ClientConnInterface) ProfilingClient {
 }
 
 func (c *profilingClient) Enable(ctx context.Context, in *EnableRequest, opts ...grpc.CallOption) (*EnableResponse, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(EnableResponse)
-	err := c.cc.Invoke(ctx, Profiling_Enable_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Profiling_Enable_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -67,9 +67,9 @@ func (c *profilingClient) Enable(ctx context.Context, in *EnableRequest, opts ..
 }
 
 func (c *profilingClient) GetStreamStats(ctx context.Context, in *GetStreamStatsRequest, opts ...grpc.CallOption) (*GetStreamStatsResponse, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetStreamStatsResponse)
-	err := c.cc.Invoke(ctx, Profiling_GetStreamStats_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Profiling_GetStreamStats_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}

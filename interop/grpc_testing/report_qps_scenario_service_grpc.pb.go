@@ -56,9 +56,9 @@ func NewReportQpsScenarioServiceClient(cc grpc.ClientConnInterface) ReportQpsSce
 }
 
 func (c *reportQpsScenarioServiceClient) ReportScenario(ctx context.Context, in *ScenarioResult, opts ...grpc.CallOption) (*Void, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Void)
-	err := c.cc.Invoke(ctx, ReportQpsScenarioService_ReportScenario_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, ReportQpsScenarioService_ReportScenario_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}

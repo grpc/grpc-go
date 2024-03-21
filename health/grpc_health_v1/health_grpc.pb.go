@@ -81,9 +81,9 @@ func NewHealthClient(cc grpc.ClientConnInterface) HealthClient {
 }
 
 func (c *healthClient) Check(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HealthCheckResponse)
-	err := c.cc.Invoke(ctx, Health_Check_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Health_Check_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -91,8 +91,8 @@ func (c *healthClient) Check(ctx context.Context, in *HealthCheckRequest, opts .
 }
 
 func (c *healthClient) Watch(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (Health_WatchClient, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Health_ServiceDesc.Streams[0], Health_Watch_FullMethodName, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Health_ServiceDesc.Streams[0], Health_Watch_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}

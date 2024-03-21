@@ -53,9 +53,9 @@ func NewGreeterClient(cc grpc.ClientConnInterface) GreeterClient {
 }
 
 func (c *greeterClient) SayHello(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (*HelloReply, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HelloReply)
-	err := c.cc.Invoke(ctx, Greeter_SayHello_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Greeter_SayHello_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}

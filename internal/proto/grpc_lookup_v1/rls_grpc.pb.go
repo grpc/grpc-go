@@ -53,9 +53,9 @@ func NewRouteLookupServiceClient(cc grpc.ClientConnInterface) RouteLookupService
 }
 
 func (c *routeLookupServiceClient) RouteLookup(ctx context.Context, in *RouteLookupRequest, opts ...grpc.CallOption) (*RouteLookupResponse, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RouteLookupResponse)
-	err := c.cc.Invoke(ctx, RouteLookupService_RouteLookup_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, RouteLookupService_RouteLookup_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}

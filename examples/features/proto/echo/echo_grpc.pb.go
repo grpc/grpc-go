@@ -65,9 +65,9 @@ func NewEchoClient(cc grpc.ClientConnInterface) EchoClient {
 }
 
 func (c *echoClient) UnaryEcho(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (*EchoResponse, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(EchoResponse)
-	err := c.cc.Invoke(ctx, Echo_UnaryEcho_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Echo_UnaryEcho_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -75,8 +75,8 @@ func (c *echoClient) UnaryEcho(ctx context.Context, in *EchoRequest, opts ...grp
 }
 
 func (c *echoClient) ServerStreamingEcho(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (Echo_ServerStreamingEchoClient, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[0], Echo_ServerStreamingEcho_FullMethodName, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[0], Echo_ServerStreamingEcho_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -108,8 +108,8 @@ func (x *echoServerStreamingEchoClient) Recv() (*EchoResponse, error) {
 }
 
 func (c *echoClient) ClientStreamingEcho(ctx context.Context, opts ...grpc.CallOption) (Echo_ClientStreamingEchoClient, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[1], Echo_ClientStreamingEcho_FullMethodName, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[1], Echo_ClientStreamingEcho_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -143,8 +143,8 @@ func (x *echoClientStreamingEchoClient) CloseAndRecv() (*EchoResponse, error) {
 }
 
 func (c *echoClient) BidirectionalStreamingEcho(ctx context.Context, opts ...grpc.CallOption) (Echo_BidirectionalStreamingEchoClient, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[2], Echo_BidirectionalStreamingEcho_FullMethodName, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[2], Echo_BidirectionalStreamingEcho_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}

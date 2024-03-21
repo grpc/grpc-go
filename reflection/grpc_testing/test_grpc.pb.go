@@ -54,9 +54,9 @@ func NewSearchServiceClient(cc grpc.ClientConnInterface) SearchServiceClient {
 }
 
 func (c *searchServiceClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SearchResponse)
-	err := c.cc.Invoke(ctx, SearchService_Search_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, SearchService_Search_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -64,8 +64,8 @@ func (c *searchServiceClient) Search(ctx context.Context, in *SearchRequest, opt
 }
 
 func (c *searchServiceClient) StreamingSearch(ctx context.Context, opts ...grpc.CallOption) (SearchService_StreamingSearchClient, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &SearchService_ServiceDesc.Streams[0], SearchService_StreamingSearch_FullMethodName, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &SearchService_ServiceDesc.Streams[0], SearchService_StreamingSearch_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}

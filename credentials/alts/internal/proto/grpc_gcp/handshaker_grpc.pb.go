@@ -61,8 +61,8 @@ func NewHandshakerServiceClient(cc grpc.ClientConnInterface) HandshakerServiceCl
 }
 
 func (c *handshakerServiceClient) DoHandshake(ctx context.Context, opts ...grpc.CallOption) (HandshakerService_DoHandshakeClient, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &HandshakerService_ServiceDesc.Streams[0], HandshakerService_DoHandshake_FullMethodName, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &HandshakerService_ServiceDesc.Streams[0], HandshakerService_DoHandshake_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}

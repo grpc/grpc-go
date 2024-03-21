@@ -309,10 +309,10 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 		g.P(deprecationComment)
 	}
 	g.P("func (c *", unexport(service.GoName), "Client) ", clientSignature(g, method), "{")
-	g.P("opts := append([]", grpcPackage.Ident("CallOption"), "{", grpcPackage.Ident("StaticMethod()"), "}, opts...)")
+	g.P("cOpts := append([]", grpcPackage.Ident("CallOption"), "{", grpcPackage.Ident("StaticMethod()"), "}, opts...)")
 	if !method.Desc.IsStreamingServer() && !method.Desc.IsStreamingClient() {
 		g.P("out := new(", method.Output.GoIdent, ")")
-		g.P(`err := c.cc.Invoke(ctx, `, fmSymbol, `, in, out, opts...)`)
+		g.P(`err := c.cc.Invoke(ctx, `, fmSymbol, `, in, out, cOpts...)`)
 		g.P("if err != nil { return nil, err }")
 		g.P("return out, nil")
 		g.P("}")
@@ -321,7 +321,7 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	}
 	streamType := unexport(service.GoName) + method.GoName + "Client"
 	serviceDescVar := service.GoName + "_ServiceDesc"
-	g.P("stream, err := c.cc.NewStream(ctx, &", serviceDescVar, ".Streams[", index, `], `, fmSymbol, `, opts...)`)
+	g.P("stream, err := c.cc.NewStream(ctx, &", serviceDescVar, ".Streams[", index, `], `, fmSymbol, `, cOpts...)`)
 	g.P("if err != nil { return nil, err }")
 	g.P("x := &", streamType, "{stream}")
 	if !method.Desc.IsStreamingClient() {

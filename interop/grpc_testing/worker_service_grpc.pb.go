@@ -75,8 +75,8 @@ func NewWorkerServiceClient(cc grpc.ClientConnInterface) WorkerServiceClient {
 }
 
 func (c *workerServiceClient) RunServer(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunServerClient, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[0], WorkerService_RunServer_FullMethodName, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[0], WorkerService_RunServer_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -107,8 +107,8 @@ func (x *workerServiceRunServerClient) Recv() (*ServerStatus, error) {
 }
 
 func (c *workerServiceClient) RunClient(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunClientClient, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[1], WorkerService_RunClient_FullMethodName, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[1], WorkerService_RunClient_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -139,9 +139,9 @@ func (x *workerServiceRunClientClient) Recv() (*ClientStatus, error) {
 }
 
 func (c *workerServiceClient) CoreCount(ctx context.Context, in *CoreRequest, opts ...grpc.CallOption) (*CoreResponse, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CoreResponse)
-	err := c.cc.Invoke(ctx, WorkerService_CoreCount_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, WorkerService_CoreCount_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -149,9 +149,9 @@ func (c *workerServiceClient) CoreCount(ctx context.Context, in *CoreRequest, op
 }
 
 func (c *workerServiceClient) QuitWorker(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error) {
-	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Void)
-	err := c.cc.Invoke(ctx, WorkerService_QuitWorker_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, WorkerService_QuitWorker_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
