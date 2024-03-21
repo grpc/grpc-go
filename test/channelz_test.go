@@ -211,7 +211,7 @@ func (s) TestCZGetSocket(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		ss, _ := channelz.GetServers(0, 0)
 		if len(ss) != 1 {
-			return false, fmt.Errorf("there should only be one server, not %d", len(ss))
+			return false, fmt.Errorf("len(ss) = %v; want %v", len(ss), 1)
 		}
 
 		serverID := ss[0].ID
@@ -220,12 +220,12 @@ func (s) TestCZGetSocket(t *testing.T) {
 			return false, fmt.Errorf("server %d does not exist", serverID)
 		}
 		if srv.ID != serverID {
-			return false, fmt.Errorf("server want id %d, but got %d", serverID, srv.ID)
+			return false, fmt.Errorf("srv.ID = %d; want %v", srv.ID, serverID)
 		}
 
 		skts := srv.ListenSockets()
 		if got, want := len(skts), 1; got != want {
-			return false, fmt.Errorf("server has %v sockets; want %v", got, want)
+			return false, fmt.Errorf("len(skts) = %v; want %v", got, want)
 		}
 		var sktID int64
 		for sktID = range skts {
@@ -237,7 +237,7 @@ func (s) TestCZGetSocket(t *testing.T) {
 		}
 
 		if got, want := skt.LocalAddr, lis.Addr(); got != want {
-			return false, fmt.Errorf("socket %v has LocalAddr=%v; want %v", sktID, got, want)
+			return false, fmt.Errorf("socket %v LocalAddr=%v; want %v", sktID, got, want)
 		}
 		return true, nil
 	}); err != nil {
