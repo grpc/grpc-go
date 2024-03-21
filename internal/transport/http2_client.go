@@ -407,6 +407,12 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	// returning from this function.
 	readerErrCh := make(chan error, 1)
 	go t.reader(readerErrCh)
+	defer func() {
+		if err != nil {
+			close(t.writerDone)
+			t.Close(err)
+		}
+	}()
 
 	// Send connection preface to server.
 	n, err := t.conn.Write(clientPreface)
@@ -450,6 +456,9 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	if err := t.framer.writer.Flush(); err != nil {
 		return nil, err
 	}
+	if err = <-readerErrCh; err != nil {
+		return nil, err
+	}
 	go func() {
 		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger)
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
@@ -460,17 +469,9 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 			// after draining any remaining incoming data.
 			t.conn.Close()
 		}
-		t.logger.Infof("Closing writerDone channel")
 		close(t.writerDone)
 	}()
-	defer func() {
-		if err == nil {
-			err = <-readerErrCh
-		}
-		if err != nil {
-			t.Close(err)
-		}
-	}()
+
 	return t, nil
 }
 
@@ -977,7 +978,7 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 
 // Close kicks off the shutdown process of the transport. This should be called
 // only once on a transport. Once it is called, the transport should not be
-// accessed any more.
+// accessed anymore.
 func (t *http2Client) Close(err error) {
 	t.mu.Lock()
 	// Make sure we only close once.
@@ -1006,7 +1007,9 @@ func (t *http2Client) Close(err error) {
 	// ever starts to take in an HTTP/2 error code the peer will be able to get more information about the reason
 	// behind the connection close.
 	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(fmt.Sprintf("client shutdown with: %v", err)), closeConnErr: err})
-	<-t.writerDone
+	if t.writerDone != nil {
+		<-t.writerDone
+	}
 	t.cancel()
 	t.conn.Close()
 	channelz.RemoveEntry(t.channelz.ID)

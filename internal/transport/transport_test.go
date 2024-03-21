@@ -2670,7 +2670,7 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 		t.Fatalf("Error while listening: %v", err)
 	}
 	defer lis.Close()
-	// greetDone channel verifies that greet is done with the connection
+	// greetDone is used to notify when server is done greeting the client.
 	greetDone := make(chan struct{})
 	// successCh verifies that GOAWAY is received at server side
 	successCh := make(chan struct{})
@@ -2694,10 +2694,18 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 			t.Errorf("Error while writing settings %v", err)
 			return
 		}
-
-		sfr.ReadFrame()
-		sfr.ReadFrame()
-		sfr.ReadFrame()
+		fr, _ := sfr.ReadFrame()
+		if _, ok := fr.(*http2.SettingsFrame); !ok {
+			t.Errorf("Expected settings frame, got %v", fr)
+		}
+		fr, _ = sfr.ReadFrame()
+		if fr, ok := fr.(*http2.SettingsFrame); !ok && fr.IsAck() {
+			t.Errorf("Expected settings ACK frame, got %v", fr)
+		}
+		fr, _ = sfr.ReadFrame()
+		if fr, ok := fr.(*http2.HeadersFrame); !ok && fr.Flags.Has(http2.FlagHeadersEndStream) {
+			t.Errorf("Expected Headers frame with END_HEADERS frame, got %v", fr)
+		}
 		close(greetDone)
 
 		frame, err := sfr.ReadFrame()
@@ -2712,11 +2720,11 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 				t.Logf("Received goAway frame from client")
 				close(successCh)
 			} else {
+				t.Logf("Received unexpected goAway frame from client")
 				close(errorCh)
 			}
 			return
 		default:
-			// The client should have sent any frame other than GOAWAY
 			t.Logf("The server received a frame other than GOAWAY")
 			close(errorCh)
 			return
@@ -2731,7 +2739,7 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open stream: %v", err)
 	}
-	// Wait until server receives the headers and settings frame as part of greet
+	// Wait until server receives the headers and settings frame as part of greet.
 	<-greetDone
 	ct.Close(errors.New("manually closed by client"))
 	t.Logf("Closed the client connection")
