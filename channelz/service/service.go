@@ -88,14 +88,18 @@ func channelTraceToProto(ct *channelz.ChannelTrace) *channelzpb.ChannelTrace {
 		return pbt
 	}
 	pbt.NumEventsLogged = ct.EventNum
-	pbt.CreationTimestamp = timestamppb.New(ct.CreationTime)
+	if ts := timestamppb.New(ct.CreationTime); ts.IsValid() {
+		pbt.CreationTimestamp = ts
+	}
 	events := make([]*channelzpb.ChannelTraceEvent, 0, len(ct.Events))
 	for _, e := range ct.Events {
 		cte := &channelzpb.ChannelTraceEvent{
 			Description: e.Desc,
 			Severity:    channelzpb.ChannelTraceEvent_Severity(e.Severity),
 		}
-		cte.Timestamp = timestamppb.New(e.Timestamp)
+		if ts := timestamppb.New(e.Timestamp); ts.IsValid() {
+			cte.Timestamp = ts
+		}
 		if e.RefID != 0 {
 			switch e.RefType {
 			case channelz.RefChannel:
@@ -128,7 +132,9 @@ func channelMetricToProto(cm *channelz.Channel) *channelzpb.Channel {
 		CallsSucceeded: cm.ChannelMetrics.CallsSucceeded.Load(),
 		CallsFailed:    cm.ChannelMetrics.CallsFailed.Load(),
 	}
-	c.Data.LastCallStartedTimestamp = timestamppb.New(time.Unix(0, cm.ChannelMetrics.LastCallStartedTimestamp.Load()))
+	if ts := timestamppb.New(time.Unix(0, cm.ChannelMetrics.LastCallStartedTimestamp.Load())); ts.IsValid() {
+		c.Data.LastCallStartedTimestamp = ts
+	}
 	ncs := cm.NestedChans()
 	nestedChans := make([]*channelzpb.ChannelRef, 0, len(ncs))
 	for id, ref := range ncs {
@@ -158,7 +164,9 @@ func subChannelMetricToProto(cm *channelz.SubChannel) *channelzpb.Subchannel {
 		CallsSucceeded: cm.ChannelMetrics.CallsSucceeded.Load(),
 		CallsFailed:    cm.ChannelMetrics.CallsFailed.Load(),
 	}
-	sc.Data.LastCallStartedTimestamp = timestamppb.New(time.Unix(0, cm.ChannelMetrics.LastCallStartedTimestamp.Load()))
+	if ts := timestamppb.New(time.Unix(0, cm.ChannelMetrics.LastCallStartedTimestamp.Load())); ts.IsValid() {
+		sc.Data.LastCallStartedTimestamp = ts
+	}
 
 	skts := cm.Sockets()
 	sockets := make([]*channelzpb.SocketRef, 0, len(skts))
@@ -225,10 +233,18 @@ func socketMetricToProto(skt *channelz.Socket) *channelzpb.Socket {
 		MessagesReceived: skt.SocketMetrics.MessagesReceived.Load(),
 		KeepAlivesSent:   skt.SocketMetrics.KeepAlivesSent.Load(),
 	}
-	s.Data.LastLocalStreamCreatedTimestamp = timestamppb.New(time.Unix(0, skt.SocketMetrics.LastLocalStreamCreatedTimestamp.Load()))
-	s.Data.LastRemoteStreamCreatedTimestamp = timestamppb.New(time.Unix(0, skt.SocketMetrics.LastRemoteStreamCreatedTimestamp.Load()))
-	s.Data.LastMessageSentTimestamp = timestamppb.New(time.Unix(0, skt.SocketMetrics.LastMessageSentTimestamp.Load()))
-	s.Data.LastMessageReceivedTimestamp = timestamppb.New(time.Unix(0, skt.SocketMetrics.LastMessageReceivedTimestamp.Load()))
+	if ts := timestamppb.New(time.Unix(0, skt.SocketMetrics.LastLocalStreamCreatedTimestamp.Load())); ts.IsValid() {
+		s.Data.LastLocalStreamCreatedTimestamp = ts
+	}
+	if ts := timestamppb.New(time.Unix(0, skt.SocketMetrics.LastRemoteStreamCreatedTimestamp.Load())); ts.IsValid() {
+		s.Data.LastRemoteStreamCreatedTimestamp = ts
+	}
+	if ts := timestamppb.New(time.Unix(0, skt.SocketMetrics.LastMessageSentTimestamp.Load())); ts.IsValid() {
+		s.Data.LastMessageSentTimestamp = ts
+	}
+	if ts := timestamppb.New(time.Unix(0, skt.SocketMetrics.LastMessageReceivedTimestamp.Load())); ts.IsValid() {
+		s.Data.LastMessageReceivedTimestamp = ts
+	}
 	if skt.EphemeralMetrics != nil {
 		e := skt.EphemeralMetrics()
 		s.Data.LocalFlowControlWindow = &wrapperspb.Int64Value{Value: e.LocalFlowControlWindow}
@@ -263,7 +279,9 @@ func serverMetricToProto(sm *channelz.Server) *channelzpb.Server {
 		CallsFailed:    sm.ServerMetrics.CallsFailed.Load(),
 	}
 
-	s.Data.LastCallStartedTimestamp = timestamppb.New(time.Unix(0, sm.ServerMetrics.LastCallStartedTimestamp.Load()))
+	if ts := timestamppb.New(time.Unix(0, sm.ServerMetrics.LastCallStartedTimestamp.Load())); ts.IsValid() {
+		s.Data.LastCallStartedTimestamp = ts
+	}
 	lss := sm.ListenSockets()
 	sockets := make([]*channelzpb.SocketRef, 0, len(lss))
 	for id, ref := range lss {
