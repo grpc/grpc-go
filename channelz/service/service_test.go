@@ -28,13 +28,15 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/protoadapt"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
@@ -98,9 +100,12 @@ type OtherSecurityValue struct {
 	RemoteCertificate []byte `protobuf:"bytes,2,opt,name=remote_certificate,json=remoteCertificate,proto3" json:"remote_certificate,omitempty"`
 }
 
-func (m *OtherSecurityValue) Reset()         { *m = OtherSecurityValue{} }
-func (m *OtherSecurityValue) String() string { return proto.CompactTextString(m) }
-func (*OtherSecurityValue) ProtoMessage()    {}
+func (m *OtherSecurityValue) Reset() { *m = OtherSecurityValue{} }
+func (m *OtherSecurityValue) String() string {
+	opt := prototext.MarshalOptions{Multiline: false}
+	return opt.Format(protoadapt.MessageV2Of(m))
+}
+func (*OtherSecurityValue) ProtoMessage() {}
 
 func init() {
 	// Ad-hoc registering the proto type here to facilitate UnmarshalAny of OtherSecurityValue.
@@ -270,7 +275,7 @@ func (s) TestGetServerSockets(t *testing.T) {
 		ids[2]: refNames[2],
 	}
 	if got := convertSocketRefSliceToMap(resp.GetSocketRef()); !cmp.Equal(got, want) {
-		t.Fatalf("GetServerSockets want: %#v, got: %#v (resp=%v)", want, got, proto.MarshalTextString(resp))
+		t.Fatalf("GetServerSockets want: %#v, got: %#v (resp=%v)", want, got, prototext.Format(resp))
 	}
 
 	for i := 0; i < 50; i++ {
@@ -620,11 +625,11 @@ func (s) TestGetSocket(t *testing.T) {
 	}), newSocket(czSocket{
 		security: &credentials.OtherChannelzSecurityValue{
 			Name:  "YYYY",
-			Value: &OtherSecurityValue{LocalCertificate: []byte{1, 2, 3}, RemoteCertificate: []byte{4, 5, 6}},
+			Value: protoadapt.MessageV2Of(&OtherSecurityValue{LocalCertificate: []byte{1, 2, 3}, RemoteCertificate: []byte{4, 5, 6}}),
 		},
 	}),
 	}
-	otherSecVal, err := ptypes.MarshalAny(ss[6].Security.(*credentials.OtherChannelzSecurityValue).Value)
+	otherSecVal, err := anypb.New(ss[6].Security.(*credentials.OtherChannelzSecurityValue).Value)
 	if err != nil {
 		t.Fatal("Error marshalling proto:", err)
 	}

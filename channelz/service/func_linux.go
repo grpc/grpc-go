@@ -21,15 +21,14 @@ package service
 import (
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
-	durpb "github.com/golang/protobuf/ptypes/duration"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
-	return ptypes.DurationProto(time.Duration(sec*1e9 + usec*1e3))
+func convertToPbDuration(sec int64, usec int64) *durationpb.Duration {
+	return durationpb.New(time.Duration(sec*1e9 + usec*1e3))
 }
 
 func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {
@@ -40,7 +39,7 @@ func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOptio
 	if skopts.Linger != nil {
 		additional, err := anypb.New(&channelzpb.SocketOptionLinger{
 			Active:   skopts.Linger.Onoff != 0,
-			Duration: convertToPtypesDuration(int64(skopts.Linger.Linger), 0),
+			Duration: convertToPbDuration(int64(skopts.Linger.Linger), 0),
 		})
 		if err == nil {
 			opts = append(opts, &channelzpb.SocketOption{
@@ -53,7 +52,7 @@ func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOptio
 	}
 	if skopts.RecvTimeout != nil {
 		additional, err := anypb.New(&channelzpb.SocketOptionTimeout{
-			Duration: convertToPtypesDuration(int64(skopts.RecvTimeout.Sec), int64(skopts.RecvTimeout.Usec)),
+			Duration: convertToPbDuration(int64(skopts.RecvTimeout.Sec), int64(skopts.RecvTimeout.Usec)),
 		})
 		if err == nil {
 			opts = append(opts, &channelzpb.SocketOption{
@@ -66,7 +65,7 @@ func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOptio
 	}
 	if skopts.SendTimeout != nil {
 		additional, err := anypb.New(&channelzpb.SocketOptionTimeout{
-			Duration: convertToPtypesDuration(int64(skopts.SendTimeout.Sec), int64(skopts.SendTimeout.Usec)),
+			Duration: convertToPbDuration(int64(skopts.SendTimeout.Sec), int64(skopts.SendTimeout.Usec)),
 		})
 		if err == nil {
 			opts = append(opts, &channelzpb.SocketOption{
