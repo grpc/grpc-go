@@ -225,11 +225,10 @@ func (s) TestCZGetSocket(t *testing.T) {
 
 		skts := srv.ListenSockets()
 		if got, want := len(skts), 1; got != want {
-			t.Logf("%#v", srv)
 			return false, fmt.Errorf("server has %v sockets; want %v", got, want)
 		}
 		var sktID int64
-		for sktID, _ = range skts {
+		for sktID = range skts {
 		}
 
 		skt := channelz.GetSocket(sktID)
