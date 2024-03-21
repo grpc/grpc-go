@@ -29,8 +29,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.32.0 or later.
-const _ = grpc.SupportPackageIsVersion7
+// Requires gRPC-Go v1.62.0 or later.
+const _ = grpc.SupportPackageIsVersion8
 
 const (
 	RouteGuide_GetFeature_FullMethodName   = "/routeguide.RouteGuide/GetFeature"
@@ -78,6 +78,7 @@ func NewRouteGuideClient(cc grpc.ClientConnInterface) RouteGuideClient {
 }
 
 func (c *routeGuideClient) GetFeature(ctx context.Context, in *Point, opts ...grpc.CallOption) (*Feature, error) {
+	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Feature)
 	err := c.cc.Invoke(ctx, RouteGuide_GetFeature_FullMethodName, in, out, opts...)
 	if err != nil {
@@ -87,6 +88,7 @@ func (c *routeGuideClient) GetFeature(ctx context.Context, in *Point, opts ...gr
 }
 
 func (c *routeGuideClient) ListFeatures(ctx context.Context, in *Rectangle, opts ...grpc.CallOption) (RouteGuide_ListFeaturesClient, error) {
+	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &RouteGuide_ServiceDesc.Streams[0], RouteGuide_ListFeatures_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
@@ -119,6 +121,7 @@ func (x *routeGuideListFeaturesClient) Recv() (*Feature, error) {
 }
 
 func (c *routeGuideClient) RecordRoute(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RecordRouteClient, error) {
+	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &RouteGuide_ServiceDesc.Streams[1], RouteGuide_RecordRoute_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
@@ -153,6 +156,7 @@ func (x *routeGuideRecordRouteClient) CloseAndRecv() (*RouteSummary, error) {
 }
 
 func (c *routeGuideClient) RouteChat(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RouteChatClient, error) {
+	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &RouteGuide_ServiceDesc.Streams[2], RouteGuide_RouteChat_FullMethodName, opts...)
 	if err != nil {
 		return nil, err

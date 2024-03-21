@@ -29,8 +29,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.32.0 or later.
-const _ = grpc.SupportPackageIsVersion7
+// Requires gRPC-Go v1.62.0 or later.
+const _ = grpc.SupportPackageIsVersion8
 
 const (
 	RouteLookupService_RouteLookup_FullMethodName = "/grpc.lookup.v1.RouteLookupService/RouteLookup"
@@ -53,6 +53,7 @@ func NewRouteLookupServiceClient(cc grpc.ClientConnInterface) RouteLookupService
 }
 
 func (c *routeLookupServiceClient) RouteLookup(ctx context.Context, in *RouteLookupRequest, opts ...grpc.CallOption) (*RouteLookupResponse, error) {
+	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RouteLookupResponse)
 	err := c.cc.Invoke(ctx, RouteLookupService_RouteLookup_FullMethodName, in, out, opts...)
 	if err != nil {

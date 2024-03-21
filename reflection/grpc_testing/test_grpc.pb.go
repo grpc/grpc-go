@@ -29,8 +29,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.32.0 or later.
-const _ = grpc.SupportPackageIsVersion7
+// Requires gRPC-Go v1.62.0 or later.
+const _ = grpc.SupportPackageIsVersion8
 
 const (
 	SearchService_Search_FullMethodName          = "/grpc.testing.SearchService/Search"
@@ -54,6 +54,7 @@ func NewSearchServiceClient(cc grpc.ClientConnInterface) SearchServiceClient {
 }
 
 func (c *searchServiceClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error) {
+	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SearchResponse)
 	err := c.cc.Invoke(ctx, SearchService_Search_FullMethodName, in, out, opts...)
 	if err != nil {
@@ -63,6 +64,7 @@ func (c *searchServiceClient) Search(ctx context.Context, in *SearchRequest, opt
 }
 
 func (c *searchServiceClient) StreamingSearch(ctx context.Context, opts ...grpc.CallOption) (SearchService_StreamingSearchClient, error) {
+	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &SearchService_ServiceDesc.Streams[0], SearchService_StreamingSearch_FullMethodName, opts...)
 	if err != nil {
 		return nil, err

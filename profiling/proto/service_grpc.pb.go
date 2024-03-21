@@ -29,8 +29,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.32.0 or later.
-const _ = grpc.SupportPackageIsVersion7
+// Requires gRPC-Go v1.62.0 or later.
+const _ = grpc.SupportPackageIsVersion8
 
 const (
 	Profiling_Enable_FullMethodName         = "/grpc.go.profiling.v1alpha.Profiling/Enable"
@@ -57,6 +57,7 @@ func NewProfilingClient(cc grpc.ClientConnInterface) ProfilingClient {
 }
 
 func (c *profilingClient) Enable(ctx context.Context, in *EnableRequest, opts ...grpc.CallOption) (*EnableResponse, error) {
+	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(EnableResponse)
 	err := c.cc.Invoke(ctx, Profiling_Enable_FullMethodName, in, out, opts...)
 	if err != nil {
@@ -66,6 +67,7 @@ func (c *profilingClient) Enable(ctx context.Context, in *EnableRequest, opts ..
 }
 
 func (c *profilingClient) GetStreamStats(ctx context.Context, in *GetStreamStatsRequest, opts ...grpc.CallOption) (*GetStreamStatsResponse, error) {
+	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetStreamStatsResponse)
 	err := c.cc.Invoke(ctx, Profiling_GetStreamStats_FullMethodName, in, out, opts...)
 	if err != nil {

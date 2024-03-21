@@ -32,8 +32,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.32.0 or later.
-const _ = grpc.SupportPackageIsVersion7
+// Requires gRPC-Go v1.62.0 or later.
+const _ = grpc.SupportPackageIsVersion8
 
 const (
 	BenchmarkService_UnaryCall_FullMethodName           = "/grpc.testing.BenchmarkService/UnaryCall"
@@ -74,6 +74,7 @@ func NewBenchmarkServiceClient(cc grpc.ClientConnInterface) BenchmarkServiceClie
 }
 
 func (c *benchmarkServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
+	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SimpleResponse)
 	err := c.cc.Invoke(ctx, BenchmarkService_UnaryCall_FullMethodName, in, out, opts...)
 	if err != nil {
@@ -83,6 +84,7 @@ func (c *benchmarkServiceClient) UnaryCall(ctx context.Context, in *SimpleReques
 }
 
 func (c *benchmarkServiceClient) StreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingCallClient, error) {
+	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[0], BenchmarkService_StreamingCall_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
@@ -114,6 +116,7 @@ func (x *benchmarkServiceStreamingCallClient) Recv() (*SimpleResponse, error) {
 }
 
 func (c *benchmarkServiceClient) StreamingFromClient(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingFromClientClient, error) {
+	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[1], BenchmarkService_StreamingFromClient_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
@@ -148,6 +151,7 @@ func (x *benchmarkServiceStreamingFromClientClient) CloseAndRecv() (*SimpleRespo
 }
 
 func (c *benchmarkServiceClient) StreamingFromServer(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (BenchmarkService_StreamingFromServerClient, error) {
+	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[2], BenchmarkService_StreamingFromServer_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
@@ -180,6 +184,7 @@ func (x *benchmarkServiceStreamingFromServerClient) Recv() (*SimpleResponse, err
 }
 
 func (c *benchmarkServiceClient) StreamingBothWays(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingBothWaysClient, error) {
+	opts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[3], BenchmarkService_StreamingBothWays_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
