@@ -32,8 +32,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.32.0 or later.
-const _ = grpc.SupportPackageIsVersion7
+// Requires gRPC-Go v1.62.0 or later.
+const _ = grpc.SupportPackageIsVersion8
 
 const (
 	ReportQpsScenarioService_ReportScenario_FullMethodName = "/grpc.testing.ReportQpsScenarioService/ReportScenario"
@@ -56,8 +56,9 @@ func NewReportQpsScenarioServiceClient(cc grpc.ClientConnInterface) ReportQpsSce
 }
 
 func (c *reportQpsScenarioServiceClient) ReportScenario(ctx context.Context, in *ScenarioResult, opts ...grpc.CallOption) (*Void, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Void)
-	err := c.cc.Invoke(ctx, ReportQpsScenarioService_ReportScenario_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, ReportQpsScenarioService_ReportScenario_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}

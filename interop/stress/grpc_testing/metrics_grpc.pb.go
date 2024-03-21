@@ -36,8 +36,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.32.0 or later.
-const _ = grpc.SupportPackageIsVersion7
+// Requires gRPC-Go v1.62.0 or later.
+const _ = grpc.SupportPackageIsVersion8
 
 const (
 	MetricsService_GetAllGauges_FullMethodName = "/grpc.testing.MetricsService/GetAllGauges"
@@ -64,7 +64,8 @@ func NewMetricsServiceClient(cc grpc.ClientConnInterface) MetricsServiceClient {
 }
 
 func (c *metricsServiceClient) GetAllGauges(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (MetricsService_GetAllGaugesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &MetricsService_ServiceDesc.Streams[0], MetricsService_GetAllGauges_FullMethodName, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &MetricsService_ServiceDesc.Streams[0], MetricsService_GetAllGauges_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,8 +97,9 @@ func (x *metricsServiceGetAllGaugesClient) Recv() (*GaugeResponse, error) {
 }
 
 func (c *metricsServiceClient) GetGauge(ctx context.Context, in *GaugeRequest, opts ...grpc.CallOption) (*GaugeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GaugeResponse)
-	err := c.cc.Invoke(ctx, MetricsService_GetGauge_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, MetricsService_GetGauge_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
