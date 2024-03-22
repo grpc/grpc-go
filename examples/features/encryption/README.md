@@ -94,10 +94,10 @@ In this example, we use the public/private keys created ahead of time:
 
 * "server_cert.pem" contains the server certificate (public key). 
 * "server_key.pem" contains the server private key. 
-* "ca_cert.pem" contains the certificate (certificate authority) that can verify the server's certificate.
+* "ca_cert.pem" contains the certificate of certificate authority that can verify the server's certificate.
 * "client_cert.pem" contains the client certificate (public key). 
 * "client_key.pem" contains the client private key. 
-* "client_ca_cert.pem" contains the certificate (certificate authority) that can verify the client's certificate.
+* "client_ca_cert.pem" contains the certificate of certificate authority that can verify the client's certificate.
 
 In normal TLS, the server is only concerned with presenting the server
 certificate for clients to verify. In mutual TLS, the server also loads in a
