@@ -91,27 +91,29 @@ successfully up.
 In mutual TLS (mTLS), the client and the server authenticate each other. gRPC
 allows users to configure mutual TLS at the connection level.
 
-In this example, we use the public/private keys created ahead of time: 
+In this example, we use the following public/private keys created ahead of time:
 
-* "server_cert.pem" contains the server certificate (public key). 
-* "server_key.pem" contains the server private key. 
-* "ca_cert.pem" contains the certificate of certificate authority
-that can verify the server's certificate.
-* "client_cert.pem" contains the client certificate (public key). 
-* "client_key.pem" contains the client private key. 
-* "client_ca_cert.pem" contains the certificate of certificate authority
-that can verify the client's certificate.
+* "server_cert.pem" contains the server's certificate (public key). 
+* "server_key.pem" contains the server's private key. 
+* "ca_cert.pem" contains the certificate of the certificate authority that can
+  verify the server's certificate.
+* "client_cert.pem" contains the client's certificate (public key). 
+* "client_key.pem" contains the client's private key. 
+* "client_ca_cert.pem" contains the certificate of the certificate authority
+  that can verify the client's certificate.
 
 In normal TLS, the server is only concerned with presenting the server
 certificate for clients to verify. In mutual TLS, the server also loads in a
-list of trusted CA files for verifying client presented certificates with.
-This is done via setting
+list of trusted CA files for verifying the client's presented certificates.
+This is done by setting
 [`tls.Config.ClientCAs`](https://pkg.go.dev/crypto/tls#Config.ClientCAs)
 to the list of trusted CA files,
-and setting [`tls.config.ClientAuth`](https://pkg.go.dev/crypto/tls#Config.ClientAuth)
-to [`tls.RequireAndVerifyClientCert`](https://pkg.go.dev/crypto/tls#RequireAndVerifyClientCert).
+and setting
+[`tls.config.ClientAuth`](https://pkg.go.dev/crypto/tls#Config.ClientAuth)
+to
+[`tls.RequireAndVerifyClientCert`](https://pkg.go.dev/crypto/tls#RequireAndVerifyClientCert).
 
 In normal TLS, the client is only concerned with authenticating the server by
 using one or more trusted CA file. In mutual TLS, the client also presents its
-client certificate to the server for authentication. This is done via setting
+client certificate to the server for authentication. This is done by setting
 [`tls.Config.Certificates`](https://pkg.go.dev/crypto/tls#Config.Certificates).
