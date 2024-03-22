@@ -202,6 +202,49 @@ func (s) TestCZGetServer(t *testing.T) {
 	}
 }
 
+func (s) TestCZGetSocket(t *testing.T) {
+	e := tcpClearRREnv
+	te := newTest(t, e)
+	lis := te.listenAndServe(&testServer{security: e.security}, net.Listen)
+	defer te.tearDown()
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		ss, _ := channelz.GetServers(0, 0)
+		if len(ss) != 1 {
+			return false, fmt.Errorf("len(ss) = %v; want %v", len(ss), 1)
+		}
+
+		serverID := ss[0].ID
+		srv := channelz.GetServer(serverID)
+		if srv == nil {
+			return false, fmt.Errorf("server %d does not exist", serverID)
+		}
+		if srv.ID != serverID {
+			return false, fmt.Errorf("srv.ID = %d; want %v", srv.ID, serverID)
+		}
+
+		skts := srv.ListenSockets()
+		if got, want := len(skts), 1; got != want {
+			return false, fmt.Errorf("len(skts) = %v; want %v", got, want)
+		}
+		var sktID int64
+		for sktID = range skts {
+		}
+
+		skt := channelz.GetSocket(sktID)
+		if skt == nil {
+			return false, fmt.Errorf("socket %v does not exist", sktID)
+		}
+
+		if got, want := skt.LocalAddr, lis.Addr(); got != want {
+			return false, fmt.Errorf("socket %v LocalAddr=%v; want %v", sktID, got, want)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func (s) TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 	testcases := []struct {
 		total  int
