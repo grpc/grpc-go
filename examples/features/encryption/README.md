@@ -90,7 +90,7 @@ successfully up.
 In mutual TLS (mTLS), the client and the server authenticate each other. gRPC
 allows users to configure mutual TLS at the connection level.
 
-In this example, we use the public/private keys created ahead: 
+In this example, we use the public/private keys created ahead of time: 
 
 * "server_cert.pem" contains the server certificate (public key). 
 * "server_key.pem" contains the server private key. 
