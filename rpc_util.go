@@ -822,20 +822,38 @@ func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize 
 			buf := bytes.NewBuffer(make([]byte, 0, int(bufferSize)))
 
 			bytesRead, err := buf.ReadFrom(io.LimitReader(dcReader, int64(maxReceiveMessageSize)))
-			if bytesRead == int64(maxReceiveMessageSize) {
-				b := make([]byte, 1)
-				if n, err := dcReader.Read(b); n > 0 || err != io.EOF {
-					return nil, size + n, fmt.Errorf("overflow: message larger than max size receivable by client (%v bytes)", maxReceiveMessageSize)
-				}
+			if err != nil {
+				return nil, int(bytesRead), err
+			}
+
+			if err = checkReceiveMessageOverflow(bytesRead, int64(maxReceiveMessageSize), dcReader); err != nil {
+				return nil, size + 1, err
 			}
 
 			return buf.Bytes(), int(bytesRead), err
 		}
 	}
-	// Read from LimitReader with limit max+1. So if the underlying
-	// reader is over limit, the result will be bigger than max.
-	d, err = io.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+	// Read from LimitReader & check for overflow
+	d, err = io.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)))
+	if err != nil {
+		return nil, len(d), err
+	}
+
+	if err = checkReceiveMessageOverflow(int64(len(d)), int64(maxReceiveMessageSize), dcReader); err != nil {
+		return nil, len(d) + 1, err
+	}
+
 	return d, len(d), err
+}
+
+func checkReceiveMessageOverflow(readBytes, maxReceiveMessageSize int64, dcReader io.Reader) error {
+	if readBytes == maxReceiveMessageSize {
+		b := make([]byte, 1)
+		if n, err := dcReader.Read(b); n > 0 || err != io.EOF {
+			return fmt.Errorf("overflow: message larger than max size receivable by client (%v bytes)", maxReceiveMessageSize)
+		}
+	}
+	return nil
 }
 
 // For the two compressor parameters, both should not be set, but if they are,
