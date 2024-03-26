@@ -19,7 +19,7 @@
  *
  */
 
-package service
+package protoconv
 
 import (
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
