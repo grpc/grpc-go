@@ -32,6 +32,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -314,6 +315,8 @@ func (s) TestGetServerSocketsNonZeroStartID(t *testing.T) {
 		t.Fatalf("GetServerSockets want: %#v, got: %#v", want, resp.GetSocketRef())
 	}
 }
+
+var logger = grpclog.Component("channelz")
 
 func (s) TestGetChannel(t *testing.T) {
 	refNames := []string{"top channel 1", "nested channel 1", "sub channel 2", "nested channel 3"}
