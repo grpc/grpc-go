@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
@@ -35,6 +34,9 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/protoadapt"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/runtime/protoimpl"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -108,8 +110,13 @@ func (m *OtherSecurityValue) String() string {
 func (*OtherSecurityValue) ProtoMessage() {}
 
 func init() {
-	// Ad-hoc registering the proto type here to facilitate UnmarshalAny of OtherSecurityValue.
-	proto.RegisterType((*OtherSecurityValue)(nil), "grpc.credentials.OtherChannelzSecurityValue")
+	// Ad-hoc registering the proto type here to facilitate Unmarshal of OtherSecurityValue.
+	m := (*OtherSecurityValue)(nil)
+	s := "grpc.credentials.OtherChannelzSecurityValue"
+	mt := protoimpl.X.LegacyMessageTypeOf(m, protoreflect.FullName(s))
+	if err := protoregistry.GlobalTypes.RegisterMessage(mt); err != nil {
+		panic(err)
+	}
 }
 
 func (s) TestGetTopChannels(t *testing.T) {
@@ -742,7 +749,7 @@ func (s) TestGetSocket(t *testing.T) {
 	for i := range ss {
 		resp, _ := svr.GetSocket(ctx, &channelzpb.GetSocketRequest{SocketId: skts[i].ID})
 		w := &channelzpb.Socket{}
-		if err := proto.UnmarshalText(want[i], w); err != nil {
+		if err := prototext.Unmarshal([]byte(want[i]), w); err != nil {
 			t.Fatalf("Error unmarshalling %q: %v", want[i], err)
 		}
 		if diff := cmp.Diff(resp.GetSocket(), w, protocmp.Transform()); diff != "" {
@@ -762,9 +769,9 @@ func escape(bs []byte) string {
 func addr(a net.Addr) string {
 	switch a := a.(type) {
 	case *net.TCPAddr:
-		return string(a.IP)
+		return escape([]byte(a.IP))
 	case *net.IPAddr:
-		return string(a.IP)
+		return escape([]byte(a.IP))
 	}
 	return ""
 }
