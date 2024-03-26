@@ -16,6 +16,8 @@
  *
  */
 
+// Package protoconv supports converting between the internal channelz
+// implementation and the protobuf representation of all the entities.
 package protoconv
 
 import (

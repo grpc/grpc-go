@@ -114,6 +114,9 @@ func channelToProto(cm *channelz.Channel) *channelzpb.Channel {
 	return c
 }
 
+// GetTopChannels returns the protobuf representation of the channels starting
+// at startID (max of len), and returns end=true if no top channels exist with
+// higher IDs.
 func GetTopChannels(startID int64, len int) (channels []*channelzpb.Channel, end bool) {
 	chans, end := channelz.GetTopChannels(startID, len)
 	for _, ch := range chans {
@@ -122,6 +125,8 @@ func GetTopChannels(startID int64, len int) (channels []*channelzpb.Channel, end
 	return channels, end
 }
 
+// GetChannel returns the protobuf representation of the channel with the given
+// ID.
 func GetChannel(id int64) (*channelzpb.Channel, error) {
 	ch := channelz.GetChannel(id)
 	if ch == nil {

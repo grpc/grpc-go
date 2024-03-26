@@ -54,6 +54,8 @@ func subChannelToProto(cm *channelz.SubChannel) *channelzpb.Subchannel {
 	return sc
 }
 
+// GetSubChannel returns the protobuf representation of the subchannel with the
+// given ID.
 func GetSubChannel(id int64) (*channelzpb.Subchannel, error) {
 	subChan := channelz.GetSubChannel(id)
 	if subChan == nil {

@@ -51,18 +51,23 @@ func serverToProto(sm *channelz.Server) *channelzpb.Server {
 	return s
 }
 
-func GetServer(id int64) (*channelzpb.Server, error) {
-	srv := channelz.GetServer(id)
-	if srv == nil {
-		return nil, status.Errorf(codes.NotFound, "requested server %d not found", id)
-	}
-	return serverToProto(srv), nil
-}
-
+// GetServers returns the protobuf representation of the servers starting at
+// startID (max of len), and returns end=true if no servers exist with higher
+// IDs.
 func GetServers(startID int64, len int) (servers []*channelzpb.Server, end bool) {
 	srvs, end := channelz.GetServers(startID, len)
 	for _, srv := range srvs {
 		servers = append(servers, serverToProto(srv))
 	}
 	return servers, end
+}
+
+// GetServer returns the protobuf representation of the server with the given
+// ID.
+func GetServer(id int64) (*channelzpb.Server, error) {
+	srv := channelz.GetServer(id)
+	if srv == nil {
+		return nil, status.Errorf(codes.NotFound, "requested server %d not found", id)
+	}
+	return serverToProto(srv), nil
 }

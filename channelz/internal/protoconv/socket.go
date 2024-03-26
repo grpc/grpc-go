@@ -115,6 +115,9 @@ func socketToProto(skt *channelz.Socket) *channelzpb.Socket {
 	return s
 }
 
+// GetServerSockets returns the protobuf representation of the server (listen)
+// sockets starting at startID (max of len), and returns end=true if no server
+// sockets exist with higher IDs.
 func GetServerSockets(serverID, startID int64, len int) (sockets []*channelzpb.SocketRef, end bool) {
 	skts, end := channelz.GetServerSockets(serverID, startID, len)
 	for _, m := range skts {
@@ -123,6 +126,8 @@ func GetServerSockets(serverID, startID int64, len int) (sockets []*channelzpb.S
 	return sockets, end
 }
 
+// GetSocket returns the protobuf representation of the socket with the given
+// ID.
 func GetSocket(id int64) (*channelzpb.Socket, error) {
 	skt := channelz.GetSocket(id)
 	if skt == nil {
