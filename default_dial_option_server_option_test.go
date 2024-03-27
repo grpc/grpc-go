@@ -132,3 +132,16 @@ func (s) TestJoinServerOption(t *testing.T) {
 		t.Fatalf("Unexpected s.opts.initialWindowSize: %d != %d", s.opts.initialWindowSize, initialWindowSize)
 	}
 }
+
+// funcTestHeaderListSizeDialOptionServerOption tests
+func (s) TestHeaderListSizeDialOptionServerOption(t *testing.T) {
+	const maxHeaderListSize uint32 = 998765
+	clientHeaderListSize := WithMaxHeaderListSize(maxHeaderListSize)
+	if clientHeaderListSize.(MaxHeaderListSizeDialOption).MaxHeaderListSize != maxHeaderListSize {
+		t.Fatalf("Unexpected s.opts.MaxHeaderListSizeDialOption.MaxHeaderListSize: %d != %d", clientHeaderListSize, maxHeaderListSize)
+	}
+	serverHeaderListSize := MaxHeaderListSize(maxHeaderListSize)
+	if serverHeaderListSize.(MaxHeaderListSizeServerOption).MaxHeaderListSize != maxHeaderListSize {
+		t.Fatalf("Unexpected s.opts.MaxHeaderListSizeDialOption.MaxHeaderListSize: %d != %d", serverHeaderListSize, maxHeaderListSize)
+	}
+}

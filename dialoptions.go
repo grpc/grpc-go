@@ -601,12 +601,22 @@ func WithDisableRetry() DialOption {
 	})
 }
 
+// MaxHeaderListSizeDialOption is a DialOption that specifies the maximum
+// (uncompressed) size of header list that the client is prepared to accept.
+type MaxHeaderListSizeDialOption struct {
+	MaxHeaderListSize uint32
+}
+
+func (o MaxHeaderListSizeDialOption) apply(do *dialOptions) {
+	do.copts.MaxHeaderListSize = &o.MaxHeaderListSize
+}
+
 // WithMaxHeaderListSize returns a DialOption that specifies the maximum
 // (uncompressed) size of header list that the client is prepared to accept.
 func WithMaxHeaderListSize(s uint32) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.copts.MaxHeaderListSize = &s
-	})
+	return MaxHeaderListSizeDialOption{
+		MaxHeaderListSize: s,
+	}
 }
 
 // WithDisableHealthCheck disables the LB channel health checking for all
