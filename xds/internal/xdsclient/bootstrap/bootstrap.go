@@ -453,11 +453,9 @@ func NewConfig() (*Config, error) {
 	return newConfigFromContents(data)
 }
 
-// NewConfigFromContentsForTesting returns a new Config using the specified
+// NewConfigFromContents returns a new Config using the specified
 // bootstrap file contents instead of reading the environment variable.
-//
-// This is only suitable for testing purposes.
-func NewConfigFromContentsForTesting(data []byte) (*Config, error) {
+func NewConfigFromContents(data []byte) (*Config, error) {
 	return newConfigFromContents(data)
 }
 
