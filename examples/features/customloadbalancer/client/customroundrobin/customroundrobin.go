@@ -40,16 +40,16 @@ const customRRName = "custom_round_robin"
 type customRRConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
 
-	// N represents how often pick iterations chose the second SubConn in the
-	// list. Defaults to 3. If 0 never choses second SubConn.
-	N uint32 `json:"n,omitempty"`
+	// ChooseSecond represents how often pick iterations choose the second
+	// SubConn in the list. Defaults to 3. If 0 never choose the second SubConn.
+	ChooseSecond uint32 `json:"chooseSecond,omitempty"`
 }
 
 type customRoundRobinBuilder struct{}
 
 func (customRoundRobinBuilder) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	lbConfig := &customRRConfig{
-		N: 3,
+		ChooseSecond: 3,
 	}
 	if err := json.Unmarshal(s, lbConfig); err != nil {
 		return nil, fmt.Errorf("custom-round-robin: unable to unmarshal customRRConfig: %v", err)
@@ -78,7 +78,7 @@ var logger = grpclog.Component("example")
 
 type customRoundRobin struct {
 	// All state and operations on this balancer are either initialized at build
-	// time and read only after, or are only accessed as part of it's
+	// time and read only after, or are only accessed as part of its
 	// balancer.Balancer API (UpdateState from children only comes in from
 	// balancer.Balancer calls as well, and children are called one at a time),
 	// in which calls are guaranteed to come synchronously. Thus, no extra
@@ -92,27 +92,26 @@ type customRoundRobin struct {
 	pickFirstBuilder balancer.Builder
 	pfs              *resolver.EndpointMap
 
-	n                    uint32
+	cfg *customRRConfig
+
+	// InhibitPickerUpdates determines whether picker updates from the child
+	// forward to cc or not.
 	inhibitPickerUpdates bool
 }
 
 func (crr *customRoundRobin) UpdateClientConnState(state balancer.ClientConnState) error {
-	if logger.V(2) {
-		logger.Info("custom_round_robin: got new ClientConn state: ", state)
-	}
 	crrCfg, ok := state.BalancerConfig.(*customRRConfig)
 	if !ok {
 		return balancer.ErrBadResolverState
 	}
-	crr.n = crrCfg.N
+	crr.cfg = crrCfg
 
 	endpointSet := resolver.NewEndpointMap()
 	crr.inhibitPickerUpdates = true
 	for _, endpoint := range state.ResolverState.Endpoints {
 		endpointSet.Set(endpoint, nil)
 		var pickFirst *balancerWrapper
-		pf, ok := crr.pfs.Get(endpoint)
-		if ok {
+		if pf, ok := crr.pfs.Get(endpoint); ok {
 			pickFirst = pf.(*balancerWrapper)
 		} else {
 			pickFirst = &balancerWrapper{
@@ -147,7 +146,7 @@ func (crr *customRoundRobin) UpdateClientConnState(state balancer.ClientConnStat
 		}
 	}
 	crr.inhibitPickerUpdates = false
-	crr.regeneratePicker() // one synchronous picker update per Update Client Conn State operation.
+	crr.regeneratePicker() // one synchronous picker update per UpdateClientConnState operation.
 	return nil
 }
 
@@ -199,9 +198,9 @@ func (crr *customRoundRobin) regeneratePicker() {
 		return
 	}
 	picker := &customRoundRobinPicker{
-		pickers: readyPickers,
-		n:       crr.n,
-		next:    0,
+		pickers:      readyPickers,
+		chooseSecond: crr.cfg.ChooseSecond,
+		next:         0,
 	}
 	crr.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.Ready,
@@ -233,15 +232,15 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 }
 
 type customRoundRobinPicker struct {
-	pickers []balancer.Picker
-	n       uint32
-	next    uint32
+	pickers      []balancer.Picker
+	chooseSecond uint32
+	next         uint32
 }
 
 func (crrp *customRoundRobinPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	next := atomic.AddUint32(&crrp.next, 1)
 	index := 0
-	if next != 0 && next%crrp.n == 0 {
+	if next != 0 && next%crrp.chooseSecond == 0 {
 		index = 1
 	}
 	childPicker := crrp.pickers[index%len(crrp.pickers)]

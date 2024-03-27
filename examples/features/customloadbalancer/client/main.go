@@ -46,7 +46,7 @@ func main() {
 	// You can also plug in your own custom lb policy, which needs to be
 	// configurable. This n is configurable. Try changing n and see how the
 	// behavior changes.
-	json := `{"loadBalancingConfig": [{"custom_round_robin":{"n": 3}}]}`
+	json := `{"loadBalancingConfig": [{"custom_round_robin":{"chooseSecond": 3}}]}`
 	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(json)
 	mr.InitialState(resolver.State{
 		Endpoints: []resolver.Endpoint{
