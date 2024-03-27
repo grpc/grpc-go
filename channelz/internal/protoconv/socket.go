@@ -22,13 +22,12 @@ import (
 	"net"
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/protoadapt"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
@@ -46,7 +45,7 @@ func securityToProto(se credentials.ChannelzSecurityValue) *channelzpb.Security 
 		otherSecurity := &channelzpb.Security_OtherSecurity{
 			Name: v.Name,
 		}
-		if anyval, err := anypb.New(protoadapt.MessageV2Of(v.Value)); err == nil {
+		if anyval, err := anypb.New(v.Value); err == nil {
 			otherSecurity.Value = anyval
 		}
 		return &channelzpb.Security{Model: &channelzpb.Security_Other{Other: otherSecurity}}
@@ -89,16 +88,16 @@ func socketToProto(skt *channelz.Socket) *channelzpb.Socket {
 		MessagesReceived: skt.SocketMetrics.MessagesReceived.Load(),
 		KeepAlivesSent:   skt.SocketMetrics.KeepAlivesSent.Load(),
 	}
-	if ts, err := ptypes.TimestampProto(time.Unix(0, skt.SocketMetrics.LastLocalStreamCreatedTimestamp.Load())); err == nil {
+	if ts := timestamppb.New(time.Unix(0, skt.SocketMetrics.LastLocalStreamCreatedTimestamp.Load())); ts.IsValid() {
 		s.Data.LastLocalStreamCreatedTimestamp = ts
 	}
-	if ts, err := ptypes.TimestampProto(time.Unix(0, skt.SocketMetrics.LastRemoteStreamCreatedTimestamp.Load())); err == nil {
+	if ts := timestamppb.New(time.Unix(0, skt.SocketMetrics.LastRemoteStreamCreatedTimestamp.Load())); ts.IsValid() {
 		s.Data.LastRemoteStreamCreatedTimestamp = ts
 	}
-	if ts, err := ptypes.TimestampProto(time.Unix(0, skt.SocketMetrics.LastMessageSentTimestamp.Load())); err == nil {
+	if ts := timestamppb.New(time.Unix(0, skt.SocketMetrics.LastMessageSentTimestamp.Load())); ts.IsValid() {
 		s.Data.LastMessageSentTimestamp = ts
 	}
-	if ts, err := ptypes.TimestampProto(time.Unix(0, skt.SocketMetrics.LastMessageReceivedTimestamp.Load())); err == nil {
+	if ts := timestamppb.New(time.Unix(0, skt.SocketMetrics.LastMessageReceivedTimestamp.Load())); ts.IsValid() {
 		s.Data.LastMessageReceivedTimestamp = ts
 	}
 	if skt.EphemeralMetrics != nil {
