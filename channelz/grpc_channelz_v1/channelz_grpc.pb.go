@@ -36,8 +36,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.32.0 or later.
-const _ = grpc.SupportPackageIsVersion7
+// Requires gRPC-Go v1.62.0 or later.
+const _ = grpc.SupportPackageIsVersion8
 
 const (
 	Channelz_GetTopChannels_FullMethodName   = "/grpc.channelz.v1.Channelz/GetTopChannels"
@@ -79,8 +79,9 @@ func NewChannelzClient(cc grpc.ClientConnInterface) ChannelzClient {
 }
 
 func (c *channelzClient) GetTopChannels(ctx context.Context, in *GetTopChannelsRequest, opts ...grpc.CallOption) (*GetTopChannelsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetTopChannelsResponse)
-	err := c.cc.Invoke(ctx, Channelz_GetTopChannels_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Channelz_GetTopChannels_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -88,8 +89,9 @@ func (c *channelzClient) GetTopChannels(ctx context.Context, in *GetTopChannelsR
 }
 
 func (c *channelzClient) GetServers(ctx context.Context, in *GetServersRequest, opts ...grpc.CallOption) (*GetServersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetServersResponse)
-	err := c.cc.Invoke(ctx, Channelz_GetServers_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Channelz_GetServers_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -97,8 +99,9 @@ func (c *channelzClient) GetServers(ctx context.Context, in *GetServersRequest, 
 }
 
 func (c *channelzClient) GetServer(ctx context.Context, in *GetServerRequest, opts ...grpc.CallOption) (*GetServerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetServerResponse)
-	err := c.cc.Invoke(ctx, Channelz_GetServer_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Channelz_GetServer_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -106,8 +109,9 @@ func (c *channelzClient) GetServer(ctx context.Context, in *GetServerRequest, op
 }
 
 func (c *channelzClient) GetServerSockets(ctx context.Context, in *GetServerSocketsRequest, opts ...grpc.CallOption) (*GetServerSocketsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetServerSocketsResponse)
-	err := c.cc.Invoke(ctx, Channelz_GetServerSockets_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Channelz_GetServerSockets_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -115,8 +119,9 @@ func (c *channelzClient) GetServerSockets(ctx context.Context, in *GetServerSock
 }
 
 func (c *channelzClient) GetChannel(ctx context.Context, in *GetChannelRequest, opts ...grpc.CallOption) (*GetChannelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetChannelResponse)
-	err := c.cc.Invoke(ctx, Channelz_GetChannel_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Channelz_GetChannel_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -124,8 +129,9 @@ func (c *channelzClient) GetChannel(ctx context.Context, in *GetChannelRequest, 
 }
 
 func (c *channelzClient) GetSubchannel(ctx context.Context, in *GetSubchannelRequest, opts ...grpc.CallOption) (*GetSubchannelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetSubchannelResponse)
-	err := c.cc.Invoke(ctx, Channelz_GetSubchannel_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Channelz_GetSubchannel_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -133,8 +139,9 @@ func (c *channelzClient) GetSubchannel(ctx context.Context, in *GetSubchannelReq
 }
 
 func (c *channelzClient) GetSocket(ctx context.Context, in *GetSocketRequest, opts ...grpc.CallOption) (*GetSocketResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetSocketResponse)
-	err := c.cc.Invoke(ctx, Channelz_GetSocket_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Channelz_GetSocket_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}

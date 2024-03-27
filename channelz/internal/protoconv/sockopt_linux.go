@@ -16,7 +16,7 @@
  *
  */
 
-package service
+package protoconv
 
 import (
 	"time"
