@@ -190,10 +190,10 @@ type incomingGoAway struct {
 func (*incomingGoAway) isTransportResponseFrame() bool { return false }
 
 type goAway struct {
-	code      http2.ErrCode
-	debugData []byte
-	headsUp   bool
-	closeConn error // if set, loopyWriter will exit, resulting in conn closure
+	code         http2.ErrCode
+	debugData    []byte
+	headsUp      bool
+	closeConnErr error // if set, loopyWriter will exit with this error
 }
 
 func (*goAway) isTransportResponseFrame() bool { return false }
