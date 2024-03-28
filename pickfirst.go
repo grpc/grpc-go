@@ -60,18 +60,6 @@ type pfConfig struct {
 }
 
 func (pickfirstBuilder) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	if !envconfig.PickFirstLBConfig {
-		// Prior to supporting loadbalancing configuration, the pick_first LB
-		// policy did not implement the balancer.ConfigParser interface. This
-		// meant that if a non-empty configuration was passed to it, the service
-		// config unmarshaling code would throw a warning log, but would
-		// continue using the pick_first LB policy. The code below ensures the
-		// same behavior is retained if the env var is not set.
-		if string(js) != "{}" {
-			logger.Warningf("Ignoring non-empty balancer configuration %q for the pick_first LB policy", string(js))
-		}
-		return nil, nil
-	}
 	var cfg pfConfig
 	if err := json.Unmarshal(js, &cfg); err != nil {
 		return nil, fmt.Errorf("pickfirst: unable to unmarshal LB policy config: %s, error: %v", string(js), err)
