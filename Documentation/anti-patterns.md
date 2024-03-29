@@ -38,6 +38,7 @@ connection until an RPC is executed. Instead of using the WithBlock option, whic
 may not be recommended in some cases, you can call the
 [`ClientConn.Connect`](https://pkg.go.dev/google.golang.org/grpc#ClientConn.Connect)
 method to explicitly initiate a connection.
+[`WithBlock`](https://pkg.go.dev/google.golang.org/grpc#WithBlock) in an instance where WithBlock(true) is used, `Connect` and `WaitForStateChange` is invoked until either the context created via `context.WithTimeout` expires or the `ClientConn` is ready.
 
 ### Using `FailOnNonTempDialError`, `WithBlock`, and `WithReturnConnectionError`
 
@@ -55,6 +56,17 @@ whether a connection was never established in the first place, or if it was
 created and then immediately lost.  Implementing proper error handling for RPCs
 is crucial for maintaining the reliability and stability of your gRPC
 communication.
+
+### Difference between Dial and NewClient
+[`grpc.NewClient`](https://pkg.go.dev/google.golang.org/grpc#NewClient) is a function in the grpc libaray that creates a new gRPC `channel` for the target URI that is passed in as an argument, together with a list of `DialOption`, and returns [`ClientConn`](https://pkg.go.dev/google.golang.org/grpc#ClientConn) an object representing a server connection.
+
+Unlike `grpc.NewClient`, whereby using the ClientConn for RPCs will automatically cause it to connect or `Connect` may be used to manually create a connection, by default `Dial` does not always establish a connection to servers. Connection behavior is determined by the load balancing policy used.
+
+`grpc.NewClient` automatically ignores `DialOptions` returned by `WithBlock`, `WithTimeout`, `WithReturnConnectionError`, and `FailOnNonTempDialError. 
+
+`grpc.NewClient` uses passthrough as the default name resolver for backward compatibility while  `Dial` uses dns as its default name resolver. This subtle diffrence is crucial in legacy systems that specify a custom dialer and expect it to receive the target string directly.
+
+Timeouts are not supported by `grpc.NewClient`. 
 
 ###  Why we discourage using `FailOnNonTempDialError`, `WithBlock`, and `WithReturnConnectionError`
 

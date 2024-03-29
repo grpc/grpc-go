@@ -150,9 +150,9 @@ func (s) TestEnterIdleDuringResolverUpdateState(t *testing.T) {
 	}
 	resolver.Register(rb)
 
-	cc, err := grpc.Dial(name+":///", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(name+":///", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial error: %v", err)
+		t.Fatalf("grpc.NewClient error: %v", err)
 	}
 	defer cc.Close()
 
@@ -196,12 +196,12 @@ func (s) TestEnterIdleDuringBalancerUpdateState(t *testing.T) {
 	}
 	resolver.Register(rb)
 
-	cc, err := grpc.Dial(
+	cc, err := grpc.NewClient(
 		name+":///",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"`+name+`":{}}]}`))
 	if err != nil {
-		t.Fatalf("grpc.Dial error: %v", err)
+		t.Fatalf("grpc.NewClient error: %v", err)
 	}
 	defer cc.Close()
 
@@ -241,12 +241,12 @@ func (s) TestEnterIdleDuringBalancerNewSubConn(t *testing.T) {
 	}
 	resolver.Register(rb)
 
-	cc, err := grpc.Dial(
+	cc, err := grpc.NewClient(
 		name+":///",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"`+name+`":{}}]}`))
 	if err != nil {
-		t.Fatalf("grpc.Dial error: %v", err)
+		t.Fatalf("grpc.NewClient error: %v", err)
 	}
 	defer cc.Close()
 

@@ -118,9 +118,9 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 			defer srv.Stop()
 
 			// Dial the stub server.
-			cc, err := grpc.Dial(srv.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			cc, err := grpc.NewClient(srv.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("grpc.Dial(%s) failed: %v", srv.Address, err)
+				t.Fatalf("grpc.NewClient(%s) failed: %v", srv.Address, err)
 			}
 			defer cc.Close()
 
@@ -239,9 +239,9 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 			defer srv.Stop()
 
 			// Dial the stub server.
-			cc, err := grpc.Dial(srv.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			cc, err := grpc.NewClient(srv.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("grpc.Dial(%s) failed: %v", srv.Address, err)
+				t.Fatalf("grpc.NewClient(%s) failed: %v", srv.Address, err)
 			}
 			defer cc.Close()
 

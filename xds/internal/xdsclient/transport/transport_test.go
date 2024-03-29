@@ -39,7 +39,7 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 	customDialerCalled := false
 	customDialer := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		customDialerCalled = true
-		return grpc.Dial(target, opts...)
+		return grpc.NewClient(target, opts...)
 	}
 	oldDial := grpcDial
 	grpcDial = customDialer
@@ -66,7 +66,7 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 
 	// Reset the dialer, create a new transport and ensure that our custom
 	// dialer is no longer called.
-	grpcDial = grpc.Dial
+	grpcDial = grpc.NewClient
 	c, err = New(opts)
 	defer func() {
 		if c != nil {

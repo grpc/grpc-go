@@ -97,7 +97,7 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Success(t *test
 	}
 
 	// Create a client that uses insecure creds and verify RPCs.
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial local test server: %v", err)
 	}
@@ -225,7 +225,7 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 
 	// Create a client that uses insecure creds and verify that RPCs don't
 	// succeed.
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial local test server: %v", err)
 	}
@@ -443,7 +443,7 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 
 	// Create a client that uses TLS creds and verify RPCs to listener1.
 	clientCreds := e2e.CreateClientTLSCredentials(t)
-	cc1, err := grpc.Dial(lis1.Addr().String(), grpc.WithTransportCredentials(clientCreds))
+	cc1, err := grpc.NewClient(lis1.Addr().String(), grpc.WithTransportCredentials(clientCreds))
 	if err != nil {
 		t.Fatalf("Failed to dial local test server: %v", err)
 	}
@@ -471,7 +471,7 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 
 	// Create a client that uses insecure creds and verify that RPCs don't
 	// succeed to listener2.
-	cc2, err := grpc.Dial(lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc2, err := grpc.NewClient(lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial local test server: %v", err)
 	}

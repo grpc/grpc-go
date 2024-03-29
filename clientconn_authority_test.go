@@ -128,8 +128,8 @@ func (s) TestClientConnAuthority_CredsAndDialOptionMismatch(t *testing.T) {
 		t.Fatalf("credentials.NewClientTLSFromFile(_, %q) failed: %v", err, serverNameOverride)
 	}
 	opts := []DialOption{WithTransportCredentials(creds), WithAuthority("authority-override")}
-	if cc, err := Dial("Non-Existent.Server:8000", opts...); err == nil {
+	if cc, err := NewClient("Non-Existent.Server:8000", opts...); err == nil {
 		cc.Close()
-		t.Fatal("grpc.Dial() succeeded when expected to fail")
+		t.Fatal("grpc.NewClient() succeeded when expected to fail")
 	}
 }

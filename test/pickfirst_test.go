@@ -80,9 +80,9 @@ func setupPickFirst(t *testing.T, backendCount int, opts ...grpc.DialOption) (*g
 		grpc.WithDefaultServiceConfig(pickFirstServiceConfig),
 	}
 	dopts = append(dopts, opts...)
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	t.Cleanup(func() { cc.Close() })
 
@@ -531,9 +531,9 @@ func setupPickFirstWithListenerWrapper(t *testing.T, backendCount int, opts ...g
 		grpc.WithDefaultServiceConfig(pickFirstServiceConfig),
 	}
 	dopts = append(dopts, opts...)
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	t.Cleanup(func() { cc.Close() })
 

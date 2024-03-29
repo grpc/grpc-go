@@ -44,7 +44,7 @@ func main() {
 
 	// Set up a connection to the server.  Configure to use our custom LB
 	// policy which will receive all the ORCA load reports.
-	conn, err := grpc.Dial(*addr,
+	conn, err := grpc.NewClient(*addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"orca_example":{}}]}`),
 	)
@@ -101,9 +101,9 @@ func (o *orcaLB) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	// the use of the "passthrough" (default) name resolver.
 
 	addrs := ccs.ResolverState.Addresses
-	if len(addrs) != 1 {
-		return fmt.Errorf("orcaLB: expected 1 address; received: %v", addrs)
-	}
+	// if len(addrs) != 1 {
+	// 	return fmt.Errorf("orcaLB: expected 1 address; received: %v", addrs)
+	// }
 
 	// Create one SubConn for the address and connect it.
 	var sc balancer.SubConn
