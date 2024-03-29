@@ -31,7 +31,7 @@ creates a pick first child for every endpoint it receives. It waits until both
 pick first children become ready, then defers to the first pick first child's
 picker, choosing the connection to localhost:20000, except every chooseSecond
 times, where it defers to second pick first child's picker, choosing the
-connection to localhost:20001.
+connection to localhost:20001 (or vice versa).
 
 `custom_round_robin` is written as a delegating policy wrapping `pick_first`
 load balancers, one for every endpoint received. This is the intended way a user

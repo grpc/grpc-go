@@ -136,12 +136,12 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 			addrs = append(addrs, endpoint.Addresses...)
 		}
 	} else {
-		// Endpoints not set, process addresses until migrate resolver emissions
-		// fully to Endpoints. The top channel does wrap emitted addresses with
-		// endpoints, however some balancers such as weighted target do not forwarrd
-		// the corresponding correct endpoints down/split endpoints properly. Once
-		// all balancers correctly forward endpoints down, can delete this else
-		// conditional.
+		// Endpoints not set, process addresses until we migrate resolver
+		// emissions fully to Endpoints. The top channel does wrap emitted
+		// addresses with endpoints, however some balancers such as weighted
+		// target do not forwarrd the corresponding correct endpoints down/split
+		// endpoints properly. Once all balancers correctly forward endpoints
+		// down, can delete this else conditional.
 		addrs = state.ResolverState.Addresses
 		if cfg.ShuffleAddressList {
 			addrs = append([]resolver.Address{}, addrs...)

@@ -24,25 +24,25 @@ import (
 	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/balanceraggregator"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/balancer/balanceraggregator"
 	"google.golang.org/grpc/serviceconfig"
 )
 
+var gracefulSwitchPickFirst serviceconfig.LoadBalancingConfig
+
 func init() {
 	balancer.Register(customRoundRobinBuilder{})
+	// Hardcode a pick first with no shuffling, since this is a petiole, and
+	// that is what petiole policies will interact with.
+	gracefulSwitchPickFirst, _ = balanceraggregator.ParseConfig(json.RawMessage(balanceraggregator.PickFirstConfig))
 }
 
 const customRRName = "custom_round_robin"
 
 type customRRConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
-
-	// ChildPolicy is the child policy of this balancer. This will be hardcoded
-	// to a graceful switch config which wraps a pick first with no shuffling
-	// enabled.
-	ChildPolicy serviceconfig.LoadBalancingConfig `json:"childPolicy"`
 
 	// ChooseSecond represents how often pick iterations choose the second
 	// SubConn in the list. Defaults to 3. If 0 never choose the second SubConn.
@@ -52,15 +52,8 @@ type customRRConfig struct {
 type customRoundRobinBuilder struct{}
 
 func (customRoundRobinBuilder) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	// Hardcode a pick first with no shuffling, since this is a petiole, and
-	// that is what petiole policies will interact with.
-	gspf, err := balanceraggregator.ParseConfig(json.RawMessage(balanceraggregator.PickFirstConfig))
-	if err != nil {
-		return nil, fmt.Errorf("error parsing hardcoded pick_first config: %v", err)
-	}
 	lbConfig := &customRRConfig{
 		ChooseSecond: 3,
-		ChildPolicy:  gspf,
 	}
 
 	if err := json.Unmarshal(s, lbConfig); err != nil {
@@ -78,7 +71,7 @@ func (customRoundRobinBuilder) Build(cc balancer.ClientConn, bOpts balancer.Buil
 		ClientConn: cc,
 		bOpts:      bOpts,
 	}
-	crr.balancerAggregator = balanceraggregator.Build(crr, bOpts)
+	crr.Balancer = balanceraggregator.Build(crr, bOpts)
 	return crr
 }
 
@@ -91,18 +84,11 @@ type customRoundRobin struct {
 	// balancer.Balancer calls as well, and children are called one at a time),
 	// in which calls are guaranteed to come synchronously. Thus, no extra
 	// synchronization is required in this balancer.
+	balancer.Balancer
 	balancer.ClientConn
 	bOpts balancer.BuildOptions
 
-	// hardcoded child config, graceful switch that wraps a pick_first with no
-	// shuffling enabled.
-	balancerAggregator balancer.Balancer
-
 	cfg *customRRConfig
-
-	// InhibitPickerUpdates determines whether picker updates from the child
-	// forward to cc or not.
-	inhibitPickerUpdates bool
 }
 
 func (crr *customRoundRobin) UpdateClientConnState(state balancer.ClientConnState) error {
@@ -111,25 +97,13 @@ func (crr *customRoundRobin) UpdateClientConnState(state balancer.ClientConnStat
 		return balancer.ErrBadResolverState
 	}
 	crr.cfg = crrCfg
-	return crr.balancerAggregator.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: crrCfg.ChildPolicy,
+	// A call to UpdateClientConnState should always produce a new Picker.  That
+	// is guaranteed to happen since the aggregator will always call
+	// UpdateChildState in its UpdateClientConnState.
+	return crr.Balancer.UpdateClientConnState(balancer.ClientConnState{
+		BalancerConfig: gracefulSwitchPickFirst,
 		ResolverState:  state.ResolverState,
 	})
-}
-
-func (crr *customRoundRobin) ResolverError(err error) {
-	crr.balancerAggregator.ResolverError(err)
-}
-
-// This function is deprecated. SubConn state updates now come through listener
-// callbacks. This balancer does not deal with SubConns directly and has no need
-// to intercept listener callbacks.
-func (crr *customRoundRobin) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	logger.Errorf("custom_round_robin: UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
-}
-
-func (crr *customRoundRobin) Close() {
-	crr.balancerAggregator.Close()
 }
 
 // regeneratePicker generates a picker if both child balancers are READY and

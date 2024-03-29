@@ -64,9 +64,17 @@ type BalancerAggregator struct {
 	inhibitChildUpdates bool
 }
 
+// UpdateClientConnState creates a child for new endpoints, deletes children for
+// endpoints that are no longer present. It also updates all the children, and
+// sends a single synchronous update of the childStates at the end of
+// the UpdateClientConnState operation.
 func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnState) error {
 	endpointSet := resolver.NewEndpointMap()
 	ba.inhibitChildUpdates = true
+	defer func() {
+		ba.inhibitChildUpdates = false
+		ba.updateChildStates()
+	}()
 	// Update/Create new children.
 	for _, endpoint := range state.ResolverState.Endpoints {
 		endpointSet.Set(endpoint, nil)
@@ -75,7 +83,7 @@ func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 			bal = child.(*balancerWrapper)
 		} else {
 			bal = &balancerWrapper{
-				endpoint:   endpoint,
+				childState: ChildState{Endpoint: endpoint},
 				ClientConn: ba.parent,
 				ba:         ba,
 			}
@@ -101,19 +109,22 @@ func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 			ba.children.Delete(e)
 		}
 	}
-	ba.inhibitChildUpdates = false
-	ba.updateChildStates()
 	return nil
 }
 
+// ResolverError forwards the resolver error to all of the BalancerAggregator's
+// children, sends a single synchronous update of the childStates at the end of
+// the ResolverError operation.
 func (ba *BalancerAggregator) ResolverError(err error) {
 	ba.inhibitChildUpdates = true
+	defer func() {
+		ba.inhibitChildUpdates = false
+		ba.updateChildStates()
+	}()
 	for _, child := range ba.children.Values() {
 		bal := child.(balancer.Balancer)
 		bal.ResolverError(err)
 	}
-	ba.inhibitChildUpdates = false
-	ba.updateChildStates()
 }
 
 func (ba *BalancerAggregator) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
@@ -127,20 +138,19 @@ func (ba *BalancerAggregator) Close() {
 	}
 }
 
+// updateChildStates updates the parents with all of the childStates for all of
+// the BalancerAggregator's children.
 func (ba *BalancerAggregator) updateChildStates() {
 	if ba.inhibitChildUpdates {
 		return
 	}
 
-	childUpdates := make([]ChildState, ba.children.Len())
+	childStates := make([]ChildState, 0, ba.children.Len())
 	for _, child := range ba.children.Values() {
 		bw := child.(*balancerWrapper)
-		childUpdates = append(childUpdates, ChildState{
-			Endpoint: bw.endpoint,
-			State:    bw.state,
-		})
+		childStates = append(childStates, bw.childState)
 	}
-	ba.parent.UpdateChildState(childUpdates)
+	ba.parent.UpdateChildState(childStates)
 }
 
 // balancerWrapper is a wrapper of a balancer. It ID's a child balancer by
@@ -151,12 +161,11 @@ type balancerWrapper struct {
 
 	ba *BalancerAggregator
 
-	endpoint resolver.Endpoint
-	state    balancer.State
+	childState ChildState
 }
 
 func (bw *balancerWrapper) UpdateState(state balancer.State) {
-	bw.state = state
+	bw.childState.State = state
 	bw.ba.updateChildStates()
 }
 
