@@ -471,7 +471,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		}
 		close(t.writerDone)
 	}()
-
 	return t, nil
 }
 
