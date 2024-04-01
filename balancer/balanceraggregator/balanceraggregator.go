@@ -21,10 +21,13 @@ package balanceraggregator
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
+	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
+	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -36,17 +39,10 @@ type ChildState struct {
 	State    balancer.State
 }
 
-// Parent is a balancer.ClientConn that can also receive
-// child state updates.
-type Parent interface {
-	balancer.ClientConn
-	UpdateChildState(childStates []ChildState)
-}
-
 // Build returns a new BalancerAggregator.
-func Build(parent Parent, opts balancer.BuildOptions) *BalancerAggregator {
+func Build(cc balancer.ClientConn, opts balancer.BuildOptions) *BalancerAggregator {
 	return &BalancerAggregator{
-		parent:   parent,
+		cc:       cc,
 		bOpts:    opts,
 		children: resolver.NewEndpointMap(),
 	}
@@ -56,8 +52,8 @@ func Build(parent Parent, opts balancer.BuildOptions) *BalancerAggregator {
 // child balancer with child config for every Endpoint received. It updates the
 // child states on any update from parent or child.
 type BalancerAggregator struct {
-	parent Parent
-	bOpts  balancer.BuildOptions
+	cc    balancer.ClientConn
+	bOpts balancer.BuildOptions
 
 	children *resolver.EndpointMap
 
@@ -66,15 +62,26 @@ type BalancerAggregator struct {
 
 // UpdateClientConnState creates a child for new endpoints, deletes children for
 // endpoints that are no longer present. It also updates all the children, and
-// sends a single synchronous update of the childStates at the end of
-// the UpdateClientConnState operation.
+// sends a single synchronous update of the children's aggregate state at the
+// end of the UpdateClientConnState operation. If an endpoint has no addresses,
+// returns error. Otherwise returns first error found from a child, but fully
+// processes the new update.
 func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnState) error {
 	endpointSet := resolver.NewEndpointMap()
+
+	// Check/return early if any endpoints have no addresses.
+	// TODO: eventually make this configurable.
+	for _, endpoint := range state.ResolverState.Endpoints {
+		if len(endpoint.Addresses) == 0 {
+			return errors.New("endpoint has empty addresses")
+		}
+	}
 	ba.inhibitChildUpdates = true
 	defer func() {
 		ba.inhibitChildUpdates = false
-		ba.updateChildStates()
+		ba.updateState()
 	}()
+	var ret error
 	// Update/Create new children.
 	for _, endpoint := range state.ResolverState.Endpoints {
 		endpointSet.Set(endpoint, nil)
@@ -84,7 +91,7 @@ func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 		} else {
 			bal = &balancerWrapper{
 				childState: ChildState{Endpoint: endpoint},
-				ClientConn: ba.parent,
+				ClientConn: ba.cc,
 				ba:         ba,
 			}
 			bal.Balancer = gracefulswitch.NewBalancer(bal, ba.bOpts)
@@ -96,8 +103,12 @@ func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 				Endpoints:  []resolver.Endpoint{endpoint},
 				Attributes: state.ResolverState.Attributes,
 			},
-		}); err != nil {
-			return fmt.Errorf("error updating child balancer: %v", err)
+		}); err != nil && ret == nil {
+			// Return first error found, and always commit full processing of
+			// updating children. If desired to process more specific errors
+			// across all endpoints, caller should make these specific
+			// validations, this is a current limitation for simplicities sake.
+			ret = err
 		}
 	}
 	// Delete old children that are no longer present.
@@ -109,7 +120,7 @@ func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 			ba.children.Delete(e)
 		}
 	}
-	return nil
+	return ret
 }
 
 // ResolverError forwards the resolver error to all of the BalancerAggregator's
@@ -119,7 +130,7 @@ func (ba *BalancerAggregator) ResolverError(err error) {
 	ba.inhibitChildUpdates = true
 	defer func() {
 		ba.inhibitChildUpdates = false
-		ba.updateChildStates()
+		ba.updateState()
 	}()
 	for _, child := range ba.children.Values() {
 		bal := child.(balancer.Balancer)
@@ -138,19 +149,91 @@ func (ba *BalancerAggregator) Close() {
 	}
 }
 
-// updateChildStates updates the parents with all of the childStates for all of
-// the BalancerAggregator's children.
-func (ba *BalancerAggregator) updateChildStates() {
+// updateState updates this components state. It sends the aggregated state, and
+// a picker with round robin behavior with all the child states present if
+// needed.
+func (ba *BalancerAggregator) updateState() {
 	if ba.inhibitChildUpdates {
 		return
 	}
+	readyPickers := make([]balancer.Picker, 0)
+	connectingPickers := make([]balancer.Picker, 0)
+	idlePickers := make([]balancer.Picker, 0)
+	transientFailurePickers := make([]balancer.Picker, 0)
 
 	childStates := make([]ChildState, 0, ba.children.Len())
 	for _, child := range ba.children.Values() {
 		bw := child.(*balancerWrapper)
 		childStates = append(childStates, bw.childState)
+		childPicker := bw.childState.State.Picker
+		switch bw.childState.State.ConnectivityState {
+		case connectivity.Ready:
+			readyPickers = append(readyPickers, childPicker)
+		case connectivity.Connecting:
+			connectingPickers = append(connectingPickers, childPicker)
+		case connectivity.Idle:
+			idlePickers = append(idlePickers, childPicker)
+		case connectivity.TransientFailure:
+			transientFailurePickers = append(transientFailurePickers, childPicker)
+			// connectivity.Shutdown shouldn't appear.
+		}
 	}
-	ba.parent.UpdateChildState(childStates)
+
+	// Construct the round robin picker based off the aggregated state. Whatever
+	// the aggregated state, use the pickers present that are currently in that
+	// state only.
+	var aggState connectivity.State
+	var pickers []balancer.Picker
+	if len(readyPickers) >= 1 {
+		aggState = connectivity.Ready
+		pickers = readyPickers
+	} else if len(connectingPickers) >= 1 {
+		aggState = connectivity.Connecting
+		pickers = connectingPickers
+	} else if len(idlePickers) >= 1 {
+		aggState = connectivity.Idle
+		pickers = idlePickers
+	} else if len(transientFailurePickers) >= 1 {
+		aggState = connectivity.TransientFailure
+		pickers = transientFailurePickers
+	} else {
+		// Shouldn't happen, no-op.
+	}
+
+	p := &pickerWithChildStates{
+		pickers:     pickers,
+		childStates: childStates,
+		next:        uint32(grpcrand.Intn(len(pickers))),
+	}
+	ba.cc.UpdateState(balancer.State{
+		ConnectivityState: aggState,
+		Picker:            p,
+	})
+}
+
+// pickerWithChildStates delegates to the pickers it holds in a round robin
+// fashion. It also contains the childStates of all the BalancerAggregator's
+// children.
+type pickerWithChildStates struct {
+	pickers     []balancer.Picker
+	childStates []ChildState
+	next        uint32
+}
+
+func (p *pickerWithChildStates) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	nextIndex := atomic.AddUint32(&p.next, 1)
+	picker := p.pickers[nextIndex%uint32(len(p.pickers))]
+	return picker.Pick(info)
+}
+
+// ChildStatesFromPicker returns the persisted child states from the picker if
+// picker is of type pickerWithChildStates.
+func ChildStatesFromPicker(picker balancer.Picker) []ChildState {
+	p, ok := picker.(*pickerWithChildStates)
+	if !ok {
+		return nil
+	}
+	return p.childStates
 }
 
 // balancerWrapper is a wrapper of a balancer. It ID's a child balancer by
@@ -166,7 +249,7 @@ type balancerWrapper struct {
 
 func (bw *balancerWrapper) UpdateState(state balancer.State) {
 	bw.childState.State = state
-	bw.ba.updateChildStates()
+	bw.ba.updateState()
 }
 
 func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {

@@ -106,33 +106,32 @@ func (crr *customRoundRobin) UpdateClientConnState(state balancer.ClientConnStat
 	})
 }
 
-// regeneratePicker generates a picker if both child balancers are READY and
-// forwards it upward.
-func (crr *customRoundRobin) UpdateChildState(childStates []balanceraggregator.ChildState) {
-	var readyPickers []balancer.Picker
-	for _, childState := range childStates {
-		if childState.State.ConnectivityState == connectivity.Ready {
-			readyPickers = append(readyPickers, childState.State.Picker)
+func (crr *customRoundRobin) UpdateState(state balancer.State) {
+	if state.ConnectivityState == connectivity.Ready {
+		childStates := balanceraggregator.ChildStatesFromPicker(state.Picker)
+		var readyPickers []balancer.Picker
+		for _, childState := range childStates {
+			if childState.State.ConnectivityState == connectivity.Ready {
+				readyPickers = append(readyPickers, childState.State.Picker)
+			}
+		}
+		// If both children are ready, pick using the custom round robin
+		// algorithm.
+		if len(readyPickers) == 2 {
+			picker := &customRoundRobinPicker{
+				pickers:      readyPickers,
+				chooseSecond: crr.cfg.ChooseSecond,
+				next:         0,
+			}
+			crr.ClientConn.UpdateState(balancer.State{
+				ConnectivityState: connectivity.Ready,
+				Picker:            picker,
+			})
+			return
 		}
 	}
-
-	// For determinism, this balancer only updates it's picker when both
-	// backends of the example are ready. Thus, no need to keep track of
-	// aggregated state and can simply specify this balancer is READY once it
-	// has two ready children. Other balancers can keep track of aggregated
-	// state and interact with errors as part of picker.
-	if len(readyPickers) != 2 {
-		return
-	}
-	picker := &customRoundRobinPicker{
-		pickers:      readyPickers,
-		chooseSecond: crr.cfg.ChooseSecond,
-		next:         0,
-	}
-	crr.ClientConn.UpdateState(balancer.State{
-		ConnectivityState: connectivity.Ready,
-		Picker:            picker,
-	})
+	// Delegate to default behavior/picker from below.
+	crr.ClientConn.UpdateState(state)
 }
 
 type customRoundRobinPicker struct {
