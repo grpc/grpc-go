@@ -33,7 +33,7 @@ import (
 type serverStatsHandler struct {
 	mo MetricsOptions
 
-	registeredMetrics registeredMetrics
+	serverMetrics serverMetrics
 }
 
 func (ssh *serverStatsHandler) initializeMetrics() {
@@ -49,13 +49,13 @@ func (ssh *serverStatsHandler) initializeMetrics() {
 	}
 	setOfMetrics := ssh.mo.Metrics.metrics
 
-	registeredMetrics := registeredMetrics{}
+	serverMetrics := serverMetrics{}
 	if _, ok := setOfMetrics["grpc.server.call.started"]; ok {
 		scs, err := meter.Int64Counter("grpc.server.call.started", metric.WithUnit("call"), metric.WithDescription("The total number of RPCs started, including those that have not completed."))
 		if err != nil {
 			logger.Errorf("failed to register metric \"grpc.server.call.started\", will not record") // error or log?
 		} else {
-			registeredMetrics.serverCallStarted = scs
+			serverMetrics.callStarted = scs
 		}
 	}
 
@@ -64,7 +64,7 @@ func (ssh *serverStatsHandler) initializeMetrics() {
 		if err != nil {
 			logger.Errorf("failed to register metric \"grpc.server.call.sent_total_compressed_message_size\", will not record") // error or log?
 		} else {
-			registeredMetrics.serverCallSentTotalCompressedMessageSize = ss
+			serverMetrics.callSentTotalCompressedMessageSize = ss
 		}
 	}
 
@@ -73,7 +73,7 @@ func (ssh *serverStatsHandler) initializeMetrics() {
 		if err != nil {
 			logger.Errorf("failed to register metric \"grpc.server.rcvd.sent_total_compressed_message_size\", will not record")
 		} else {
-			registeredMetrics.serverCallRcvdTotalCompressedMessageSize = sr
+			serverMetrics.callRcvdTotalCompressedMessageSize = sr
 		}
 	}
 
@@ -82,11 +82,11 @@ func (ssh *serverStatsHandler) initializeMetrics() {
 		if err != nil {
 			logger.Errorf("failed to register metric \"grpc.server.call.duration\", will not record")
 		} else {
-			registeredMetrics.serverCallDuration = scd
+			serverMetrics.callDuration = scd
 		}
 	}
 
-	ssh.registeredMetrics = registeredMetrics
+	ssh.serverMetrics = serverMetrics
 }
 
 // TagConn exists to satisfy stats.Handler.
@@ -107,6 +107,7 @@ func (ssh *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 	}
 	server := internal.ServerFromContext.(func(context.Context) *grpc.Server)(ctx)
 	if server == nil { // Shouldn't happen, defensive programming.
+		logger.Error("ctx passed into server side stats handler has no grpc server ref")
 		method = "other"
 	} else {
 		isRegisteredMethod := internal.IsRegisteredMethod.(func(*grpc.Server, string) bool)
@@ -142,8 +143,8 @@ func (ssh *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCSt
 		// measures concern number of messages and bytes for messages. This
 		// aligns with flow control.
 	case *stats.InHeader:
-		if ssh.registeredMetrics.serverCallStarted != nil {
-			ssh.registeredMetrics.serverCallStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", removeLeadingSlash(mi.method))))
+		if ssh.serverMetrics.callStarted != nil {
+			ssh.serverMetrics.callStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", removeLeadingSlash(mi.method))))
 		}
 	case *stats.OutPayload:
 		atomic.AddInt64(&mi.sentCompressedBytes, int64(st.CompressedLength))
@@ -169,23 +170,19 @@ func (ssh *serverStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInf
 	}
 	serverAttributeOption := metric.WithAttributes(attribute.String("grpc.method", removeLeadingSlash(mi.method)), attribute.String("grpc.status", st))
 
-	if ssh.registeredMetrics.serverCallDuration != nil {
-		ssh.registeredMetrics.serverCallDuration.Record(ctx, latency, serverAttributeOption)
+	if ssh.serverMetrics.callDuration != nil {
+		ssh.serverMetrics.callDuration.Record(ctx, latency, serverAttributeOption)
 	}
-	if ssh.registeredMetrics.serverCallSentTotalCompressedMessageSize != nil {
-		ssh.registeredMetrics.serverCallSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.sentCompressedBytes), serverAttributeOption)
+	if ssh.serverMetrics.callSentTotalCompressedMessageSize != nil {
+		ssh.serverMetrics.callSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.sentCompressedBytes), serverAttributeOption)
 	}
-	if ssh.registeredMetrics.serverCallRcvdTotalCompressedMessageSize != nil {
-		ssh.registeredMetrics.serverCallRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.recvCompressedBytes), serverAttributeOption)
+	if ssh.serverMetrics.callRcvdTotalCompressedMessageSize != nil {
+		ssh.serverMetrics.callRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.recvCompressedBytes), serverAttributeOption)
 	}
 }
 
 // DefaultServerMetrics are the default server metrics provided by this module.
-var DefaultServerMetrics = Metrics{
-	metrics: map[string]bool{
-		"grpc.server.call.started":                            true,
-		"grpc.server.call.sent_total_compressed_message_size": true,
-		"grpc.server.call.rcvd_total_compressed_message_size": true,
-		"grpc.server.call.duration":                           true,
-	},
-}
+var DefaultServerMetrics = *EmptyMetrics.Add("grpc.server.call.started").
+	Add("grpc.server.call.sent_total_compressed_message_size").
+	Add("grpc.server.call.rcvd_total_compressed_message_size").
+	Add("grpc.server.call.duration")

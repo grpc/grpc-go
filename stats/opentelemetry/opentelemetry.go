@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// Package opentelemetry implements opencensus instrumentation code for gRPC-Go
-// clients and servers.
+// Package opentelemetry implements opentelemetry instrumentation code for
+// gRPC-Go clients and servers.
 package opentelemetry
 
 import (
@@ -31,29 +31,29 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-var logger = grpclog.Component("opentelemetry-instrumentation")
+var logger = grpclog.Component("otel-plugin")
 
 var canonicalString = internal.CanonicalString.(func(codes.Code) string)
 
-var (
-	joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.DialOption)
-)
+var joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.DialOption)
 
-// EmptyMetrics represents no metrics. To start from a clean slate if want to
-// pick a subset of metrics, use this and add onto it.
+// EmptyMetrics represents no metrics. To start from a clean slate if the
+// intended effect is to pick a subset of metrics, use this and add onto it.
 var EmptyMetrics = Metrics{}
 
-// Metrics is a set of metrics to initialize. Once created, Metrics is
-// immutable.
+// MetricName is a name of a metric.
+type MetricName string
+
+// Metrics is a set of metrics to record. Once created, Metrics is immutable.
 type Metrics struct {
 	// metrics are the set of metrics to initialize.
-	metrics map[string]bool
+	metrics map[MetricName]bool
 }
 
 // Add adds the metrics to the metrics set and returns a new copy with the
 // additional metrics.
-func (m *Metrics) Add(metrics ...string) *Metrics {
-	newMetrics := make(map[string]bool)
+func (m *Metrics) Add(metrics ...MetricName) *Metrics {
+	newMetrics := make(map[MetricName]bool)
 	for metric := range m.metrics {
 		newMetrics[metric] = true
 	}
@@ -68,8 +68,8 @@ func (m *Metrics) Add(metrics ...string) *Metrics {
 
 // Remove removes the metrics from the metrics set and returns a new copy with
 // the metrics removed.
-func (m *Metrics) Remove(metrics ...string) *Metrics {
-	newMetrics := make(map[string]bool)
+func (m *Metrics) Remove(metrics ...MetricName) *Metrics {
+	newMetrics := make(map[MetricName]bool)
 	for metric := range m.metrics {
 		newMetrics[metric] = true
 	}
@@ -95,14 +95,17 @@ type MetricsOptions struct {
 	// metric supported by the client and server instrumentation components if
 	// applicable.
 	Metrics Metrics
-	// TargetAttributeFilter is a callback that takes the target string and
-	// returns a bool representing whether to use target as a label value or use
-	// the string "other". If unset, will use the target string as is.
+	// TargetAttributeFilter is a callback that takes the target string of the
+	// channel and returns a bool representing whether to use target as a label
+	// value or use the string "other". If unset, will use the target string as
+	// is.
 	TargetAttributeFilter func(string) bool
 	// MethodAttributeFilter is a callback that takes the method string and
 	// returns a bool representing whether to use method as a label value or use
 	// the string "other". If unset, will use the method string as is. This is
-	// used only for generic methods, and not registered methods.
+	// intended to be used only for generic methods (see
+	// grpc.UnknownServiceHandler), and not registered static methods (from
+	// generated service protos).
 	MethodAttributeFilter func(string) bool
 }
 
@@ -111,7 +114,7 @@ type MetricsOptions struct {
 //
 // Client applications interested in instrumenting their grpc.ClientConn should
 // pass the dial option returned from this function as a dial option to
-// grpc.Dial().
+// grpc.NewClient().
 //
 // For the metrics supported by this instrumentation code, a user needs to
 // specify the client metrics to record in metrics options. A user also needs to
@@ -121,7 +124,7 @@ type MetricsOptions struct {
 func DialOption(mo MetricsOptions) grpc.DialOption {
 	csh := &clientStatsHandler{mo: mo}
 	csh.initializeMetrics()
-	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
+	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
 }
 
 // ServerOption returns a server option which enables OpenTelemetry
@@ -201,29 +204,29 @@ type metricsInfo struct {
 	authority string
 }
 
-// registeredMetrics are the set of metrics to record with for the OpenTelemetry
-// component.
-type registeredMetrics struct {
+type clientMetrics struct {
 	// "grpc.client.attempt.started"
-	clientAttemptStarted metric.Int64Counter
+	attemptStarted metric.Int64Counter
 	// "grpc.client.attempt.duration"
-	clientAttemptDuration metric.Float64Histogram
+	attemptDuration metric.Float64Histogram
 	// "grpc.client.attempt.sent_total_compressed_message_size"
-	clientAttemptSentTotalCompressedMessageSize metric.Int64Histogram
+	attemptSentTotalCompressedMessageSize metric.Int64Histogram
 	// "grpc.client.attempt.rcvd_total_compressed_message_size"
-	clientAttemptRcvdTotalCompressedMessageSize metric.Int64Histogram
+	attemptRcvdTotalCompressedMessageSize metric.Int64Histogram
 
-	// per call client metrics:
-	clientCallDuration metric.Float64Histogram
+	// "grpc.client.call.duration"
+	callDuration metric.Float64Histogram
+}
 
+type serverMetrics struct {
 	// "grpc.server.call.started"
-	serverCallStarted metric.Int64Counter
+	callStarted metric.Int64Counter
 	// "grpc.server.call.sent_total_compressed_message_size"
-	serverCallSentTotalCompressedMessageSize metric.Int64Histogram
+	callSentTotalCompressedMessageSize metric.Int64Histogram
 	// "grpc.server.call.rcvd_total_compressed_message_size"
-	serverCallRcvdTotalCompressedMessageSize metric.Int64Histogram
+	callRcvdTotalCompressedMessageSize metric.Int64Histogram
 	// "grpc.server.call.duration"
-	serverCallDuration metric.Float64Histogram
+	callDuration metric.Float64Histogram
 }
 
 // Users of this component should use these bucket boundaries as part of their
@@ -231,9 +234,12 @@ type registeredMetrics struct {
 // API, which works, however this stability is not guaranteed, so for safety the
 // SDK Meter Provider should set these bounds.
 var (
-	// DefaultLatencyBounds are the default bounds for latency metrics.
+	// DefaultLatencyBounds are the default bounds for latency metrics. Users of
+	// this component should set these bucket boundaries as part of their SDK
+	// MeterProvider passed in for desired latency metrics.
 	DefaultLatencyBounds = []float64{0, 0.00001, 0.00005, 0.0001, 0.0003, 0.0006, 0.0008, 0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.008, 0.01, 0.013, 0.016, 0.02, 0.025, 0.03, 0.04, 0.05, 0.065, 0.08, 0.1, 0.13, 0.16, 0.2, 0.25, 0.3, 0.4, 0.5, 0.65, 0.8, 1, 2, 5, 10, 20, 50, 100} // provide "advice" through API, SDK should set this too
-	// DefaultLatencyBounds are the default bounds for metrics which record
-	// size.
+	// DefaultSizeBounds are the default bounds for metrics which record size.
+	// Users of this component should set these bucket boundaries as part of
+	// their SDK MeterProvider passed in for desired size metrics.
 	DefaultSizeBounds = []float64{0, 1024, 2048, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864, 268435456, 1073741824, 4294967296}
 )

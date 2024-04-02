@@ -32,7 +32,7 @@ import (
 type clientStatsHandler struct {
 	mo MetricsOptions
 
-	registeredMetrics registeredMetrics
+	clientMetrics clientMetrics
 }
 
 func (csh *clientStatsHandler) initializeMetrics() {
@@ -49,14 +49,14 @@ func (csh *clientStatsHandler) initializeMetrics() {
 
 	setOfMetrics := csh.mo.Metrics.metrics
 
-	registeredMetrics := registeredMetrics{}
+	clientMetrics := clientMetrics{}
 
 	if _, ok := setOfMetrics["grpc.client.attempt.started"]; ok {
 		asc, err := meter.Int64Counter("grpc.client.attempt.started", metric.WithUnit("attempt"), metric.WithDescription("The total number of RPC attempts started, including those that have not completed."))
 		if err != nil {
 			logger.Errorf("failed to register metric \"grpc.client.attempt.started\", will not record")
 		} else {
-			registeredMetrics.clientAttemptStarted = asc
+			clientMetrics.attemptStarted = asc
 		}
 	}
 
@@ -65,7 +65,7 @@ func (csh *clientStatsHandler) initializeMetrics() {
 		if err != nil {
 			logger.Errorf("failed to register metric \"grpc.client.attempt.started\", will not record")
 		} else {
-			registeredMetrics.clientAttemptDuration = cad
+			clientMetrics.attemptDuration = cad
 		}
 	}
 
@@ -74,7 +74,7 @@ func (csh *clientStatsHandler) initializeMetrics() {
 		if err != nil {
 			logger.Errorf("failed to register metric \"grpc.client.attempt.sent_total_compressed_message_size\", will not record")
 		} else {
-			registeredMetrics.clientAttemptSentTotalCompressedMessageSize = cas
+			clientMetrics.attemptSentTotalCompressedMessageSize = cas
 		}
 	}
 
@@ -83,7 +83,7 @@ func (csh *clientStatsHandler) initializeMetrics() {
 		if err != nil {
 			logger.Errorf("failed to register metric \"grpc.client.rcvd.sent_total_compressed_message_size\", will not record")
 		} else {
-			registeredMetrics.clientAttemptRcvdTotalCompressedMessageSize = car
+			clientMetrics.attemptRcvdTotalCompressedMessageSize = car
 		}
 	}
 
@@ -92,10 +92,10 @@ func (csh *clientStatsHandler) initializeMetrics() {
 		if err != nil {
 			logger.Errorf("failed to register metric \"grpc.client.call.duration\", will not record")
 		} else {
-			registeredMetrics.clientCallDuration = ccs
+			clientMetrics.callDuration = ccs
 		}
 	}
-	csh.registeredMetrics = registeredMetrics
+	csh.clientMetrics = clientMetrics
 }
 
 func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
@@ -116,10 +116,8 @@ func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method stri
 // otherwise.
 func (csh *clientStatsHandler) determineTarget(cc *grpc.ClientConn) string {
 	target := cc.CanonicalTarget()
-	if csh.mo.TargetAttributeFilter != nil {
-		if !csh.mo.TargetAttributeFilter(target) {
-			target = "other"
-		}
+	if f := csh.mo.TargetAttributeFilter; f != nil && !f(target) {
+		target = "other"
 	}
 	return target
 }
@@ -128,10 +126,8 @@ func (csh *clientStatsHandler) determineTarget(cc *grpc.ClientConn) string {
 // "other" if StaticMethod isn't specified or if method filter is set and
 // specifies, the method name as is otherwise.
 func (csh *clientStatsHandler) determineMethod(method string, opts ...grpc.CallOption) string {
-	if csh.mo.MethodAttributeFilter != nil {
-		if !csh.mo.MethodAttributeFilter(method) {
-			return "other"
-		}
+	if f := csh.mo.MethodAttributeFilter; f != nil && !f(method) {
+		return "other"
 	}
 	for _, opt := range opts {
 		if _, ok := opt.(grpc.StaticMethodCallOption); ok {
@@ -153,18 +149,14 @@ func (csh *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc
 		csh.perCallMetrics(ctx, err, startTime, ci)
 	}
 	opts = append([]grpc.CallOption{grpc.OnFinish(callback)}, opts...)
-	s, err := streamer(ctx, desc, cc, method, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return s, nil
+	return streamer(ctx, desc, cc, method, opts...)
 }
 
 func (csh *clientStatsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
 	s := status.Convert(err)
 	callLatency := float64(time.Since(startTime)) / float64(time.Second)
-	if csh.registeredMetrics.clientCallDuration != nil {
-		csh.registeredMetrics.clientCallDuration.Record(ctx, callLatency, metric.WithAttributes(attribute.String("grpc.method", removeLeadingSlash(ci.method)), attribute.String("grpc.target", ci.target), attribute.String("grpc.status", canonicalString(s.Code())))) // needs method target and status should I persist this?
+	if csh.clientMetrics.callDuration != nil {
+		csh.clientMetrics.callDuration.Record(ctx, callLatency, metric.WithAttributes(attribute.String("grpc.method", removeLeadingSlash(ci.method)), attribute.String("grpc.target", ci.target), attribute.String("grpc.status", canonicalString(s.Code()))))
 	}
 }
 
@@ -202,12 +194,13 @@ func (csh *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 	case *stats.Begin:
 		ci := getCallInfo(ctx)
 		if ci == nil {
-			// Shouldn't happen, set by interceptor, defensive programming. Log it won't record?
+			// Shouldn't happen, set by interceptor, defensive programming.
+			logger.Error("ctx passed into client side stats handler metrics event handling has no metrics data present")
 			return
 		}
 
-		if csh.registeredMetrics.clientAttemptStarted != nil {
-			csh.registeredMetrics.clientAttemptStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", removeLeadingSlash(ci.method)), attribute.String("grpc.target", ci.target))) // Add records a change to the counter...attributeset for efficiency
+		if csh.clientMetrics.attemptStarted != nil {
+			csh.clientMetrics.attemptStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", removeLeadingSlash(ci.method)), attribute.String("grpc.target", ci.target)))
 		}
 	case *stats.OutPayload:
 		atomic.AddInt64(&mi.sentCompressedBytes, int64(st.CompressedLength))
@@ -237,26 +230,22 @@ func (csh *clientStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInf
 		st = "OK"
 	}
 	clientAttributeOption := metric.WithAttributes(attribute.String("grpc.method", removeLeadingSlash(ci.method)), attribute.String("grpc.target", ci.target), attribute.String("grpc.status", st))
-	if csh.registeredMetrics.clientAttemptDuration != nil {
-		csh.registeredMetrics.clientAttemptDuration.Record(ctx, latency, clientAttributeOption)
+	if csh.clientMetrics.attemptDuration != nil {
+		csh.clientMetrics.attemptDuration.Record(ctx, latency, clientAttributeOption)
 	}
 
-	if csh.registeredMetrics.clientAttemptSentTotalCompressedMessageSize != nil {
-		csh.registeredMetrics.clientAttemptSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.sentCompressedBytes), clientAttributeOption)
+	if csh.clientMetrics.attemptSentTotalCompressedMessageSize != nil {
+		csh.clientMetrics.attemptSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.sentCompressedBytes), clientAttributeOption)
 	}
 
-	if csh.registeredMetrics.clientAttemptRcvdTotalCompressedMessageSize != nil {
-		csh.registeredMetrics.clientAttemptRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.recvCompressedBytes), clientAttributeOption)
+	if csh.clientMetrics.attemptRcvdTotalCompressedMessageSize != nil {
+		csh.clientMetrics.attemptRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.recvCompressedBytes), clientAttributeOption)
 	}
 }
 
 // DefaultClientMetrics are the default client metrics provided by this module.
-var DefaultClientMetrics = Metrics{
-	metrics: map[string]bool{
-		"grpc.client.attempt.started":                            true,
-		"grpc.client.attempt.duration":                           true,
-		"grpc.client.attempt.sent_total_compressed_message_size": true,
-		"grpc.client.attempt.rcvd_total_compressed_message_size": true,
-		"grpc.client.call.duration":                              true,
-	},
-}
+var DefaultClientMetrics = *EmptyMetrics.Add("grpc.client.attempt.started").
+	Add("grpc.client.attempt.duration").
+	Add("grpc.client.attempt.sent_total_compressed_message_size").
+	Add("grpc.client.attempt.rcvd_total_compressed_message_size").
+	Add("grpc.client.call.duration")
