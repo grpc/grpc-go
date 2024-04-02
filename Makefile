@@ -39,8 +39,11 @@ vetdeps:
 	all \
 	build \
 	clean \
+	deps \
 	proto \
 	test \
+	testsubmodule \
 	testrace \
+	testdeps \
 	vet \
 	vetdeps
