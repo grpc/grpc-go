@@ -68,7 +68,9 @@ type BalancerAggregator struct {
 // returns error. Otherwise returns first error found from a child, but fully
 // processes the new update.
 func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnState) error {
-	endpointSet := resolver.NewEndpointMap()
+	if len(state.ResolverState.Endpoints) == 0 {
+		return errors.New("endpoints list is empty")
+	}
 
 	// Check/return early if any endpoints have no addresses.
 	// TODO: eventually make this configurable.
@@ -77,6 +79,7 @@ func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 			return errors.New("endpoint has empty addresses")
 		}
 	}
+	endpointSet := resolver.NewEndpointMap()
 	ba.inhibitChildUpdates = true
 	defer func() {
 		ba.inhibitChildUpdates = false
@@ -200,7 +203,7 @@ func (ba *BalancerAggregator) updateState() {
 	} else {
 		aggState = connectivity.TransientFailure
 		pickers = append(pickers, base.NewErrPicker(errors.New("no children to pick from")))
-	} // No children (zero length endpoints).
+	} // No children (resolver error before valid update).
 
 	p := &pickerWithChildStates{
 		pickers:     pickers,
