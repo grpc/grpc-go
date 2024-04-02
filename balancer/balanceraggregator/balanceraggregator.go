@@ -22,10 +22,10 @@ package balanceraggregator
 import (
 	"encoding/json"
 	"errors"
-	"google.golang.org/grpc/balancer/base"
 	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/grpcrand"
