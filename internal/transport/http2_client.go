@@ -1002,9 +1002,8 @@ func (t *http2Client) Close(err error) {
 		t.kpDormancyCond.Signal()
 	}
 	t.mu.Unlock()
-	// The HTTP/2 spec mentions that a GOAWAY frame should be sent before a connection close. If this close() function
-	// ever starts to take in an HTTP/2 error code the peer will be able to get more information about the reason
-	// behind the connection close.
+	// Per HTTP/2 spec, a GOAWAY frame must be sent before closing the
+	// connection. See https://httpwg.org/specs/rfc7540.html#GOAWAY.
 	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(fmt.Sprintf("client shutdown with: %v", err)), closeConnErr: err})
 	if t.writerDone != nil {
 		<-t.writerDone
