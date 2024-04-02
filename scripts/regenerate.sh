@@ -46,7 +46,7 @@ git clone --quiet https://github.com/protocolbuffers/protobuf "${WORKDIR}/protob
 # Pull in code.proto as a proto dependency
 mkdir -p "${WORKDIR}/googleapis/google/rpc"
 echo "curl https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto"
-curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto > "${WORKDIR}"/googleapis/google/rpc/code.proto
+curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto > "${WORKDIR}/googleapis/google/rpc/code.proto"
 
 source ./scripts/protoc_installer.sh
 download_protoc
