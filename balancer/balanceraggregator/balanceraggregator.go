@@ -22,6 +22,7 @@ package balanceraggregator
 import (
 	"encoding/json"
 	"errors"
+	"google.golang.org/grpc/balancer/base"
 	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
@@ -197,8 +198,9 @@ func (ba *BalancerAggregator) updateState() {
 		aggState = connectivity.TransientFailure
 		pickers = transientFailurePickers
 	} else {
-		// Shouldn't happen, no-op.
-	}
+		aggState = connectivity.TransientFailure
+		pickers = append(pickers, base.NewErrPicker(errors.New("no children to pick from")))
+	} // No children (zero length endpoints).
 
 	p := &pickerWithChildStates{
 		pickers:     pickers,
