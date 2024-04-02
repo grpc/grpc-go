@@ -28,8 +28,8 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 )
 
@@ -102,8 +102,8 @@ func socketToProto(skt *channelz.Socket) *channelzpb.Socket {
 	}
 	if skt.EphemeralMetrics != nil {
 		e := skt.EphemeralMetrics()
-		s.Data.LocalFlowControlWindow = &wrpb.Int64Value{Value: e.LocalFlowControlWindow}
-		s.Data.RemoteFlowControlWindow = &wrpb.Int64Value{Value: e.RemoteFlowControlWindow}
+		s.Data.LocalFlowControlWindow = wrapperspb.Int64(e.LocalFlowControlWindow)
+		s.Data.RemoteFlowControlWindow = wrapperspb.Int64(e.RemoteFlowControlWindow)
 	}
 
 	s.Data.Option = sockoptToProto(skt.SocketOptions)
