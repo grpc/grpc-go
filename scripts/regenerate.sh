@@ -38,13 +38,13 @@ echo "go install cmd/protoc-gen-go-grpc"
 (cd cmd/protoc-gen-go-grpc && go install .)
 
 echo "git clone https://github.com/grpc/grpc-proto"
-git clone --quiet https://github.com/grpc/grpc-proto "${WORKDIR}"/grpc-proto
+git clone --quiet https://github.com/grpc/grpc-proto "${WORKDIR}/grpc-proto"
 
 echo "git clone https://github.com/protocolbuffers/protobuf"
-git clone --quiet https://github.com/protocolbuffers/protobuf "${WORKDIR}"/protobuf
+git clone --quiet https://github.com/protocolbuffers/protobuf "${WORKDIR}/protobuf"
 
 # Pull in code.proto as a proto dependency
-mkdir -p "${WORKDIR}"/googleapis/google/rpc
+mkdir -p "${WORKDIR}/googleapis/google/rpc"
 echo "curl https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto"
 curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto > "${WORKDIR}"/googleapis/google/rpc/code.proto
 
@@ -116,7 +116,7 @@ done
 
 for src in ${LEGACY_SOURCES[@]}; do
   echo "protoc ${src}"
-  protoc --go_out="${OPTS}:${WORKDIR}"/out --go-grpc_out="${OPTS}",require_unimplemented_servers=false:"${WORKDIR}/out" \
+  protoc --go_out="${OPTS}:${WORKDIR}/out" --go-grpc_out="${OPTS}",require_unimplemented_servers=false:"${WORKDIR}/out" \
     -I"." \
     -I"${WORKDIR}/grpc-proto" \
     -I"${WORKDIR}/googleapis" \
@@ -127,7 +127,7 @@ done
 # The go_package option in grpc/lookup/v1/rls.proto doesn't match the
 # current location. Move it into the right place.
 mkdir -p "${WORKDIR}/out/google.golang.org/grpc/internal/proto/grpc_lookup_v1"
-mv "${WORKDIR}"/out/google.golang.org/grpc/lookup/grpc_lookup_v1/* "${WORKDIR}"/out/google.golang.org/grpc/internal/proto/grpc_lookup_v1
+mv "${WORKDIR}"/out/google.golang.org/grpc/lookup/grpc_lookup_v1/* "${WORKDIR}/out/google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 
 # grpc_testing_not_regenerate/*.pb.go are not re-generated,
 # see grpc_testing_not_regenerate/README.md for details.
