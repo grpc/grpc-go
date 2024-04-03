@@ -96,7 +96,7 @@ jobs:
       - name: Run vet.sh
         if: matrix.type == 'vet'
         run: |
-          VET_SKIP_PROTO=1
+          export VET_SKIP_PROTO=1
           ./vet.sh -install && ./vet.sh
 
       # Main tests run for everything except when testing "extras"
