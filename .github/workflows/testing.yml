@@ -127,8 +127,7 @@ jobs:
           interop/interop_test.sh
           echo -e "\n-- Running xDS E2E Test --"
           xds/internal/test/e2e/run.sh
-          echo -e "\n-- Running protoc-gen-go-grpc change detector test --"
+          echo -e "\n-- Running protoc-gen-go-grpc test --"
           ./vet.sh -install
-          (cd test/tools && go install google.golang.org/protobuf/cmd/protoc-gen-go)
           (cd cmd/protoc-gen-go-grpc && go install .)
           cmd/protoc-gen-go-grpc/protoc-gen-go-grpc_test.sh
