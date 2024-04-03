@@ -53,8 +53,8 @@ type bidirectionalStreamingServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewBidirectionalStreamingServiceClient(cc1 grpc.ClientConnInterface) BidirectionalStreamingServiceClient {
-	return &bidirectionalStreamingServiceClient{cc1}
+func NewBidirectionalStreamingServiceClient(cc grpc.ClientConnInterface) BidirectionalStreamingServiceClient {
+	return &bidirectionalStreamingServiceClient{cc}
 }
 
 func (c *bidirectionalStreamingServiceClient) UnaryMethod(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (*EventResponse, error) {
