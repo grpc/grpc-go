@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package grpc.credentials;
+
+option go_package = "google.golang.org/grpc/channelz/service";
+
+message OtherChannelzSecurityValue {
+  bytes local_certificate = 1;
+  bytes remote_certificate = 2;
+}
