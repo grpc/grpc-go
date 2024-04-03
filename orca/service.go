@@ -19,7 +19,7 @@
 package orca
 
 import (
-	"sync"
+	"fmt"
 	"time"
 
 	"google.golang.org/grpc"
@@ -28,7 +28,6 @@ import (
 	ointernal "google.golang.org/grpc/orca/internal"
 	"google.golang.org/grpc/status"
 
-	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	v3orcaservicegrpc "github.com/cncf/xds/go/xds/service/orca/v3"
 	v3orcaservicepb "github.com/cncf/xds/go/xds/service/orca/v3"
 )
@@ -60,15 +59,16 @@ type Service struct {
 	// Minimum reporting interval, as configured by the user, or the default.
 	minReportingInterval time.Duration
 
-	// mu guards the custom metrics injected by the server application.
-	mu          sync.RWMutex
-	cpu         float64
-	memory      float64
-	utilization map[string]float64
+	smProvider ServerMetricsProvider
 }
 
 // ServiceOptions contains options to configure the ORCA service implementation.
 type ServiceOptions struct {
+	// ServerMetricsProvider is the provider to be used by the service for
+	// reporting OOB server metrics to clients.  Typically obtained via
+	// NewServerMetricsRecorder.  This field is required.
+	ServerMetricsProvider ServerMetricsProvider
+
 	// MinReportingInterval sets the lower bound for how often out-of-band
 	// metrics are reported on the streaming RPC initiated by the client. If
 	// unspecified, negative or less than the default value of 30s, the default
@@ -81,11 +81,22 @@ type ServiceOptions struct {
 	allowAnyMinReportingInterval bool
 }
 
+// A ServerMetricsProvider provides ServerMetrics upon request.
+type ServerMetricsProvider interface {
+	// ServerMetrics returns the current set of server metrics.  It should
+	// return a read-only, immutable copy of the data that is active at the
+	// time of the call.
+	ServerMetrics() *ServerMetrics
+}
+
 // NewService creates a new ORCA service implementation configured using the
 // provided options.
 func NewService(opts ServiceOptions) (*Service, error) {
 	// The default minimum supported reporting interval value can be overridden
 	// for testing purposes through the orca internal package.
+	if opts.ServerMetricsProvider == nil {
+		return nil, fmt.Errorf("ServerMetricsProvider not specified")
+	}
 	if !opts.allowAnyMinReportingInterval {
 		if opts.MinReportingInterval < 0 || opts.MinReportingInterval < minReportingInterval {
 			opts.MinReportingInterval = minReportingInterval
@@ -93,20 +104,22 @@ func NewService(opts ServiceOptions) (*Service, error) {
 	}
 	service := &Service{
 		minReportingInterval: opts.MinReportingInterval,
-		utilization:          make(map[string]float64),
+		smProvider:           opts.ServerMetricsProvider,
 	}
 	return service, nil
 }
 
 // Register creates a new ORCA service implementation configured using the
-// provided options and registers the same on the provided service registrar.
-func Register(s *grpc.Server, opts ServiceOptions) (*Service, error) {
+// provided options and registers the same on the provided grpc Server.
+func Register(s *grpc.Server, opts ServiceOptions) error {
+	// TODO(https://github.com/cncf/xds/issues/41): replace *grpc.Server with
+	// grpc.ServiceRegistrar when possible.
 	service, err := NewService(opts)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	v3orcaservicegrpc.RegisterOpenRcaServiceServer(s, service)
-	return service, nil
+	return nil
 }
 
 // determineReportingInterval determines the reporting interval for out-of-band
@@ -120,14 +133,14 @@ func (s *Service) determineReportingInterval(req *v3orcaservicepb.OrcaLoadReport
 	}
 	dur := req.GetReportInterval().AsDuration()
 	if dur < s.minReportingInterval {
-		logger.Warningf("Received reporting interval %q is less than configured minimum: %v. Using default: %s", dur, s.minReportingInterval)
+		logger.Warningf("Received reporting interval %q is less than configured minimum: %v. Using minimum", dur, s.minReportingInterval)
 		return s.minReportingInterval
 	}
 	return dur
 }
 
 func (s *Service) sendMetricsResponse(stream v3orcaservicegrpc.OpenRcaService_StreamCoreMetricsServer) error {
-	return stream.Send(s.toLoadReportProto())
+	return stream.Send(s.smProvider.ServerMetrics().toLoadReportProto())
 }
 
 // StreamCoreMetrics streams custom backend metrics injected by the server
@@ -146,51 +159,5 @@ func (s *Service) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportRequest, 
 			return status.Error(codes.Canceled, "Stream has ended.")
 		case <-ticker.C:
 		}
-	}
-}
-
-// SetCPUUtilization records a measurement for the CPU utilization metric.
-func (s *Service) SetCPUUtilization(val float64) {
-	s.mu.Lock()
-	s.cpu = val
-	s.mu.Unlock()
-}
-
-// SetMemoryUtilization records a measurement for the memory utilization metric.
-func (s *Service) SetMemoryUtilization(val float64) {
-	s.mu.Lock()
-	s.memory = val
-	s.mu.Unlock()
-}
-
-// SetUtilization records a measurement for a utilization metric uniquely
-// identifiable by name.
-func (s *Service) SetUtilization(name string, val float64) {
-	s.mu.Lock()
-	s.utilization[name] = val
-	s.mu.Unlock()
-}
-
-// DeleteUtilization deletes any previously recorded measurement for a
-// utilization metric uniquely identifiable by name.
-func (s *Service) DeleteUtilization(name string) {
-	s.mu.Lock()
-	delete(s.utilization, name)
-	s.mu.Unlock()
-}
-
-// toLoadReportProto dumps the recorded measurements as an OrcaLoadReport proto.
-func (s *Service) toLoadReportProto() *v3orcapb.OrcaLoadReport {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	util := make(map[string]float64, len(s.utilization))
-	for k, v := range s.utilization {
-		util[k] = v
-	}
-	return &v3orcapb.OrcaLoadReport{
-		CpuUtilization: s.cpu,
-		MemUtilization: s.memory,
-		Utilization:    util,
 	}
 }

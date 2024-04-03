@@ -4,6 +4,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 jobs:
   release:
     permissions:
@@ -22,10 +25,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
 
       - name: Download dependencies
         run: |
@@ -51,10 +54,10 @@ jobs:
         run: |
           PACKAGE_NAME=protoc-gen-go-grpc.${GITHUB_REF#refs/tags/cmd/protoc-gen-go-grpc/}.${{ matrix.goos }}.${{ matrix.goarch }}.tar.gz
           tar -czvf $PACKAGE_NAME -C build .
-          echo ::set-output name=name::${PACKAGE_NAME}
+          echo "name=${PACKAGE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Upload asset
-        uses: actions/upload-release-asset@v1
+        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

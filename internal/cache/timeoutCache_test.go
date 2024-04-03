@@ -38,7 +38,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func (c *TimeoutCache) getForTesting(key interface{}) (*cacheEntry, bool) {
+func (c *TimeoutCache) getForTesting(key any) (*cacheEntry, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	r, ok := c.cache[key]
@@ -58,6 +58,9 @@ func (s) TestCacheExpire(t *testing.T) {
 	if gotV, ok := c.getForTesting(k); !ok || gotV.item != v {
 		t.Fatalf("After Add(), before timeout, from cache got: %v, %v, want %v, %v", gotV.item, ok, v, true)
 	}
+	if l := c.Len(); l != 1 {
+		t.Fatalf("%d number of items in the cache, want 1", l)
+	}
 
 	select {
 	case <-callbackChan:
@@ -67,6 +70,9 @@ func (s) TestCacheExpire(t *testing.T) {
 
 	if _, ok := c.getForTesting(k); ok {
 		t.Fatalf("After Add(), after timeout, from cache got: _, %v, want _, %v", ok, false)
+	}
+	if l := c.Len(); l != 0 {
+		t.Fatalf("%d number of items in the cache, want 0", l)
 	}
 }
 
@@ -83,6 +89,9 @@ func (s) TestCacheRemove(t *testing.T) {
 	if got, ok := c.getForTesting(k); !ok || got.item != v {
 		t.Fatalf("After Add(), before timeout, from cache got: %v, %v, want %v, %v", got.item, ok, v, true)
 	}
+	if l := c.Len(); l != 1 {
+		t.Fatalf("%d number of items in the cache, want 1", l)
+	}
 
 	time.Sleep(testCacheTimeout / 2)
 
@@ -93,6 +102,9 @@ func (s) TestCacheRemove(t *testing.T) {
 
 	if _, ok := c.getForTesting(k); ok {
 		t.Fatalf("After Add(), before timeout, after Remove(), from cache got: _, %v, want _, %v", ok, false)
+	}
+	if l := c.Len(); l != 0 {
+		t.Fatalf("%d number of items in the cache, want 0", l)
 	}
 
 	select {
@@ -133,6 +145,9 @@ func (s) TestCacheClearWithoutCallback(t *testing.T) {
 			t.Fatalf("After Add(), before timeout, from cache got: %v, %v, want %v, %v", got.item, ok, v, true)
 		}
 	}
+	if l := c.Len(); l != itemCount {
+		t.Fatalf("%d number of items in the cache, want %d", l, itemCount)
+	}
 
 	time.Sleep(testCacheTimeout / 2)
 	c.Clear(false)
@@ -141,6 +156,9 @@ func (s) TestCacheClearWithoutCallback(t *testing.T) {
 		if _, ok := c.getForTesting(i); ok {
 			t.Fatalf("After Add(), before timeout, after Remove(), from cache got: _, %v, want _, %v", ok, false)
 		}
+	}
+	if l := c.Len(); l != 0 {
+		t.Fatalf("%d number of items in the cache, want 0", l)
 	}
 
 	select {
@@ -188,6 +206,9 @@ func (s) TestCacheClearWithCallback(t *testing.T) {
 			t.Fatalf("After Add(), before timeout, from cache got: %v, %v, want %v, %v", got.item, ok, v, true)
 		}
 	}
+	if l := c.Len(); l != itemCount {
+		t.Fatalf("%d number of items in the cache, want %d", l, itemCount)
+	}
 
 	time.Sleep(testCacheTimeout / 2)
 	c.Clear(true)
@@ -196,6 +217,9 @@ func (s) TestCacheClearWithCallback(t *testing.T) {
 		if _, ok := c.getForTesting(i); ok {
 			t.Fatalf("After Add(), before timeout, after Remove(), from cache got: _, %v, want _, %v", ok, false)
 		}
+	}
+	if l := c.Len(); l != 0 {
+		t.Fatalf("%d number of items in the cache, want 0", l)
 	}
 
 	select {

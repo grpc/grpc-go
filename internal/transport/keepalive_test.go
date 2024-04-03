@@ -24,17 +24,23 @@ package transport
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"golang.org/x/net/http2"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/testdata"
 )
 
 const defaultTestTimeout = 10 * time.Second
@@ -69,8 +75,12 @@ func (s) TestMaxConnectionIdle(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("context expired before receiving GoAway from the server.")
 	case <-client.GoAway():
-		if reason, _ := client.GetGoAwayReason(); reason != GoAwayNoReason {
+		reason, debugMsg := client.GetGoAwayReason()
+		if reason != GoAwayNoReason {
 			t.Fatalf("GoAwayReason is %v, want %v", reason, GoAwayNoReason)
+		}
+		if !strings.Contains(debugMsg, "max_idle") {
+			t.Fatalf("GoAwayDebugMessage is %v, want %v", debugMsg, "max_idle")
 		}
 	}
 }
@@ -135,8 +145,12 @@ func (s) TestMaxConnectionAge(t *testing.T) {
 	// for more than MaxConnectionIdle time.
 	select {
 	case <-client.GoAway():
-		if reason, _ := client.GetGoAwayReason(); reason != GoAwayNoReason {
+		reason, debugMsg := client.GetGoAwayReason()
+		if reason != GoAwayNoReason {
 			t.Fatalf("GoAwayReason is %v, want %v", reason, GoAwayNoReason)
+		}
+		if !strings.Contains(debugMsg, "max_age") {
+			t.Fatalf("GoAwayDebugMessage is %v, want %v", debugMsg, "max_age")
 		}
 	case <-ctx.Done():
 		t.Fatalf("timed out before getting a GoAway from the server.")
@@ -177,7 +191,7 @@ func (s) TestKeepaliveServerClosesUnresponsiveClient(t *testing.T) {
 	if n, err := conn.Write(clientPreface); err != nil || n != len(clientPreface) {
 		t.Fatalf("conn.Write(clientPreface) failed: n=%v, err=%v", n, err)
 	}
-	framer := newFramer(conn, defaultWriteBufSize, defaultReadBufSize, 0)
+	framer := newFramer(conn, defaultWriteBufSize, defaultReadBufSize, false, 0)
 	if err := framer.fr.WriteSettings(http2.Setting{}); err != nil {
 		t.Fatal("framer.WriteSettings(http2.Setting{}) failed:", err)
 	}
@@ -243,13 +257,14 @@ func (s) TestKeepaliveServerWithResponsiveClient(t *testing.T) {
 func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
-		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+		ChannelzParent: channelz.RegisterSubChannel(-1, "test subchan"),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:                10 * time.Millisecond,
 			Timeout:             10 * time.Millisecond,
 			PermitWithoutStream: true,
 		},
 	}
+	defer channelz.RemoveEntry(copts.ChannelzParent.ID)
 	client, cancel := setUpWithNoPingServer(t, copts, connCh)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
@@ -273,12 +288,13 @@ func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
-		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+		ChannelzParent: channelz.RegisterSubChannel(-1, "test subchan"),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:    10 * time.Millisecond,
 			Timeout: 10 * time.Millisecond,
 		},
 	}
+	defer channelz.RemoveEntry(copts.ChannelzParent.ID)
 	client, cancel := setUpWithNoPingServer(t, copts, connCh)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
@@ -303,12 +319,13 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
-		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+		ChannelzParent: channelz.RegisterSubChannel(-1, "test subchan"),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:    500 * time.Millisecond,
 			Timeout: 500 * time.Millisecond,
 		},
 	}
+	defer channelz.RemoveEntry(copts.ChannelzParent.ID)
 	// TODO(i/6099): Setup a server which can ping and no-ping based on a flag to
 	// reduce the flakiness in this test.
 	client, cancel := setUpWithNoPingServer(t, copts, connCh)
@@ -572,24 +589,49 @@ func (s) TestKeepaliveServerEnforcementWithDormantKeepaliveOnClient(t *testing.T
 // the keepalive timeout, as detailed in proposal A18.
 func (s) TestTCPUserTimeout(t *testing.T) {
 	tests := []struct {
+		tls               bool
 		time              time.Duration
 		timeout           time.Duration
 		clientWantTimeout time.Duration
 		serverWantTimeout time.Duration
 	}{
 		{
+			false,
 			10 * time.Second,
 			10 * time.Second,
 			10 * 1000 * time.Millisecond,
 			10 * 1000 * time.Millisecond,
 		},
 		{
+			false,
 			0,
 			0,
 			0,
 			20 * 1000 * time.Millisecond,
 		},
 		{
+			false,
+			infinity,
+			infinity,
+			0,
+			0,
+		},
+		{
+			true,
+			10 * time.Second,
+			10 * time.Second,
+			10 * 1000 * time.Millisecond,
+			10 * 1000 * time.Millisecond,
+		},
+		{
+			true,
+			0,
+			0,
+			0,
+			20 * 1000 * time.Millisecond,
+		},
+		{
+			true,
 			infinity,
 			infinity,
 			0,
@@ -597,22 +639,32 @@ func (s) TestTCPUserTimeout(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		sopts := &ServerConfig{
+			KeepaliveParams: keepalive.ServerParameters{
+				Time:    tt.time,
+				Timeout: tt.timeout,
+			},
+		}
+
+		copts := ConnectOptions{
+			KeepaliveParams: keepalive.ClientParameters{
+				Time:    tt.time,
+				Timeout: tt.timeout,
+			},
+		}
+
+		if tt.tls {
+			copts.TransportCredentials = makeTLSCreds(t, "x509/client1_cert.pem", "x509/client1_key.pem", "x509/server_ca_cert.pem")
+			sopts.Credentials = makeTLSCreds(t, "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
+
+		}
+
 		server, client, cancel := setUpWithOptions(
 			t,
 			0,
-			&ServerConfig{
-				KeepaliveParams: keepalive.ServerParameters{
-					Time:    tt.time,
-					Timeout: tt.timeout,
-				},
-			},
+			sopts,
 			normal,
-			ConnectOptions{
-				KeepaliveParams: keepalive.ClientParameters{
-					Time:    tt.time,
-					Timeout: tt.timeout,
-				},
-			},
+			copts,
 		)
 		defer func() {
 			client.Close(fmt.Errorf("closed manually by test"))
@@ -621,6 +673,7 @@ func (s) TestTCPUserTimeout(t *testing.T) {
 		}()
 
 		var sc *http2Server
+		var srawConn net.Conn
 		// Wait until the server transport is setup.
 		for {
 			server.mu.Lock()
@@ -635,6 +688,7 @@ func (s) TestTCPUserTimeout(t *testing.T) {
 				if !ok {
 					t.Fatalf("Failed to convert %v to *http2Server", k)
 				}
+				srawConn = server.conns[k]
 			}
 			server.mu.Unlock()
 			break
@@ -648,25 +702,60 @@ func (s) TestTCPUserTimeout(t *testing.T) {
 		}
 		client.CloseStream(stream, io.EOF)
 
-		cltOpt, err := syscall.GetTCPUserTimeout(client.conn)
-		if err != nil {
-			t.Fatalf("syscall.GetTCPUserTimeout() failed: %v", err)
+		// check client TCP user timeout only when non TLS
+		// TODO : find a way to get the underlying conn for client when TLS
+		if !tt.tls {
+			cltOpt, err := syscall.GetTCPUserTimeout(client.conn)
+			if err != nil {
+				t.Fatalf("syscall.GetTCPUserTimeout() failed: %v", err)
+			}
+			if cltOpt < 0 {
+				t.Skipf("skipping test on unsupported environment")
+			}
+			if gotTimeout := time.Duration(cltOpt) * time.Millisecond; gotTimeout != tt.clientWantTimeout {
+				t.Fatalf("syscall.GetTCPUserTimeout() = %d, want %d", gotTimeout, tt.clientWantTimeout)
+			}
 		}
-		if cltOpt < 0 {
-			t.Skipf("skipping test on unsupported environment")
+		scConn := sc.conn
+		if tt.tls {
+			if _, ok := sc.conn.(*net.TCPConn); ok {
+				t.Fatalf("sc.conn is should have wrapped conn with TLS")
+			}
+			scConn = srawConn
 		}
-		if gotTimeout := time.Duration(cltOpt) * time.Millisecond; gotTimeout != tt.clientWantTimeout {
-			t.Fatalf("syscall.GetTCPUserTimeout() = %d, want %d", gotTimeout, tt.clientWantTimeout)
+		// verify the type of scConn (on which TCP user timeout will be got)
+		if _, ok := scConn.(*net.TCPConn); !ok {
+			t.Fatalf("server underlying conn is of type %T, want net.TCPConn", scConn)
 		}
-
-		srvOpt, err := syscall.GetTCPUserTimeout(sc.conn)
+		srvOpt, err := syscall.GetTCPUserTimeout(scConn)
 		if err != nil {
 			t.Fatalf("syscall.GetTCPUserTimeout() failed: %v", err)
 		}
 		if gotTimeout := time.Duration(srvOpt) * time.Millisecond; gotTimeout != tt.serverWantTimeout {
 			t.Fatalf("syscall.GetTCPUserTimeout() = %d, want %d", gotTimeout, tt.serverWantTimeout)
 		}
+
 	}
+}
+
+func makeTLSCreds(t *testing.T, certPath, keyPath, rootsPath string) credentials.TransportCredentials {
+	cert, err := tls.LoadX509KeyPair(testdata.Path(certPath), testdata.Path(keyPath))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(%q, %q) failed: %v", certPath, keyPath, err)
+	}
+	b, err := os.ReadFile(testdata.Path(rootsPath))
+	if err != nil {
+		t.Fatalf("os.ReadFile(%q) failed: %v", rootsPath, err)
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(b) {
+		t.Fatal("failed to append certificates")
+	}
+	return credentials.NewTLS(&tls.Config{
+		Certificates:       []tls.Certificate{cert},
+		RootCAs:            roots,
+		InsecureSkipVerify: true,
+	})
 }
 
 // checkForHealthyStream attempts to create a stream and return error if any.

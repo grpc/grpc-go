@@ -37,7 +37,7 @@ func Test(t *testing.T) {
 
 func (s) TestCircularBufferSerial(t *testing.T) {
 	var size, i uint32
-	var result []interface{}
+	var result []any
 
 	size = 1 << 15
 	cb, err := NewCircularBuffer(size)
@@ -78,7 +78,7 @@ func (s) TestCircularBufferSerial(t *testing.T) {
 
 func (s) TestCircularBufferOverflow(t *testing.T) {
 	var size, i uint32
-	var result []interface{}
+	var result []any
 
 	size = 1 << 10
 	cb, err := NewCircularBuffer(size)
@@ -106,7 +106,7 @@ func (s) TestCircularBufferOverflow(t *testing.T) {
 func (s) TestCircularBufferConcurrent(t *testing.T) {
 	for tn := 0; tn < 2; tn++ {
 		var size uint32
-		var result []interface{}
+		var result []any
 
 		size = 1 << 6
 		cb, err := NewCircularBuffer(size)

@@ -31,7 +31,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -43,6 +42,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -53,8 +53,9 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
-	_ "google.golang.org/grpc/xds/internal/balancer" // Register the balancers.
-	_ "google.golang.org/grpc/xds/internal/resolver" // Register the xds_resolver.
+	_ "google.golang.org/grpc/xds/internal/balancer"          // Register the balancers.
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
+	_ "google.golang.org/grpc/xds/internal/resolver"          // Register the xds_resolver.
 )
 
 const defaultTestTimeout = 10 * time.Second
@@ -218,7 +219,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 		cfgs: []*fpb.HTTPFault{{
 			Delay: &cpb.FaultDelay{
 				Percentage:         &tpb.FractionalPercent{Numerator: 100, Denominator: tpb.FractionalPercent_HUNDRED},
-				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: ptypes.DurationProto(time.Second)},
+				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: durationpb.New(time.Second)},
 			},
 		}},
 		randOutInc: 5,
@@ -232,7 +233,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 		cfgs: []*fpb.HTTPFault{{
 			Delay: &cpb.FaultDelay{
 				Percentage:         &tpb.FractionalPercent{Numerator: 1000, Denominator: tpb.FractionalPercent_TEN_THOUSAND},
-				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: ptypes.DurationProto(time.Second)},
+				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: durationpb.New(time.Second)},
 			},
 		}},
 		randOutInc: 500,
@@ -256,7 +257,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 		cfgs: []*fpb.HTTPFault{{
 			Delay: &cpb.FaultDelay{
 				Percentage:         &tpb.FractionalPercent{Numerator: 80, Denominator: tpb.FractionalPercent_HUNDRED},
-				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: ptypes.DurationProto(3 * time.Second)},
+				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: durationpb.New(3 * time.Second)},
 			},
 			Abort: &fpb.FaultAbort{
 				Percentage: &tpb.FractionalPercent{Numerator: 50, Denominator: tpb.FractionalPercent_HUNDRED},
@@ -456,7 +457,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 		}, {
 			Delay: &cpb.FaultDelay{
 				Percentage:         &tpb.FractionalPercent{Numerator: 80, Denominator: tpb.FractionalPercent_HUNDRED},
-				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: ptypes.DurationProto(time.Second)},
+				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: durationpb.New(time.Second)},
 			},
 		}},
 		randOutInc: 10,
@@ -505,7 +506,8 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 				SecLevel:   e2e.SecurityLevelNone,
 			})
 			hcm := new(v3httppb.HttpConnectionManager)
-			err := ptypes.UnmarshalAny(resources.Listeners[0].GetApiListener().GetApiListener(), hcm)
+			lis := resources.Listeners[0].GetApiListener().GetApiListener()
+			err := lis.UnmarshalTo(hcm)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -516,7 +518,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 				hcm.HttpFilters = append(hcm.HttpFilters, e2e.HTTPFilter(fmt.Sprintf("fault%d", i), cfg))
 			}
 			hcm.HttpFilters = append(hcm.HttpFilters, routerFilter)
-			hcmAny := testutils.MarshalAny(hcm)
+			hcmAny := testutils.MarshalAny(t, hcm)
 			resources.Listeners[0].ApiListener.ApiListener = hcmAny
 			resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
 
@@ -569,7 +571,8 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 		SecLevel:   e2e.SecurityLevelNone,
 	})
 	hcm := new(v3httppb.HttpConnectionManager)
-	err := ptypes.UnmarshalAny(resources.Listeners[0].GetApiListener().GetApiListener(), hcm)
+	lis := resources.Listeners[0].GetApiListener().GetApiListener()
+	err := lis.UnmarshalTo(hcm)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -587,11 +590,11 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 			MaxActiveFaults: wrapperspb.UInt32(2),
 			Delay: &cpb.FaultDelay{
 				Percentage:         &tpb.FractionalPercent{Numerator: 100, Denominator: tpb.FractionalPercent_HUNDRED},
-				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: ptypes.DurationProto(time.Second)},
+				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: durationpb.New(time.Second)},
 			},
 		})},
 		hcm.HttpFilters...)
-	hcmAny := testutils.MarshalAny(hcm)
+	hcmAny := testutils.MarshalAny(t, hcm)
 	resources.Listeners[0].ApiListener.ApiListener = hcmAny
 	resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
 

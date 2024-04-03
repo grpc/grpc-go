@@ -20,382 +20,241 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+)
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+const (
+	defaultTestTimeout      = 10 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
 )
 
 const (
+	listenerName = "listener"
+	clusterName  = "cluster"
+
 	route1 = "route1"
 	route2 = "route2"
 	route3 = "route3"
+	route4 = "route4"
 )
 
-// setupTests creates a rds handler with a fake xds client for control over the
-// xds client.
-func setupTests() (*rdsHandler, *fakeclient.Client, chan rdsHandlerUpdate) {
-	xdsC := fakeclient.NewClient()
-	ch := make(chan rdsHandlerUpdate, 1)
-	rh := newRDSHandler(xdsC, ch)
-	return rh, xdsC, ch
+// xdsSetupForTests performs the following setup actions:
+//   - spins up an xDS management server
+//   - creates an xDS client with a bootstrap configuration pointing to the above
+//     management server
+//
+// Returns the following:
+// - a reference to the management server
+// - nodeID to use when pushing resources to the management server
+// - a channel to read lds resource names received by the management server
+// - a channel to read rds resource names received by the management server
+// - an xDS client to pass to the rdsHandler under test
+func xdsSetupForTests(t *testing.T) (*e2e.ManagementServer, string, chan []string, chan []string, xdsclient.XDSClient) {
+	t.Helper()
+
+	ldsNamesCh := make(chan []string, 1)
+	rdsNamesCh := make(chan []string, 1)
+
+	// Setup the management server to push the requested route configuration
+	// resource names on to a channel for the test to inspect.
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			switch req.GetTypeUrl() {
+			case version.V3ListenerURL: // Waits on the listener, and route config below...
+				select {
+				case <-ldsNamesCh:
+				default:
+				}
+				select {
+				case ldsNamesCh <- req.GetResourceNames():
+				default:
+				}
+			case version.V3RouteConfigURL: // waits on route config names here...
+				select {
+				case <-rdsNamesCh:
+				default:
+				}
+				select {
+				case rdsNamesCh <- req.GetResourceNames():
+				default:
+				}
+			default:
+				return fmt.Errorf("unexpected resources %v of type %q requested", req.GetResourceNames(), req.GetTypeUrl())
+			}
+			return nil
+		},
+		AllowResourceSubset: true,
+	})
+	t.Cleanup(cleanup)
+
+	xdsC, cancel, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cancel)
+
+	return mgmtServer, nodeID, ldsNamesCh, rdsNamesCh, xdsC
 }
 
-// waitForFuncWithNames makes sure that a blocking function returns the correct
-// set of names, where order doesn't matter. This takes away nondeterminism from
-// ranging through a map.
-func waitForFuncWithNames(ctx context.Context, f func(context.Context) (string, error), names ...string) error {
-	wantNames := make(map[string]bool, len(names))
-	for _, name := range names {
-		wantNames[name] = true
-	}
-	gotNames := make(map[string]bool, len(names))
-	for range wantNames {
-		name, err := f(ctx)
-		if err != nil {
-			return err
+// Waits for the wantNames to be pushed on to namesCh. Fails the test by calling
+// t.Fatal if the context expires before that.
+func waitForResourceNames(ctx context.Context, t *testing.T, namesCh chan []string, wantNames []string) {
+	t.Helper()
+
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		select {
+		case <-ctx.Done():
+		case gotNames := <-namesCh:
+			if cmp.Equal(gotNames, wantNames, cmpopts.EquateEmpty(), cmpopts.SortSlices(func(s1, s2 string) bool { return s1 < s2 })) {
+				return
+			}
+			t.Logf("Received resource names %v, want %v", gotNames, wantNames)
 		}
-		gotNames[name] = true
 	}
-	if !cmp.Equal(gotNames, wantNames) {
-		return fmt.Errorf("got routeNames %v, want %v", gotNames, wantNames)
-	}
-	return nil
+	t.Fatalf("Timeout waiting for resource to be requested from the management server")
 }
 
-// TestSuccessCaseOneRDSWatch tests the simplest scenario: the rds handler
-// receives a single route name, starts a watch for that route name, gets a
-// successful update, and then writes an update to the update channel for
-// listener to pick up.
-func (s) TestSuccessCaseOneRDSWatch(t *testing.T) {
-	rh, fakeClient, ch := setupTests()
-	// When you first update the rds handler with a list of a single Route names
-	// that needs dynamic RDS Configuration, this Route name has not been seen
-	// before, so the RDS Handler should start a watch on that RouteName.
-	rh.updateRouteNamesToWatch(map[string]bool{route1: true})
-	// The RDS Handler should start a watch for that routeName.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	gotRoute, err := fakeClient.WaitForWatchRouteConfig(ctx)
-	if err != nil {
-		t.Fatalf("xdsClient.WatchRDS failed with error: %v", err)
-	}
-	if gotRoute != route1 {
-		t.Fatalf("xdsClient.WatchRDS called for route: %v, want %v", gotRoute, route1)
-	}
-	rdsUpdate := xdsresource.RouteConfigUpdate{}
-	// Invoke callback with the xds client with a certain route update. Due to
-	// this route update updating every route name that rds handler handles,
-	// this should write to the update channel to send to the listener.
-	fakeClient.InvokeWatchRouteConfigCallback(route1, rdsUpdate, nil)
-	rhuWant := map[string]xdsresource.RouteConfigUpdate{route1: rdsUpdate}
-	select {
-	case rhu := <-ch:
-		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
-			t.Fatalf("got unexpected route update, diff (-got, +want): %v", diff)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timed out waiting for update from update channel.")
-	}
-	// Close the rds handler. This is meant to be called when the lis wrapper is
-	// closed, and the call should cancel all the watches present (for this
-	// test, a single watch).
-	rh.close()
-	routeNameDeleted, err := fakeClient.WaitForCancelRouteConfigWatch(ctx)
-	if err != nil {
-		t.Fatalf("xdsClient.CancelRDS failed with error: %v", err)
-	}
-	if routeNameDeleted != route1 {
-		t.Fatalf("xdsClient.CancelRDS called for route %v, want %v", routeNameDeleted, route1)
-	}
+func routeConfigResourceForName(name string) *v3routepb.RouteConfiguration {
+	return e2e.RouteConfigResourceWithOptions(e2e.RouteConfigOptions{
+		RouteConfigName:      name,
+		ListenerName:         listenerName,
+		ClusterSpecifierType: e2e.RouteConfigClusterSpecifierTypeCluster,
+		ClusterName:          clusterName,
+	})
 }
 
-// TestSuccessCaseTwoUpdates tests the case where the rds handler receives an
-// update with a single Route, then receives a second update with two routes.
-// The handler should start a watch for the added route, and if received a RDS
-// update for that route it should send an update with both RDS updates present.
-func (s) TestSuccessCaseTwoUpdates(t *testing.T) {
-	rh, fakeClient, ch := setupTests()
+type testCallbackVerify struct {
+	ch chan callbackStruct
+}
 
-	rh.updateRouteNamesToWatch(map[string]bool{route1: true})
+type callbackStruct struct {
+	routeName string
+	rwu       rdsWatcherUpdate
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	gotRoute, err := fakeClient.WaitForWatchRouteConfig(ctx)
-	if err != nil {
-		t.Fatalf("xdsClient.WatchRDS failed with error: %v", err)
-	}
-	if gotRoute != route1 {
-		t.Fatalf("xdsClient.WatchRDS called for route: %v, want %v", gotRoute, route1)
-	}
+func (tcv *testCallbackVerify) testCallback(routeName string, rwu rdsWatcherUpdate) {
+	tcv.ch <- callbackStruct{routeName: routeName, rwu: rwu}
+}
 
-	// Update the RDSHandler with route names which adds a route name to watch.
-	// This should trigger the RDSHandler to start a watch for the added route
-	// name to watch.
-	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route2: true})
-	gotRoute, err = fakeClient.WaitForWatchRouteConfig(ctx)
-	if err != nil {
-		t.Fatalf("xdsClient.WatchRDS failed with error: %v", err)
-	}
-	if gotRoute != route2 {
-		t.Fatalf("xdsClient.WatchRDS called for route: %v, want %v", gotRoute, route2)
-	}
-
-	// Invoke the callback with an update for route 1. This shouldn't cause the
-	// handler to write an update, as it has not received RouteConfigurations
-	// for every RouteName.
-	rdsUpdate1 := xdsresource.RouteConfigUpdate{}
-	fakeClient.InvokeWatchRouteConfigCallback(route1, rdsUpdate1, nil)
-
-	// The RDS Handler should not send an update.
-	sCtx, sCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCtxCancel()
+func verifyRouteName(ctx context.Context, t *testing.T, ch chan callbackStruct, want callbackStruct) {
+	t.Helper()
 	select {
-	case <-ch:
-		t.Fatal("RDS Handler wrote an update to updateChannel when it shouldn't have, as each route name has not received an update yet")
-	case <-sCtx.Done():
-	}
-
-	// Invoke the callback with an update for route 2. This should cause the
-	// handler to write an update, as it has received RouteConfigurations for
-	// every RouteName.
-	rdsUpdate2 := xdsresource.RouteConfigUpdate{}
-	fakeClient.InvokeWatchRouteConfigCallback(route2, rdsUpdate2, nil)
-	// The RDS Handler should then update the listener wrapper with an update
-	// with two route configurations, as both route names the RDS Handler handles
-	// have received an update.
-	rhuWant := map[string]xdsresource.RouteConfigUpdate{route1: rdsUpdate1, route2: rdsUpdate2}
-	select {
-	case rhu := <-ch:
-		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
-			t.Fatalf("got unexpected route update, diff (-got, +want): %v", diff)
+	case got := <-ch:
+		if diff := cmp.Diff(got.routeName, want.routeName); diff != "" {
+			t.Fatalf("unexpected update received (-got, +want):%v, want: %v", got, want)
 		}
 	case <-ctx.Done():
-		t.Fatal("Timed out waiting for the rds handler update to be written to the update buffer.")
-	}
-
-	// Close the rds handler. This is meant to be called when the lis wrapper is
-	// closed, and the call should cancel all the watches present (for this
-	// test, two watches on route1 and route2).
-	rh.close()
-	if err = waitForFuncWithNames(ctx, fakeClient.WaitForCancelRouteConfigWatch, route1, route2); err != nil {
-		t.Fatalf("Error while waiting for names: %v", err)
+		t.Fatalf("timeout waiting for callback")
 	}
 }
 
-// TestSuccessCaseDeletedRoute tests the case where the rds handler receives an
-// update with two routes, then receives an update with only one route. The RDS
-// Handler is expected to cancel the watch for the route no longer present.
-func (s) TestSuccessCaseDeletedRoute(t *testing.T) {
-	rh, fakeClient, ch := setupTests()
+// TestRDSHandler tests the RDS Handler. It first configures the rds handler to
+// watch route 1 and 2. Before receiving both RDS updates, it should not be
+// ready, but after receiving both, it should be ready. It then tells the rds
+// handler to watch route 1 2 and 3. It should not be ready until it receives
+// route3 from the management server. It then configures the rds handler to
+// watch route 1 and 3. It should immediately be ready. It then configures the
+// rds handler to watch route 1 and 4. It should not be ready until it receives
+// an rds update for route 4.
+func (s) TestRDSHandler(t *testing.T) {
+	mgmtServer, nodeID, _, rdsNamesCh, xdsC := xdsSetupForTests(t)
+
+	ch := make(chan callbackStruct, 1)
+	tcv := &testCallbackVerify{ch: ch}
+	rh := newRDSHandler(tcv.testCallback, xdsC, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Configure the management server with a single route config resource.
+	routeResource1 := routeConfigResourceForName(route1)
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Routes:         []*v3routepb.RouteConfiguration{routeResource1},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
 
 	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route2: true})
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	// Will start two watches.
-	if err := waitForFuncWithNames(ctx, fakeClient.WaitForWatchRouteConfig, route1, route2); err != nil {
-		t.Fatalf("Error while waiting for names: %v", err)
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1, route2})
+	verifyRouteName(ctx, t, ch, callbackStruct{routeName: route1})
+
+	// The rds handler update should not be ready.
+	if got := rh.determineRouteConfigurationReady(); got != false {
+		t.Fatalf("rh.determineRouteConfigurationReady: %v, want: false", false)
 	}
 
-	// Update the RDSHandler with route names which deletes a route name to
-	// watch. This should trigger the RDSHandler to cancel the watch for the
-	// deleted route name to watch.
-	rh.updateRouteNamesToWatch(map[string]bool{route1: true})
-	// This should delete the watch for route2.
-	routeNameDeleted, err := fakeClient.WaitForCancelRouteConfigWatch(ctx)
-	if err != nil {
-		t.Fatalf("xdsClient.CancelRDS failed with error %v", err)
-	}
-	if routeNameDeleted != route2 {
-		t.Fatalf("xdsClient.CancelRDS called for route %v, want %v", routeNameDeleted, route2)
+	// Configure the management server both route config resources.
+	routeResource2 := routeConfigResourceForName(route2)
+	resources.Routes = []*v3routepb.RouteConfiguration{routeResource1, routeResource2}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
 	}
 
-	rdsUpdate := xdsresource.RouteConfigUpdate{}
-	// Invoke callback with the xds client with a certain route update. Due to
-	// this route update updating every route name that rds handler handles,
-	// this should write to the update channel to send to the listener.
-	fakeClient.InvokeWatchRouteConfigCallback(route1, rdsUpdate, nil)
-	rhuWant := map[string]xdsresource.RouteConfigUpdate{route1: rdsUpdate}
-	select {
-	case rhu := <-ch:
-		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
-			t.Fatalf("got unexpected route update, diff (-got, +want): %v", diff)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timed out waiting for update from update channel.")
-	}
+	verifyRouteName(ctx, t, ch, callbackStruct{routeName: route2})
 
-	rh.close()
-	routeNameDeleted, err = fakeClient.WaitForCancelRouteConfigWatch(ctx)
-	if err != nil {
-		t.Fatalf("xdsClient.CancelRDS failed with error: %v", err)
+	if got := rh.determineRouteConfigurationReady(); got != true {
+		t.Fatalf("rh.determineRouteConfigurationReady: %v, want: true", got)
 	}
-	if routeNameDeleted != route1 {
-		t.Fatalf("xdsClient.CancelRDS called for route %v, want %v", routeNameDeleted, route1)
-	}
-}
-
-// TestSuccessCaseTwoUpdatesAddAndDeleteRoute tests the case where the rds
-// handler receives an update with two routes, and then receives an update with
-// two routes, one previously there and one added (i.e. 12 -> 23). This should
-// cause the route that is no longer there to be deleted and cancelled, and the
-// route that was added should have a watch started for it.
-func (s) TestSuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
-	rh, fakeClient, ch := setupTests()
-
-	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route2: true})
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if err := waitForFuncWithNames(ctx, fakeClient.WaitForWatchRouteConfig, route1, route2); err != nil {
-		t.Fatalf("Error while waiting for names: %v", err)
-	}
-
-	// Update the rds handler with two routes, one which was already there and a new route.
-	// This should cause the rds handler to delete/cancel watch for route 1 and start a watch
-	// for route 3.
-	rh.updateRouteNamesToWatch(map[string]bool{route2: true, route3: true})
-
-	// Start watch comes first, which should be for route3 as was just added.
-	gotRoute, err := fakeClient.WaitForWatchRouteConfig(ctx)
-	if err != nil {
-		t.Fatalf("xdsClient.WatchRDS failed with error: %v", err)
-	}
-	if gotRoute != route3 {
-		t.Fatalf("xdsClient.WatchRDS called for route: %v, want %v", gotRoute, route3)
-	}
-
-	// Then route 1 should be deleted/cancelled watch for, as it is no longer present
-	// in the new RouteName to watch map.
-	routeNameDeleted, err := fakeClient.WaitForCancelRouteConfigWatch(ctx)
-	if err != nil {
-		t.Fatalf("xdsClient.CancelRDS failed with error: %v", err)
-	}
-	if routeNameDeleted != route1 {
-		t.Fatalf("xdsClient.CancelRDS called for route %v, want %v", routeNameDeleted, route1)
-	}
-
-	// Invoke the callback with an update for route 2. This shouldn't cause the
-	// handler to write an update, as it has not received RouteConfigurations
-	// for every RouteName.
-	rdsUpdate2 := xdsresource.RouteConfigUpdate{}
-	fakeClient.InvokeWatchRouteConfigCallback(route2, rdsUpdate2, nil)
-
-	// The RDS Handler should not send an update.
-	sCtx, sCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCtxCancel()
-	select {
-	case <-ch:
-		t.Fatalf("RDS Handler wrote an update to updateChannel when it shouldn't have, as each route name has not received an update yet")
-	case <-sCtx.Done():
-	}
-
-	// Invoke the callback with an update for route 3. This should cause the
-	// handler to write an update, as it has received RouteConfigurations for
-	// every RouteName.
-	rdsUpdate3 := xdsresource.RouteConfigUpdate{}
-	fakeClient.InvokeWatchRouteConfigCallback(route3, rdsUpdate3, nil)
-	// The RDS Handler should then update the listener wrapper with an update
-	// with two route configurations, as both route names the RDS Handler handles
-	// have received an update.
-	rhuWant := map[string]xdsresource.RouteConfigUpdate{route2: rdsUpdate2, route3: rdsUpdate3}
-	select {
-	case rhu := <-rh.updateChannel:
-		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
-			t.Fatalf("got unexpected route update, diff (-got, +want): %v", diff)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timed out waiting for the rds handler update to be written to the update buffer.")
-	}
-	// Close the rds handler. This is meant to be called when the lis wrapper is
-	// closed, and the call should cancel all the watches present (for this
-	// test, two watches on route2 and route3).
-	rh.close()
-	if err = waitForFuncWithNames(ctx, fakeClient.WaitForCancelRouteConfigWatch, route2, route3); err != nil {
-		t.Fatalf("Error while waiting for names: %v", err)
-	}
-}
-
-// TestSuccessCaseSecondUpdateMakesRouteFull tests the scenario where the rds handler gets
-// told to watch three rds configurations, gets two successful updates, then gets told to watch
-// only those two. The rds handler should then write an update to update buffer.
-func (s) TestSuccessCaseSecondUpdateMakesRouteFull(t *testing.T) {
-	rh, fakeClient, ch := setupTests()
 
 	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route2: true, route3: true})
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if err := waitForFuncWithNames(ctx, fakeClient.WaitForWatchRouteConfig, route1, route2, route3); err != nil {
-		t.Fatalf("Error while waiting for names: %v", err)
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1, route2, route3})
+	if got := rh.determineRouteConfigurationReady(); got != false {
+		t.Fatalf("rh.determineRouteConfigurationReady: %v, want: false", got)
 	}
 
-	// Invoke the callbacks for two of the three watches. Since RDS is not full,
-	// this shouldn't trigger rds handler to write an update to update buffer.
-	fakeClient.InvokeWatchRouteConfigCallback(route1, xdsresource.RouteConfigUpdate{}, nil)
-	fakeClient.InvokeWatchRouteConfigCallback(route2, xdsresource.RouteConfigUpdate{}, nil)
+	// Configure the management server with route config resources.
+	routeResource3 := routeConfigResourceForName(route3)
+	resources.Routes = []*v3routepb.RouteConfiguration{routeResource1, routeResource2, routeResource3}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+	verifyRouteName(ctx, t, ch, callbackStruct{routeName: route3})
 
-	// The RDS Handler should not send an update.
-	sCtx, sCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCtxCancel()
-	select {
-	case <-rh.updateChannel:
-		t.Fatalf("RDS Handler wrote an update to updateChannel when it shouldn't have, as each route name has not received an update yet")
-	case <-sCtx.Done():
+	if got := rh.determineRouteConfigurationReady(); got != true {
+		t.Fatalf("rh.determineRouteConfigurationReady: %v, want: true", got)
 	}
-
-	// Tell the rds handler to now only watch Route 1 and Route 2. This should
-	// trigger the rds handler to write an update to the update buffer as it now
-	// has full rds configuration.
-	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route2: true})
-	// Route 3 should be deleted/cancelled watch for, as it is no longer present
-	// in the new RouteName to watch map.
-	routeNameDeleted, err := fakeClient.WaitForCancelRouteConfigWatch(ctx)
-	if err != nil {
-		t.Fatalf("xdsClient.CancelRDS failed with error: %v", err)
-	}
-	if routeNameDeleted != route3 {
-		t.Fatalf("xdsClient.CancelRDS called for route %v, want %v", routeNameDeleted, route1)
-	}
-	rhuWant := map[string]xdsresource.RouteConfigUpdate{route1: {}, route2: {}}
-	select {
-	case rhu := <-ch:
-		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
-			t.Fatalf("got unexpected route update, diff (-got, +want): %v", diff)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timed out waiting for the rds handler update to be written to the update buffer.")
-	}
-}
-
-// TestErrorReceived tests the case where the rds handler receives a route name
-// to watch, then receives an update with an error. This error should be then
-// written to the update channel.
-func (s) TestErrorReceived(t *testing.T) {
-	rh, fakeClient, ch := setupTests()
-
-	rh.updateRouteNamesToWatch(map[string]bool{route1: true})
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	gotRoute, err := fakeClient.WaitForWatchRouteConfig(ctx)
-	if err != nil {
-		t.Fatalf("xdsClient.WatchRDS failed with error %v", err)
-	}
-	if gotRoute != route1 {
-		t.Fatalf("xdsClient.WatchRDS called for route: %v, want %v", gotRoute, route1)
+	// Update to route 1 and route 2. Should immediately go ready.
+	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route3: true})
+	if got := rh.determineRouteConfigurationReady(); got != true {
+		t.Fatalf("rh.determineRouteConfigurationReady: %v, want: true", got)
 	}
 
-	rdsErr := errors.New("some error")
-	fakeClient.InvokeWatchRouteConfigCallback(route1, xdsresource.RouteConfigUpdate{}, rdsErr)
-	select {
-	case rhu := <-ch:
-		if rhu.err.Error() != "some error" {
-			t.Fatalf("Did not receive the expected error, instead received: %v", rhu.err.Error())
-		}
-	case <-ctx.Done():
-		t.Fatal("Timed out waiting for update from update channel")
+	// Update to route 1 and route 4. No route 4, so should not be ready.
+	rh.updateRouteNamesToWatch(map[string]bool{route1: true, route4: true})
+	waitForResourceNames(ctx, t, rdsNamesCh, []string{route1, route4})
+	if got := rh.determineRouteConfigurationReady(); got != false {
+		t.Fatalf("rh.determineRouteConfigurationReady: %v, want: false", got)
+	}
+	routeResource4 := routeConfigResourceForName(route4)
+	resources.Routes = []*v3routepb.RouteConfiguration{routeResource1, routeResource2, routeResource3, routeResource4}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+	verifyRouteName(ctx, t, ch, callbackStruct{routeName: route4})
+	if got := rh.determineRouteConfigurationReady(); got != true {
+		t.Fatalf("rh.determineRouteConfigurationReady: %v, want: true", got)
 	}
 }

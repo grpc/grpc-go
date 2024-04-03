@@ -25,13 +25,13 @@ import (
 )
 
 // stats returns a tuple with accepts, throttles for the current time.
-func (th *Throttler) stats() (int64, int64) {
+func (t *Throttler) stats() (int64, int64) {
 	now := timeNowFunc()
 
-	th.mu.Lock()
-	a, t := th.accepts.sum(now), th.throttles.sum(now)
-	th.mu.Unlock()
-	return a, t
+	t.mu.Lock()
+	a, th := t.accepts.sum(now), t.throttles.sum(now)
+	t.mu.Unlock()
+	return a, th
 }
 
 // Enums for responses.

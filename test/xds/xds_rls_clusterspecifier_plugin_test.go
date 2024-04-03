@@ -26,7 +26,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/rls"
@@ -46,7 +45,7 @@ import (
 
 // defaultClientResourcesWithRLSCSP returns a set of resources (LDS, RDS, CDS, EDS) for a
 // client to connect to a server with a RLS Load Balancer as a child of Cluster Manager.
-func defaultClientResourcesWithRLSCSP(lb e2e.LoadBalancingPolicy, params e2e.ResourceParams, rlsProto *rlspb.RouteLookupConfig) e2e.UpdateOptions {
+func defaultClientResourcesWithRLSCSP(t *testing.T, lb e2e.LoadBalancingPolicy, params e2e.ResourceParams, rlsProto *rlspb.RouteLookupConfig) e2e.UpdateOptions {
 	routeConfigName := "route-" + params.DialTarget
 	clusterName := "cluster-" + params.DialTarget
 	endpointsName := "endpoints-" + params.DialTarget
@@ -58,7 +57,7 @@ func defaultClientResourcesWithRLSCSP(lb e2e.LoadBalancingPolicy, params e2e.Res
 			ListenerName:               params.DialTarget,
 			ClusterSpecifierType:       e2e.RouteConfigClusterSpecifierTypeClusterSpecifierPlugin,
 			ClusterSpecifierPluginName: "rls-csp",
-			ClusterSpecifierPluginConfig: testutils.MarshalAny(&rlspb.RouteLookupClusterSpecifier{
+			ClusterSpecifierPluginConfig: testutils.MarshalAny(t, &rlspb.RouteLookupClusterSpecifier{
 				RouteLookupConfig: rlsProto,
 			}),
 		})},
@@ -100,13 +99,8 @@ func (s) TestRLSinxDS(t *testing.T) {
 }
 
 func testRLSinxDS(t *testing.T, lbPolicy e2e.LoadBalancingPolicy) {
-	oldRLS := envconfig.XDSRLS
-	envconfig.XDSRLS = true
 	internal.RegisterRLSClusterSpecifierPluginForTesting()
-	defer func() {
-		envconfig.XDSRLS = oldRLS
-		internal.UnregisterRLSClusterSpecifierPluginForTesting()
-	}()
+	defer internal.UnregisterRLSClusterSpecifierPluginForTesting()
 
 	// Set up all components and configuration necessary - management server,
 	// xDS resolver, fake RLS Server, and xDS configuration which specifies an
@@ -127,7 +121,7 @@ func testRLSinxDS(t *testing.T, lbPolicy e2e.LoadBalancingPolicy) {
 	}
 
 	const serviceName = "my-service-client-side-xds"
-	resources := defaultClientResourcesWithRLSCSP(lbPolicy, e2e.ResourceParams{
+	resources := defaultClientResourcesWithRLSCSP(t, lbPolicy, e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
 		Host:       "localhost",

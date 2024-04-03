@@ -26,10 +26,10 @@
 // example, if one wants to profile the load balancing layer, which is
 // independent of RPC queries, a separate CircularBuffer can be used.
 //
-// Note that the circular buffer simply takes any interface{}. In the future,
-// more types of measurements (such as the number of memory allocations) could
-// be measured, which might require a different type of object being pushed
-// into the circular buffer.
+// Note that the circular buffer simply takes any type. In the future, more
+// types of measurements (such as the number of memory allocations) could be
+// measured, which might require a different type of object being pushed into
+// the circular buffer.
 package profiling
 
 import (

@@ -52,7 +52,7 @@ func init() {
 }
 
 // TestSingleWriter starts one reader and one writer goroutine and makes sure
-// that the reader gets all the value added to the buffer by the writer.
+// that the reader gets all the values added to the buffer by the writer.
 func (s) TestSingleWriter(t *testing.T) {
 	ub := NewUnbounded()
 	reads := []int{}
@@ -124,14 +124,25 @@ func (s) TestMultipleWriters(t *testing.T) {
 // buffer is closed.
 func (s) TestClose(t *testing.T) {
 	ub := NewUnbounded()
-	ub.Close()
-	if v, ok := <-ub.Get(); ok {
-		t.Errorf("Unbounded.Get() = %v, want closed channel", v)
+	if err := ub.Put(1); err != nil {
+		t.Fatalf("Unbounded.Put() = %v; want nil", err)
 	}
-	ub.Put(1)
+	ub.Close()
+	if err := ub.Put(1); err == nil {
+		t.Fatalf("Unbounded.Put() = <nil>; want non-nil error")
+	}
+	if v, ok := <-ub.Get(); !ok {
+		t.Errorf("Unbounded.Get() = %v, %v, want %v, %v", v, ok, 1, true)
+	}
+	if err := ub.Put(1); err == nil {
+		t.Fatalf("Unbounded.Put() = <nil>; want non-nil error")
+	}
 	ub.Load()
 	if v, ok := <-ub.Get(); ok {
 		t.Errorf("Unbounded.Get() = %v, want closed channel", v)
 	}
-	ub.Close()
+	if err := ub.Put(1); err == nil {
+		t.Fatalf("Unbounded.Put() = <nil>; want non-nil error")
+	}
+	ub.Close() // ignored
 }

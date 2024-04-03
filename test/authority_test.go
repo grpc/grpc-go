@@ -29,7 +29,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -84,7 +83,7 @@ func runUnixTest(t *testing.T, address, target, expectedAuthority string, dialer
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 	if err != nil {
@@ -126,7 +125,7 @@ var authorityTests = []authorityTest{
 		name:           "UnixPassthrough",
 		address:        "/tmp/sock.sock",
 		target:         "passthrough:///unix:///tmp/sock.sock",
-		authority:      "unix:///tmp/sock.sock",
+		authority:      "unix:%2F%2F%2Ftmp%2Fsock.sock",
 		dialTargetWant: "unix:///tmp/sock.sock",
 	},
 	{
@@ -202,7 +201,7 @@ func (s) TestColonPortAuthority(t *testing.T) {
 		t.Fatalf("grpc.Dial(%q) = %v", ss.Target, err)
 	}
 	defer cc.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	_, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
 	if err != nil {
@@ -211,7 +210,7 @@ func (s) TestColonPortAuthority(t *testing.T) {
 }
 
 // TestAuthorityReplacedWithResolverAddress tests the scenario where the resolver
-// returned address contains a ServerName override. The test verifies that the the
+// returned address contains a ServerName override. The test verifies that the
 // :authority header value sent to the server as part of the http/2 HEADERS frame
 // is set to the value specified in the resolver returned address.
 func (s) TestAuthorityReplacedWithResolverAddress(t *testing.T) {
