@@ -1267,14 +1267,16 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				FilterMetadata: map[string]*structpb.Struct{
 					"com.google.csm.telemetry_labels": {
 						Fields: map[string]*structpb.Value{
-							"string-value-dont-ignore": structpb.NewStringValue("string-val"),
-							"float-value-ignore":       structpb.NewNumberValue(3),
-							"bool-value-ignore":        structpb.NewBoolValue(false),
+							"string-value-should-ignore": structpb.NewStringValue("string-val"),
+							"float-value-ignore":         structpb.NewNumberValue(3),
+							"bool-value-ignore":          structpb.NewBoolValue(false),
+							"service_name":               structpb.NewStringValue("grpc-service"), // shouldn't ignore
+							"service_namespace":          structpb.NewNullValue(),                 // should ignore - wrong type
 						},
 					},
-					"ignore-this-metadata": {
+					"ignore-this-metadata": { // should ignore this filter_metadata
 						Fields: map[string]*structpb.Value{
-							"string-value-should-ignore": structpb.NewStringValue("string-val-should-ignore"),
+							"service_namespace": structpb.NewStringValue("string-val-should-ignore"),
 						},
 					},
 				},
@@ -1389,7 +1391,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				LRSServerConfig: ClusterLRSServerSelf,
 				Raw:             v3ClusterAnyWithTelemetryLabelsIgnoreSome,
 				StringMD: map[string]string{
-					"string-value-dont-ignore": "string-val",
+					"service_name": "grpc-service",
 				},
 			},
 		},

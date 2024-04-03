@@ -85,9 +85,20 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	stringMD := make(map[string]string)
 	if fmd := cluster.GetMetadata().GetFilterMetadata(); fmd != nil {
 		if val, ok := fmd["com.google.csm.telemetry_labels"]; ok {
-			for key, val := range val.GetFields() {
-				if _, ok := val.GetKind().(*structpb.Value_StringValue); ok {
-					stringMD[key] = val.GetStringValue()
+			/*
+				"service_name" = "",
+				"service_namespace" = ""
+			*/
+			if fields := val.GetFields(); fields != nil {
+				if val, ok := fields["service_name"]; ok {
+					if _, isStringVal := val.GetKind().(*structpb.Value_StringValue); isStringVal {
+						stringMD["service_name"] = val.GetStringValue()
+					}
+				}
+				if val, ok := fields["service_namespace"]; ok {
+					if _, isStringVal := val.GetKind().(*structpb.Value_StringValue); isStringVal {
+						stringMD["service_namespace"] = val.GetStringValue()
+					}
 				}
 			}
 		}
