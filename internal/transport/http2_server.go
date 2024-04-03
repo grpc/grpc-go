@@ -1208,7 +1208,7 @@ func (t *http2Server) keepalive() {
 				continue
 			}
 			if outstandingPing && kpTimeoutLeft <= 0 {
-				t.Close(fmt.Errorf("keepalive ping not acked within timeout %s", t.kp.Time))
+				t.Close(fmt.Errorf("keepalive ping not acked within timeout %s", t.kp.Timeout))
 				return
 			}
 			if !outstandingPing {
