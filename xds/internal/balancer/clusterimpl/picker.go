@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -78,24 +79,34 @@ type loadReporter interface {
 
 // Picker implements RPC drop, circuit breaking drop and load reporting.
 type picker struct {
-	drops     []*dropper
-	s         balancer.State
-	loadStore loadReporter
-	counter   *xdsclient.ClusterRequestsCounter
-	countMax  uint32
+	drops           []*dropper
+	s               balancer.State
+	loadStore       loadReporter
+	counter         *xdsclient.ClusterRequestsCounter
+	countMax        uint32
+	telemetryLabels map[string]string
 }
 
-func newPicker(s balancer.State, config *dropConfigs, loadStore load.PerClusterReporter) *picker {
+func newPicker(s balancer.State, config *dropConfigs, loadStore load.PerClusterReporter, telemetryLabels map[string]string) *picker {
 	return &picker{
-		drops:     config.drops,
-		s:         s,
-		loadStore: loadStore,
-		counter:   config.requestCounter,
-		countMax:  config.requestCountMax,
+		drops:           config.drops,
+		s:               s,
+		loadStore:       loadStore,
+		counter:         config.requestCounter,
+		countMax:        config.requestCountMax,
+		telemetryLabels: telemetryLabels,
 	}
 }
 
 func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	if info.Ctx != nil {
+		if labels := stats.GetLabels(info.Ctx); labels != nil && labels.TelemetryLabels != nil {
+			for key, value := range d.telemetryLabels {
+				labels.TelemetryLabels[key] = value
+			}
+		} // Unconditionally set, even dropped or queued RPC's can use this label.
+	}
+
 	// Don't drop unless the inner picker is READY. Similar to
 	// https://github.com/grpc/grpc-go/issues/2622.
 	if d.s.ConnectivityState == connectivity.Ready {

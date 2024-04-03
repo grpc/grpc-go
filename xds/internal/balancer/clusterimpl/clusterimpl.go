@@ -123,6 +123,7 @@ type clusterImplBalancer struct {
 	requestCounterService string // The service name for the request counter.
 	requestCounter        *xdsclient.ClusterRequestsCounter
 	requestCountMax       uint32
+	telemetryLabels       map[string]string
 	pickerUpdateCh        *buffer.Unbounded
 }
 
@@ -469,14 +470,15 @@ func (b *clusterImplBalancer) run() {
 						drops:           b.drops,
 						requestCounter:  b.requestCounter,
 						requestCountMax: b.requestCountMax,
-					}, b.loadWrapper),
+					}, b.loadWrapper, b.telemetryLabels),
 				})
 			case *LBConfig:
+				b.telemetryLabels = u.TelemetryLabels
 				dc := b.handleDropAndRequestCount(u)
 				if dc != nil && b.childState.Picker != nil {
 					b.ClientConn.UpdateState(balancer.State{
 						ConnectivityState: b.childState.ConnectivityState,
-						Picker:            newPicker(b.childState, dc, b.loadWrapper),
+						Picker:            newPicker(b.childState, dc, b.loadWrapper, b.telemetryLabels),
 					})
 				}
 			}
