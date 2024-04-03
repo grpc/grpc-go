@@ -79,7 +79,7 @@ func (c *workerServiceClient) RunServer(ctx context.Context, opts ...grpc.CallOp
 	if err != nil {
 		return nil, err
 	}
-	x := &workerServiceRunServerClient{stream}
+	x := &workerServiceRunServerClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -110,7 +110,7 @@ func (c *workerServiceClient) RunClient(ctx context.Context, opts ...grpc.CallOp
 	if err != nil {
 		return nil, err
 	}
-	x := &workerServiceRunClientClient{stream}
+	x := &workerServiceRunClientClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -209,7 +209,7 @@ func RegisterWorkerServiceServer(s grpc.ServiceRegistrar, srv WorkerServiceServe
 }
 
 func _WorkerService_RunServer_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(WorkerServiceServer).RunServer(&workerServiceRunServerServer{stream})
+	return srv.(WorkerServiceServer).RunServer(&workerServiceRunServerServer{ServerStream: stream})
 }
 
 type WorkerService_RunServerServer interface {
@@ -235,7 +235,7 @@ func (x *workerServiceRunServerServer) Recv() (*ServerArgs, error) {
 }
 
 func _WorkerService_RunClient_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(WorkerServiceServer).RunClient(&workerServiceRunClientServer{stream})
+	return srv.(WorkerServiceServer).RunClient(&workerServiceRunClientServer{ServerStream: stream})
 }
 
 type WorkerService_RunClientServer interface {

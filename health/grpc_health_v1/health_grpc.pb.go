@@ -94,7 +94,7 @@ func (c *healthClient) Watch(ctx context.Context, in *HealthCheckRequest, opts .
 	if err != nil {
 		return nil, err
 	}
-	x := &healthWatchClient{stream}
+	x := &healthWatchClient{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -198,7 +198,7 @@ func _Health_Watch_Handler(srv interface{}, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(HealthServer).Watch(m, &healthWatchServer{stream})
+	return srv.(HealthServer).Watch(m, &healthWatchServer{ServerStream: stream})
 }
 
 type Health_WatchServer interface {

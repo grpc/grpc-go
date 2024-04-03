@@ -68,7 +68,7 @@ func (c *metricsServiceClient) GetAllGauges(ctx context.Context, in *EmptyMessag
 	if err != nil {
 		return nil, err
 	}
-	x := &metricsServiceGetAllGaugesClient{stream}
+	x := &metricsServiceGetAllGaugesClient{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func _MetricsService_GetAllGauges_Handler(srv interface{}, stream grpc.ServerStr
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(MetricsServiceServer).GetAllGauges(m, &metricsServiceGetAllGaugesServer{stream})
+	return srv.(MetricsServiceServer).GetAllGauges(m, &metricsServiceGetAllGaugesServer{ServerStream: stream})
 }
 
 type MetricsService_GetAllGaugesServer interface {

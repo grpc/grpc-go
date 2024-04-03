@@ -67,7 +67,7 @@ func (c *searchServiceClient) StreamingSearch(ctx context.Context, opts ...grpc.
 	if err != nil {
 		return nil, err
 	}
-	x := &searchServiceStreamingSearchClient{stream}
+	x := &searchServiceStreamingSearchClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -144,7 +144,7 @@ func _SearchService_Search_Handler(srv interface{}, ctx context.Context, dec fun
 }
 
 func _SearchService_StreamingSearch_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(SearchServiceServer).StreamingSearch(&searchServiceStreamingSearchServer{stream})
+	return srv.(SearchServiceServer).StreamingSearch(&searchServiceStreamingSearchServer{ServerStream: stream})
 }
 
 type SearchService_StreamingSearchServer interface {

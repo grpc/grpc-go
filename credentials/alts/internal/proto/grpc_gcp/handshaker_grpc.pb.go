@@ -65,7 +65,7 @@ func (c *handshakerServiceClient) DoHandshake(ctx context.Context, opts ...grpc.
 	if err != nil {
 		return nil, err
 	}
-	x := &handshakerServiceDoHandshakeClient{stream}
+	x := &handshakerServiceDoHandshakeClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -126,7 +126,7 @@ func RegisterHandshakerServiceServer(s grpc.ServiceRegistrar, srv HandshakerServ
 }
 
 func _HandshakerService_DoHandshake_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(HandshakerServiceServer).DoHandshake(&handshakerServiceDoHandshakeServer{stream})
+	return srv.(HandshakerServiceServer).DoHandshake(&handshakerServiceDoHandshakeServer{ServerStream: stream})
 }
 
 type HandshakerService_DoHandshakeServer interface {

@@ -118,7 +118,7 @@ func (c *testServiceClient) StreamingOutputCall(ctx context.Context, in *Streami
 	if err != nil {
 		return nil, err
 	}
-	x := &testServiceStreamingOutputCallClient{stream}
+	x := &testServiceStreamingOutputCallClient{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func (c *testServiceClient) StreamingInputCall(ctx context.Context, opts ...grpc
 	if err != nil {
 		return nil, err
 	}
-	x := &testServiceStreamingInputCallClient{stream}
+	x := &testServiceStreamingInputCallClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -184,7 +184,7 @@ func (c *testServiceClient) FullDuplexCall(ctx context.Context, opts ...grpc.Cal
 	if err != nil {
 		return nil, err
 	}
-	x := &testServiceFullDuplexCallClient{stream}
+	x := &testServiceFullDuplexCallClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -215,7 +215,7 @@ func (c *testServiceClient) HalfDuplexCall(ctx context.Context, opts ...grpc.Cal
 	if err != nil {
 		return nil, err
 	}
-	x := &testServiceHalfDuplexCallClient{stream}
+	x := &testServiceHalfDuplexCallClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -383,7 +383,7 @@ func _TestService_StreamingOutputCall_Handler(srv interface{}, stream grpc.Serve
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(TestServiceServer).StreamingOutputCall(m, &testServiceStreamingOutputCallServer{stream})
+	return srv.(TestServiceServer).StreamingOutputCall(m, &testServiceStreamingOutputCallServer{ServerStream: stream})
 }
 
 type TestService_StreamingOutputCallServer interface {
@@ -400,7 +400,7 @@ func (x *testServiceStreamingOutputCallServer) Send(m *StreamingOutputCallRespon
 }
 
 func _TestService_StreamingInputCall_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TestServiceServer).StreamingInputCall(&testServiceStreamingInputCallServer{stream})
+	return srv.(TestServiceServer).StreamingInputCall(&testServiceStreamingInputCallServer{ServerStream: stream})
 }
 
 type TestService_StreamingInputCallServer interface {
@@ -426,7 +426,7 @@ func (x *testServiceStreamingInputCallServer) Recv() (*StreamingInputCallRequest
 }
 
 func _TestService_FullDuplexCall_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TestServiceServer).FullDuplexCall(&testServiceFullDuplexCallServer{stream})
+	return srv.(TestServiceServer).FullDuplexCall(&testServiceFullDuplexCallServer{ServerStream: stream})
 }
 
 type TestService_FullDuplexCallServer interface {
@@ -452,7 +452,7 @@ func (x *testServiceFullDuplexCallServer) Recv() (*StreamingOutputCallRequest, e
 }
 
 func _TestService_HalfDuplexCall_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TestServiceServer).HalfDuplexCall(&testServiceHalfDuplexCallServer{stream})
+	return srv.(TestServiceServer).HalfDuplexCall(&testServiceHalfDuplexCallServer{ServerStream: stream})
 }
 
 type TestService_HalfDuplexCallServer interface {

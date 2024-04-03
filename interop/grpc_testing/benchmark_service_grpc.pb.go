@@ -87,7 +87,7 @@ func (c *benchmarkServiceClient) StreamingCall(ctx context.Context, opts ...grpc
 	if err != nil {
 		return nil, err
 	}
-	x := &benchmarkServiceStreamingCallClient{stream}
+	x := &benchmarkServiceStreamingCallClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -118,7 +118,7 @@ func (c *benchmarkServiceClient) StreamingFromClient(ctx context.Context, opts .
 	if err != nil {
 		return nil, err
 	}
-	x := &benchmarkServiceStreamingFromClientClient{stream}
+	x := &benchmarkServiceStreamingFromClientClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -152,7 +152,7 @@ func (c *benchmarkServiceClient) StreamingFromServer(ctx context.Context, in *Si
 	if err != nil {
 		return nil, err
 	}
-	x := &benchmarkServiceStreamingFromServerClient{stream}
+	x := &benchmarkServiceStreamingFromServerClient{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -184,7 +184,7 @@ func (c *benchmarkServiceClient) StreamingBothWays(ctx context.Context, opts ...
 	if err != nil {
 		return nil, err
 	}
-	x := &benchmarkServiceStreamingBothWaysClient{stream}
+	x := &benchmarkServiceStreamingBothWaysClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -284,7 +284,7 @@ func _BenchmarkService_UnaryCall_Handler(srv interface{}, ctx context.Context, d
 }
 
 func _BenchmarkService_StreamingCall_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BenchmarkServiceServer).StreamingCall(&benchmarkServiceStreamingCallServer{stream})
+	return srv.(BenchmarkServiceServer).StreamingCall(&benchmarkServiceStreamingCallServer{ServerStream: stream})
 }
 
 type BenchmarkService_StreamingCallServer interface {
@@ -310,7 +310,7 @@ func (x *benchmarkServiceStreamingCallServer) Recv() (*SimpleRequest, error) {
 }
 
 func _BenchmarkService_StreamingFromClient_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BenchmarkServiceServer).StreamingFromClient(&benchmarkServiceStreamingFromClientServer{stream})
+	return srv.(BenchmarkServiceServer).StreamingFromClient(&benchmarkServiceStreamingFromClientServer{ServerStream: stream})
 }
 
 type BenchmarkService_StreamingFromClientServer interface {
@@ -340,7 +340,7 @@ func _BenchmarkService_StreamingFromServer_Handler(srv interface{}, stream grpc.
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(BenchmarkServiceServer).StreamingFromServer(m, &benchmarkServiceStreamingFromServerServer{stream})
+	return srv.(BenchmarkServiceServer).StreamingFromServer(m, &benchmarkServiceStreamingFromServerServer{ServerStream: stream})
 }
 
 type BenchmarkService_StreamingFromServerServer interface {
@@ -357,7 +357,7 @@ func (x *benchmarkServiceStreamingFromServerServer) Send(m *SimpleResponse) erro
 }
 
 func _BenchmarkService_StreamingBothWays_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BenchmarkServiceServer).StreamingBothWays(&benchmarkServiceStreamingBothWaysServer{stream})
+	return srv.(BenchmarkServiceServer).StreamingBothWays(&benchmarkServiceStreamingBothWaysServer{ServerStream: stream})
 }
 
 type BenchmarkService_StreamingBothWaysServer interface {

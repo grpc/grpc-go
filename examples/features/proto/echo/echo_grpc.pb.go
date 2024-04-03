@@ -78,7 +78,7 @@ func (c *echoClient) ServerStreamingEcho(ctx context.Context, in *EchoRequest, o
 	if err != nil {
 		return nil, err
 	}
-	x := &echoServerStreamingEchoClient{stream}
+	x := &echoServerStreamingEchoClient{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func (c *echoClient) ClientStreamingEcho(ctx context.Context, opts ...grpc.CallO
 	if err != nil {
 		return nil, err
 	}
-	x := &echoClientStreamingEchoClient{stream}
+	x := &echoClientStreamingEchoClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -144,7 +144,7 @@ func (c *echoClient) BidirectionalStreamingEcho(ctx context.Context, opts ...grp
 	if err != nil {
 		return nil, err
 	}
-	x := &echoBidirectionalStreamingEchoClient{stream}
+	x := &echoBidirectionalStreamingEchoClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -237,7 +237,7 @@ func _Echo_ServerStreamingEcho_Handler(srv interface{}, stream grpc.ServerStream
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(EchoServer).ServerStreamingEcho(m, &echoServerStreamingEchoServer{stream})
+	return srv.(EchoServer).ServerStreamingEcho(m, &echoServerStreamingEchoServer{ServerStream: stream})
 }
 
 type Echo_ServerStreamingEchoServer interface {
@@ -254,7 +254,7 @@ func (x *echoServerStreamingEchoServer) Send(m *EchoResponse) error {
 }
 
 func _Echo_ClientStreamingEcho_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(EchoServer).ClientStreamingEcho(&echoClientStreamingEchoServer{stream})
+	return srv.(EchoServer).ClientStreamingEcho(&echoClientStreamingEchoServer{ServerStream: stream})
 }
 
 type Echo_ClientStreamingEchoServer interface {
@@ -280,7 +280,7 @@ func (x *echoClientStreamingEchoServer) Recv() (*EchoRequest, error) {
 }
 
 func _Echo_BidirectionalStreamingEcho_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(EchoServer).BidirectionalStreamingEcho(&echoBidirectionalStreamingEchoServer{stream})
+	return srv.(EchoServer).BidirectionalStreamingEcho(&echoBidirectionalStreamingEchoServer{ServerStream: stream})
 }
 
 type Echo_BidirectionalStreamingEchoServer interface {
