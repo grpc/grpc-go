@@ -129,5 +129,4 @@ jobs:
           xds/internal/test/e2e/run.sh
           echo -e "\n-- Running protoc-gen-go-grpc test --"
           ./vet.sh -install
-          (cd cmd/protoc-gen-go-grpc && go install .)
           cmd/protoc-gen-go-grpc/protoc-gen-go-grpc_test.sh
