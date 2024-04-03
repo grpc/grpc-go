@@ -117,14 +117,14 @@ jobs:
         run: |
           export TERM=${TERM:-xterm}
           go version
-          # echo -e "\n-- Running Examples --"
-          # examples/examples_test.sh
-          # echo -e "\n-- Running AdvancedTLS Examples --"
-          # security/advancedtls/examples/examples_test.sh
-          # echo -e "\n-- Running Interop Test --"
-          # interop/interop_test.sh
-          # echo -e "\n-- Running xDS E2E Test --"
-          # xds/internal/test/e2e/run.sh
+          echo -e "\n-- Running Examples --"
+          examples/examples_test.sh
+          echo -e "\n-- Running AdvancedTLS Examples --"
+          security/advancedtls/examples/examples_test.sh
+          echo -e "\n-- Running Interop Test --"
+          interop/interop_test.sh
+          echo -e "\n-- Running xDS E2E Test --"
+          xds/internal/test/e2e/run.sh
           echo -e "\n-- Running protoc-gen-go-grpc test --"
           ./vet.sh -install
           cmd/protoc-gen-go-grpc/protoc-gen-go-grpc_test.sh
