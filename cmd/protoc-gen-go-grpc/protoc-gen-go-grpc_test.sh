@@ -5,10 +5,13 @@ set -ex # Debugging enabled.
 trap "git clean --force --quiet" EXIT
 
 # Build protoc-gen-go-grpc binary and add to $PATH.
-go build google.golang.org/grpc/cmd/protoc-gen-go-grpc
-PATH="${PWD}:${PATH}"
-
 WD="$(dirname $0)"
+
+pushd "${WD}"
+go build google.golang.org/grpc/cmd/protoc-gen-go-grpc
+popd
+PATH="${WD}:${PATH}"
+
 protoc \
     --go-grpc_out=. \
     --go-grpc_opt=paths=source_relative \
