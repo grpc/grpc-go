@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // ValidateClusterAndConstructClusterUpdateForTesting exports the
@@ -81,6 +82,17 @@ const (
 )
 
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
+	stringMD := make(map[string]string)
+	if fmd := cluster.GetMetadata().GetFilterMetadata(); fmd != nil {
+		if val, ok := fmd["com.google.csm.telemetry_labels"]; ok {
+			for key, val := range val.GetFields() {
+				if _, ok := val.GetKind().(*structpb.Value_StringValue); ok {
+					stringMD[key] = val.GetStringValue()
+				}
+			}
+		}
+	}
+
 	var lbPolicy json.RawMessage
 	var err error
 	switch cluster.GetLbPolicy() {
@@ -160,6 +172,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		MaxRequests:      circuitBreakersFromCluster(cluster),
 		LBPolicy:         lbPolicy,
 		OutlierDetection: od,
+		StringMD:         stringMD,
 	}
 
 	// Note that this is different from the gRFC (gRFC A47 says to include the

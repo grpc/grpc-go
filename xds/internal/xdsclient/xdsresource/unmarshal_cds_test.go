@@ -41,6 +41,7 @@ import (
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -1216,6 +1217,69 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				},
 			},
 		})
+
+		v3ClusterAnyWithTelemetryLabels = testutils.MarshalAny(t, &v3clusterpb.Cluster{
+			Name:                 v3ClusterName,
+			ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+			EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+				EdsConfig: &v3corepb.ConfigSource{
+					ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+						Ads: &v3corepb.AggregatedConfigSource{},
+					},
+				},
+				ServiceName: v3Service,
+			},
+			LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+			LrsServer: &v3corepb.ConfigSource{
+				ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+					Self: &v3corepb.SelfConfigSource{},
+				},
+			},
+			Metadata: &v3corepb.Metadata{
+				FilterMetadata: map[string]*structpb.Struct{
+					"com.google.csm.telemetry_labels": {
+						Fields: map[string]*structpb.Value{
+							"service_name":      structpb.NewStringValue("grpc-service"),
+							"service_namespace": structpb.NewStringValue("grpc-service-namespace"),
+						},
+					},
+				},
+			},
+		})
+		v3ClusterAnyWithTelemetryLabelsIgnoreSome = testutils.MarshalAny(t, &v3clusterpb.Cluster{
+			Name:                 v3ClusterName,
+			ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+			EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+				EdsConfig: &v3corepb.ConfigSource{
+					ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+						Ads: &v3corepb.AggregatedConfigSource{},
+					},
+				},
+				ServiceName: v3Service,
+			},
+			LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+			LrsServer: &v3corepb.ConfigSource{
+				ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+					Self: &v3corepb.SelfConfigSource{},
+				},
+			},
+			Metadata: &v3corepb.Metadata{
+				FilterMetadata: map[string]*structpb.Struct{
+					"com.google.csm.telemetry_labels": {
+						Fields: map[string]*structpb.Value{
+							"string-value-dont-ignore": structpb.NewStringValue("string-val"),
+							"float-value-ignore":       structpb.NewNumberValue(3),
+							"bool-value-ignore":        structpb.NewBoolValue(false),
+						},
+					},
+					"ignore-this-metadata": {
+						Fields: map[string]*structpb.Value{
+							"string-value-should-ignore": structpb.NewStringValue("string-val-should-ignore"),
+						},
+					},
+				},
+			},
+		})
 	)
 
 	tests := []struct {
@@ -1298,6 +1362,35 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				ClusterName:    v3ClusterName,
 				EDSServiceName: v3Service, LRSServerConfig: ClusterLRSServerSelf,
 				Raw: v3ClusterAnyWithEDSConfigSourceSelf,
+			},
+		},
+		{
+			name:     "v3 cluster with telemetry case",
+			resource: v3ClusterAnyWithTelemetryLabels,
+			wantName: v3ClusterName,
+			wantUpdate: ClusterUpdate{
+				ClusterName:     v3ClusterName,
+				EDSServiceName:  v3Service,
+				LRSServerConfig: ClusterLRSServerSelf,
+				Raw:             v3ClusterAnyWithTelemetryLabels,
+				StringMD: map[string]string{
+					"service_name":      "grpc-service",
+					"service_namespace": "grpc-service-namespace",
+				},
+			},
+		},
+		{
+			name:     "v3 metadata ignore other types not string and not com.google.csm.telemetry_labels",
+			resource: v3ClusterAnyWithTelemetryLabelsIgnoreSome,
+			wantName: v3ClusterName,
+			wantUpdate: ClusterUpdate{
+				ClusterName:     v3ClusterName,
+				EDSServiceName:  v3Service,
+				LRSServerConfig: ClusterLRSServerSelf,
+				Raw:             v3ClusterAnyWithTelemetryLabelsIgnoreSome,
+				StringMD: map[string]string{
+					"string-value-dont-ignore": "string-val",
+				},
 			},
 		},
 		{
