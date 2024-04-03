@@ -91,7 +91,7 @@ func (s) TestStreamCleanupAfterSendStatus(t *testing.T) {
 
 	// 1. Make a long living stream RPC. So server's activeStream list is not
 	// empty.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	stream, err := ss.Client.FullDuplexCall(ctx)
 	if err != nil {

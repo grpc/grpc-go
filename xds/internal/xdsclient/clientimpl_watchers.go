@@ -25,124 +25,6 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
-// This is only required temporarily, while we modify the
-// clientImpl.WatchListener API to be implemented via the wrapper
-// WatchListener() API which calls the WatchResource() API.
-type listenerWatcher struct {
-	resourceName string
-	cb           func(xdsresource.ListenerUpdate, error)
-}
-
-func (l *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData) {
-	l.cb(update.Resource, nil)
-}
-
-func (l *listenerWatcher) OnError(err error) {
-	l.cb(xdsresource.ListenerUpdate{}, err)
-}
-
-func (l *listenerWatcher) OnResourceDoesNotExist() {
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Listener not found in received response", l.resourceName)
-	l.cb(xdsresource.ListenerUpdate{}, err)
-}
-
-// WatchListener uses LDS to discover information about the Listener resource
-// identified by resourceName.
-func (c *clientImpl) WatchListener(resourceName string, cb func(xdsresource.ListenerUpdate, error)) (cancel func()) {
-	watcher := &listenerWatcher{resourceName: resourceName, cb: cb}
-	return xdsresource.WatchListener(c, resourceName, watcher)
-}
-
-// This is only required temporarily, while we modify the
-// clientImpl.WatchRouteConfig API to be implemented via the wrapper
-// WatchRouteConfig() API which calls the WatchResource() API.
-type routeConfigWatcher struct {
-	resourceName string
-	cb           func(xdsresource.RouteConfigUpdate, error)
-}
-
-func (r *routeConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData) {
-	r.cb(update.Resource, nil)
-}
-
-func (r *routeConfigWatcher) OnError(err error) {
-	r.cb(xdsresource.RouteConfigUpdate{}, err)
-}
-
-func (r *routeConfigWatcher) OnResourceDoesNotExist() {
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type RouteConfiguration not found in received response", r.resourceName)
-	r.cb(xdsresource.RouteConfigUpdate{}, err)
-}
-
-// WatchRouteConfig uses RDS to discover information about the
-// RouteConfiguration resource identified by resourceName.
-func (c *clientImpl) WatchRouteConfig(resourceName string, cb func(xdsresource.RouteConfigUpdate, error)) (cancel func()) {
-	watcher := &routeConfigWatcher{resourceName: resourceName, cb: cb}
-	return xdsresource.WatchRouteConfig(c, resourceName, watcher)
-}
-
-// This is only required temporarily, while we modify the
-// clientImpl.WatchCluster API to be implemented via the wrapper WatchCluster()
-// API which calls the WatchResource() API.
-type clusterWatcher struct {
-	resourceName string
-	cb           func(xdsresource.ClusterUpdate, error)
-}
-
-func (c *clusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData) {
-	c.cb(update.Resource, nil)
-}
-
-func (c *clusterWatcher) OnError(err error) {
-	c.cb(xdsresource.ClusterUpdate{}, err)
-}
-
-func (c *clusterWatcher) OnResourceDoesNotExist() {
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Cluster not found in received response", c.resourceName)
-	c.cb(xdsresource.ClusterUpdate{}, err)
-}
-
-// WatchCluster uses CDS to discover information about the Cluster resource
-// identified by resourceName.
-//
-// WatchCluster can be called multiple times, with same or different
-// clusterNames. Each call will start an independent watcher for the resource.
-func (c *clientImpl) WatchCluster(resourceName string, cb func(xdsresource.ClusterUpdate, error)) (cancel func()) {
-	watcher := &clusterWatcher{resourceName: resourceName, cb: cb}
-	return xdsresource.WatchCluster(c, resourceName, watcher)
-}
-
-// This is only required temporarily, while we modify the
-// clientImpl.WatchEndpoints API to be implemented via the wrapper
-// WatchEndpoints() API which calls the WatchResource() API.
-type endpointsWatcher struct {
-	resourceName string
-	cb           func(xdsresource.EndpointsUpdate, error)
-}
-
-func (c *endpointsWatcher) OnUpdate(update *xdsresource.EndpointsResourceData) {
-	c.cb(update.Resource, nil)
-}
-
-func (c *endpointsWatcher) OnError(err error) {
-	c.cb(xdsresource.EndpointsUpdate{}, err)
-}
-
-func (c *endpointsWatcher) OnResourceDoesNotExist() {
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Endpoints not found in received response", c.resourceName)
-	c.cb(xdsresource.EndpointsUpdate{}, err)
-}
-
-// WatchEndpoints uses EDS to discover information about the
-// ClusterLoadAssignment resource identified by resourceName.
-//
-// WatchEndpoints can be called multiple times, with same or different
-// clusterNames. Each call will start an independent watcher for the resource.
-func (c *clientImpl) WatchEndpoints(resourceName string, cb func(xdsresource.EndpointsUpdate, error)) (cancel func()) {
-	watcher := &endpointsWatcher{resourceName: resourceName, cb: cb}
-	return xdsresource.WatchEndpoints(c, resourceName, watcher)
-}
-
 // WatchResource uses xDS to discover the resource associated with the provided
 // resource name. The resource type implementation determines how xDS requests
 // are sent out and how responses are deserialized and validated. Upon receipt
@@ -219,5 +101,21 @@ func (r *resourceTypeRegistry) maybeRegister(rType xdsresource.Type) error {
 		return fmt.Errorf("attempt to re-register a resource type implementation for %v", rType.TypeName())
 	}
 	r.types[url] = rType
+	return nil
+}
+
+func (c *clientImpl) triggerResourceNotFoundForTesting(rType xdsresource.Type, resourceName string) error {
+	// Return early if the client is already closed.
+	if c == nil || c.done.HasFired() {
+		return fmt.Errorf("attempt to trigger resource-not-found-error for resource %q of type %q, but client is closed", rType.TypeName(), resourceName)
+	}
+
+	n := xdsresource.ParseName(resourceName)
+	a, unref, err := c.findAuthority(n)
+	if err != nil {
+		return fmt.Errorf("attempt to trigger resource-not-found-error for resource %q of type %q, but authority %q is not found", rType.TypeName(), resourceName, n.Authority)
+	}
+	defer unref()
+	a.triggerResourceNotFoundForTesting(rType, n.String())
 	return nil
 }

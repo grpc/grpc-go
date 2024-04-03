@@ -16,375 +16,153 @@
  *
  */
 
-package resolver
+package resolver_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
-	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
+	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
+	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 )
 
-func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
-	var (
-		oneExactMatch = &xdsresource.VirtualHost{
-			Domains: []string{"foo.bar.com"},
-		}
-		oneSuffixMatch = &xdsresource.VirtualHost{
-			Domains: []string{"*.bar.com"},
-		}
-		onePrefixMatch = &xdsresource.VirtualHost{
-			Domains: []string{"foo.bar.*"},
-		}
-		oneUniversalMatch = &xdsresource.VirtualHost{
-			Domains: []string{"*"},
-		}
-		longExactMatch = &xdsresource.VirtualHost{
-			Domains: []string{"v2.foo.bar.com"},
-		}
-		multipleMatch = &xdsresource.VirtualHost{
-			Domains: []string{"pi.foo.bar.com", "314.*", "*.159"},
-		}
-		vhs = []*xdsresource.VirtualHost{oneExactMatch, oneSuffixMatch, onePrefixMatch, oneUniversalMatch, longExactMatch, multipleMatch}
-	)
-
-	tests := []struct {
-		name   string
-		host   string
-		vHosts []*xdsresource.VirtualHost
-		want   *xdsresource.VirtualHost
-	}{
-		{name: "exact-match", host: "foo.bar.com", vHosts: vhs, want: oneExactMatch},
-		{name: "suffix-match", host: "123.bar.com", vHosts: vhs, want: oneSuffixMatch},
-		{name: "prefix-match", host: "foo.bar.org", vHosts: vhs, want: onePrefixMatch},
-		{name: "universal-match", host: "abc.123", vHosts: vhs, want: oneUniversalMatch},
-		{name: "long-exact-match", host: "v2.foo.bar.com", vHosts: vhs, want: longExactMatch},
-		// Matches suffix "*.bar.com" and exact "pi.foo.bar.com". Takes exact.
-		{name: "multiple-match-exact", host: "pi.foo.bar.com", vHosts: vhs, want: multipleMatch},
-		// Matches suffix "*.159" and prefix "foo.bar.*". Takes suffix.
-		{name: "multiple-match-suffix", host: "foo.bar.159", vHosts: vhs, want: multipleMatch},
-		// Matches suffix "*.bar.com" and prefix "314.*". Takes suffix.
-		{name: "multiple-match-prefix", host: "314.bar.com", vHosts: vhs, want: oneSuffixMatch},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := xdsresource.FindBestMatchingVirtualHost(tt.host, tt.vHosts); !cmp.Equal(got, tt.want, cmp.Comparer(proto.Equal)) {
-				t.Errorf("findBestMatchingxdsclient.VirtualHost() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-type serviceUpdateErr struct {
-	u   serviceUpdate
-	err error
-}
-
-func verifyServiceUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate serviceUpdate) error {
-	u, err := updateCh.Receive(ctx)
-	if err != nil {
-		return fmt.Errorf("timeout when waiting for service update: %v", err)
-	}
-	gotUpdate := u.(serviceUpdateErr)
-	if gotUpdate.err != nil || !cmp.Equal(gotUpdate.u, wantUpdate, cmpopts.EquateEmpty(), cmp.AllowUnexported(serviceUpdate{}, ldsConfig{})) {
-		return fmt.Errorf("unexpected service update: (%v, %v), want: (%v, nil),  diff (-want +got):\n%s", gotUpdate.u, gotUpdate.err, wantUpdate, cmp.Diff(gotUpdate.u, wantUpdate, cmpopts.EquateEmpty(), cmp.AllowUnexported(serviceUpdate{}, ldsConfig{})))
-	}
-	return nil
-}
-
-func newStringP(s string) *string {
-	return &s
-}
-
-// TestServiceWatch covers the cases:
-// - an update is received after a watch()
-// - an update with routes received
-func (s) TestServiceWatch(t *testing.T) {
-	serviceUpdateCh := testutils.NewChannel()
-	xdsC := fakeclient.NewClient()
-	cancelWatch := watchService(xdsC, targetStr, func(update serviceUpdate, err error) {
-		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
-	}, nil)
-	defer cancelWatch()
-
+// Tests the case where the listener resource starts pointing to a new route
+// configuration resource after the xDS resolver has successfully resolved the
+// service name and pushed an update on the channel. The test verifies that the
+// resolver stops requesting the old route configuration resource and requests
+// the new resource, and once successfully resolved, verifies that the update
+// from the resolver matches expected service config.
+func (s) TestServiceWatch_ListenerPointsToNewRouteConfiguration(t *testing.T) {
+	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
+	nodeID := uuid.New().String()
+	mgmtServer, lisCh, routeCfgCh := setupManagementServerForTest(ctx, t, nodeID)
 
-	wantUpdate := serviceUpdate{virtualHost: &xdsresource.VirtualHost{Domains: []string{"target"}, Routes: []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}}}}
-	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
-		VirtualHosts: []*xdsresource.VirtualHost{
-			{
-				Domains: []string{targetStr},
-				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}},
+	// Configure resources on the management server.
+	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
+	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)})
+
+	// Verify initial update from the resolver.
+	waitForResourceNames(ctx, t, lisCh, []string{defaultTestServiceName})
+	waitForResourceNames(ctx, t, routeCfgCh, []string{defaultTestRouteConfigName})
+	verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+
+	// Update the listener resource to point to a new route configuration name.
+	// Leave the old route configuration resource unchanged.
+	newTestRouteConfigName := defaultTestRouteConfigName + "-new"
+	listeners = []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, newTestRouteConfigName)}
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+
+	// Verify that the new route configuration resource is requested.
+	waitForResourceNames(ctx, t, routeCfgCh, []string{newTestRouteConfigName})
+
+	// Update the old route configuration resource by adding a new route.
+	routes[0].VirtualHosts[0].Routes = append(routes[0].VirtualHosts[0].Routes, &v3routepb.Route{
+		Match: &v3routepb.RouteMatch{
+			PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/foo/bar"},
+			CaseSensitive: &wrapperspb.BoolValue{Value: false},
+		},
+		Action: &v3routepb.Route_Route{
+			Route: &v3routepb.RouteAction{
+				ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: "some-random-cluster"},
 			},
 		},
-	}, nil)
-	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate); err != nil {
-		t.Fatal(err)
-	}
+	})
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
 
-	wantUpdate2 := serviceUpdate{virtualHost: &xdsresource.VirtualHost{Domains: []string{"target"},
-		Routes: []*xdsresource.Route{{
-			Path:             newStringP(""),
-			WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}},
+	// Wait for no update from the resolver.
+	verifyNoUpdateFromResolver(ctx, t, stateCh)
+
+	// Update the management server with the new route configuration resource.
+	routes = append(routes, e2e.DefaultRouteConfig(newTestRouteConfigName, defaultTestServiceName, defaultTestClusterName))
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+
+	// Ensure update from the resolver.
+	verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+}
+
+// Tests the case where the listener resource changes to contain an inline route
+// configuration and changes back to having a route configuration resource name.
+// Verifies that the expected xDS resource names are requested by the resolver
+// and that the update from the resolver matches expected service config.
+func (s) TestServiceWatch_ListenerPointsToInlineRouteConfiguration(t *testing.T) {
+	// Spin up an xDS management server for the test.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	nodeID := uuid.New().String()
+	mgmtServer, lisCh, routeCfgCh := setupManagementServerForTest(ctx, t, nodeID)
+
+	// Configure resources on the management server.
+	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
+	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)})
+
+	// Verify initial update from the resolver.
+	waitForResourceNames(ctx, t, lisCh, []string{defaultTestServiceName})
+	waitForResourceNames(ctx, t, routeCfgCh, []string{defaultTestRouteConfigName})
+	verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+
+	// Update listener to contain an inline route configuration.
+	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+		RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+			RouteConfig: &v3routepb.RouteConfiguration{
+				Name: defaultTestRouteConfigName,
+				VirtualHosts: []*v3routepb.VirtualHost{{
+					Domains: []string{defaultTestServiceName},
+					Routes: []*v3routepb.Route{{
+						Match: &v3routepb.RouteMatch{
+							PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+						},
+						Action: &v3routepb.Route_Route{
+							Route: &v3routepb.RouteAction{
+								ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: defaultTestClusterName},
+							},
+						},
+					}},
+				}},
+			},
+		},
+		HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
+	})
+	listeners = []*v3listenerpb.Listener{{
+		Name:        defaultTestServiceName,
+		ApiListener: &v3listenerpb.ApiListener{ApiListener: hcm},
+		FilterChains: []*v3listenerpb.FilterChain{{
+			Name: "filter-chain-name",
+			Filters: []*v3listenerpb.Filter{{
+				Name:       wellknown.HTTPConnectionManager,
+				ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: hcm},
+			}},
 		}},
 	}}
-	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
-		VirtualHosts: []*xdsresource.VirtualHost{
-			{
-				Domains: []string{targetStr},
-				Routes:  []*xdsresource.Route{{Path: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}},
-			},
-			{
-				// Another virtual host, with different domains.
-				Domains: []string{"random"},
-				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}},
-			},
-		},
-	}, nil)
-	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate2); err != nil {
-		t.Fatal(err)
-	}
-}
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, nil)
 
-// TestServiceWatchLDSUpdate covers the case that after first LDS and first RDS
-// response, the second LDS response trigger an new RDS watch, and an update of
-// the old RDS watch doesn't trigger update to service callback.
-func (s) TestServiceWatchLDSUpdate(t *testing.T) {
-	serviceUpdateCh := testutils.NewChannel()
-	xdsC := fakeclient.NewClient()
-	cancelWatch := watchService(xdsC, targetStr, func(update serviceUpdate, err error) {
-		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
-	}, nil)
-	defer cancelWatch()
+	// Verify that the old route configuration is not requested anymore.
+	waitForResourceNames(ctx, t, routeCfgCh, []string{})
+	verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
+	// Update listener back to contain a route configuration name.
+	listeners = []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
 
-	wantUpdate := serviceUpdate{virtualHost: &xdsresource.VirtualHost{Domains: []string{"target"}, Routes: []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}}}}
-	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
-		VirtualHosts: []*xdsresource.VirtualHost{
-			{
-				Domains: []string{targetStr},
-				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}},
-			},
-		},
-	}, nil)
-	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate); err != nil {
-		t.Fatal(err)
-	}
+	// Verify that that route configuration resource is requested.
+	waitForResourceNames(ctx, t, routeCfgCh, []string{defaultTestRouteConfigName})
 
-	// Another LDS update with a different RDS_name.
-	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr + "2"}, nil)
-	if _, err := xdsC.WaitForCancelRouteConfigWatch(ctx); err != nil {
-		t.Fatalf("wait for cancel route watch failed: %v, want nil", err)
-	}
-	waitForWatchRouteConfig(ctx, t, xdsC, routeStr+"2")
-
-	// RDS update for the new name.
-	wantUpdate2 := serviceUpdate{virtualHost: &xdsresource.VirtualHost{Domains: []string{"target"}, Routes: []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster + "2": {Weight: 1}}}}}}
-	xdsC.InvokeWatchRouteConfigCallback(routeStr+"2", xdsresource.RouteConfigUpdate{
-		VirtualHosts: []*xdsresource.VirtualHost{
-			{
-				Domains: []string{targetStr},
-				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster + "2": {Weight: 1}}}},
-			},
-		},
-	}, nil)
-	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate2); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// TestServiceWatchLDSUpdate covers the case that after first LDS and first RDS
-// response, the second LDS response includes a new MaxStreamDuration.  It also
-// verifies this is reported in subsequent RDS updates.
-func (s) TestServiceWatchLDSUpdateMaxStreamDuration(t *testing.T) {
-	serviceUpdateCh := testutils.NewChannel()
-	xdsC := fakeclient.NewClient()
-	cancelWatch := watchService(xdsC, targetStr, func(update serviceUpdate, err error) {
-		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
-	}, nil)
-	defer cancelWatch()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, MaxStreamDuration: time.Second}, nil)
-	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
-
-	wantUpdate := serviceUpdate{virtualHost: &xdsresource.VirtualHost{Domains: []string{"target"}, Routes: []*xdsresource.Route{{
-		Prefix:           newStringP(""),
-		WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}}},
-		ldsConfig: ldsConfig{maxStreamDuration: time.Second},
-	}
-	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
-		VirtualHosts: []*xdsresource.VirtualHost{
-			{
-				Domains: []string{targetStr},
-				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}},
-			},
-		},
-	}, nil)
-	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate); err != nil {
-		t.Fatal(err)
-	}
-
-	// Another LDS update with the same RDS_name but different MaxStreamDuration (zero in this case).
-	wantUpdate2 := serviceUpdate{virtualHost: &xdsresource.VirtualHost{Domains: []string{"target"}, Routes: []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}}}}
-	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate2); err != nil {
-		t.Fatal(err)
-	}
-
-	// RDS update.
-	wantUpdate3 := serviceUpdate{virtualHost: &xdsresource.VirtualHost{Domains: []string{"target"}, Routes: []*xdsresource.Route{{
-		Prefix:           newStringP(""),
-		WeightedClusters: map[string]xdsresource.WeightedCluster{cluster + "2": {Weight: 1}}}},
-	}}
-	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
-		VirtualHosts: []*xdsresource.VirtualHost{
-			{
-				Domains: []string{targetStr},
-				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster + "2": {Weight: 1}}}},
-			},
-		},
-	}, nil)
-	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate3); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// TestServiceNotCancelRDSOnSameLDSUpdate covers the case that if the second LDS
-// update contains the same RDS name as the previous, the RDS watch isn't
-// canceled and restarted.
-func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
-	serviceUpdateCh := testutils.NewChannel()
-	xdsC := fakeclient.NewClient()
-	cancelWatch := watchService(xdsC, targetStr, func(update serviceUpdate, err error) {
-		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
-	}, nil)
-	defer cancelWatch()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
-
-	wantUpdate := serviceUpdate{virtualHost: &xdsresource.VirtualHost{Domains: []string{"target"}, Routes: []*xdsresource.Route{{
-		Prefix:           newStringP(""),
-		WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}},
-	}}
-	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
-		VirtualHosts: []*xdsresource.VirtualHost{
-			{
-				Domains: []string{targetStr},
-				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}},
-			},
-		},
-	}, nil)
-
-	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate); err != nil {
-		t.Fatal(err)
-	}
-
-	// Another LDS update with a the same RDS_name.
-	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := xdsC.WaitForCancelRouteConfigWatch(sCtx); err != context.DeadlineExceeded {
-		t.Fatalf("wait for cancel route watch failed: %v, want nil", err)
-	}
-}
-
-// TestServiceWatchInlineRDS covers the cases switching between:
-// - LDS update contains RDS name to watch
-// - LDS update contains inline RDS resource
-func (s) TestServiceWatchInlineRDS(t *testing.T) {
-	serviceUpdateCh := testutils.NewChannel()
-	xdsC := fakeclient.NewClient()
-	cancelWatch := watchService(xdsC, targetStr, func(update serviceUpdate, err error) {
-		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
-	}, nil)
-	defer cancelWatch()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	// First LDS update is LDS with RDS name to watch.
-	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
-	wantUpdate := serviceUpdate{virtualHost: &xdsresource.VirtualHost{Domains: []string{"target"}, Routes: []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}}}}
-	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
-		VirtualHosts: []*xdsresource.VirtualHost{
-			{
-				Domains: []string{targetStr},
-				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}},
-			},
-		},
-	}, nil)
-	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate); err != nil {
-		t.Fatal(err)
-	}
-
-	// Switch LDS resp to a LDS with inline RDS resource
-	wantVirtualHosts2 := &xdsresource.VirtualHost{Domains: []string{"target"},
-		Routes: []*xdsresource.Route{{
-			Path:             newStringP(""),
-			WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}},
-		}},
-	}
-	wantUpdate2 := serviceUpdate{virtualHost: wantVirtualHosts2}
-	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{InlineRouteConfig: &xdsresource.RouteConfigUpdate{
-		VirtualHosts: []*xdsresource.VirtualHost{wantVirtualHosts2},
-	}}, nil)
-	// This inline RDS resource should cause the RDS watch to be canceled.
-	if _, err := xdsC.WaitForCancelRouteConfigWatch(ctx); err != nil {
-		t.Fatalf("wait for cancel route watch failed: %v, want nil", err)
-	}
-	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate2); err != nil {
-		t.Fatal(err)
-	}
-
-	// Switch LDS update back to LDS with RDS name to watch.
-	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr}, nil)
-	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
-	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
-		VirtualHosts: []*xdsresource.VirtualHost{
-			{
-				Domains: []string{targetStr},
-				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}},
-			},
-		},
-	}, nil)
-	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate); err != nil {
-		t.Fatal(err)
-	}
-
-	// Switch LDS resp to a LDS with inline RDS resource again.
-	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{InlineRouteConfig: &xdsresource.RouteConfigUpdate{
-		VirtualHosts: []*xdsresource.VirtualHost{wantVirtualHosts2},
-	}}, nil)
-	// This inline RDS resource should cause the RDS watch to be canceled.
-	if _, err := xdsC.WaitForCancelRouteConfigWatch(ctx); err != nil {
-		t.Fatalf("wait for cancel route watch failed: %v, want nil", err)
-	}
-	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate2); err != nil {
-		t.Fatal(err)
-	}
+	// Verify that appropriate SC is pushed on the channel.
+	verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
 }

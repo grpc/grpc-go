@@ -21,11 +21,13 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 )
 
 func (s) TestAndMatcherMatch(t *testing.T) {
@@ -186,6 +188,44 @@ func (s) TestMatch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if gotTyp, gotMatched := match(tt.domain, tt.host); gotTyp != tt.wantTyp || gotMatched != tt.wantMatched {
 				t.Errorf("match() = %v, %v, want %v, %v", gotTyp, gotMatched, tt.wantTyp, tt.wantMatched)
+			}
+		})
+	}
+}
+
+func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
+	var (
+		oneExactMatch     = &VirtualHost{Domains: []string{"foo.bar.com"}}
+		oneSuffixMatch    = &VirtualHost{Domains: []string{"*.bar.com"}}
+		onePrefixMatch    = &VirtualHost{Domains: []string{"foo.bar.*"}}
+		oneUniversalMatch = &VirtualHost{Domains: []string{"*"}}
+		longExactMatch    = &VirtualHost{Domains: []string{"v2.foo.bar.com"}}
+		multipleMatch     = &VirtualHost{Domains: []string{"pi.foo.bar.com", "314.*", "*.159"}}
+		vhs               = []*VirtualHost{oneExactMatch, oneSuffixMatch, onePrefixMatch, oneUniversalMatch, longExactMatch, multipleMatch}
+	)
+
+	tests := []struct {
+		name   string
+		host   string
+		vHosts []*VirtualHost
+		want   *VirtualHost
+	}{
+		{name: "exact-match", host: "foo.bar.com", vHosts: vhs, want: oneExactMatch},
+		{name: "suffix-match", host: "123.bar.com", vHosts: vhs, want: oneSuffixMatch},
+		{name: "prefix-match", host: "foo.bar.org", vHosts: vhs, want: onePrefixMatch},
+		{name: "universal-match", host: "abc.123", vHosts: vhs, want: oneUniversalMatch},
+		{name: "long-exact-match", host: "v2.foo.bar.com", vHosts: vhs, want: longExactMatch},
+		// Matches suffix "*.bar.com" and exact "pi.foo.bar.com". Takes exact.
+		{name: "multiple-match-exact", host: "pi.foo.bar.com", vHosts: vhs, want: multipleMatch},
+		// Matches suffix "*.159" and prefix "foo.bar.*". Takes suffix.
+		{name: "multiple-match-suffix", host: "foo.bar.159", vHosts: vhs, want: multipleMatch},
+		// Matches suffix "*.bar.com" and prefix "314.*". Takes suffix.
+		{name: "multiple-match-prefix", host: "314.bar.com", vHosts: vhs, want: oneSuffixMatch},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FindBestMatchingVirtualHost(tt.host, tt.vHosts); !cmp.Equal(got, tt.want, cmp.Comparer(proto.Equal)) {
+				t.Errorf("FindBestMatchingxdsclient.VirtualHost() = %v, want %v", got, tt.want)
 			}
 		})
 	}

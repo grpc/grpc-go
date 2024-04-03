@@ -21,8 +21,8 @@ import (
 	"time"
 
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -30,7 +30,7 @@ import (
 // context/logic available at the xdsClient layer. Since these validation are
 // performed on internal update structs, they can be shared between different
 // API clients.
-type UpdateValidatorFunc func(interface{}) error
+type UpdateValidatorFunc func(any) error
 
 // UpdateMetadata contains the metadata for each update, including timestamp,
 // raw message, and so on.

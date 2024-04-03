@@ -21,12 +21,12 @@ package grpc
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"reflect"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -36,18 +36,40 @@ type parseTestCase struct {
 	wantErr bool
 }
 
+func lbConfigFor(t *testing.T, name string, cfg serviceconfig.LoadBalancingConfig) serviceconfig.LoadBalancingConfig {
+	if name == "" {
+		name = "pick_first"
+		cfg = struct {
+			serviceconfig.LoadBalancingConfig
+		}{}
+	}
+	d := []map[string]any{{name: cfg}}
+	strCfg, err := json.Marshal(d)
+	t.Logf("strCfg = %v", string(strCfg))
+	if err != nil {
+		t.Fatalf("Error parsing config: %v", err)
+	}
+	parsedCfg, err := gracefulswitch.ParseConfig(strCfg)
+	if err != nil {
+		t.Fatalf("Error parsing config: %v", err)
+	}
+	return parsedCfg
+}
+
 func runParseTests(t *testing.T, testCases []parseTestCase) {
 	t.Helper()
-	for _, c := range testCases {
-		scpr := parseServiceConfig(c.scjs)
-		var sc *ServiceConfig
-		sc, _ = scpr.Config.(*ServiceConfig)
-		if !c.wantErr {
-			c.wantSC.rawJSONString = c.scjs
-		}
-		if c.wantErr != (scpr.Err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
-			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, scpr.Err, c.wantSC, c.wantErr)
-		}
+	for i, c := range testCases {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			scpr := parseServiceConfig(c.scjs)
+			var sc *ServiceConfig
+			sc, _ = scpr.Config.(*ServiceConfig)
+			if !c.wantErr {
+				c.wantSC.rawJSONString = c.scjs
+			}
+			if c.wantErr != (scpr.Err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
+				t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, scpr.Err, c.wantSC, c.wantErr)
+			}
+		})
 	}
 }
 
@@ -87,7 +109,7 @@ func (s) TestParseLBConfig(t *testing.T) {
 }`,
 			&ServiceConfig{
 				Methods:  make(map[string]MethodConfig),
-				lbConfig: &lbConfig{name: "pbb", cfg: pbbData{Foo: "hi"}},
+				lbConfig: lbConfigFor(t, "pbb", pbbData{Foo: "hi"}),
 			},
 			false,
 		},
@@ -130,12 +152,12 @@ func (s) TestParseLoadBalancer(t *testing.T) {
     ]
 }`,
 			&ServiceConfig{
-				LB: newString("round_robin"),
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
 						WaitForReady: newBool(true),
 					},
 				},
+				lbConfig: lbConfigFor(t, "round_robin", nil),
 			},
 			false,
 		},
@@ -183,6 +205,7 @@ func (s) TestParseWaitForReady(t *testing.T) {
 						WaitForReady: newBool(true),
 					},
 				},
+				lbConfig: lbConfigFor(t, "", nil),
 			},
 			false,
 		},
@@ -206,6 +229,7 @@ func (s) TestParseWaitForReady(t *testing.T) {
 						WaitForReady: newBool(false),
 					},
 				},
+				lbConfig: lbConfigFor(t, "", nil),
 			},
 			false,
 		},
@@ -262,6 +286,7 @@ func (s) TestParseTimeOut(t *testing.T) {
 						Timeout: newDuration(time.Second),
 					},
 				},
+				lbConfig: lbConfigFor(t, "", nil),
 			},
 			false,
 		},
@@ -337,6 +362,7 @@ func (s) TestParseMsgSize(t *testing.T) {
 						MaxRespSize: newInt(2048),
 					},
 				},
+				lbConfig: lbConfigFor(t, "", nil),
 			},
 			false,
 		},
@@ -377,6 +403,7 @@ func (s) TestParseDefaultMethodConfig(t *testing.T) {
 		Methods: map[string]MethodConfig{
 			"": {WaitForReady: newBool(true)},
 		},
+		lbConfig: lbConfigFor(t, "", nil),
 	}
 
 	runParseTests(t, []parseTestCase{
@@ -449,63 +476,10 @@ func (s) TestParseMethodConfigDuplicatedName(t *testing.T) {
 	})
 }
 
-func (s) TestParseDuration(t *testing.T) {
-	testCases := []struct {
-		s    *string
-		want *time.Duration
-		err  bool
-	}{
-		{s: nil, want: nil},
-		{s: newString("1s"), want: newDuration(time.Second)},
-		{s: newString("-1s"), want: newDuration(-time.Second)},
-		{s: newString("1.1s"), want: newDuration(1100 * time.Millisecond)},
-		{s: newString("1.s"), want: newDuration(time.Second)},
-		{s: newString("1.0s"), want: newDuration(time.Second)},
-		{s: newString(".002s"), want: newDuration(2 * time.Millisecond)},
-		{s: newString(".002000s"), want: newDuration(2 * time.Millisecond)},
-		{s: newString("0.003s"), want: newDuration(3 * time.Millisecond)},
-		{s: newString("0.000004s"), want: newDuration(4 * time.Microsecond)},
-		{s: newString("5000.000000009s"), want: newDuration(5000*time.Second + 9*time.Nanosecond)},
-		{s: newString("4999.999999999s"), want: newDuration(5000*time.Second - time.Nanosecond)},
-		{s: newString("1"), err: true},
-		{s: newString("s"), err: true},
-		{s: newString(".s"), err: true},
-		{s: newString("1 s"), err: true},
-		{s: newString(" 1s"), err: true},
-		{s: newString("1ms"), err: true},
-		{s: newString("1.1.1s"), err: true},
-		{s: newString("Xs"), err: true},
-		{s: newString("as"), err: true},
-		{s: newString(".0000000001s"), err: true},
-		{s: newString(fmt.Sprint(math.MaxInt32) + "s"), want: newDuration(math.MaxInt32 * time.Second)},
-		{s: newString(fmt.Sprint(int64(math.MaxInt32)+1) + "s"), err: true},
-	}
-	for _, tc := range testCases {
-		got, err := parseDuration(tc.s)
-		if tc.err != (err != nil) ||
-			(got == nil) != (tc.want == nil) ||
-			(got != nil && *got != *tc.want) {
-			wantErr := "<nil>"
-			if tc.err {
-				wantErr = "<non-nil error>"
-			}
-			s := "<nil>"
-			if tc.s != nil {
-				s = `&"` + *tc.s + `"`
-			}
-			t.Errorf("parseDuration(%v) = %v, %v; want %v, %v", s, got, err, tc.want, wantErr)
-		}
-	}
-}
-
 func newBool(b bool) *bool {
 	return &b
 }
 
 func newDuration(b time.Duration) *time.Duration {
-	return &b
-}
-
-func newString(b string) *string {
 	return &b
 }

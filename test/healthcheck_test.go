@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
@@ -121,7 +122,7 @@ func (s *testHealthServer) SetServingStatus(service string, status healthpb.Heal
 func setupHealthCheckWrapper() (hcEnterChan chan struct{}, hcExitChan chan struct{}, wrapper internal.HealthChecker) {
 	hcEnterChan = make(chan struct{})
 	hcExitChan = make(chan struct{})
-	wrapper = func(ctx context.Context, newStream func(string) (interface{}, error), update func(connectivity.State, error), service string) error {
+	wrapper = func(ctx context.Context, newStream func(string) (any, error), update func(connectivity.State, error), service string) error {
 		close(hcEnterChan)
 		defer close(hcExitChan)
 		return testHealthCheckFunc(ctx, newStream, update, service)
@@ -212,44 +213,33 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if ok := cc.WaitForStateChange(ctx, connectivity.Idle); !ok {
-		t.Fatal("ClientConn is still in IDLE state when the context times out.")
-	}
-	if ok := cc.WaitForStateChange(ctx, connectivity.Connecting); !ok {
-		t.Fatal("ClientConn is still in CONNECTING state when the context times out.")
-	}
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Idle)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Connecting)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
-	if ok := cc.WaitForStateChange(ctx, connectivity.TransientFailure); !ok {
-		t.Fatal("ClientConn is still in TRANSIENT FAILURE state when the context times out.")
-	}
+	testutils.AwaitNotState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
-	if ok := cc.WaitForStateChange(ctx, connectivity.Ready); !ok {
-		t.Fatal("ClientConn is still in READY state when the context times out.")
-	}
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Ready)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
-	if ok := cc.WaitForStateChange(ctx, connectivity.TransientFailure); !ok {
-		t.Fatal("ClientConn is still in TRANSIENT FAILURE state when the context times out.")
-	}
+	testutils.AwaitNotState(ctx, t, cc, connectivity.TransientFailure)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_UNKNOWN)
-	if ok := cc.WaitForStateChange(ctx, connectivity.Ready); !ok {
-		t.Fatal("ClientConn is still in READY state when the context times out.")
-	}
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Ready)
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
@@ -278,12 +268,8 @@ func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if ok := cc.WaitForStateChange(ctx, connectivity.Idle); !ok {
-		t.Fatal("ClientConn is still in IDLE state when the context times out.")
-	}
-	if ok := cc.WaitForStateChange(ctx, connectivity.Connecting); !ok {
-		t.Fatal("ClientConn is still in CONNECTING state when the context times out.")
-	}
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Idle)
+	testutils.AwaitNotState(ctx, t, cc, connectivity.Connecting)
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
@@ -801,23 +787,25 @@ func (s) TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 		if len(cm) == 0 {
 			return false, errors.New("channelz.GetTopChannels return 0 top channel")
 		}
-		if len(cm[0].SubChans) == 0 {
+		subChans := cm[0].SubChans()
+		if len(subChans) == 0 {
 			return false, errors.New("there is 0 subchannel")
 		}
 		var id int64
-		for k := range cm[0].SubChans {
+		for k := range subChans {
 			id = k
 			break
 		}
 		scm := channelz.GetSubChannel(id)
-		if scm == nil || scm.ChannelData == nil {
-			return false, errors.New("nil subchannel metric or nil subchannel metric ChannelData returned")
+		if scm == nil {
+			return false, errors.New("nil subchannel returned")
 		}
 		// exponential backoff retry may result in more than one health check call.
-		if scm.ChannelData.CallsStarted > 0 && scm.ChannelData.CallsSucceeded > 0 && scm.ChannelData.CallsFailed == 0 {
+		cstart, csucc, cfail := scm.ChannelMetrics.CallsStarted.Load(), scm.ChannelMetrics.CallsSucceeded.Load(), scm.ChannelMetrics.CallsFailed.Load()
+		if cstart > 0 && csucc > 0 && cfail == 0 {
 			return true, nil
 		}
-		return false, fmt.Errorf("got %d CallsStarted, %d CallsSucceeded, want >0 >0", scm.ChannelData.CallsStarted, scm.ChannelData.CallsSucceeded)
+		return false, fmt.Errorf("got %d CallsStarted, %d CallsSucceeded %d CallsFailed, want >0 >0 =0", cstart, csucc, cfail)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -848,23 +836,25 @@ func (s) TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 		if len(cm) == 0 {
 			return false, errors.New("channelz.GetTopChannels return 0 top channel")
 		}
-		if len(cm[0].SubChans) == 0 {
+		subChans := cm[0].SubChans()
+		if len(subChans) == 0 {
 			return false, errors.New("there is 0 subchannel")
 		}
 		var id int64
-		for k := range cm[0].SubChans {
+		for k := range subChans {
 			id = k
 			break
 		}
 		scm := channelz.GetSubChannel(id)
-		if scm == nil || scm.ChannelData == nil {
-			return false, errors.New("nil subchannel metric or nil subchannel metric ChannelData returned")
+		if scm == nil {
+			return false, errors.New("nil subchannel returned")
 		}
 		// exponential backoff retry may result in more than one health check call.
-		if scm.ChannelData.CallsStarted > 0 && scm.ChannelData.CallsFailed > 0 && scm.ChannelData.CallsSucceeded == 0 {
+		cstart, cfail, csucc := scm.ChannelMetrics.CallsStarted.Load(), scm.ChannelMetrics.CallsFailed.Load(), scm.ChannelMetrics.CallsSucceeded.Load()
+		if cstart > 0 && cfail > 0 && csucc == 0 {
 			return true, nil
 		}
-		return false, fmt.Errorf("got %d CallsStarted, %d CallsFailed, want >0, >0", scm.ChannelData.CallsStarted, scm.ChannelData.CallsFailed)
+		return false, fmt.Errorf("got %d CallsStarted, %d CallsFailed, %d CallsSucceeded, want >0, >0", cstart, cfail, csucc)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -905,7 +895,7 @@ func verifyHealthCheckErrCode(t *testing.T, d time.Duration, cc *grpc.ClientConn
 // RPC, and returns the stream.
 func newHealthCheckStream(t *testing.T, cc *grpc.ClientConn, service string) (healthgrpc.Health_WatchClient, context.CancelFunc) {
 	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	hc := healthgrpc.NewHealthClient(cc)
 	stream, err := hc.Watch(ctx, &healthpb.HealthCheckRequest{Service: service})
 	if err != nil {
@@ -1137,7 +1127,7 @@ func (s) TestUnknownHandler(t *testing.T) {
 	// An example unknownHandler that returns a different code and a different
 	// method, making sure that we do not expose what methods are implemented to
 	// a client that is not authenticated.
-	unknownHandler := func(srv interface{}, stream grpc.ServerStream) error {
+	unknownHandler := func(srv any, stream grpc.ServerStream) error {
 		return status.Error(codes.Unauthenticated, "user unauthenticated")
 	}
 	for _, e := range listTestEnv() {

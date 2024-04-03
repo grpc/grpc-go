@@ -55,7 +55,15 @@ func callBidiStreamingEcho(ctx context.Context, client ecpb.EchoClient, opts ...
 		return status.Errorf(status.Code(err), "BidirectionalStreamingEcho RPC failed: %v", err)
 	}
 	for i := 0; i < 5; i++ {
-		if err := c.Send(&ecpb.EchoRequest{Message: fmt.Sprintf("Request %d", i+1)}); err != nil {
+		err := c.Send(&ecpb.EchoRequest{Message: fmt.Sprintf("Request %d", i+1)})
+		if err == io.EOF {
+			// Bidi streaming RPC errors happen and make Send return io.EOF,
+			// not the RPC error itself.  Call Recv to determine the error.
+			break
+		}
+		if err != nil {
+			// Some local errors are reported this way, e.g. errors serializing
+			// the request message.
 			return status.Errorf(status.Code(err), "sending StreamingEcho message: %v", err)
 		}
 	}

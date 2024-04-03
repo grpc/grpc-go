@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	rrutil "google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -45,10 +46,6 @@ const rrServiceConfig = `{"loadBalancingConfig": [{"round_robin":{}}]}`
 
 func testRoundRobinBasic(ctx context.Context, t *testing.T, opts ...grpc.DialOption) (*grpc.ClientConn, *manual.Resolver, []*stubserver.StubServer) {
 	t.Helper()
-
-	// Initialize channelz. Used to determine pending RPC count.
-	czCleanup := channelz.NewChannelzStorageForTesting()
-	t.Cleanup(func() { czCleanupWrapper(czCleanup, t) })
 
 	r := manual.NewBuilderWithScheme("whatever")
 
@@ -119,11 +116,7 @@ func (s) TestRoundRobin_AddressesRemoved(t *testing.T) {
 	// Send a resolver update with no addresses. This should push the channel into
 	// TransientFailure.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("timeout waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
-		}
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	const msgWant = "produced zero addresses"
 	client := testgrpc.NewTestServiceClient(cc)
@@ -135,7 +128,7 @@ func (s) TestRoundRobin_AddressesRemoved(t *testing.T) {
 // TestRoundRobin_NewAddressWhileBlocking tests the case where round_robin is
 // configured on a channel, things are working as expected and then a resolver
 // updates removes all addresses. An RPC attempted at this point in time will be
-// blocked because there are no valid backends. This test verifies that when new
+// blocked because there are no valid ¡ds. This test verifies that when new
 // backends are added, the RPC is able to complete.
 func (s) TestRoundRobin_NewAddressWhileBlocking(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -145,11 +138,7 @@ func (s) TestRoundRobin_NewAddressWhileBlocking(t *testing.T) {
 	// Send a resolver update with no addresses. This should push the channel into
 	// TransientFailure.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("timeout waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
-		}
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	client := testgrpc.NewTestServiceClient(cc)
 	doneCh := make(chan struct{})
@@ -174,8 +163,8 @@ func (s) TestRoundRobin_NewAddressWhileBlocking(t *testing.T) {
 		if len(tcs) != 1 {
 			t.Fatalf("there should only be one top channel, not %d", len(tcs))
 		}
-		started := tcs[0].ChannelData.CallsStarted
-		completed := tcs[0].ChannelData.CallsSucceeded + tcs[0].ChannelData.CallsFailed
+		started := tcs[0].ChannelMetrics.CallsStarted.Load()
+		completed := tcs[0].ChannelMetrics.CallsSucceeded.Load() + tcs[0].ChannelMetrics.CallsFailed.Load()
 		if (started - completed) == 1 {
 			break
 		}
@@ -229,17 +218,13 @@ func (s) TestRoundRobin_AllServersDown(t *testing.T) {
 		b.Stop()
 	}
 
-	// Wait for TransientFailure.
-	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
-		if !cc.WaitForStateChange(ctx, state) {
-			t.Fatalf("timeout waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
-		}
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Failfast RPCs should fail with Unavailable.
 	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(context.Background(), &testpb.Empty{}); status.Code(err) == codes.Unavailable {
-		return
+
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("EmptyCall got err: %v; want Unavailable", err)
 	}
 }
 

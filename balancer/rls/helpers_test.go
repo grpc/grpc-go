@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/balancer/rls/internal/test/e2e"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
@@ -47,10 +46,6 @@ const (
 	defaultTestTimeout      = 5 * time.Second
 	defaultTestShortTimeout = 100 * time.Millisecond
 )
-
-func init() {
-	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond
-}
 
 type s struct {
 	grpctest.Tester

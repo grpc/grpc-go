@@ -62,12 +62,14 @@ func (s) TestConfigSelector(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	ctxDeadline := time.Now().Add(10 * time.Second)
-	ctx, cancel := context.WithDeadline(context.Background(), ctxDeadline)
+	const normalTimeout = 10 * time.Second
+	ctxDeadline := time.Now().Add(normalTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), normalTimeout)
 	defer cancel()
 
-	longCtxDeadline := time.Now().Add(30 * time.Second)
-	longdeadlineCtx, cancel := context.WithDeadline(context.Background(), longCtxDeadline)
+	const longTimeout = 30 * time.Second
+	longCtxDeadline := time.Now().Add(longTimeout)
+	longdeadlineCtx, cancel := context.WithTimeout(context.Background(), longTimeout)
 	defer cancel()
 	shorterTimeout := 3 * time.Second
 

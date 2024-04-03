@@ -27,9 +27,9 @@ import (
 
 func TestIsRoundRobin(t *testing.T) {
 	var (
-		sc1 = testutils.TestSubConns[0]
-		sc2 = testutils.TestSubConns[1]
-		sc3 = testutils.TestSubConns[2]
+		sc1 = &testutils.TestSubConn{}
+		sc2 = &testutils.TestSubConn{}
+		sc3 = &testutils.TestSubConn{}
 	)
 
 	testCases := []struct {

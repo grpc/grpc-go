@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"strings"
 	"sync"
@@ -51,6 +52,8 @@ var (
 	soakPerIterationMaxAcceptableLatencyMs = flag.Int("soak_per_iteration_max_acceptable_latency_ms", 1000, "The number of milliseconds a single iteration in the two soak tests (rpc_soak and channel_soak) should take.")
 	soakOverallTimeoutSeconds              = flag.Int("soak_overall_timeout_seconds", 10, "The overall number of seconds after which a soak test should stop and fail, if the desired number of iterations have not yet completed.")
 	soakMinTimeMsBetweenRPCs               = flag.Int("soak_min_time_ms_between_rpcs", 0, "The minimum time in milliseconds between consecutive RPCs in a soak test (rpc_soak or channel_soak), useful for limiting QPS")
+	soakRequestSize                        = flag.Int("soak_request_size", 271828, "The request size in a soak RPC. The default value is set based on the interop large unary test case.")
+	soakResponseSize                       = flag.Int("soak_response_size", 314159, "The response size in a soak RPC. The default value is set based on the interop large unary test case.")
 	testCase                               = flag.String("test_case", "rpc_soak",
 		`Configure different test cases. Valid options are:
         rpc_soak: sends --soak_iterations large_unary RPCs;
@@ -113,10 +116,13 @@ func main() {
 	// run soak tests with the different clients
 	logger.Infof("Clients running with test case %q", *testCase)
 	var wg sync.WaitGroup
+	ctx := context.Background()
 	for i := range clients {
 		wg.Add(1)
 		go func(c clientConfig) {
-			interop.DoSoakTest(c.tc, c.uri, c.opts, resetChannel, *soakIterations, *soakMaxFailures, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, time.Now().Add(time.Duration(*soakOverallTimeoutSeconds)*time.Second))
+			ctxWithDeadline, cancel := context.WithTimeout(ctx, time.Duration(*soakOverallTimeoutSeconds)*time.Second)
+			defer cancel()
+			interop.DoSoakTest(ctxWithDeadline, c.tc, c.uri, c.opts, resetChannel, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond)
 			logger.Infof("%s test done for server: %s", *testCase, c.uri)
 			wg.Done()
 		}(clients[i])
