@@ -15,7 +15,7 @@
 
 set -eu -o pipefail
 
-export WORKDIR=$(mktemp -d)
+WORKDIR=$(mktemp -d)
 
 function finish {
   rm -rf "$WORKDIR"
@@ -49,7 +49,7 @@ echo "curl https://raw.githubusercontent.com/googleapis/googleapis/master/google
 curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto > "${WORKDIR}/googleapis/google/rpc/code.proto"
 
 source ./scripts/protoc_installer.sh
-download_protoc
+download_protoc $WORKDIR
 
 export PATH="$PATH:$GOBIN"
 
@@ -92,6 +92,7 @@ SOURCES=(
 #
 # Note that the protos listed here are all for testing purposes. All protos to
 # be used externally should have a go_package option (and they don't need to be
+# listed here).
 # listed here).
 OPTS=Mgrpc/core/stats.proto=google.golang.org/grpc/interop/grpc_testing/core,\
 Mgrpc/testing/benchmark_service.proto=google.golang.org/grpc/interop/grpc_testing,\
