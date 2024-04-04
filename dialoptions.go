@@ -300,6 +300,9 @@ func withBackoff(bs internalbackoff.Strategy) DialOption {
 //
 // Use of this feature is not recommended.  For more information, please see:
 // https://github.com/grpc/grpc-go/blob/master/Documentation/anti-patterns.md
+//
+// Deprecated: this DialOption is not supported by NewClient.
+// Will be supported throughout 1.x.
 func WithBlock() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.block = true
@@ -318,6 +321,8 @@ func WithBlock() DialOption {
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
+//
+// Deprecated: this DialOption is not supported by NewClient.
 func WithReturnConnectionError() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.block = true
@@ -387,8 +392,8 @@ func WithCredentialsBundle(b credentials.Bundle) DialOption {
 // WithTimeout returns a DialOption that configures a timeout for dialing a
 // ClientConn initially. This is valid if and only if WithBlock() is present.
 //
-// Deprecated: use DialContext instead of Dial and context.WithTimeout
-// instead.  Will be supported throughout 1.x.
+// Deprecated: this DialOption is not supported by NewClient.
+// Will be supported throughout 1.x.
 func WithTimeout(d time.Duration) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.timeout = d
@@ -474,6 +479,8 @@ func withBinaryLogger(bl binarylog.Logger) DialOption {
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
+//
+// Deprecated: this DialOption is not supported by NewClient.
 func FailOnNonTempDialError(f bool) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.FailOnNonTempDialError = f
