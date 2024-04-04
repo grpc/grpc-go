@@ -40,6 +40,9 @@ type SubChannel struct {
 }
 
 func (sc *SubChannel) String() string {
+	if sc.parent == nil {
+		return fmt.Sprintf("SubChannel #%d", sc.ID)
+	}
 	return fmt.Sprintf("%s SubChannel #%d", sc.parent, sc.ID)
 }
 
