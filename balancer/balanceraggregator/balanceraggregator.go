@@ -64,11 +64,12 @@ type BalancerAggregator struct {
 	bOpts balancer.BuildOptions
 
 	children *resolver.EndpointMap
-
 	// inhibitChildUpdates is set during UpdateClientConnState/ResolverError
 	// calls (calls to children will each produce an update, only want one
 	// update).
-	inhibitChildUpdates bool
+	inhibitChildUpdates atomic.Bool
+
+	mu sync.Mutex // Sync updateState callouts and childState recent state updates
 }
 
 // UpdateClientConnState creates a child for new endpoints and deletes children
@@ -90,9 +91,9 @@ func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 		}
 	}
 	endpointSet := resolver.NewEndpointMap()
-	ba.inhibitChildUpdates = true
+	ba.inhibitChildUpdates.Store(true)
 	defer func() {
-		ba.inhibitChildUpdates = false
+		ba.inhibitChildUpdates.Store(false)
 		ba.updateState()
 	}()
 	var ret error
@@ -146,9 +147,9 @@ func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 // children and sends a single synchronous update of the childStates at the end
 // of the ResolverError operation.
 func (ba *BalancerAggregator) ResolverError(err error) {
-	ba.inhibitChildUpdates = true
+	ba.inhibitChildUpdates.Store(true)
 	defer func() {
-		ba.inhibitChildUpdates = false
+		ba.inhibitChildUpdates.Store(false)
 		ba.updateState()
 	}()
 	for _, child := range ba.children.Values() {
@@ -172,7 +173,7 @@ func (ba *BalancerAggregator) Close() {
 // and a picker with round robin behavior with all the child states present if
 // needed.
 func (ba *BalancerAggregator) updateState() {
-	if ba.inhibitChildUpdates {
+	if ba.inhibitChildUpdates.Load() {
 		return
 	}
 	readyPickers := make([]balancer.Picker, 0)
@@ -181,11 +182,11 @@ func (ba *BalancerAggregator) updateState() {
 	transientFailurePickers := make([]balancer.Picker, 0)
 
 	childStates := make([]ChildState, 0, ba.children.Len())
+	ba.mu.Lock()
+	defer ba.mu.Unlock()
 	for _, child := range ba.children.Values() {
 		bw := child.(*balancerWrapper)
-		bw.mu.Lock()
 		childState := bw.childState
-		bw.mu.Unlock()
 		childStates = append(childStates, childState)
 		childPicker := childState.State.Picker
 		switch childState.State.ConnectivityState {
@@ -249,8 +250,8 @@ func (p *pickerWithChildStates) Pick(info balancer.PickInfo) (balancer.PickResul
 	return picker.Pick(info)
 }
 
-// ChildStatesFromPicker returns the persisted child states from the picker if
-// picker is one provided in a call to UpdateState from this balancer.
+// ChildStatesFromPicker returns the child states from the picker if the picker
+// is one provided in a call to UpdateState from this balancer.
 func ChildStatesFromPicker(picker balancer.Picker) []ChildState {
 	p, ok := picker.(*pickerWithChildStates)
 	if !ok {
@@ -267,14 +268,13 @@ type balancerWrapper struct {
 
 	ba *BalancerAggregator
 
-	mu         sync.Mutex
 	childState ChildState
 }
 
 func (bw *balancerWrapper) UpdateState(state balancer.State) {
-	bw.mu.Lock()
+	bw.ba.mu.Lock()
 	bw.childState.State = state
-	bw.mu.Unlock()
+	bw.ba.mu.Unlock()
 	bw.ba.updateState()
 }
 
