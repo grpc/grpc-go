@@ -16,7 +16,7 @@
  *
  */
 
-// Package balanceraggregator implements a BalancerAggregator helper.
+// Package balanceraggregator implements a balancerAggregator helper.
 //
 // # Experimental
 //
@@ -47,19 +47,19 @@ type ChildState struct {
 	State    balancer.State
 }
 
-// NewBalancer returns a new BalancerAggregator.
+// NewBalancer returns a new balancerAggregator.
 func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &BalancerAggregator{
+	return &balancerAggregator{
 		cc:       cc,
 		bOpts:    opts,
 		children: resolver.NewEndpointMap(),
 	}
 }
 
-// BalancerAggregator is a balancer that wraps child balancers. It creates a
+// balancerAggregator is a balancer that wraps child balancers. It creates a
 // child balancer with child config for every unique Endpoint received. It
 // updates the child states on any update from parent or child.
-type BalancerAggregator struct {
+type balancerAggregator struct {
 	cc    balancer.ClientConn
 	bOpts balancer.BuildOptions
 
@@ -78,7 +78,7 @@ type BalancerAggregator struct {
 // the end of the UpdateClientConnState operation. If any endpoint has no
 // addresses, returns error. Otherwise returns first error found from a child,
 // but fully processes the new update.
-func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnState) error {
+func (ba *balancerAggregator) UpdateClientConnState(state balancer.ClientConnState) error {
 	if len(state.ResolverState.Endpoints) == 0 {
 		return errors.New("endpoints list is empty")
 	}
@@ -143,10 +143,10 @@ func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 	return ret
 }
 
-// ResolverError forwards the resolver error to all of the BalancerAggregator's
+// ResolverError forwards the resolver error to all of the balancerAggregator's
 // children and sends a single synchronous update of the childStates at the end
 // of the ResolverError operation.
-func (ba *BalancerAggregator) ResolverError(err error) {
+func (ba *balancerAggregator) ResolverError(err error) {
 	ba.inhibitChildUpdates.Store(true)
 	defer func() {
 		ba.inhibitChildUpdates.Store(false)
@@ -158,11 +158,11 @@ func (ba *BalancerAggregator) ResolverError(err error) {
 	}
 }
 
-func (ba *BalancerAggregator) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+func (ba *balancerAggregator) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	// UpdateSubConnState is deprecated.
 }
 
-func (ba *BalancerAggregator) Close() {
+func (ba *balancerAggregator) Close() {
 	for _, child := range ba.children.Values() {
 		bal := child.(balancer.Balancer)
 		bal.Close()
@@ -172,7 +172,7 @@ func (ba *BalancerAggregator) Close() {
 // updateState updates this component's state. It sends the aggregated state,
 // and a picker with round robin behavior with all the child states present if
 // needed.
-func (ba *BalancerAggregator) updateState() {
+func (ba *balancerAggregator) updateState() {
 	if ba.inhibitChildUpdates.Load() {
 		return
 	}
@@ -236,7 +236,7 @@ func (ba *BalancerAggregator) updateState() {
 }
 
 // pickerWithChildStates delegates to the pickers it holds in a round robin
-// fashion. It also contains the childStates of all the BalancerAggregator's
+// fashion. It also contains the childStates of all the balancerAggregator's
 // children.
 type pickerWithChildStates struct {
 	pickers     []balancer.Picker
@@ -266,7 +266,7 @@ type balancerWrapper struct {
 	balancer.Balancer   // Simply forward balancer.Balancer operations.
 	balancer.ClientConn // embed to intercept UpdateState, doesn't deal with SubConns
 
-	ba *BalancerAggregator
+	ba *balancerAggregator
 
 	childState ChildState
 }
