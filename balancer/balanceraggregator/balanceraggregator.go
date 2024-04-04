@@ -28,6 +28,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
@@ -182,9 +183,12 @@ func (ba *BalancerAggregator) updateState() {
 	childStates := make([]ChildState, 0, ba.children.Len())
 	for _, child := range ba.children.Values() {
 		bw := child.(*balancerWrapper)
-		childStates = append(childStates, bw.childState)
-		childPicker := bw.childState.State.Picker
-		switch bw.childState.State.ConnectivityState {
+		bw.mu.Lock()
+		childState := bw.childState
+		bw.mu.Unlock()
+		childStates = append(childStates, childState)
+		childPicker := childState.State.Picker
+		switch childState.State.ConnectivityState {
 		case connectivity.Ready:
 			readyPickers = append(readyPickers, childPicker)
 		case connectivity.Connecting:
@@ -263,11 +267,14 @@ type balancerWrapper struct {
 
 	ba *BalancerAggregator
 
+	mu         sync.Mutex
 	childState ChildState
 }
 
 func (bw *balancerWrapper) UpdateState(state balancer.State) {
+	bw.mu.Lock()
 	bw.childState.State = state
+	bw.mu.Unlock()
 	bw.ba.updateState()
 }
 
