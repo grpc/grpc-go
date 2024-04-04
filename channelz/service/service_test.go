@@ -34,7 +34,11 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/reflect/protodesc"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/dynamicpb"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -546,6 +550,47 @@ func newSocket(cs czSocket) *channelz.Socket {
 	return s
 }
 
+type OtherChannelzSecurityValue struct {
+	LocalCertificate  []byte `protobuf:"bytes,1,opt,name=local_certificate,json=localCertificate,proto3" json:"local_certificate,omitempty"`
+	RemoteCertificate []byte `protobuf:"bytes,2,opt,name=remote_certificate,json=remoteCertificate,proto3" json:"remote_certificate,omitempty"`
+}
+
+func (x *OtherChannelzSecurityValue) Reset() {
+	*x = OtherChannelzSecurityValue{}
+}
+
+func (x *OtherChannelzSecurityValue) String() string {
+	return prototext.Format(x)
+}
+
+func (*OtherChannelzSecurityValue) ProtoMessage() {}
+
+func (x OtherChannelzSecurityValue) ProtoReflect() protoreflect.Message {
+	const s = `
+		name:   "service_test.proto"
+		syntax: "proto3"
+		package: "grpc.credentials",
+		message_type: [{
+			name: "OtherChannelzSecurityValue"
+			field: [
+				{name:"local_certificate"  number:1 type:TYPE_BYTES},
+				{name:"remote_certificate"  number:2 type:TYPE_BYTES}
+			]
+		}]
+	`
+	pb := new(descriptorpb.FileDescriptorProto)
+	if err := prototext.Unmarshal([]byte(s), pb); err != nil {
+		panic(err)
+	}
+	fd, err := protodesc.NewFile(pb, nil)
+	if err != nil {
+		panic(err)
+	}
+	md := fd.Messages().Get(0)
+	mt := dynamicpb.NewMessageType(md)
+	return mt.New()
+}
+
 func (s) TestGetSocket(t *testing.T) {
 	ss := []*channelz.Socket{newSocket(czSocket{
 		streamsStarted:                   10,
@@ -609,7 +654,7 @@ func (s) TestGetSocket(t *testing.T) {
 	}), newSocket(czSocket{
 		security: &credentials.OtherChannelzSecurityValue{
 			Name: "YYYY",
-			Value: &OtherChannelzSecurityValue{
+			Value: OtherChannelzSecurityValue{
 				LocalCertificate:  []byte{1, 2, 3},
 				RemoteCertificate: []byte{4, 5, 6},
 			},
