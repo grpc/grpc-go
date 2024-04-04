@@ -17,11 +17,17 @@
  */
 
 // Package balanceraggregator implements a BalancerAggregator helper.
+//
+// # Experimental
+//
+// Notice: This package is EXPERIMENTAL and may be changed or removed in a
+// later release.
 package balanceraggregator
 
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
@@ -33,15 +39,15 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-// ChildState is the balancer state of the child along with the
-// endpoint which ID's the child balancer.
+// ChildState is the balancer state of a child along with the endpoint which
+// identifies the child balancer.
 type ChildState struct {
 	Endpoint resolver.Endpoint
 	State    balancer.State
 }
 
-// Build returns a new BalancerAggregator.
-func Build(cc balancer.ClientConn, opts balancer.BuildOptions) *BalancerAggregator {
+// NewBalancer returns a new BalancerAggregator.
+func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	return &BalancerAggregator{
 		cc:       cc,
 		bOpts:    opts,
@@ -50,33 +56,36 @@ func Build(cc balancer.ClientConn, opts balancer.BuildOptions) *BalancerAggregat
 }
 
 // BalancerAggregator is a balancer that wraps child balancers. It creates a
-// child balancer with child config for every Endpoint received. It updates the
-// child states on any update from parent or child.
+// child balancer with child config for every unique Endpoint received. It
+// updates the child states on any update from parent or child.
 type BalancerAggregator struct {
 	cc    balancer.ClientConn
 	bOpts balancer.BuildOptions
 
 	children *resolver.EndpointMap
 
+	// inhibitChildUpdates is set during UpdateClientConnState/ResolverError
+	// calls (calls to children will each produce an update, only want one
+	// update).
 	inhibitChildUpdates bool
 }
 
-// UpdateClientConnState creates a child for new endpoints, deletes children for
-// endpoints that are no longer present. It also updates all the children, and
-// sends a single synchronous update of the children's aggregate state at the
-// end of the UpdateClientConnState operation. If an endpoint has no addresses,
-// returns error. Otherwise returns first error found from a child, but fully
-// processes the new update.
+// UpdateClientConnState creates a child for new endpoints and deletes children
+// for endpoints that are no longer present. It also updates all the children,
+// and sends a single synchronous update of the children's aggregate state at
+// the end of the UpdateClientConnState operation. If any endpoint has no
+// addresses, returns error. Otherwise returns first error found from a child,
+// but fully processes the new update.
 func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnState) error {
 	if len(state.ResolverState.Endpoints) == 0 {
 		return errors.New("endpoints list is empty")
 	}
 
 	// Check/return early if any endpoints have no addresses.
-	// TODO: eventually make this configurable.
-	for _, endpoint := range state.ResolverState.Endpoints {
+	// TODO: make this configurable if needed.
+	for i, endpoint := range state.ResolverState.Endpoints {
 		if len(endpoint.Addresses) == 0 {
-			return errors.New("endpoint has empty addresses")
+			return fmt.Errorf("endpoint %d has empty addresses", i)
 		}
 	}
 	endpointSet := resolver.NewEndpointMap()
@@ -88,6 +97,11 @@ func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 	var ret error
 	// Update/Create new children.
 	for _, endpoint := range state.ResolverState.Endpoints {
+		if _, ok := endpointSet.Get(endpoint); ok {
+			// Endpoint child was already created, continue to avoid duplicate
+			// update.
+			continue
+		}
 		endpointSet.Set(endpoint, nil)
 		var bal *balancerWrapper
 		if child, ok := ba.children.Get(endpoint); ok {
@@ -128,8 +142,8 @@ func (ba *BalancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 }
 
 // ResolverError forwards the resolver error to all of the BalancerAggregator's
-// children, sends a single synchronous update of the childStates at the end of
-// the ResolverError operation.
+// children and sends a single synchronous update of the childStates at the end
+// of the ResolverError operation.
 func (ba *BalancerAggregator) ResolverError(err error) {
 	ba.inhibitChildUpdates = true
 	defer func() {
@@ -153,8 +167,8 @@ func (ba *BalancerAggregator) Close() {
 	}
 }
 
-// updateState updates this components state. It sends the aggregated state, and
-// a picker with round robin behavior with all the child states present if
+// updateState updates this component's state. It sends the aggregated state,
+// and a picker with round robin behavior with all the child states present if
 // needed.
 func (ba *BalancerAggregator) updateState() {
 	if ba.inhibitChildUpdates {
@@ -232,7 +246,7 @@ func (p *pickerWithChildStates) Pick(info balancer.PickInfo) (balancer.PickResul
 }
 
 // ChildStatesFromPicker returns the persisted child states from the picker if
-// picker is of type pickerWithChildStates.
+// picker is one provided in a call to UpdateState from this balancer.
 func ChildStatesFromPicker(picker balancer.Picker) []ChildState {
 	p, ok := picker.(*pickerWithChildStates)
 	if !ok {

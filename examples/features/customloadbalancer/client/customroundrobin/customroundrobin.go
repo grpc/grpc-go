@@ -71,7 +71,7 @@ func (customRoundRobinBuilder) Build(cc balancer.ClientConn, bOpts balancer.Buil
 		ClientConn: cc,
 		bOpts:      bOpts,
 	}
-	crr.Balancer = balanceraggregator.Build(crr, bOpts)
+	crr.Balancer = balanceraggregator.NewBalancer(crr, bOpts)
 	return crr
 }
 
