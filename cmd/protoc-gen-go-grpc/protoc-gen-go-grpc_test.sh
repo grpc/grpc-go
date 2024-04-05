@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/bin/bash -e
+
 # Copyright 2024 gRPC authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,13 +28,13 @@ go build -o "${TEMPDIR}" .
 PATH="${TEMPDIR}:${PATH}"
 popd
 
-protoc \
+protoc1 \
     --go-grpc_out="${TEMPDIR}" \
     --go-grpc_opt=paths=source_relative \
-    "$WORKDIR/proto/golden.proto"
+    "$WORKDIR/testdata/golden.proto"
 
 GOLDENFILE="${WORKDIR}/testdata/golden_grpc.pb.go"
-GENFILE=$(find "${TEMPDIR}" -name "golden_grpc.pb.go")
+GENFILE="${TEMPDIR}/cmd/protoc-gen-go-grpc/testdata/golden_grpc.pb.go"
 
 DIFF=$(diff "${GOLDENFILE}" "${GENFILE}")
 if [[ -n "${DIFF}" ]]; then
