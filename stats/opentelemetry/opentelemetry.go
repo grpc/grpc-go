@@ -105,7 +105,9 @@ type MetricsOptions struct {
 	// the string "other". If unset, will use the method string as is. This is
 	// intended to be used only for generic methods (see
 	// grpc.UnknownServiceHandler), and not registered static methods (from
-	// generated service protos).
+	// generated service protos). Take care to limit the values allowed, as
+	// allowing too many will increase cardinality and could cause severe memory
+	// or performance problems.
 	MethodAttributeFilter func(string) bool
 }
 

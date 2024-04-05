@@ -118,7 +118,7 @@ func (ssh *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 
 	mi := &metricsInfo{
 		startTime: time.Now(),
-		method:    method,
+		method:    removeLeadingSlash(method),
 	}
 	ri := &rpcInfo{
 		mi: mi,
@@ -130,7 +130,6 @@ func (ssh *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 func (ssh *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
-		// Shouldn't happen because TagRPC populates this information.
 		return
 	}
 	ssh.processRPCData(ctx, rs, ri.mi)
@@ -144,7 +143,7 @@ func (ssh *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCSt
 		// aligns with flow control.
 	case *stats.InHeader:
 		if ssh.serverMetrics.callStarted != nil {
-			ssh.serverMetrics.callStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", removeLeadingSlash(mi.method))))
+			ssh.serverMetrics.callStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", mi.method)))
 		}
 	case *stats.OutPayload:
 		atomic.AddInt64(&mi.sentCompressedBytes, int64(st.CompressedLength))
@@ -168,7 +167,7 @@ func (ssh *serverStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInf
 	} else {
 		st = "OK"
 	}
-	serverAttributeOption := metric.WithAttributes(attribute.String("grpc.method", removeLeadingSlash(mi.method)), attribute.String("grpc.status", st))
+	serverAttributeOption := metric.WithAttributes(attribute.String("grpc.method", mi.method), attribute.String("grpc.status", st))
 
 	if ssh.serverMetrics.callDuration != nil {
 		ssh.serverMetrics.callDuration.Record(ctx, latency, serverAttributeOption)
@@ -180,6 +179,19 @@ func (ssh *serverStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInf
 		ssh.serverMetrics.callRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.recvCompressedBytes), serverAttributeOption)
 	}
 }
+
+const (
+	// ServerCallStartedName is the name of the server call started metric.
+	ServerCallStartedName = MetricName("grpc.server.call.started")
+	// ServerCallSentCompressedTotalMessageSize is the name of the server call
+	// sent total compressed message size metric.
+	ServerCallSentCompressedTotalMessageSize = MetricName("grpc.server.call.sent_total_compressed_message_size")
+	// ServerCallRcvdCompressedTotalMessageSize is the name of the server call
+	// rcvd total compressed message size metric.
+	ServerCallRcvdCompressedTotalMessageSize = MetricName("grpc.server.call.rcvd_total_compressed_message_size")
+	// ServerCallDurationName is the name of the server call duration metric.
+	ServerCallDurationName = MetricName("grpc.server.call.duration")
+)
 
 // DefaultServerMetrics are the default server metrics provided by this module.
 var DefaultServerMetrics = *EmptyMetrics.Add("grpc.server.call.started").

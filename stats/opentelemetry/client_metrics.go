@@ -101,7 +101,7 @@ func (csh *clientStatsHandler) initializeMetrics() {
 func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := &callInfo{
 		target: csh.determineTarget(cc),
-		method: csh.determineMethod(method, opts...),
+		method: removeLeadingSlash(csh.determineMethod(method, opts...)),
 	}
 	ctx = setCallInfo(ctx, ci)
 
@@ -140,7 +140,7 @@ func (csh *clientStatsHandler) determineMethod(method string, opts ...grpc.CallO
 func (csh *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := &callInfo{
 		target: csh.determineTarget(cc),
-		method: csh.determineMethod(method, opts...),
+		method: removeLeadingSlash(csh.determineMethod(method, opts...)),
 	}
 	ctx = setCallInfo(ctx, ci)
 	startTime := time.Now()
@@ -156,7 +156,7 @@ func (csh *clientStatsHandler) perCallMetrics(ctx context.Context, err error, st
 	s := status.Convert(err)
 	callLatency := float64(time.Since(startTime)) / float64(time.Second)
 	if csh.clientMetrics.callDuration != nil {
-		csh.clientMetrics.callDuration.Record(ctx, callLatency, metric.WithAttributes(attribute.String("grpc.method", removeLeadingSlash(ci.method)), attribute.String("grpc.target", ci.target), attribute.String("grpc.status", canonicalString(s.Code()))))
+		csh.clientMetrics.callDuration.Record(ctx, callLatency, metric.WithAttributes(attribute.String("grpc.method", ci.method), attribute.String("grpc.target", ci.target), attribute.String("grpc.status", canonicalString(s.Code()))))
 	}
 }
 
@@ -194,13 +194,12 @@ func (csh *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 	case *stats.Begin:
 		ci := getCallInfo(ctx)
 		if ci == nil {
-			// Shouldn't happen, set by interceptor, defensive programming.
 			logger.Error("ctx passed into client side stats handler metrics event handling has no metrics data present")
 			return
 		}
 
 		if csh.clientMetrics.attemptStarted != nil {
-			csh.clientMetrics.attemptStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", removeLeadingSlash(ci.method)), attribute.String("grpc.target", ci.target)))
+			csh.clientMetrics.attemptStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", ci.method), attribute.String("grpc.target", ci.target)))
 		}
 	case *stats.OutPayload:
 		atomic.AddInt64(&mi.sentCompressedBytes, int64(st.CompressedLength))
@@ -243,9 +242,26 @@ func (csh *clientStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInf
 	}
 }
 
+const (
+	// ClientAttemptStartedName is the name of the client attempt started
+	// metric.
+	ClientAttemptStartedName = MetricName("grpc.client.attempt.started")
+	// ClientAttemptDurationName is the name of the client attempt duration
+	// metric.
+	ClientAttemptDurationName = MetricName("grpc.client.attempt.duration")
+	// ClientAttemptSentCompressedTotalMessageSize is the name of the client
+	// attempt sent total compressed message size metric.
+	ClientAttemptSentCompressedTotalMessageSize = MetricName("grpc.client.attempt.sent_total_compressed_message_size")
+	// ClientAttemptRcvdCompressedTotalMessageSize is the name of the client
+	// attempt rcvd total compressed message size metric.
+	ClientAttemptRcvdCompressedTotalMessageSize = MetricName("grpc.client.attempt.rcvd_total_compressed_message_size")
+	// ClientCallDurationName is the name of the client call duration metric.
+	ClientCallDurationName = MetricName("grpc.client.call.duration")
+)
+
 // DefaultClientMetrics are the default client metrics provided by this module.
-var DefaultClientMetrics = *EmptyMetrics.Add("grpc.client.attempt.started").
-	Add("grpc.client.attempt.duration").
-	Add("grpc.client.attempt.sent_total_compressed_message_size").
-	Add("grpc.client.attempt.rcvd_total_compressed_message_size").
-	Add("grpc.client.call.duration")
+var DefaultClientMetrics = *EmptyMetrics.Add(ClientAttemptStartedName).
+	Add(ClientAttemptDurationName).
+	Add(ClientAttemptSentCompressedTotalMessageSize).
+	Add(ClientAttemptRcvdCompressedTotalMessageSize).
+	Add(ClientCallDurationName)
