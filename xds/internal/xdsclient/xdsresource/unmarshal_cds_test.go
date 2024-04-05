@@ -1375,7 +1375,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				EDSServiceName:  v3Service,
 				LRSServerConfig: ClusterLRSServerSelf,
 				Raw:             v3ClusterAnyWithTelemetryLabels,
-				StringMD: map[string]string{
+				TelemetryLabels: map[string]string{
 					"service_name":      "grpc-service",
 					"service_namespace": "grpc-service-namespace",
 				},
@@ -1390,7 +1390,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				EDSServiceName:  v3Service,
 				LRSServerConfig: ClusterLRSServerSelf,
 				Raw:             v3ClusterAnyWithTelemetryLabelsIgnoreSome,
-				StringMD: map[string]string{
+				TelemetryLabels: map[string]string{
 					"service_name": "grpc-service",
 				},
 			},

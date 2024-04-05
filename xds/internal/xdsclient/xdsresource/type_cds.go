@@ -85,7 +85,8 @@ type ClusterUpdate struct {
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
-	// All the string valued metadata of filter_metadata type
-	// "com.google.csm.telemetry_labels".
-	StringMD map[string]string
+	// TelemetryLabels are the string valued metadata of filter_metadata type
+	// "com.google.csm.telemetry_labels" with keys "service_name" or
+	// "service_namespace".
+	TelemetryLabels map[string]string
 }

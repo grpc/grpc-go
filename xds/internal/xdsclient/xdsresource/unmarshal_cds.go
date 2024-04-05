@@ -82,22 +82,18 @@ const (
 )
 
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
-	stringMD := make(map[string]string)
+	telemetryLabels := make(map[string]string)
 	if fmd := cluster.GetMetadata().GetFilterMetadata(); fmd != nil {
 		if val, ok := fmd["com.google.csm.telemetry_labels"]; ok {
-			/*
-				"service_name" = "",
-				"service_namespace" = ""
-			*/
 			if fields := val.GetFields(); fields != nil {
 				if val, ok := fields["service_name"]; ok {
-					if _, isStringVal := val.GetKind().(*structpb.Value_StringValue); isStringVal {
-						stringMD["service_name"] = val.GetStringValue()
+					if _, ok := val.GetKind().(*structpb.Value_StringValue); ok {
+						telemetryLabels["service_name"] = val.GetStringValue()
 					}
 				}
 				if val, ok := fields["service_namespace"]; ok {
-					if _, isStringVal := val.GetKind().(*structpb.Value_StringValue); isStringVal {
-						stringMD["service_namespace"] = val.GetStringValue()
+					if _, ok := val.GetKind().(*structpb.Value_StringValue); ok {
+						telemetryLabels["service_namespace"] = val.GetStringValue()
 					}
 				}
 			}
@@ -183,7 +179,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		MaxRequests:      circuitBreakersFromCluster(cluster),
 		LBPolicy:         lbPolicy,
 		OutlierDetection: od,
-		StringMD:         stringMD,
+		TelemetryLabels:  telemetryLabels,
 	}
 
 	// Note that this is different from the gRFC (gRFC A47 says to include the
