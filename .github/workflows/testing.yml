@@ -19,8 +19,6 @@ jobs:
   vet-proto:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      VET_ONLY_PROTO: 1
     steps:
       # Setup the environment.
       - name: Setup Go
@@ -32,13 +30,10 @@ jobs:
 
       # Run the vet checks.
       - name: vet
-        run: ./vet.sh -install && ./vet.sh
+        run: VET_ONLY_PROTO=1 ./vet.sh
 
   # Run the main gRPC-Go tests.
   tests:
-    # Proto checks are run in the above job.
-    env:
-      VET_SKIP_PROTO: 1
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
