@@ -124,5 +124,5 @@ jobs:
           echo -e "\n-- Running xDS E2E Test --"
           xds/internal/test/e2e/run.sh
           echo -e "\n-- Running protoc-gen-go-grpc test --"
-          ./vet.sh -install
+          ./scripts/vet-proto.sh -install
           cmd/protoc-gen-go-grpc/protoc-gen-go-grpc_test.sh
