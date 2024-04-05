@@ -21,10 +21,10 @@ package protoconv
 import (
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 )
@@ -40,7 +40,7 @@ func subChannelToProto(cm *channelz.SubChannel) *channelzpb.Subchannel {
 		CallsSucceeded: cm.ChannelMetrics.CallsSucceeded.Load(),
 		CallsFailed:    cm.ChannelMetrics.CallsFailed.Load(),
 	}
-	if ts, err := ptypes.TimestampProto(time.Unix(0, cm.ChannelMetrics.LastCallStartedTimestamp.Load())); err == nil {
+	if ts := timestamppb.New(time.Unix(0, cm.ChannelMetrics.LastCallStartedTimestamp.Load())); ts.IsValid() {
 		sc.Data.LastCallStartedTimestamp = ts
 	}
 

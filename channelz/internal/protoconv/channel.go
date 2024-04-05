@@ -21,11 +21,11 @@ package protoconv
 import (
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 )
@@ -56,7 +56,7 @@ func channelTraceToProto(ct *channelz.ChannelTrace) *channelzpb.ChannelTrace {
 		return pbt
 	}
 	pbt.NumEventsLogged = ct.EventNum
-	if ts, err := ptypes.TimestampProto(ct.CreationTime); err == nil {
+	if ts := timestamppb.New(ct.CreationTime); ts.IsValid() {
 		pbt.CreationTimestamp = ts
 	}
 	events := make([]*channelzpb.ChannelTraceEvent, 0, len(ct.Events))
@@ -65,7 +65,7 @@ func channelTraceToProto(ct *channelz.ChannelTrace) *channelzpb.ChannelTrace {
 			Description: e.Desc,
 			Severity:    channelzpb.ChannelTraceEvent_Severity(e.Severity),
 		}
-		if ts, err := ptypes.TimestampProto(e.Timestamp); err == nil {
+		if ts := timestamppb.New(e.Timestamp); ts.IsValid() {
 			cte.Timestamp = ts
 		}
 		if e.RefID != 0 {
@@ -93,7 +93,7 @@ func channelToProto(cm *channelz.Channel) *channelzpb.Channel {
 		CallsSucceeded: cm.ChannelMetrics.CallsSucceeded.Load(),
 		CallsFailed:    cm.ChannelMetrics.CallsFailed.Load(),
 	}
-	if ts, err := ptypes.TimestampProto(time.Unix(0, cm.ChannelMetrics.LastCallStartedTimestamp.Load())); err == nil {
+	if ts := timestamppb.New(time.Unix(0, cm.ChannelMetrics.LastCallStartedTimestamp.Load())); ts.IsValid() {
 		c.Data.LastCallStartedTimestamp = ts
 	}
 	ncs := cm.NestedChans()
