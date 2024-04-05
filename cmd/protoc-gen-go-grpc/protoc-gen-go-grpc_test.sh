@@ -16,8 +16,10 @@
 # Uncomment to enable debugging.
 # set -x 
 
-TEMPDIR=$(mktemp -d)
 WORKDIR="$(dirname $0)"
+TEMPDIR=$(mktemp -d)
+
+trap "rm -rf ${TEMPDIR}" EXIT
 
 # Build protoc-gen-go-grpc binary and add to $PATH.
 pushd "${WORKDIR}"
