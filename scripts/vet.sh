@@ -3,21 +3,7 @@
 set -ex  # Exit on error; debugging enabled.
 set -o pipefail  # Fail a pipe if any sub-command fails.
 
-# not makes sure the command passed to it does not exit with a return code of 0.
-not() {
-  # This is required instead of the earlier (! $COMMAND) because subshells and
-  # pipefail don't work the same on Darwin as in Linux.
-  ! "$@"
-}
-
-die() {
-  echo "$@" >&2
-  exit 1
-}
-
-fail_on_output() {
-  tee /dev/stderr | not read
-}
+source "$(dirname $0)/util.sh"
 
 # Check to make sure it's safe to modify the user's git repo.
 git status --porcelain | fail_on_output
@@ -41,26 +27,6 @@ if [[ "$1" = "-install" ]]; then
   popd
 elif [[ "$#" -ne 0 ]]; then
   die "Unknown argument(s): $*"
-fi
-
-if [[ -n "${VET_ONLY_PROTO}" ]]; then
-  # - Check that protoc is installed.
-  # TODO: Remove this check and replace with install protoc script once merged.
-  if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
-    PROTOBUF_VERSION=25.2 # a.k.a. v4.22.0 in pb.go files.
-    PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
-    pushd /home/runner/go
-    wget https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/${PROTOC_FILENAME}
-    unzip ${PROTOC_FILENAME}
-    bin/protoc --version
-    popd
-  elif not which protoc > /dev/null; then
-    die "Please install protoc into your path"
-  fi
-  # - Check that generated proto files are up to date.
-  make proto && git status --porcelain 2>&1 | fail_on_output || \
-  (git status; git --no-pager diff; exit 1)
-  exit 0
 fi
 
 # - Ensure all source files contain a copyright message.
