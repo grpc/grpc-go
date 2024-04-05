@@ -25,6 +25,7 @@ if [[ "$1" = "-install" ]]; then
     honnef.co/go/tools/cmd/staticcheck \
     github.com/client9/misspell/cmd/misspell
   popd
+  exit 0
 elif [[ "$#" -ne 0 ]]; then
   die "Unknown argument(s): $*"
 fi
