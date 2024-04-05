@@ -53,8 +53,8 @@ func NewBuilder() resolver.Builder {
 	return dns.NewBuilder()
 }
 
-// SetMinResolutionRate sets the default minimum rate at which DNS re-resolutions are
+// SetMinResolutionInterval sets the default minimum interval at which DNS re-resolutions are
 // allowed. This helps to prevent excessive re-resolution.
-func SetMinResolutionRate(d time.Duration) {
-	dns.MinResolutionRate = d
+func SetMinResolutionInterval(d time.Duration) {
+	dns.MinResolutionInterval = d
 }

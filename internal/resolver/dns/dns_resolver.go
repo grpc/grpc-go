@@ -46,9 +46,9 @@ var (
 	// addresses from SRV records.  Must not be changed after init time.
 	EnableSRVLookups = false
 
-	// MinResolutionRate is the minimum rate at which re-resolutions are
+	// MinResolutionInterval is the minimum interval at which re-resolutions are
 	// allowed. This helps to prevent excessive re-resolution.
-	MinResolutionRate = 30 * time.Second
+	MinResolutionInterval = 30 * time.Second
 
 	// ResolvingTimeout specifies the maximum duration for a DNS resolution request.
 	// If the timeout expires before a response is received, the request will be canceled.
@@ -214,7 +214,7 @@ func (d *dnsResolver) watcher() {
 			// Success resolving, wait for the next ResolveNow. However, also wait 30
 			// seconds at the very least to prevent constantly re-resolving.
 			backoffIndex = 1
-			waitTime = MinResolutionRate
+			waitTime = MinResolutionInterval
 			select {
 			case <-d.ctx.Done():
 				return

@@ -68,11 +68,11 @@ func overrideNetResolver(t *testing.T, r *testNetResolver) {
 	t.Cleanup(func() { dnsinternal.NewNetResolver = origNetResolver })
 }
 
-// Override the DNS Min Res Rate used by the resolver.
-func overrideResolutionRate(t *testing.T, d time.Duration) {
-	origMinResRate := dns.MinResolutionRate
-	dnspublic.SetMinResolutionRate(d)
-	t.Cleanup(func() { dnspublic.SetMinResolutionRate(origMinResRate) })
+// Override the DNS minimum resolution interval used by the resolver.
+func overrideResolutionInterval(t *testing.T, d time.Duration) {
+	origMinResInterval := dns.MinResolutionInterval
+	dnspublic.SetMinResolutionInterval(d)
+	t.Cleanup(func() { dnspublic.SetMinResolutionInterval(origMinResInterval) })
 }
 
 // Override the timer used by the DNS resolver to fire after a duration of d.
@@ -636,7 +636,7 @@ func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 	const target = "foo.bar.com"
 
-	overrideResolutionRate(t, 0)
+	overrideResolutionInterval(t, 0)
 	overrideTimeAfterFunc(t, 0)
 	tr := &testNetResolver{
 		hostLookupTable: map[string][]string{
@@ -739,7 +739,7 @@ func (s) TestIPResolver(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			overrideResolutionRate(t, 0)
+			overrideResolutionInterval(t, 0)
 			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
 			r, stateCh, _ := buildResolverWithTestClientConn(t, test.target)
 
@@ -1259,12 +1259,12 @@ func (s) TestResolveTimeout(t *testing.T) {
 	}
 }
 
-// Test verifies that changing [MinResolutionRate] variable correctly effects
+// Test verifies that changing [MinResolutionInterval] variable correctly effects
 // the resolution behaviour
-func (s) TestMinResolutionRate(t *testing.T) {
+func (s) TestMinResolutionInterval(t *testing.T) {
 	const target = "foo.bar.com"
 
-	overrideResolutionRate(t, 1*time.Millisecond)
+	overrideResolutionInterval(t, 1*time.Millisecond)
 	tr := &testNetResolver{
 		hostLookupTable: map[string][]string{
 			"foo.bar.com": {"1.2.3.4", "5.6.7.8"},
@@ -1281,7 +1281,7 @@ func (s) TestMinResolutionRate(t *testing.T) {
 	wantSC := scJSON
 
 	for i := 0; i < 5; i++ {
-		// set context timeout slightly higher than the resolution rate to make sure resolutions
+		// set context timeout slightly higher than the min resolution interval to make sure resolutions
 		// happen successfully
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
