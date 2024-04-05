@@ -28,7 +28,7 @@ go build -o "${TEMPDIR}" .
 PATH="${TEMPDIR}:${PATH}"
 popd
 
-protoc1 \
+protoc \
     --go-grpc_out="${TEMPDIR}" \
     --go-grpc_opt=paths=source_relative \
     "$WORKDIR/testdata/golden.proto"
