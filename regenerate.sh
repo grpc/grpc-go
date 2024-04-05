@@ -89,7 +89,8 @@ Mgrpc/testing/worker_service.proto=google.golang.org/grpc/interop/grpc_testing,\
 Mgrpc/testing/control.proto=google.golang.org/grpc/interop/grpc_testing,\
 Mgrpc/testing/test.proto=google.golang.org/grpc/interop/grpc_testing,\
 Mgrpc/testing/payloads.proto=google.golang.org/grpc/interop/grpc_testing,\
-Mgrpc/testing/empty.proto=google.golang.org/grpc/interop/grpc_testing
+Mgrpc/testing/empty.proto=google.golang.org/grpc/interop/grpc_testing,\
+Mcmd/protoc-gen-go-grpc/proto/golden.proto=google.golang.org/grpc/cmd/protoc-gen-go-grpc/testdata,\
 
 for src in ${SOURCES[@]}; do
   echo "protoc ${src}"
