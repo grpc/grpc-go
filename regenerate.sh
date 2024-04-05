@@ -63,7 +63,7 @@ LEGACY_SOURCES=(
 
 # Generates only the new gRPC Service symbols
 SOURCES=(
-  $(git ls-files --exclude-standard --cached --others "*.proto" | grep -v '^\(profiling/proto/service.proto\|reflection/grpc_reflection_v1alpha/reflection.proto\)$')
+  $(git ls-files --exclude-standard --cached --others "*.proto" | grep -v '^profiling/proto/service.proto$')
   ${WORKDIR}/grpc-proto/grpc/gcp/altscontext.proto
   ${WORKDIR}/grpc-proto/grpc/gcp/handshaker.proto
   ${WORKDIR}/grpc-proto/grpc/gcp/transport_security_common.proto
