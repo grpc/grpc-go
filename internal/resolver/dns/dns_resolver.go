@@ -49,16 +49,16 @@ var (
 	// MinResolutionRate is the minimum rate at which re-resolutions are
 	// allowed. This helps to prevent excessive re-resolution.
 	MinResolutionRate = 30 * time.Second
+
+	// ResolvingTimeout specifies the maximum duration for a DNS resolution request.
+	// If the timeout expires before a response is received, the request will be canceled.
+	//
+	// It is recommended to set this value at application startup. Avoid modifying this variable
+	// after initialization as it's not thread-safe for concurrent modification.
+	ResolvingTimeout = 30 * time.Second
+
+	logger = grpclog.Component("dns")
 )
-
-// ResolvingTimeout specifies the maximum duration for a DNS resolution request.
-// If the timeout expires before a response is received, the request will be canceled.
-//
-// It is recommended to set this value at application startup. Avoid modifying this variable
-// after initialization as it's not thread-safe for concurrent modification.
-var ResolvingTimeout = 30 * time.Second
-
-var logger = grpclog.Component("dns")
 
 func init() {
 	resolver.Register(NewBuilder())

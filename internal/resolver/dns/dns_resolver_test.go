@@ -71,8 +71,8 @@ func overrideNetResolver(t *testing.T, r *testNetResolver) {
 // Override the DNS Min Res Rate used by the resolver.
 func overrideResolutionRate(t *testing.T, d time.Duration) {
 	origMinResRate := dns.MinResolutionRate
-	dns.MinResolutionRate = d
-	t.Cleanup(func() { dns.MinResolutionRate = origMinResRate })
+	dnspublic.SetMinResolutionRate(d)
+	t.Cleanup(func() { dnspublic.SetMinResolutionRate(origMinResRate) })
 }
 
 // Override the timer used by the DNS resolver to fire after a duration of d.
