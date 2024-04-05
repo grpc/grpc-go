@@ -20,7 +20,7 @@ WORKDIR=$(mktemp -d)
 function finish {
   rm -rf "$WORKDIR"
 }
-trap finish EXIT
+# trap finish EXIT
 
 export GOBIN=${WORKDIR}/bin
 export PATH=${GOBIN}:${PATH}
@@ -63,7 +63,7 @@ LEGACY_SOURCES=(
 
 # Generates only the new gRPC Service symbols
 SOURCES=(
-  $(git ls-files --exclude-standard --cached --others "*.proto" | grep -v '^\(profiling/proto/service.proto\|reflection/grpc_reflection_v1alpha/reflection.proto\)$')
+  $(git ls-files --exclude-standard --cached --others "*.proto" | grep -v '^profiling/proto/service.proto$')
   ${WORKDIR}/grpc-proto/grpc/gcp/altscontext.proto
   ${WORKDIR}/grpc-proto/grpc/gcp/handshaker.proto
   ${WORKDIR}/grpc-proto/grpc/gcp/transport_security_common.proto
@@ -89,8 +89,7 @@ Mgrpc/testing/worker_service.proto=google.golang.org/grpc/interop/grpc_testing,\
 Mgrpc/testing/control.proto=google.golang.org/grpc/interop/grpc_testing,\
 Mgrpc/testing/test.proto=google.golang.org/grpc/interop/grpc_testing,\
 Mgrpc/testing/payloads.proto=google.golang.org/grpc/interop/grpc_testing,\
-Mgrpc/testing/empty.proto=google.golang.org/grpc/interop/grpc_testing,\
-Mcmd/protoc-gen-go-grpc/proto/golden.proto=google.golang.org/grpc/cmd/protoc-gen-go-grpc/testdata,\
+Mgrpc/testing/empty.proto=google.golang.org/grpc/interop/grpc_testing
 
 for src in ${SOURCES[@]}; do
   echo "protoc ${src}"
