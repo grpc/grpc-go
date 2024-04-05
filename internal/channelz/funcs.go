@@ -153,7 +153,7 @@ func RegisterSubChannel(pid int64, ref string) *SubChannel {
 		RefName: ref,
 		ID:      id,
 		sockets: make(map[int64]string),
-		parent:  db.channels[pid],
+		parent:  db.getChannel(pid),
 		trace:   &ChannelTrace{CreationTime: time.Now(), Events: make([]*traceEvent, 0, getMaxTraceEntry())},
 	}
 	db.addSubChannel(id, sc, pid)
