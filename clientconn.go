@@ -121,8 +121,9 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 // https://github.com/grpc/grpc/blob/master/doc/naming.md.  e.g. to use dns
 // resolver, a "dns:///" prefix should be applied to the target.
 //
-// The DialOptions returned by WithBlock, WithTimeout, and
-// WithReturnConnectionError are ignored by this function.
+// The DialOptions returned by WithBlock, WithTimeout,
+// WithReturnConnectionError, and FailOnNonTempDialError are ignored by this
+// function.
 func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target: target,
