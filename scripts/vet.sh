@@ -3,7 +3,7 @@
 set -ex  # Exit on error; debugging enabled.
 set -o pipefail  # Fail a pipe if any sub-command fails.
 
-source "$(dirname $0)/util.sh"
+source "$(dirname $0)/util.sh" || exit 1
 
 # Check to make sure it's safe to modify the user's git repo.
 git status --porcelain | fail_on_output

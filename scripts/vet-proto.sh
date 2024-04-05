@@ -3,7 +3,7 @@
 set -ex  # Exit on error; debugging enabled.
 set -o pipefail  # Fail a pipe if any sub-command fails.
 
-source "$(dirname $0)/util.sh"
+source "$(dirname $0)/util.sh" || exit 1
 
 # - Install protoc if requested.
 if [[ "$1" = "-install" ]]; then
