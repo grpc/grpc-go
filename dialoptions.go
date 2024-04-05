@@ -317,12 +317,8 @@ func WithBlock() DialOption {
 // Use of this feature is not recommended.  For more information, please see:
 // https://github.com/grpc/grpc-go/blob/master/Documentation/anti-patterns.md
 //
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
-//
 // Deprecated: this DialOption is not supported by NewClient.
+// Will be supported throughout 1.x.
 func WithReturnConnectionError() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.block = true
