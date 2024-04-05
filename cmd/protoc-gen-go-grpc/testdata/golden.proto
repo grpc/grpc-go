@@ -29,6 +29,6 @@ message EventResponse {
 service BidirectionalStreamingService {
   rpc unaryMethod(EventRequest) returns (EventResponse) {}
   rpc clientMethod(stream EventRequest) returns (EventResponse) {}
-  rpc serverMethod(EventRequest) returns (stream EventResponse) {};
+  rpc serverMethod(EventRequest) returns (stream EventResponse) {}
   rpc bidirectionalMethod(stream EventRequest) returns (stream EventResponse) {}
 }
