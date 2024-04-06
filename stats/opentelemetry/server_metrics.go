@@ -43,48 +43,17 @@ func (ssh *serverStatsHandler) initializeMetrics() {
 		return
 	}
 
-	meter := ssh.mo.MeterProvider.Meter("gRPC-Go")
+	meter := ssh.mo.MeterProvider.Meter("grpc-go " + grpc.Version)
 	if meter == nil {
 		return
 	}
 	setOfMetrics := ssh.mo.Metrics.metrics
 
 	serverMetrics := serverMetrics{}
-	if _, ok := setOfMetrics["grpc.server.call.started"]; ok {
-		scs, err := meter.Int64Counter("grpc.server.call.started", metric.WithUnit("call"), metric.WithDescription("The total number of RPCs started, including those that have not completed."))
-		if err != nil {
-			logger.Errorf("failed to register metric \"grpc.server.call.started\", will not record") // error or log?
-		} else {
-			serverMetrics.callStarted = scs
-		}
-	}
-
-	if _, ok := setOfMetrics["grpc.server.call.sent_total_compressed_message_size"]; ok {
-		ss, err := meter.Int64Histogram("grpc.server.call.sent_total_compressed_message_size", metric.WithUnit("By"), metric.WithDescription("Total bytes (compressed but not encrypted) sent across all response messages (metadata excluded) per RPC; does not include grpc or transport framing bytes."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-		if err != nil {
-			logger.Errorf("failed to register metric \"grpc.server.call.sent_total_compressed_message_size\", will not record") // error or log?
-		} else {
-			serverMetrics.callSentTotalCompressedMessageSize = ss
-		}
-	}
-
-	if _, ok := setOfMetrics["grpc.server.call.rcvd_total_compressed_message_size"]; ok {
-		sr, err := meter.Int64Histogram("grpc.server.call.rcvd_total_compressed_message_size", metric.WithUnit("By"), metric.WithDescription("Total bytes (compressed but not encrypted) received across all request messages (metadata excluded) per RPC; does not include grpc or transport framing bytes."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-		if err != nil {
-			logger.Errorf("failed to register metric \"grpc.server.rcvd.sent_total_compressed_message_size\", will not record")
-		} else {
-			serverMetrics.callRcvdTotalCompressedMessageSize = sr
-		}
-	}
-
-	if _, ok := setOfMetrics["grpc.server.call.duration"]; ok {
-		scd, err := meter.Float64Histogram("grpc.server.call.duration", metric.WithUnit("s"), metric.WithDescription("This metric aims to measure the end2end time an RPC takes from the server transport’s perspective."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
-		if err != nil {
-			logger.Errorf("failed to register metric \"grpc.server.call.duration\", will not record")
-		} else {
-			serverMetrics.callDuration = scd
-		}
-	}
+	serverMetrics.callStarted = createInt64Counter(setOfMetrics, "grpc.server.call.started", meter, metric.WithUnit("call"), metric.WithDescription("Number of server calls started."))
+	serverMetrics.callSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.sent_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes sent per server call."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	serverMetrics.callRcvdTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.rcvd_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes received per server call."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	serverMetrics.callDuration = createFloat64Histogram(setOfMetrics, "grpc.server.call.duration", meter, metric.WithUnit("s"), metric.WithDescription("End-to-end time taken to complete a call from server transport's perspective."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 
 	ssh.serverMetrics = serverMetrics
 }

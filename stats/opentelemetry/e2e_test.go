@@ -158,12 +158,12 @@ func (s) TestMethodTargetAttributeFilter(t *testing.T) {
 	wantMetrics := []metricdata.Metrics{
 		{
 			Name:        "grpc.client.attempt.started",
-			Description: "The total number of RPC attempts started, including those that have not completed.",
+			Description: "Number of client call attempts started.",
 			Unit:        "attempt",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
-						Attributes: attribute.NewSet(attribute.String("grpc.method", "other"), attribute.String("grpc.target", "other")),
+						Attributes: attribute.NewSet(attribute.String("grpc.method", "grpc.testing.TestService/UnaryCall"), attribute.String("grpc.target", "other")),
 						Value:      1,
 					},
 					{
@@ -276,7 +276,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	wantMetrics := []metricdata.Metrics{
 		{
 			Name:        "grpc.client.attempt.started",
-			Description: "The total number of RPC attempts started, including those that have not completed.",
+			Description: "Number of client call attempts started.",
 			Unit:        "attempt",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
@@ -295,7 +295,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		},
 		{
 			Name:        "grpc.client.attempt.duration",
-			Description: "End-to-end time taken to complete an RPC attempt including the time it takes to pick a subchannel.",
+			Description: "End-to-end time taken to complete a client call attempt.",
 			Unit:        "s",
 			Data: metricdata.Histogram[float64]{
 				DataPoints: []metricdata.HistogramDataPoint[float64]{
@@ -315,7 +315,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		},
 		{
 			Name:        "grpc.client.attempt.sent_total_compressed_message_size",
-			Description: "Total bytes (compressed but not encrypted) sent across all request messages (metadata excluded) per RPC attempt; does not include grpc or transport framing bytes.",
+			Description: "Compressed message bytes sent per client call attempt.",
 			Unit:        "By",
 			Data: metricdata.Histogram[int64]{
 				DataPoints: []metricdata.HistogramDataPoint[int64]{
@@ -343,7 +343,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		},
 		{
 			Name:        "grpc.client.attempt.rcvd_total_compressed_message_size",
-			Description: "Total bytes (compressed but not encrypted) received across all response messages (metadata excluded) per RPC attempt; does not include grpc or transport framing bytes.",
+			Description: "Compressed message bytes received per call attempt.",
 			Unit:        "By",
 			Data: metricdata.Histogram[int64]{
 				DataPoints: []metricdata.HistogramDataPoint[int64]{
@@ -371,7 +371,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		},
 		{
 			Name:        "grpc.client.call.duration",
-			Description: "This metric aims to measure the end-to-end time the gRPC library takes to complete an RPC from the application’s perspective.",
+			Description: "Time taken by gRPC to complete an RPC from application's perspective.",
 			Unit:        "s",
 			Data: metricdata.Histogram[float64]{
 				DataPoints: []metricdata.HistogramDataPoint[float64]{
@@ -391,7 +391,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		},
 		{
 			Name:        "grpc.server.call.started",
-			Description: "The total number of RPCs started, including those that have not completed.",
+			Description: "Number of server calls started.",
 			Unit:        "call",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
@@ -411,7 +411,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		{
 			Name:        "grpc.server.call.sent_total_compressed_message_size",
 			Unit:        "By",
-			Description: "Total bytes (compressed but not encrypted) sent across all response messages (metadata excluded) per RPC; does not include grpc or transport framing bytes.",
+			Description: "Compressed message bytes sent per server call.",
 			Data: metricdata.Histogram[int64]{
 				DataPoints: []metricdata.HistogramDataPoint[int64]{
 					{
@@ -439,7 +439,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		{
 			Name:        "grpc.server.call.rcvd_total_compressed_message_size",
 			Unit:        "By",
-			Description: "Total bytes (compressed but not encrypted) received across all request messages (metadata excluded) per RPC; does not include grpc or transport framing bytes.",
+			Description: "Compressed message bytes received per server call.",
 			Data: metricdata.Histogram[int64]{
 				DataPoints: []metricdata.HistogramDataPoint[int64]{
 					{
@@ -466,7 +466,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		},
 		{
 			Name:        "grpc.server.call.duration",
-			Description: "This metric aims to measure the end2end time an RPC takes from the server transport’s perspective.",
+			Description: "End-to-end time taken to complete a call from server transport's perspective.",
 			Unit:        "s",
 			Data: metricdata.Histogram[float64]{
 				DataPoints: []metricdata.HistogramDataPoint[float64]{
@@ -537,7 +537,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	wantMetrics = []metricdata.Metrics{
 		{
 			Name:        "grpc.client.attempt.started",
-			Description: "The total number of RPC attempts started, including those that have not completed.",
+			Description: "Number of client call attempts started.",
 			Unit:        "attempt",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
@@ -560,7 +560,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		},
 		{
 			Name:        "grpc.server.call.started",
-			Description: "The total number of RPCs started, including those that have not completed.",
+			Description: "Number of server calls started.",
 			Unit:        "call",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{

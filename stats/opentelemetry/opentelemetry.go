@@ -100,14 +100,13 @@ type MetricsOptions struct {
 	// value or use the string "other". If unset, will use the target string as
 	// is.
 	TargetAttributeFilter func(string) bool
-	// MethodAttributeFilter is a callback that takes the method string and
-	// returns a bool representing whether to use method as a label value or use
-	// the string "other". If unset, will use the method string as is. This is
-	// intended to be used only for generic methods (see
-	// grpc.UnknownServiceHandler), and not registered static methods (from
-	// generated service protos). Take care to limit the values allowed, as
+
+	// MethodAttributeFilter is to record the method name of RPCs handled by
+	// grpc.UnknownServiceHandler, but take care to limit the values allowed, as
 	// allowing too many will increase cardinality and could cause severe memory
-	// or performance problems.
+	// or performance problems. Only applicable on server side. On Client Side,
+	// pass a grpc.StaticMethodCallOption as a call option into Invoke or
+	// NewStream.
 	MethodAttributeFilter func(string) bool
 }
 
@@ -229,6 +228,42 @@ type serverMetrics struct {
 	callRcvdTotalCompressedMessageSize metric.Int64Histogram
 	// "grpc.server.call.duration"
 	callDuration metric.Float64Histogram
+}
+
+func createInt64Counter(setOfMetrics map[MetricName]bool, metricName MetricName, meter metric.Meter, options ...metric.Int64CounterOption) metric.Int64Counter {
+	if _, ok := setOfMetrics[metricName]; !ok {
+		return nil
+	}
+	ret, err := meter.Int64Counter(string(metricName), options...)
+	if err != nil {
+		logger.Errorf("failed to register metric \"%v\", will not record", metricName)
+		return nil
+	}
+	return ret
+}
+
+func createInt64Histogram(setOfMetrics map[MetricName]bool, metricName MetricName, meter metric.Meter, options ...metric.Int64HistogramOption) metric.Int64Histogram {
+	if _, ok := setOfMetrics[metricName]; !ok {
+		return nil
+	}
+	ret, err := meter.Int64Histogram(string(metricName), options...)
+	if err != nil {
+		logger.Errorf("failed to register metric \"%v\", will not record", metricName)
+		return nil
+	}
+	return ret
+}
+
+func createFloat64Histogram(setOfMetrics map[MetricName]bool, metricName MetricName, meter metric.Meter, options ...metric.Float64HistogramOption) metric.Float64Histogram {
+	if _, ok := setOfMetrics[metricName]; !ok {
+		return nil
+	}
+	ret, err := meter.Float64Histogram(string(metricName), options...)
+	if err != nil {
+		logger.Errorf("failed to register metric \"%v\", will not record", metricName)
+		return nil
+	}
+	return ret
 }
 
 // Users of this component should use these bucket boundaries as part of their

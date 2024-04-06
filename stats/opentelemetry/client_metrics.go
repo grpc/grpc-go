@@ -42,7 +42,7 @@ func (csh *clientStatsHandler) initializeMetrics() {
 		return
 	}
 
-	meter := csh.mo.MeterProvider.Meter("gRPC-Go")
+	meter := csh.mo.MeterProvider.Meter("grpc-go " + grpc.Version)
 	if meter == nil {
 		return
 	}
@@ -51,50 +51,12 @@ func (csh *clientStatsHandler) initializeMetrics() {
 
 	clientMetrics := clientMetrics{}
 
-	if _, ok := setOfMetrics["grpc.client.attempt.started"]; ok {
-		asc, err := meter.Int64Counter("grpc.client.attempt.started", metric.WithUnit("attempt"), metric.WithDescription("The total number of RPC attempts started, including those that have not completed."))
-		if err != nil {
-			logger.Errorf("failed to register metric \"grpc.client.attempt.started\", will not record")
-		} else {
-			clientMetrics.attemptStarted = asc
-		}
-	}
+	clientMetrics.attemptStarted = createInt64Counter(setOfMetrics, "grpc.client.attempt.started", meter, metric.WithUnit("attempt"), metric.WithDescription("Number of client call attempts started."))
+	clientMetrics.attemptDuration = createFloat64Histogram(setOfMetrics, "grpc.client.attempt.duration", meter, metric.WithUnit("s"), metric.WithDescription("End-to-end time taken to complete a client call attempt."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.client.attempt.sent_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes sent per client call attempt."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.client.attempt.rcvd_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes received per call attempt."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	clientMetrics.callDuration = createFloat64Histogram(setOfMetrics, "grpc.client.call.duration", meter, metric.WithUnit("s"), metric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 
-	if _, ok := setOfMetrics["grpc.client.attempt.duration"]; ok {
-		cad, err := meter.Float64Histogram("grpc.client.attempt.duration", metric.WithUnit("s"), metric.WithDescription("End-to-end time taken to complete an RPC attempt including the time it takes to pick a subchannel."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
-		if err != nil {
-			logger.Errorf("failed to register metric \"grpc.client.attempt.started\", will not record")
-		} else {
-			clientMetrics.attemptDuration = cad
-		}
-	}
-
-	if _, ok := setOfMetrics["grpc.client.attempt.sent_total_compressed_message_size"]; ok {
-		cas, err := meter.Int64Histogram("grpc.client.attempt.sent_total_compressed_message_size", metric.WithUnit("By"), metric.WithDescription("Total bytes (compressed but not encrypted) sent across all request messages (metadata excluded) per RPC attempt; does not include grpc or transport framing bytes."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-		if err != nil {
-			logger.Errorf("failed to register metric \"grpc.client.attempt.sent_total_compressed_message_size\", will not record")
-		} else {
-			clientMetrics.attemptSentTotalCompressedMessageSize = cas
-		}
-	}
-
-	if _, ok := setOfMetrics["grpc.client.attempt.rcvd_total_compressed_message_size"]; ok {
-		car, err := meter.Int64Histogram("grpc.client.attempt.rcvd_total_compressed_message_size", metric.WithUnit("By"), metric.WithDescription("Total bytes (compressed but not encrypted) received across all response messages (metadata excluded) per RPC attempt; does not include grpc or transport framing bytes."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-		if err != nil {
-			logger.Errorf("failed to register metric \"grpc.client.rcvd.sent_total_compressed_message_size\", will not record")
-		} else {
-			clientMetrics.attemptRcvdTotalCompressedMessageSize = car
-		}
-	}
-
-	if _, ok := setOfMetrics["grpc.client.call.duration"]; ok {
-		ccs, err := meter.Float64Histogram("grpc.client.call.duration", metric.WithUnit("s"), metric.WithDescription("This metric aims to measure the end-to-end time the gRPC library takes to complete an RPC from the application’s perspective."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
-		if err != nil {
-			logger.Errorf("failed to register metric \"grpc.client.call.duration\", will not record")
-		} else {
-			clientMetrics.callDuration = ccs
-		}
-	}
 	csh.clientMetrics = clientMetrics
 }
 
@@ -126,9 +88,6 @@ func (csh *clientStatsHandler) determineTarget(cc *grpc.ClientConn) string {
 // "other" if StaticMethod isn't specified or if method filter is set and
 // specifies, the method name as is otherwise.
 func (csh *clientStatsHandler) determineMethod(method string, opts ...grpc.CallOption) string {
-	if f := csh.mo.MethodAttributeFilter; f != nil && !f(method) {
-		return "other"
-	}
 	for _, opt := range opts {
 		if _, ok := opt.(grpc.StaticMethodCallOption); ok {
 			return method
