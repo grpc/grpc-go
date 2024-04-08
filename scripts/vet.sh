@@ -32,6 +32,23 @@ if [[ "$1" = "-install" ]]; then
     honnef.co/go/tools/cmd/staticcheck \
     github.com/client9/misspell/cmd/misspell
   popd
+  if [[ -z "${VET_SKIP_PROTO}" ]]; then
+<<<<<<< HEAD
+    source ./scripts/protoc_installer.sh
+    download_protoc
+    protoc --version
+=======
+    if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
+      source ./scripts/protoc_installer.sh
+      pushd /home/runner/go
+      download_protoc
+      bin/protoc --version
+      popd
+    elif not which protoc > /dev/null; then
+      die "Please install protoc into your path"
+    fi
+>>>>>>> beb91247 (Migrate all the shell scripts to scripts directory)
+  fi
   exit 0
 elif [[ "$#" -ne 0 ]]; then
   die "Unknown argument(s): $*"

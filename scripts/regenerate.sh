@@ -15,16 +15,16 @@
 
 set -eu -o pipefail
 
-WORKDIR=$(mktemp -d)
+export WORKDIR=$(mktemp -d)
 
 function finish {
   rm -rf "$WORKDIR"
 }
 trap finish EXIT
 
-export GOBIN=${WORKDIR}/bin
-export PATH=${GOBIN}:${PATH}
-mkdir -p ${GOBIN}
+export GOBIN="${WORKDIR}"/bin
+export PATH="${GOBIN}:${PATH}"
+mkdir -p "${GOBIN}"
 
 echo "remove existing generated files"
 # grpc_testing_not_regenerate/*.pb.go is not re-generated,
@@ -38,39 +38,52 @@ echo "go install cmd/protoc-gen-go-grpc"
 (cd cmd/protoc-gen-go-grpc && go install .)
 
 echo "git clone https://github.com/grpc/grpc-proto"
-git clone --quiet https://github.com/grpc/grpc-proto ${WORKDIR}/grpc-proto
+git clone --quiet https://github.com/grpc/grpc-proto "${WORKDIR}"/grpc-proto
 
 echo "git clone https://github.com/protocolbuffers/protobuf"
-git clone --quiet https://github.com/protocolbuffers/protobuf ${WORKDIR}/protobuf
+git clone --quiet https://github.com/protocolbuffers/protobuf "${WORKDIR}"/protobuf
 
 # Pull in code.proto as a proto dependency
-mkdir -p ${WORKDIR}/googleapis/google/rpc
+mkdir -p "${WORKDIR}"/googleapis/google/rpc
 echo "curl https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto"
-curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto > ${WORKDIR}/googleapis/google/rpc/code.proto
+curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto > "${WORKDIR}"/googleapis/google/rpc/code.proto
 
-mkdir -p ${WORKDIR}/out
+source ./scripts/protoc_installer.sh
+download_protoc
+
+export PATH="$PATH:$GOBIN"
+
+PROTOC_PATH="/usr/local/bin"
+if [[ ":$PATH:" != *":$PROTOC_PATH:"* ]]; then
+  export PATH="$PATH:$PROTOC_PATH"
+  echo "protoc added to your PATH. You might need to open a new terminal"
+else
+  echo "protoc already appears to be on your PATH"
+fi
+
+mkdir -p "${WORKDIR}/out"
 
 # Generates sources without the embed requirement
 LEGACY_SOURCES=(
-  ${WORKDIR}/grpc-proto/grpc/binlog/v1/binarylog.proto
-  ${WORKDIR}/grpc-proto/grpc/channelz/v1/channelz.proto
-  ${WORKDIR}/grpc-proto/grpc/health/v1/health.proto
-  ${WORKDIR}/grpc-proto/grpc/lb/v1/load_balancer.proto
+  "${WORKDIR}/grpc-proto/grpc/binlog/v1/binarylog.proto"
+  "${WORKDIR}/grpc-proto/grpc/channelz/v1/channelz.proto"
+  "${WORKDIR}/grpc-proto/grpc/health/v1/health.proto"
+  "${WORKDIR}/grpc-proto/grpc/lb/v1/load_balancer.proto"
   profiling/proto/service.proto
-  ${WORKDIR}/grpc-proto/grpc/reflection/v1alpha/reflection.proto
-  ${WORKDIR}/grpc-proto/grpc/reflection/v1/reflection.proto
+  "${WORKDIR}/grpc-proto/grpc/reflection/v1alpha/reflection.proto"
+  "${WORKDIR}/grpc-proto/grpc/reflection/v1/reflection.proto"
 )
 
 # Generates only the new gRPC Service symbols
 SOURCES=(
-  $(git ls-files --exclude-standard --cached --others "*.proto" | grep -v '^profiling/proto/service.proto$')
-  ${WORKDIR}/grpc-proto/grpc/gcp/altscontext.proto
-  ${WORKDIR}/grpc-proto/grpc/gcp/handshaker.proto
-  ${WORKDIR}/grpc-proto/grpc/gcp/transport_security_common.proto
-  ${WORKDIR}/grpc-proto/grpc/lookup/v1/rls.proto
-  ${WORKDIR}/grpc-proto/grpc/lookup/v1/rls_config.proto
-  ${WORKDIR}/grpc-proto/grpc/testing/*.proto
-  ${WORKDIR}/grpc-proto/grpc/core/*.proto
+  $(git ls-files --exclude-standard --cached --others "*.proto" | grep -v '^\(profiling/proto/service.proto\|reflection/grpc_reflection_v1alpha/reflection.proto\)$')
+  "${WORKDIR}/grpc-proto/grpc/gcp/altscontext.proto"
+  "${WORKDIR}/grpc-proto/grpc/gcp/handshaker.proto"
+  "${WORKDIR}/grpc-proto/grpc/gcp/transport_security_common.proto"
+  "${WORKDIR}/grpc-proto/grpc/lookup/v1/rls.proto"
+  "${WORKDIR}/grpc-proto/grpc/lookup/v1/rls_config.proto"
+  "${WORKDIR}/grpc-proto/grpc/testing/*.proto"
+  "${WORKDIR}/grpc-proto/grpc/core/*.proto"
 )
 
 # These options of the form 'Mfoo.proto=bar' instruct the codegen to use an
@@ -95,29 +108,29 @@ for src in ${SOURCES[@]}; do
   echo "protoc ${src}"
   protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS},use_generic_streams_experimental=true:${WORKDIR}/out \
     -I"." \
-    -I${WORKDIR}/grpc-proto \
-    -I${WORKDIR}/googleapis \
-    -I${WORKDIR}/protobuf/src \
-    ${src}
+    -I"${WORKDIR}/grpc-proto" \
+    -I"${WORKDIR}/googleapis" \
+    -I"${WORKDIR}/protobuf/src" \
+    "${src}"
 done
 
 for src in ${LEGACY_SOURCES[@]}; do
   echo "protoc ${src}"
-  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS},require_unimplemented_servers=false:${WORKDIR}/out \
+  protoc --go_out="${OPTS}:${WORKDIR}"/out --go-grpc_out="${OPTS}",require_unimplemented_servers=false:"${WORKDIR}/out" \
     -I"." \
-    -I${WORKDIR}/grpc-proto \
-    -I${WORKDIR}/googleapis \
-    -I${WORKDIR}/protobuf/src \
-    ${src}
+    -I"${WORKDIR}/grpc-proto" \
+    -I"${WORKDIR}/googleapis" \
+    -I"${WORKDIR}/protobuf/src" \
+    "${src}"
 done
 
 # The go_package option in grpc/lookup/v1/rls.proto doesn't match the
 # current location. Move it into the right place.
-mkdir -p ${WORKDIR}/out/google.golang.org/grpc/internal/proto/grpc_lookup_v1
-mv ${WORKDIR}/out/google.golang.org/grpc/lookup/grpc_lookup_v1/* ${WORKDIR}/out/google.golang.org/grpc/internal/proto/grpc_lookup_v1
+mkdir -p "${WORKDIR}/out/google.golang.org/grpc/internal/proto/grpc_lookup_v1"
+mv "${WORKDIR}"/out/google.golang.org/grpc/lookup/grpc_lookup_v1/* "${WORKDIR}"/out/google.golang.org/grpc/internal/proto/grpc_lookup_v1
 
 # grpc_testing_not_regenerate/*.pb.go are not re-generated,
 # see grpc_testing_not_regenerate/README.md for details.
-rm ${WORKDIR}/out/google.golang.org/grpc/reflection/test/grpc_testing_not_regenerate/*.pb.go
+rm "${WORKDIR}"/out/google.golang.org/grpc/reflection/test/grpc_testing_not_regenerate/*.pb.go
 
-cp -R ${WORKDIR}/out/google.golang.org/grpc/* .
+cp -R "${WORKDIR}"/out/google.golang.org/grpc/* .
