@@ -327,7 +327,10 @@ func (s) TestGetChannel(t *testing.T) {
 		},
 	})
 
-	subChan := channelz.RegisterSubChannel(cids[0].ID, refNames[2])
+	subChan, err := channelz.RegisterSubChannel(cids[0], refNames[2])
+	if err != nil {
+		t.Fatal(err)
+	}
 	channelz.AddTraceEvent(logger, subChan, 0, &channelz.TraceEvent{
 		Desc:     "SubChannel Created",
 		Severity: channelz.CtInfo,
@@ -425,7 +428,10 @@ func (s) TestGetSubChannel(t *testing.T) {
 		Desc:     "Channel Created",
 		Severity: channelz.CtInfo,
 	})
-	subChan := channelz.RegisterSubChannel(chann.ID, refNames[1])
+	subChan, err := channelz.RegisterSubChannel(chann, refNames[1])
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer channelz.RemoveEntry(subChan.ID)
 	channelz.AddTraceEvent(logger, subChan, 0, &channelz.TraceEvent{
 		Desc:     subchanCreated,

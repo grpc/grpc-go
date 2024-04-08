@@ -22,6 +22,7 @@
 package channelz
 
 import (
+	"errors"
 	"sync/atomic"
 	"time"
 
@@ -143,21 +144,29 @@ func RegisterChannel(parent *Channel, target string) *Channel {
 // Returns a unique channelz identifier assigned to this subChannel.
 //
 // If channelz is not turned ON, the channelz database is not mutated.
-func RegisterSubChannel(pid int64, ref string) *SubChannel {
+func RegisterSubChannel(pid *Channel, ref string) (*SubChannel, error) {
+	if pid == nil {
+		return nil, errors.New("a SubChannel's parent id cannot be nil")
+	}
+
 	id := IDGen.genID()
 	if !IsOn() {
-		return &SubChannel{ID: id}
+		return &SubChannel{
+			RefName: ref,
+			parent:  pid,
+			ID:      id,
+		}, nil
 	}
 
 	sc := &SubChannel{
 		RefName: ref,
 		ID:      id,
 		sockets: make(map[int64]string),
-		parent:  db.getChannel(pid),
+		parent:  pid,
 		trace:   &ChannelTrace{CreationTime: time.Now(), Events: make([]*traceEvent, 0, getMaxTraceEntry())},
 	}
-	db.addSubChannel(id, sc, pid)
-	return sc
+	db.addSubChannel(id, sc, pid.ID)
+	return sc, nil
 }
 
 // RegisterServer registers the given server s in channelz database. It returns

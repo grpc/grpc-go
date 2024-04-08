@@ -434,7 +434,13 @@ func setUp(t *testing.T, port int, ht hType) (*server, *http2Client, func()) {
 func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts ConnectOptions) (*server, *http2Client, func()) {
 	server := setUpServerOnly(t, port, sc, ht)
 	addr := resolver.Address{Addr: "localhost:" + server.port}
-	copts.ChannelzParent = channelz.RegisterSubChannel(-1, "test channel")
+	pid := channelz.RegisterChannel(nil, "test channel parent")
+	t.Cleanup(func() { channelz.RemoveEntry(pid.ID) })
+	var err error
+	copts.ChannelzParent, err = channelz.RegisterSubChannel(pid, "test channel")
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { channelz.RemoveEntry(copts.ChannelzParent.ID) })
 
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
@@ -1186,7 +1192,6 @@ func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	if _, err := sstream1.Read(make([]byte, 1)); err != io.EOF {
 		t.Fatalf("_.Read(_) = %v, want io.EOF", err)
 	}
-
 }
 
 func (s) TestServerWithMisbehavedClient(t *testing.T) {
@@ -1321,7 +1326,12 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 	connectCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	time.AfterFunc(100*time.Millisecond, cancel)
 
-	parent := channelz.RegisterSubChannel(-1, "test channel")
+	pid := channelz.RegisterChannel(nil, "test channel parent")
+	t.Cleanup(func() { channelz.RemoveEntry(pid.ID) })
+	parent, err := channelz.RegisterSubChannel(pid, "test channel")
+	if err != nil {
+		t.Fatal(err)
+	}
 	copts := ConnectOptions{ChannelzParent: parent}
 	defer channelz.RemoveEntry(parent.ID)
 	_, err = NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
@@ -1414,7 +1424,12 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	defer cancel()
 
-	parent := channelz.RegisterSubChannel(-1, "test channel")
+	pid := channelz.RegisterChannel(nil, "test channel parent")
+	t.Cleanup(func() { channelz.RemoveEntry(pid.ID) })
+	parent, err := channelz.RegisterSubChannel(pid, "test channel")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer channelz.RemoveEntry(parent.ID)
 	copts := ConnectOptions{ChannelzParent: parent}
 	ct, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
@@ -2423,11 +2438,17 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 	defer cancel()
 	creds := &attrTransportCreds{}
 
+	pid := channelz.RegisterChannel(nil, "test channel parent")
+	t.Cleanup(func() { channelz.RemoveEntry(pid.ID) })
+	subChan, err := channelz.RegisterSubChannel(pid, "test subchannel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { channelz.RemoveEntry(subChan.ID) })
 	copts := ConnectOptions{
 		TransportCredentials: creds,
-		ChannelzParent:       channelz.RegisterSubChannel(-1, "test subchannel"),
+		ChannelzParent:       subChan,
 	}
-	defer channelz.RemoveEntry(copts.ChannelzParent.ID)
 	tr, err := NewClientTransport(ctx, context.Background(), addr, copts, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("NewClientTransport(): %v", err)
@@ -2465,11 +2486,17 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
 	}
 
+	pid := channelz.RegisterChannel(nil, "test channel parent")
+	t.Cleanup(func() { channelz.RemoveEntry(pid.ID) })
+	subChan, err := channelz.RegisterSubChannel(pid, "test subchannel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { channelz.RemoveEntry(subChan.ID) })
 	copts := ConnectOptions{
 		Dialer:         dialer,
-		ChannelzParent: channelz.RegisterSubChannel(-1, "test subchannel"),
+		ChannelzParent: subChan,
 	}
-	defer channelz.RemoveEntry(copts.ChannelzParent.ID)
 	tr, err := NewClientTransport(ctx, context.Background(), addr, copts, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("NewClientTransport(): %v", err)
