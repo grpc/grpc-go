@@ -35,7 +35,7 @@ readonly FORCE_IMAGE_BUILD="${FORCE_IMAGE_BUILD:-0}"
 build_test_app_docker_images() {
   echo "Building Go xDS interop test app Docker images"
   docker build -f "${SRC_DIR}/interop/xds/client/Dockerfile" -t "${CLIENT_IMAGE_NAME}:${GIT_COMMIT}" "${SRC_DIR}"
-  gcloud -q auth configure-docker
+  gcloud -q auth configure-docker "${DOCKER_REGISTRY}"
   docker push "${CLIENT_IMAGE_NAME}:${GIT_COMMIT}"
   if is_version_branch "${TESTING_VERSION}"; then
     tag_and_push_docker_image "${CLIENT_IMAGE_NAME}" "${GIT_COMMIT}" "${TESTING_VERSION}"
