@@ -330,8 +330,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	t.handleSettings(sf)
 
 	go func() {
-		t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger)
-		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
+		t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger, t.outgoingGoAwayHandler)
 		err := t.loopy.run()
 		close(t.loopyWriterDone)
 		if !isIOError(err) {
@@ -673,9 +672,9 @@ func (t *http2Server) HandleStreams(ctx context.Context, handle func(*Stream)) {
 				// Any error processing client headers, e.g. invalid stream ID,
 				// is considered a protocol violation.
 				t.controlBuf.put(&goAway{
-					code:         http2.ErrCodeProtocol,
-					debugData:    []byte(err.Error()),
-					closeConnErr: err,
+					code:      http2.ErrCodeProtocol,
+					debugData: []byte(err.Error()),
+					closeConn: err,
 				})
 				continue
 			}
@@ -920,7 +919,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 
 	if t.pingStrikes > maxPingStrikes {
 		// Send goaway and close the connection.
-		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConnErr: errors.New("got too many pings from the client")})
+		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConn: errors.New("got too many pings from the client")})
 	}
 }
 
@@ -1350,7 +1349,7 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 		// Stop accepting more streams now.
 		t.state = draining
 		sid := t.maxStreamID
-		retErr := g.closeConnErr
+		retErr := g.closeConn
 		if len(t.activeStreams) == 0 {
 			retErr = errors.New("second GOAWAY written and no active streams left to process")
 		}

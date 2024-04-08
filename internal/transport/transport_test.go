@@ -2672,10 +2672,8 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 	defer lis.Close()
 	// greetDone is used to notify when server is done greeting the client.
 	greetDone := make(chan struct{})
-	// successCh verifies that GOAWAY is received at server side
-	successCh := make(chan struct{})
 	// errorCh verifies that desired GOAWAY not received by server
-	errorCh := make(chan struct{})
+	errorCh := make(chan error)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	// Launch the server.
@@ -2718,14 +2716,16 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 			goAwayFrame := fr
 			if goAwayFrame.ErrCode == http2.ErrCodeNo {
 				t.Logf("Received goAway frame from client")
-				close(successCh)
+				close(errorCh)
 			} else {
 				t.Logf("Received unexpected goAway frame from client")
+				errorCh <- errors.New("received unexpected goAway frame from client")
 				close(errorCh)
 			}
 			return
 		default:
 			t.Logf("The server received a frame other than GOAWAY")
+			errorCh <- errors.New("server received a frame other than GOAWAY")
 			close(errorCh)
 			return
 		}
@@ -2744,10 +2744,13 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 	ct.Close(errors.New("manually closed by client"))
 	t.Logf("Closed the client connection")
 	select {
-	case <-successCh:
-	case <-errorCh:
-		t.Errorf("Received an unexpected frame")
+	case err = <-errorCh:
 	case <-ctx.Done():
 		t.Errorf("Timed out")
+	}
+	if err != nil {
+		t.Errorf("Error receiving the GOAWAY frame: %v", err)
+	} else {
+		t.Logf("Received a GOAWAY frame from client")
 	}
 }

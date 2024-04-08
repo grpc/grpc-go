@@ -409,6 +409,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	go t.reader(readerErrCh)
 	defer func() {
 		if err != nil {
+			// Close writerDone in case of error occurs
 			close(t.writerDone)
 			t.Close(err)
 		}
@@ -456,12 +457,12 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	if err := t.framer.writer.Flush(); err != nil {
 		return nil, err
 	}
+	// Block until the server preface is received successfully or an error occurs.
 	if err = <-readerErrCh; err != nil {
 		return nil, err
 	}
 	go func() {
-		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger)
-		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
+		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger, t.outgoingGoAwayHandler)
 		if err := t.loopy.run(); !isIOError(err) {
 			// Immediately close the connection, as the loopy writer returns
 			// when there are no more active streams and we were draining (the
@@ -519,13 +520,13 @@ func (t *http2Client) getPeer() *peer.Peer {
 	}
 }
 
-// OutgoingGoAwayHandler writes GOAWAY to the connection.  Always returns (false, err) as we want the GoAway
+// OutgoingGoAwayHandler writes a GOAWAY to the connection.  Always returns (false, err) as we want the GoAway
 // to be the last frame loopy writes to the transport.
 func (t *http2Client) outgoingGoAwayHandler(g *goAway) (bool, error) {
 	if err := t.framer.fr.WriteGoAway(math.MaxUint32, http2.ErrCodeNo, g.debugData); err != nil {
 		return false, err
 	}
-	return false, g.closeConnErr
+	return false, g.closeConn
 }
 
 func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) ([]hpack.HeaderField, error) {
@@ -1004,10 +1005,8 @@ func (t *http2Client) Close(err error) {
 	t.mu.Unlock()
 	// Per HTTP/2 spec, a GOAWAY frame must be sent before closing the
 	// connection. See https://httpwg.org/specs/rfc7540.html#GOAWAY.
-	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(fmt.Sprintf("client shutdown with: %v", err)), closeConnErr: err})
-	if t.writerDone != nil {
-		<-t.writerDone
-	}
+	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(fmt.Sprintf("client shutdown with: %v", err)), closeConn: err})
+	<-t.writerDone
 	t.cancel()
 	t.conn.Close()
 	channelz.RemoveEntry(t.channelz.ID)
