@@ -434,8 +434,7 @@ func setUp(t *testing.T, port int, ht hType) (*server, *http2Client, func()) {
 func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts ConnectOptions) (*server, *http2Client, func()) {
 	server := setUpServerOnly(t, port, sc, ht)
 	addr := resolver.Address{Addr: "localhost:" + server.port}
-	copts.ChannelzParent = channelz.RegisterSubChannel(-1, "test channel")
-	t.Cleanup(func() { channelz.RemoveEntry(copts.ChannelzParent.ID) })
+	copts.ChannelzParent = channelzSubChannel(t)
 
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	ct, connErr := NewClientTransport(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {})
@@ -1321,9 +1320,8 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 	connectCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	time.AfterFunc(100*time.Millisecond, cancel)
 
-	parent := channelz.RegisterSubChannel(-1, "test channel")
+	parent := channelzSubChannel(t)
 	copts := ConnectOptions{ChannelzParent: parent}
-	defer channelz.RemoveEntry(parent.ID)
 	_, err = NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err == nil {
 		t.Fatalf("NewClientTransport() returned successfully; wanted error")
@@ -1414,8 +1412,7 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	defer cancel()
 
-	parent := channelz.RegisterSubChannel(-1, "test channel")
-	defer channelz.RemoveEntry(parent.ID)
+	parent := channelzSubChannel(t)
 	copts := ConnectOptions{ChannelzParent: parent}
 	ct, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err != nil {
@@ -2425,9 +2422,8 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 
 	copts := ConnectOptions{
 		TransportCredentials: creds,
-		ChannelzParent:       channelz.RegisterSubChannel(-1, "test subchannel"),
+		ChannelzParent:       channelzSubChannel(t),
 	}
-	defer channelz.RemoveEntry(copts.ChannelzParent.ID)
 	tr, err := NewClientTransport(ctx, context.Background(), addr, copts, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("NewClientTransport(): %v", err)
@@ -2467,9 +2463,8 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 
 	copts := ConnectOptions{
 		Dialer:         dialer,
-		ChannelzParent: channelz.RegisterSubChannel(-1, "test subchannel"),
+		ChannelzParent: channelzSubChannel(t),
 	}
-	defer channelz.RemoveEntry(copts.ChannelzParent.ID)
 	tr, err := NewClientTransport(ctx, context.Background(), addr, copts, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("NewClientTransport(): %v", err)
