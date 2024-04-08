@@ -833,7 +833,7 @@ func (cc *ClientConn) newAddrConnLocked(addrs []resolver.Address, opts balancer.
 		addrs:        copyAddressesWithoutBalancerAttributes(addrs),
 		scopts:       opts,
 		dopts:        cc.dopts,
-		channelz:     channelz.RegisterSubChannel(cc.channelz.ID, ""),
+		channelz:     channelz.RegisterSubChannel(cc.channelz, ""),
 		resetBackoff: make(chan struct{}),
 		stateChan:    make(chan struct{}),
 	}
