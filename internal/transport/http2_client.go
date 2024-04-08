@@ -409,7 +409,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	go t.reader(readerErrCh)
 	defer func() {
 		if err != nil {
-			// Close writerDone in case of error occurs
+			// writerDone should be closed since the loopy goroutine wouldn't have started in the case this function returns an error.
 			close(t.writerDone)
 			t.Close(err)
 		}
