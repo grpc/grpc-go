@@ -88,7 +88,7 @@ type customRoundRobin struct {
 	balancer.ClientConn
 	bOpts balancer.BuildOptions
 
-	chooseSecond uint32 // accessed atomically
+	cfg atomic.Pointer[customRRConfig]
 }
 
 func (crr *customRoundRobin) UpdateClientConnState(state balancer.ClientConnState) error {
@@ -99,7 +99,7 @@ func (crr *customRoundRobin) UpdateClientConnState(state balancer.ClientConnStat
 	if el := len(state.ResolverState.Endpoints); el != 2 {
 		return fmt.Errorf("UpdateClientConnState wants two endpoints, got: %v", el)
 	}
-	atomic.StoreUint32(&crr.chooseSecond, crrCfg.ChooseSecond)
+	crr.cfg.Store(crrCfg)
 	// A call to UpdateClientConnState should always produce a new Picker.  That
 	// is guaranteed to happen since the aggregator will always call
 	// UpdateChildState in its UpdateClientConnState.
@@ -123,7 +123,7 @@ func (crr *customRoundRobin) UpdateState(state balancer.State) {
 		if len(readyPickers) == 2 {
 			picker := &customRoundRobinPicker{
 				pickers:      readyPickers,
-				chooseSecond: atomic.LoadUint32(&crr.chooseSecond),
+				chooseSecond: crr.cfg.Load().ChooseSecond,
 				next:         0,
 			}
 			crr.ClientConn.UpdateState(balancer.State{

@@ -30,7 +30,6 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
-	"unsafe"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
@@ -50,11 +49,12 @@ type ChildState struct {
 
 // NewBalancer returns a new balancerAggregator.
 func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &balancerAggregator{
+	ba := &balancerAggregator{
 		cc:       cc,
 		bOpts:    opts,
-		children: unsafe.Pointer(resolver.NewEndpointMap()),
 	}
+	ba.children.Store(resolver.NewEndpointMap())
+	return ba
 }
 
 // balancerAggregator is a balancer that wraps child balancers. It creates a
@@ -64,7 +64,7 @@ type balancerAggregator struct {
 	cc    balancer.ClientConn
 	bOpts balancer.BuildOptions
 
-	children unsafe.Pointer // *resolver.EndpointMap
+	children atomic.Pointer[resolver.EndpointMap]
 
 	// inhibitChildUpdates is set during UpdateClientConnState/ResolverError
 	// calls (calls to children will each produce an update, only want one
@@ -100,7 +100,7 @@ func (ba *balancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 	}()
 	var ret error
 
-	children := (*resolver.EndpointMap)(ba.children)
+	children := ba.children.Load()
 	newChildren := resolver.NewEndpointMap()
 
 	// Update/Create new children.
@@ -144,7 +144,7 @@ func (ba *balancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 			bal.Close()
 		}
 	}
-	atomic.StorePointer(&ba.children, unsafe.Pointer(newChildren))
+	ba.children.Store(newChildren)
 
 	return ret
 }
@@ -158,7 +158,7 @@ func (ba *balancerAggregator) ResolverError(err error) {
 		ba.inhibitChildUpdates.Store(false)
 		ba.updateState()
 	}()
-	children := (*resolver.EndpointMap)(ba.children)
+	children := ba.children.Load()
 	for _, child := range children.Values() {
 		bal := child.(balancer.Balancer)
 		bal.ResolverError(err)
@@ -170,7 +170,7 @@ func (ba *balancerAggregator) UpdateSubConnState(sc balancer.SubConn, state bala
 }
 
 func (ba *balancerAggregator) Close() {
-	children := (*resolver.EndpointMap)(ba.children)
+	children := ba.children.Load()
 	for _, child := range children.Values() {
 		bal := child.(balancer.Balancer)
 		bal.Close()
@@ -189,8 +189,7 @@ func (ba *balancerAggregator) updateState() {
 	ba.mu.Lock()
 	defer ba.mu.Unlock()
 
-	uPtr := atomic.LoadPointer(&ba.children)
-	children := (*resolver.EndpointMap)(uPtr)
+	children := ba.children.Load()
 	childStates := make([]ChildState, 0, children.Len())
 
 	for _, child := range children.Values() {
