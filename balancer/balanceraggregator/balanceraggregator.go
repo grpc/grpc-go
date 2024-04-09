@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
@@ -52,7 +53,7 @@ func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Ba
 	return &balancerAggregator{
 		cc:       cc,
 		bOpts:    opts,
-		children: resolver.NewEndpointMap(),
+		children: unsafe.Pointer(resolver.NewEndpointMap()),
 	}
 }
 
@@ -63,7 +64,8 @@ type balancerAggregator struct {
 	cc    balancer.ClientConn
 	bOpts balancer.BuildOptions
 
-	children *resolver.EndpointMap
+	children unsafe.Pointer // *resolver.EndpointMap
+
 	// inhibitChildUpdates is set during UpdateClientConnState/ResolverError
 	// calls (calls to children will each produce an update, only want one
 	// update).
@@ -74,10 +76,10 @@ type balancerAggregator struct {
 
 // UpdateClientConnState creates a child for new endpoints and deletes children
 // for endpoints that are no longer present. It also updates all the children,
-// and sends a single synchronous update of the children's aggregate state at
+// and sends a single synchronous update of the childrens' aggregated state at
 // the end of the UpdateClientConnState operation. If any endpoint has no
-// addresses, returns error. Otherwise returns first error found from a child,
-// but fully processes the new update.
+// addresses, returns error without forwarding any updates. Otherwise returns
+// first error found from a child, but fully processes the new update.
 func (ba *balancerAggregator) UpdateClientConnState(state balancer.ClientConnState) error {
 	if len(state.ResolverState.Endpoints) == 0 {
 		return errors.New("endpoints list is empty")
@@ -90,23 +92,26 @@ func (ba *balancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 			return fmt.Errorf("endpoint %d has empty addresses", i)
 		}
 	}
-	endpointSet := resolver.NewEndpointMap()
+
 	ba.inhibitChildUpdates.Store(true)
 	defer func() {
 		ba.inhibitChildUpdates.Store(false)
 		ba.updateState()
 	}()
 	var ret error
+
+	children := (*resolver.EndpointMap)(ba.children)
+	newChildren := resolver.NewEndpointMap()
+
 	// Update/Create new children.
 	for _, endpoint := range state.ResolverState.Endpoints {
-		if _, ok := endpointSet.Get(endpoint); ok {
+		if _, ok := newChildren.Get(endpoint); ok {
 			// Endpoint child was already created, continue to avoid duplicate
 			// update.
 			continue
 		}
-		endpointSet.Set(endpoint, nil)
 		var bal *balancerWrapper
-		if child, ok := ba.children.Get(endpoint); ok {
+		if child, ok := children.Get(endpoint); ok {
 			bal = child.(*balancerWrapper)
 		} else {
 			bal = &balancerWrapper{
@@ -115,8 +120,8 @@ func (ba *balancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 				ba:         ba,
 			}
 			bal.Balancer = gracefulswitch.NewBalancer(bal, ba.bOpts)
-			ba.children.Set(endpoint, bal)
 		}
+		newChildren.Set(endpoint, bal)
 		if err := bal.UpdateClientConnState(balancer.ClientConnState{
 			BalancerConfig: state.BalancerConfig,
 			ResolverState: resolver.State{
@@ -132,14 +137,15 @@ func (ba *balancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 		}
 	}
 	// Delete old children that are no longer present.
-	for _, e := range ba.children.Keys() {
-		child, _ := ba.children.Get(e)
+	for _, e := range children.Keys() {
+		child, _ := children.Get(e)
 		bal := child.(balancer.Balancer)
-		if _, ok := endpointSet.Get(e); !ok {
+		if _, ok := newChildren.Get(e); !ok {
 			bal.Close()
-			ba.children.Delete(e)
 		}
 	}
+	atomic.StorePointer(&ba.children, unsafe.Pointer(newChildren))
+
 	return ret
 }
 
@@ -152,7 +158,8 @@ func (ba *balancerAggregator) ResolverError(err error) {
 		ba.inhibitChildUpdates.Store(false)
 		ba.updateState()
 	}()
-	for _, child := range ba.children.Values() {
+	children := (*resolver.EndpointMap)(ba.children)
+	for _, child := range children.Values() {
 		bal := child.(balancer.Balancer)
 		bal.ResolverError(err)
 	}
@@ -163,7 +170,8 @@ func (ba *balancerAggregator) UpdateSubConnState(sc balancer.SubConn, state bala
 }
 
 func (ba *balancerAggregator) Close() {
-	for _, child := range ba.children.Values() {
+	children := (*resolver.EndpointMap)(ba.children)
+	for _, child := range children.Values() {
 		bal := child.(balancer.Balancer)
 		bal.Close()
 	}
@@ -176,15 +184,16 @@ func (ba *balancerAggregator) updateState() {
 	if ba.inhibitChildUpdates.Load() {
 		return
 	}
-	readyPickers := make([]balancer.Picker, 0)
-	connectingPickers := make([]balancer.Picker, 0)
-	idlePickers := make([]balancer.Picker, 0)
-	transientFailurePickers := make([]balancer.Picker, 0)
+	var readyPickers, connectingPickers, idlePickers, transientFailurePickers []balancer.Picker
 
-	childStates := make([]ChildState, 0, ba.children.Len())
 	ba.mu.Lock()
 	defer ba.mu.Unlock()
-	for _, child := range ba.children.Values() {
+
+	uPtr := atomic.LoadPointer(&ba.children)
+	children := (*resolver.EndpointMap)(uPtr)
+	childStates := make([]ChildState, 0, children.Len())
+
+	for _, child := range children.Values() {
 		bw := child.(*balancerWrapper)
 		childState := bw.childState
 		childStates = append(childStates, childState)
