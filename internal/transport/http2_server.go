@@ -34,6 +34,7 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/pretty"
@@ -1112,27 +1113,35 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 
 // Write converts the data into HTTP2 data frame and sends it out. Non-nil error
 // is returns if it fails (e.g., framing error, transport error).
-func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
+func (t *http2Server) Write(s *Stream, hdr []byte, data encoding.BufferSlice, opts *Options) error {
 	if !s.isHeaderSent() { // Headers haven't been written yet.
 		if err := t.WriteHeader(s, nil); err != nil {
+			data.Free()
 			return err
 		}
 	} else {
 		// Writing headers checks for this condition.
 		if s.getState() == streamDone {
+			data.Free()
 			return t.streamContextErr(s)
 		}
 	}
+
 	df := &dataFrame{
 		streamID:    s.id,
 		h:           hdr,
 		d:           data,
+		r:           data.Reader(),
 		onEachWrite: t.setResetPingStrikes,
 	}
-	if err := s.wq.get(int32(len(hdr) + len(data))); err != nil {
+	if err := s.wq.get(int32(len(hdr) + df.d.Len())); err != nil {
+		data.Free()
 		return t.streamContextErr(s)
 	}
-	return t.controlBuf.put(df)
+	if err := t.controlBuf.put(df); err != nil {
+		data.Free()
+	}
+	return nil
 }
 
 // keepalive running in a separate goroutine does the following:

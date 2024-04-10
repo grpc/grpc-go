@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/internal"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/binarylog"
@@ -653,7 +654,7 @@ func defaultDialOptions() dialOptions {
 		bs:              internalbackoff.DefaultExponential,
 		healthCheckFunc: internal.HealthCheckFunc,
 		idleTimeout:     30 * time.Minute,
-		recvBufferPool:  nopBufferPool{},
+		recvBufferPool:  encoding.NopBufferPool{},
 		defaultScheme:   "dns",
 	}
 }

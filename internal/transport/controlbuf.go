@@ -30,6 +30,7 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/status"
@@ -148,7 +149,8 @@ type dataFrame struct {
 	streamID  uint32
 	endStream bool
 	h         []byte
-	d         []byte
+	d         encoding.BufferSlice
+	r         *encoding.Reader
 	// onEachWrite is called every time
 	// a part of d is written out.
 	onEachWrite func()
@@ -888,6 +890,10 @@ func (l *loopyWriter) applySettings(ss []http2.Setting) {
 	}
 }
 
+var bufPool = sync.Pool{
+	New: func() any { return make([]byte, http2MaxFrameLen) },
+}
+
 // processData removes the first stream from active streams, writes out at most 16KB
 // of its data and then puts it at the end of activeStreams if there's still more data
 // to be sent and stream has some stream-level flow control.
@@ -906,12 +912,13 @@ func (l *loopyWriter) processData() (bool, error) {
 	// As an optimization to keep wire traffic low, data from d is copied to h to make as big as the
 	// maximum possible HTTP2 frame size.
 
-	if len(dataItem.h) == 0 && len(dataItem.d) == 0 { // Empty data frame
+	if len(dataItem.h) == 0 && dataItem.r.Len() == 0 { // Empty data frame
 		// Client sends out empty data frame with endStream = true
 		if err := l.framer.fr.WriteData(dataItem.streamID, dataItem.endStream, nil); err != nil {
 			return false, err
 		}
 		str.itl.dequeue() // remove the empty data item from stream
+		dataItem.d.Free()
 		if str.itl.isEmpty() {
 			str.state = empty
 		} else if trailer, ok := str.itl.peek().(*headerFrame); ok { // the next item is trailers.
@@ -926,9 +933,7 @@ func (l *loopyWriter) processData() (bool, error) {
 		}
 		return false, nil
 	}
-	var (
-		buf []byte
-	)
+
 	// Figure out the maximum size we can send
 	maxSize := http2MaxFrameLen
 	if strQuota := int(l.oiws) - str.bytesOutStanding; strQuota <= 0 { // stream-level flow control.
@@ -942,20 +947,22 @@ func (l *loopyWriter) processData() (bool, error) {
 	}
 	// Compute how much of the header and data we can send within quota and max frame length
 	hSize := min(maxSize, len(dataItem.h))
-	dSize := min(maxSize-hSize, len(dataItem.d))
-	if hSize != 0 {
-		if dSize == 0 {
-			buf = dataItem.h
-		} else {
-			// We can add some data to grpc message header to distribute bytes more equally across frames.
-			// Copy on the stack to avoid generating garbage
-			var localBuf [http2MaxFrameLen]byte
-			copy(localBuf[:hSize], dataItem.h)
-			copy(localBuf[hSize:], dataItem.d[:dSize])
-			buf = localBuf[:hSize+dSize]
-		}
+	dSize := min(maxSize-hSize, dataItem.r.Len())
+	remainingBytes := len(dataItem.h) + dataItem.r.Len() - hSize - dSize
+
+	var buf []byte
+
+	if hSize != 0 && dSize == 0 {
+		buf = dataItem.h
 	} else {
-		buf = dataItem.d
+		// Note: this is only necessary because the http2.Framer does not support
+		// partially writing a frame, so the sequence must be materialized into a buffer.
+		buf = bufPool.Get().([]byte)
+		defer bufPool.Put(buf)
+
+		copy(buf[:hSize], dataItem.h)
+		_, _ = dataItem.r.Read(buf[hSize:])
+		buf = buf[:hSize+dSize]
 	}
 
 	size := hSize + dSize
@@ -964,7 +971,7 @@ func (l *loopyWriter) processData() (bool, error) {
 	str.wq.replenish(size)
 	var endStream bool
 	// If this is the last data message on this stream and all of it can be written in this iteration.
-	if dataItem.endStream && len(dataItem.h)+len(dataItem.d) <= size {
+	if dataItem.endStream && remainingBytes == 0 {
 		endStream = true
 	}
 	if dataItem.onEachWrite != nil {
@@ -976,9 +983,9 @@ func (l *loopyWriter) processData() (bool, error) {
 	str.bytesOutStanding += size
 	l.sendQuota -= uint32(size)
 	dataItem.h = dataItem.h[hSize:]
-	dataItem.d = dataItem.d[dSize:]
 
-	if len(dataItem.h) == 0 && len(dataItem.d) == 0 { // All the data from that message was written out.
+	if remainingBytes == 0 { // All the data from that message was written out.
+		dataItem.d.Free()
 		str.itl.dequeue()
 	}
 	if str.itl.isEmpty() {

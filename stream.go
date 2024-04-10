@@ -890,23 +890,28 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, payload, data, err := prepareMsg(m, cs.codec, cs.cp, cs.comp)
+	hdr, data, payload, err := prepareMsg(m, cs.codec, cs.cp, cs.comp, cs.cc.dopts.recvBufferPool)
 	if err != nil {
 		return err
 	}
 
+	defer data.Free()
+
+	payloadLen := payload.Len()
 	// TODO(dfawley): should we be checking len(data) instead?
-	if len(payload) > *cs.callInfo.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), *cs.callInfo.maxSendMessageSize)
+	if payloadLen > *cs.callInfo.maxSendMessageSize {
+		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payloadLen, *cs.callInfo.maxSendMessageSize)
 	}
 	op := func(a *csAttempt) error {
 		return a.sendMsg(m, hdr, payload, data)
 	}
-	err = cs.withRetry(op, func() { cs.bufferForRetryLocked(len(hdr)+len(payload), op) })
+	err = cs.withRetry(op, func() { cs.bufferForRetryLocked(len(hdr)+payloadLen, op) })
 	if len(cs.binlogs) != 0 && err == nil {
+		mData := materialize(data, cs.cc.dopts.recvBufferPool)
+		defer mData.Free()
 		cm := &binarylog.ClientMessage{
 			OnClientSide: true,
-			Message:      data,
+			Message:      mData.ReadOnlyData(),
 		}
 		for _, binlog := range cs.binlogs {
 			binlog.Log(cs.ctx, cm)
@@ -923,14 +928,18 @@ func (cs *clientStream) RecvMsg(m any) error {
 	var recvInfo *payloadInfo
 	if len(cs.binlogs) != 0 {
 		recvInfo = &payloadInfo{}
+		defer recvInfo.free()
 	}
 	err := cs.withRetry(func(a *csAttempt) error {
 		return a.recvMsg(m, recvInfo)
 	}, cs.commitAttemptLocked)
 	if len(cs.binlogs) != 0 && err == nil {
+		mData := materialize(recvInfo.uncompressedBytes, cs.cc.dopts.recvBufferPool)
+		defer mData.Free()
+
 		sm := &binarylog.ServerMessage{
 			OnClientSide: true,
-			Message:      recvInfo.uncompressedBytes,
+			Message:      mData.ReadOnlyData(),
 		}
 		for _, binlog := range cs.binlogs {
 			binlog.Log(cs.ctx, sm)
@@ -1033,7 +1042,7 @@ func (cs *clientStream) finish(err error) {
 	cs.cancel()
 }
 
-func (a *csAttempt) sendMsg(m any, hdr, payld, data []byte) error {
+func (a *csAttempt) sendMsg(m any, hdr []byte, payld, data encoding.BufferSlice) error {
 	cs := a.cs
 	if a.trInfo != nil {
 		a.mu.Lock()
@@ -1042,6 +1051,7 @@ func (a *csAttempt) sendMsg(m any, hdr, payld, data []byte) error {
 		}
 		a.mu.Unlock()
 	}
+	payloadLen := payld.Len()
 	if err := a.t.Write(a.s, hdr, payld, &transport.Options{Last: !cs.desc.ClientStreams}); err != nil {
 		if !cs.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
@@ -1051,8 +1061,12 @@ func (a *csAttempt) sendMsg(m any, hdr, payld, data []byte) error {
 		}
 		return io.EOF
 	}
-	for _, sh := range a.statsHandlers {
-		sh.HandleRPC(a.ctx, outPayload(true, m, data, payld, time.Now()))
+	if len(a.statsHandlers) != 0 {
+		mData := materialize(data, a.cs.cc.dopts.recvBufferPool)
+		defer mData.Free()
+		for _, sh := range a.statsHandlers {
+			sh.HandleRPC(a.ctx, outPayload(true, m, mData.ReadOnlyData(), payloadLen, time.Now()))
+		}
 	}
 	if channelz.IsOn() {
 		a.t.IncrMsgSent()
@@ -1064,6 +1078,7 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 	cs := a.cs
 	if len(a.statsHandlers) != 0 && payInfo == nil {
 		payInfo = &payloadInfo{}
+		defer payInfo.free()
 	}
 
 	if !a.decompSet {
@@ -1100,17 +1115,21 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 		}
 		a.mu.Unlock()
 	}
-	for _, sh := range a.statsHandlers {
-		sh.HandleRPC(a.ctx, &stats.InPayload{
-			Client:   true,
-			RecvTime: time.Now(),
-			Payload:  m,
-			// TODO truncate large payload.
-			Data:             payInfo.uncompressedBytes,
-			WireLength:       payInfo.compressedLength + headerLen,
-			CompressedLength: payInfo.compressedLength,
-			Length:           len(payInfo.uncompressedBytes),
-		})
+	if len(a.statsHandlers) != 0 {
+		mData := materialize(payInfo.uncompressedBytes, a.cs.cc.dopts.recvBufferPool)
+		defer mData.Free()
+		for _, sh := range a.statsHandlers {
+			sh.HandleRPC(a.ctx, &stats.InPayload{
+				Client:   true,
+				RecvTime: time.Now(),
+				Payload:  m,
+				// TODO truncate large payload.
+				Data:             mData.ReadOnlyData(),
+				WireLength:       payInfo.compressedLength + headerLen,
+				CompressedLength: payInfo.compressedLength,
+				Length:           len(mData.ReadOnlyData()),
+			})
+		}
 	}
 	if channelz.IsOn() {
 		a.t.IncrMsgRecv()
@@ -1372,17 +1391,19 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, payld, _, err := prepareMsg(m, as.codec, as.cp, as.comp)
+	hdr, data, payload, err := prepareMsg(m, as.codec, as.cp, as.comp, as.ac.dopts.recvBufferPool)
 	if err != nil {
 		return err
 	}
 
+	defer data.Free()
+
 	// TODO(dfawley): should we be checking len(data) instead?
-	if len(payld) > *as.callInfo.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payld), *as.callInfo.maxSendMessageSize)
+	if payload.Len() > *as.callInfo.maxSendMessageSize {
+		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payload.Len(), *as.callInfo.maxSendMessageSize)
 	}
 
-	if err := as.t.Write(as.s, hdr, payld, &transport.Options{Last: !as.desc.ClientStreams}); err != nil {
+	if err := as.t.Write(as.s, hdr, payload, &transport.Options{Last: !as.desc.ClientStreams}); err != nil {
 		if !as.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
 			// because the generated code requires it.  finish is not called; RecvMsg()
@@ -1644,18 +1665,29 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, payload, data, err := prepareMsg(m, ss.codec, ss.cp, ss.comp)
+	hdr, data, payload, err := prepareMsg(m, ss.codec, ss.cp, ss.comp, ss.p.recvBufferPool)
 	if err != nil {
 		return err
 	}
 
+	defer data.Free()
+
+	payloadLen := payload.Len()
+
 	// TODO(dfawley): should we be checking len(data) instead?
-	if len(payload) > ss.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), ss.maxSendMessageSize)
+	if payloadLen > ss.maxSendMessageSize {
+		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payloadLen, ss.maxSendMessageSize)
 	}
 	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
 	}
+
+	var mData *encoding.Buffer
+	if len(ss.binlogs) != 0 || len(ss.statsHandler) != 0 {
+		mData = materialize(data, ss.p.recvBufferPool)
+		defer mData.Free()
+	}
+
 	if len(ss.binlogs) != 0 {
 		if !ss.serverHeaderBinlogged {
 			h, _ := ss.s.Header()
@@ -1668,7 +1700,7 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 			}
 		}
 		sm := &binarylog.ServerMessage{
-			Message: data,
+			Message: mData.ReadOnlyData(),
 		}
 		for _, binlog := range ss.binlogs {
 			binlog.Log(ss.ctx, sm)
@@ -1676,7 +1708,7 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	}
 	if len(ss.statsHandler) != 0 {
 		for _, sh := range ss.statsHandler {
-			sh.HandleRPC(ss.s.Context(), outPayload(false, m, data, payload, time.Now()))
+			sh.HandleRPC(ss.s.Context(), outPayload(false, m, mData.ReadOnlyData(), payloadLen, time.Now()))
 		}
 	}
 	return nil
@@ -1713,6 +1745,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 	var payInfo *payloadInfo
 	if len(ss.statsHandler) != 0 || len(ss.binlogs) != 0 {
 		payInfo = &payloadInfo{}
+		defer payInfo.free()
 	}
 	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxReceiveMessageSize, payInfo, ss.decomp); err != nil {
 		if err == io.EOF {
@@ -1730,12 +1763,14 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		return toRPCErr(err)
 	}
 	if len(ss.statsHandler) != 0 {
+		mData := materialize(payInfo.uncompressedBytes, ss.p.recvBufferPool)
+		defer mData.Free()
 		for _, sh := range ss.statsHandler {
 			sh.HandleRPC(ss.s.Context(), &stats.InPayload{
 				RecvTime: time.Now(),
 				Payload:  m,
 				// TODO truncate large payload.
-				Data:             payInfo.uncompressedBytes,
+				Data:             mData.ReadOnlyData(),
 				Length:           len(payInfo.uncompressedBytes),
 				WireLength:       payInfo.compressedLength + headerLen,
 				CompressedLength: payInfo.compressedLength,
@@ -1762,9 +1797,9 @@ func MethodFromServerStream(stream ServerStream) (string, bool) {
 // prepareMsg returns the hdr, payload and data
 // using the compressors passed or using the
 // passed preparedmsg
-func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor) (hdr, payload, data []byte, err error) {
+func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor, provider encoding.BufferProvider) (hdr []byte, data, payload encoding.BufferSlice, err error) {
 	if preparedMsg, ok := m.(*PreparedMsg); ok {
-		return preparedMsg.hdr, preparedMsg.payload, preparedMsg.encodedData, nil
+		return preparedMsg.hdr, preparedMsg.encodedData, preparedMsg.payload, nil
 	}
 	// The input interface is not a prepared msg.
 	// Marshal and Compress the data at this point
@@ -1772,10 +1807,12 @@ func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	compData, err := compress(data, cp, comp)
+
+	compData, pf, err := compress(data, cp, comp, provider)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	hdr, payload = msgHeader(data, compData)
-	return hdr, payload, data, nil
+
+	hdr, payload = msgHeader(data, compData, pf)
+	return hdr, data, payload, nil
 }

@@ -181,7 +181,7 @@ var defaultServerOptions = serverOptions{
 	connectionTimeout:     120 * time.Second,
 	writeBufferSize:       defaultWriteBufSize,
 	readBufferSize:        defaultReadBufSize,
-	recvBufferPool:        nopBufferPool{},
+	recvBufferPool:        encoding.NopBufferPool{},
 }
 var globalServerOptions []ServerOption
 
@@ -313,7 +313,7 @@ func KeepaliveEnforcementPolicy(kep keepalive.EnforcementPolicy) ServerOption {
 // Will be supported throughout 1.x.
 func CustomCodec(codec Codec) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
-		o.codec = codec
+		o.codec = newCodecV0Bridge(codec)
 	})
 }
 
@@ -342,7 +342,22 @@ func CustomCodec(codec Codec) ServerOption {
 // later release.
 func ForceServerCodec(codec encoding.Codec) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
-		o.codec = codec
+		o.codec = newCodecV1Bridge(codec)
+	})
+}
+
+// ForceServerCodecV2 is the equivalent of ForceServerCodec, but for the new
+// CodecV2 interface.
+//
+// Will be supported throughout 1.x.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func ForceServerCodecV2(codecV2 encoding.CodecV2) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.codec = codecV2
 	})
 }
 
@@ -1142,20 +1157,28 @@ func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, 
 		channelz.Error(logger, s.channelz, "grpc: server failed to encode response: ", err)
 		return err
 	}
-	compData, err := compress(data, cp, comp)
+	defer data.Free()
+
+	compData, pf, err := compress(data, cp, comp, s.opts.recvBufferPool)
 	if err != nil {
 		channelz.Error(logger, s.channelz, "grpc: server failed to compress response: ", err)
 		return err
 	}
-	hdr, payload := msgHeader(data, compData)
+
+	hdr, payload := msgHeader(data, compData, pf)
+	payloadLen := payload.Len()
 	// TODO(dfawley): should we be checking len(data) instead?
-	if len(payload) > s.opts.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(payload), s.opts.maxSendMessageSize)
+	if payloadLen > s.opts.maxSendMessageSize {
+		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", payloadLen, s.opts.maxSendMessageSize)
 	}
 	err = t.Write(stream, hdr, payload, opts)
 	if err == nil {
-		for _, sh := range s.opts.statsHandlers {
-			sh.HandleRPC(ctx, outPayload(false, msg, data, payload, time.Now()))
+		if len(s.opts.statsHandlers) != 0 {
+			mData := materialize(data, s.opts.recvBufferPool)
+			defer mData.Free()
+			for _, sh := range s.opts.statsHandlers {
+				sh.HandleRPC(ctx, outPayload(false, msg, mData.ReadOnlyData(), payloadLen, time.Now()))
+			}
 		}
 	}
 	return err
@@ -1334,9 +1357,10 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 	var payInfo *payloadInfo
 	if len(shs) != 0 || len(binlogs) != 0 {
 		payInfo = &payloadInfo{}
+		defer payInfo.free()
 	}
 
-	d, cancel, err := recvAndDecompress(&parser{r: stream, recvBufferPool: s.opts.recvBufferPool}, stream, dc, s.opts.maxReceiveMessageSize, payInfo, decomp)
+	d, err := recvAndDecompress(&parser{r: stream, recvBufferPool: s.opts.recvBufferPool}, stream, dc, s.opts.maxReceiveMessageSize, payInfo, decomp)
 	if err != nil {
 		if e := t.WriteStatus(stream, status.Convert(err)); e != nil {
 			channelz.Warningf(logger, s.channelz, "grpc: Server.processUnaryRPC failed to write status: %v", e)
@@ -1347,20 +1371,22 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 		t.IncrMsgRecv()
 	}
 	df := func(v any) error {
-		defer cancel()
-
 		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
-		for _, sh := range shs {
-			sh.HandleRPC(ctx, &stats.InPayload{
-				RecvTime:         time.Now(),
-				Payload:          v,
-				Length:           len(d),
-				WireLength:       payInfo.compressedLength + headerLen,
-				CompressedLength: payInfo.compressedLength,
-				Data:             d,
-			})
+		if len(shs) != 0 {
+			mData := materialize(d, s.opts.recvBufferPool)
+			defer mData.Free()
+			for _, sh := range shs {
+				sh.HandleRPC(ctx, &stats.InPayload{
+					RecvTime:         time.Now(),
+					Payload:          v,
+					Length:           len(mData.ReadOnlyData()),
+					WireLength:       payInfo.compressedLength + headerLen,
+					CompressedLength: payInfo.compressedLength,
+					Data:             mData.ReadOnlyData(),
+				})
+			}
 		}
 		if len(binlogs) != 0 {
 			cm := &binarylog.ClientMessage{
@@ -1963,12 +1989,12 @@ func (s *Server) getCodec(contentSubtype string) baseCodec {
 		return s.opts.codec
 	}
 	if contentSubtype == "" {
-		return encoding.GetCodec(proto.Name)
+		return getCodec(proto.Name)
 	}
-	codec := encoding.GetCodec(contentSubtype)
+	codec := getCodec(contentSubtype)
 	if codec == nil {
 		logger.Warningf("Unsupported codec %q. Defaulting to %q for now. This will start to fail in future releases.", contentSubtype, proto.Name)
-		return encoding.GetCodec(proto.Name)
+		return getCodec(proto.Name)
 	}
 	return codec
 }

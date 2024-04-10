@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/status"
 )
 
@@ -31,9 +32,9 @@ import (
 // later release.
 type PreparedMsg struct {
 	// Struct for preparing msg before sending them
-	encodedData []byte
+	encodedData encoding.BufferSlice
 	hdr         []byte
-	payload     []byte
+	payload     encoding.BufferSlice
 }
 
 // Encode marshalls and compresses the message using the codec and compressor for the stream.
@@ -58,10 +59,14 @@ func (p *PreparedMsg) Encode(s Stream, msg any) error {
 		return err
 	}
 	p.encodedData = data
-	compData, err := compress(data, rpcInfo.preloaderInfo.cp, rpcInfo.preloaderInfo.comp)
+	// TODO: it should be possible to grab the recvBufferPool from the underlying
+	// stream implementation.
+	compData, pf, err := compress(data, rpcInfo.preloaderInfo.cp, rpcInfo.preloaderInfo.comp, encoding.NoopBufferProvider)
 	if err != nil {
+		data.Free()
 		return err
 	}
-	p.hdr, p.payload = msgHeader(data, compData)
+
+	p.hdr, p.payload = msgHeader(data, compData, pf)
 	return nil
 }

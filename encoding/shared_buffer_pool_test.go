@@ -16,13 +16,15 @@
  *
  */
 
-package grpc
+package encoding
 
-import "testing"
+import (
+	"testing"
+)
 
-func (s) TestSharedBufferPool(t *testing.T) {
+func TestSharedBufferPool(t *testing.T) {
 	pools := []SharedBufferPool{
-		nopBufferPool{},
+		NopBufferPool{},
 		NewSharedBufferPool(),
 	}
 
@@ -42,7 +44,7 @@ func (s) TestSharedBufferPool(t *testing.T) {
 				t.Fatalf("Expected buffer of length %d, got %d", l, len(bs))
 			}
 
-			p.Put(&bs)
+			p.Put(bs)
 		}
 	}
 }

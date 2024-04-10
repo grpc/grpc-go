@@ -23,16 +23,77 @@ import (
 	_ "google.golang.org/grpc/encoding/proto" // to register the Codec for "proto"
 )
 
-// baseCodec contains the functionality of both Codec and encoding.Codec, but
-// omits the name/string, which vary between the two and are not needed for
-// anything besides the registry in the encoding package.
+// baseCodec captures the new encoding.CodecV2 interface without the Name
+// function, allowing it to be implemented by older Codec and encoding.Codec
+// implementations. The omitted Name function is only needed for the register in
+// the encoding package and is not part of the core functionality.
 type baseCodec interface {
-	Marshal(v any) ([]byte, error)
-	Unmarshal(data []byte, v any) error
+	Marshal(v any) (encoding.BufferSlice, error)
+	Unmarshal(data encoding.BufferSlice, v any) error
 }
 
-var _ baseCodec = Codec(nil)
-var _ baseCodec = encoding.Codec(nil)
+type namedBaseCodec interface {
+	baseCodec
+	Name() string
+}
+
+func getCodec(name string) namedBaseCodec {
+	codecV2 := encoding.GetCodecV2(name)
+	if codecV2 != nil {
+		return codecV2
+	}
+
+	codecV1 := encoding.GetCodec(name)
+	if codecV1 != nil {
+		return newCodecV1Bridge(codecV1)
+	}
+
+	return nil
+}
+
+func newCodecV0Bridge(c Codec) baseCodec {
+	return codecV0Bridge{c}
+}
+
+func newCodecV1Bridge(c encoding.Codec) namedBaseCodec {
+	return codecV1Bridge{
+		codecV0Bridge: codecV0Bridge{c},
+		name:          c.Name(),
+	}
+}
+
+var _ baseCodec = codecV0Bridge{}
+
+type codecV0Bridge struct {
+	codec interface {
+		Marshal(v any) ([]byte, error)
+		Unmarshal(data []byte, v any) error
+	}
+}
+
+func (c codecV0Bridge) Marshal(v any) (encoding.BufferSlice, error) {
+	data, err := c.codec.Marshal(v)
+	if err != nil {
+		return nil, err
+	} else {
+		return encoding.BufferSlice{encoding.NewBuffer(data, nil)}, nil
+	}
+}
+
+func (c codecV0Bridge) Unmarshal(data encoding.BufferSlice, v any) (err error) {
+	return c.codec.Unmarshal(data.Materialize(), v)
+}
+
+var _ namedBaseCodec = codecV1Bridge{}
+
+type codecV1Bridge struct {
+	codecV0Bridge
+	name string
+}
+
+func (c codecV1Bridge) Name() string {
+	return c.name
+}
 
 // Codec defines the interface gRPC uses to encode and decode messages.
 // Note that implementations of this interface must be thread safe;

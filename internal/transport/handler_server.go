@@ -38,6 +38,7 @@ import (
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/metadata"
@@ -330,16 +331,21 @@ func (ht *serverHandlerTransport) writeCustomHeaders(s *Stream) {
 	s.hdrMu.Unlock()
 }
 
-func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
+func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data encoding.BufferSlice, opts *Options) error {
 	headersWritten := s.updateHeaderSent()
-	return ht.do(func() {
+	err := ht.do(func() {
 		if !headersWritten {
 			ht.writePendingHeaders(s)
 		}
 		ht.rw.Write(hdr)
-		ht.rw.Write(data)
+		_, _ = io.Copy(ht.rw, data.Reader())
+		data.Free()
 		ht.rw.(http.Flusher).Flush()
 	})
+	if err != nil {
+		data.Free()
+	}
+	return err
 }
 
 func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
