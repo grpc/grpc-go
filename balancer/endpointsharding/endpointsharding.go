@@ -50,8 +50,8 @@ type ChildState struct {
 // NewBalancer returns a new endpointSharding.
 func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	es := &endpointSharding{
-		cc:       cc,
-		bOpts:    opts,
+		cc:    cc,
+		bOpts: opts,
 	}
 	es.children.Store(resolver.NewEndpointMap())
 	return es
