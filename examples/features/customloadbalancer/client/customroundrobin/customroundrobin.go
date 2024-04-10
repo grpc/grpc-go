@@ -24,7 +24,7 @@ import (
 	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/balanceraggregator"
+	"google.golang.org/grpc/balancer/endpointsharding"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/serviceconfig"
@@ -36,7 +36,7 @@ func init() {
 	balancer.Register(customRoundRobinBuilder{})
 	// Hardcode a pick first with no shuffling, since this is a petiole, and
 	// that is what petiole policies will interact with.
-	gracefulSwitchPickFirst, _ = balanceraggregator.ParseConfig(json.RawMessage(balanceraggregator.PickFirstConfig))
+	gracefulSwitchPickFirst, _ = endpointsharding.ParseConfig(json.RawMessage(endpointsharding.PickFirstConfig))
 }
 
 const customRRName = "custom_round_robin"
@@ -71,7 +71,7 @@ func (customRoundRobinBuilder) Build(cc balancer.ClientConn, bOpts balancer.Buil
 		ClientConn: cc,
 		bOpts:      bOpts,
 	}
-	crr.Balancer = balanceraggregator.NewBalancer(crr, bOpts)
+	crr.Balancer = endpointsharding.NewBalancer(crr, bOpts)
 	return crr
 }
 
@@ -96,7 +96,7 @@ func (crr *customRoundRobin) UpdateClientConnState(state balancer.ClientConnStat
 	if !ok {
 		return balancer.ErrBadResolverState
 	}
-	if el := len(state.ResolverState.Endpoints); el != 2 {
+	if el := state.ResolverState.Endpoints; len(el) != 2 {
 		return fmt.Errorf("UpdateClientConnState wants two endpoints, got: %v", el)
 	}
 	crr.cfg.Store(crrCfg)
@@ -111,7 +111,7 @@ func (crr *customRoundRobin) UpdateClientConnState(state balancer.ClientConnStat
 
 func (crr *customRoundRobin) UpdateState(state balancer.State) {
 	if state.ConnectivityState == connectivity.Ready {
-		childStates := balanceraggregator.ChildStatesFromPicker(state.Picker)
+		childStates := endpointsharding.ChildStatesFromPicker(state.Picker)
 		var readyPickers []balancer.Picker
 		for _, childState := range childStates {
 			if childState.State.ConnectivityState == connectivity.Ready {

@@ -16,13 +16,13 @@
  *
  */
 
-// Package balanceraggregator implements a balancerAggregator helper.
+// Package endpointsharding implements a endpointSharding helper.
 //
 // # Experimental
 //
 // Notice: This package is EXPERIMENTAL and may be changed or removed in a
 // later release.
-package balanceraggregator
+package endpointsharding
 
 import (
 	"encoding/json"
@@ -47,20 +47,20 @@ type ChildState struct {
 	State    balancer.State
 }
 
-// NewBalancer returns a new balancerAggregator.
+// NewBalancer returns a new endpointSharding.
 func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	ba := &balancerAggregator{
+	es := &endpointSharding{
 		cc:       cc,
 		bOpts:    opts,
 	}
-	ba.children.Store(resolver.NewEndpointMap())
-	return ba
+	es.children.Store(resolver.NewEndpointMap())
+	return es
 }
 
-// balancerAggregator is a balancer that wraps child balancers. It creates a
-// child balancer with child config for every unique Endpoint received. It
-// updates the child states on any update from parent or child.
-type balancerAggregator struct {
+// endpointSharding is a balancer that wraps child balancers. It creates a child
+// balancer with child config for every unique Endpoint received. It updates the
+// child states on any update from parent or child.
+type endpointSharding struct {
 	cc    balancer.ClientConn
 	bOpts balancer.BuildOptions
 
@@ -80,7 +80,7 @@ type balancerAggregator struct {
 // the end of the UpdateClientConnState operation. If any endpoint has no
 // addresses, returns error without forwarding any updates. Otherwise returns
 // first error found from a child, but fully processes the new update.
-func (ba *balancerAggregator) UpdateClientConnState(state balancer.ClientConnState) error {
+func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState) error {
 	if len(state.ResolverState.Endpoints) == 0 {
 		return errors.New("endpoints list is empty")
 	}
@@ -93,14 +93,14 @@ func (ba *balancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 		}
 	}
 
-	ba.inhibitChildUpdates.Store(true)
+	es.inhibitChildUpdates.Store(true)
 	defer func() {
-		ba.inhibitChildUpdates.Store(false)
-		ba.updateState()
+		es.inhibitChildUpdates.Store(false)
+		es.updateState()
 	}()
 	var ret error
 
-	children := ba.children.Load()
+	children := es.children.Load()
 	newChildren := resolver.NewEndpointMap()
 
 	// Update/Create new children.
@@ -116,10 +116,10 @@ func (ba *balancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 		} else {
 			bal = &balancerWrapper{
 				childState: ChildState{Endpoint: endpoint},
-				ClientConn: ba.cc,
-				ba:         ba,
+				ClientConn: es.cc,
+				es:         es,
 			}
-			bal.Balancer = gracefulswitch.NewBalancer(bal, ba.bOpts)
+			bal.Balancer = gracefulswitch.NewBalancer(bal, es.bOpts)
 		}
 		newChildren.Set(endpoint, bal)
 		if err := bal.UpdateClientConnState(balancer.ClientConnState{
@@ -144,33 +144,33 @@ func (ba *balancerAggregator) UpdateClientConnState(state balancer.ClientConnSta
 			bal.Close()
 		}
 	}
-	ba.children.Store(newChildren)
+	es.children.Store(newChildren)
 
 	return ret
 }
 
-// ResolverError forwards the resolver error to all of the balancerAggregator's
+// ResolverError forwards the resolver error to all of the endpointSharding's
 // children and sends a single synchronous update of the childStates at the end
 // of the ResolverError operation.
-func (ba *balancerAggregator) ResolverError(err error) {
-	ba.inhibitChildUpdates.Store(true)
+func (es *endpointSharding) ResolverError(err error) {
+	es.inhibitChildUpdates.Store(true)
 	defer func() {
-		ba.inhibitChildUpdates.Store(false)
-		ba.updateState()
+		es.inhibitChildUpdates.Store(false)
+		es.updateState()
 	}()
-	children := ba.children.Load()
+	children := es.children.Load()
 	for _, child := range children.Values() {
 		bal := child.(balancer.Balancer)
 		bal.ResolverError(err)
 	}
 }
 
-func (ba *balancerAggregator) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+func (es *endpointSharding) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	// UpdateSubConnState is deprecated.
 }
 
-func (ba *balancerAggregator) Close() {
-	children := ba.children.Load()
+func (es *endpointSharding) Close() {
+	children := es.children.Load()
 	for _, child := range children.Values() {
 		bal := child.(balancer.Balancer)
 		bal.Close()
@@ -180,16 +180,16 @@ func (ba *balancerAggregator) Close() {
 // updateState updates this component's state. It sends the aggregated state,
 // and a picker with round robin behavior with all the child states present if
 // needed.
-func (ba *balancerAggregator) updateState() {
-	if ba.inhibitChildUpdates.Load() {
+func (es *endpointSharding) updateState() {
+	if es.inhibitChildUpdates.Load() {
 		return
 	}
 	var readyPickers, connectingPickers, idlePickers, transientFailurePickers []balancer.Picker
 
-	ba.mu.Lock()
-	defer ba.mu.Unlock()
+	es.mu.Lock()
+	defer es.mu.Unlock()
 
-	children := ba.children.Load()
+	children := es.children.Load()
 	childStates := make([]ChildState, 0, children.Len())
 
 	for _, child := range children.Values() {
@@ -229,7 +229,7 @@ func (ba *balancerAggregator) updateState() {
 		pickers = transientFailurePickers
 	} else {
 		aggState = connectivity.TransientFailure
-		pickers = append(pickers, base.NewErrPicker(errors.New("no children to pick from")))
+		pickers = []balancer.Picker{base.NewErrPicker(errors.New("no children to pick from"))}
 	} // No children (resolver error before valid update).
 
 	p := &pickerWithChildStates{
@@ -237,14 +237,14 @@ func (ba *balancerAggregator) updateState() {
 		childStates: childStates,
 		next:        uint32(grpcrand.Intn(len(pickers))),
 	}
-	ba.cc.UpdateState(balancer.State{
+	es.cc.UpdateState(balancer.State{
 		ConnectivityState: aggState,
 		Picker:            p,
 	})
 }
 
 // pickerWithChildStates delegates to the pickers it holds in a round robin
-// fashion. It also contains the childStates of all the balancerAggregator's
+// fashion. It also contains the childStates of all the endpointSharding's
 // children.
 type pickerWithChildStates struct {
 	pickers     []balancer.Picker
@@ -258,8 +258,8 @@ func (p *pickerWithChildStates) Pick(info balancer.PickInfo) (balancer.PickResul
 	return picker.Pick(info)
 }
 
-// ChildStatesFromPicker returns the child states from the picker if the picker
-// is one provided in a call to UpdateState from this balancer.
+// ChildStatesFromPicker returns the child states from the picker that are
+// managed by this balancer.
 func ChildStatesFromPicker(picker balancer.Picker) []ChildState {
 	p, ok := picker.(*pickerWithChildStates)
 	if !ok {
@@ -274,16 +274,16 @@ type balancerWrapper struct {
 	balancer.Balancer   // Simply forward balancer.Balancer operations.
 	balancer.ClientConn // embed to intercept UpdateState, doesn't deal with SubConns
 
-	ba *balancerAggregator
+	es *endpointSharding
 
 	childState ChildState
 }
 
 func (bw *balancerWrapper) UpdateState(state balancer.State) {
-	bw.ba.mu.Lock()
+	bw.es.mu.Lock()
 	bw.childState.State = state
-	bw.ba.mu.Unlock()
-	bw.ba.updateState()
+	bw.es.mu.Unlock()
+	bw.es.updateState()
 }
 
 func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
