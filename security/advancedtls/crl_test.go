@@ -601,12 +601,12 @@ func TestRevokedCert(t *testing.T) {
 
 	for _, tt := range revocationTests {
 		t.Run(fmt.Sprintf("%v with x509 crl hash dir", tt.desc), func(t *testing.T) {
-			err := CheckRevocation(tt.in, RevocationConfig{
+			err := checkRevocation(tt.in, RevocationConfig{
 				RootDir:           testdata.Path("crl"),
 				AllowUndetermined: tt.allowUndetermined,
 				Cache:             cache,
 			})
-			t.Logf("CheckRevocation err = %v", err)
+			t.Logf("checkRevocation err = %v", err)
 			if tt.revoked && err == nil {
 				t.Error("Revoked certificate chain was allowed")
 			} else if !tt.revoked && err != nil {
@@ -614,11 +614,11 @@ func TestRevokedCert(t *testing.T) {
 			}
 		})
 		t.Run(fmt.Sprintf("%v with static provider", tt.desc), func(t *testing.T) {
-			err := CheckRevocation(tt.in, RevocationConfig{
+			err := checkRevocation(tt.in, RevocationConfig{
 				AllowUndetermined: tt.allowUndetermined,
 				CRLProvider:       cRLProvider,
 			})
-			t.Logf("CheckRevocation err = %v", err)
+			t.Logf("checkRevocation err = %v", err)
 			if tt.revoked && err == nil {
 				t.Error("Revoked certificate chain was allowed")
 			} else if !tt.revoked && err != nil {
@@ -739,7 +739,7 @@ func TestVerifyConnection(t *testing.T) {
 			cliCfg := tls.Config{
 				RootCAs: cp,
 				VerifyConnection: func(cs tls.ConnectionState) error {
-					return CheckRevocation(cs, RevocationConfig{RootDir: dir})
+					return checkRevocation(cs, RevocationConfig{RootDir: dir})
 				},
 			}
 			conn, err := tls.Dial(lis.Addr().Network(), lis.Addr().String(), &cliCfg)

@@ -548,7 +548,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 			if verifiedChains == nil {
 				verifiedChains = [][]*x509.Certificate{rawCertList}
 			}
-			if err := CheckChainRevocation(verifiedChains, *c.revocationConfig); err != nil {
+			if err := checkChainRevocation(verifiedChains, *c.revocationConfig); err != nil {
 				return err
 			}
 		}

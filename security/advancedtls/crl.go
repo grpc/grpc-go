@@ -192,7 +192,7 @@ func x509NameHash(r pkix.RDNSequence) string {
 	return fmt.Sprintf("%08x", fileHash)
 }
 
-// CheckRevocation checks the connection for revoked certificates based on RFC5280.
+// checkRevocation checks the connection for revoked certificates based on RFC5280.
 // This implementation has the following major limitations:
 //   - Indirect CRL files are not supported.
 //   - CRL loading is only supported from directories in the X509_LOOKUP_hash_dir format.
@@ -200,13 +200,13 @@ func x509NameHash(r pkix.RDNSequence) string {
 //   - Delta CRL files are not supported.
 //   - Certificate CRLDistributionPoint must be URLs, but are then ignored and converted into a file path.
 //   - CRL checks are done after path building, which goes against RFC4158.
-func CheckRevocation(conn tls.ConnectionState, cfg RevocationConfig) error {
-	return CheckChainRevocation(conn.VerifiedChains, cfg)
+func checkRevocation(conn tls.ConnectionState, cfg RevocationConfig) error {
+	return checkChainRevocation(conn.VerifiedChains, cfg)
 }
 
-// CheckChainRevocation checks the verified certificate chain
+// checkChainRevocation checks the verified certificate chain
 // for revoked certificates based on RFC5280.
-func CheckChainRevocation(verifiedChains [][]*x509.Certificate, cfg RevocationConfig) error {
+func checkChainRevocation(verifiedChains [][]*x509.Certificate, cfg RevocationConfig) error {
 	// Iterate the verified chains looking for one that is RevocationUnrevoked.
 	// A single RevocationUnrevoked chain is enough to allow the connection, and a single RevocationRevoked
 	// chain does not mean the connection should fail.
