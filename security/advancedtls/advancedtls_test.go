@@ -902,7 +902,7 @@ func (s) TestAdvancedTLSOverrideServerName(t *testing.T) {
 		RootOptions: RootCertificateOptions{
 			RootCACerts: cs.ClientTrust1,
 		},
-		ServerNameOverride: expectedServerName,
+		serverNameOverride: expectedServerName,
 	}
 	c, err := NewClientCreds(clientOptions)
 	if err != nil {
