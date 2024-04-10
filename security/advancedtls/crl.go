@@ -87,10 +87,6 @@ const (
 	RevocationRevoked
 )
 
-func (s revocationStatus) String() string {
-	return [...]string{"RevocationUndetermined", "RevocationUnrevoked", "RevocationRevoked"}[s]
-}
-
 // CRL contains a pkix.CertificateList and parsed extensions that aren't
 // provided by the golang CRL parser.
 // All CRLs should be loaded using NewCRL() for bytes directly or ReadCRLFile()
