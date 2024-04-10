@@ -51,16 +51,6 @@ curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/goo
 source ./scripts/protoc_installer.sh
 download_protoc $WORKDIR
 
-export PATH="$PATH:$GOBIN"
-
-PROTOC_PATH="/usr/local/bin"
-if [[ ":$PATH:" != *":$PROTOC_PATH:"* ]]; then
-  export PATH="$PATH:$PROTOC_PATH"
-  echo "protoc added to your PATH. You might need to open a new terminal"
-else
-  echo "protoc already appears to be on your PATH"
-fi
-
 mkdir -p "${WORKDIR}/out"
 
 # Generates sources without the embed requirement
@@ -76,7 +66,7 @@ LEGACY_SOURCES=(
 
 # Generates only the new gRPC Service symbols
 SOURCES=(
-  $(git ls-files --exclude-standard --cached --others "*.proto" | grep -v '^\(profiling/proto/service.proto\|reflection/grpc_reflection_v1alpha/reflection.proto\)$')
+  $(git ls-files --exclude-standard --cached --others "*.proto" | grep -v '^profiling/proto/service.proto$')
   "${WORKDIR}/grpc-proto/grpc/gcp/altscontext.proto"
   "${WORKDIR}/grpc-proto/grpc/gcp/handshaker.proto"
   "${WORKDIR}/grpc-proto/grpc/gcp/transport_security_common.proto"

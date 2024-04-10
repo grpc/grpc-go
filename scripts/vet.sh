@@ -32,11 +32,6 @@ if [[ "$1" = "-install" ]]; then
     honnef.co/go/tools/cmd/staticcheck \
     github.com/client9/misspell/cmd/misspell
   popd
-  if [[ -z "${VET_SKIP_PROTO}" ]]; then
-    source ./scripts/protoc_installer.sh
-    download_protoc
-    protoc --version
-  fi
   exit 0
 elif [[ "$#" -ne 0 ]]; then
   die "Unknown argument(s): $*"
