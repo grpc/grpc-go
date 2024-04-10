@@ -117,7 +117,7 @@ func (s) TestJoinDialOption(t *testing.T) {
 	}
 }
 
-// TestJoinDialOption tests the join server option. It configures a joined
+// TestJoinServerOption tests the join server option. It configures a joined
 // server option with three individual server options, and verifies that all
 // three are successfully applied.
 func (s) TestJoinServerOption(t *testing.T) {
