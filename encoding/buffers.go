@@ -136,3 +136,10 @@ func (s BufferSlice) Materialize() []byte {
 	s.WriteTo(out)
 	return out
 }
+
+func (s BufferSlice) LazyMaterialize(provider BufferProvider) *Buffer {
+	if len(s) == 1 {
+		return s[0].Ref()
+	}
+	return provider.GetAndSetBuffer(s.Len(), s.WriteTo)
+}

@@ -907,7 +907,7 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	}
 	err = cs.withRetry(op, func() { cs.bufferForRetryLocked(len(hdr)+payloadLen, op) })
 	if len(cs.binlogs) != 0 && err == nil {
-		mData := materialize(data, cs.cc.dopts.recvBufferPool)
+		mData := data.LazyMaterialize(cs.cc.dopts.recvBufferPool)
 		defer mData.Free()
 		cm := &binarylog.ClientMessage{
 			OnClientSide: true,
@@ -934,7 +934,7 @@ func (cs *clientStream) RecvMsg(m any) error {
 		return a.recvMsg(m, recvInfo)
 	}, cs.commitAttemptLocked)
 	if len(cs.binlogs) != 0 && err == nil {
-		mData := materialize(recvInfo.uncompressedBytes, cs.cc.dopts.recvBufferPool)
+		mData := recvInfo.uncompressedBytes.LazyMaterialize(cs.cc.dopts.recvBufferPool)
 		defer mData.Free()
 
 		sm := &binarylog.ServerMessage{
@@ -1062,7 +1062,7 @@ func (a *csAttempt) sendMsg(m any, hdr []byte, payld, data encoding.BufferSlice)
 		return io.EOF
 	}
 	if len(a.statsHandlers) != 0 {
-		mData := materialize(data, a.cs.cc.dopts.recvBufferPool)
+		mData := data.LazyMaterialize(a.cs.cc.dopts.recvBufferPool)
 		defer mData.Free()
 		for _, sh := range a.statsHandlers {
 			sh.HandleRPC(a.ctx, outPayload(true, m, mData.ReadOnlyData(), payloadLen, time.Now()))
@@ -1116,7 +1116,7 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 		a.mu.Unlock()
 	}
 	if len(a.statsHandlers) != 0 {
-		mData := materialize(payInfo.uncompressedBytes, a.cs.cc.dopts.recvBufferPool)
+		mData := payInfo.uncompressedBytes.LazyMaterialize(a.cs.cc.dopts.recvBufferPool)
 		defer mData.Free()
 		for _, sh := range a.statsHandlers {
 			sh.HandleRPC(a.ctx, &stats.InPayload{
@@ -1684,7 +1684,7 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 
 	var mData *encoding.Buffer
 	if len(ss.binlogs) != 0 || len(ss.statsHandler) != 0 {
-		mData = materialize(data, ss.p.recvBufferPool)
+		mData = data.LazyMaterialize(ss.p.recvBufferPool)
 		defer mData.Free()
 	}
 
@@ -1763,7 +1763,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		return toRPCErr(err)
 	}
 	if len(ss.statsHandler) != 0 {
-		mData := materialize(payInfo.uncompressedBytes, ss.p.recvBufferPool)
+		mData := payInfo.uncompressedBytes.LazyMaterialize(ss.p.recvBufferPool)
 		defer mData.Free()
 		for _, sh := range ss.statsHandler {
 			sh.HandleRPC(ss.s.Context(), &stats.InPayload{

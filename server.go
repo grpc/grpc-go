@@ -1174,7 +1174,7 @@ func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, 
 	err = t.Write(stream, hdr, payload, opts)
 	if err == nil {
 		if len(s.opts.statsHandlers) != 0 {
-			mData := materialize(data, s.opts.recvBufferPool)
+			mData := data.LazyMaterialize(s.opts.recvBufferPool)
 			defer mData.Free()
 			for _, sh := range s.opts.statsHandlers {
 				sh.HandleRPC(ctx, outPayload(false, msg, mData.ReadOnlyData(), payloadLen, time.Now()))
@@ -1374,9 +1374,14 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
-		if len(shs) != 0 {
-			mData := materialize(d, s.opts.recvBufferPool)
+
+		var mData *encoding.Buffer
+		if len(shs) != 0 || len(binlogs) != 0 {
+			mData = d.LazyMaterialize(s.opts.recvBufferPool)
 			defer mData.Free()
+		}
+
+		if len(shs) != 0 {
 			for _, sh := range shs {
 				sh.HandleRPC(ctx, &stats.InPayload{
 					RecvTime:         time.Now(),
@@ -1390,7 +1395,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 		}
 		if len(binlogs) != 0 {
 			cm := &binarylog.ClientMessage{
-				Message: d,
+				Message: mData.ReadOnlyData(),
 			}
 			for _, binlog := range binlogs {
 				binlog.Log(ctx, cm)

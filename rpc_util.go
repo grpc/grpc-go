@@ -694,7 +694,7 @@ func compress(in encoding.BufferSlice, cp Compressor, compressor encoding.Compre
 		// there is no way around this with the old Compressor API. At least it attempts
 		// to return the buffer to the provider, in the hopes it can be reused (maybe
 		// even by a subsequent call to this very function).
-		buf := provider.GetAndSetBuffer(in.Len(), in.WriteTo)
+		buf := in.LazyMaterialize(provider)
 		defer buf.Free()
 		if err := cp.Do(w, buf.ReadOnlyData()); err != nil {
 			return nil, 0, wrapErr(err)
@@ -859,10 +859,6 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m any, m
 		return status.Errorf(codes.Internal, "grpc: failed to unmarshal the received message: %v", err)
 	}
 	return nil
-}
-
-func materialize(data encoding.BufferSlice, provider encoding.BufferProvider) *encoding.Buffer {
-	return provider.GetAndSetBuffer(data.Len(), data.WriteTo)
 }
 
 // Information about RPC

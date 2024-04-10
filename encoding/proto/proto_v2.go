@@ -61,11 +61,10 @@ func (c *codecV2) Unmarshal(data encoding.BufferSlice, v any) (err error) {
 
 	defer data.Free()
 
-	buf := c.Get(data.Len())
-	defer c.Put(buf)
-	data.WriteTo(buf)
+	buf := data.LazyMaterialize(c)
+	defer buf.Free()
 	// TODO: Upgrade proto.Unmarshal to support encoding.BufferSlice
-	return proto.Unmarshal(buf, vv)
+	return proto.Unmarshal(buf.ReadOnlyData(), vv)
 }
 
 func (c *codecV2) Name() string {
