@@ -229,7 +229,7 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 	var revocationTests = []struct {
 		desc    string
 		in      x509.Certificate
-		revoked RevocationStatus
+		revoked revocationStatus
 	}{
 		{
 			desc: "Single revoked",

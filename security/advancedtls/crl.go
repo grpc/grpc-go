@@ -75,19 +75,19 @@ type RevocationConfig struct {
 	CRLProvider CRLProvider
 }
 
-// RevocationStatus is the revocation status for a certificate or chain.
-type RevocationStatus int
+// revocationStatus is the revocation status for a certificate or chain.
+type revocationStatus int
 
 const (
 	// RevocationUndetermined means we couldn't find or verify a CRL for the cert.
-	RevocationUndetermined RevocationStatus = iota
+	RevocationUndetermined revocationStatus = iota
 	// RevocationUnrevoked means we found the CRL for the cert and the cert is not revoked.
 	RevocationUnrevoked
 	// RevocationRevoked means we found the CRL and the cert is revoked.
 	RevocationRevoked
 )
 
-func (s RevocationStatus) String() string {
+func (s revocationStatus) String() string {
 	return [...]string{"RevocationUndetermined", "RevocationUnrevoked", "RevocationRevoked"}[s]
 }
 
@@ -210,7 +210,7 @@ func checkChainRevocation(verifiedChains [][]*x509.Certificate, cfg RevocationCo
 	// Iterate the verified chains looking for one that is RevocationUnrevoked.
 	// A single RevocationUnrevoked chain is enough to allow the connection, and a single RevocationRevoked
 	// chain does not mean the connection should fail.
-	count := make(map[RevocationStatus]int)
+	count := make(map[revocationStatus]int)
 	for _, chain := range verifiedChains {
 		switch checkChain(chain, cfg) {
 		case RevocationUnrevoked:
@@ -236,7 +236,7 @@ func checkChainRevocation(verifiedChains [][]*x509.Certificate, cfg RevocationCo
 // 1. If any certificate is RevocationRevoked, return RevocationRevoked.
 // 2. If any certificate is RevocationUndetermined, return RevocationUndetermined.
 // 3. If all certificates are RevocationUnrevoked, return RevocationUnrevoked.
-func checkChain(chain []*x509.Certificate, cfg RevocationConfig) RevocationStatus {
+func checkChain(chain []*x509.Certificate, cfg RevocationConfig) revocationStatus {
 	chainStatus := RevocationUnrevoked
 	for _, c := range chain {
 		switch checkCert(c, chain, cfg) {
@@ -318,7 +318,7 @@ func fetchCRL(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revocat
 // RevocationUndetermined.
 // c is the certificate to check.
 // crlVerifyCrt is the group of possible certificates to verify the crl.
-func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) RevocationStatus {
+func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) revocationStatus {
 	crl, err := fetchCRL(c, crlVerifyCrt, cfg)
 	if err != nil {
 		// We couldn't load any valid CRL files for the certificate, so we don't
@@ -343,7 +343,7 @@ func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revoca
 	return revocation
 }
 
-func checkCertRevocation(c *x509.Certificate, crl *CRL) (RevocationStatus, error) {
+func checkCertRevocation(c *x509.Certificate, crl *CRL) (revocationStatus, error) {
 	// Per section 5.3.3 we prime the certificate issuer with the CRL issuer.
 	// Subsequent entries use the previous entry's issuer.
 	rawEntryIssuer := crl.rawIssuer
