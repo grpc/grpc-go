@@ -189,9 +189,10 @@ type ClientOptions struct {
 	// By default, the maximum version supported by this package is used,
 	// which is currently TLS 1.3.
 	MaxVersion uint16
-	// serverNameOverride is for testing only. If set to a non-empty string,
-	// it will override the virtual host name of authority (e.g. :authority
-	// header field) in requests.
+	// serverNameOverride is for testing only. If set to a non-empty string, it
+	// will override the virtual host name of authority (e.g. :authority header
+	// field) in requests and the target hostname used during server cert
+	// verification.
 	serverNameOverride string
 }
 
