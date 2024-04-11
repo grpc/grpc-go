@@ -19,7 +19,7 @@
  *
  */
 
-package advancedtls
+package revocation
 
 import (
 	"bytes"
@@ -43,7 +43,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-var grpclogLogger = grpclog.Component("advancedtls")
+var grpclogLogger = grpclog.Component("revocation")
 
 // Cache is an interface to cache CRL files.
 // The cache implementation must be concurrency safe.

@@ -16,7 +16,7 @@
  *
  */
 
-package advancedtls
+package revocation
 
 import (
 	"crypto/x509"

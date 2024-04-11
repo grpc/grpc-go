@@ -19,7 +19,7 @@
  *
  */
 
-package advancedtls
+package revocation
 
 import (
 	"crypto/ecdsa"
