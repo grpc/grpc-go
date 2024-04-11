@@ -247,7 +247,7 @@ func (x *Channel) GetSocketRef() []*SocketRef {
 }
 
 // Subchannel is a logical grouping of channels, subchannels, and sockets.
-// A subchannel is load balanced over by it's ancestor
+// A subchannel is load balanced over by its ancestor
 type Subchannel struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
