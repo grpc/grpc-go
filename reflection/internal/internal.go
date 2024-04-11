@@ -39,15 +39,20 @@ import (
 	v1alphareflectionpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 )
 
+// ServiceInfoProvider is an interface used to retrieve metadata about the
+// services to expose.
 type ServiceInfoProvider interface {
 	GetServiceInfo() map[string]grpc.ServiceInfo
 }
 
+// ExtensionResolver is the interface used to query details about extensions.
+// This interface is satisfied by protoregistry.GlobalTypes.
 type ExtensionResolver interface {
 	protoregistry.ExtensionTypeResolver
 	RangeExtensionsByMessage(message protoreflect.FullName, f func(protoreflect.ExtensionType) bool)
 }
 
+// ServerReflectionServer is the server API for ServerReflection service.
 type ServerReflectionServer struct {
 	v1alphareflectiongrpc.UnimplementedServerReflectionServer
 	S            ServiceInfoProvider
@@ -242,6 +247,7 @@ func (s *ServerReflectionServer) ServerReflectionInfo(stream v1reflectiongrpc.Se
 	}
 }
 
+// V1ToV1AlphaResponse converts a v1 ServerReflectionResponse to a v1alpha.
 func V1ToV1AlphaResponse(v1 *v1reflectionpb.ServerReflectionResponse) *v1alphareflectionpb.ServerReflectionResponse {
 	var v1alpha v1alphareflectionpb.ServerReflectionResponse
 	v1alpha.ValidHost = v1.ValidHost
@@ -295,6 +301,7 @@ func V1ToV1AlphaResponse(v1 *v1reflectionpb.ServerReflectionResponse) *v1alphare
 	return &v1alpha
 }
 
+// V1AlphaToV1Request converts a v1alpha ServerReflectionRequest to a v1.
 func V1AlphaToV1Request(v1alpha *v1alphareflectionpb.ServerReflectionRequest) *v1reflectionpb.ServerReflectionRequest {
 	var v1 v1reflectionpb.ServerReflectionRequest
 	v1.Host = v1alpha.Host
@@ -330,6 +337,7 @@ func V1AlphaToV1Request(v1alpha *v1alphareflectionpb.ServerReflectionRequest) *v
 	return &v1
 }
 
+// V1ToV1AlphaRequest converts a v1 ServerReflectionRequest to a v1alpha.
 func V1ToV1AlphaRequest(v1 *v1reflectionpb.ServerReflectionRequest) *v1alphareflectionpb.ServerReflectionRequest {
 	var v1alpha v1alphareflectionpb.ServerReflectionRequest
 	v1alpha.Host = v1.Host
@@ -373,6 +381,7 @@ func V1ToV1AlphaRequest(v1 *v1reflectionpb.ServerReflectionRequest) *v1alpharefl
 	return &v1alpha
 }
 
+// V1AlphaToV1Response converts a v1alpha ServerReflectionResponse to a v1.
 func V1AlphaToV1Response(v1alpha *v1alphareflectionpb.ServerReflectionResponse) *v1reflectionpb.ServerReflectionResponse {
 	var v1 v1reflectionpb.ServerReflectionResponse
 	v1.ValidHost = v1alpha.ValidHost
