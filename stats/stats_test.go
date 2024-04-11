@@ -24,6 +24,7 @@ import (
 	"io"
 	"net"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -808,6 +809,16 @@ func (h *statshandler) HandleConn(ctx context.Context, s stats.ConnStats) {
 func (h *statshandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	switch stats := s.(type) {
+	case *stats.OutPayload:
+		statsCopy := *stats
+		statsCopy.Data = slices.Clone(statsCopy.Data)
+		s = &statsCopy
+	case *stats.InPayload:
+		statsCopy := *stats
+		statsCopy.Data = slices.Clone(statsCopy.Data)
+		s = &statsCopy
+	}
 	h.gotRPC = append(h.gotRPC, &gotData{ctx, s.IsClient(), s})
 }
 

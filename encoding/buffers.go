@@ -76,7 +76,7 @@ func (r *Reader) Len() int {
 
 func (r *Reader) Read(buf []byte) (n int, _ error) {
 	for len(buf) != 0 && r.len != 0 {
-		data := r.data[r.idx].ReadOnlyData()
+		data := r.data[0].ReadOnlyData()
 		copied := copy(buf, data[r.idx:])
 		r.len -= copied
 

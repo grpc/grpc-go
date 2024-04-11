@@ -800,11 +800,12 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 		if dc != nil {
 			var uncompressedBuf []byte
 			uncompressedBuf, err = dc.Do(compressed.Reader())
-			if err != nil {
+			if err == nil {
 				out = encoding.BufferSlice{encoding.NewBuffer(uncompressedBuf, nil)}
 			}
+			size = len(uncompressedBuf)
 		} else {
-			out, err = decompress(compressor, compressed, maxReceiveMessageSize, p.recvBufferPool)
+			out, size, err = decompress(compressor, compressed, maxReceiveMessageSize, p.recvBufferPool)
 		}
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message: %v", err)
@@ -830,19 +831,39 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 
 // Using compressor, decompress d, returning data and size.
 // Optionally, if data will be over maxReceiveMessageSize, just return the size.
-func decompress(compressor encoding.Compressor, d encoding.BufferSlice, maxReceiveMessageSize int, provider encoding.BufferProvider) (encoding.BufferSlice, error) {
+func decompress(compressor encoding.Compressor, d encoding.BufferSlice, maxReceiveMessageSize int, provider encoding.BufferProvider) (encoding.BufferSlice, int, error) {
 	dcReader, err := compressor.Decompress(d.Reader())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+
+	// TODO: Can/should this still be preserved with the new BufferSlice API?
+	//if sizer, ok := compressor.(interface {
+	//	DecompressedSize(compressedBytes []byte) int
+	//}); ok {
+	//	if size := sizer.DecompressedSize(d); size >= 0 {
+	//		if size > maxReceiveMessageSize {
+	//			return nil, size, nil
+	//		}
+	//		// size is used as an estimate to size the buffer, but we
+	//		// will read more data if available.
+	//		// +MinRead so ReadFrom will not reallocate if size is correct.
+	//		//
+	//		// TODO: If we ensure that the buffer size is the same as the DecompressedSize,
+	//		// we can also utilize the recv buffer pool here.
+	//		buf := bytes.NewBuffer(make([]byte, 0, size+bytes.MinRead))
+	//		bytesRead, err := buf.ReadFrom(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+	//		return buf.Bytes(), int(bytesRead), err
+	//	}
+	//}
 
 	var out encoding.BufferSlice
 	_, err = io.Copy(encoding.NewWriter(&out, provider), io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
 	if err != nil {
 		out.Free()
-		return nil, err
+		return nil, 0, err
 	}
-	return out, nil
+	return out, out.Len(), nil
 }
 
 // For the two compressor parameters, both should not be set, but if they are,
@@ -853,9 +874,9 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m any, m
 	if err != nil {
 		return err
 	}
-	defer data.Free()
 
 	if err := c.Unmarshal(data, m); err != nil {
+		data.Free()
 		return status.Errorf(codes.Internal, "grpc: failed to unmarshal the received message: %v", err)
 	}
 	return nil

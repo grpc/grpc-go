@@ -907,11 +907,9 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	}
 	err = cs.withRetry(op, func() { cs.bufferForRetryLocked(len(hdr)+payloadLen, op) })
 	if len(cs.binlogs) != 0 && err == nil {
-		mData := data.LazyMaterialize(cs.cc.dopts.recvBufferPool)
-		defer mData.Free()
 		cm := &binarylog.ClientMessage{
 			OnClientSide: true,
-			Message:      mData.ReadOnlyData(),
+			Message:      data,
 		}
 		for _, binlog := range cs.binlogs {
 			binlog.Log(cs.ctx, cm)
@@ -934,12 +932,9 @@ func (cs *clientStream) RecvMsg(m any) error {
 		return a.recvMsg(m, recvInfo)
 	}, cs.commitAttemptLocked)
 	if len(cs.binlogs) != 0 && err == nil {
-		mData := recvInfo.uncompressedBytes.LazyMaterialize(cs.cc.dopts.recvBufferPool)
-		defer mData.Free()
-
 		sm := &binarylog.ServerMessage{
 			OnClientSide: true,
-			Message:      mData.ReadOnlyData(),
+			Message:      recvInfo.uncompressedBytes,
 		}
 		for _, binlog := range cs.binlogs {
 			binlog.Log(cs.ctx, sm)
@@ -1682,12 +1677,6 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 		return toRPCErr(err)
 	}
 
-	var mData *encoding.Buffer
-	if len(ss.binlogs) != 0 || len(ss.statsHandler) != 0 {
-		mData = data.LazyMaterialize(ss.p.recvBufferPool)
-		defer mData.Free()
-	}
-
 	if len(ss.binlogs) != 0 {
 		if !ss.serverHeaderBinlogged {
 			h, _ := ss.s.Header()
@@ -1700,13 +1689,15 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 			}
 		}
 		sm := &binarylog.ServerMessage{
-			Message: mData.ReadOnlyData(),
+			Message: data,
 		}
 		for _, binlog := range ss.binlogs {
 			binlog.Log(ss.ctx, sm)
 		}
 	}
 	if len(ss.statsHandler) != 0 {
+		mData := data.LazyMaterialize(ss.p.recvBufferPool)
+		defer mData.Free()
 		for _, sh := range ss.statsHandler {
 			sh.HandleRPC(ss.s.Context(), outPayload(false, m, mData.ReadOnlyData(), payloadLen, time.Now()))
 		}
@@ -1771,7 +1762,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 				Payload:  m,
 				// TODO truncate large payload.
 				Data:             mData.ReadOnlyData(),
-				Length:           len(payInfo.uncompressedBytes),
+				Length:           len(mData.ReadOnlyData()),
 				WireLength:       payInfo.compressedLength + headerLen,
 				CompressedLength: payInfo.compressedLength,
 			})
