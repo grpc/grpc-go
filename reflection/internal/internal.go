@@ -16,6 +16,9 @@
  *
  */
 
+// Package internal contains code that is shared by both reflection package and
+// the test package. The packages are split in this way inorder to avoid
+// depenedency to deprecated package github.com/golang/protobuf.
 package internal
 
 import (
