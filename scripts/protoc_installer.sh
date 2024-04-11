@@ -2,7 +2,8 @@
 # Install protoc
 PROTOC_VERSION="25.2"
 
-# Function to download pre-built binaries for Linux
+# Function to download pre-built binaries for Linux with
+# ARCH as $1, OS as $2, and WORKDIR as $3 arguments.
 download_binary() {
   # Download URL (adjust if a newer release is available)
   DOWNLOAD_URL="https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-$2-$1.zip"
@@ -13,7 +14,8 @@ download_binary() {
   rm "protoc-${PROTOC_VERSION}-$2-$1.zip"
 }
 
-download_protoc() {
+# Function to install protoc with WORKDIR as argument
+install_protoc() {
   # Determine architecture
   if [[ $(uname -m) == "x86_64" ]]; then
     ARCH="x86_64"

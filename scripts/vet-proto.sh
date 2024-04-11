@@ -28,10 +28,6 @@ if [[ "$1" = "-install" ]]; then
       unzip ${PROTOC_FILENAME}
       protoc --version # Check that the binary works.
     popd
-  elif [[ -z "${VET_SKIP_PROTO}" ]]; then
-    source ./scripts/protoc_installer.sh
-    download_protoc
-    protoc --version
   else
     # TODO: replace with install protoc when https://github.com/grpc/grpc-go/pull/7064 is merged.
     die "-install currently intended for use in CI only."
