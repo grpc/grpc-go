@@ -76,6 +76,7 @@ type InPayload struct {
 	// Payload is the payload with original type.
 	Payload any
 	// Data is the serialized message payload.
+	// Deprecated: Data will be removed in the next release.
 	Data []byte
 
 	// Length is the size of the uncompressed payload data. Does not include any
@@ -146,6 +147,7 @@ type OutPayload struct {
 	// Payload is the payload with original type.
 	Payload any
 	// Data is the serialized message payload.
+	// Deprecated: Data will be removed in the next release.
 	Data []byte
 	// Length is the size of the uncompressed payload data. Does not include any
 	// framing (gRPC or HTTP/2).
