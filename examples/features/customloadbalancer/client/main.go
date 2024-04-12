@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	_ "google.golang.org/grpc/examples/features/customloadbalancer/client/customroundrobin" // To register custom_round_robin.
-	"google.golang.org/grpc/examples/features/proto/echo"
+	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -37,8 +37,8 @@ import (
 )
 
 var (
-	addr1 = "localhost:20000"
-	addr2 = "localhost:20001"
+	addr1 = "localhost:50050"
+	addr2 = "localhost:50051"
 )
 
 func main() {
@@ -64,7 +64,7 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	ec := echo.NewEchoClient(cc)
+	ec := pb.NewEchoClient(cc)
 	if err := waitForDistribution(ctx, ec); err != nil {
 		log.Fatalf(err.Error())
 	}
@@ -74,7 +74,7 @@ func main() {
 // waitForDistribution makes RPC's on the echo client until 3 RPC's follow the
 // same 1:2 address ratio for the peer. Returns an error if fails to do so
 // before context timeout.
-func waitForDistribution(ctx context.Context, ec echo.EchoClient) error {
+func waitForDistribution(ctx context.Context, ec pb.EchoClient) error {
 	for {
 		results := make(map[string]uint32)
 	InnerLoop:
@@ -87,13 +87,13 @@ func waitForDistribution(ctx context.Context, ec echo.EchoClient) error {
 				res := make(map[string]uint32)
 				for j := 0; j < 3; j++ {
 					var peer peer.Peer
-					r, err := ec.UnaryEcho(ctx, &echo.EchoRequest{Message: "this is examples/customloadbalancing"}, grpc.Peer(&peer))
+					r, err := ec.UnaryEcho(ctx, &pb.EchoRequest{Message: "this is examples/customloadbalancing"}, grpc.Peer(&peer))
 					if err != nil {
 						return fmt.Errorf("UnaryEcho failed: %v", err)
 					}
 					fmt.Println(r)
 					peerAddr := peer.Addr.String()
-					if strings.HasSuffix(peerAddr, addr1) || strings.HasSuffix(peerAddr, addr2) {
+					if !strings.HasSuffix(peerAddr, "50050") && !strings.HasSuffix(peerAddr, "50051") {
 						return fmt.Errorf("peer address was not one of %v or %v, got: %v", addr1, addr2, peerAddr)
 					}
 					res[peerAddr]++

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	_ "google.golang.org/grpc" // to register pick_first
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/endpointsharding"
 	"google.golang.org/grpc/connectivity"
@@ -30,13 +31,8 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-var gracefulSwitchPickFirst serviceconfig.LoadBalancingConfig
-
 func init() {
 	balancer.Register(customRoundRobinBuilder{})
-	// Hardcode a pick first with no shuffling, since this is a petiole, and
-	// that is what petiole policies will interact with.
-	gracefulSwitchPickFirst, _ = endpointsharding.ParseConfig(json.RawMessage(endpointsharding.PickFirstConfig))
 }
 
 const customRRName = "custom_round_robin"
@@ -103,6 +99,7 @@ func (crr *customRoundRobin) UpdateClientConnState(state balancer.ClientConnStat
 	// A call to UpdateClientConnState should always produce a new Picker.  That
 	// is guaranteed to happen since the aggregator will always call
 	// UpdateChildState in its UpdateClientConnState.
+	gracefulSwitchPickFirst, _ := endpointsharding.ParseConfig(json.RawMessage(endpointsharding.PickFirstConfig))
 	return crr.Balancer.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: gracefulSwitchPickFirst,
 		ResolverState:  state.ResolverState,

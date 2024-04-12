@@ -86,7 +86,6 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 	if len(state.ResolverState.Endpoints) == 0 {
 		return errors.New("endpoints list is empty")
 	}
-
 	// Check/return early if any endpoints have no addresses.
 	// TODO: make this configurable if needed.
 	for i, endpoint := range state.ResolverState.Endpoints {
@@ -147,7 +146,6 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 		}
 	}
 	es.children.Store(newChildren)
-
 	return ret
 }
 
@@ -233,7 +231,6 @@ func (es *endpointSharding) updateState() {
 		aggState = connectivity.TransientFailure
 		pickers = []balancer.Picker{base.NewErrPicker(errors.New("no children to pick from"))}
 	} // No children (resolver error before valid update).
-
 	p := &pickerWithChildStates{
 		pickers:     pickers,
 		childStates: childStates,

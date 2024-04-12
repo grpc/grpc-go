@@ -40,13 +40,13 @@ useful functionality, such as Sticky Transient Failure, Happy Eyeballs, and
 Health Checking.
 
 ```
-this is examples/customloadbalancing (from localhost:20000)
-this is examples/customloadbalancing (from localhost:20000)
-this is examples/customloadbalancing (from localhost:20001)
-this is examples/customloadbalancing (from localhost:20000)
-this is examples/customloadbalancing (from localhost:20000)
-this is examples/customloadbalancing (from localhost:20001)
-this is examples/customloadbalancing (from localhost:20000)
-this is examples/customloadbalancing (from localhost:20000)
-this is examples/customloadbalancing (from localhost:20001)
+this is examples/customloadbalancing (from localhost:50050)
+this is examples/customloadbalancing (from localhost:50050)
+this is examples/customloadbalancing (from localhost:50051)
+this is examples/customloadbalancing (from localhost:50050)
+this is examples/customloadbalancing (from localhost:50050)
+this is examples/customloadbalancing (from localhost:50051)
+this is examples/customloadbalancing (from localhost:50050)
+this is examples/customloadbalancing (from localhost:50050)
+this is examples/customloadbalancing (from localhost:50051)
 ```

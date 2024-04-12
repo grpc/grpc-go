@@ -110,7 +110,7 @@ declare -A EXPECTED_SERVER_OUTPUT=(
     ["features/authz"]="unary echoing message \"hello world\""
     ["features/cancellation"]="server: error receiving from stream: rpc error: code = Canceled desc = context canceled"
     ["features/compression"]="UnaryEcho called with message \"compress\""
-    ["features/customloadbalancer"]="serving on localhost:20000"
+    ["features/customloadbalancer"]="serving on localhost:50051"
     ["features/deadline"]=""
     ["features/encryption/TLS"]=""
     ["features/error_details"]=""
