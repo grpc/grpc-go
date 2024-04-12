@@ -16,7 +16,8 @@
  *
  */
 
-// Package endpointsharding implements a endpointSharding helper.
+// Package endpointsharding implements a load balancing policy that manages
+// homogenous child policies each owning a single endpoint.
 //
 // # Experimental
 //
@@ -47,7 +48,8 @@ type ChildState struct {
 	State    balancer.State
 }
 
-// NewBalancer returns a new endpointSharding.
+// NewBalancer returns a load balancing policy that manages homogenous child
+// policies each owning a single endpoint.
 func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	es := &endpointSharding{
 		cc:    cc,
@@ -258,8 +260,8 @@ func (p *pickerWithChildStates) Pick(info balancer.PickInfo) (balancer.PickResul
 	return picker.Pick(info)
 }
 
-// ChildStatesFromPicker returns the child states from the picker that are
-// managed by this balancer.
+// ChildStatesFromPicker returns the state of all the children managed by the
+// endpoint sharding balancer that created this picker.
 func ChildStatesFromPicker(picker balancer.Picker) []ChildState {
 	p, ok := picker.(*pickerWithChildStates)
 	if !ok {
