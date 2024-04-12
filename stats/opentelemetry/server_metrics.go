@@ -87,7 +87,7 @@ func (ssh *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 
 	mi := &metricsInfo{
 		startTime: time.Now(),
-		method:    removeLeadingSlash(method),
+		method:    method,
 	}
 	ri := &rpcInfo{
 		mi: mi,

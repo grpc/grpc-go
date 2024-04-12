@@ -187,7 +187,7 @@ func (csh *clientStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInf
 	} else {
 		st = "OK"
 	}
-	clientAttributeOption := metric.WithAttributes(attribute.String("grpc.method", removeLeadingSlash(ci.method)), attribute.String("grpc.target", ci.target), attribute.String("grpc.status", st))
+	clientAttributeOption := metric.WithAttributes(attribute.String("grpc.method", ci.method), attribute.String("grpc.target", ci.target), attribute.String("grpc.status", st))
 	if csh.clientMetrics.attemptDuration != nil {
 		csh.clientMetrics.attemptDuration.Record(ctx, latency, clientAttributeOption)
 	}
