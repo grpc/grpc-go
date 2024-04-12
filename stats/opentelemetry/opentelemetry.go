@@ -44,7 +44,9 @@ var EmptyMetrics = Metrics{}
 // MetricName is a name of a metric.
 type MetricName string
 
-// Metrics is a set of metrics to record. Once created, Metrics is immutable.
+// Metrics is a set of metrics to record. Once created, Metrics is immutable,
+// however Add and Remove can make copies with specific metrics added or
+// removed, respectively.
 type Metrics struct {
 	// metrics are the set of metrics to initialize.
 	metrics map[MetricName]bool
@@ -94,19 +96,19 @@ type MetricsOptions struct {
 	// Metrics are the metrics to instrument. Will turn on the corresponding
 	// metric supported by the client and server instrumentation components if
 	// applicable.
-	Metrics Metrics
+	Metrics *Metrics
 	// TargetAttributeFilter is a callback that takes the target string of the
 	// channel and returns a bool representing whether to use target as a label
 	// value or use the string "other". If unset, will use the target string as
-	// is.
+	// is. This only applies for client side metrics.
 	TargetAttributeFilter func(string) bool
 
 	// MethodAttributeFilter is to record the method name of RPCs handled by
 	// grpc.UnknownServiceHandler, but take care to limit the values allowed, as
 	// allowing too many will increase cardinality and could cause severe memory
-	// or performance problems. Only applicable on server side. On Client Side,
-	// pass a grpc.StaticMethodCallOption as a call option into Invoke or
-	// NewStream.
+	// or performance problems. On Client Side, pass a
+	// grpc.StaticMethodCallOption as a call option into Invoke or NewStream.
+	// This only applies for server side metrics.
 	MethodAttributeFilter func(string) bool
 }
 
@@ -117,11 +119,11 @@ type MetricsOptions struct {
 // pass the dial option returned from this function as a dial option to
 // grpc.NewClient().
 //
-// For the metrics supported by this instrumentation code, a user needs to
-// specify the client metrics to record in metrics options. A user also needs to
-// provide an implementation of a MeterProvider. If the passed in Meter Provider
-// does not have the view configured for an individual metric turned on, the API
-// call in this component will create a default view for that metric.
+// For the metrics supported by this instrumentation code, specify the client
+// metrics to record in metrics options. Also provide an implementation of a
+// MeterProvider. If the passed in Meter Provider does not have the view
+// configured for an individual metric turned on, the API call in this component
+// will create a default view for that metric.
 func DialOption(mo MetricsOptions) grpc.DialOption {
 	csh := &clientStatsHandler{mo: mo}
 	csh.initializeMetrics()
@@ -135,11 +137,11 @@ func DialOption(mo MetricsOptions) grpc.DialOption {
 // the server option returned from this function as an argument to
 // grpc.NewServer().
 //
-// For the metrics supported by this instrumentation code, a user needs to
-// specify the client metrics to record in metrics options. A user also needs to
-// provide an implementation of a MeterProvider. If the passed in Meter Provider
-// does not have the view configured for an individual metric turned on, the API
-// call in this component will create a default view for that metric.
+// For the metrics supported by this instrumentation code, specify the client
+// metrics to record in metrics options. Also provide an implementation of a
+// MeterProvider. If the passed in Meter Provider does not have the view
+// configured for an individual metric turned on, the API call in this component
+// will create a default view for that metric.
 func ServerOption(mo MetricsOptions) grpc.ServerOption {
 	ssh := &serverStatsHandler{mo: mo}
 	ssh.initializeMetrics()

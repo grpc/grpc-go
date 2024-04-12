@@ -163,7 +163,7 @@ const (
 )
 
 // DefaultServerMetrics are the default server metrics provided by this module.
-var DefaultServerMetrics = *EmptyMetrics.Add("grpc.server.call.started").
+var DefaultServerMetrics = EmptyMetrics.Add("grpc.server.call.started").
 	Add("grpc.server.call.sent_total_compressed_message_size").
 	Add("grpc.server.call.rcvd_total_compressed_message_size").
 	Add("grpc.server.call.duration")

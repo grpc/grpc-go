@@ -219,7 +219,7 @@ const (
 )
 
 // DefaultClientMetrics are the default client metrics provided by this module.
-var DefaultClientMetrics = *EmptyMetrics.Add(ClientAttemptStartedName).
+var DefaultClientMetrics = EmptyMetrics.Add(ClientAttemptStartedName).
 	Add(ClientAttemptDurationName).
 	Add(ClientAttemptSentCompressedTotalMessageSize).
 	Add(ClientAttemptRcvdCompressedTotalMessageSize).
