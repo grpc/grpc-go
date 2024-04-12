@@ -20,6 +20,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -794,7 +795,7 @@ func (s) TestClientSendsAGoAway(t *testing.T) {
 	}
 	ct := val.(*clientTester)
 	goAwayReceived := make(chan struct{})
-	errCh := make(chan struct{})
+	errCh := make(chan error)
 	go func() {
 		for {
 			f, err := ct.fr.ReadFrame()
@@ -810,6 +811,7 @@ func (s) TestClientSendsAGoAway(t *testing.T) {
 				}
 			default:
 				t.Errorf("server tester received unexpected frame type %T", f)
+				errCh <- fmt.Errorf("server tester received unexpected frame type %T", f)
 				close(errCh)
 			}
 		}
@@ -818,7 +820,7 @@ func (s) TestClientSendsAGoAway(t *testing.T) {
 	defer ct.conn.Close()
 	select {
 	case <-goAwayReceived:
-	case <-errCh:
+	case err := <-errCh:
 		t.Errorf("Error receiving the goAway: %v", err)
 	case <-ctx.Done():
 		t.Errorf("Context timed out")

@@ -409,7 +409,8 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	go t.reader(readerErrCh)
 	defer func() {
 		if err != nil {
-			// writerDone should be closed since the loopy goroutine wouldn't have started in the case this function returns an error.
+			// writerDone should be closed since the loopy goroutine
+			// wouldn't have started in the case this function returns an error.
 			close(t.writerDone)
 			t.Close(err)
 		}
@@ -523,7 +524,7 @@ func (t *http2Client) getPeer() *peer.Peer {
 // OutgoingGoAwayHandler writes a GOAWAY to the connection.  Always returns (false, err) as we want the GoAway
 // to be the last frame loopy writes to the transport.
 func (t *http2Client) outgoingGoAwayHandler(g *goAway) (bool, error) {
-	if err := t.framer.fr.WriteGoAway(math.MaxUint32, http2.ErrCodeNo, g.debugData); err != nil {
+	if err := t.framer.fr.WriteGoAway(math.MaxInt32*3/4, http2.ErrCodeNo, g.debugData); err != nil {
 		return false, err
 	}
 	return false, g.closeConn
@@ -1005,7 +1006,7 @@ func (t *http2Client) Close(err error) {
 	t.mu.Unlock()
 	// Per HTTP/2 spec, a GOAWAY frame must be sent before closing the
 	// connection. See https://httpwg.org/specs/rfc7540.html#GOAWAY.
-	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(fmt.Sprintf("client shutdown with: %v", err)), closeConn: err})
+	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(err.Error()), closeConn: err})
 	<-t.writerDone
 	t.cancel()
 	t.conn.Close()

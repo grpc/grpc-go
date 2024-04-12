@@ -2718,14 +2718,12 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 				t.Logf("Received goAway frame from client")
 				close(errorCh)
 			} else {
-				t.Logf("Received unexpected goAway frame from client")
-				errorCh <- errors.New("received unexpected goAway frame from client")
+				errorCh <- fmt.Errorf("received unexpected goAway frame: %v", err)
 				close(errorCh)
 			}
 			return
 		default:
-			t.Logf("The server received a frame other than GOAWAY")
-			errorCh <- errors.New("server received a frame other than GOAWAY")
+			errorCh <- fmt.Errorf("server received a frame other than GOAWAY: %v", err)
 			close(errorCh)
 			return
 		}
@@ -2744,13 +2742,11 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 	ct.Close(errors.New("manually closed by client"))
 	t.Logf("Closed the client connection")
 	select {
-	case err = <-errorCh:
+	case err := <-errorCh:
+		if err != nil {
+			t.Errorf("Error receiving the GOAWAY frame: %v", err)
+		}
 	case <-ctx.Done():
-		t.Errorf("Timed out")
-	}
-	if err != nil {
-		t.Errorf("Error receiving the GOAWAY frame: %v", err)
-	} else {
-		t.Logf("Received a GOAWAY frame from client")
+		t.Errorf("Context timed out")
 	}
 }
