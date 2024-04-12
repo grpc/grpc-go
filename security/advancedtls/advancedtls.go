@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	credinternal "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/security/advancedtls/revocation"
 )
 
 // VerificationFuncParams contains parameters available to users when
@@ -183,7 +184,7 @@ type ClientOptions struct {
 	VType VerificationType
 	// RevocationConfig is the configurations for certificate revocation checks.
 	// It could be nil if such checks are not needed.
-	RevocationConfig *RevocationConfig
+	RevocationConfig *revocation.RevocationConfig
 	// MinVersion contains the minimum TLS version that is acceptable.
 	// By default, TLS 1.2 is currently used as the minimum when acting as a
 	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
@@ -213,7 +214,7 @@ type ServerOptions struct {
 	VType VerificationType
 	// RevocationConfig is the configurations for certificate revocation checks.
 	// It could be nil if such checks are not needed.
-	RevocationConfig *RevocationConfig
+	RevocationConfig *revocation.RevocationConfig
 	// MinVersion contains the minimum TLS version that is acceptable.
 	// By default, TLS 1.2 is currently used as the minimum when acting as a
 	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
@@ -395,7 +396,7 @@ type advancedTLSCreds struct {
 	getRootCAs       func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 	isClient         bool
 	vType            VerificationType
-	revocationConfig *RevocationConfig
+	revocationConfig *revocation.RevocationConfig
 }
 
 func (c advancedTLSCreds) Info() credentials.ProtocolInfo {
@@ -548,7 +549,8 @@ func buildVerifyFunc(c *advancedTLSCreds,
 			if verifiedChains == nil {
 				verifiedChains = [][]*x509.Certificate{rawCertList}
 			}
-			if err := CheckChainRevocation(verifiedChains, *c.revocationConfig); err != nil {
+			// TODO(gtcooke94) checkChainRevocation here but not fully exported
+			if err := revocation.checkChainRevocation(verifiedChains, *c.revocationConfig); err != nil {
 				return err
 			}
 		}
