@@ -27,7 +27,7 @@ type BufferSlice []*Buffer
 
 type Buffer struct {
 	data []byte
-	refs atomic.Int32
+	refs *atomic.Int32
 	free func([]byte)
 }
 
@@ -48,11 +48,11 @@ var NoopBufferProvider BufferProvider = BufferProviderFunc(func(length int, writ
 })
 
 func NewBuffer(data []byte, free func([]byte)) *Buffer {
-	return (&Buffer{data: data, free: free}).Ref()
+	return (&Buffer{data: data, refs: new(atomic.Int32), free: free}).Ref()
 }
 
 func (b *Buffer) ReadOnlyData() []byte {
-	if b == nil || b.refs.Load() == 0 {
+	if b == nil || b.refs.Load() <= 0 {
 		return nil
 	}
 	return b.data
@@ -68,12 +68,14 @@ func (b *Buffer) Free() {
 		return
 	}
 	refs := b.refs.Add(-1)
-	if refs == 0 && b.free != nil {
+	if refs != 0 {
+		return
+	}
+
+	if b.free != nil {
 		b.free(b.data)
 	}
-	if refs <= 0 {
-		b.data = nil
-	}
+	b.data = nil
 }
 
 func (b *Buffer) Len() int {
@@ -82,21 +84,20 @@ func (b *Buffer) Len() int {
 
 func (b *Buffer) Split(n int) *Buffer {
 	data := b.data
-	refs := b.refs.Load()
 	free := b.free
 
 	b.data = data[:n]
 	b.free = nil
 
-	right := &Buffer{
-		data: b.data[n:],
+	newBuf := &Buffer{
+		data: data[n:],
+		refs: b.refs,
 		free: func(_ []byte) {
 			free(data)
 		},
 	}
-	right.refs.Store(refs)
 
-	return right
+	return newBuf.Ref()
 }
 
 type Writer struct {

@@ -78,6 +78,21 @@ func newBufferSlice(b []byte) encoding.BufferSlice {
 	return encoding.BufferSlice{encoding.NewBuffer(b, nil)}
 }
 
+func (s *Stream) readTo(p []byte) (int, error) {
+	data, err := s.Read(len(p))
+	defer data.Free()
+
+	if data.Len() != len(p) {
+		if err == nil {
+			err = io.ErrUnexpectedEOF
+		}
+		return 0, err
+	}
+
+	data.WriteTo(p)
+	return len(p), nil
+}
+
 type testStreamHandler struct {
 	t           *http2Server
 	notify      chan struct{}
@@ -2210,7 +2225,7 @@ func (s) TestWriteHeaderConnectionError(t *testing.T) {
 	}
 }
 
-func (s) TestPingPong1B(t *testing.T) {
+func TestPingPong1B(t *testing.T) {
 	runPingPongTest(t, 1)
 }
 

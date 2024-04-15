@@ -955,6 +955,7 @@ func (l *loopyWriter) processData() (bool, error) {
 	} else {
 		// Note: this is only necessary because the http2.Framer does not support
 		// partially writing a frame, so the sequence must be materialized into a buffer.
+		// TODO: Revisit once https://github.com/golang/go/issues/66655 is addressed.
 		buf = bufPool.get()
 		defer bufPool.put(buf)
 

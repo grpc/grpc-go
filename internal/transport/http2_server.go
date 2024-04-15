@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -642,6 +643,7 @@ func (t *http2Server) HandleStreams(ctx context.Context, handle func(*Stream)) {
 	for {
 		t.controlBuf.throttle()
 		frame, err := t.framer.fr.ReadFrame()
+		slog.Info("Server frame read", "f", frame, "err", err)
 		atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
 		if err != nil {
 			if se, ok := err.(http2.StreamError); ok {
@@ -1129,12 +1131,13 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data encoding.BufferSlice, op
 		r:           data.Reader(),
 		onEachWrite: t.setResetPingStrikes,
 	}
-	if err := s.wq.get(int32(len(hdr) + df.d.Len())); err != nil {
+	if err := s.wq.get(int32(len(hdr) + df.r.Len())); err != nil {
 		data.Free()
 		return t.streamContextErr(s)
 	}
 	if err := t.controlBuf.put(df); err != nil {
 		data.Free()
+		return err
 	}
 	return nil
 }

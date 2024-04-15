@@ -71,6 +71,11 @@ func (p *bufferPool) get() []byte {
 }
 
 func (p *bufferPool) put(b []byte) {
+	b = b[:cap(b)]
+	// TODO: replace this loop with `clear`
+	for i := range b {
+		b[i] = 0
+	}
 	p.pool.Put(&b)
 }
 
@@ -159,7 +164,7 @@ type recvBufferReader struct {
 	ctx         context.Context
 	ctxDone     <-chan struct{} // cache of ctx.Done() (for performance).
 	recv        *recvBuffer
-	last        *encoding.Buffer
+	last        *encoding.Buffer // Stores the remaining data in the previous calls.
 	err         error
 }
 
@@ -516,6 +521,9 @@ func (s *Stream) Read(n int) (data encoding.BufferSlice, err error) {
 		buf, err := s.trReader.Read(n)
 		n -= buf.Len()
 		if n == 0 {
+			if err != nil {
+				panic(":thinking:")
+			}
 			err = nil
 		}
 		if err != nil {
@@ -528,21 +536,6 @@ func (s *Stream) Read(n int) (data encoding.BufferSlice, err error) {
 		data = append(data, buf)
 	}
 	return data, nil
-}
-
-func (s *Stream) readTo(p []byte) (int, error) {
-	data, err := s.Read(len(p))
-	defer data.Free()
-
-	if data.Len() != len(p) {
-		if err == nil {
-			err = io.ErrUnexpectedEOF
-		}
-		return 0, err
-	}
-
-	data.WriteTo(p)
-	return len(p), nil
 }
 
 // tranportReader reads all the data available for this Stream from the transport and

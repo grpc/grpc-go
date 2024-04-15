@@ -6148,19 +6148,19 @@ func (s) TestUnexpectedEOF(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	for i := 0; i < 10; i++ {
 		// exceeds grpc.DefaultMaxRecvMessageSize, this should error with
 		// RESOURCE_EXHAUSTED error.
 		_, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{ResponseSize: 4194304})
 		if code := status.Code(err); code != codes.ResourceExhausted {
-			t.Fatalf("UnaryCall RPC %d returned error: %v, want status code %v", i, err, codes.ResourceExhausted)
+			t.Fatalf("UnaryCall RPC returned error: %v, want status code %v", err, codes.ResourceExhausted)
 		}
 		// Larger response that doesn't exceed DefaultMaxRecvMessageSize, this
 		// should work normally.
 		if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{ResponseSize: 275075}); err != nil {
-			t.Fatalf("UnaryCall RPC %d failed: %v", i, err)
+			t.Fatalf("UnaryCall RPC failed: %v", err)
 		}
 	}
 }

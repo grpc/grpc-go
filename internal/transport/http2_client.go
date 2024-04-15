@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -1050,9 +1051,11 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data encoding.BufferSlice, op
 	if opts.Last {
 		// If it's the last message, update stream state.
 		if !s.compareAndSwapState(streamActive, streamWriteDone) {
+			data.Free()
 			return errStreamDone
 		}
 	} else if s.getState() != streamActive {
+		data.Free()
 		return errStreamDone
 	}
 
@@ -1065,11 +1068,16 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data encoding.BufferSlice, op
 	}
 
 	if hdr != nil || data != nil { // If it's not an empty data frame, check quota.
-		if err := s.wq.get(int32(len(hdr) + df.d.Len())); err != nil {
+		if err := s.wq.get(int32(len(hdr) + df.r.Len())); err != nil {
+			data.Free()
 			return err
 		}
 	}
-	return t.controlBuf.put(df)
+	if err := t.controlBuf.put(df); err != nil {
+		data.Free()
+		return err
+	}
+	return nil
 }
 
 func (t *http2Client) getStream(f http2.Frame) *Stream {
@@ -1599,6 +1607,7 @@ func (t *http2Client) reader(errCh chan<- error) {
 	for {
 		t.controlBuf.throttle()
 		frame, err := t.framer.fr.ReadFrame()
+		slog.Info("Client frame read", "f", frame, "err", err)
 		if t.keepaliveEnabled {
 			atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
 		}
