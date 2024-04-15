@@ -32,8 +32,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.62.0 or later.
-const _ = grpc.SupportPackageIsVersion8
+// Requires gRPC-Go v1.64.0 or later.
+const _ = grpc.SupportPackageIsVersion9
 
 const (
 	HandshakerService_DoHandshake_FullMethodName = "/grpc.gcp.HandshakerService/DoHandshake"
@@ -66,31 +66,11 @@ func (c *handshakerServiceClient) DoHandshake(ctx context.Context, opts ...grpc.
 	if err != nil {
 		return nil, err
 	}
-	x := &handshakerServiceDoHandshakeClient{ClientStream: stream}
+	x := &grpc.StreamClientImpl[HandshakerReq, HandshakerResp]{ClientStream: stream}
 	return x, nil
 }
 
-type HandshakerService_DoHandshakeClient interface {
-	Send(*HandshakerReq) error
-	Recv() (*HandshakerResp, error)
-	grpc.ClientStream
-}
-
-type handshakerServiceDoHandshakeClient struct {
-	grpc.ClientStream
-}
-
-func (x *handshakerServiceDoHandshakeClient) Send(m *HandshakerReq) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *handshakerServiceDoHandshakeClient) Recv() (*HandshakerResp, error) {
-	m := new(HandshakerResp)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type HandshakerService_DoHandshakeClient = grpc.BidiStreamClient[HandshakerReq, HandshakerResp]
 
 // HandshakerServiceServer is the server API for HandshakerService service.
 // All implementations must embed UnimplementedHandshakerServiceServer
@@ -127,30 +107,10 @@ func RegisterHandshakerServiceServer(s grpc.ServiceRegistrar, srv HandshakerServ
 }
 
 func _HandshakerService_DoHandshake_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(HandshakerServiceServer).DoHandshake(&handshakerServiceDoHandshakeServer{ServerStream: stream})
+	return srv.(HandshakerServiceServer).DoHandshake(&grpc.StreamServerImpl[HandshakerReq, HandshakerResp]{ServerStream: stream})
 }
 
-type HandshakerService_DoHandshakeServer interface {
-	Send(*HandshakerResp) error
-	Recv() (*HandshakerReq, error)
-	grpc.ServerStream
-}
-
-type handshakerServiceDoHandshakeServer struct {
-	grpc.ServerStream
-}
-
-func (x *handshakerServiceDoHandshakeServer) Send(m *HandshakerResp) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *handshakerServiceDoHandshakeServer) Recv() (*HandshakerReq, error) {
-	m := new(HandshakerReq)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type HandshakerService_DoHandshakeServer = grpc.BidiStreamServer[HandshakerReq, HandshakerResp]
 
 // HandshakerService_ServiceDesc is the grpc.ServiceDesc for HandshakerService service.
 // It's only intended for direct use with grpc.RegisterService,

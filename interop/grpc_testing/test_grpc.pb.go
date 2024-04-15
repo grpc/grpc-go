@@ -32,8 +32,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.62.0 or later.
-const _ = grpc.SupportPackageIsVersion8
+// Requires gRPC-Go v1.64.0 or later.
+const _ = grpc.SupportPackageIsVersion9
 
 const (
 	TestService_EmptyCall_FullMethodName           = "/grpc.testing.TestService/EmptyCall"
@@ -122,7 +122,7 @@ func (c *testServiceClient) StreamingOutputCall(ctx context.Context, in *Streami
 	if err != nil {
 		return nil, err
 	}
-	x := &testServiceStreamingOutputCallClient{ClientStream: stream}
+	x := &grpc.StreamClientImpl[StreamingOutputCallRequest, StreamingOutputCallResponse]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -132,22 +132,7 @@ func (c *testServiceClient) StreamingOutputCall(ctx context.Context, in *Streami
 	return x, nil
 }
 
-type TestService_StreamingOutputCallClient interface {
-	Recv() (*StreamingOutputCallResponse, error)
-	grpc.ClientStream
-}
-
-type testServiceStreamingOutputCallClient struct {
-	grpc.ClientStream
-}
-
-func (x *testServiceStreamingOutputCallClient) Recv() (*StreamingOutputCallResponse, error) {
-	m := new(StreamingOutputCallResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type TestService_StreamingOutputCallClient = grpc.ServerStreamClient[StreamingOutputCallResponse]
 
 func (c *testServiceClient) StreamingInputCall(ctx context.Context, opts ...grpc.CallOption) (TestService_StreamingInputCallClient, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -155,34 +140,11 @@ func (c *testServiceClient) StreamingInputCall(ctx context.Context, opts ...grpc
 	if err != nil {
 		return nil, err
 	}
-	x := &testServiceStreamingInputCallClient{ClientStream: stream}
+	x := &grpc.StreamClientImpl[StreamingInputCallRequest, StreamingInputCallResponse]{ClientStream: stream}
 	return x, nil
 }
 
-type TestService_StreamingInputCallClient interface {
-	Send(*StreamingInputCallRequest) error
-	CloseAndRecv() (*StreamingInputCallResponse, error)
-	grpc.ClientStream
-}
-
-type testServiceStreamingInputCallClient struct {
-	grpc.ClientStream
-}
-
-func (x *testServiceStreamingInputCallClient) Send(m *StreamingInputCallRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *testServiceStreamingInputCallClient) CloseAndRecv() (*StreamingInputCallResponse, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(StreamingInputCallResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type TestService_StreamingInputCallClient = grpc.ClientStreamClient[StreamingInputCallRequest, StreamingInputCallResponse]
 
 func (c *testServiceClient) FullDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_FullDuplexCallClient, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -190,31 +152,11 @@ func (c *testServiceClient) FullDuplexCall(ctx context.Context, opts ...grpc.Cal
 	if err != nil {
 		return nil, err
 	}
-	x := &testServiceFullDuplexCallClient{ClientStream: stream}
+	x := &grpc.StreamClientImpl[StreamingOutputCallRequest, StreamingOutputCallResponse]{ClientStream: stream}
 	return x, nil
 }
 
-type TestService_FullDuplexCallClient interface {
-	Send(*StreamingOutputCallRequest) error
-	Recv() (*StreamingOutputCallResponse, error)
-	grpc.ClientStream
-}
-
-type testServiceFullDuplexCallClient struct {
-	grpc.ClientStream
-}
-
-func (x *testServiceFullDuplexCallClient) Send(m *StreamingOutputCallRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *testServiceFullDuplexCallClient) Recv() (*StreamingOutputCallResponse, error) {
-	m := new(StreamingOutputCallResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type TestService_FullDuplexCallClient = grpc.BidiStreamClient[StreamingOutputCallRequest, StreamingOutputCallResponse]
 
 func (c *testServiceClient) HalfDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_HalfDuplexCallClient, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -222,31 +164,11 @@ func (c *testServiceClient) HalfDuplexCall(ctx context.Context, opts ...grpc.Cal
 	if err != nil {
 		return nil, err
 	}
-	x := &testServiceHalfDuplexCallClient{ClientStream: stream}
+	x := &grpc.StreamClientImpl[StreamingOutputCallRequest, StreamingOutputCallResponse]{ClientStream: stream}
 	return x, nil
 }
 
-type TestService_HalfDuplexCallClient interface {
-	Send(*StreamingOutputCallRequest) error
-	Recv() (*StreamingOutputCallResponse, error)
-	grpc.ClientStream
-}
-
-type testServiceHalfDuplexCallClient struct {
-	grpc.ClientStream
-}
-
-func (x *testServiceHalfDuplexCallClient) Send(m *StreamingOutputCallRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *testServiceHalfDuplexCallClient) Recv() (*StreamingOutputCallResponse, error) {
-	m := new(StreamingOutputCallResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type TestService_HalfDuplexCallClient = grpc.BidiStreamClient[StreamingOutputCallRequest, StreamingOutputCallResponse]
 
 func (c *testServiceClient) UnimplementedCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -391,99 +313,28 @@ func _TestService_StreamingOutputCall_Handler(srv interface{}, stream grpc.Serve
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(TestServiceServer).StreamingOutputCall(m, &testServiceStreamingOutputCallServer{ServerStream: stream})
+	return srv.(TestServiceServer).StreamingOutputCall(m, &grpc.StreamServerImpl[StreamingOutputCallRequest, StreamingOutputCallResponse]{ServerStream: stream})
 }
 
-type TestService_StreamingOutputCallServer interface {
-	Send(*StreamingOutputCallResponse) error
-	grpc.ServerStream
-}
-
-type testServiceStreamingOutputCallServer struct {
-	grpc.ServerStream
-}
-
-func (x *testServiceStreamingOutputCallServer) Send(m *StreamingOutputCallResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
+type TestService_StreamingOutputCallServer = grpc.ServerStreamServer[StreamingOutputCallResponse]
 
 func _TestService_StreamingInputCall_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TestServiceServer).StreamingInputCall(&testServiceStreamingInputCallServer{ServerStream: stream})
+	return srv.(TestServiceServer).StreamingInputCall(&grpc.StreamServerImpl[StreamingInputCallRequest, StreamingInputCallResponse]{ServerStream: stream})
 }
 
-type TestService_StreamingInputCallServer interface {
-	SendAndClose(*StreamingInputCallResponse) error
-	Recv() (*StreamingInputCallRequest, error)
-	grpc.ServerStream
-}
-
-type testServiceStreamingInputCallServer struct {
-	grpc.ServerStream
-}
-
-func (x *testServiceStreamingInputCallServer) SendAndClose(m *StreamingInputCallResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *testServiceStreamingInputCallServer) Recv() (*StreamingInputCallRequest, error) {
-	m := new(StreamingInputCallRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type TestService_StreamingInputCallServer = grpc.ClientStreamServer[StreamingInputCallRequest, StreamingInputCallResponse]
 
 func _TestService_FullDuplexCall_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TestServiceServer).FullDuplexCall(&testServiceFullDuplexCallServer{ServerStream: stream})
+	return srv.(TestServiceServer).FullDuplexCall(&grpc.StreamServerImpl[StreamingOutputCallRequest, StreamingOutputCallResponse]{ServerStream: stream})
 }
 
-type TestService_FullDuplexCallServer interface {
-	Send(*StreamingOutputCallResponse) error
-	Recv() (*StreamingOutputCallRequest, error)
-	grpc.ServerStream
-}
-
-type testServiceFullDuplexCallServer struct {
-	grpc.ServerStream
-}
-
-func (x *testServiceFullDuplexCallServer) Send(m *StreamingOutputCallResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *testServiceFullDuplexCallServer) Recv() (*StreamingOutputCallRequest, error) {
-	m := new(StreamingOutputCallRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type TestService_FullDuplexCallServer = grpc.BidiStreamServer[StreamingOutputCallRequest, StreamingOutputCallResponse]
 
 func _TestService_HalfDuplexCall_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TestServiceServer).HalfDuplexCall(&testServiceHalfDuplexCallServer{ServerStream: stream})
+	return srv.(TestServiceServer).HalfDuplexCall(&grpc.StreamServerImpl[StreamingOutputCallRequest, StreamingOutputCallResponse]{ServerStream: stream})
 }
 
-type TestService_HalfDuplexCallServer interface {
-	Send(*StreamingOutputCallResponse) error
-	Recv() (*StreamingOutputCallRequest, error)
-	grpc.ServerStream
-}
-
-type testServiceHalfDuplexCallServer struct {
-	grpc.ServerStream
-}
-
-func (x *testServiceHalfDuplexCallServer) Send(m *StreamingOutputCallResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *testServiceHalfDuplexCallServer) Recv() (*StreamingOutputCallRequest, error) {
-	m := new(StreamingOutputCallRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type TestService_HalfDuplexCallServer = grpc.BidiStreamServer[StreamingOutputCallRequest, StreamingOutputCallResponse]
 
 func _TestService_UnimplementedCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)

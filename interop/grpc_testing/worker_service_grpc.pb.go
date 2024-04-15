@@ -32,8 +32,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.62.0 or later.
-const _ = grpc.SupportPackageIsVersion8
+// Requires gRPC-Go v1.64.0 or later.
+const _ = grpc.SupportPackageIsVersion9
 
 const (
 	WorkerService_RunServer_FullMethodName  = "/grpc.testing.WorkerService/RunServer"
@@ -80,31 +80,11 @@ func (c *workerServiceClient) RunServer(ctx context.Context, opts ...grpc.CallOp
 	if err != nil {
 		return nil, err
 	}
-	x := &workerServiceRunServerClient{ClientStream: stream}
+	x := &grpc.StreamClientImpl[ServerArgs, ServerStatus]{ClientStream: stream}
 	return x, nil
 }
 
-type WorkerService_RunServerClient interface {
-	Send(*ServerArgs) error
-	Recv() (*ServerStatus, error)
-	grpc.ClientStream
-}
-
-type workerServiceRunServerClient struct {
-	grpc.ClientStream
-}
-
-func (x *workerServiceRunServerClient) Send(m *ServerArgs) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *workerServiceRunServerClient) Recv() (*ServerStatus, error) {
-	m := new(ServerStatus)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type WorkerService_RunServerClient = grpc.BidiStreamClient[ServerArgs, ServerStatus]
 
 func (c *workerServiceClient) RunClient(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunClientClient, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -112,31 +92,11 @@ func (c *workerServiceClient) RunClient(ctx context.Context, opts ...grpc.CallOp
 	if err != nil {
 		return nil, err
 	}
-	x := &workerServiceRunClientClient{ClientStream: stream}
+	x := &grpc.StreamClientImpl[ClientArgs, ClientStatus]{ClientStream: stream}
 	return x, nil
 }
 
-type WorkerService_RunClientClient interface {
-	Send(*ClientArgs) error
-	Recv() (*ClientStatus, error)
-	grpc.ClientStream
-}
-
-type workerServiceRunClientClient struct {
-	grpc.ClientStream
-}
-
-func (x *workerServiceRunClientClient) Send(m *ClientArgs) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *workerServiceRunClientClient) Recv() (*ClientStatus, error) {
-	m := new(ClientStatus)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type WorkerService_RunClientClient = grpc.BidiStreamClient[ClientArgs, ClientStatus]
 
 func (c *workerServiceClient) CoreCount(ctx context.Context, in *CoreRequest, opts ...grpc.CallOption) (*CoreResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -213,56 +173,16 @@ func RegisterWorkerServiceServer(s grpc.ServiceRegistrar, srv WorkerServiceServe
 }
 
 func _WorkerService_RunServer_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(WorkerServiceServer).RunServer(&workerServiceRunServerServer{ServerStream: stream})
+	return srv.(WorkerServiceServer).RunServer(&grpc.StreamServerImpl[ServerArgs, ServerStatus]{ServerStream: stream})
 }
 
-type WorkerService_RunServerServer interface {
-	Send(*ServerStatus) error
-	Recv() (*ServerArgs, error)
-	grpc.ServerStream
-}
-
-type workerServiceRunServerServer struct {
-	grpc.ServerStream
-}
-
-func (x *workerServiceRunServerServer) Send(m *ServerStatus) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *workerServiceRunServerServer) Recv() (*ServerArgs, error) {
-	m := new(ServerArgs)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type WorkerService_RunServerServer = grpc.BidiStreamServer[ServerArgs, ServerStatus]
 
 func _WorkerService_RunClient_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(WorkerServiceServer).RunClient(&workerServiceRunClientServer{ServerStream: stream})
+	return srv.(WorkerServiceServer).RunClient(&grpc.StreamServerImpl[ClientArgs, ClientStatus]{ServerStream: stream})
 }
 
-type WorkerService_RunClientServer interface {
-	Send(*ClientStatus) error
-	Recv() (*ClientArgs, error)
-	grpc.ServerStream
-}
-
-type workerServiceRunClientServer struct {
-	grpc.ServerStream
-}
-
-func (x *workerServiceRunClientServer) Send(m *ClientStatus) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *workerServiceRunClientServer) Recv() (*ClientArgs, error) {
-	m := new(ClientArgs)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type WorkerService_RunClientServer = grpc.BidiStreamServer[ClientArgs, ClientStatus]
 
 func _WorkerService_CoreCount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CoreRequest)

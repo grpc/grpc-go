@@ -73,11 +73,6 @@ SOURCES=(
   ${WORKDIR}/grpc-proto/grpc/core/*.proto
 )
 
-# Generates sources with bleeding-edge flags enabled
-FUTURE_SOURCES=(
-  examples/route_guide/routeguide/route_guide.proto
-)
-
 # These options of the form 'Mfoo.proto=bar' instruct the codegen to use an
 # import path of 'bar' in the generated code when 'foo.proto' is imported in
 # one of the sources.
@@ -98,7 +93,7 @@ Mgrpc/testing/empty.proto=google.golang.org/grpc/interop/grpc_testing
 
 for src in ${SOURCES[@]}; do
   echo "protoc ${src}"
-  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS}:${WORKDIR}/out \
+  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS},use_generic_streams=true:${WORKDIR}/out \
     -I"." \
     -I${WORKDIR}/grpc-proto \
     -I${WORKDIR}/googleapis \
@@ -109,16 +104,6 @@ done
 for src in ${LEGACY_SOURCES[@]}; do
   echo "protoc ${src}"
   protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS},require_unimplemented_servers=false:${WORKDIR}/out \
-    -I"." \
-    -I${WORKDIR}/grpc-proto \
-    -I${WORKDIR}/googleapis \
-    -I${WORKDIR}/protobuf/src \
-    ${src}
-done
-
-for src in ${FUTURE_SOURCES[@]}; do
-  echo "protoc ${src}"
-  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS},use_generic_streams=true:${WORKDIR}/out \
     -I"." \
     -I${WORKDIR}/grpc-proto \
     -I${WORKDIR}/googleapis \

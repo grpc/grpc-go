@@ -29,8 +29,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.62.0 or later.
-const _ = grpc.SupportPackageIsVersion8
+// Requires gRPC-Go v1.64.0 or later.
+const _ = grpc.SupportPackageIsVersion9
 
 const (
 	BidirectionalStreamingService_UnaryMethod_FullMethodName         = "/main.BidirectionalStreamingService/unaryMethod"
@@ -73,34 +73,11 @@ func (c *bidirectionalStreamingServiceClient) ClientMethod(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	x := &bidirectionalStreamingServiceClientMethodClient{ClientStream: stream}
+	x := &grpc.StreamClientImpl[EventRequest, EventResponse]{ClientStream: stream}
 	return x, nil
 }
 
-type BidirectionalStreamingService_ClientMethodClient interface {
-	Send(*EventRequest) error
-	CloseAndRecv() (*EventResponse, error)
-	grpc.ClientStream
-}
-
-type bidirectionalStreamingServiceClientMethodClient struct {
-	grpc.ClientStream
-}
-
-func (x *bidirectionalStreamingServiceClientMethodClient) Send(m *EventRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *bidirectionalStreamingServiceClientMethodClient) CloseAndRecv() (*EventResponse, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(EventResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type BidirectionalStreamingService_ClientMethodClient = grpc.ClientStreamClient[EventRequest, EventResponse]
 
 func (c *bidirectionalStreamingServiceClient) ServerMethod(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (BidirectionalStreamingService_ServerMethodClient, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -108,7 +85,7 @@ func (c *bidirectionalStreamingServiceClient) ServerMethod(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	x := &bidirectionalStreamingServiceServerMethodClient{ClientStream: stream}
+	x := &grpc.StreamClientImpl[EventRequest, EventResponse]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -118,22 +95,7 @@ func (c *bidirectionalStreamingServiceClient) ServerMethod(ctx context.Context, 
 	return x, nil
 }
 
-type BidirectionalStreamingService_ServerMethodClient interface {
-	Recv() (*EventResponse, error)
-	grpc.ClientStream
-}
-
-type bidirectionalStreamingServiceServerMethodClient struct {
-	grpc.ClientStream
-}
-
-func (x *bidirectionalStreamingServiceServerMethodClient) Recv() (*EventResponse, error) {
-	m := new(EventResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type BidirectionalStreamingService_ServerMethodClient = grpc.ServerStreamClient[EventResponse]
 
 func (c *bidirectionalStreamingServiceClient) BidirectionalMethod(ctx context.Context, opts ...grpc.CallOption) (BidirectionalStreamingService_BidirectionalMethodClient, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -141,31 +103,11 @@ func (c *bidirectionalStreamingServiceClient) BidirectionalMethod(ctx context.Co
 	if err != nil {
 		return nil, err
 	}
-	x := &bidirectionalStreamingServiceBidirectionalMethodClient{ClientStream: stream}
+	x := &grpc.StreamClientImpl[EventRequest, EventResponse]{ClientStream: stream}
 	return x, nil
 }
 
-type BidirectionalStreamingService_BidirectionalMethodClient interface {
-	Send(*EventRequest) error
-	Recv() (*EventResponse, error)
-	grpc.ClientStream
-}
-
-type bidirectionalStreamingServiceBidirectionalMethodClient struct {
-	grpc.ClientStream
-}
-
-func (x *bidirectionalStreamingServiceBidirectionalMethodClient) Send(m *EventRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *bidirectionalStreamingServiceBidirectionalMethodClient) Recv() (*EventResponse, error) {
-	m := new(EventResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type BidirectionalStreamingService_BidirectionalMethodClient = grpc.BidiStreamClient[EventRequest, EventResponse]
 
 // BidirectionalStreamingServiceServer is the server API for BidirectionalStreamingService service.
 // All implementations must embed UnimplementedBidirectionalStreamingServiceServer
@@ -227,77 +169,26 @@ func _BidirectionalStreamingService_UnaryMethod_Handler(srv interface{}, ctx con
 }
 
 func _BidirectionalStreamingService_ClientMethod_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BidirectionalStreamingServiceServer).ClientMethod(&bidirectionalStreamingServiceClientMethodServer{ServerStream: stream})
+	return srv.(BidirectionalStreamingServiceServer).ClientMethod(&grpc.StreamServerImpl[EventRequest, EventResponse]{ServerStream: stream})
 }
 
-type BidirectionalStreamingService_ClientMethodServer interface {
-	SendAndClose(*EventResponse) error
-	Recv() (*EventRequest, error)
-	grpc.ServerStream
-}
-
-type bidirectionalStreamingServiceClientMethodServer struct {
-	grpc.ServerStream
-}
-
-func (x *bidirectionalStreamingServiceClientMethodServer) SendAndClose(m *EventResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *bidirectionalStreamingServiceClientMethodServer) Recv() (*EventRequest, error) {
-	m := new(EventRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type BidirectionalStreamingService_ClientMethodServer = grpc.ClientStreamServer[EventRequest, EventResponse]
 
 func _BidirectionalStreamingService_ServerMethod_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(EventRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(BidirectionalStreamingServiceServer).ServerMethod(m, &bidirectionalStreamingServiceServerMethodServer{ServerStream: stream})
+	return srv.(BidirectionalStreamingServiceServer).ServerMethod(m, &grpc.StreamServerImpl[EventRequest, EventResponse]{ServerStream: stream})
 }
 
-type BidirectionalStreamingService_ServerMethodServer interface {
-	Send(*EventResponse) error
-	grpc.ServerStream
-}
-
-type bidirectionalStreamingServiceServerMethodServer struct {
-	grpc.ServerStream
-}
-
-func (x *bidirectionalStreamingServiceServerMethodServer) Send(m *EventResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
+type BidirectionalStreamingService_ServerMethodServer = grpc.ServerStreamServer[EventResponse]
 
 func _BidirectionalStreamingService_BidirectionalMethod_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BidirectionalStreamingServiceServer).BidirectionalMethod(&bidirectionalStreamingServiceBidirectionalMethodServer{ServerStream: stream})
+	return srv.(BidirectionalStreamingServiceServer).BidirectionalMethod(&grpc.StreamServerImpl[EventRequest, EventResponse]{ServerStream: stream})
 }
 
-type BidirectionalStreamingService_BidirectionalMethodServer interface {
-	Send(*EventResponse) error
-	Recv() (*EventRequest, error)
-	grpc.ServerStream
-}
-
-type bidirectionalStreamingServiceBidirectionalMethodServer struct {
-	grpc.ServerStream
-}
-
-func (x *bidirectionalStreamingServiceBidirectionalMethodServer) Send(m *EventResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *bidirectionalStreamingServiceBidirectionalMethodServer) Recv() (*EventRequest, error) {
-	m := new(EventRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+type BidirectionalStreamingService_BidirectionalMethodServer = grpc.BidiStreamServer[EventRequest, EventResponse]
 
 // BidirectionalStreamingService_ServiceDesc is the grpc.ServiceDesc for BidirectionalStreamingService service.
 // It's only intended for direct use with grpc.RegisterService,
