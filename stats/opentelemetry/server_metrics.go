@@ -31,7 +31,7 @@ import (
 )
 
 type serverStatsHandler struct {
-	mo MetricsOptions
+	o Options
 
 	serverMetrics serverMetrics
 }
@@ -39,15 +39,15 @@ type serverStatsHandler struct {
 func (ssh *serverStatsHandler) initializeMetrics() {
 	// Will set no metrics to record, logically making this stats handler a
 	// no-op.
-	if ssh.mo.MeterProvider == nil {
+	if ssh.o.MetricsOptions.MeterProvider == nil {
 		return
 	}
 
-	meter := ssh.mo.MeterProvider.Meter("grpc-go " + grpc.Version)
+	meter := ssh.o.MetricsOptions.MeterProvider.Meter("grpc-go " + grpc.Version)
 	if meter == nil {
 		return
 	}
-	setOfMetrics := ssh.mo.Metrics.metrics
+	setOfMetrics := ssh.o.MetricsOptions.Metrics.metrics
 
 	serverMetrics := serverMetrics{}
 	serverMetrics.callStarted = createInt64Counter(setOfMetrics, "grpc.server.call.started", meter, metric.WithUnit("call"), metric.WithDescription("Number of server calls started."))
@@ -69,8 +69,8 @@ func (ssh *serverStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 // TagRPC implements per RPC context management.
 func (ssh *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	method := info.FullMethodName
-	if ssh.mo.MethodAttributeFilter != nil {
-		if !ssh.mo.MethodAttributeFilter(method) {
+	if ssh.o.MetricsOptions.MethodAttributeFilter != nil {
+		if !ssh.o.MetricsOptions.MethodAttributeFilter(method) {
 			method = "other"
 		}
 	}
@@ -163,7 +163,4 @@ const (
 )
 
 // DefaultServerMetrics are the default server metrics provided by this module.
-var DefaultServerMetrics = EmptyMetrics.Add("grpc.server.call.started").
-	Add("grpc.server.call.sent_total_compressed_message_size").
-	Add("grpc.server.call.rcvd_total_compressed_message_size").
-	Add("grpc.server.call.duration")
+var DefaultServerMetrics = NewMetrics(ServerCallStartedName, ServerCallSentCompressedTotalMessageSize, ServerCallRcvdCompressedTotalMessageSize, ServerCallDurationName)

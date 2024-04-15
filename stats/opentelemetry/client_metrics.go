@@ -30,7 +30,7 @@ import (
 )
 
 type clientStatsHandler struct {
-	mo MetricsOptions
+	o Options
 
 	clientMetrics clientMetrics
 }
@@ -38,16 +38,16 @@ type clientStatsHandler struct {
 func (csh *clientStatsHandler) initializeMetrics() {
 	// Will set no metrics to record, logically making this stats handler a
 	// no-op.
-	if csh.mo.MeterProvider == nil {
+	if csh.o.MetricsOptions.MeterProvider == nil {
 		return
 	}
 
-	meter := csh.mo.MeterProvider.Meter("grpc-go " + grpc.Version)
+	meter := csh.o.MetricsOptions.MeterProvider.Meter("grpc-go " + grpc.Version)
 	if meter == nil {
 		return
 	}
 
-	setOfMetrics := csh.mo.Metrics.metrics
+	setOfMetrics := csh.o.MetricsOptions.Metrics.metrics
 
 	clientMetrics := clientMetrics{}
 
@@ -78,7 +78,7 @@ func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method stri
 // otherwise.
 func (csh *clientStatsHandler) determineTarget(cc *grpc.ClientConn) string {
 	target := cc.CanonicalTarget()
-	if f := csh.mo.TargetAttributeFilter; f != nil && !f(target) {
+	if f := csh.o.MetricsOptions.TargetAttributeFilter; f != nil && !f(target) {
 		target = "other"
 	}
 	return target
@@ -219,8 +219,4 @@ const (
 )
 
 // DefaultClientMetrics are the default client metrics provided by this module.
-var DefaultClientMetrics = EmptyMetrics.Add(ClientAttemptStartedName).
-	Add(ClientAttemptDurationName).
-	Add(ClientAttemptSentCompressedTotalMessageSize).
-	Add(ClientAttemptRcvdCompressedTotalMessageSize).
-	Add(ClientCallDurationName)
+var DefaultClientMetrics = NewMetrics(ClientAttemptStartedName, ClientAttemptDurationName, ClientAttemptSentCompressedTotalMessageSize, ClientAttemptRcvdCompressedTotalMessageSize, ClientCallDurationName)

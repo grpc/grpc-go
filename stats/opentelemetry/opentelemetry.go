@@ -37,10 +37,6 @@ var canonicalString = internal.CanonicalString.(func(codes.Code) string)
 
 var joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.DialOption)
 
-// EmptyMetrics represents no metrics. To start from a clean slate if the
-// intended effect is to pick a subset of metrics, use this and add onto it.
-var EmptyMetrics = Metrics{}
-
 // MetricName is a name of a metric.
 type MetricName string
 
@@ -50,6 +46,17 @@ type MetricName string
 type Metrics struct {
 	// metrics are the set of metrics to initialize.
 	metrics map[MetricName]bool
+}
+
+// NewMetrics returns a Metrics with the metrics provided specified.
+func NewMetrics(metrics ...MetricName) *Metrics {
+	newMetrics := make(map[MetricName]bool)
+	for _, metric := range metrics {
+		newMetrics[metric] = true
+	}
+	return &Metrics{
+		metrics: newMetrics,
+	}
 }
 
 // Add adds the metrics to the metrics set and returns a new copy with the
@@ -82,6 +89,12 @@ func (m *Metrics) Remove(metrics ...MetricName) *Metrics {
 	return &Metrics{
 		metrics: newMetrics,
 	}
+}
+
+// Options are the options for OpenTelemetry instrumentation.
+type Options struct {
+	// MetricsOptions are the metrics options for OpenTelemetry instrumentation.
+	MetricsOptions MetricsOptions
 }
 
 // MetricsOptions are the metrics options for OpenTelemetry instrumentation.
@@ -124,8 +137,8 @@ type MetricsOptions struct {
 // MeterProvider. If the passed in Meter Provider does not have the view
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
-func DialOption(mo MetricsOptions) grpc.DialOption {
-	csh := &clientStatsHandler{mo: mo}
+func DialOption(o Options) grpc.DialOption {
+	csh := &clientStatsHandler{o: o}
 	csh.initializeMetrics()
 	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
 }
@@ -142,8 +155,8 @@ func DialOption(mo MetricsOptions) grpc.DialOption {
 // MeterProvider. If the passed in Meter Provider does not have the view
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
-func ServerOption(mo MetricsOptions) grpc.ServerOption {
-	ssh := &serverStatsHandler{mo: mo}
+func ServerOption(o Options) grpc.ServerOption {
+	ssh := &serverStatsHandler{o: o}
 	ssh.initializeMetrics()
 	return grpc.StatsHandler(ssh)
 }

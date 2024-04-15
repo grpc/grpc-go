@@ -103,16 +103,19 @@ func setup(t *testing.T, tafOn bool, maf func(string) bool) (*metric.ManualReade
 			return true
 		}
 	}
-	if err := ss.Start([]grpc.ServerOption{ServerOption(MetricsOptions{
-		MeterProvider:         provider,
-		Metrics:               DefaultServerMetrics,
-		TargetAttributeFilter: taf,
-		MethodAttributeFilter: maf,
-	})}, DialOption(MetricsOptions{
-		MeterProvider:         provider,
-		Metrics:               DefaultClientMetrics,
-		TargetAttributeFilter: taf,
-		MethodAttributeFilter: maf,
+	if err := ss.Start([]grpc.ServerOption{ServerOption(Options{
+		MetricsOptions: MetricsOptions{
+			MeterProvider:         provider,
+			Metrics:               DefaultServerMetrics,
+			TargetAttributeFilter: taf,
+			MethodAttributeFilter: maf,
+		}})}, DialOption(Options{
+		MetricsOptions: MetricsOptions{
+			MeterProvider:         provider,
+			Metrics:               DefaultClientMetrics,
+			TargetAttributeFilter: taf,
+			MethodAttributeFilter: maf,
+		},
 	})); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
