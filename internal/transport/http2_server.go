@@ -262,7 +262,6 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		idle:              time.Now(),
 		kep:               kep,
 		initialWindowSize: iwz,
-		bufferPool:        newBufferPool(),
 	}
 	var czSecurity credentials.ChannelzSecurityValue
 	if au, ok := authInfo.(credentials.ChannelzSecurityInfo); ok {
@@ -615,10 +614,9 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	s.wq = newWriteQuota(defaultWriteQuota, s.ctxDone)
 	s.trReader = &transportReader{
 		reader: &recvBufferReader{
-			ctx:        s.ctx,
-			ctxDone:    s.ctxDone,
-			recv:       s.buf,
-			freeBuffer: t.bufferPool.put,
+			ctx:     s.ctx,
+			ctxDone: s.ctxDone,
+			recv:    s.buf,
 		},
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
@@ -815,10 +813,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		// guarantee f.Data() is consumed before the arrival of next frame.
 		// Can this copy be eliminated?
 		if len(f.Data()) > 0 {
-			buffer := t.bufferPool.get()
-			buffer.Reset()
-			buffer.Write(f.Data())
-			s.write(recvMsg{buffer: buffer})
+			s.write(recvMsg{buffer: bufPool.copy(f.Data())})
 		}
 	}
 	if f.StreamEnded() {

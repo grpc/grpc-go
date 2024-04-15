@@ -52,6 +52,9 @@ func NewBuffer(data []byte, free func([]byte)) *Buffer {
 }
 
 func (b *Buffer) ReadOnlyData() []byte {
+	if b == nil || b.refs.Load() == 0 {
+		return nil
+	}
 	return b.data
 }
 
@@ -61,10 +64,39 @@ func (b *Buffer) Ref() *Buffer {
 }
 
 func (b *Buffer) Free() {
-	if b.refs.Add(-1) == 0 && b.free != nil {
+	if b == nil {
+		return
+	}
+	refs := b.refs.Add(-1)
+	if refs == 0 && b.free != nil {
 		b.free(b.data)
+	}
+	if refs <= 0 {
 		b.data = nil
 	}
+}
+
+func (b *Buffer) Len() int {
+	return len(b.ReadOnlyData())
+}
+
+func (b *Buffer) Split(n int) *Buffer {
+	data := b.data
+	refs := b.refs.Load()
+	free := b.free
+
+	b.data = data[:n]
+	b.free = nil
+
+	right := &Buffer{
+		data: b.data[n:],
+		free: func(_ []byte) {
+			free(data)
+		},
+	}
+	right.refs.Store(refs)
+
+	return right
 }
 
 type Writer struct {

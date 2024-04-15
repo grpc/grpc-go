@@ -347,7 +347,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		streamQuota:           defaultMaxStreamsClient,
 		streamsQuotaAvailable: make(chan struct{}, 1),
 		keepaliveEnabled:      keepaliveEnabled,
-		bufferPool:            newBufferPool(),
 		onClose:               onClose,
 	}
 	var czSecurity credentials.ChannelzSecurityValue
@@ -501,7 +500,6 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 			closeStream: func(err error) {
 				t.CloseStream(s, err)
 			},
-			freeBuffer: t.bufferPool.put,
 		},
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
@@ -1176,10 +1174,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		// guarantee f.Data() is consumed before the arrival of next frame.
 		// Can this copy be eliminated?
 		if len(f.Data()) > 0 {
-			buffer := t.bufferPool.get()
-			buffer.Reset()
-			buffer.Write(f.Data())
-			s.write(recvMsg{buffer: buffer})
+			s.write(recvMsg{buffer: bufPool.copy(f.Data())})
 		}
 	}
 	// The server has closed the stream without sending trailers.  Record that

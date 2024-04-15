@@ -22,7 +22,6 @@
 package transport
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -48,6 +47,10 @@ import (
 
 const logLevel = 2
 
+type Reader interface {
+	Read(n int) (encoding.BufferSlice, error)
+}
+
 type bufferPool struct {
 	pool sync.Pool
 }
@@ -56,24 +59,31 @@ func newBufferPool() *bufferPool {
 	return &bufferPool{
 		pool: sync.Pool{
 			New: func() any {
-				return bytes.NewBuffer(make([]byte, 0, http2MaxFrameLen))
+				buf := make([]byte, http2MaxFrameLen)
+				return &buf
 			},
 		},
 	}
 }
 
-func (p *bufferPool) get() *bytes.Buffer {
-	return p.pool.Get().(*bytes.Buffer)
+func (p *bufferPool) get() []byte {
+	return *p.pool.Get().(*[]byte)
 }
 
-func (p *bufferPool) put(b *bytes.Buffer) {
-	p.pool.Put(b)
+func (p *bufferPool) put(b []byte) {
+	p.pool.Put(&b)
+}
+
+func (p *bufferPool) copy(data []byte) *encoding.Buffer {
+	b := p.get()
+	n := copy(b, data)
+	return encoding.NewBuffer(b[:n], bufPool.put)
 }
 
 // recvMsg represents the received msg from the transport. All transport
 // protocol specific info has been removed.
 type recvMsg struct {
-	buffer *bytes.Buffer
+	buffer *encoding.Buffer
 	// nil: received some data
 	// io.EOF: stream is completed. data is nil.
 	// other non-nil error: transport failure. data is nil.
@@ -149,45 +159,40 @@ type recvBufferReader struct {
 	ctx         context.Context
 	ctxDone     <-chan struct{} // cache of ctx.Done() (for performance).
 	recv        *recvBuffer
-	last        *bytes.Buffer // Stores the remaining data in the previous calls.
+	last        *encoding.Buffer
 	err         error
-	freeBuffer  func(*bytes.Buffer)
 }
 
 // Read reads the next len(p) bytes from last. If last is drained, it tries to
 // read additional data from recv. It blocks if there no additional data available
 // in recv. If Read returns any non-nil error, it will continue to return that error.
-func (r *recvBufferReader) Read(p []byte) (n int, err error) {
+func (r *recvBufferReader) Read(n int) (buf *encoding.Buffer, err error) {
 	if r.err != nil {
-		return 0, r.err
+		return nil, r.err
 	}
 	if r.last != nil {
-		// Read remaining data left in last call.
-		copied, _ := r.last.Read(p)
-		if r.last.Len() == 0 {
-			r.freeBuffer(r.last)
-			r.last = nil
-		}
-		return copied, nil
+		buf = r.last
+		r.last = nil
+		return buf, nil
 	}
 	if r.closeStream != nil {
-		n, r.err = r.readClient(p)
+		buf, r.err = r.readClient(n)
 	} else {
-		n, r.err = r.read(p)
+		buf, r.err = r.read(n)
 	}
-	return n, r.err
+	return buf, r.err
 }
 
-func (r *recvBufferReader) read(p []byte) (n int, err error) {
+func (r *recvBufferReader) read(n int) (buf *encoding.Buffer, err error) {
 	select {
 	case <-r.ctxDone:
-		return 0, ContextErr(r.ctx.Err())
+		return nil, ContextErr(r.ctx.Err())
 	case m := <-r.recv.get():
-		return r.readAdditional(m, p)
+		return r.readAdditional(m, n)
 	}
 }
 
-func (r *recvBufferReader) readClient(p []byte) (n int, err error) {
+func (r *recvBufferReader) readClient(n int) (buf *encoding.Buffer, err error) {
 	// If the context is canceled, then closes the stream with nil metadata.
 	// closeStream writes its error parameter to r.recv as a recvMsg.
 	// r.readAdditional acts on that message and returns the necessary error.
@@ -208,25 +213,25 @@ func (r *recvBufferReader) readClient(p []byte) (n int, err error) {
 		// faster.
 		r.closeStream(ContextErr(r.ctx.Err()))
 		m := <-r.recv.get()
-		return r.readAdditional(m, p)
+		return r.readAdditional(m, n)
 	case m := <-r.recv.get():
-		return r.readAdditional(m, p)
+		return r.readAdditional(m, n)
 	}
 }
 
-func (r *recvBufferReader) readAdditional(m recvMsg, p []byte) (n int, err error) {
+func (r *recvBufferReader) readAdditional(m recvMsg, n int) (b *encoding.Buffer, err error) {
 	r.recv.load()
+
 	if m.err != nil {
-		return 0, m.err
+		m.buffer.Free()
+		return nil, err
 	}
-	copied, _ := m.buffer.Read(p)
-	if m.buffer.Len() == 0 {
-		r.freeBuffer(m.buffer)
-		r.last = nil
-	} else {
-		r.last = m.buffer
+
+	if m.buffer.Len() > n {
+		r.last = m.buffer.Split(n)
 	}
-	return copied, nil
+
+	return m.buffer, nil
 }
 
 type streamState uint32
@@ -252,7 +257,7 @@ type Stream struct {
 	recvCompress string
 	sendCompress string
 	buf          *recvBuffer
-	trReader     io.Reader
+	trReader     *transportReader
 	fc           *inFlow
 	wq           *writeQuota
 
@@ -501,13 +506,43 @@ func (s *Stream) write(m recvMsg) {
 }
 
 // Read reads all p bytes from the wire for this stream.
-func (s *Stream) Read(p []byte) (n int, err error) {
+func (s *Stream) Read(n int) (data encoding.BufferSlice, err error) {
 	// Don't request a read if there was an error earlier
-	if er := s.trReader.(*transportReader).er; er != nil {
-		return 0, er
+	if er := s.trReader.er; er != nil {
+		return nil, er
 	}
-	s.requestRead(len(p))
-	return io.ReadFull(s.trReader, p)
+	s.requestRead(n)
+	for n != 0 {
+		buf, err := s.trReader.Read(n)
+		n -= buf.Len()
+		if n == 0 {
+			err = nil
+		}
+		if err != nil {
+			if err == io.EOF {
+				err = io.ErrUnexpectedEOF
+			}
+			data.Free()
+			return nil, err
+		}
+		data = append(data, buf)
+	}
+	return data, nil
+}
+
+func (s *Stream) readTo(p []byte) (int, error) {
+	data, err := s.Read(len(p))
+	defer data.Free()
+
+	if data.Len() != len(p) {
+		if err == nil {
+			err = io.ErrUnexpectedEOF
+		}
+		return 0, err
+	}
+
+	data.WriteTo(p)
+	return len(p), nil
 }
 
 // tranportReader reads all the data available for this Stream from the transport and
@@ -515,20 +550,20 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 // The error is io.EOF when the stream is done or another non-nil error if
 // the stream broke.
 type transportReader struct {
-	reader io.Reader
+	reader *recvBufferReader
 	// The handler to control the window update procedure for both this
 	// particular stream and the associated transport.
 	windowHandler func(int)
 	er            error
 }
 
-func (t *transportReader) Read(p []byte) (n int, err error) {
-	n, err = t.reader.Read(p)
+func (t *transportReader) Read(n int) (buf *encoding.Buffer, err error) {
+	buf, err = t.reader.Read(n)
 	if err != nil {
 		t.er = err
 		return
 	}
-	t.windowHandler(n)
+	t.windowHandler(buf.Len())
 	return
 }
 

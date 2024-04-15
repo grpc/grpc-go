@@ -890,9 +890,7 @@ func (l *loopyWriter) applySettings(ss []http2.Setting) {
 	}
 }
 
-var bufPool = sync.Pool{
-	New: func() any { return make([]byte, http2MaxFrameLen) },
-}
+var bufPool = newBufferPool()
 
 // processData removes the first stream from active streams, writes out at most 16KB
 // of its data and then puts it at the end of activeStreams if there's still more data
@@ -957,8 +955,8 @@ func (l *loopyWriter) processData() (bool, error) {
 	} else {
 		// Note: this is only necessary because the http2.Framer does not support
 		// partially writing a frame, so the sequence must be materialized into a buffer.
-		buf = bufPool.Get().([]byte)
-		defer bufPool.Put(buf)
+		buf = bufPool.get()
+		defer bufPool.put(buf)
 
 		copy(buf[:hSize], dataItem.h)
 		_, _ = dataItem.r.Read(buf[hSize:])

@@ -585,7 +585,7 @@ type parser struct {
 	// r is the underlying reader.
 	// See the comment on recvMsg for the permissible
 	// error types.
-	r io.Reader
+	r transport.Reader
 
 	// The header of a gRPC message. Find more detail at
 	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md
@@ -610,7 +610,11 @@ type parser struct {
 // that the underlying io.Reader must not return an incompatible
 // error.
 func (p *parser) recvMsg(maxReceiveMessageSize int) (payloadFormat, encoding.BufferSlice, error) {
-	if _, err := p.r.Read(p.header[:]); err != nil {
+	if header, err := p.r.Read(5); err == nil {
+		header.WriteTo(p.header[:])
+		header.Free()
+	} else {
+		header.Free()
 		return 0, nil, err
 	}
 
@@ -626,18 +630,16 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (payloadFormat, encoding.Buf
 	if int(length) > maxReceiveMessageSize {
 		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
-	buf := p.recvBufferPool.Get(int(length))
-	// TODO: instead of reading out the entire message into a single buffer, the
-	// underlying reader should return its underlying data as an encoding.BufferSlice
-	// directly, avoiding this copy.
-	if _, err := p.r.Read(buf); err != nil {
+
+	data, err := p.r.Read(int(length))
+	if err != nil {
+		data.Free()
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
-		p.recvBufferPool.Put(buf)
 		return 0, nil, err
 	}
-	return pf, encoding.BufferSlice{encoding.NewBuffer(buf, p.recvBufferPool.Put)}, nil
+	return pf, data, nil
 }
 
 // encode serializes msg and returns a buffer containing the message, or an

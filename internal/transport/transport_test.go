@@ -118,7 +118,7 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 		resp = expectedResponseLarge
 	}
 	p := make([]byte, len(req))
-	_, err := s.Read(p)
+	_, err := s.readTo(p)
 	if err != nil {
 		return
 	}
@@ -136,7 +136,7 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 func (h *testStreamHandler) handleStreamPingPong(t *testing.T, s *Stream) {
 	header := make([]byte, 5)
 	for {
-		if _, err := s.Read(header); err != nil {
+		if _, err := s.readTo(header); err != nil {
 			if err == io.EOF {
 				h.t.WriteStatus(s, status.New(codes.OK, ""))
 				return
@@ -147,7 +147,7 @@ func (h *testStreamHandler) handleStreamPingPong(t *testing.T, s *Stream) {
 		}
 		sz := binary.BigEndian.Uint32(header[1:])
 		msg := make([]byte, int(sz))
-		if _, err := s.Read(msg); err != nil {
+		if _, err := s.readTo(msg); err != nil {
 			t.Errorf("Error on server while reading message: %v", err)
 			h.t.WriteStatus(s, status.New(codes.Internal, "panic"))
 			return
@@ -266,7 +266,7 @@ func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *Stream) {
 		t.Errorf("Server timed-out.")
 		return
 	}
-	_, err := s.Read(p)
+	_, err := s.readTo(p)
 	if err != nil {
 		t.Errorf("s.Read(_) = _, %v, want _, <nil>", err)
 		return
@@ -286,7 +286,7 @@ func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *Stream) {
 	// Read one more time to ensure that everything remains fine and
 	// that the goroutine, that we launched earlier to signal client
 	// to read, gets enough time to process.
-	_, err = s.Read(p)
+	_, err = s.readTo(p)
 	if err != nil {
 		t.Errorf("s.Read(_) = _, %v, want _, nil", err)
 		return
@@ -508,7 +508,7 @@ func (s) TestInflightStreamClosing(t *testing.T) {
 	serr := status.Error(codes.Internal, "client connection is closing")
 	go func() {
 		defer close(donec)
-		if _, err := stream.Read(make([]byte, defaultWindowSize)); err != serr {
+		if _, err := stream.readTo(make([]byte, defaultWindowSize)); err != serr {
 			t.Errorf("unexpected Stream error %v, expected %v", err, serr)
 		}
 	}()
@@ -602,11 +602,11 @@ func (s) TestClientSendAndReceive(t *testing.T) {
 		t.Fatalf("failed to send data: %v", err)
 	}
 	p := make([]byte, len(expectedResponse))
-	_, recvErr := s1.Read(p)
+	_, recvErr := s1.readTo(p)
 	if recvErr != nil || !bytes.Equal(p, expectedResponse) {
 		t.Fatalf("Error: %v, want <nil>; Result: %v, want %v", recvErr, p, expectedResponse)
 	}
-	_, recvErr = s1.Read(p)
+	_, recvErr = s1.readTo(p)
 	if recvErr != io.EOF {
 		t.Fatalf("Error: %v; want <EOF>", recvErr)
 	}
@@ -642,9 +642,9 @@ func performOneRPC(ct ClientTransport) {
 		//
 		// Read response
 		p := make([]byte, len(expectedResponse))
-		s.Read(p)
+		s.readTo(p)
 		// Read io.EOF
-		s.Read(p)
+		s.readTo(p)
 	}
 }
 
@@ -684,10 +684,10 @@ func (s) TestLargeMessage(t *testing.T) {
 				t.Errorf("%v.Write(_, _, _) = %v, want  <nil>", ct, err)
 			}
 			p := make([]byte, len(expectedResponseLarge))
-			if _, err := s.Read(p); err != nil || !bytes.Equal(p, expectedResponseLarge) {
+			if _, err := s.readTo(p); err != nil || !bytes.Equal(p, expectedResponseLarge) {
 				t.Errorf("s.Read(%v) = _, %v, want %v, <nil>", err, p, expectedResponse)
 			}
-			if _, err = s.Read(p); err != io.EOF {
+			if _, err = s.readTo(p); err != io.EOF {
 				t.Errorf("Failed to complete the stream %v; want <EOF>", err)
 			}
 		}()
@@ -783,13 +783,13 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("Client timed out")
 	}
-	if _, err := s.Read(p); err != nil || !bytes.Equal(p, expectedResponseLarge) {
+	if _, err := s.readTo(p); err != nil || !bytes.Equal(p, expectedResponseLarge) {
 		t.Fatalf("s.Read(_) = _, %v, want _, <nil>", err)
 	}
 	if err := ct.Write(s, []byte{}, newBufferSlice(expectedRequestLarge), &Options{Last: true}); err != nil {
 		t.Fatalf("Write(_, _, _) = %v, want <nil>", err)
 	}
-	if _, err = s.Read(p); err != io.EOF {
+	if _, err = s.readTo(p); err != io.EOF {
 		t.Fatalf("Failed to complete the stream %v; want <EOF>", err)
 	}
 }
@@ -827,12 +827,12 @@ func (s) TestGracefulClose(t *testing.T) {
 	if err := ct.Write(s, outgoingHeader, newBufferSlice(msg), &Options{}); err != nil {
 		t.Fatalf("Error while writing: %v", err)
 	}
-	if _, err := s.Read(incomingHeader); err != nil {
+	if _, err := s.readTo(incomingHeader); err != nil {
 		t.Fatalf("Error while reading: %v", err)
 	}
 	sz := binary.BigEndian.Uint32(incomingHeader[1:])
 	recvMsg := make([]byte, int(sz))
-	if _, err := s.Read(recvMsg); err != nil {
+	if _, err := s.readTo(recvMsg); err != nil {
 		t.Fatalf("Error while reading: %v", err)
 	}
 
@@ -857,7 +857,7 @@ func (s) TestGracefulClose(t *testing.T) {
 
 	// Confirm the existing stream still functions as expected.
 	ct.Write(s, nil, nil, &Options{Last: true})
-	if _, err := s.Read(incomingHeader); err != io.EOF {
+	if _, err := s.readTo(incomingHeader); err != io.EOF {
 		t.Fatalf("Client expected EOF from the server. Got: %v", err)
 	}
 	wg.Wait()
@@ -891,7 +891,7 @@ func (s) TestLargeMessageSuspension(t *testing.T) {
 		t.Fatalf("Write got %v, want io.EOF", err)
 	}
 	expectedErr := status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())
-	if _, err := s.Read(make([]byte, 8)); err.Error() != expectedErr.Error() {
+	if _, err := s.readTo(make([]byte, 8)); err.Error() != expectedErr.Error() {
 		t.Fatalf("Read got %v of type %T, want %v", err, err, expectedErr)
 	}
 	ct.Close(fmt.Errorf("closed manually by test"))
@@ -1116,12 +1116,12 @@ func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 	}
 
 	// Client should be able to read data on second stream.
-	if _, err := cstream2.Read(make([]byte, defaultWindowSize)); err != nil {
+	if _, err := cstream2.readTo(make([]byte, defaultWindowSize)); err != nil {
 		t.Fatalf("_.Read(_) = _, %v, want _, <nil>", err)
 	}
 
 	// Client should be able to read data on first stream.
-	if _, err := cstream1.Read(make([]byte, defaultWindowSize)); err != nil {
+	if _, err := cstream1.readTo(make([]byte, defaultWindowSize)); err != nil {
 		t.Fatalf("_.Read(_) = _, %v, want _, <nil>", err)
 	}
 }
@@ -1187,11 +1187,11 @@ func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	}
 	st.mu.Unlock()
 	// Reading from the stream on server should succeed.
-	if _, err := sstream1.Read(make([]byte, defaultWindowSize)); err != nil {
+	if _, err := sstream1.readTo(make([]byte, defaultWindowSize)); err != nil {
 		t.Fatalf("_.Read(_) = %v, want <nil>", err)
 	}
 
-	if _, err := sstream1.Read(make([]byte, 1)); err != io.EOF {
+	if _, err := sstream1.readTo(make([]byte, 1)); err != io.EOF {
 		t.Fatalf("_.Read(_) = %v, want io.EOF", err)
 	}
 
@@ -1465,7 +1465,7 @@ func (s) TestEncodingRequiredStatus(t *testing.T) {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
 	p := make([]byte, http2MaxFrameLen)
-	if _, err := s.trReader.(*transportReader).Read(p); err != io.EOF {
+	if _, err := s.readTo(p); err != io.EOF {
 		t.Fatalf("Read got error %v, want %v", err, io.EOF)
 	}
 	if !testutils.StatusErrEqual(s.Status().Err(), encodingTestStatus.Err()) {
@@ -1489,7 +1489,7 @@ func (s) TestInvalidHeaderField(t *testing.T) {
 		return
 	}
 	p := make([]byte, http2MaxFrameLen)
-	_, err = s.trReader.(*transportReader).Read(p)
+	_, err = s.readTo(p)
 	if se, ok := status.FromError(err); !ok || se.Code() != codes.Internal || !strings.Contains(err.Error(), expectedInvalidHeaderField) {
 		t.Fatalf("Read got error %v, want error with code %s and contains %q", err, codes.Internal, expectedInvalidHeaderField)
 	}
@@ -1651,13 +1651,13 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 					t.Errorf("Error on client while writing message %v on stream %v: %v", i, stream.id, err)
 					return
 				}
-				if _, err := stream.Read(header); err != nil {
+				if _, err := stream.readTo(header); err != nil {
 					t.Errorf("Error on client while reading data frame header %v on stream %v: %v", i, stream.id, err)
 					return
 				}
 				sz := binary.BigEndian.Uint32(header[1:])
 				recvMsg := make([]byte, int(sz))
-				if _, err := stream.Read(recvMsg); err != nil {
+				if _, err := stream.readTo(recvMsg); err != nil {
 					t.Errorf("Error on client while reading data %v on stream %v: %v", i, stream.id, err)
 					return
 				}
@@ -1688,7 +1688,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	// Close all streams
 	for _, stream := range clientStreams {
 		client.Write(stream, nil, nil, &Options{Last: true})
-		if _, err := stream.Read(make([]byte, 5)); err != io.EOF {
+		if _, err := stream.readTo(make([]byte, 5)); err != io.EOF {
 			t.Fatalf("Client expected an EOF from the server. Got: %v", err)
 		}
 	}
@@ -1760,21 +1760,19 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	}
 	s.trReader = &transportReader{
 		reader: &recvBufferReader{
-			ctx:        s.ctx,
-			ctxDone:    s.ctx.Done(),
-			recv:       s.buf,
-			freeBuffer: func(*bytes.Buffer) {},
+			ctx:     s.ctx,
+			ctxDone: s.ctx.Done(),
+			recv:    s.buf,
 		},
 		windowHandler: func(int) {},
 	}
 	testData := make([]byte, 1)
 	testData[0] = 5
-	testBuffer := bytes.NewBuffer(testData)
 	testErr := errors.New("test error")
-	s.write(recvMsg{buffer: testBuffer, err: testErr})
+	s.write(recvMsg{buffer: encoding.NewBuffer(testData, nil), err: testErr})
 
 	inBuf := make([]byte, 1)
-	actualCount, actualErr := s.Read(inBuf)
+	actualCount, actualErr := s.readTo(inBuf)
 	if actualCount != 0 {
 		t.Errorf("actualCount, _ := s.Read(_) differs; want 0; got %v", actualCount)
 	}
@@ -1782,12 +1780,12 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 		t.Errorf("_ , actualErr := s.Read(_) differs; want actualErr.Error() to be %v; got %v", testErr.Error(), actualErr.Error())
 	}
 
-	s.write(recvMsg{buffer: testBuffer, err: nil})
-	s.write(recvMsg{buffer: testBuffer, err: errors.New("different error from first")})
+	s.write(recvMsg{buffer: encoding.NewBuffer(testData, nil), err: nil})
+	s.write(recvMsg{buffer: encoding.NewBuffer(testData, nil), err: errors.New("different error from first")})
 
 	for i := 0; i < 2; i++ {
 		inBuf := make([]byte, 1)
-		actualCount, actualErr := s.Read(inBuf)
+		actualCount, actualErr := s.readTo(inBuf)
 		if actualCount != 0 {
 			t.Errorf("actualCount, _ := s.Read(_) differs; want %v; got %v", 0, actualCount)
 		}
@@ -2261,18 +2259,18 @@ func runPingPongTest(t *testing.T, msgSize int) {
 		if err := client.Write(stream, outgoingHeader, newBufferSlice(msg), opts); err != nil {
 			t.Fatalf("Error on client while writing message. Err: %v", err)
 		}
-		if _, err := stream.Read(incomingHeader); err != nil {
+		if _, err := stream.readTo(incomingHeader); err != nil {
 			t.Fatalf("Error on client while reading data header. Err: %v", err)
 		}
 		sz := binary.BigEndian.Uint32(incomingHeader[1:])
 		recvMsg := make([]byte, int(sz))
-		if _, err := stream.Read(recvMsg); err != nil {
+		if _, err := stream.readTo(recvMsg); err != nil {
 			t.Fatalf("Error on client while reading data. Err: %v", err)
 		}
 	}
 
 	client.Write(stream, nil, nil, &Options{Last: true})
-	if _, err := stream.Read(incomingHeader); err != io.EOF {
+	if _, err := stream.readTo(incomingHeader); err != io.EOF {
 		t.Fatalf("Client expected EOF from the server. Got: %v", err)
 	}
 }

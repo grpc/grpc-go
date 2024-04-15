@@ -37,11 +37,24 @@ import (
 )
 
 type fullReader struct {
-	reader io.Reader
+	data []byte
 }
 
-func (f fullReader) Read(p []byte) (int, error) {
-	return io.ReadFull(f.reader, p)
+func (f *fullReader) Read(n int) (encoding.BufferSlice, error) {
+	if len(f.data) == 0 {
+		return nil, io.EOF
+	}
+
+	if len(f.data) < n {
+		data := f.data
+		f.data = nil
+		return encoding.BufferSlice{encoding.NewBuffer(data, nil)}, io.ErrUnexpectedEOF
+	}
+
+	buf := f.data[:n]
+	f.data = f.data[n:]
+
+	return encoding.BufferSlice{encoding.NewBuffer(buf, nil)}, nil
 }
 
 var _ CallOption = EmptyCallOption{} // ensure EmptyCallOption implements the interface
@@ -64,7 +77,7 @@ func (s) TestSimpleParsing(t *testing.T) {
 		// Check that messages with length >= 2^24 are parsed.
 		{append([]byte{0, 1, 0, 0, 0}, bigMsg...), nil, bigMsg, compressionNone},
 	} {
-		buf := fullReader{bytes.NewReader(test.p)}
+		buf := &fullReader{test.p}
 		parser := &parser{r: buf, recvBufferPool: encoding.NopBufferPool{}}
 		pt, b, err := parser.recvMsg(math.MaxInt32)
 		if err != test.err || !bytes.Equal(b.Materialize(), test.b) || pt != test.pt {
@@ -76,7 +89,7 @@ func (s) TestSimpleParsing(t *testing.T) {
 func (s) TestMultipleParsing(t *testing.T) {
 	// Set a byte stream consists of 3 messages with their headers.
 	p := []byte{0, 0, 0, 0, 1, 'a', 0, 0, 0, 0, 2, 'b', 'c', 0, 0, 0, 0, 1, 'd'}
-	b := fullReader{bytes.NewReader(p)}
+	b := &fullReader{p}
 	parser := &parser{r: b, recvBufferPool: encoding.NopBufferPool{}}
 
 	wantRecvs := []struct {

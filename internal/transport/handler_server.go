@@ -24,7 +24,6 @@
 package transport
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -412,7 +411,7 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		headerWireLength: 0, // won't have access to header wire length until golang/go#18997.
 	}
 	s.trReader = &transportReader{
-		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf, freeBuffer: func(*bytes.Buffer) {}},
+		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf},
 		windowHandler: func(int) {},
 	}
 
@@ -421,20 +420,15 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 	go func() {
 		defer close(readerDone)
 
-		// TODO: minimize garbage, optimize recvBuffer code/ownership
-		const readSize = 8196
-		for buf := make([]byte, readSize); ; {
+		for {
+			buf := bufPool.get()
 			n, err := req.Body.Read(buf)
 			if n > 0 {
-				s.buf.put(recvMsg{buffer: bytes.NewBuffer(buf[:n:n])})
-				buf = buf[n:]
+				s.buf.put(recvMsg{buffer: encoding.NewBuffer(buf[:n], bufPool.put)})
 			}
 			if err != nil {
 				s.buf.put(recvMsg{err: mapRecvMsgError(err)})
 				return
-			}
-			if len(buf) == 0 {
-				buf = make([]byte, readSize)
 			}
 		}
 	}()
