@@ -31,8 +31,11 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
+var gracefulSwitchPickFirst serviceconfig.LoadBalancingConfig
+
 func init() {
 	balancer.Register(customRoundRobinBuilder{})
+	gracefulSwitchPickFirst, _ = endpointsharding.ParseConfig(json.RawMessage(endpointsharding.PickFirstConfig))
 }
 
 const customRRName = "custom_round_robin"
@@ -99,7 +102,6 @@ func (crr *customRoundRobin) UpdateClientConnState(state balancer.ClientConnStat
 	// A call to UpdateClientConnState should always produce a new Picker.  That
 	// is guaranteed to happen since the aggregator will always call
 	// UpdateChildState in its UpdateClientConnState.
-	gracefulSwitchPickFirst, _ := endpointsharding.ParseConfig(json.RawMessage(endpointsharding.PickFirstConfig))
 	return crr.Balancer.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: gracefulSwitchPickFirst,
 		ResolverState:  state.ResolverState,
