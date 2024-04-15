@@ -121,8 +121,9 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 // https://github.com/grpc/grpc/blob/master/doc/naming.md.  e.g. to use dns
 // resolver, a "dns:///" prefix should be applied to the target.
 //
-// The DialOptions returned by WithBlock, WithTimeout, and
-// WithReturnConnectionError are ignored by this function.
+// The DialOptions returned by WithBlock, WithTimeout,
+// WithReturnConnectionError, and FailOnNonTempDialError are ignored by this
+// function.
 func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target: target,
@@ -692,6 +693,7 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 var emptyServiceConfig *ServiceConfig
 
 func init() {
+	balancer.Register(pickfirstBuilder{})
 	cfg := parseServiceConfig("{}")
 	if cfg.Err != nil {
 		panic(fmt.Sprintf("impossible error parsing empty service config: %v", cfg.Err))
@@ -777,7 +779,7 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 
 	var balCfg serviceconfig.LoadBalancingConfig
 	if cc.sc != nil && cc.sc.lbConfig != nil {
-		balCfg = cc.sc.lbConfig.cfg
+		balCfg = cc.sc.lbConfig
 	}
 	bw := cc.balancerWrapper
 	cc.mu.Unlock()
@@ -836,7 +838,7 @@ func (cc *ClientConn) newAddrConnLocked(addrs []resolver.Address, opts balancer.
 		addrs:        copyAddressesWithoutBalancerAttributes(addrs),
 		scopts:       opts,
 		dopts:        cc.dopts,
-		channelz:     channelz.RegisterSubChannel(cc.channelz.ID, ""),
+		channelz:     channelz.RegisterSubChannel(cc.channelz, ""),
 		resetBackoff: make(chan struct{}),
 		stateChan:    make(chan struct{}),
 	}
@@ -1074,17 +1076,6 @@ func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSel
 	} else {
 		cc.retryThrottler.Store((*retryThrottler)(nil))
 	}
-
-	var newBalancerName string
-	if cc.sc == nil || (cc.sc.lbConfig == nil && cc.sc.LB == nil) {
-		// No service config or no LB policy specified in config.
-		newBalancerName = PickFirstBalancerName
-	} else if cc.sc.lbConfig != nil {
-		newBalancerName = cc.sc.lbConfig.name
-	} else { // cc.sc.LB != nil
-		newBalancerName = *cc.sc.LB
-	}
-	cc.balancerWrapper.switchTo(newBalancerName)
 }
 
 func (cc *ClientConn) resolveNow(o resolver.ResolveNowOptions) {
@@ -1204,6 +1195,7 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	close(ac.stateChan)
 	ac.stateChan = make(chan struct{})
 	ac.state = s
+	ac.channelz.ChannelMetrics.State.Store(&s)
 	if lastErr == nil {
 		channelz.Infof(logger, ac.channelz, "Subchannel Connectivity change to %v", s)
 	} else {

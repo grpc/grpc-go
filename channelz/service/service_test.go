@@ -27,14 +27,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/reflect/protodesc"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/dynamicpb"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
@@ -91,20 +96,6 @@ func convertSocketRefSliceToMap(sktRefs []*channelzpb.SocketRef) map[int64]strin
 		m[sr.SocketId] = sr.Name
 	}
 	return m
-}
-
-type OtherSecurityValue struct {
-	LocalCertificate  []byte `protobuf:"bytes,1,opt,name=local_certificate,json=localCertificate,proto3" json:"local_certificate,omitempty"`
-	RemoteCertificate []byte `protobuf:"bytes,2,opt,name=remote_certificate,json=remoteCertificate,proto3" json:"remote_certificate,omitempty"`
-}
-
-func (m *OtherSecurityValue) Reset()         { *m = OtherSecurityValue{} }
-func (m *OtherSecurityValue) String() string { return proto.CompactTextString(m) }
-func (*OtherSecurityValue) ProtoMessage()    {}
-
-func init() {
-	// Ad-hoc registering the proto type here to facilitate UnmarshalAny of OtherSecurityValue.
-	proto.RegisterType((*OtherSecurityValue)(nil), "grpc.credentials.OtherChannelzSecurityValue")
 }
 
 func (s) TestGetTopChannels(t *testing.T) {
@@ -270,7 +261,7 @@ func (s) TestGetServerSockets(t *testing.T) {
 		ids[2]: refNames[2],
 	}
 	if got := convertSocketRefSliceToMap(resp.GetSocketRef()); !cmp.Equal(got, want) {
-		t.Fatalf("GetServerSockets want: %#v, got: %#v (resp=%v)", want, got, proto.MarshalTextString(resp))
+		t.Fatalf("GetServerSockets want: %#v, got: %#v (resp=%v)", want, got, prototext.Format(resp))
 	}
 
 	for i := 0; i < 50; i++ {
@@ -315,6 +306,8 @@ func (s) TestGetServerSocketsNonZeroStartID(t *testing.T) {
 	}
 }
 
+var logger = grpclog.Component("channelz")
+
 func (s) TestGetChannel(t *testing.T) {
 	refNames := []string{"top channel 1", "nested channel 1", "sub channel 2", "nested channel 3"}
 	cids := make([]*channelz.Channel, 3)
@@ -334,7 +327,7 @@ func (s) TestGetChannel(t *testing.T) {
 		},
 	})
 
-	subChan := channelz.RegisterSubChannel(cids[0].ID, refNames[2])
+	subChan := channelz.RegisterSubChannel(cids[0], refNames[2])
 	channelz.AddTraceEvent(logger, subChan, 0, &channelz.TraceEvent{
 		Desc:     "SubChannel Created",
 		Severity: channelz.CtInfo,
@@ -432,7 +425,7 @@ func (s) TestGetSubChannel(t *testing.T) {
 		Desc:     "Channel Created",
 		Severity: channelz.CtInfo,
 	})
-	subChan := channelz.RegisterSubChannel(chann.ID, refNames[1])
+	subChan := channelz.RegisterSubChannel(chann, refNames[1])
 	defer channelz.RemoveEntry(subChan.ID)
 	channelz.AddTraceEvent(logger, subChan, 0, &channelz.TraceEvent{
 		Desc:     subchanCreated,
@@ -557,6 +550,47 @@ func newSocket(cs czSocket) *channelz.Socket {
 	return s
 }
 
+type OtherChannelzSecurityValue struct {
+	LocalCertificate  []byte `protobuf:"bytes,1,opt,name=local_certificate,json=localCertificate,proto3" json:"local_certificate,omitempty"`
+	RemoteCertificate []byte `protobuf:"bytes,2,opt,name=remote_certificate,json=remoteCertificate,proto3" json:"remote_certificate,omitempty"`
+}
+
+func (x *OtherChannelzSecurityValue) Reset() {
+	*x = OtherChannelzSecurityValue{}
+}
+
+func (x *OtherChannelzSecurityValue) String() string {
+	return prototext.Format(x)
+}
+
+func (*OtherChannelzSecurityValue) ProtoMessage() {}
+
+func (x OtherChannelzSecurityValue) ProtoReflect() protoreflect.Message {
+	const s = `
+		name:   "service_test.proto"
+		syntax: "proto3"
+		package: "grpc.credentials",
+		message_type: [{
+			name: "OtherChannelzSecurityValue"
+			field: [
+				{name:"local_certificate"  number:1 type:TYPE_BYTES},
+				{name:"remote_certificate"  number:2 type:TYPE_BYTES}
+			]
+		}]
+	`
+	pb := new(descriptorpb.FileDescriptorProto)
+	if err := prototext.Unmarshal([]byte(s), pb); err != nil {
+		panic(err)
+	}
+	fd, err := protodesc.NewFile(pb, nil)
+	if err != nil {
+		panic(err)
+	}
+	md := fd.Messages().Get(0)
+	mt := dynamicpb.NewMessageType(md)
+	return mt.New()
+}
+
 func (s) TestGetSocket(t *testing.T) {
 	ss := []*channelz.Socket{newSocket(czSocket{
 		streamsStarted:                   10,
@@ -619,12 +653,15 @@ func (s) TestGetSocket(t *testing.T) {
 		},
 	}), newSocket(czSocket{
 		security: &credentials.OtherChannelzSecurityValue{
-			Name:  "YYYY",
-			Value: &OtherSecurityValue{LocalCertificate: []byte{1, 2, 3}, RemoteCertificate: []byte{4, 5, 6}},
+			Name: "YYYY",
+			Value: OtherChannelzSecurityValue{
+				LocalCertificate:  []byte{1, 2, 3},
+				RemoteCertificate: []byte{4, 5, 6},
+			},
 		},
 	}),
 	}
-	otherSecVal, err := ptypes.MarshalAny(ss[6].Security.(*credentials.OtherChannelzSecurityValue).Value)
+	otherSecVal, err := anypb.New(ss[6].Security.(*credentials.OtherChannelzSecurityValue).Value)
 	if err != nil {
 		t.Fatal("Error marshalling proto:", err)
 	}
@@ -737,7 +774,7 @@ func (s) TestGetSocket(t *testing.T) {
 	for i := range ss {
 		resp, _ := svr.GetSocket(ctx, &channelzpb.GetSocketRequest{SocketId: skts[i].ID})
 		w := &channelzpb.Socket{}
-		if err := proto.UnmarshalText(want[i], w); err != nil {
+		if err := prototext.Unmarshal([]byte(want[i]), w); err != nil {
 			t.Fatalf("Error unmarshalling %q: %v", want[i], err)
 		}
 		if diff := cmp.Diff(resp.GetSocket(), w, protocmp.Transform()); diff != "" {
@@ -757,9 +794,9 @@ func escape(bs []byte) string {
 func addr(a net.Addr) string {
 	switch a := a.(type) {
 	case *net.TCPAddr:
-		return string(a.IP)
+		return escape([]byte(a.IP))
 	case *net.IPAddr:
-		return string(a.IP)
+		return escape([]byte(a.IP))
 	}
 	return ""
 }

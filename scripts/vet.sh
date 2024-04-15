@@ -3,21 +3,7 @@
 set -ex  # Exit on error; debugging enabled.
 set -o pipefail  # Fail a pipe if any sub-command fails.
 
-# not makes sure the command passed to it does not exit with a return code of 0.
-not() {
-  # This is required instead of the earlier (! $COMMAND) because subshells and
-  # pipefail don't work the same on Darwin as in Linux.
-  ! "$@"
-}
-
-die() {
-  echo "$@" >&2
-  exit 1
-}
-
-fail_on_output() {
-  tee /dev/stderr | not read
-}
+source "$(dirname $0)/vet-common.sh"
 
 # Check to make sure it's safe to modify the user's git repo.
 git status --porcelain | fail_on_output
@@ -39,32 +25,9 @@ if [[ "$1" = "-install" ]]; then
     honnef.co/go/tools/cmd/staticcheck \
     github.com/client9/misspell/cmd/misspell
   popd
-  if [[ -z "${VET_SKIP_PROTO}" ]]; then
-    if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
-      PROTOBUF_VERSION=25.2 # a.k.a. v4.22.0 in pb.go files.
-      PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
-      pushd /home/runner/go
-      wget https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/${PROTOC_FILENAME}
-      unzip ${PROTOC_FILENAME}
-      bin/protoc --version
-      popd
-    elif not which protoc > /dev/null; then
-      die "Please install protoc into your path"
-    fi
-  fi
   exit 0
 elif [[ "$#" -ne 0 ]]; then
   die "Unknown argument(s): $*"
-fi
-
-# - Check that generated proto files are up to date.
-if [[ -z "${VET_SKIP_PROTO}" ]]; then
-  make proto && git status --porcelain 2>&1 | fail_on_output || \
-    (git status; git --no-pager diff; exit 1)
-fi
-
-if [[ -n "${VET_ONLY_PROTO}" ]]; then
-  exit 0
 fi
 
 # - Ensure all source files contain a copyright message.
@@ -97,8 +60,8 @@ git grep -l 'interface{}' -- "*.go" 2>&1 | not grep -v '\.pb\.go\|protoc-gen-go-
 # - Do not call grpclog directly. Use grpclog.Component instead.
 git grep -l -e 'grpclog.I' --or -e 'grpclog.W' --or -e 'grpclog.E' --or -e 'grpclog.F' --or -e 'grpclog.V' -- "*.go" | not grep -v '^grpclog/component.go\|^internal/grpctest/tlogger_test.go'
 
-# - Ensure all ptypes proto packages are renamed when importing.
-not git grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/" -- "*.go"
+# - Ensure that the deprecated protobuf dependency is not used.
+not git grep "\"github.com/golang/protobuf/*" -- "*.go" ':(exclude)reflection/test/grpc_testing_not_regenerate/*'
 
 # - Ensure all usages of grpc_testing package are renamed when importing.
 not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" -- "*.go"
@@ -176,6 +139,7 @@ UpdateAddresses is deprecated:
 UpdateSubConnState is deprecated:
 balancer.ErrTransientFailure is deprecated:
 grpc/reflection/v1alpha/reflection.proto
+SwitchTo is deprecated:
 XXXXX xDS deprecated fields we support
 .ExactMatch
 .PrefixMatch

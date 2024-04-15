@@ -53,6 +53,10 @@ func (serviceGenerateHelper) formatFullMethodSymbol(service *protogen.Service, m
 }
 
 func (serviceGenerateHelper) genFullMethods(g *protogen.GeneratedFile, service *protogen.Service) {
+	if len(service.Methods) == 0 {
+		return
+	}
+
 	g.P("const (")
 	for _, method := range service.Methods {
 		fmSymbol := helper.formatFullMethodSymbol(service, method)
@@ -171,8 +175,8 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 
 	g.P("// This is a compile-time assertion to ensure that this generated file")
 	g.P("// is compatible with the grpc package it is being compiled against.")
-	g.P("// Requires gRPC-Go v1.32.0 or later.")
-	g.P("const _ = ", grpcPackage.Ident("SupportPackageIsVersion7")) // When changing, update version number above.
+	g.P("// Requires gRPC-Go v1.62.0 or later.")
+	g.P("const _ = ", grpcPackage.Ident("SupportPackageIsVersion8")) // When changing, update version number above.
 	g.P()
 	for _, service := range file.Services {
 		genService(gen, file, g, service)
@@ -194,10 +198,10 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 		g.P("//")
 		g.P(deprecationComment)
 	}
-	g.Annotate(clientName, service.Location)
+	g.AnnotateSymbol(clientName, protogen.Annotation{Location: service.Location})
 	g.P("type ", clientName, " interface {")
 	for _, method := range service.Methods {
-		g.Annotate(clientName+"."+method.GoName, method.Location)
+		g.AnnotateSymbol(clientName+"."+method.GoName, protogen.Annotation{Location: method.Location})
 		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 			g.P(deprecationComment)
 		}
@@ -247,10 +251,10 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 		g.P("//")
 		g.P(deprecationComment)
 	}
-	g.Annotate(serverType, service.Location)
+	g.AnnotateSymbol(serverType, protogen.Annotation{Location: service.Location})
 	g.P("type ", serverType, " interface {")
 	for _, method := range service.Methods {
-		g.Annotate(serverType+"."+method.GoName, method.Location)
+		g.AnnotateSymbol(serverType+"."+method.GoName, protogen.Annotation{Location: method.Location})
 		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 			g.P(deprecationComment)
 		}
@@ -310,9 +314,10 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 		g.P(deprecationComment)
 	}
 	g.P("func (c *", unexport(service.GoName), "Client) ", clientSignature(g, method), "{")
+	g.P("cOpts := append([]", grpcPackage.Ident("CallOption"), "{", grpcPackage.Ident("StaticMethod()"), "}, opts...)")
 	if !method.Desc.IsStreamingServer() && !method.Desc.IsStreamingClient() {
 		g.P("out := new(", method.Output.GoIdent, ")")
-		g.P(`err := c.cc.Invoke(ctx, `, fmSymbol, `, in, out, opts...)`)
+		g.P(`err := c.cc.Invoke(ctx, `, fmSymbol, `, in, out, cOpts...)`)
 		g.P("if err != nil { return nil, err }")
 		g.P("return out, nil")
 		g.P("}")
@@ -335,7 +340,7 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	}
 
 	serviceDescVar := service.GoName + "_ServiceDesc"
-	g.P("stream, err := c.cc.NewStream(ctx, &", serviceDescVar, ".Streams[", index, `], `, fmSymbol, `, opts...)`)
+	g.P("stream, err := c.cc.NewStream(ctx, &", serviceDescVar, ".Streams[", index, `], `, fmSymbol, `, cOpts...)`)
 	g.P("if err != nil { return nil, err }")
 	g.P("x := &", streamType, "{ClientStream: stream}")
 	if !method.Desc.IsStreamingClient() {

@@ -131,6 +131,43 @@ func (s) TestCZGetChannel(t *testing.T) {
 	}
 }
 
+func (s) TestCZGetSubChannel(t *testing.T) {
+	e := tcpClearRREnv
+	e.balancer = ""
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	r := manual.NewBuilderWithScheme("whatever")
+	addrs := []resolver.Address{{Addr: te.srvAddr}}
+	r.InitialState(resolver.State{Addresses: addrs})
+	te.resolverScheme = r.Scheme()
+	te.clientConn(grpc.WithResolvers(r))
+	defer te.tearDown()
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tcs, _ := channelz.GetTopChannels(0, 0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
+		}
+		scs := tcs[0].SubChans()
+		if len(scs) != 1 {
+			return false, fmt.Errorf("there should be one subchannel, not %d", len(scs))
+		}
+		var scid int64
+		for scid = range scs {
+		}
+		sc := channelz.GetSubChannel(scid)
+		if sc == nil {
+			return false, fmt.Errorf("subchannel with id %v is nil", scid)
+		}
+		state := sc.ChannelMetrics.State.Load()
+		if state == nil || *state != connectivity.Ready {
+			return false, fmt.Errorf("Got subchannel state=%v; want %q", state, connectivity.Ready)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func (s) TestCZGetServer(t *testing.T) {
 	e := tcpClearRREnv
 	te := newTest(t, e)
@@ -159,6 +196,49 @@ func (s) TestCZGetServer(t *testing.T) {
 			return false, fmt.Errorf("server %d should not exist", serverID)
 		}
 
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (s) TestCZGetSocket(t *testing.T) {
+	e := tcpClearRREnv
+	te := newTest(t, e)
+	lis := te.listenAndServe(&testServer{security: e.security}, net.Listen)
+	defer te.tearDown()
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		ss, _ := channelz.GetServers(0, 0)
+		if len(ss) != 1 {
+			return false, fmt.Errorf("len(ss) = %v; want %v", len(ss), 1)
+		}
+
+		serverID := ss[0].ID
+		srv := channelz.GetServer(serverID)
+		if srv == nil {
+			return false, fmt.Errorf("server %d does not exist", serverID)
+		}
+		if srv.ID != serverID {
+			return false, fmt.Errorf("srv.ID = %d; want %v", srv.ID, serverID)
+		}
+
+		skts := srv.ListenSockets()
+		if got, want := len(skts), 1; got != want {
+			return false, fmt.Errorf("len(skts) = %v; want %v", got, want)
+		}
+		var sktID int64
+		for sktID = range skts {
+		}
+
+		skt := channelz.GetSocket(sktID)
+		if skt == nil {
+			return false, fmt.Errorf("socket %v does not exist", sktID)
+		}
+
+		if got, want := skt.LocalAddr, lis.Addr(); got != want {
+			return false, fmt.Errorf("socket %v LocalAddr=%v; want %v", sktID, got, want)
+		}
 		return true, nil
 	}); err != nil {
 		t.Fatal(err)
@@ -474,8 +554,8 @@ func (s) TestCZRecusivelyDeletionOfEntry(t *testing.T) {
 	// Socket1       Socket2
 
 	topChan := channelz.RegisterChannel(nil, "")
-	subChan1 := channelz.RegisterSubChannel(topChan.ID, "")
-	subChan2 := channelz.RegisterSubChannel(topChan.ID, "")
+	subChan1 := channelz.RegisterSubChannel(topChan, "")
+	subChan2 := channelz.RegisterSubChannel(topChan, "")
 	skt1 := channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, Parent: subChan1})
 	skt2 := channelz.RegisterSocket(&channelz.Socket{SocketType: channelz.SocketTypeNormal, Parent: subChan1})
 

@@ -199,7 +199,7 @@ func TestBuildXDS(t *testing.T) {
 				Locality:             &v3corepb.Locality{Zone: testZone},
 				UserAgentName:        gRPCUserAgentName,
 				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-				ClientFeatures:       []string{clientFeatureNoOverprovisioning},
+				ClientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
 			}
 			if tt.ipv6 {
 				wantNode.Metadata = &structpb.Struct{
@@ -213,7 +213,7 @@ func TestBuildXDS(t *testing.T) {
 			wantServerConfig, err := bootstrap.ServerConfigFromJSON([]byte(fmt.Sprintf(`{
 				"server_uri": "%s",
 				"channel_creds": [{"type": "google_default"}],
-				"server_features": ["xds_v3", "ignore_resource_deletion"]
+				"server_features": ["xds_v3", "ignore_resource_deletion", "xds.config.resource-in-sotw"]
 			}`, tdURL)))
 			if err != nil {
 				t.Fatalf("Failed to build server bootstrap config: %v", err)
@@ -223,7 +223,8 @@ func TestBuildXDS(t *testing.T) {
 				ClientDefaultListenerResourceNameTemplate: "%s",
 				Authorities: map[string]*bootstrap.Authority{
 					"traffic-director-c2p.xds.googleapis.com": {
-						XDSServer: wantServerConfig,
+						XDSServer:                          wantServerConfig,
+						ClientListenerResourceNameTemplate: "xdstp://traffic-director-c2p.xds.googleapis.com/envoy.config.listener.v3.Listener/%s",
 					},
 				},
 				NodeProto: wantNode,

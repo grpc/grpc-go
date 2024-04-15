@@ -322,7 +322,7 @@ func (s) TestParseConfigErrors(t *testing.T) {
 				"childPolicy": [{"grpclb": {"childPolicy": [{"pickfirst": {}}]}}],
 				"childPolicyConfigTargetFieldName": "serviceName"
 			}`),
-			wantErr: "invalid loadBalancingConfig: no supported policies found",
+			wantErr: "no supported policies found in config",
 		},
 		{
 			desc: "no child policy",

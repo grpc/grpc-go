@@ -32,8 +32,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.32.0 or later.
-const _ = grpc.SupportPackageIsVersion7
+// Requires gRPC-Go v1.62.0 or later.
+const _ = grpc.SupportPackageIsVersion8
 
 const (
 	WorkerService_RunServer_FullMethodName  = "/grpc.testing.WorkerService/RunServer"
@@ -75,7 +75,8 @@ func NewWorkerServiceClient(cc grpc.ClientConnInterface) WorkerServiceClient {
 }
 
 func (c *workerServiceClient) RunServer(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunServerClient, error) {
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[0], WorkerService_RunServer_FullMethodName, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[0], WorkerService_RunServer_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +107,8 @@ func (x *workerServiceRunServerClient) Recv() (*ServerStatus, error) {
 }
 
 func (c *workerServiceClient) RunClient(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunClientClient, error) {
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[1], WorkerService_RunClient_FullMethodName, opts...)
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[1], WorkerService_RunClient_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -137,8 +139,9 @@ func (x *workerServiceRunClientClient) Recv() (*ClientStatus, error) {
 }
 
 func (c *workerServiceClient) CoreCount(ctx context.Context, in *CoreRequest, opts ...grpc.CallOption) (*CoreResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CoreResponse)
-	err := c.cc.Invoke(ctx, WorkerService_CoreCount_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, WorkerService_CoreCount_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -146,8 +149,9 @@ func (c *workerServiceClient) CoreCount(ctx context.Context, in *CoreRequest, op
 }
 
 func (c *workerServiceClient) QuitWorker(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Void)
-	err := c.cc.Invoke(ctx, WorkerService_QuitWorker_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, WorkerService_QuitWorker_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}

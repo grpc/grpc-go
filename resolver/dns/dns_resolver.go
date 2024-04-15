@@ -52,3 +52,9 @@ func SetResolvingTimeout(timeout time.Duration) {
 func NewBuilder() resolver.Builder {
 	return dns.NewBuilder()
 }
+
+// SetMinResolutionInterval sets the default minimum interval at which DNS re-resolutions are
+// allowed. This helps to prevent excessive re-resolution.
+func SetMinResolutionInterval(d time.Duration) {
+	dns.MinResolutionInterval = d
+}
