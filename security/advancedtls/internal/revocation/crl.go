@@ -84,7 +84,7 @@ func CheckChainRevocation(verifiedChains [][]*x509.Certificate, cfg revocation.R
 // 1. If any certificate is RevocationRevoked, return RevocationRevoked.
 // 2. If any certificate is RevocationUndetermined, return RevocationUndetermined.
 // 3. If all certificates are RevocationUnrevoked, return RevocationUnrevoked.
-func checkChain(chain []*x509.Certificate, cfg RevocationConfig) RevocationStatus {
+func checkChain(chain []*x509.Certificate, cfg revocation.RevocationConfig) revocation.RevocationStatus {
 	chainStatus := revocation.RevocationUnrevoked
 	for _, c := range chain {
 		switch checkCert(c, chain, cfg) {

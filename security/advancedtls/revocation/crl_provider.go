@@ -24,7 +24,11 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc/grpclog"
 )
+
+var grpclogLogger = grpclog.Component("revocation")
 
 const defaultCRLRefreshDuration = 1 * time.Hour
 const minCRLRefreshDuration = 1 * time.Minute
@@ -78,7 +82,7 @@ func NewStaticCRLProvider(rawCRLs [][]byte) *StaticCRLProvider {
 
 // AddCRL adds/updates provided CRL to in-memory storage.
 func (p *StaticCRLProvider) addCRL(crl *CRL) {
-	key := crl.certList.Issuer.ToRDNSequence().String()
+	key := crl.CertList.Issuer.ToRDNSequence().String()
 	p.crls[key] = crl
 }
 
@@ -208,7 +212,7 @@ func (p *FileWatcherCRLProvider) scanCRLDirectory() {
 			}
 			continue
 		}
-		tempCRLs[crl.certList.Issuer.ToRDNSequence().String()] = crl
+		tempCRLs[crl.CertList.Issuer.ToRDNSequence().String()] = crl
 		successCounter++
 	}
 	// Only if all the files are processed successfully we can swap maps (there

@@ -136,43 +136,6 @@ var (
 	oidAuthorityKeyIdentifier = asn1.ObjectIdentifier{2, 5, 29, 35}
 )
 
-func checkCertRevocation(c *x509.Certificate, crl *CRL) (RevocationStatus, error) {
-	// Per section 5.3.3 we prime the certificate issuer with the CRL issuer.
-	// Subsequent entries use the previous entry's issuer.
-	rawEntryIssuer := crl.RawIssuer
-
-	// Loop through all the revoked certificates.
-	for _, revCert := range crl.certList.RevokedCertificates {
-		// 5.3 Loop through CRL entry extensions for needed information.
-		for _, ext := range revCert.Extensions {
-			if oidCertificateIssuer.Equal(ext.Id) {
-				extIssuer, err := parseCertIssuerExt(ext)
-				if err != nil {
-					grpclogLogger.Info(err)
-					if ext.Critical {
-						return RevocationUndetermined, err
-					}
-					// Since this is a non-critical extension, we can skip it even though
-					// there was a parsing failure.
-					continue
-				}
-				rawEntryIssuer = extIssuer
-			} else if ext.Critical {
-				return RevocationUndetermined, fmt.Errorf("checkCertRevocation: Unhandled critical extension: %v", ext.Id)
-			}
-		}
-
-		// If the issuer and serial number appear in the CRL, the certificate is revoked.
-		if bytes.Equal(c.RawIssuer, rawEntryIssuer) && c.SerialNumber.Cmp(revCert.SerialNumber) == 0 {
-			// CRL contains the serial, so return revoked.
-			return RevocationRevoked, nil
-		}
-	}
-	// We did not find the serial in the CRL file that was valid for the cert
-	// so the certificate is not revoked.
-	return RevocationUnrevoked, nil
-}
-
 func parseCertIssuerExt(ext pkix.Extension) ([]byte, error) {
 	// 5.3.3 Certificate Issuer
 	// CertificateIssuer ::=     GeneralNames
@@ -238,7 +201,7 @@ func parseCRLExtensions(c *x509.RevocationList) (*CRL, error) {
 	if c == nil {
 		return nil, errors.New("c is nil, expected any value")
 	}
-	certList := &CRL{certList: c}
+	certList := &CRL{CertList: c}
 
 	for _, ext := range c.Extensions {
 		switch {
@@ -252,7 +215,7 @@ func parseCRLExtensions(c *x509.RevocationList) (*CRL, error) {
 			} else if len(rest) != 0 {
 				return nil, errors.New("trailing data after AKID extension")
 			}
-			certList.authorityKeyID = a.ID
+			certList.AuthorityKeyID = a.ID
 
 		case oidIssuingDistributionPoint.Equal(ext.Id):
 			var dp issuingDistributionPoint
@@ -277,7 +240,7 @@ func parseCRLExtensions(c *x509.RevocationList) (*CRL, error) {
 		}
 	}
 
-	if len(certList.authorityKeyID) == 0 {
+	if len(certList.AuthorityKeyID) == 0 {
 		return nil, errors.New("authority key identifier extension missing")
 	}
 	return certList, nil
