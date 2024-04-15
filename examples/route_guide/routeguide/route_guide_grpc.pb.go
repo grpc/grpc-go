@@ -56,17 +56,17 @@ type RouteGuideClient interface {
 	// streamed rather than returned at once (e.g. in a response message with a
 	// repeated field), as the rectangle may cover a large area and contain a
 	// huge number of features.
-	ListFeatures(ctx context.Context, in *Rectangle, opts ...grpc.CallOption) (RouteGuide_ListFeaturesClient, error)
+	ListFeatures(ctx context.Context, in *Rectangle, opts ...grpc.CallOption) (grpc.ServerStreamClient[Feature], error)
 	// A client-to-server streaming RPC.
 	//
 	// Accepts a stream of Points on a route being traversed, returning a
 	// RouteSummary when traversal is completed.
-	RecordRoute(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RecordRouteClient, error)
+	RecordRoute(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamClient[Point, RouteSummary], error)
 	// A Bidirectional streaming RPC.
 	//
 	// Accepts a stream of RouteNotes sent while a route is being traversed,
 	// while receiving other RouteNotes (e.g. from other users).
-	RouteChat(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RouteChatClient, error)
+	RouteChat(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamClient[RouteNote, RouteNote], error)
 }
 
 type routeGuideClient struct {
@@ -87,7 +87,7 @@ func (c *routeGuideClient) GetFeature(ctx context.Context, in *Point, opts ...gr
 	return out, nil
 }
 
-func (c *routeGuideClient) ListFeatures(ctx context.Context, in *Rectangle, opts ...grpc.CallOption) (RouteGuide_ListFeaturesClient, error) {
+func (c *routeGuideClient) ListFeatures(ctx context.Context, in *Rectangle, opts ...grpc.CallOption) (grpc.ServerStreamClient[Feature], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &RouteGuide_ServiceDesc.Streams[0], RouteGuide_ListFeatures_FullMethodName, cOpts...)
 	if err != nil {
@@ -103,9 +103,10 @@ func (c *routeGuideClient) ListFeatures(ctx context.Context, in *Rectangle, opts
 	return x, nil
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type RouteGuide_ListFeaturesClient = grpc.ServerStreamClient[Feature]
 
-func (c *routeGuideClient) RecordRoute(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RecordRouteClient, error) {
+func (c *routeGuideClient) RecordRoute(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamClient[Point, RouteSummary], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &RouteGuide_ServiceDesc.Streams[1], RouteGuide_RecordRoute_FullMethodName, cOpts...)
 	if err != nil {
@@ -115,9 +116,10 @@ func (c *routeGuideClient) RecordRoute(ctx context.Context, opts ...grpc.CallOpt
 	return x, nil
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type RouteGuide_RecordRouteClient = grpc.ClientStreamClient[Point, RouteSummary]
 
-func (c *routeGuideClient) RouteChat(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RouteChatClient, error) {
+func (c *routeGuideClient) RouteChat(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamClient[RouteNote, RouteNote], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &RouteGuide_ServiceDesc.Streams[2], RouteGuide_RouteChat_FullMethodName, cOpts...)
 	if err != nil {
@@ -127,6 +129,7 @@ func (c *routeGuideClient) RouteChat(ctx context.Context, opts ...grpc.CallOptio
 	return x, nil
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type RouteGuide_RouteChatClient = grpc.BidiStreamClient[RouteNote, RouteNote]
 
 // RouteGuideServer is the server API for RouteGuide service.
@@ -146,17 +149,17 @@ type RouteGuideServer interface {
 	// streamed rather than returned at once (e.g. in a response message with a
 	// repeated field), as the rectangle may cover a large area and contain a
 	// huge number of features.
-	ListFeatures(*Rectangle, RouteGuide_ListFeaturesServer) error
+	ListFeatures(*Rectangle, grpc.ServerStreamServer[Feature]) error
 	// A client-to-server streaming RPC.
 	//
 	// Accepts a stream of Points on a route being traversed, returning a
 	// RouteSummary when traversal is completed.
-	RecordRoute(RouteGuide_RecordRouteServer) error
+	RecordRoute(grpc.ClientStreamServer[Point, RouteSummary]) error
 	// A Bidirectional streaming RPC.
 	//
 	// Accepts a stream of RouteNotes sent while a route is being traversed,
 	// while receiving other RouteNotes (e.g. from other users).
-	RouteChat(RouteGuide_RouteChatServer) error
+	RouteChat(grpc.BidiStreamServer[RouteNote, RouteNote]) error
 	mustEmbedUnimplementedRouteGuideServer()
 }
 
@@ -167,13 +170,13 @@ type UnimplementedRouteGuideServer struct {
 func (UnimplementedRouteGuideServer) GetFeature(context.Context, *Point) (*Feature, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetFeature not implemented")
 }
-func (UnimplementedRouteGuideServer) ListFeatures(*Rectangle, RouteGuide_ListFeaturesServer) error {
+func (UnimplementedRouteGuideServer) ListFeatures(*Rectangle, grpc.ServerStreamServer[Feature]) error {
 	return status.Errorf(codes.Unimplemented, "method ListFeatures not implemented")
 }
-func (UnimplementedRouteGuideServer) RecordRoute(RouteGuide_RecordRouteServer) error {
+func (UnimplementedRouteGuideServer) RecordRoute(grpc.ClientStreamServer[Point, RouteSummary]) error {
 	return status.Errorf(codes.Unimplemented, "method RecordRoute not implemented")
 }
-func (UnimplementedRouteGuideServer) RouteChat(RouteGuide_RouteChatServer) error {
+func (UnimplementedRouteGuideServer) RouteChat(grpc.BidiStreamServer[RouteNote, RouteNote]) error {
 	return status.Errorf(codes.Unimplemented, "method RouteChat not implemented")
 }
 func (UnimplementedRouteGuideServer) mustEmbedUnimplementedRouteGuideServer() {}
@@ -215,18 +218,21 @@ func _RouteGuide_ListFeatures_Handler(srv interface{}, stream grpc.ServerStream)
 	return srv.(RouteGuideServer).ListFeatures(m, &grpc.StreamServerImpl[Rectangle, Feature]{ServerStream: stream})
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type RouteGuide_ListFeaturesServer = grpc.ServerStreamServer[Feature]
 
 func _RouteGuide_RecordRoute_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(RouteGuideServer).RecordRoute(&grpc.StreamServerImpl[Point, RouteSummary]{ServerStream: stream})
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type RouteGuide_RecordRouteServer = grpc.ClientStreamServer[Point, RouteSummary]
 
 func _RouteGuide_RouteChat_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(RouteGuideServer).RouteChat(&grpc.StreamServerImpl[RouteNote, RouteNote]{ServerStream: stream})
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type RouteGuide_RouteChatServer = grpc.BidiStreamServer[RouteNote, RouteNote]
 
 // RouteGuide_ServiceDesc is the grpc.ServiceDesc for RouteGuide service.

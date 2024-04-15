@@ -304,7 +304,11 @@ func clientSignature(g *protogen.GeneratedFile, method *protogen.Method) string 
 	if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
 		s += "*" + g.QualifiedGoIdent(method.Output.GoIdent)
 	} else {
-		s += method.Parent.GoName + "_" + method.GoName + "Client"
+		if *useGenericStreams {
+			s += clientStreamInterface(g, method)
+		} else {
+			s += method.Parent.GoName + "_" + method.GoName + "Client"
+		}
 	}
 	s += ", error)"
 	return s
@@ -358,15 +362,16 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	g.P("}")
 	g.P()
 
-	// Stream auxiliary types and methods.
+	// Auxiliary types aliases, for backwards compatibility.
 	if *useGenericStreams {
-		// Use a type alias so that the type name in the generated function
-		// signature can remain identical even while we swap out the implementation.
+		g.P("// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.")
 		g.P("type ", service.GoName, "_", method.GoName, "Client = ", clientStreamInterface(g, method))
 		g.P()
 		return
 	}
 
+	// Stream auxiliary types and methods, if we're not taking advantage of the
+	// pre-implemented generic types and their methods.
 	genSend := method.Desc.IsStreamingClient()
 	genRecv := method.Desc.IsStreamingServer()
 	genCloseAndRecv := !method.Desc.IsStreamingServer()
@@ -426,7 +431,11 @@ func serverSignature(g *protogen.GeneratedFile, method *protogen.Method) string 
 		reqArgs = append(reqArgs, "*"+g.QualifiedGoIdent(method.Input.GoIdent))
 	}
 	if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
-		reqArgs = append(reqArgs, method.Parent.GoName+"_"+method.GoName+"Server")
+		if *useGenericStreams {
+			reqArgs = append(reqArgs, serverStreamInterface(g, method))
+		} else {
+			reqArgs = append(reqArgs, method.Parent.GoName+"_"+method.GoName+"Server")
+		}
 	}
 	return method.GoName + "(" + strings.Join(reqArgs, ", ") + ") " + ret
 }
@@ -523,15 +532,16 @@ func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	g.P("}")
 	g.P()
 
-	// Stream auxiliary types and methods.
+	// Auxiliary types aliases, for backwards compatibility.
 	if *useGenericStreams {
-		// Use a type alias so that the type name in the generated function
-		// signature can remain identical even while we swap out the implementation.
+		g.P("// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.")
 		g.P("type ", service.GoName, "_", method.GoName, "Server = ", serverStreamInterface(g, method))
 		g.P()
 		return hname
 	}
 
+	// Stream auxiliary types and methods, if we're not taking advantage of the
+	// pre-implemented generic types and their methods.
 	genSend := method.Desc.IsStreamingServer()
 	genSendAndClose := !method.Desc.IsStreamingServer()
 	genRecv := method.Desc.IsStreamingClient()

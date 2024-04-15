@@ -49,7 +49,7 @@ type HandshakerServiceClient interface {
 	// messages with next. Each time client sends a request, the handshaker
 	// service expects to respond. Client does not have to wait for service's
 	// response before sending next request.
-	DoHandshake(ctx context.Context, opts ...grpc.CallOption) (HandshakerService_DoHandshakeClient, error)
+	DoHandshake(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamClient[HandshakerReq, HandshakerResp], error)
 }
 
 type handshakerServiceClient struct {
@@ -60,7 +60,7 @@ func NewHandshakerServiceClient(cc grpc.ClientConnInterface) HandshakerServiceCl
 	return &handshakerServiceClient{cc}
 }
 
-func (c *handshakerServiceClient) DoHandshake(ctx context.Context, opts ...grpc.CallOption) (HandshakerService_DoHandshakeClient, error) {
+func (c *handshakerServiceClient) DoHandshake(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamClient[HandshakerReq, HandshakerResp], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &HandshakerService_ServiceDesc.Streams[0], HandshakerService_DoHandshake_FullMethodName, cOpts...)
 	if err != nil {
@@ -70,6 +70,7 @@ func (c *handshakerServiceClient) DoHandshake(ctx context.Context, opts ...grpc.
 	return x, nil
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type HandshakerService_DoHandshakeClient = grpc.BidiStreamClient[HandshakerReq, HandshakerResp]
 
 // HandshakerServiceServer is the server API for HandshakerService service.
@@ -82,7 +83,7 @@ type HandshakerServiceServer interface {
 	// messages with next. Each time client sends a request, the handshaker
 	// service expects to respond. Client does not have to wait for service's
 	// response before sending next request.
-	DoHandshake(HandshakerService_DoHandshakeServer) error
+	DoHandshake(grpc.BidiStreamServer[HandshakerReq, HandshakerResp]) error
 	mustEmbedUnimplementedHandshakerServiceServer()
 }
 
@@ -90,7 +91,7 @@ type HandshakerServiceServer interface {
 type UnimplementedHandshakerServiceServer struct {
 }
 
-func (UnimplementedHandshakerServiceServer) DoHandshake(HandshakerService_DoHandshakeServer) error {
+func (UnimplementedHandshakerServiceServer) DoHandshake(grpc.BidiStreamServer[HandshakerReq, HandshakerResp]) error {
 	return status.Errorf(codes.Unimplemented, "method DoHandshake not implemented")
 }
 func (UnimplementedHandshakerServiceServer) mustEmbedUnimplementedHandshakerServiceServer() {}
@@ -110,6 +111,7 @@ func _HandshakerService_DoHandshake_Handler(srv interface{}, stream grpc.ServerS
 	return srv.(HandshakerServiceServer).DoHandshake(&grpc.StreamServerImpl[HandshakerReq, HandshakerResp]{ServerStream: stream})
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type HandshakerService_DoHandshakeServer = grpc.BidiStreamServer[HandshakerReq, HandshakerResp]
 
 // HandshakerService_ServiceDesc is the grpc.ServiceDesc for HandshakerService service.

@@ -44,9 +44,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BidirectionalStreamingServiceClient interface {
 	UnaryMethod(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (*EventResponse, error)
-	ClientMethod(ctx context.Context, opts ...grpc.CallOption) (BidirectionalStreamingService_ClientMethodClient, error)
-	ServerMethod(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (BidirectionalStreamingService_ServerMethodClient, error)
-	BidirectionalMethod(ctx context.Context, opts ...grpc.CallOption) (BidirectionalStreamingService_BidirectionalMethodClient, error)
+	ClientMethod(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamClient[EventRequest, EventResponse], error)
+	ServerMethod(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (grpc.ServerStreamClient[EventResponse], error)
+	BidirectionalMethod(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamClient[EventRequest, EventResponse], error)
 }
 
 type bidirectionalStreamingServiceClient struct {
@@ -67,7 +67,7 @@ func (c *bidirectionalStreamingServiceClient) UnaryMethod(ctx context.Context, i
 	return out, nil
 }
 
-func (c *bidirectionalStreamingServiceClient) ClientMethod(ctx context.Context, opts ...grpc.CallOption) (BidirectionalStreamingService_ClientMethodClient, error) {
+func (c *bidirectionalStreamingServiceClient) ClientMethod(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamClient[EventRequest, EventResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &BidirectionalStreamingService_ServiceDesc.Streams[0], BidirectionalStreamingService_ClientMethod_FullMethodName, cOpts...)
 	if err != nil {
@@ -77,9 +77,10 @@ func (c *bidirectionalStreamingServiceClient) ClientMethod(ctx context.Context, 
 	return x, nil
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type BidirectionalStreamingService_ClientMethodClient = grpc.ClientStreamClient[EventRequest, EventResponse]
 
-func (c *bidirectionalStreamingServiceClient) ServerMethod(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (BidirectionalStreamingService_ServerMethodClient, error) {
+func (c *bidirectionalStreamingServiceClient) ServerMethod(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (grpc.ServerStreamClient[EventResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &BidirectionalStreamingService_ServiceDesc.Streams[1], BidirectionalStreamingService_ServerMethod_FullMethodName, cOpts...)
 	if err != nil {
@@ -95,9 +96,10 @@ func (c *bidirectionalStreamingServiceClient) ServerMethod(ctx context.Context, 
 	return x, nil
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type BidirectionalStreamingService_ServerMethodClient = grpc.ServerStreamClient[EventResponse]
 
-func (c *bidirectionalStreamingServiceClient) BidirectionalMethod(ctx context.Context, opts ...grpc.CallOption) (BidirectionalStreamingService_BidirectionalMethodClient, error) {
+func (c *bidirectionalStreamingServiceClient) BidirectionalMethod(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamClient[EventRequest, EventResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &BidirectionalStreamingService_ServiceDesc.Streams[2], BidirectionalStreamingService_BidirectionalMethod_FullMethodName, cOpts...)
 	if err != nil {
@@ -107,6 +109,7 @@ func (c *bidirectionalStreamingServiceClient) BidirectionalMethod(ctx context.Co
 	return x, nil
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type BidirectionalStreamingService_BidirectionalMethodClient = grpc.BidiStreamClient[EventRequest, EventResponse]
 
 // BidirectionalStreamingServiceServer is the server API for BidirectionalStreamingService service.
@@ -114,9 +117,9 @@ type BidirectionalStreamingService_BidirectionalMethodClient = grpc.BidiStreamCl
 // for forward compatibility
 type BidirectionalStreamingServiceServer interface {
 	UnaryMethod(context.Context, *EventRequest) (*EventResponse, error)
-	ClientMethod(BidirectionalStreamingService_ClientMethodServer) error
-	ServerMethod(*EventRequest, BidirectionalStreamingService_ServerMethodServer) error
-	BidirectionalMethod(BidirectionalStreamingService_BidirectionalMethodServer) error
+	ClientMethod(grpc.ClientStreamServer[EventRequest, EventResponse]) error
+	ServerMethod(*EventRequest, grpc.ServerStreamServer[EventResponse]) error
+	BidirectionalMethod(grpc.BidiStreamServer[EventRequest, EventResponse]) error
 	mustEmbedUnimplementedBidirectionalStreamingServiceServer()
 }
 
@@ -127,13 +130,13 @@ type UnimplementedBidirectionalStreamingServiceServer struct {
 func (UnimplementedBidirectionalStreamingServiceServer) UnaryMethod(context.Context, *EventRequest) (*EventResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UnaryMethod not implemented")
 }
-func (UnimplementedBidirectionalStreamingServiceServer) ClientMethod(BidirectionalStreamingService_ClientMethodServer) error {
+func (UnimplementedBidirectionalStreamingServiceServer) ClientMethod(grpc.ClientStreamServer[EventRequest, EventResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method ClientMethod not implemented")
 }
-func (UnimplementedBidirectionalStreamingServiceServer) ServerMethod(*EventRequest, BidirectionalStreamingService_ServerMethodServer) error {
+func (UnimplementedBidirectionalStreamingServiceServer) ServerMethod(*EventRequest, grpc.ServerStreamServer[EventResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method ServerMethod not implemented")
 }
-func (UnimplementedBidirectionalStreamingServiceServer) BidirectionalMethod(BidirectionalStreamingService_BidirectionalMethodServer) error {
+func (UnimplementedBidirectionalStreamingServiceServer) BidirectionalMethod(grpc.BidiStreamServer[EventRequest, EventResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method BidirectionalMethod not implemented")
 }
 func (UnimplementedBidirectionalStreamingServiceServer) mustEmbedUnimplementedBidirectionalStreamingServiceServer() {
@@ -172,6 +175,7 @@ func _BidirectionalStreamingService_ClientMethod_Handler(srv interface{}, stream
 	return srv.(BidirectionalStreamingServiceServer).ClientMethod(&grpc.StreamServerImpl[EventRequest, EventResponse]{ServerStream: stream})
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type BidirectionalStreamingService_ClientMethodServer = grpc.ClientStreamServer[EventRequest, EventResponse]
 
 func _BidirectionalStreamingService_ServerMethod_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -182,12 +186,14 @@ func _BidirectionalStreamingService_ServerMethod_Handler(srv interface{}, stream
 	return srv.(BidirectionalStreamingServiceServer).ServerMethod(m, &grpc.StreamServerImpl[EventRequest, EventResponse]{ServerStream: stream})
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type BidirectionalStreamingService_ServerMethodServer = grpc.ServerStreamServer[EventResponse]
 
 func _BidirectionalStreamingService_BidirectionalMethod_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(BidirectionalStreamingServiceServer).BidirectionalMethod(&grpc.StreamServerImpl[EventRequest, EventResponse]{ServerStream: stream})
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type BidirectionalStreamingService_BidirectionalMethodServer = grpc.BidiStreamServer[EventRequest, EventResponse]
 
 // BidirectionalStreamingService_ServiceDesc is the grpc.ServiceDesc for BidirectionalStreamingService service.
