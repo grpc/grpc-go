@@ -466,11 +466,11 @@ func (b *clusterImplBalancer) run() {
 				b.childState = u
 				b.ClientConn.UpdateState(balancer.State{
 					ConnectivityState: b.childState.ConnectivityState,
-					Picker: newPicker(b.childState, &dropConfigs{
+					Picker: b.newPicker(&dropConfigs{
 						drops:           b.drops,
 						requestCounter:  b.requestCounter,
 						requestCountMax: b.requestCountMax,
-					}, b.loadWrapper, b.telemetryLabels),
+					}),
 				})
 			case *LBConfig:
 				b.telemetryLabels = u.TelemetryLabels
@@ -478,7 +478,7 @@ func (b *clusterImplBalancer) run() {
 				if dc != nil && b.childState.Picker != nil {
 					b.ClientConn.UpdateState(balancer.State{
 						ConnectivityState: b.childState.ConnectivityState,
-						Picker:            newPicker(b.childState, dc, b.loadWrapper, b.telemetryLabels),
+						Picker:            b.newPicker(dc),
 					})
 				}
 			}

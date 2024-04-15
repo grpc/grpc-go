@@ -28,11 +28,11 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/stats"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -47,8 +47,8 @@ const serviceNamespaceValue = "grpc-service-namespace"
 // handler asserts that subsequent HandleRPC calls from the RPC lifecycle
 // contain telemetry labels that it can see.
 func (s) TestTelemetryLabels(t *testing.T) {
-	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup1()
+	managementServer, nodeID, _, resolver, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+	defer cleanup()
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
@@ -124,9 +124,7 @@ func (fsh *fakeStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	// These three stats callouts trigger all metrics for OpenTelemetry that
 	// aren't started. All of these should have access to the desired telemetry
 	// labels.
-	case *stats.OutPayload:
-	case *stats.InPayload:
-	case *stats.End:
+	case *stats.OutPayload, *stats.InPayload, *stats.End:
 		if label, ok := fsh.labels.TelemetryLabels[serviceNameKey]; !ok || label != serviceNameValue {
 			fsh.t.Fatalf("for telemetry label %v, want: %v, got: %v", serviceNameKey, serviceNameValue, label)
 		}

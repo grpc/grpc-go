@@ -21,7 +21,7 @@ package stats
 
 import "context"
 
-// Labels are the labels for metrics
+// Labels are the labels for metrics.
 type Labels struct {
 	// TelemetryLabels are the telemetry labels to record.
 	TelemetryLabels map[string]string
@@ -29,13 +29,13 @@ type Labels struct {
 
 type labelsKey struct{}
 
-// GetLabels returns the Labels stored in theo context, or nil if there is one
+// GetLabels returns the Labels stored in the context, or nil if there is one.
 func GetLabels(ctx context.Context) *Labels {
 	labels, _ := ctx.Value(labelsKey{}).(*Labels)
 	return labels
 }
 
-// SetLabels sets the Labels
+// SetLabels sets the Labels in the context.
 func SetLabels(ctx context.Context, labels *Labels) context.Context {
 	// could also append
 	return context.WithValue(ctx, labelsKey{}, labels)
