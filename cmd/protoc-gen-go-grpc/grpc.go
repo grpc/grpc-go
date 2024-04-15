@@ -29,11 +29,10 @@ import (
 )
 
 const (
-	contextPackage      = protogen.GoImportPath("context")
-	experimentalPackage = protogen.GoImportPath("google.golang.org/grpc/experimental")
-	grpcPackage         = protogen.GoImportPath("google.golang.org/grpc")
-	codesPackage        = protogen.GoImportPath("google.golang.org/grpc/codes")
-	statusPackage       = protogen.GoImportPath("google.golang.org/grpc/status")
+	contextPackage = protogen.GoImportPath("context")
+	grpcPackage    = protogen.GoImportPath("google.golang.org/grpc")
+	codesPackage   = protogen.GoImportPath("google.golang.org/grpc/codes")
+	statusPackage  = protogen.GoImportPath("google.golang.org/grpc/status")
 )
 
 type serviceGenerateHelperInterface interface {
@@ -175,8 +174,13 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 
 	g.P("// This is a compile-time assertion to ensure that this generated file")
 	g.P("// is compatible with the grpc package it is being compiled against.")
-	g.P("// Requires gRPC-Go v1.62.0 or later.")
-	g.P("const _ = ", grpcPackage.Ident("SupportPackageIsVersion8")) // When changing, update version number above.
+	if *useGenericStreams {
+		g.P("// Requires gRPC-Go v1.64.0 or later.")
+		g.P("const _ = ", grpcPackage.Ident("SupportPackageIsVersion9"))
+	} else {
+		g.P("// Requires gRPC-Go v1.62.0 or later.")
+		g.P("const _ = ", grpcPackage.Ident("SupportPackageIsVersion8")) // When changing, update version number above.
+	}
 	g.P()
 	for _, service := range file.Services {
 		genService(gen, file, g, service)
@@ -329,13 +333,13 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	var streamInterface string
 	if *useGenericStreams {
 		typeParam := g.QualifiedGoIdent(method.Input.GoIdent) + ", " + g.QualifiedGoIdent(method.Output.GoIdent)
-		streamType = g.QualifiedGoIdent(experimentalPackage.Ident("StreamClientImpl")) + "[" + typeParam + "]"
+		streamType = g.QualifiedGoIdent(grpcPackage.Ident("StreamClientImpl")) + "[" + typeParam + "]"
 		if method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
-			streamInterface = g.QualifiedGoIdent(experimentalPackage.Ident("BidiStreamClient")) + "[" + typeParam + "]"
+			streamInterface = g.QualifiedGoIdent(grpcPackage.Ident("BidiStreamClient")) + "[" + typeParam + "]"
 		} else if method.Desc.IsStreamingClient() {
-			streamInterface = g.QualifiedGoIdent(experimentalPackage.Ident("ClientStreamClient")) + "[" + typeParam + "]"
+			streamInterface = g.QualifiedGoIdent(grpcPackage.Ident("ClientStreamClient")) + "[" + typeParam + "]"
 		} else { // i.e. if method.Desc.IsStreamingServer()
-			streamInterface = g.QualifiedGoIdent(experimentalPackage.Ident("ServerStreamClient")) + "[" + g.QualifiedGoIdent(method.Output.GoIdent) + "]"
+			streamInterface = g.QualifiedGoIdent(grpcPackage.Ident("ServerStreamClient")) + "[" + g.QualifiedGoIdent(method.Output.GoIdent) + "]"
 		}
 	}
 
@@ -492,13 +496,13 @@ func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	var streamInterface string
 	if *useGenericStreams {
 		typeParam := g.QualifiedGoIdent(method.Input.GoIdent) + ", " + g.QualifiedGoIdent(method.Output.GoIdent)
-		streamType = g.QualifiedGoIdent(experimentalPackage.Ident("StreamServerImpl")) + "[" + typeParam + "]"
+		streamType = g.QualifiedGoIdent(grpcPackage.Ident("StreamServerImpl")) + "[" + typeParam + "]"
 		if method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
-			streamInterface = g.QualifiedGoIdent(experimentalPackage.Ident("BidiStreamServer")) + "[" + typeParam + "]"
+			streamInterface = g.QualifiedGoIdent(grpcPackage.Ident("BidiStreamServer")) + "[" + typeParam + "]"
 		} else if method.Desc.IsStreamingClient() {
-			streamInterface = g.QualifiedGoIdent(experimentalPackage.Ident("ClientStreamServer")) + "[" + typeParam + "]"
+			streamInterface = g.QualifiedGoIdent(grpcPackage.Ident("ClientStreamServer")) + "[" + typeParam + "]"
 		} else { // i.e. if method.Desc.IsStreamingServer()
-			streamInterface = g.QualifiedGoIdent(experimentalPackage.Ident("ServerStreamServer")) + "[" + g.QualifiedGoIdent(method.Output.GoIdent) + "]"
+			streamInterface = g.QualifiedGoIdent(grpcPackage.Ident("ServerStreamServer")) + "[" + g.QualifiedGoIdent(method.Output.GoIdent) + "]"
 		}
 	}
 

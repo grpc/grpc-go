@@ -24,14 +24,13 @@ import (
 	context "context"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
-	experimental "google.golang.org/grpc/experimental"
 	status "google.golang.org/grpc/status"
 )
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.62.0 or later.
-const _ = grpc.SupportPackageIsVersion8
+// Requires gRPC-Go v1.64.0 or later.
+const _ = grpc.SupportPackageIsVersion9
 
 const (
 	RouteGuide_GetFeature_FullMethodName   = "/routeguide.RouteGuide/GetFeature"
@@ -94,7 +93,7 @@ func (c *routeGuideClient) ListFeatures(ctx context.Context, in *Rectangle, opts
 	if err != nil {
 		return nil, err
 	}
-	x := &experimental.StreamClientImpl[Rectangle, Feature]{ClientStream: stream}
+	x := &grpc.StreamClientImpl[Rectangle, Feature]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -104,7 +103,7 @@ func (c *routeGuideClient) ListFeatures(ctx context.Context, in *Rectangle, opts
 	return x, nil
 }
 
-type RouteGuide_ListFeaturesClient = experimental.ServerStreamClient[Feature]
+type RouteGuide_ListFeaturesClient = grpc.ServerStreamClient[Feature]
 
 func (c *routeGuideClient) RecordRoute(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RecordRouteClient, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -112,11 +111,11 @@ func (c *routeGuideClient) RecordRoute(ctx context.Context, opts ...grpc.CallOpt
 	if err != nil {
 		return nil, err
 	}
-	x := &experimental.StreamClientImpl[Point, RouteSummary]{ClientStream: stream}
+	x := &grpc.StreamClientImpl[Point, RouteSummary]{ClientStream: stream}
 	return x, nil
 }
 
-type RouteGuide_RecordRouteClient = experimental.ClientStreamClient[Point, RouteSummary]
+type RouteGuide_RecordRouteClient = grpc.ClientStreamClient[Point, RouteSummary]
 
 func (c *routeGuideClient) RouteChat(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RouteChatClient, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -124,11 +123,11 @@ func (c *routeGuideClient) RouteChat(ctx context.Context, opts ...grpc.CallOptio
 	if err != nil {
 		return nil, err
 	}
-	x := &experimental.StreamClientImpl[RouteNote, RouteNote]{ClientStream: stream}
+	x := &grpc.StreamClientImpl[RouteNote, RouteNote]{ClientStream: stream}
 	return x, nil
 }
 
-type RouteGuide_RouteChatClient = experimental.BidiStreamClient[RouteNote, RouteNote]
+type RouteGuide_RouteChatClient = grpc.BidiStreamClient[RouteNote, RouteNote]
 
 // RouteGuideServer is the server API for RouteGuide service.
 // All implementations must embed UnimplementedRouteGuideServer
@@ -213,22 +212,22 @@ func _RouteGuide_ListFeatures_Handler(srv interface{}, stream grpc.ServerStream)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(RouteGuideServer).ListFeatures(m, &experimental.StreamServerImpl[Rectangle, Feature]{ServerStream: stream})
+	return srv.(RouteGuideServer).ListFeatures(m, &grpc.StreamServerImpl[Rectangle, Feature]{ServerStream: stream})
 }
 
-type RouteGuide_ListFeaturesServer = experimental.ServerStreamServer[Feature]
+type RouteGuide_ListFeaturesServer = grpc.ServerStreamServer[Feature]
 
 func _RouteGuide_RecordRoute_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(RouteGuideServer).RecordRoute(&experimental.StreamServerImpl[Point, RouteSummary]{ServerStream: stream})
+	return srv.(RouteGuideServer).RecordRoute(&grpc.StreamServerImpl[Point, RouteSummary]{ServerStream: stream})
 }
 
-type RouteGuide_RecordRouteServer = experimental.ClientStreamServer[Point, RouteSummary]
+type RouteGuide_RecordRouteServer = grpc.ClientStreamServer[Point, RouteSummary]
 
 func _RouteGuide_RouteChat_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(RouteGuideServer).RouteChat(&experimental.StreamServerImpl[RouteNote, RouteNote]{ServerStream: stream})
+	return srv.(RouteGuideServer).RouteChat(&grpc.StreamServerImpl[RouteNote, RouteNote]{ServerStream: stream})
 }
 
-type RouteGuide_RouteChatServer = experimental.BidiStreamServer[RouteNote, RouteNote]
+type RouteGuide_RouteChatServer = grpc.BidiStreamServer[RouteNote, RouteNote]
 
 // RouteGuide_ServiceDesc is the grpc.ServiceDesc for RouteGuide service.
 // It's only intended for direct use with grpc.RegisterService,

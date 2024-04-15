@@ -73,7 +73,7 @@ func (c *bidirectionalStreamingServiceClient) ClientMethod(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	x := &bidirectionalStreamingServiceClientMethodClient{stream}
+	x := &bidirectionalStreamingServiceClientMethodClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -108,7 +108,7 @@ func (c *bidirectionalStreamingServiceClient) ServerMethod(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	x := &bidirectionalStreamingServiceServerMethodClient{stream}
+	x := &bidirectionalStreamingServiceServerMethodClient{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func (c *bidirectionalStreamingServiceClient) BidirectionalMethod(ctx context.Co
 	if err != nil {
 		return nil, err
 	}
-	x := &bidirectionalStreamingServiceBidirectionalMethodClient{stream}
+	x := &bidirectionalStreamingServiceBidirectionalMethodClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -227,7 +227,7 @@ func _BidirectionalStreamingService_UnaryMethod_Handler(srv interface{}, ctx con
 }
 
 func _BidirectionalStreamingService_ClientMethod_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BidirectionalStreamingServiceServer).ClientMethod(&bidirectionalStreamingServiceClientMethodServer{stream})
+	return srv.(BidirectionalStreamingServiceServer).ClientMethod(&bidirectionalStreamingServiceClientMethodServer{ServerStream: stream})
 }
 
 type BidirectionalStreamingService_ClientMethodServer interface {
@@ -257,7 +257,7 @@ func _BidirectionalStreamingService_ServerMethod_Handler(srv interface{}, stream
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(BidirectionalStreamingServiceServer).ServerMethod(m, &bidirectionalStreamingServiceServerMethodServer{stream})
+	return srv.(BidirectionalStreamingServiceServer).ServerMethod(m, &bidirectionalStreamingServiceServerMethodServer{ServerStream: stream})
 }
 
 type BidirectionalStreamingService_ServerMethodServer interface {
@@ -274,7 +274,7 @@ func (x *bidirectionalStreamingServiceServerMethodServer) Send(m *EventResponse)
 }
 
 func _BidirectionalStreamingService_BidirectionalMethod_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BidirectionalStreamingServiceServer).BidirectionalMethod(&bidirectionalStreamingServiceBidirectionalMethodServer{stream})
+	return srv.(BidirectionalStreamingServiceServer).BidirectionalMethod(&bidirectionalStreamingServiceBidirectionalMethodServer{ServerStream: stream})
 }
 
 type BidirectionalStreamingService_BidirectionalMethodServer interface {
