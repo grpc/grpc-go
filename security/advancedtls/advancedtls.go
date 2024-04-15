@@ -550,7 +550,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				verifiedChains = [][]*x509.Certificate{rawCertList}
 			}
 			// TODO(gtcooke94) checkChainRevocation here but not fully exported
-			if err := revocation.checkChainRevocation(verifiedChains, *c.revocationConfig); err != nil {
+			if err := revocation.CheckChainRevocation(verifiedChains, *c.revocationConfig); err != nil {
 				return err
 			}
 		}
