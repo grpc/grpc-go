@@ -19,6 +19,7 @@
 package certprovider
 
 import (
+	"context"
 	"fmt"
 	"sync"
 )
@@ -44,13 +45,20 @@ type storeKey struct {
 
 // wrappedProvider wraps a provider instance with a reference count.
 type wrappedProvider struct {
-	Provider
+	provider Provider
 	refCount int
 
 	// A reference to the key and store are also kept here to override the
 	// Close method on the provider.
 	storeKey storeKey
 	store    *store
+}
+
+// wrappedProviderCloser wraps a provider instance with a reference count to avoid double
+// close still in use provider.
+type wrappedProviderCloser struct {
+	mu sync.RWMutex
+	wp *wrappedProvider
 }
 
 // store is a collection of provider instances, safe for concurrent access.
@@ -70,9 +78,32 @@ func (wp *wrappedProvider) Close() {
 
 	wp.refCount--
 	if wp.refCount == 0 {
-		wp.Provider.Close()
+		wp.provider.Close()
 		delete(ps.providers, wp.storeKey)
 	}
+}
+
+// Close overrides the Close method of the embedded provider to avoid release the
+// already released reference.
+func (w *wrappedProviderCloser) Close() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if wp := w.wp; wp != nil {
+		w.wp = nil
+		wp.Close()
+	}
+}
+
+// KeyMaterial returns the key material sourced by the Provider.
+// Callers are expected to use the returned value as read-only.
+func (w *wrappedProviderCloser) KeyMaterial(ctx context.Context) (*KeyMaterial, error) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	if w.wp == nil {
+		return nil, errProviderClosed
+	}
+	return w.wp.provider.KeyMaterial(ctx)
 }
 
 // BuildableConfig wraps parsed provider configuration and functionality to
@@ -112,7 +143,7 @@ func (bc *BuildableConfig) Build(opts BuildOptions) (Provider, error) {
 	}
 	if wp, ok := provStore.providers[sk]; ok {
 		wp.refCount++
-		return wp, nil
+		return &wrappedProviderCloser{wp: wp}, nil
 	}
 
 	provider := bc.starter(opts)
@@ -120,13 +151,13 @@ func (bc *BuildableConfig) Build(opts BuildOptions) (Provider, error) {
 		return nil, fmt.Errorf("provider(%q, %q).Build(%v) failed", sk.name, sk.config, opts)
 	}
 	wp := &wrappedProvider{
-		Provider: provider,
+		provider: provider,
 		refCount: 1,
 		storeKey: sk,
 		store:    provStore,
 	}
 	provStore.providers[sk] = wp
-	return wp, nil
+	return &wrappedProviderCloser{wp: wp}, nil
 }
 
 // String returns the provider name and config as a colon separated string.
