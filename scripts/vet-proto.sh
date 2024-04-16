@@ -5,7 +5,7 @@ set -o pipefail  # Fail a pipe if any sub-command fails.
 
 # - Source them sweet sweet helpers.
 source "$(dirname $0)/vet-common.sh"
-\
+
 # - Check to make sure it's safe to modify the user's git repo.
 git status --porcelain | fail_on_output
 
