@@ -91,12 +91,12 @@ func (s RevocationStatus) String() string {
 	return [...]string{"RevocationUndetermined", "RevocationUnrevoked", "RevocationRevoked"}[s]
 }
 
-// CRL contains a pkix.CertificateList and parsed extensions that aren't
+// CRL contains a x509.RevocationList and parsed extensions that aren't
 // provided by the golang CRL parser.
 // All CRLs should be loaded using NewCRL() for bytes directly or ReadCRLFile()
 // to read directly from a filepath
 type CRL struct {
-	certList *x509.RevocationList
+	CertList *x509.RevocationList
 	// RFC5280, 5.2.1, all conforming CRLs must have a AKID with the ID method.
 	authorityKeyID []byte
 	rawIssuer      []byte
@@ -266,7 +266,7 @@ func cachedCrl(rawIssuer []byte, cache Cache) (*CRL, bool) {
 		return nil, false
 	}
 	// If the CRL is expired, force a reload.
-	if hasExpired(crl.certList, time.Now()) {
+	if hasExpired(crl.CertList, time.Now()) {
 		return nil, false
 	}
 	return crl, true
@@ -333,7 +333,7 @@ func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revoca
 	}
 	revocation, err := checkCertRevocation(c, crl)
 	if err != nil {
-		grpclogLogger.Warningf("checkCertRevocation(CRL %v) failed: %v", crl.certList.Issuer, err)
+		grpclogLogger.Warningf("checkCertRevocation(CRL %v) failed: %v", crl.CertList.Issuer, err)
 		// We couldn't check the CRL file for some reason, so we don't know if it's RevocationUnrevoked or not.
 		return RevocationUndetermined
 	}
@@ -349,7 +349,7 @@ func checkCertRevocation(c *x509.Certificate, crl *CRL) (RevocationStatus, error
 	rawEntryIssuer := crl.rawIssuer
 
 	// Loop through all the revoked certificates.
-	for _, revCert := range crl.certList.RevokedCertificates {
+	for _, revCert := range crl.CertList.RevokedCertificates {
 		// 5.3 Loop through CRL entry extensions for needed information.
 		for _, ext := range revCert.Extensions {
 			if oidCertificateIssuer.Equal(ext.Id) {
@@ -445,7 +445,7 @@ func parseCRLExtensions(c *x509.RevocationList) (*CRL, error) {
 	if c == nil {
 		return nil, errors.New("c is nil, expected any value")
 	}
-	certList := &CRL{certList: c}
+	certList := &CRL{CertList: c}
 
 	for _, ext := range c.Extensions {
 		switch {
@@ -559,10 +559,10 @@ func verifyCRL(crl *CRL, chain []*x509.Certificate) error {
 				return fmt.Errorf("verifyCRL: The certificate can't be used for issuing CRLs")
 			}
 			// RFC5280, 6.3.3 (g) Validate signature.
-			return crl.certList.CheckSignatureFrom(c)
+			return crl.CertList.CheckSignatureFrom(c)
 		}
 	}
-	return fmt.Errorf("verifyCRL: No certificates matched CRL issuer (%v)", crl.certList.Issuer)
+	return fmt.Errorf("verifyCRL: No certificates matched CRL issuer (%v)", crl.CertList.Issuer)
 }
 
 // pemType is the type of a PEM encoded CRL.

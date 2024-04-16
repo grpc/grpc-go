@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	credinternal "google.golang.org/grpc/internal/credentials"
+	internalrevocation "google.golang.org/grpc/security/advancedtls/internal/revocation"
 	"google.golang.org/grpc/security/advancedtls/revocation"
 )
 
@@ -549,8 +550,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 			if verifiedChains == nil {
 				verifiedChains = [][]*x509.Certificate{rawCertList}
 			}
-			// TODO(gtcooke94) checkChainRevocation here but not fully exported
-			if err := revocation.CheckChainRevocation(verifiedChains, *c.revocationConfig); err != nil {
+			if err := internalrevocation.CheckChainRevocation(verifiedChains, *c.revocationConfig); err != nil {
 				return err
 			}
 		}

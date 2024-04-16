@@ -24,6 +24,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	internalrevocation "google.golang.org/grpc/security/advancedtls/internal/revocation"
 )
 
 const defaultCRLRefreshDuration = 1 * time.Hour
@@ -41,18 +43,7 @@ const minCRLRefreshDuration = 1 * time.Minute
 // slow things such as file IO should be done asynchronously.
 //
 // [gRFC A69]: https://github.com/grpc/proposal/pull/382
-type CRLProvider interface {
-	// CRL accepts x509 Cert and returns a related CRL struct, which can contain
-	// either an empty or non-empty list of revoked certificates. If an error is
-	// thrown or (nil, nil) is returned, it indicates that we can't load any
-	// authoritative CRL files (which may not necessarily be a problem). It's not
-	// considered invalid to have no CRLs if there are no revocations for an
-	// issuer. In such cases, the status of the check CRL operation is marked as
-	// RevocationUndetermined, as defined in [RFC5280 - Undetermined].
-	//
-	// [RFC5280 - Undetermined]: https://datatracker.ietf.org/doc/html/rfc5280#section-6.3.3
-	CRL(cert *x509.Certificate) (*CRL, error)
-}
+type CRLProvider = internalrevocation.CRLProvider
 
 // StaticCRLProvider implements CRLProvider interface by accepting raw content
 // of CRL files at creation time and storing parsed CRL structs in-memory.
@@ -78,7 +69,7 @@ func NewStaticCRLProvider(rawCRLs [][]byte) *StaticCRLProvider {
 
 // AddCRL adds/updates provided CRL to in-memory storage.
 func (p *StaticCRLProvider) addCRL(crl *CRL) {
-	key := crl.certList.Issuer.ToRDNSequence().String()
+	key := crl.CertList.Issuer.ToRDNSequence().String()
 	p.crls[key] = crl
 }
 
@@ -208,7 +199,7 @@ func (p *FileWatcherCRLProvider) scanCRLDirectory() {
 			}
 			continue
 		}
-		tempCRLs[crl.certList.Issuer.ToRDNSequence().String()] = crl
+		tempCRLs[crl.CertList.Issuer.ToRDNSequence().String()] = crl
 		successCounter++
 	}
 	// Only if all the files are processed successfully we can swap maps (there

@@ -789,8 +789,8 @@ func TestCRLCacheExpirationReloading(t *testing.T) {
 	// `3.crl`` revokes `revokedInt.pem`
 	crl := loadCRL(t, testdata.Path("crl/3.crl"))
 	// Modify the crl so that the cert is NOT revoked and add it to the cache
-	crl.certList.RevokedCertificates = nil
-	crl.certList.NextUpdate = time.Now().Add(time.Hour)
+	crl.CertList.RevokedCertificates = nil
+	crl.CertList.NextUpdate = time.Now().Add(time.Hour)
 	cache.Add(hex.EncodeToString(rawIssuer), crl)
 	var cfg = RevocationConfig{RootDir: testdata.Path("crl"), Cache: cache}
 	revocationStatus := checkChain(certs, cfg)
@@ -799,7 +799,7 @@ func TestCRLCacheExpirationReloading(t *testing.T) {
 	}
 
 	// Modify the entry in the cache so that the cache will be refreshed
-	crl.certList.NextUpdate = time.Now()
+	crl.CertList.NextUpdate = time.Now()
 	cache.Add(hex.EncodeToString(rawIssuer), crl)
 
 	revocationStatus = checkChain(certs, cfg)
