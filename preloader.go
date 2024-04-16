@@ -61,7 +61,7 @@ func (p *PreparedMsg) Encode(s Stream, msg any) error {
 	p.encodedData = data
 	// TODO: it should be possible to grab the recvBufferPool from the underlying
 	// stream implementation.
-	compData, pf, err := compress(data, rpcInfo.preloaderInfo.cp, rpcInfo.preloaderInfo.comp, encoding.NoopBufferProvider)
+	compData, pf, err := compress(data, rpcInfo.preloaderInfo.cp, rpcInfo.preloaderInfo.comp, encoding.NopBufferPool{})
 	if err != nil {
 		data.Free()
 		return err

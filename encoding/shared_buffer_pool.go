@@ -31,7 +31,6 @@ import (
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
 type SharedBufferPool interface {
-	BufferProvider
 	// Get returns a buffer with specified length from the pool.
 	//
 	// The returned byte slice may be not zero initialized.
@@ -146,10 +145,6 @@ var _ SharedBufferPool = NopBufferPool{}
 
 // NopBufferPool is a buffer pool just makes new buffer without pooling.
 type NopBufferPool struct{}
-
-func (p NopBufferPool) GetAndSetBuffer(length int, write func([]byte)) *Buffer {
-	return NoopBufferProvider.GetAndSetBuffer(length, write)
-}
 
 func (NopBufferPool) Get(length int) []byte {
 	return make([]byte, length)

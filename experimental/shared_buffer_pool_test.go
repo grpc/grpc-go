@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/internal/grpctest"
@@ -200,10 +199,6 @@ func (s) TestRecvBufferPoolUnary(t *testing.T) {
 
 type checkBufferPool struct {
 	puts [][]byte
-}
-
-func (p *checkBufferPool) GetAndSetBuffer(length int, write func([]byte)) *encoding.Buffer {
-	return encoding.NoopBufferProvider.GetAndSetBuffer(length, write)
 }
 
 func (p *checkBufferPool) Get(size int) []byte {

@@ -31,22 +31,6 @@ type Buffer struct {
 	free func([]byte)
 }
 
-type BufferProvider interface {
-	GetAndSetBuffer(length int, write func([]byte)) *Buffer
-}
-
-type BufferProviderFunc func(length int, write func(b []byte)) *Buffer
-
-func (b BufferProviderFunc) GetAndSetBuffer(length int, write func([]byte)) *Buffer {
-	return b(length, write)
-}
-
-var NoopBufferProvider BufferProvider = BufferProviderFunc(func(length int, write func(b []byte)) *Buffer {
-	buf := make([]byte, length)
-	write(buf)
-	return NewBuffer(buf, nil)
-})
-
 func NewBuffer(data []byte, free func([]byte)) *Buffer {
 	return (&Buffer{data: data, refs: new(atomic.Int32), free: free}).Ref()
 }
@@ -101,18 +85,21 @@ func (b *Buffer) Split(n int) *Buffer {
 }
 
 type Writer struct {
-	buffers  *BufferSlice
-	provider BufferProvider
+	buffers *BufferSlice
+	pool    SharedBufferPool
 }
 
 func (s *Writer) Write(p []byte) (n int, err error) {
-	*s.buffers = append(*s.buffers, s.provider.GetAndSetBuffer(len(p), func(b []byte) { copy(b, p) }))
+	buf := s.pool.Get(len(p))
+	n = copy(buf, p)
 
-	return len(p), nil
+	*s.buffers = append(*s.buffers, NewBuffer(buf, s.pool.Put))
+
+	return n, nil
 }
 
-func NewWriter(buffers *BufferSlice, provider BufferProvider) *Writer {
-	return &Writer{buffers: buffers, provider: provider}
+func NewWriter(buffers *BufferSlice, pool SharedBufferPool) *Writer {
+	return &Writer{buffers: buffers, pool: pool}
 }
 
 type Reader struct {
@@ -188,9 +175,11 @@ func (s BufferSlice) Materialize() []byte {
 	return out
 }
 
-func (s BufferSlice) LazyMaterialize(provider BufferProvider) *Buffer {
+func (s BufferSlice) LazyMaterialize(pool SharedBufferPool) *Buffer {
 	if len(s) == 1 {
 		return s[0].Ref()
 	}
-	return provider.GetAndSetBuffer(s.Len(), s.WriteTo)
+	buf := pool.Get(s.Len())
+	s.WriteTo(buf)
+	return NewBuffer(buf, pool.Put)
 }

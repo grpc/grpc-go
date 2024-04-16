@@ -665,7 +665,7 @@ func encode(c baseCodec, msg any) (encoding.BufferSlice, error) {
 // indicating no compression was done.
 //
 // TODO(dfawley): eliminate cp parameter by wrapping Compressor in an encoding.Compressor.
-func compress(in encoding.BufferSlice, cp Compressor, compressor encoding.Compressor, provider encoding.BufferProvider) (encoding.BufferSlice, payloadFormat, error) {
+func compress(in encoding.BufferSlice, cp Compressor, compressor encoding.Compressor, pool encoding.SharedBufferPool) (encoding.BufferSlice, payloadFormat, error) {
 	if compressor == nil && cp == nil {
 		return nil, compressionNone, nil
 	}
@@ -673,7 +673,7 @@ func compress(in encoding.BufferSlice, cp Compressor, compressor encoding.Compre
 		return nil, compressionNone, nil
 	}
 	var out encoding.BufferSlice
-	w := encoding.NewWriter(&out, provider)
+	w := encoding.NewWriter(&out, pool)
 	wrapErr := func(err error) error {
 		out.Free()
 		return status.Errorf(codes.Internal, "grpc: error while compressing: %v", err.Error())
@@ -696,7 +696,7 @@ func compress(in encoding.BufferSlice, cp Compressor, compressor encoding.Compre
 		// there is no way around this with the old Compressor API. At least it attempts
 		// to return the buffer to the provider, in the hopes it can be reused (maybe
 		// even by a subsequent call to this very function).
-		buf := in.LazyMaterialize(provider)
+		buf := in.LazyMaterialize(pool)
 		defer buf.Free()
 		if err := cp.Do(w, buf.ReadOnlyData()); err != nil {
 			return nil, 0, wrapErr(err)
@@ -833,7 +833,7 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 
 // Using compressor, decompress d, returning data and size.
 // Optionally, if data will be over maxReceiveMessageSize, just return the size.
-func decompress(compressor encoding.Compressor, d encoding.BufferSlice, maxReceiveMessageSize int, provider encoding.BufferProvider) (encoding.BufferSlice, int, error) {
+func decompress(compressor encoding.Compressor, d encoding.BufferSlice, maxReceiveMessageSize int, pool encoding.SharedBufferPool) (encoding.BufferSlice, int, error) {
 	dcReader, err := compressor.Decompress(d.Reader())
 	if err != nil {
 		return nil, 0, err
@@ -860,7 +860,7 @@ func decompress(compressor encoding.Compressor, d encoding.BufferSlice, maxRecei
 	//}
 
 	var out encoding.BufferSlice
-	_, err = io.Copy(encoding.NewWriter(&out, provider), io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+	_, err = io.Copy(encoding.NewWriter(&out, pool), io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
 	if err != nil {
 		out.Free()
 		return nil, 0, err
