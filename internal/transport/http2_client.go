@@ -1006,7 +1006,7 @@ func (t *http2Client) Close(err error) {
 	t.mu.Unlock()
 	// Per HTTP/2 spec, a GOAWAY frame must be sent before closing the
 	// connection. See https://httpwg.org/specs/rfc7540.html#GOAWAY.
-	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(err.Error()), closeConn: err})
+	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte("client transport shutdown"), closeConn: err})
 	<-t.writerDone
 	t.cancel()
 	t.conn.Close()
