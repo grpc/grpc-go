@@ -37,7 +37,6 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/idle"
-	"google.golang.org/grpc/internal/pretty"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
@@ -934,10 +933,13 @@ func equalAddresses(a, b []resolver.Address) bool {
 // updateAddrs updates ac.addrs with the new addresses list and handles active
 // connections or connection attempts.
 func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
-	ac.mu.Lock()
-	channelz.Infof(logger, ac.channelz, "addrConn: updateAddrs curAddr: %v, addrs: %v", pretty.ToJSON(ac.curAddr), pretty.ToJSON(addrs))
+	limit := len(addrs)
+	if limit > 5 {
+		limit = 5
+	}
+	channelz.Infof(logger, ac.channelz, "addrConn: updateAddrs: first %d of %d addrs: %+v", limit, len(addrs), addrs[:limit])
 
-	addrs = copyAddressesWithoutBalancerAttributes(addrs)
+	ac.mu.Lock()
 	if equalAddresses(ac.addrs, addrs) {
 		ac.mu.Unlock()
 		return
