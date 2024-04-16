@@ -16,7 +16,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.3.0
 // - protoc             v4.25.2
-// source: cmd/protoc-gen-go-grpc/testdata/golden.proto
+// source: testdata/golden.proto
 
 package testdata
 
@@ -33,19 +33,23 @@ import (
 const _ = grpc.SupportPackageIsVersion8
 
 const (
-	BidirectionalStreamingService_UnaryMethod_FullMethodName         = "/main.BidirectionalStreamingService/unaryMethod"
-	BidirectionalStreamingService_ClientMethod_FullMethodName        = "/main.BidirectionalStreamingService/clientMethod"
-	BidirectionalStreamingService_ServerMethod_FullMethodName        = "/main.BidirectionalStreamingService/serverMethod"
-	BidirectionalStreamingService_BidirectionalMethod_FullMethodName = "/main.BidirectionalStreamingService/bidirectionalMethod"
+	BidirectionalStreamingService_UnaryMethod_FullMethodName         = "/main.BidirectionalStreamingService/UnaryMethod"
+	BidirectionalStreamingService_ClientMethod_FullMethodName        = "/main.BidirectionalStreamingService/ClientMethod"
+	BidirectionalStreamingService_ServerMethod_FullMethodName        = "/main.BidirectionalStreamingService/ServerMethod"
+	BidirectionalStreamingService_BidirectionalMethod_FullMethodName = "/main.BidirectionalStreamingService/BidirectionalMethod"
 )
 
 // BidirectionalStreamingServiceClient is the client API for BidirectionalStreamingService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BidirectionalStreamingServiceClient interface {
+	// UnaryMethod is a sample unary method.
 	UnaryMethod(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (*EventResponse, error)
+	// ClientMethod is a sample client streaming method.
 	ClientMethod(ctx context.Context, opts ...grpc.CallOption) (BidirectionalStreamingService_ClientMethodClient, error)
+	// ServerMethod is a sample server streaming method.
 	ServerMethod(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (BidirectionalStreamingService_ServerMethodClient, error)
+	// BidirectionalMethod is a sample bidirectional streaming method.
 	BidirectionalMethod(ctx context.Context, opts ...grpc.CallOption) (BidirectionalStreamingService_BidirectionalMethodClient, error)
 }
 
@@ -171,9 +175,13 @@ func (x *bidirectionalStreamingServiceBidirectionalMethodClient) Recv() (*EventR
 // All implementations must embed UnimplementedBidirectionalStreamingServiceServer
 // for forward compatibility
 type BidirectionalStreamingServiceServer interface {
+	// UnaryMethod is a sample unary method.
 	UnaryMethod(context.Context, *EventRequest) (*EventResponse, error)
+	// ClientMethod is a sample client streaming method.
 	ClientMethod(BidirectionalStreamingService_ClientMethodServer) error
+	// ServerMethod is a sample server streaming method.
 	ServerMethod(*EventRequest, BidirectionalStreamingService_ServerMethodServer) error
+	// BidirectionalMethod is a sample bidirectional streaming method.
 	BidirectionalMethod(BidirectionalStreamingService_BidirectionalMethodServer) error
 	mustEmbedUnimplementedBidirectionalStreamingServiceServer()
 }
@@ -307,27 +315,27 @@ var BidirectionalStreamingService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*BidirectionalStreamingServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "unaryMethod",
+			MethodName: "UnaryMethod",
 			Handler:    _BidirectionalStreamingService_UnaryMethod_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "clientMethod",
+			StreamName:    "ClientMethod",
 			Handler:       _BidirectionalStreamingService_ClientMethod_Handler,
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "serverMethod",
+			StreamName:    "ServerMethod",
 			Handler:       _BidirectionalStreamingService_ServerMethod_Handler,
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "bidirectionalMethod",
+			StreamName:    "BidirectionalMethod",
 			Handler:       _BidirectionalStreamingService_BidirectionalMethod_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
 	},
-	Metadata: "cmd/protoc-gen-go-grpc/testdata/golden.proto",
+	Metadata: "testdata/golden.proto",
 }
