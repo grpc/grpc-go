@@ -45,7 +45,7 @@ func ExampleNewMetrics() {
 	// unset, which will pick up defaults.
 }
 
-func ExampleMetric_Remove() {
+func ExampleMetrics_Remove() {
 	// Use DefaultClientMetrics without ClientAttemptDuration and
 	// ClientCallDurationName.
 	DefaultClientMetrics.Remove(ClientAttemptDuration, ClientCallDurationName)
