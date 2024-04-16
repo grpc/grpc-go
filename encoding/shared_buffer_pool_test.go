@@ -18,9 +18,7 @@
 
 package encoding
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestSharedBufferPool(t *testing.T) {
 	pools := []SharedBufferPool{

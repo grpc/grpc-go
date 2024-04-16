@@ -1798,12 +1798,10 @@ func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor,
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	compData, pf, err := compress(data, cp, comp, provider)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	hdr, payload = msgHeader(data, compData, pf)
 	return hdr, data, payload, nil
 }

@@ -895,9 +895,8 @@ func testClientBinaryLog(t *testing.T, c *rpcConfig) error {
 	}
 	var errored bool
 	for i := 0; i < len(got); i++ {
-		want, got := want[i], got[i]
-		if !equalLogEntry(want, got) {
-			t.Errorf("entry: %d, want %+v, got %+v", i, want, got)
+		if !equalLogEntry(want[i], got[i]) {
+			t.Errorf("entry: %d, want %+v, got %+v", i, want[i], got[i])
 			errored = true
 		}
 	}

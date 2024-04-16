@@ -177,7 +177,11 @@ func (r *recvBufferReader) Read(n int) (buf *encoding.Buffer, err error) {
 	}
 	if r.last != nil {
 		buf = r.last
-		r.last = nil
+		if r.last.Len() > n {
+			r.last = buf.Split(n)
+		} else {
+			r.last = nil
+		}
 		return buf, nil
 	}
 	if r.closeStream != nil {
@@ -226,10 +230,9 @@ func (r *recvBufferReader) readClient(n int) (buf *encoding.Buffer, err error) {
 
 func (r *recvBufferReader) readAdditional(m recvMsg, n int) (b *encoding.Buffer, err error) {
 	r.recv.load()
-
 	if m.err != nil {
 		m.buffer.Free()
-		return nil, err
+		return nil, m.err
 	}
 
 	if m.buffer.Len() > n {
@@ -521,13 +524,10 @@ func (s *Stream) Read(n int) (data encoding.BufferSlice, err error) {
 		buf, err := s.trReader.Read(n)
 		n -= buf.Len()
 		if n == 0 {
-			if err != nil {
-				panic(":thinking:")
-			}
 			err = nil
 		}
 		if err != nil {
-			if err == io.EOF {
+			if buf.Len() > 0 && err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}
 			data.Free()

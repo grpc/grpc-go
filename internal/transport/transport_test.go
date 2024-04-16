@@ -82,6 +82,10 @@ func (s *Stream) readTo(p []byte) (int, error) {
 	data, err := s.Read(len(p))
 	defer data.Free()
 
+	if err != nil {
+		return 0, err
+	}
+
 	if data.Len() != len(p) {
 		if err == nil {
 			err = io.ErrUnexpectedEOF
@@ -2225,15 +2229,15 @@ func (s) TestWriteHeaderConnectionError(t *testing.T) {
 	}
 }
 
-func TestPingPong1B(t *testing.T) {
+func (s) TestPingPong1B(t *testing.T) {
 	runPingPongTest(t, 1)
 }
 
-func (s) TestPingPong1KB(t *testing.T) {
+func TestPingPong1KB(t *testing.T) {
 	runPingPongTest(t, 1024)
 }
 
-func (s) TestPingPong64KB(t *testing.T) {
+func TestPingPong64KB(t *testing.T) {
 	runPingPongTest(t, 65536)
 }
 
@@ -2268,7 +2272,7 @@ func runPingPongTest(t *testing.T, msgSize int) {
 	opts := &Options{}
 	incomingHeader := make([]byte, 5)
 
-	ctx, cancel = context.WithTimeout(ctx, time.Second)
+	ctx, cancel = context.WithTimeout(ctx, 10*time.Millisecond)
 	defer cancel()
 	for ctx.Err() == nil {
 		if err := client.Write(stream, outgoingHeader, newBufferSlice(msg), opts); err != nil {

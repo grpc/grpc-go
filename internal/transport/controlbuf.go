@@ -947,6 +947,7 @@ func (l *loopyWriter) processData() (bool, error) {
 	hSize := min(maxSize, len(dataItem.h))
 	dSize := min(maxSize-hSize, dataItem.r.Len())
 	remainingBytes := len(dataItem.h) + dataItem.r.Len() - hSize - dSize
+	size := hSize + dSize
 
 	var buf []byte
 
@@ -956,15 +957,12 @@ func (l *loopyWriter) processData() (bool, error) {
 		// Note: this is only necessary because the http2.Framer does not support
 		// partially writing a frame, so the sequence must be materialized into a buffer.
 		// TODO: Revisit once https://github.com/golang/go/issues/66655 is addressed.
-		buf = bufPool.get()
+		buf = bufPool.get()[:size]
 		defer bufPool.put(buf)
 
 		copy(buf[:hSize], dataItem.h)
 		_, _ = dataItem.r.Read(buf[hSize:])
-		buf = buf[:hSize+dSize]
 	}
-
-	size := hSize + dSize
 
 	// Now that outgoing flow controls are checked we can replenish str's write quota
 	str.wq.replenish(size)

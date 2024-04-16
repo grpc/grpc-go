@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -643,7 +642,6 @@ func (t *http2Server) HandleStreams(ctx context.Context, handle func(*Stream)) {
 	for {
 		t.controlBuf.throttle()
 		frame, err := t.framer.fr.ReadFrame()
-		slog.Info("Server frame read", "f", frame, "err", err)
 		atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
 		if err != nil {
 			if se, ok := err.(http2.StreamError); ok {

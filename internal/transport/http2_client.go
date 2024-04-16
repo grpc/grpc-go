@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -1607,7 +1606,6 @@ func (t *http2Client) reader(errCh chan<- error) {
 	for {
 		t.controlBuf.throttle()
 		frame, err := t.framer.fr.ReadFrame()
-		slog.Info("Client frame read", "f", frame, "err", err)
 		if t.keepaliveEnabled {
 			atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
 		}
