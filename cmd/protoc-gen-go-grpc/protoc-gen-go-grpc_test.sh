@@ -36,7 +36,8 @@ protoc \
 GOLDENFILE="examples/route_guide/routeguide/route_guide_grpc.pb.go"
 GENFILE="${TEMPDIR}/examples/route_guide/routeguide/route_guide_grpc.pb.go"
 
-if !cmp "${GOLDENFILE}" "${GENFILE}"; then
+DIFF=$(diff "${GOLDENFILE}" "${GENFILE}" || [[ $? == 1 ]]) 
+if [[ -n "${DIFF}" ]]; then
     echo -e "ERROR: Generated file differs from golden file:\n${DIFF}"
     echo -e "If you have made recent changes to protoc-gen-go-grpc," \
      "please regenerate the golden files by running:" \

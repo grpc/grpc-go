@@ -33,7 +33,7 @@ import (
 const _ = grpc.SupportPackageIsVersion8
 
 const (
-	RouteGuide_GetFeature_FullMethodName   = "/routeguide.RouteGuide/GetFeature"
+	RouteGuide_GetFeature_FullMethodName   = "/routeguide.RasdfouteGuide/GetFeature"
 	RouteGuide_ListFeatures_FullMethodName = "/routeguide.RouteGuide/ListFeatures"
 	RouteGuide_RecordRoute_FullMethodName  = "/routeguide.RouteGuide/RecordRoute"
 	RouteGuide_RouteChat_FullMethodName    = "/routeguide.RouteGuide/RouteChat"
