@@ -16,7 +16,7 @@
  *
  */
 
-package test
+package test_test
 
 import (
 	"context"

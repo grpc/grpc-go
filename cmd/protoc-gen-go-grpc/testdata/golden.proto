@@ -27,8 +27,12 @@ message EventResponse {
 }
 
 service BidirectionalStreamingService {
-  rpc unaryMethod(EventRequest) returns (EventResponse) {}
-  rpc clientMethod(stream EventRequest) returns (EventResponse) {}
-  rpc serverMethod(EventRequest) returns (stream EventResponse) {}
-  rpc bidirectionalMethod(stream EventRequest) returns (stream EventResponse) {}
+  // UnaryMethod is a sample unary method.
+  rpc UnaryMethod(EventRequest) returns (EventResponse) {}
+  // ClientMethod is a sample client streaming method.
+  rpc ClientMethod(stream EventRequest) returns (EventResponse) {}
+  // ServerMethod is a sample server streaming method.
+  rpc ServerMethod(EventRequest) returns (stream EventResponse) {}
+  // BidirectionalMethod is a sample bidirectional streaming method.
+  rpc BidirectionalMethod(stream EventRequest) returns (stream EventResponse) {}
 }
