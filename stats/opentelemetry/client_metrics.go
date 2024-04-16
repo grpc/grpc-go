@@ -202,21 +202,21 @@ func (csh *clientStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInf
 }
 
 const (
-	// ClientAttemptStartedName is the name of the client attempt started
-	// metric.
-	ClientAttemptStartedName = MetricName("grpc.client.attempt.started")
-	// ClientAttemptDurationName is the name of the client attempt duration
-	// metric.
-	ClientAttemptDurationName = MetricName("grpc.client.attempt.duration")
-	// ClientAttemptSentCompressedTotalMessageSize is the name of the client
-	// attempt sent total compressed message size metric.
-	ClientAttemptSentCompressedTotalMessageSize = MetricName("grpc.client.attempt.sent_total_compressed_message_size")
-	// ClientAttemptRcvdCompressedTotalMessageSize is the name of the client
-	// attempt rcvd total compressed message size metric.
-	ClientAttemptRcvdCompressedTotalMessageSize = MetricName("grpc.client.attempt.rcvd_total_compressed_message_size")
-	// ClientCallDurationName is the name of the client call duration metric.
-	ClientCallDurationName = MetricName("grpc.client.call.duration")
+	// ClientAttemptStarted is the number of client call attempts started.
+	ClientAttemptStarted Metric = "grpc.client.attempt.started"
+	// ClientAttemptDuration is the end-to-end time taken to complete a client
+	// call attempt.
+	ClientAttemptDuration Metric = "grpc.client.attempt.duration"
+	// ClientAttemptSentCompressedTotalMessageSize is the compressed message
+	// bytes sent per client call attempt.
+	ClientAttemptSentCompressedTotalMessageSize Metric = "grpc.client.attempt.sent_total_compressed_message_size"
+	// ClientAttemptRcvdCompressedTotalMessageSize is the compressed message
+	// bytes received per call attempt.
+	ClientAttemptRcvdCompressedTotalMessageSize Metric = "grpc.client.attempt.rcvd_total_compressed_message_size"
+	// ClientCallDurationName is the time taken by gRPC to complete an RPC from
+	// application's perspective.
+	ClientCallDurationName Metric = "grpc.client.call.duration"
 )
 
 // DefaultClientMetrics are the default client metrics provided by this module.
-var DefaultClientMetrics = NewMetrics(ClientAttemptStartedName, ClientAttemptDurationName, ClientAttemptSentCompressedTotalMessageSize, ClientAttemptRcvdCompressedTotalMessageSize, ClientCallDurationName)
+var DefaultClientMetrics = NewMetrics(ClientAttemptStarted, ClientAttemptDuration, ClientAttemptSentCompressedTotalMessageSize, ClientAttemptRcvdCompressedTotalMessageSize, ClientCallDurationName)

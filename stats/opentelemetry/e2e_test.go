@@ -36,6 +36,21 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata/metricdatatest"
 )
 
+func ExampleNewMetrics() {
+	// Will disable metrics, set with no metrics specified.
+	NewMetrics()
+	// Will enable these two metrics.
+	NewMetrics(ClientAttemptDuration, ServerCallDuration)
+	// Use DefaultClientMetrics to enable default client metrics. Equivalent to
+	// unset, which will pick up defaults.
+}
+
+func ExampleMetric_Remove() {
+	// Use DefaultClientMetrics without ClientAttemptDuration and
+	// ClientCallDurationName.
+	DefaultClientMetrics.Remove(ClientAttemptDuration, ClientCallDurationName)
+}
+
 var defaultTestTimeout = 5 * time.Second
 
 type s struct {
