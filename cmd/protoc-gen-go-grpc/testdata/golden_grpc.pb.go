@@ -16,7 +16,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.3.0
 // - protoc             v4.25.2
-// source: testdata/golden.proto
+// source: cmd/protoc-gen-go-grpc/testdata/golden.proto
 
 package testdata
 
@@ -337,5 +337,5 @@ var BidirectionalStreamingService_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "testdata/golden.proto",
+	Metadata: "cmd/protoc-gen-go-grpc/testdata/golden.proto",
 }
