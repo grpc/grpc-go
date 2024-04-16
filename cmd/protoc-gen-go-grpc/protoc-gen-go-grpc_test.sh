@@ -36,6 +36,8 @@ protoc \
 GOLDENFILE="examples/route_guide/routeguide/route_guide_grpc.pb.go"
 GENFILE="${TEMPDIR}/examples/route_guide/routeguide/route_guide_grpc.pb.go"
 
+# diff is piped to [[ $? == 1 ]] to avoid exiting on diff but exit on error
+# (like if the file was not found). See man diff for more info.
 DIFF=$(diff "${GOLDENFILE}" "${GENFILE}" || [[ $? == 1 ]]) 
 if [[ -n "${DIFF}" ]]; then
     echo -e "ERROR: Generated file differs from golden file:\n${DIFF}"
