@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 )
 
-func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {
+func sockoptToProto(_ *channelz.SocketOptionData) []*channelzpb.SocketOption {
+	logger.Info("sockoptToProto is not implemented on non-linux platforms")
 	return nil
 }
