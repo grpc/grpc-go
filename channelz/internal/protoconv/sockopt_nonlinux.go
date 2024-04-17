@@ -27,6 +27,5 @@ import (
 )
 
 func sockoptToProto(_ *channelz.SocketOptionData) []*channelzpb.SocketOption {
-	logger.Info("sockoptToProto is not implemented on non-linux platforms")
 	return nil
 }

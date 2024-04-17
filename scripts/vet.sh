@@ -3,7 +3,7 @@
 set -ex  # Exit on error; debugging enabled.
 set -o pipefail  # Fail a pipe if any sub-command fails.
 
-source "$(dirname $0)/vet-common.sh"
+source "../vet-common.sh"
 
 # Check to make sure it's safe to modify the user's git repo.
 git status --porcelain | fail_on_output
@@ -119,6 +119,7 @@ grep "(SA1019)" "${SC_OUT}" | not grep -Fv 'XXXXX PleaseIgnoreUnused
 XXXXX Protobuf related deprecation errors:
 "github.com/golang/protobuf
 .pb.go:
+grpc_testing_not_regenerate
 : ptypes.
 proto.RegisterType
 XXXXX gRPC internal usage deprecation errors:

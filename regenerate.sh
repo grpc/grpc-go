@@ -20,7 +20,7 @@ WORKDIR=$(mktemp -d)
 function finish {
   rm -rf "$WORKDIR"
 }
-trap finish EXIT
+# trap finish EXIT
 
 export GOBIN=${WORKDIR}/bin
 export PATH=${GOBIN}:${PATH}
