@@ -24,6 +24,19 @@ PROTOC_VERSION="25.2"
 # Function to download pre-built binaries for Linux with
 # ARCH as $1, OS as $2, and WORKDIR as $3 arguments.
 download_binary() {
+  # Check if protoc is already available
+  if command -v protoc &> /dev/null; then
+      if installed_version=$(protoc --version | cut -d' ' -f2 2>/dev/null); then
+        if [ "$installed_version" = "$PROTOC_VERSION" ]; then
+          echo "protoc version $PROTOC_VERSION is already installed."
+          return
+        else
+          echo "Existing protoc version ($installed_version) differs. Installing version $PROTOC_VERSION..."
+        fi
+      else
+        echo "Unable to determine installed protoc version. Starting the installation."
+      fi
+  fi
   # Download URL (adjust if a newer release is available)
   DOWNLOAD_URL="https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-$2-$1.zip"
   # Download and unzip
@@ -46,7 +59,7 @@ install_protoc() {
   # Detect the Operating System
   case "$(uname -s)" in
     "Darwin") download_binary $ARCH "osx" "$1";;
-    "Linux") download_binary $ARCH "linux" $1;;
+    "Linux") download_binary $ARCH "linux" "$1";;
   *) echo "Please consider manual installation from \
      https://github.com/protocolbuffers/protobuf/releases/ and add to PATH" ;;
   esac
