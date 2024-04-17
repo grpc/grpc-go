@@ -408,10 +408,10 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	readerErrCh := make(chan error, 1)
 	go t.reader(readerErrCh)
 	defer func() {
-		if err == nil {
-			err = <-readerErrCh
-		}
 		if err != nil {
+			// writerDone should be closed since the loopy goroutine
+			// wouldn't have started in the case this function returns an error.
+			close(t.writerDone)
 			t.Close(err)
 		}
 	}()
@@ -458,8 +458,12 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	if err := t.framer.writer.Flush(); err != nil {
 		return nil, err
 	}
+	// Block until the server preface is received successfully or an error occurs.
+	if err = <-readerErrCh; err != nil {
+		return nil, err
+	}
 	go func() {
-		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger)
+		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger, t.outgoingGoAwayHandler)
 		if err := t.loopy.run(); !isIOError(err) {
 			// Immediately close the connection, as the loopy writer returns
 			// when there are no more active streams and we were draining (the
@@ -515,6 +519,17 @@ func (t *http2Client) getPeer() *peer.Peer {
 		AuthInfo:  t.authInfo, // Can be nil
 		LocalAddr: t.localAddr,
 	}
+}
+
+// OutgoingGoAwayHandler writes a GOAWAY to the connection.  Always returns (false, err) as we want the GoAway
+// to be the last frame loopy writes to the transport.
+func (t *http2Client) outgoingGoAwayHandler(g *goAway) (bool, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if err := t.framer.fr.WriteGoAway(t.nextID-2, http2.ErrCodeNo, g.debugData); err != nil {
+		return false, err
+	}
+	return false, g.closeConn
 }
 
 func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) ([]hpack.HeaderField, error) {
@@ -966,7 +981,7 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 
 // Close kicks off the shutdown process of the transport. This should be called
 // only once on a transport. Once it is called, the transport should not be
-// accessed any more.
+// accessed anymore.
 func (t *http2Client) Close(err error) {
 	t.mu.Lock()
 	// Make sure we only close once.
@@ -991,7 +1006,10 @@ func (t *http2Client) Close(err error) {
 		t.kpDormancyCond.Signal()
 	}
 	t.mu.Unlock()
-	t.controlBuf.finish()
+	// Per HTTP/2 spec, a GOAWAY frame must be sent before closing the
+	// connection. See https://httpwg.org/specs/rfc7540.html#GOAWAY.
+	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte("client transport shutdown"), closeConn: err})
+	<-t.writerDone
 	t.cancel()
 	t.conn.Close()
 	channelz.RemoveEntry(t.channelz.ID)
