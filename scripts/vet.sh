@@ -119,7 +119,6 @@ grep "(SA1019)" "${SC_OUT}" | not grep -Fv 'XXXXX PleaseIgnoreUnused
 XXXXX Protobuf related deprecation errors:
 "github.com/golang/protobuf
 .pb.go:
-grpc_testing_not_regenerate
 : ptypes.
 proto.RegisterType
 XXXXX gRPC internal usage deprecation errors:
