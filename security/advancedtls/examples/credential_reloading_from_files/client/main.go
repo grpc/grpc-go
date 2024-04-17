@@ -76,7 +76,7 @@ func main() {
 		IdentityOptions: advancedtls.IdentityCertificateOptions{
 			IdentityProvider: identityProvider,
 		},
-		VerifyPeer: func(params *advancedtls.VerificationFuncParams) (*advancedtls.VerificationResults, error) {
+		VerifyPeer: func(params *advancedtls.HandshakeVerificationInfo) (*advancedtls.VerificationResults, error) {
 			return &advancedtls.VerificationResults{}, nil
 		},
 		RootOptions: advancedtls.RootCertificateOptions{

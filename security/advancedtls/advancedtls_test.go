@@ -341,7 +341,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	getRootCAsForClient := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return &GetRootCAsResults{TrustCerts: cs.ClientTrust1}, nil
 	}
-	clientVerifyFuncGood := func(params *VerificationFuncParams) (*VerificationResults, error) {
+	clientVerifyFuncGood := func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
 		if params.ServerName == "" {
 			return nil, errors.New("client side server name should have a value")
 		}
@@ -352,13 +352,13 @@ func (s) TestClientServerHandshake(t *testing.T) {
 
 		return &VerificationResults{}, nil
 	}
-	verifyFuncBad := func(params *VerificationFuncParams) (*VerificationResults, error) {
+	verifyFuncBad := func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
 		return nil, fmt.Errorf("custom verification function failed")
 	}
 	getRootCAsForServer := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return &GetRootCAsResults{TrustCerts: cs.ServerTrust1}, nil
 	}
-	serverVerifyFunc := func(params *VerificationFuncParams) (*VerificationResults, error) {
+	serverVerifyFunc := func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
 		if params.ServerName != "" {
 			return nil, errors.New("server side server name should not have a value")
 		}

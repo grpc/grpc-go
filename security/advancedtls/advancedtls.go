@@ -71,7 +71,7 @@ type VerificationResults struct{}
 // verification has been completed.
 // PostHandshakeVerificationFunc returns nil
 // if the authorization fails; otherwise returns an empty struct.
-type PostHandshakeVerificationFunc func(params *VerificationFuncParams) (*VerificationResults, error)
+type PostHandshakeVerificationFunc func(params *HandshakeVerificationInfo) (*VerificationResults, error)
 
 // DEPRECATED: Renamed to PostHandshakeVerificationFunc.
 // CustomVerificationFunc is the function defined by users to perform custom
@@ -569,7 +569,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 		}
 		// Perform custom verification check if specified.
 		if c.verifyFunc != nil {
-			_, err := c.verifyFunc(&VerificationFuncParams{
+			_, err := c.verifyFunc(&HandshakeVerificationInfo{
 				ServerName:     serverName,
 				RawCerts:       rawCerts,
 				VerifiedChains: chains,
