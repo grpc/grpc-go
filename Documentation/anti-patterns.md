@@ -1,19 +1,38 @@
 ## Anti-Patterns
 
 ### Dialing in gRPC
-[`grpc.Dial`](https://pkg.go.dev/google.golang.org/grpc#Dial) is a function in
-the gRPC library that creates a virtual connection from the gRPC client to the
-gRPC server.  It takes a target URI (which can represent the name of a logical
-backend service and could resolve to multiple actual addresses) and a list of
-options, and returns a
+
+[`grpc.NewClient`](https://pkg.go.dev/google.golang.org/grpc#NewClient) is a
+function in the gRPC library that creates a virtual connection from the gRPC
+client to the gRPC server.  It takes a target URI (which can represent the name
+of a logical backend service and could resolve to multiple actual addresses) and
+a list of options, and returns a
 [`ClientConn`](https://pkg.go.dev/google.golang.org/grpc#ClientConn) object that
-represents the connection to the server. The `ClientConn` contains one or more
+represents the connection to the server.  The `ClientConn` contains one or more
 actual connections to real server backends and attempts to keep these
 connections healthy by automatically reconnecting to them when they break.
+`NewClient` is made available from gRPC-Go >v1.63.
 
-The `Dial` function can also be configured with various options to customize the
-behavior of the client connection. For example, developers could use options
-such a
+`grpc.NewClient` automatically ignores `DialOptions` returned by `WithBlock`,
+`WithTimeout`, `WithReturnConnectionError`, and `FailOnNonTempDialError.
+
+### Difference between Dial and NewClient
+
+`grpc.Dial` uses passthrough as the default name resolver for backward
+compatibility while `grpc.NewClient` uses dns as its default name resolver.  This
+subtle diffrence is crucial in legacy systems that specify a custom dialer and
+expect it to receive the target string directly.  However, the usage of `Dial`
+and `DialContext` is discouraged and from gRPC-Go v1.63 users should use
+`grpc.NewClient` instead.  But keep in mind, `Dial` and `DialContext` will be
+supported throughout 1.x.
+
+#### Why is using grpc.Dial discouraged
+
+[`grpc.Dial`](https://pkg.go.dev/google.golang.org/grpc#NewClient) is also a
+function in the gRPC library that creates a virtual connection from the gRPC
+client to the gRPC server.  The `Dial` function can also be configured with
+various options to customize the behavior of the client connection.  For example,
+developers could use options such a
 [`WithTransportCredentials`](https://pkg.go.dev/google.golang.org/grpc#WithTransportCredentials)
 to configure the transport credentials to use.
 
@@ -23,7 +42,7 @@ actually perform the low-level network dialing operation like
 connection from the gRPC client to the gRPC server.
 
 `Dial` does initiate the process of connecting to the server, but it uses the
-ClientConn object to manage and maintain that connection over time. This is why
+ClientConn object to manage and maintain that connection over time.  This is why
 errors encountered during the initial connection are no different from those
 that occur later on, and why it's important to handle errors from RPCs rather
 than relying on options like
@@ -34,47 +53,35 @@ In fact, `Dial` does not always establish a connection to servers by default.
 The connection behavior is determined by the load balancing policy being used.
 For instance, an "active" load balancing policy such as Round Robin attempts to
 maintain a constant connection, while the default "pick first" policy delays
-connection until an RPC is executed. Instead of using the WithBlock option, which
-may not be recommended in some cases, you can call the
+connection until an RPC is executed.  Instead of using the WithBlock option,
+which may not be recommended in some cases, you can call the
 [`ClientConn.Connect`](https://pkg.go.dev/google.golang.org/grpc#ClientConn.Connect)
 method to explicitly initiate a connection.
-[`WithBlock`](https://pkg.go.dev/google.golang.org/grpc#WithBlock) in an instance where WithBlock(true) is used, `Connect` and `WaitForStateChange` is invoked until either the context created via `context.WithTimeout` expires or the `ClientConn` is ready.
 
 ### Using `FailOnNonTempDialError`, `WithBlock`, and `WithReturnConnectionError`
 
 The gRPC API provides several options that can be used to configure the behavior
-of dialing and connecting to a gRPC server. Some of these options, such as
+of dialing and connecting to a gRPC server.  Some of these options, such as
 `FailOnNonTempDialError`, `WithBlock`, and `WithReturnConnectionError`, rely on
-failures at dial time. However, we strongly discourage developers from using
+failures at dial time.  However, we strongly discourage developers from using
 these options, as they can introduce race conditions and result in unreliable
 and difficult-to-debug code.
 
 One of the most important reasons for avoiding these options, which is often
-overlooked, is that connections can fail at any point in time. This means that
+overlooked, is that connections can fail at any point in time.  This means that
 you need to handle RPC failures caused by connection issues, regardless of
 whether a connection was never established in the first place, or if it was
 created and then immediately lost.  Implementing proper error handling for RPCs
 is crucial for maintaining the reliability and stability of your gRPC
 communication.
 
-### Difference between Dial and NewClient
-[`grpc.NewClient`](https://pkg.go.dev/google.golang.org/grpc#NewClient) is a function in the grpc libaray that creates a new gRPC `channel` for the target URI that is passed in as an argument, together with a list of `DialOption`, and returns [`ClientConn`](https://pkg.go.dev/google.golang.org/grpc#ClientConn) an object representing a server connection.
-
-Unlike `grpc.NewClient`, whereby using the ClientConn for RPCs will automatically cause it to connect or `Connect` may be used to manually create a connection, by default `Dial` does not always establish a connection to servers. Connection behavior is determined by the load balancing policy used.
-
-`grpc.NewClient` automatically ignores `DialOptions` returned by `WithBlock`, `WithTimeout`, `WithReturnConnectionError`, and `FailOnNonTempDialError. 
-
-`grpc.NewClient` uses passthrough as the default name resolver for backward compatibility while  `Dial` uses dns as its default name resolver. This subtle diffrence is crucial in legacy systems that specify a custom dialer and expect it to receive the target string directly.
-
-Timeouts are not supported by `grpc.NewClient`. 
-
 ###  Why we discourage using `FailOnNonTempDialError`, `WithBlock`, and `WithReturnConnectionError`
 
 When a client attempts to connect to a gRPC server, it can encounter a variety
 of errors, including network connectivity issues, server-side errors, and
-incorrect usage of the gRPC API. The options `FailOnNonTempDialError`,
+incorrect usage of the gRPC API.  The options `FailOnNonTempDialError`,
 `WithBlock`, and `WithReturnConnectionError` are designed to handle some of
-these errors, but they do so by relying on failures at dial time. This means
+these errors, but they do so by relying on failures at dial time.  This means
 that they may not provide reliable or accurate information about the status of
 the connection.
 
@@ -87,26 +94,26 @@ network issues that are resolved shortly after the initial dial attempt.
 ## Best practices for error handling in gRPC
 
 Instead of relying on failures at dial time, we strongly encourage developers to
-rely on errors from RPCs. When a client makes an RPC, it can receive an error
-response from the server. These errors can provide valuable information about
+rely on errors from RPCs.  When a client makes an RPC, it can receive an error
+response from the server.  These errors can provide valuable information about
 what went wrong, including information about network issues, server-side errors,
 and incorrect usage of the gRPC API.
 
 By handling errors from RPCs correctly, developers can write more reliable and
-robust gRPC applications. Here are some best practices for error handling in
+robust gRPC applications.  Here are some best practices for error handling in
 gRPC:
 
-- Always check for error responses from RPCs and handle them appropriately.  
-- Use the `status` field of the error response to determine the type of error that
-  occurred.
+- Always check for error responses from RPCs and handle them appropriately.
+- Use the `status` field of the error response to determine the type of error
+  that occurred.
 - When retrying failed RPCs, consider using the built-in retry mechanism
   provided by gRPC-Go, if available, instead of manually implementing retries.
   Refer to the [gRPC-Go retry example
   documentation](https://github.com/grpc/grpc-go/blob/master/examples/features/retry/README.md)
   for more information.
 - Avoid using `FailOnNonTempDialError`, `WithBlock`, and
-  `WithReturnConnectionError`, as these options can introduce race conditions and
-  result in unreliable and difficult-to-debug code.
+  `WithReturnConnectionError`, as these options can introduce race conditions
+  and result in unreliable and difficult-to-debug code.
 - If making the outgoing RPC in order to handle an incoming RPC, be sure to
   translate the status code before returning the error from your method handler.
   For example, if the error is an `INVALID_ARGUMENT` error, that probably means
@@ -118,7 +125,7 @@ gRPC:
 The following code snippet demonstrates how to handle errors from an RPC in
 gRPC:
 
-```go 
+```go
 ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 defer cancel()
 
@@ -130,7 +137,7 @@ if err != nil {
     return nil, err
 }
 
-// Use the response as appropriate 
+// Use the response as appropriate
 log.Printf("MyRPC response: %v", res)
 ```
 
@@ -139,25 +146,25 @@ the error response:
 
 
 ```go
-resp, err := client.MakeRPC(context.Background(), request) 
+resp, err := client.MakeRPC(context.Background(), request)
 if err != nil {
-  status, ok := status.FromError(err) 
+  status, ok := status.FromError(err)
   if ok {
-    // Handle the error based on its status code 
+    // Handle the error based on its status code
     if status.Code() == codes.NotFound {
       log.Println("Requested resource not found")
     } else {
       log.Printf("RPC error: %v", status.Message())
     }
   } else {
-    //Handle non-RPC errors 
+    // Handle non-RPC errors
     log.Printf("Non-RPC error: %v", err)
   }
   return
-}        
+}
 
-// Use the response as needed 
-log.Printf("Response received: %v", resp) 
+// Use the response as needed
+log.Printf("Response received: %v", resp)
 ```
 
 ### Example: Using a backoff strategy
@@ -167,7 +174,7 @@ When retrying failed RPCs, use a backoff strategy to avoid overwhelming the
 server or exacerbating network issues:
 
 
-```go 
+```go
 var res *MyResponse
 var err error
 
@@ -177,16 +184,16 @@ defer cancel()
 
 // Retry the RPC call a maximum number of times
 for i := 0; i < maxRetries; i++ {
-    
+
     // Make the RPC call
     res, err = client.MyRPC(ctx, &MyRequest{})
-    
+
     // Check if the RPC call was successful
     if err == nil {
         // The RPC was successful, so break out of the loop
         break
     }
-    
+
     // The RPC failed, so wait for a backoff period before retrying
     backoff := time.Duration(i) * time.Second
     log.Printf("Error calling MyRPC: %v; retrying in %v", err, backoff)
@@ -212,7 +219,7 @@ The
 [`WithBlock`](https://pkg.go.dev/google.golang.org/grpc#WithBlock), and
 [`WithReturnConnectionError`](https://pkg.go.dev/google.golang.org/grpc#WithReturnConnectionError)
 options are designed to handle errors at dial time, but they can introduce race
-conditions and result in unreliable and difficult-to-debug code. Instead of
-relying on these options, we strongly encourage developers to rely on errors
-from RPCs for error handling. By following best practices for error handling in
-gRPC, developers can write more reliable and robust gRPC applications.
+conditions and result in unreliable and difficult-to-debug code.  Instead of
+relying on these options, we strongly encourage developers to use
+`grpc.NewClient`.  By following best practices for error handling in gRPC,
+developers can write more reliable and robust gRPC applications.
