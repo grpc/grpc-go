@@ -46,21 +46,18 @@ download_binary() {
   rm "protoc-${PROTOC_VERSION}-$2-$1.zip"
 }
 
-# Function to install protoc with WORKDIR as argument
-install_protoc() {
-  # Determine architecture
-  if [[ $(uname -m) == "x86_64" ]]; then
-    ARCH="x86_64"
-  elif [[ $(uname -m) == "aarch64" ]] || [[ $(uname -m) == "arm64" ]] ; then
-    ARCH="aarch_64"
-  else
-    die "Unsupported architecture. Please consider manual installation."
-  fi
-  # Detect the Operating System
-  case "$(uname -s)" in
-    "Darwin") download_binary $ARCH "osx" "$1";;
-    "Linux") download_binary $ARCH "linux" "$1";;
-  *) echo "Please consider manual installation from \
-     https://github.com/protocolbuffers/protobuf/releases/ and add to PATH" ;;
-  esac
-}
+# Determine architecture
+if [[ $(uname -m) == "x86_64" ]]; then
+  ARCH="x86_64"
+elif [[ $(uname -m) == "aarch64" ]] || [[ $(uname -m) == "arm64" ]] ; then
+  ARCH="aarch_64"
+else
+  die "Unsupported architecture. Please consider manual installation."
+fi
+# Detect the Operating System
+case "$(uname -s)" in
+  "Darwin") download_binary $ARCH "osx" "$1";;
+  "Linux") download_binary $ARCH "linux" "$1";;
+*) echo "Please consider manual installation from \
+   https://github.com/protocolbuffers/protobuf/releases/ and add to PATH" ;;
+esac

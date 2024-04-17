@@ -48,8 +48,7 @@ mkdir -p "${WORKDIR}/googleapis/google/rpc"
 echo "curl https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto"
 curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto > "${WORKDIR}/googleapis/google/rpc/code.proto"
 
-source ./scripts/protoc_installer.sh
-install_protoc $WORKDIR
+source ./scripts/protoc_installer.sh $WORKDIR
 
 mkdir -p "${WORKDIR}/out"
 
