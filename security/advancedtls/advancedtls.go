@@ -35,10 +35,10 @@ import (
 	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
-// VerificationFuncParams contains parameters available to users when
-// implementing CustomVerificationFunc.
+// HandshakeVerificationInfo contains parameters available to users when
+// implementing PostHandshakeVerificationFunc.
 // The fields in this struct are read-only.
-type VerificationFuncParams struct {
+type HandshakeVerificationInfo struct {
 	// The target server name that the client connects to when establishing the
 	// connection. This field is only meaningful for client side. On server side,
 	// this field would be an empty string.
@@ -54,17 +54,31 @@ type VerificationFuncParams struct {
 	Leaf *x509.Certificate
 }
 
+// DEPRECATED: Renamed to `HandshakeVerificationInfo`
+// VerificationFuncParams contains parameters available to users when
+// implementing CustomVerificationFunc.
+// The fields in this struct are read-only.
+type VerificationFuncParams = HandshakeVerificationInfo
+
 // VerificationResults contains the information about results of
 // CustomVerificationFunc.
 // VerificationResults is an empty struct for now. It may be extended in the
 // future to include more information.
 type VerificationResults struct{}
 
+// PostHandshakeVerificationFunc is the function defined by users to perform
+// custom verification checks after chain building and regular handshake
+// verification has been completed.
+// PostHandshakeVerificationFunc returns nil
+// if the authorization fails; otherwise returns an empty struct.
+type PostHandshakeVerificationFunc func(params *VerificationFuncParams) (*VerificationResults, error)
+
+// DEPRECATED: Renamed to PostHandshakeVerificationFunc.
 // CustomVerificationFunc is the function defined by users to perform custom
 // verification check.
 // CustomVerificationFunc returns nil if the authorization fails; otherwise
 // returns an empty struct.
-type CustomVerificationFunc func(params *VerificationFuncParams) (*VerificationResults, error)
+type CustomVerificationFunc = PostHandshakeVerificationFunc
 
 // GetRootCAsParams contains the parameters available to users when
 // implementing GetRootCAs.
