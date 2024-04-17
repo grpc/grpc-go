@@ -34,11 +34,11 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/syscall"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/protobuf/proto"
 
 	"google.golang.org/grpc/codes"
@@ -120,7 +120,7 @@ type http2Server struct {
 
 	// Fields below are for channelz metric collection.
 	channelz   *channelz.Socket
-	bufferPool *bufferPool
+	bufferPool mem.BufferPool
 
 	connectionID uint64
 
@@ -262,6 +262,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		idle:              time.Now(),
 		kep:               kep,
 		initialWindowSize: iwz,
+		bufferPool:        config.BufferPool,
 	}
 	var czSecurity credentials.ChannelzSecurityValue
 	if au, ok := authInfo.(credentials.ChannelzSecurityInfo); ok {
@@ -330,7 +331,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	t.handleSettings(sf)
 
 	go func() {
-		t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger)
+		t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger, t.bufferPool)
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
 		err := t.loopy.run()
 		close(t.loopyWriterDone)
@@ -391,6 +392,7 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		buf:              buf,
 		fc:               &inFlow{limit: uint32(t.initialWindowSize)},
 		headerWireLength: int(frame.Header().Length),
+		bufferPool:       t.bufferPool,
 	}
 	var (
 		// if false, content-type was missing or invalid
@@ -813,7 +815,11 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		// guarantee f.Data() is consumed before the arrival of next frame.
 		// Can this copy be eliminated?
 		if len(f.Data()) > 0 {
-			s.write(recvMsg{buffer: bufPool.copy(f.Data())})
+			pool := s.bufferPool
+			if pool == nil {
+				pool = mem.DefaultBufferPool
+			}
+			s.write(recvMsg{buffer: mem.Copy(f.Data(), pool)})
 		}
 	}
 	if f.StreamEnded() {
@@ -1108,7 +1114,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 
 // Write converts the data into HTTP2 data frame and sends it out. Non-nil error
 // is returns if it fails (e.g., framing error, transport error).
-func (t *http2Server) Write(s *Stream, hdr []byte, data encoding.BufferSlice, opts *Options) error {
+func (t *http2Server) Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error {
 	if !s.isHeaderSent() { // Headers haven't been written yet.
 		if err := t.WriteHeader(s, nil); err != nil {
 			data.Free()

@@ -34,9 +34,9 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -48,47 +48,13 @@ import (
 const logLevel = 2
 
 type Reader interface {
-	Read(n int) (encoding.BufferSlice, error)
-}
-
-type bufferPool struct {
-	pool sync.Pool
-}
-
-func newBufferPool() *bufferPool {
-	return &bufferPool{
-		pool: sync.Pool{
-			New: func() any {
-				buf := make([]byte, http2MaxFrameLen)
-				return &buf
-			},
-		},
-	}
-}
-
-func (p *bufferPool) get() []byte {
-	return *p.pool.Get().(*[]byte)
-}
-
-func (p *bufferPool) put(b []byte) {
-	b = b[:cap(b)]
-	// TODO: replace this loop with `clear`
-	for i := range b {
-		b[i] = 0
-	}
-	p.pool.Put(&b)
-}
-
-func (p *bufferPool) copy(data []byte) *encoding.Buffer {
-	b := p.get()
-	n := copy(b, data)
-	return encoding.NewBuffer(b[:n], bufPool.put)
+	Read(n int) (mem.BufferSlice, error)
 }
 
 // recvMsg represents the received msg from the transport. All transport
 // protocol specific info has been removed.
 type recvMsg struct {
-	buffer *encoding.Buffer
+	buffer *mem.Buffer
 	// nil: received some data
 	// io.EOF: stream is completed. data is nil.
 	// other non-nil error: transport failure. data is nil.
@@ -164,14 +130,14 @@ type recvBufferReader struct {
 	ctx         context.Context
 	ctxDone     <-chan struct{} // cache of ctx.Done() (for performance).
 	recv        *recvBuffer
-	last        *encoding.Buffer // Stores the remaining data in the previous calls.
+	last        *mem.Buffer // Stores the remaining data in the previous calls.
 	err         error
 }
 
 // Read reads the next len(p) bytes from last. If last is drained, it tries to
 // read additional data from recv. It blocks if there no additional data available
 // in recv. If Read returns any non-nil error, it will continue to return that error.
-func (r *recvBufferReader) Read(n int) (buf *encoding.Buffer, err error) {
+func (r *recvBufferReader) Read(n int) (buf *mem.Buffer, err error) {
 	if r.err != nil {
 		return nil, r.err
 	}
@@ -192,7 +158,7 @@ func (r *recvBufferReader) Read(n int) (buf *encoding.Buffer, err error) {
 	return buf, r.err
 }
 
-func (r *recvBufferReader) read(n int) (buf *encoding.Buffer, err error) {
+func (r *recvBufferReader) read(n int) (buf *mem.Buffer, err error) {
 	select {
 	case <-r.ctxDone:
 		return nil, ContextErr(r.ctx.Err())
@@ -201,7 +167,7 @@ func (r *recvBufferReader) read(n int) (buf *encoding.Buffer, err error) {
 	}
 }
 
-func (r *recvBufferReader) readClient(n int) (buf *encoding.Buffer, err error) {
+func (r *recvBufferReader) readClient(n int) (buf *mem.Buffer, err error) {
 	// If the context is canceled, then closes the stream with nil metadata.
 	// closeStream writes its error parameter to r.recv as a recvMsg.
 	// r.readAdditional acts on that message and returns the necessary error.
@@ -228,7 +194,7 @@ func (r *recvBufferReader) readClient(n int) (buf *encoding.Buffer, err error) {
 	}
 }
 
-func (r *recvBufferReader) readAdditional(m recvMsg, n int) (b *encoding.Buffer, err error) {
+func (r *recvBufferReader) readAdditional(m recvMsg, n int) (b *mem.Buffer, err error) {
 	r.recv.load()
 	if m.err != nil {
 		m.buffer.Free()
@@ -310,6 +276,8 @@ type Stream struct {
 	// contentSubtype is the content-subtype for requests.
 	// this must be lowercase or the behavior is undefined.
 	contentSubtype string
+
+	bufferPool mem.BufferPool
 }
 
 // isHeaderSent is only valid on the server-side.
@@ -514,7 +482,7 @@ func (s *Stream) write(m recvMsg) {
 }
 
 // Read reads all p bytes from the wire for this stream.
-func (s *Stream) Read(n int) (data encoding.BufferSlice, err error) {
+func (s *Stream) Read(n int) (data mem.BufferSlice, err error) {
 	// Don't request a read if there was an error earlier
 	if er := s.trReader.er; er != nil {
 		return nil, er
@@ -550,7 +518,7 @@ type transportReader struct {
 	er            error
 }
 
-func (t *transportReader) Read(n int) (buf *encoding.Buffer, err error) {
+func (t *transportReader) Read(n int) (buf *mem.Buffer, err error) {
 	buf, err = t.reader.Read(n)
 	if err != nil {
 		t.er = err
@@ -603,6 +571,7 @@ type ServerConfig struct {
 	ChannelzParent        *channelz.Server
 	MaxHeaderListSize     *uint32
 	HeaderTableSize       *uint32
+	BufferPool            mem.BufferPool
 }
 
 // ConnectOptions covers all relevant options for communicating with the server.
@@ -641,6 +610,8 @@ type ConnectOptions struct {
 	MaxHeaderListSize *uint32
 	// UseProxy specifies if a proxy should be used.
 	UseProxy bool
+	// The mem.BufferPool to use when reading/writing to the wire.
+	BufferPool mem.BufferPool
 }
 
 // NewClientTransport establishes the transport with the required ConnectOptions
@@ -702,7 +673,7 @@ type ClientTransport interface {
 
 	// Write sends the data for the given stream. A nil stream indicates
 	// the write is to be performed on the transport as a whole.
-	Write(s *Stream, hdr []byte, data encoding.BufferSlice, opts *Options) error
+	Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error
 
 	// NewStream creates a Stream for an RPC.
 	NewStream(ctx context.Context, callHdr *CallHdr) (*Stream, error)
@@ -754,7 +725,7 @@ type ServerTransport interface {
 
 	// Write sends the data for the given stream.
 	// Write may not be called on all streams.
-	Write(s *Stream, hdr []byte, data encoding.BufferSlice, opts *Options) error
+	Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error
 
 	// WriteStatus sends the status of a stream to the client.  WriteStatus is
 	// the final call made on a stream and always occurs.

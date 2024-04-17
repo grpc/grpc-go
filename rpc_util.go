@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/encoding/proto"
 	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
@@ -591,8 +592,8 @@ type parser struct {
 	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md
 	header [5]byte
 
-	// recvBufferPool is the pool of shared receive buffers.
-	recvBufferPool SharedBufferPool
+	// bufferPool is the pool of shared receive buffers.
+	bufferPool mem.BufferPool
 }
 
 // recvMsg reads a complete gRPC message from the stream.
@@ -609,7 +610,7 @@ type parser struct {
 // No other error values or types must be returned, which also means
 // that the underlying io.Reader must not return an incompatible
 // error.
-func (p *parser) recvMsg(maxReceiveMessageSize int) (payloadFormat, encoding.BufferSlice, error) {
+func (p *parser) recvMsg(maxReceiveMessageSize int) (payloadFormat, mem.BufferSlice, error) {
 	if header, err := p.r.Read(5); err == nil {
 		header.WriteTo(p.header[:])
 		header.Free()
@@ -645,7 +646,7 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (payloadFormat, encoding.Buf
 // encode serializes msg and returns a buffer containing the message, or an
 // error if it is too large to be transmitted by grpc.  If msg is nil, it
 // generates an empty message.
-func encode(c baseCodec, msg any) (encoding.BufferSlice, error) {
+func encode(c baseCodec, msg any) (mem.BufferSlice, error) {
 	if msg == nil { // NOTE: typed nils will not be caught by this check
 		return nil, nil
 	}
@@ -665,15 +666,15 @@ func encode(c baseCodec, msg any) (encoding.BufferSlice, error) {
 // indicating no compression was done.
 //
 // TODO(dfawley): eliminate cp parameter by wrapping Compressor in an encoding.Compressor.
-func compress(in encoding.BufferSlice, cp Compressor, compressor encoding.Compressor, pool encoding.SharedBufferPool) (encoding.BufferSlice, payloadFormat, error) {
+func compress(in mem.BufferSlice, cp Compressor, compressor encoding.Compressor, pool mem.BufferPool) (mem.BufferSlice, payloadFormat, error) {
 	if compressor == nil && cp == nil {
 		return nil, compressionNone, nil
 	}
 	if in.Len() == 0 {
 		return nil, compressionNone, nil
 	}
-	var out encoding.BufferSlice
-	w := encoding.NewWriter(&out, pool)
+	var out mem.BufferSlice
+	w := mem.NewWriter(&out, pool)
 	wrapErr := func(err error) error {
 		out.Free()
 		return status.Errorf(codes.Internal, "grpc: error while compressing: %v", err.Error())
@@ -713,7 +714,7 @@ const (
 
 // msgHeader returns a 5-byte header for the message being transmitted and the
 // payload, which is compData if non-nil or data otherwise.
-func msgHeader(data, compData encoding.BufferSlice, pf payloadFormat) (hdr []byte, payload encoding.BufferSlice) {
+func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, payload mem.BufferSlice) {
 	hdr = make([]byte, headerLen)
 	hdr[0] = byte(pf)
 
@@ -743,7 +744,6 @@ func outPayload(client bool, msg any, data []byte, payloadLength int, t time.Tim
 	return &stats.OutPayload{
 		Client:           client,
 		Payload:          msg,
-		Data:             data,
 		Length:           len(data),
 		WireLength:       payloadLength + headerLen,
 		CompressedLength: payloadLength,
@@ -769,7 +769,7 @@ func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool
 
 type payloadInfo struct {
 	compressedLength  int // The compressed length got from wire.
-	uncompressedBytes encoding.BufferSlice
+	uncompressedBytes mem.BufferSlice
 }
 
 func (p *payloadInfo) free() {
@@ -780,7 +780,7 @@ func (p *payloadInfo) free() {
 
 // recvAndDecompress reads a message from the stream, decompressing it if necessary.
 func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor,
-) (out encoding.BufferSlice, err error) {
+) (out mem.BufferSlice, err error) {
 	pf, compressed, err := p.recvMsg(maxReceiveMessageSize)
 	if err != nil {
 		return nil, err
@@ -803,11 +803,11 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 			var uncompressedBuf []byte
 			uncompressedBuf, err = dc.Do(compressed.Reader())
 			if err == nil {
-				out = encoding.BufferSlice{encoding.NewBuffer(uncompressedBuf, nil)}
+				out = mem.BufferSlice{mem.NewBuffer(uncompressedBuf, nil)}
 			}
 			size = len(uncompressedBuf)
 		} else {
-			out, size, err = decompress(compressor, compressed, maxReceiveMessageSize, p.recvBufferPool)
+			out, size, err = decompress(compressor, compressed, maxReceiveMessageSize, p.bufferPool)
 		}
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message: %v", err)
@@ -833,7 +833,7 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 
 // Using compressor, decompress d, returning data and size.
 // Optionally, if data will be over maxReceiveMessageSize, just return the size.
-func decompress(compressor encoding.Compressor, d encoding.BufferSlice, maxReceiveMessageSize int, pool encoding.SharedBufferPool) (encoding.BufferSlice, int, error) {
+func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMessageSize int, pool mem.BufferPool) (mem.BufferSlice, int, error) {
 	dcReader, err := compressor.Decompress(d.Reader())
 	if err != nil {
 		return nil, 0, err
@@ -859,8 +859,8 @@ func decompress(compressor encoding.Compressor, d encoding.BufferSlice, maxRecei
 	//	}
 	//}
 
-	var out encoding.BufferSlice
-	_, err = io.Copy(encoding.NewWriter(&out, pool), io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+	var out mem.BufferSlice
+	_, err = io.Copy(mem.NewWriter(&out, pool), io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
 	if err != nil {
 		out.Free()
 		return nil, 0, err

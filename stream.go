@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/internal/serviceconfig"
 	istatus "google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
@@ -516,7 +517,7 @@ func (a *csAttempt) newStream() error {
 		return toRPCErr(nse.Err)
 	}
 	a.s = s
-	a.p = &parser{r: s, recvBufferPool: a.cs.cc.dopts.recvBufferPool}
+	a.p = &parser{r: s, bufferPool: a.cs.cc.dopts.copts.BufferPool}
 	return nil
 }
 
@@ -890,7 +891,7 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, err := prepareMsg(m, cs.codec, cs.cp, cs.comp, cs.cc.dopts.recvBufferPool)
+	hdr, data, payload, err := prepareMsg(m, cs.codec, cs.cp, cs.comp, cs.cc.dopts.copts.BufferPool)
 	if err != nil {
 		return err
 	}
@@ -1037,7 +1038,7 @@ func (cs *clientStream) finish(err error) {
 	cs.cancel()
 }
 
-func (a *csAttempt) sendMsg(m any, hdr []byte, payld, data encoding.BufferSlice) error {
+func (a *csAttempt) sendMsg(m any, hdr []byte, payld, data mem.BufferSlice) error {
 	cs := a.cs
 	if a.trInfo != nil {
 		a.mu.Lock()
@@ -1057,7 +1058,7 @@ func (a *csAttempt) sendMsg(m any, hdr []byte, payld, data encoding.BufferSlice)
 		return io.EOF
 	}
 	if len(a.statsHandlers) != 0 {
-		mData := data.LazyMaterialize(a.cs.cc.dopts.recvBufferPool)
+		mData := data.LazyMaterialize(a.cs.cc.dopts.copts.BufferPool)
 		defer mData.Free()
 		for _, sh := range a.statsHandlers {
 			sh.HandleRPC(a.ctx, outPayload(true, m, mData.ReadOnlyData(), payloadLen, time.Now()))
@@ -1111,18 +1112,14 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 		a.mu.Unlock()
 	}
 	if len(a.statsHandlers) != 0 {
-		mData := payInfo.uncompressedBytes.LazyMaterialize(a.cs.cc.dopts.recvBufferPool)
-		defer mData.Free()
 		for _, sh := range a.statsHandlers {
 			sh.HandleRPC(a.ctx, &stats.InPayload{
-				Client:   true,
-				RecvTime: time.Now(),
-				Payload:  m,
-				// TODO truncate large payload.
-				Data:             mData.ReadOnlyData(),
+				Client:           true,
+				RecvTime:         time.Now(),
+				Payload:          m,
 				WireLength:       payInfo.compressedLength + headerLen,
 				CompressedLength: payInfo.compressedLength,
-				Length:           len(mData.ReadOnlyData()),
+				Length:           payInfo.uncompressedBytes.Len(),
 			})
 		}
 	}
@@ -1289,7 +1286,7 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 		return nil, err
 	}
 	as.s = s
-	as.p = &parser{r: s, recvBufferPool: ac.dopts.recvBufferPool}
+	as.p = &parser{r: s, bufferPool: ac.dopts.copts.BufferPool}
 	ac.incrCallsStarted()
 	if desc != unaryStreamDesc {
 		// Listen on stream context to cleanup when the stream context is
@@ -1386,7 +1383,7 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, err := prepareMsg(m, as.codec, as.cp, as.comp, as.ac.dopts.recvBufferPool)
+	hdr, data, payload, err := prepareMsg(m, as.codec, as.cp, as.comp, as.ac.dopts.copts.BufferPool)
 	if err != nil {
 		return err
 	}
@@ -1660,7 +1657,7 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, err := prepareMsg(m, ss.codec, ss.cp, ss.comp, ss.p.recvBufferPool)
+	hdr, data, payload, err := prepareMsg(m, ss.codec, ss.cp, ss.comp, ss.p.bufferPool)
 	if err != nil {
 		return err
 	}
@@ -1696,7 +1693,7 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 		}
 	}
 	if len(ss.statsHandler) != 0 {
-		mData := data.LazyMaterialize(ss.p.recvBufferPool)
+		mData := data.LazyMaterialize(ss.p.bufferPool)
 		defer mData.Free()
 		for _, sh := range ss.statsHandler {
 			sh.HandleRPC(ss.s.Context(), outPayload(false, m, mData.ReadOnlyData(), payloadLen, time.Now()))
@@ -1754,15 +1751,11 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		return toRPCErr(err)
 	}
 	if len(ss.statsHandler) != 0 {
-		mData := payInfo.uncompressedBytes.LazyMaterialize(ss.p.recvBufferPool)
-		defer mData.Free()
 		for _, sh := range ss.statsHandler {
 			sh.HandleRPC(ss.s.Context(), &stats.InPayload{
-				RecvTime: time.Now(),
-				Payload:  m,
-				// TODO truncate large payload.
-				Data:             mData.ReadOnlyData(),
-				Length:           len(mData.ReadOnlyData()),
+				RecvTime:         time.Now(),
+				Payload:          m,
+				Length:           payInfo.uncompressedBytes.Len(),
 				WireLength:       payInfo.compressedLength + headerLen,
 				CompressedLength: payInfo.compressedLength,
 			})
@@ -1788,7 +1781,7 @@ func MethodFromServerStream(stream ServerStream) (string, bool) {
 // prepareMsg returns the hdr, payload and data
 // using the compressors passed or using the
 // passed preparedmsg
-func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor, pool encoding.SharedBufferPool) (hdr []byte, data, payload encoding.BufferSlice, err error) {
+func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor, pool mem.BufferPool) (hdr []byte, data, payload mem.BufferSlice, err error) {
 	if preparedMsg, ok := m.(*PreparedMsg); ok {
 		return preparedMsg.hdr, preparedMsg.encodedData, preparedMsg.payload, nil
 	}

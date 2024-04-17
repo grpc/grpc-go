@@ -37,9 +37,9 @@ import (
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
@@ -50,7 +50,7 @@ import (
 // NewServerHandlerTransport returns a ServerTransport handling gRPC from
 // inside an http.Handler, or writes an HTTP error to w and returns an error.
 // It requires that the http Server supports HTTP/2.
-func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats []stats.Handler) (ServerTransport, error) {
+func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats []stats.Handler, bufferPool mem.BufferPool) (ServerTransport, error) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
 		msg := fmt.Sprintf("invalid gRPC request method %q", r.Method)
@@ -98,6 +98,7 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats []s
 		contentType:    contentType,
 		contentSubtype: contentSubtype,
 		stats:          stats,
+		bufferPool:     bufferPool,
 	}
 	st.logger = prefixLoggerForServerHandlerTransport(st)
 
@@ -171,6 +172,8 @@ type serverHandlerTransport struct {
 
 	stats  []stats.Handler
 	logger *grpclog.PrefixLogger
+
+	bufferPool mem.BufferPool
 }
 
 func (ht *serverHandlerTransport) Close(err error) {
@@ -330,7 +333,7 @@ func (ht *serverHandlerTransport) writeCustomHeaders(s *Stream) {
 	s.hdrMu.Unlock()
 }
 
-func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data encoding.BufferSlice, opts *Options) error {
+func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error {
 	defer data.Free()
 	headersWritten := s.updateHeaderSent()
 	return ht.do(func() {
@@ -405,6 +408,7 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		recvCompress:     req.Header.Get("grpc-encoding"),
 		contentSubtype:   ht.contentSubtype,
 		headerWireLength: 0, // won't have access to header wire length until golang/go#18997.
+		bufferPool:       ht.bufferPool,
 	}
 	s.trReader = &transportReader{
 		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf},
@@ -417,10 +421,10 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		defer close(readerDone)
 
 		for {
-			buf := bufPool.get()
+			buf := ht.bufferPool.Get(http2MaxFrameLen)
 			n, err := req.Body.Read(buf)
 			if n > 0 {
-				s.buf.put(recvMsg{buffer: encoding.NewBuffer(buf[:n], bufPool.put)})
+				s.buf.put(recvMsg{buffer: mem.NewBuffer(buf[:n], ht.bufferPool.Put)})
 			}
 			if err != nil {
 				s.buf.put(recvMsg{err: mapRecvMsgError(err)})

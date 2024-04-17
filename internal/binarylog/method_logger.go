@@ -26,7 +26,7 @@ import (
 	"time"
 
 	binlogpb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
-	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -247,7 +247,7 @@ func (c *ClientMessage) toProto() *binlogpb.GrpcLogEntry {
 		}
 	} else if b, ok := c.Message.([]byte); ok {
 		data = b
-	} else if b, ok := c.Message.(encoding.BufferSlice); ok {
+	} else if b, ok := c.Message.(mem.BufferSlice); ok {
 		data = b.Materialize()
 		if len(data) == 0 {
 			grpclogLogger.Warningf("binarylogging: message to log is empty")
@@ -292,7 +292,7 @@ func (c *ServerMessage) toProto() *binlogpb.GrpcLogEntry {
 		}
 	} else if b, ok := c.Message.([]byte); ok {
 		data = b
-	} else if b, ok := c.Message.(encoding.BufferSlice); ok {
+	} else if b, ok := c.Message.(mem.BufferSlice); ok {
 		data = b.Materialize()
 	} else {
 		grpclogLogger.Infof("binarylogging: message to log is neither proto.message nor []byte")

@@ -24,7 +24,6 @@ import (
 	"io"
 	"net"
 	"reflect"
-	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -539,40 +538,29 @@ func checkInPayload(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
+
+	var idx *int
+	var payloads []proto.Message
 	if d.client {
-		b, err := proto.Marshal(e.responses[e.respIdx])
-		if err != nil {
-			t.Fatalf("failed to marshal message: %v", err)
-		}
-		if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.responses[e.respIdx]) {
-			t.Fatalf("st.Payload = %T, want %T", st.Payload, e.responses[e.respIdx])
-		}
-		e.respIdx++
-		if string(st.Data) != string(b) {
-			t.Fatalf("st.Data = %v, want %v", st.Data, b)
-		}
-		if st.Length != len(b) {
-			t.Fatalf("st.Lenght = %v, want %v", st.Length, len(b))
-		}
+		idx = &e.respIdx
+		payloads = e.responses
 	} else {
-		b, err := proto.Marshal(e.requests[e.reqIdx])
-		if err != nil {
-			t.Fatalf("failed to marshal message: %v", err)
-		}
-		if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.requests[e.reqIdx]) {
-			t.Fatalf("st.Payload = %T, want %T", st.Payload, e.requests[e.reqIdx])
-		}
-		e.reqIdx++
-		if string(st.Data) != string(b) {
-			t.Fatalf("st.Data = %v, want %v", st.Data, b)
-		}
-		if st.Length != len(b) {
-			t.Fatalf("st.Lenght = %v, want %v", st.Length, len(b))
-		}
+		idx = &e.reqIdx
+		payloads = e.requests
 	}
+
+	expectedPayload := payloads[*idx]
+	if !proto.Equal(st.Payload.(proto.Message), expectedPayload) {
+		t.Fatalf("st.Payload = %v, want %v", st.Payload, expectedPayload)
+	}
+	*idx++
+	if st.Length != proto.Size(expectedPayload) {
+		t.Fatalf("st.Lenght = %v, want %v", st.Length, proto.Size(expectedPayload))
+	}
+
 	// Below are sanity checks that WireLength and RecvTime are populated.
 	// TODO: check values of WireLength and RecvTime.
-	if len(st.Data) > 0 && st.CompressedLength == 0 {
+	if st.Length > 0 && st.CompressedLength == 0 {
 		t.Fatalf("st.WireLength = %v with non-empty data, want <non-zero>",
 			st.CompressedLength)
 	}
@@ -658,40 +646,29 @@ func checkOutPayload(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
+
+	var idx *int
+	var payloads []proto.Message
 	if d.client {
-		b, err := proto.Marshal(e.requests[e.reqIdx])
-		if err != nil {
-			t.Fatalf("failed to marshal message: %v", err)
-		}
-		if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.requests[e.reqIdx]) {
-			t.Fatalf("st.Payload = %T, want %T", st.Payload, e.requests[e.reqIdx])
-		}
-		e.reqIdx++
-		if string(st.Data) != string(b) {
-			t.Fatalf("st.Data = %v, want %v", st.Data, b)
-		}
-		if st.Length != len(b) {
-			t.Fatalf("st.Lenght = %v, want %v", st.Length, len(b))
-		}
+		idx = &e.reqIdx
+		payloads = e.requests
 	} else {
-		b, err := proto.Marshal(e.responses[e.respIdx])
-		if err != nil {
-			t.Fatalf("failed to marshal message: %v", err)
-		}
-		if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.responses[e.respIdx]) {
-			t.Fatalf("st.Payload = %T, want %T", st.Payload, e.responses[e.respIdx])
-		}
-		e.respIdx++
-		if string(st.Data) != string(b) {
-			t.Fatalf("st.Data = %v, want %v", st.Data, b)
-		}
-		if st.Length != len(b) {
-			t.Fatalf("st.Lenght = %v, want %v", st.Length, len(b))
-		}
+		idx = &e.respIdx
+		payloads = e.responses
 	}
-	// Below are sanity checks that WireLength and SentTime are populated.
+
+	expectedPayload := payloads[*idx]
+	if !proto.Equal(st.Payload.(proto.Message), expectedPayload) {
+		t.Fatalf("st.Payload = %v, want %v", st.Payload, expectedPayload)
+	}
+	*idx++
+	if st.Length != proto.Size(expectedPayload) {
+		t.Fatalf("st.Lenght = %v, want %v", st.Length, proto.Size(expectedPayload))
+	}
+
+	// Below are sanity checks that Length, CompressedLength and SentTime are populated.
 	// TODO: check values of WireLength and SentTime.
-	if len(st.Data) > 0 && st.WireLength == 0 {
+	if st.Length > 0 && st.WireLength == 0 {
 		t.Fatalf("st.WireLength = %v with non-empty data, want <non-zero>",
 			st.WireLength)
 	}
@@ -809,16 +786,6 @@ func (h *statshandler) HandleConn(ctx context.Context, s stats.ConnStats) {
 func (h *statshandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	switch stats := s.(type) {
-	case *stats.OutPayload:
-		statsCopy := *stats
-		statsCopy.Data = slices.Clone(statsCopy.Data)
-		s = &statsCopy
-	case *stats.InPayload:
-		statsCopy := *stats
-		statsCopy.Data = slices.Clone(statsCopy.Data)
-		s = &statsCopy
-	}
 	h.gotRPC = append(h.gotRPC, &gotData{ctx, s.IsClient(), s})
 }
 

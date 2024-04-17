@@ -45,6 +45,7 @@ import (
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
@@ -170,7 +171,7 @@ type serverOptions struct {
 	maxHeaderListSize     *uint32
 	headerTableSize       *uint32
 	numServerWorkers      uint32
-	recvBufferPool        SharedBufferPool
+	bufferPool            mem.BufferPool
 	waitForHandlers       bool
 }
 
@@ -181,7 +182,7 @@ var defaultServerOptions = serverOptions{
 	connectionTimeout:     120 * time.Second,
 	writeBufferSize:       defaultWriteBufSize,
 	readBufferSize:        defaultReadBufSize,
-	recvBufferPool:        encoding.NopBufferPool{},
+	bufferPool:            mem.DefaultBufferPool,
 }
 var globalServerOptions []ServerOption
 
@@ -607,26 +608,9 @@ func WaitForHandlers(w bool) ServerOption {
 	})
 }
 
-// RecvBufferPool returns a ServerOption that configures the server
-// to use the provided shared buffer pool for parsing incoming messages. Depending
-// on the application's workload, this could result in reduced memory allocation.
-//
-// If you are unsure about how to implement a memory pool but want to utilize one,
-// begin with grpc.NewSharedBufferPool.
-//
-// Note: The shared buffer pool feature will not be active if any of the following
-// options are used: StatsHandler, EnableTracing, or binary logging. In such
-// cases, the shared buffer pool will be ignored.
-//
-// Deprecated: use experimental.WithRecvBufferPool instead.  Will be deleted in
-// v1.60.0 or later.
-func RecvBufferPool(bufferPool SharedBufferPool) ServerOption {
-	return recvBufferPool(bufferPool)
-}
-
 func recvBufferPool(bufferPool SharedBufferPool) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
-		o.recvBufferPool = bufferPool
+		o.bufferPool = bufferPool
 	})
 }
 
@@ -970,6 +954,9 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 	if !s.addConn(lisAddr, st) {
 		return
 	}
+	if s.opts.bufferPool == nil {
+		panic("?!")
+	}
 	go func() {
 		s.serveStreams(context.Background(), st, rawConn)
 		s.removeConn(lisAddr, st)
@@ -995,6 +982,7 @@ func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 		ChannelzParent:        s.channelz,
 		MaxHeaderListSize:     s.opts.maxHeaderListSize,
 		HeaderTableSize:       s.opts.headerTableSize,
+		BufferPool:            s.opts.bufferPool,
 	}
 	st, err := transport.NewServerTransport(c, config)
 	if err != nil {
@@ -1087,7 +1075,7 @@ var _ http.Handler = (*Server)(nil)
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	st, err := transport.NewServerHandlerTransport(w, r, s.opts.statsHandlers)
+	st, err := transport.NewServerHandlerTransport(w, r, s.opts.statsHandlers, s.opts.bufferPool)
 	if err != nil {
 		// Errors returned from transport.NewServerHandlerTransport have
 		// already been written to w.
@@ -1159,7 +1147,7 @@ func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, 
 	}
 	defer data.Free()
 
-	compData, pf, err := compress(data, cp, comp, s.opts.recvBufferPool)
+	compData, pf, err := compress(data, cp, comp, s.opts.bufferPool)
 	if err != nil {
 		channelz.Error(logger, s.channelz, "grpc: server failed to compress response: ", err)
 		return err
@@ -1174,7 +1162,7 @@ func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, 
 	err = t.Write(stream, hdr, payload, opts)
 	if err == nil {
 		if len(s.opts.statsHandlers) != 0 {
-			mData := data.LazyMaterialize(s.opts.recvBufferPool)
+			mData := data.LazyMaterialize(s.opts.bufferPool)
 			defer mData.Free()
 			for _, sh := range s.opts.statsHandlers {
 				sh.HandleRPC(ctx, outPayload(false, msg, mData.ReadOnlyData(), payloadLen, time.Now()))
@@ -1360,7 +1348,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 		defer payInfo.free()
 	}
 
-	d, err := recvAndDecompress(&parser{r: stream, recvBufferPool: s.opts.recvBufferPool}, stream, dc, s.opts.maxReceiveMessageSize, payInfo, decomp)
+	d, err := recvAndDecompress(&parser{r: stream, bufferPool: s.opts.bufferPool}, stream, dc, s.opts.maxReceiveMessageSize, payInfo, decomp)
 	if err != nil {
 		if e := t.WriteStatus(stream, status.Convert(err)); e != nil {
 			channelz.Warningf(logger, s.channelz, "grpc: Server.processUnaryRPC failed to write status: %v", e)
@@ -1376,16 +1364,13 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 		}
 
 		if len(shs) != 0 {
-			mData := d.LazyMaterialize(s.opts.recvBufferPool)
-			defer mData.Free()
 			for _, sh := range shs {
 				sh.HandleRPC(ctx, &stats.InPayload{
 					RecvTime:         time.Now(),
 					Payload:          v,
-					Length:           len(mData.ReadOnlyData()),
+					Length:           d.Len(),
 					WireLength:       payInfo.compressedLength + headerLen,
 					CompressedLength: payInfo.compressedLength,
-					Data:             mData.ReadOnlyData(),
 				})
 			}
 		}
@@ -1575,7 +1560,7 @@ func (s *Server) processStreamingRPC(ctx context.Context, t transport.ServerTran
 		ctx:                   ctx,
 		t:                     t,
 		s:                     stream,
-		p:                     &parser{r: stream, recvBufferPool: s.opts.recvBufferPool},
+		p:                     &parser{r: stream, bufferPool: s.opts.bufferPool},
 		codec:                 s.getCodec(stream.ContentSubtype()),
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
 		maxSendMessageSize:    s.opts.maxSendMessageSize,

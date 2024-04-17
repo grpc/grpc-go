@@ -21,6 +21,7 @@ package grpc
 import (
 	"google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/encoding/proto" // to register the Codec for "proto"
+	"google.golang.org/grpc/mem"
 )
 
 // baseCodec captures the new encoding.CodecV2 interface without the Name
@@ -28,8 +29,8 @@ import (
 // implementations. The omitted Name function is only needed for the register in
 // the encoding package and is not part of the core functionality.
 type baseCodec interface {
-	Marshal(v any) (encoding.BufferSlice, error)
-	Unmarshal(data encoding.BufferSlice, v any) error
+	Marshal(v any) (mem.BufferSlice, error)
+	Unmarshal(data mem.BufferSlice, v any) error
 }
 
 type namedBaseCodec interface {
@@ -71,16 +72,16 @@ type codecV0Bridge struct {
 	}
 }
 
-func (c codecV0Bridge) Marshal(v any) (encoding.BufferSlice, error) {
+func (c codecV0Bridge) Marshal(v any) (mem.BufferSlice, error) {
 	data, err := c.codec.Marshal(v)
 	if err != nil {
 		return nil, err
 	} else {
-		return encoding.BufferSlice{encoding.NewBuffer(data, nil)}, nil
+		return mem.BufferSlice{mem.NewBuffer(data, nil)}, nil
 	}
 }
 
-func (c codecV0Bridge) Unmarshal(data encoding.BufferSlice, v any) (err error) {
+func (c codecV0Bridge) Unmarshal(data mem.BufferSlice, v any) (err error) {
 	return c.codec.Unmarshal(data.Materialize(), v)
 }
 

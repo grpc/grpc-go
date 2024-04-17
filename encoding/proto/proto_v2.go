@@ -22,38 +22,37 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/protobuf/proto"
 )
 
 func init() {
-	encoding.RegisterCodecV2(&codecV2{SharedBufferPool: encoding.NewSharedBufferPool()})
+	encoding.RegisterCodecV2(&codecV2{})
 }
 
 // codec is a CodecV2 implementation with protobuf. It is the default codec for
 // gRPC.
-type codecV2 struct {
-	encoding.SharedBufferPool
-}
+type codecV2 struct{}
 
 var _ encoding.CodecV2 = (*codecV2)(nil)
 
-func (c *codecV2) Marshal(v any) (encoding.BufferSlice, error) {
+func (c *codecV2) Marshal(v any) (mem.BufferSlice, error) {
 	vv := messageV2Of(v)
 	if vv == nil {
 		return nil, fmt.Errorf("proto: failed to marshal, message is %T, want proto.Message", v)
 	}
 
-	buf := c.Get(proto.Size(vv))
+	buf := mem.DefaultBufferPool.Get(proto.Size(vv))
 	_, err := proto.MarshalOptions{}.MarshalAppend(buf[:0], vv)
 	if err != nil {
-		c.Put(buf)
+		mem.DefaultBufferPool.Put(buf)
 		return nil, err
 	} else {
-		return encoding.BufferSlice{encoding.NewBuffer(buf, c.Put)}, nil
+		return mem.BufferSlice{mem.NewBuffer(buf, mem.DefaultBufferPool.Put)}, nil
 	}
 }
 
-func (c *codecV2) Unmarshal(data encoding.BufferSlice, v any) (err error) {
+func (c *codecV2) Unmarshal(data mem.BufferSlice, v any) (err error) {
 	vv := messageV2Of(v)
 	if vv == nil {
 		return fmt.Errorf("failed to unmarshal, message is %T, want proto.Message", v)
@@ -61,7 +60,7 @@ func (c *codecV2) Unmarshal(data encoding.BufferSlice, v any) (err error) {
 
 	defer data.Free()
 
-	buf := data.LazyMaterialize(c)
+	buf := data.LazyMaterialize(mem.DefaultBufferPool)
 	defer buf.Free()
 	// TODO: Upgrade proto.Unmarshal to support encoding.BufferSlice
 	return proto.Unmarshal(buf.ReadOnlyData(), vv)

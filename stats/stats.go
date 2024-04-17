@@ -75,8 +75,6 @@ type InPayload struct {
 	Client bool
 	// Payload is the payload with original type.
 	Payload any
-	// Data is the serialized message payload.
-	Data []byte
 
 	// Length is the size of the uncompressed payload data. Does not include any
 	// framing (gRPC or HTTP/2).
@@ -145,8 +143,6 @@ type OutPayload struct {
 	Client bool
 	// Payload is the payload with original type.
 	Payload any
-	// Data is the serialized message payload.
-	Data []byte
 	// Length is the size of the uncompressed payload data. Does not include any
 	// framing (gRPC or HTTP/2).
 	Length int

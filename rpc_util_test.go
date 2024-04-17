@@ -27,10 +27,10 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/encoding"
 	protoenc "google.golang.org/grpc/encoding/proto"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/status"
 	perfpb "google.golang.org/grpc/test/codec_perf"
 	"google.golang.org/protobuf/proto"
@@ -40,7 +40,7 @@ type fullReader struct {
 	data []byte
 }
 
-func (f *fullReader) Read(n int) (encoding.BufferSlice, error) {
+func (f *fullReader) Read(n int) (mem.BufferSlice, error) {
 	if len(f.data) == 0 {
 		return nil, io.EOF
 	}
@@ -48,13 +48,13 @@ func (f *fullReader) Read(n int) (encoding.BufferSlice, error) {
 	if len(f.data) < n {
 		data := f.data
 		f.data = nil
-		return encoding.BufferSlice{encoding.NewBuffer(data, nil)}, io.ErrUnexpectedEOF
+		return mem.BufferSlice{mem.NewBuffer(data, nil)}, io.ErrUnexpectedEOF
 	}
 
 	buf := f.data[:n]
 	f.data = f.data[n:]
 
-	return encoding.BufferSlice{encoding.NewBuffer(buf, nil)}, nil
+	return mem.BufferSlice{mem.NewBuffer(buf, nil)}, nil
 }
 
 var _ CallOption = EmptyCallOption{} // ensure EmptyCallOption implements the interface
@@ -78,7 +78,7 @@ func (s) TestSimpleParsing(t *testing.T) {
 		{append([]byte{0, 1, 0, 0, 0}, bigMsg...), nil, bigMsg, compressionNone},
 	} {
 		buf := &fullReader{test.p}
-		parser := &parser{r: buf, recvBufferPool: encoding.NopBufferPool{}}
+		parser := &parser{r: buf, bufferPool: mem.NopBufferPool{}}
 		pt, b, err := parser.recvMsg(math.MaxInt32)
 		if err != test.err || !bytes.Equal(b.Materialize(), test.b) || pt != test.pt {
 			t.Fatalf("parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, %v", test.p, pt, b, err, test.pt, test.b, test.err)
@@ -90,7 +90,7 @@ func (s) TestMultipleParsing(t *testing.T) {
 	// Set a byte stream consists of 3 messages with their headers.
 	p := []byte{0, 0, 0, 0, 1, 'a', 0, 0, 0, 0, 2, 'b', 'c', 0, 0, 0, 0, 1, 'd'}
 	b := &fullReader{p}
-	parser := &parser{r: b, recvBufferPool: encoding.NopBufferPool{}}
+	parser := &parser{r: b, bufferPool: mem.NopBufferPool{}}
 
 	wantRecvs := []struct {
 		pt   payloadFormat

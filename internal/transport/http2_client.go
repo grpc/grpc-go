@@ -36,7 +36,6 @@ import (
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	icredentials "google.golang.org/grpc/internal/credentials"
@@ -48,6 +47,7 @@ import (
 	isyscall "google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/internal/transport/networktype"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -145,7 +145,7 @@ type http2Client struct {
 
 	onClose func(GoAwayReason)
 
-	bufferPool *bufferPool
+	bufferPool mem.BufferPool
 
 	connectionID uint64
 	logger       *grpclog.PrefixLogger
@@ -348,6 +348,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		streamsQuotaAvailable: make(chan struct{}, 1),
 		keepaliveEnabled:      keepaliveEnabled,
 		onClose:               onClose,
+		bufferPool:            opts.BufferPool,
 	}
 	var czSecurity credentials.ChannelzSecurityValue
 	if au, ok := authInfo.(credentials.ChannelzSecurityInfo); ok {
@@ -459,7 +460,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		return nil, err
 	}
 	go func() {
-		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger)
+		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst, t.conn, t.logger, t.bufferPool)
 		if err := t.loopy.run(); !isIOError(err) {
 			// Immediately close the connection, as the loopy writer returns
 			// when there are no more active streams and we were draining (the
@@ -483,6 +484,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		headerChan:     make(chan struct{}),
 		contentSubtype: callHdr.ContentSubtype,
 		doneFunc:       callHdr.DoneFunc,
+		bufferPool:     t.bufferPool,
 	}
 	s.wq = newWriteQuota(defaultWriteQuota, s.done)
 	s.requestRead = func(n int) {
@@ -1046,7 +1048,7 @@ func (t *http2Client) GracefulClose() {
 
 // Write formats the data into HTTP2 data frame(s) and sends it out. The caller
 // should proceed only if Write returns nil.
-func (t *http2Client) Write(s *Stream, hdr []byte, data encoding.BufferSlice, opts *Options) error {
+func (t *http2Client) Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error {
 	if opts.Last {
 		// If it's the last message, update stream state.
 		if !s.compareAndSwapState(streamActive, streamWriteDone) {
@@ -1181,7 +1183,11 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		// guarantee f.Data() is consumed before the arrival of next frame.
 		// Can this copy be eliminated?
 		if len(f.Data()) > 0 {
-			s.write(recvMsg{buffer: bufPool.copy(f.Data())})
+			pool := s.bufferPool
+			if pool == nil {
+				pool = mem.DefaultBufferPool
+			}
+			s.write(recvMsg{buffer: mem.Copy(f.Data(), pool)})
 		}
 	}
 	// The server has closed the stream without sending trailers.  Record that

@@ -27,12 +27,12 @@ import (
 	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/internal"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/stats"
 )
@@ -79,7 +79,6 @@ type dialOptions struct {
 	defaultServiceConfigRawJSON *string
 	resolvers                   []resolver.Builder
 	idleTimeout                 time.Duration
-	recvBufferPool              SharedBufferPool
 	defaultScheme               string
 }
 
@@ -650,11 +649,11 @@ func defaultDialOptions() dialOptions {
 			WriteBufferSize: defaultWriteBufSize,
 			UseProxy:        true,
 			UserAgent:       grpcUA,
+			BufferPool:      mem.DefaultBufferPool,
 		},
 		bs:              internalbackoff.DefaultExponential,
 		healthCheckFunc: internal.HealthCheckFunc,
 		idleTimeout:     30 * time.Minute,
-		recvBufferPool:  encoding.NopBufferPool{},
 		defaultScheme:   "dns",
 	}
 }
@@ -713,25 +712,8 @@ func WithIdleTimeout(d time.Duration) DialOption {
 	})
 }
 
-// WithRecvBufferPool returns a DialOption that configures the ClientConn
-// to use the provided shared buffer pool for parsing incoming messages. Depending
-// on the application's workload, this could result in reduced memory allocation.
-//
-// If you are unsure about how to implement a memory pool but want to utilize one,
-// begin with grpc.NewSharedBufferPool.
-//
-// Note: The shared buffer pool feature will not be active if any of the following
-// options are used: WithStatsHandler, EnableTracing, or binary logging. In such
-// cases, the shared buffer pool will be ignored.
-//
-// Deprecated: use experimental.WithRecvBufferPool instead.  Will be deleted in
-// v1.60.0 or later.
-func WithRecvBufferPool(bufferPool SharedBufferPool) DialOption {
-	return withRecvBufferPool(bufferPool)
-}
-
 func withRecvBufferPool(bufferPool SharedBufferPool) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.recvBufferPool = bufferPool
+		o.copts.BufferPool = bufferPool
 	})
 }

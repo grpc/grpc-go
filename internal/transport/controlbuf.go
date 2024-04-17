@@ -30,9 +30,9 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/status"
 )
 
@@ -149,8 +149,8 @@ type dataFrame struct {
 	streamID  uint32
 	endStream bool
 	h         []byte
-	d         encoding.BufferSlice
-	r         *encoding.Reader
+	d         mem.BufferSlice
+	r         *mem.Reader
 	// onEachWrite is called every time
 	// a part of d is written out.
 	onEachWrite func()
@@ -492,12 +492,13 @@ type loopyWriter struct {
 	draining      bool
 	conn          net.Conn
 	logger        *grpclog.PrefixLogger
+	bufferPool    mem.BufferPool
 
 	// Side-specific handlers
 	ssGoAwayHandler func(*goAway) (bool, error)
 }
 
-func newLoopyWriter(s side, fr *framer, cbuf *controlBuffer, bdpEst *bdpEstimator, conn net.Conn, logger *grpclog.PrefixLogger) *loopyWriter {
+func newLoopyWriter(s side, fr *framer, cbuf *controlBuffer, bdpEst *bdpEstimator, conn net.Conn, logger *grpclog.PrefixLogger, bufferPool mem.BufferPool) *loopyWriter {
 	var buf bytes.Buffer
 	l := &loopyWriter{
 		side:          s,
@@ -512,6 +513,7 @@ func newLoopyWriter(s side, fr *framer, cbuf *controlBuffer, bdpEst *bdpEstimato
 		bdpEst:        bdpEst,
 		conn:          conn,
 		logger:        logger,
+		bufferPool:    bufferPool,
 	}
 	return l
 }
@@ -890,8 +892,6 @@ func (l *loopyWriter) applySettings(ss []http2.Setting) {
 	}
 }
 
-var bufPool = newBufferPool()
-
 // processData removes the first stream from active streams, writes out at most 16KB
 // of its data and then puts it at the end of activeStreams if there's still more data
 // to be sent and stream has some stream-level flow control.
@@ -957,8 +957,12 @@ func (l *loopyWriter) processData() (bool, error) {
 		// Note: this is only necessary because the http2.Framer does not support
 		// partially writing a frame, so the sequence must be materialized into a buffer.
 		// TODO: Revisit once https://github.com/golang/go/issues/66655 is addressed.
-		buf = bufPool.get()[:size]
-		defer bufPool.put(buf)
+		pool := l.bufferPool
+		if pool == nil {
+			pool = mem.DefaultBufferPool
+		}
+		buf = pool.Get(size)
+		defer pool.Put(buf)
 
 		copy(buf[:hSize], dataItem.h)
 		_, _ = dataItem.r.Read(buf[hSize:])

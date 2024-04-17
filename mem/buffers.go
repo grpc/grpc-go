@@ -16,7 +16,7 @@
  *
  */
 
-package encoding
+package mem
 
 import (
 	"io"
@@ -33,6 +33,12 @@ type Buffer struct {
 
 func NewBuffer(data []byte, free func([]byte)) *Buffer {
 	return (&Buffer{data: data, refs: new(atomic.Int32), free: free}).Ref()
+}
+
+func Copy(data []byte, pool BufferPool) *Buffer {
+	buf := pool.Get(len(data))
+	copy(buf, data)
+	return NewBuffer(buf, pool.Put)
 }
 
 func (b *Buffer) ReadOnlyData() []byte {
@@ -86,7 +92,7 @@ func (b *Buffer) Split(n int) *Buffer {
 
 type Writer struct {
 	buffers *BufferSlice
-	pool    SharedBufferPool
+	pool    BufferPool
 }
 
 func (s *Writer) Write(p []byte) (n int, err error) {
@@ -98,7 +104,7 @@ func (s *Writer) Write(p []byte) (n int, err error) {
 	return n, nil
 }
 
-func NewWriter(buffers *BufferSlice, pool SharedBufferPool) *Writer {
+func NewWriter(buffers *BufferSlice, pool BufferPool) *Writer {
 	return &Writer{buffers: buffers, pool: pool}
 }
 
@@ -150,10 +156,11 @@ func (s BufferSlice) Len() (length int) {
 	return length
 }
 
-func (s BufferSlice) Ref() {
+func (s BufferSlice) Ref() BufferSlice {
 	for _, b := range s {
 		b.Ref()
 	}
+	return s
 }
 
 func (s BufferSlice) Free() {
@@ -175,7 +182,7 @@ func (s BufferSlice) Materialize() []byte {
 	return out
 }
 
-func (s BufferSlice) LazyMaterialize(pool SharedBufferPool) *Buffer {
+func (s BufferSlice) LazyMaterialize(pool BufferPool) *Buffer {
 	if len(s) == 1 {
 		return s[0].Ref()
 	}
