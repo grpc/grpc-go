@@ -84,10 +84,10 @@ func main() {
 			RootProvider: rootProvider,
 		},
 		RequireClientCert: true,
-		VerifyPeer: func(params *advancedtls.HandshakeVerificationInfo) (*advancedtls.VerificationResults, error) {
+		VerifyPeer: func(params *advancedtls.HandshakeVerificationInfo) (*advancedtls.PostHandshakeVerificationResults, error) {
 			// This message is to show the certificate under the hood is actually reloaded.
 			fmt.Printf("Client common name: %s.\n", params.Leaf.Subject.CommonName)
-			return &advancedtls.VerificationResults{}, nil
+			return &advancedtls.PostHandshakeVerificationResults{}, nil
 		},
 		VType: advancedtls.CertVerification,
 	}

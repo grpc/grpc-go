@@ -60,18 +60,21 @@ type HandshakeVerificationInfo struct {
 // The fields in this struct are read-only.
 type VerificationFuncParams = HandshakeVerificationInfo
 
-// VerificationResults contains the information about results of
-// CustomVerificationFunc.
-// VerificationResults is an empty struct for now. It may be extended in the
+// PostHandshakeVerificationResults contains the information about results of
+// PostHandshakeVerificationFunc.
+// PostHandshakeVerificationResults is an empty struct for now. It may be extended in the
 // future to include more information.
-type VerificationResults struct{}
+type PostHandshakeVerificationResults struct{}
+
+// DEPRECATED: Renamed to `PostHandshakeVerificationResults`
+type VerificationResults = PostHandshakeVerificationResults
 
 // PostHandshakeVerificationFunc is the function defined by users to perform
 // custom verification checks after chain building and regular handshake
 // verification has been completed.
 // PostHandshakeVerificationFunc returns nil
 // if the authorization fails; otherwise returns an empty struct.
-type PostHandshakeVerificationFunc func(params *HandshakeVerificationInfo) (*VerificationResults, error)
+type PostHandshakeVerificationFunc func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error)
 
 // DEPRECATED: Renamed to PostHandshakeVerificationFunc.
 // CustomVerificationFunc is the function defined by users to perform custom

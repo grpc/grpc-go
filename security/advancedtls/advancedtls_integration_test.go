@@ -175,8 +175,8 @@ func (s) TestEnd2End(t *testing.T) {
 				}
 			},
 			clientRoot: cs.ClientTrust1,
-			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
-				return &VerificationResults{}, nil
+			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				return &PostHandshakeVerificationResults{}, nil
 			},
 			clientVType: CertVerification,
 			serverCert:  []tls.Certificate{cs.ServerCert1},
@@ -188,8 +188,8 @@ func (s) TestEnd2End(t *testing.T) {
 					return &GetRootCAsResults{TrustCerts: cs.ServerTrust2}, nil
 				}
 			},
-			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
-				return &VerificationResults{}, nil
+			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				return &PostHandshakeVerificationResults{}, nil
 			},
 			serverVType: CertVerification,
 		},
@@ -216,8 +216,8 @@ func (s) TestEnd2End(t *testing.T) {
 					return &GetRootCAsResults{TrustCerts: cs.ClientTrust2}, nil
 				}
 			},
-			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
-				return &VerificationResults{}, nil
+			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				return &PostHandshakeVerificationResults{}, nil
 			},
 			clientVType: CertVerification,
 			serverGetCert: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
@@ -229,8 +229,8 @@ func (s) TestEnd2End(t *testing.T) {
 				}
 			},
 			serverRoot: cs.ServerTrust1,
-			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
-				return &VerificationResults{}, nil
+			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				return &PostHandshakeVerificationResults{}, nil
 			},
 			serverVType: CertVerification,
 		},
@@ -258,7 +258,7 @@ func (s) TestEnd2End(t *testing.T) {
 					return &GetRootCAsResults{TrustCerts: cs.ClientTrust2}, nil
 				}
 			},
-			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
+			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				if len(params.RawCerts) == 0 {
 					return nil, fmt.Errorf("no peer certs")
 				}
@@ -280,7 +280,7 @@ func (s) TestEnd2End(t *testing.T) {
 					}
 				}
 				if authzCheck {
-					return &VerificationResults{}, nil
+					return &PostHandshakeVerificationResults{}, nil
 				}
 				return nil, fmt.Errorf("custom authz check fails")
 			},
@@ -294,8 +294,8 @@ func (s) TestEnd2End(t *testing.T) {
 				}
 			},
 			serverRoot: cs.ServerTrust1,
-			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
-				return &VerificationResults{}, nil
+			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				return &PostHandshakeVerificationResults{}, nil
 			},
 			serverVType: CertVerification,
 		},
@@ -314,16 +314,16 @@ func (s) TestEnd2End(t *testing.T) {
 			desc:       "TestServerCustomVerification",
 			clientCert: []tls.Certificate{cs.ClientCert1},
 			clientRoot: cs.ClientTrust1,
-			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
-				return &VerificationResults{}, nil
+			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				return &PostHandshakeVerificationResults{}, nil
 			},
 			clientVType: CertVerification,
 			serverCert:  []tls.Certificate{cs.ServerCert1},
 			serverRoot:  cs.ServerTrust1,
-			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
+			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				switch stage.read() {
 				case 0, 2:
-					return &VerificationResults{}, nil
+					return &PostHandshakeVerificationResults{}, nil
 				case 1:
 					return nil, fmt.Errorf("custom authz check fails")
 				default:
@@ -635,8 +635,8 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 					RootProvider: serverRootProvider,
 				},
 				RequireClientCert: true,
-				VerifyPeer: func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
-					return &VerificationResults{}, nil
+				VerifyPeer: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+					return &PostHandshakeVerificationResults{}, nil
 				},
 				VType: CertVerification,
 			}
@@ -658,8 +658,8 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 				IdentityOptions: IdentityCertificateOptions{
 					IdentityProvider: clientIdentityProvider,
 				},
-				VerifyPeer: func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
-					return &VerificationResults{}, nil
+				VerifyPeer: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+					return &PostHandshakeVerificationResults{}, nil
 				},
 				RootOptions: RootCertificateOptions{
 					RootProvider: clientRootProvider,

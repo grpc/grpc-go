@@ -341,7 +341,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	getRootCAsForClient := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return &GetRootCAsResults{TrustCerts: cs.ClientTrust1}, nil
 	}
-	clientVerifyFuncGood := func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
+	clientVerifyFuncGood := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		if params.ServerName == "" {
 			return nil, errors.New("client side server name should have a value")
 		}
@@ -350,15 +350,15 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			return nil, errors.New("client side params parsing error")
 		}
 
-		return &VerificationResults{}, nil
+		return &PostHandshakeVerificationResults{}, nil
 	}
-	verifyFuncBad := func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
+	verifyFuncBad := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		return nil, fmt.Errorf("custom verification function failed")
 	}
 	getRootCAsForServer := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return &GetRootCAsResults{TrustCerts: cs.ServerTrust1}, nil
 	}
-	serverVerifyFunc := func(params *HandshakeVerificationInfo) (*VerificationResults, error) {
+	serverVerifyFunc := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		if params.ServerName != "" {
 			return nil, errors.New("server side server name should not have a value")
 		}
@@ -367,7 +367,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			return nil, errors.New("server side params parsing error")
 		}
 
-		return &VerificationResults{}, nil
+		return &PostHandshakeVerificationResults{}, nil
 	}
 	getRootCAsForServerBad := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return nil, fmt.Errorf("bad root certificate reloading")
