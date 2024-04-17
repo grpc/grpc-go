@@ -185,7 +185,7 @@ type ClientOptions struct {
 	// check.
 	// If this is set, we will perform this customized check after doing the
 	// normal check(s) indicated by setting VType.
-	VerifyPeer CustomVerificationFunc
+	VerifyPeer PostHandshakeVerificationFunc
 	// RootOptions is OPTIONAL on client side. If not set, we will try to use the
 	// default trust certificates in users' OS system.
 	RootOptions RootCertificateOptions
@@ -218,7 +218,7 @@ type ServerOptions struct {
 	// check.
 	// If this is set, we will perform this customized check after doing the
 	// normal check(s) indicated by setting VType.
-	VerifyPeer CustomVerificationFunc
+	VerifyPeer PostHandshakeVerificationFunc
 	// RootOptions is OPTIONAL on server side. This field only needs to be set if
 	// mutual authentication is required(RequireClientCert is true).
 	RootOptions RootCertificateOptions
@@ -406,7 +406,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 // using TLS.
 type advancedTLSCreds struct {
 	config           *tls.Config
-	verifyFunc       CustomVerificationFunc
+	verifyFunc       PostHandshakeVerificationFunc
 	getRootCAs       func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 	isClient         bool
 	vType            VerificationType

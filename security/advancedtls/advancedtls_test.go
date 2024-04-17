@@ -403,7 +403,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		clientGetCert              func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 		clientRoot                 *x509.CertPool
 		clientGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-		clientVerifyFunc           CustomVerificationFunc
+		clientVerifyFunc           PostHandshakeVerificationFunc
 		clientVType                VerificationType
 		clientRootProvider         certprovider.Provider
 		clientIdentityProvider     certprovider.Provider
@@ -414,7 +414,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		serverGetCert              func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 		serverRoot                 *x509.CertPool
 		serverGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-		serverVerifyFunc           CustomVerificationFunc
+		serverVerifyFunc           PostHandshakeVerificationFunc
 		serverVType                VerificationType
 		serverRootProvider         certprovider.Provider
 		serverIdentityProvider     certprovider.Provider

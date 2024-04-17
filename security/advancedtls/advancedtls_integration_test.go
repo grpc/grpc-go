@@ -143,13 +143,13 @@ func (s) TestEnd2End(t *testing.T) {
 		clientGetCert    func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 		clientRoot       *x509.CertPool
 		clientGetRoot    func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-		clientVerifyFunc CustomVerificationFunc
+		clientVerifyFunc PostHandshakeVerificationFunc
 		clientVType      VerificationType
 		serverCert       []tls.Certificate
 		serverGetCert    func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 		serverRoot       *x509.CertPool
 		serverGetRoot    func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-		serverVerifyFunc CustomVerificationFunc
+		serverVerifyFunc PostHandshakeVerificationFunc
 		serverVType      VerificationType
 	}{
 		// Test Scenarios:
