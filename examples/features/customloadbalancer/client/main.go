@@ -62,6 +62,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to dial: %v", err)
 	}
+	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	ec := pb.NewEchoClient(cc)

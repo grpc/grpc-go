@@ -35,7 +35,11 @@ var gracefulSwitchPickFirst serviceconfig.LoadBalancingConfig
 
 func init() {
 	balancer.Register(customRoundRobinBuilder{})
-	gracefulSwitchPickFirst, _ = endpointsharding.ParseConfig(json.RawMessage(endpointsharding.PickFirstConfig))
+	var err error
+	gracefulSwitchPickFirst, err = endpointsharding.ParseConfig(json.RawMessage(endpointsharding.PickFirstConfig))
+	if err != nil {
+		logger.Fatal(err)
+	}
 }
 
 const customRRName = "custom_round_robin"
