@@ -524,7 +524,9 @@ func (t *http2Client) getPeer() *peer.Peer {
 // OutgoingGoAwayHandler writes a GOAWAY to the connection.  Always returns (false, err) as we want the GoAway
 // to be the last frame loopy writes to the transport.
 func (t *http2Client) outgoingGoAwayHandler(g *goAway) (bool, error) {
-	if err := t.framer.fr.WriteGoAway(math.MaxInt32*3/4, http2.ErrCodeNo, g.debugData); err != nil {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if err := t.framer.fr.WriteGoAway(t.nextID-2, http2.ErrCodeNo, g.debugData); err != nil {
 		return false, err
 	}
 	return false, g.closeConn
