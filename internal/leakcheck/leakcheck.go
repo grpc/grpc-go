@@ -23,10 +23,70 @@ package leakcheck
 
 import (
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strings"
+	"sync"
 	"time"
+
+	"google.golang.org/grpc/mem"
 )
+
+func SetTrackingBufferPool(efer Errorfer) {
+	mem.DefaultBufferPool = &trackingBufferPool{
+		pool:             mem.DefaultBufferPool,
+		efer:             efer,
+		allocatedBuffers: make(map[*byte]string),
+	}
+}
+
+func checkTrackingBufferPool() {
+	p := mem.DefaultBufferPool.(*trackingBufferPool)
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	mem.DefaultBufferPool = p.pool
+	for _, trace := range p.allocatedBuffers {
+		p.efer.Errorf("Allocated buffer never freed:\n%s", trace)
+	}
+}
+
+type trackingBufferPool struct {
+	pool mem.BufferPool
+	efer Errorfer
+
+	lock             sync.Mutex
+	allocatedBuffers map[*byte]string
+}
+
+// TODO: replace with unsafe.SliceData once supported
+func sliceData(b []byte) *byte {
+	return &b[:1][0]
+}
+
+func (p *trackingBufferPool) Get(length int) []byte {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	buf := p.pool.Get(length)
+
+	p.allocatedBuffers[sliceData(buf)] = string(debug.Stack())
+
+	return buf
+}
+
+func (p *trackingBufferPool) Put(buf []byte) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	key := sliceData(buf)
+	if _, ok := p.allocatedBuffers[key]; !ok {
+		p.efer.Errorf("Unknown buffer freed:\n%s", string(debug.Stack()))
+	} else {
+		delete(p.allocatedBuffers, key)
+	}
+	p.pool.Put(buf)
+}
 
 var goroutinesToIgnore = []string{
 	"testing.Main(",
@@ -121,4 +181,5 @@ func checkGoroutines(efer Errorfer, timeout time.Duration) {
 // in the error cases.
 func Check(efer Errorfer) {
 	checkGoroutines(efer, 10*time.Second)
+	checkTrackingBufferPool()
 }

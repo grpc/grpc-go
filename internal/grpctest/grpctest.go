@@ -48,6 +48,7 @@ type Tester struct{}
 // Setup updates the tlogger.
 func (Tester) Setup(t *testing.T) {
 	TLogger.Update(t)
+	leakcheck.SetTrackingBufferPool(errorer{t: t})
 }
 
 // Teardown performs a leak check.
