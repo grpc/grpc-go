@@ -898,19 +898,22 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 
 	defer data.Free()
 
+	dataLen := data.Len()
 	payloadLen := payload.Len()
 	// TODO(dfawley): should we be checking len(data) instead?
 	if payloadLen > *cs.callInfo.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payloadLen, *cs.callInfo.maxSendMessageSize)
 	}
 	op := func(a *csAttempt) error {
-		return a.sendMsg(m, hdr, payload, data)
+		return a.sendMsg(m, hdr, payload.Ref(), dataLen)
 	}
 	err = cs.withRetry(op, func() { cs.bufferForRetryLocked(len(hdr)+payloadLen, op) })
 	if len(cs.binlogs) != 0 && err == nil {
+		mData := data.LazyMaterialize(cs.cc.dopts.copts.BufferPool)
+		defer mData.Free()
 		cm := &binarylog.ClientMessage{
 			OnClientSide: true,
-			Message:      data,
+			Message:      mData.ReadOnlyData(),
 		}
 		for _, binlog := range cs.binlogs {
 			binlog.Log(cs.ctx, cm)
@@ -933,9 +936,12 @@ func (cs *clientStream) RecvMsg(m any) error {
 		return a.recvMsg(m, recvInfo)
 	}, cs.commitAttemptLocked)
 	if len(cs.binlogs) != 0 && err == nil {
+		mData := recvInfo.uncompressedBytes.LazyMaterialize(cs.cc.dopts.copts.BufferPool)
+		defer mData.Free()
+
 		sm := &binarylog.ServerMessage{
 			OnClientSide: true,
-			Message:      recvInfo.uncompressedBytes,
+			Message:      mData.ReadOnlyData(),
 		}
 		for _, binlog := range cs.binlogs {
 			binlog.Log(cs.ctx, sm)
@@ -1038,7 +1044,7 @@ func (cs *clientStream) finish(err error) {
 	cs.cancel()
 }
 
-func (a *csAttempt) sendMsg(m any, hdr []byte, payld, data mem.BufferSlice) error {
+func (a *csAttempt) sendMsg(m any, hdr []byte, payld mem.BufferSlice, dataLength int) error {
 	cs := a.cs
 	if a.trInfo != nil {
 		a.mu.Lock()
@@ -1058,10 +1064,8 @@ func (a *csAttempt) sendMsg(m any, hdr []byte, payld, data mem.BufferSlice) erro
 		return io.EOF
 	}
 	if len(a.statsHandlers) != 0 {
-		mData := data.LazyMaterialize(a.cs.cc.dopts.copts.BufferPool)
-		defer mData.Free()
 		for _, sh := range a.statsHandlers {
-			sh.HandleRPC(a.ctx, outPayload(true, m, mData.ReadOnlyData(), payloadLen, time.Now()))
+			sh.HandleRPC(a.ctx, outPayload(true, m, dataLength, payloadLen, time.Now()))
 		}
 	}
 	if channelz.IsOn() {
@@ -1664,6 +1668,7 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 
 	defer data.Free()
 
+	dataLen := data.Len()
 	payloadLen := payload.Len()
 
 	// TODO(dfawley): should we be checking len(data) instead?
@@ -1685,18 +1690,18 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 				binlog.Log(ss.ctx, sh)
 			}
 		}
+		mData := data.LazyMaterialize(ss.p.bufferPool)
+		defer mData.Free()
 		sm := &binarylog.ServerMessage{
-			Message: data,
+			Message: mData.ReadOnlyData(),
 		}
 		for _, binlog := range ss.binlogs {
 			binlog.Log(ss.ctx, sm)
 		}
 	}
 	if len(ss.statsHandler) != 0 {
-		mData := data.LazyMaterialize(ss.p.bufferPool)
-		defer mData.Free()
 		for _, sh := range ss.statsHandler {
-			sh.HandleRPC(ss.s.Context(), outPayload(false, m, mData.ReadOnlyData(), payloadLen, time.Now()))
+			sh.HandleRPC(ss.s.Context(), outPayload(false, m, dataLen, payloadLen, time.Now()))
 		}
 	}
 	return nil
@@ -1762,8 +1767,10 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		}
 	}
 	if len(ss.binlogs) != 0 {
+		mData := payInfo.uncompressedBytes.LazyMaterialize(ss.p.bufferPool)
+		defer mData.Free()
 		cm := &binarylog.ClientMessage{
-			Message: payInfo.uncompressedBytes,
+			Message: mData.ReadOnlyData(),
 		}
 		for _, binlog := range ss.binlogs {
 			binlog.Log(ss.ctx, cm)

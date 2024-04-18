@@ -727,10 +727,10 @@ func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, pa
 		payload = data
 	}
 
-	// compData is never referenced for the StatsHandlers, so it never need an extra
-	// reference, and will be released after being sent. Conversely, data needs to be
-	// referenced twice if compression was disabled since it will be released by this
-	// function and the call to Write.
+	// compData is never referenced for the binlog, so it never need an extra
+	// reference and will be released after being sent. Conversely, data needs to be
+	// referenced twice if compression was disabled since it will be released by the
+	// call to Write and the function that appends to the binlog.
 	if pf == compressionNone {
 		data.Ref()
 	}
@@ -740,11 +740,11 @@ func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, pa
 	return hdr, payload
 }
 
-func outPayload(client bool, msg any, data []byte, payloadLength int, t time.Time) *stats.OutPayload {
+func outPayload(client bool, msg any, dataLength, payloadLength int, t time.Time) *stats.OutPayload {
 	return &stats.OutPayload{
 		Client:           client,
 		Payload:          msg,
-		Length:           len(data),
+		Length:           dataLength,
 		WireLength:       payloadLength + headerLen,
 		CompressedLength: payloadLength,
 		SentTime:         t,

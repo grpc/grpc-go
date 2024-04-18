@@ -334,16 +334,23 @@ func (ht *serverHandlerTransport) writeCustomHeaders(s *Stream) {
 }
 
 func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error {
-	defer data.Free()
 	headersWritten := s.updateHeaderSent()
-	return ht.do(func() {
+	err := ht.do(func() {
+		defer data.Free()
 		if !headersWritten {
 			ht.writePendingHeaders(s)
 		}
 		ht.rw.Write(hdr)
-		_, _ = io.Copy(ht.rw, data.Reader())
+		for _, b := range data {
+			_, _ = ht.rw.Write(b.ReadOnlyData())
+		}
 		ht.rw.(http.Flusher).Flush()
 	})
+	if err != nil {
+		data.Free()
+		return err
+	}
+	return nil
 }
 
 func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {

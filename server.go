@@ -1154,6 +1154,7 @@ func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, 
 	}
 
 	hdr, payload := msgHeader(data, compData, pf)
+	dataLen := data.Len()
 	payloadLen := payload.Len()
 	// TODO(dfawley): should we be checking len(data) instead?
 	if payloadLen > s.opts.maxSendMessageSize {
@@ -1162,10 +1163,8 @@ func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, 
 	err = t.Write(stream, hdr, payload, opts)
 	if err == nil {
 		if len(s.opts.statsHandlers) != 0 {
-			mData := data.LazyMaterialize(s.opts.bufferPool)
-			defer mData.Free()
 			for _, sh := range s.opts.statsHandlers {
-				sh.HandleRPC(ctx, outPayload(false, msg, mData.ReadOnlyData(), payloadLen, time.Now()))
+				sh.HandleRPC(ctx, outPayload(false, msg, dataLen, payloadLen, time.Now()))
 			}
 		}
 	}
@@ -1359,7 +1358,8 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 		t.IncrMsgRecv()
 	}
 	df := func(v any) error {
-		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
+		defer d.Free()
+		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d.Ref(), v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
 
@@ -1375,8 +1375,10 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 			}
 		}
 		if len(binlogs) != 0 {
+			mData := d.LazyMaterialize(s.opts.bufferPool)
+			defer mData.Free()
 			cm := &binarylog.ClientMessage{
-				Message: d,
+				Message: mData.ReadOnlyData(),
 			}
 			for _, binlog := range binlogs {
 				binlog.Log(ctx, cm)
