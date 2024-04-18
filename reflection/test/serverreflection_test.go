@@ -16,7 +16,7 @@
  *
  */
 
-package reflection
+package test_test
 
 import (
 	"context"
@@ -30,6 +30,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/reflection/internal"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -40,13 +42,12 @@ import (
 	v1reflectiongrpc "google.golang.org/grpc/reflection/grpc_reflection_v1"
 	v1reflectionpb "google.golang.org/grpc/reflection/grpc_reflection_v1"
 	v1alphareflectiongrpc "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
-	v1alphareflectionpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	pb "google.golang.org/grpc/reflection/grpc_testing"
-	pbv3 "google.golang.org/grpc/reflection/grpc_testing_not_regenerate"
+	pbv3 "google.golang.org/grpc/reflection/test/grpc_testing_not_regenerate"
 )
 
 var (
-	s = NewServerV1(ServerOptions{}).(*serverReflectionServer)
+	s = reflection.NewServerV1(reflection.ServerOptions{}).(*internal.ServerReflectionServer)
 	// fileDescriptor of each test proto file.
 	fdProto2Ext  *descriptorpb.FileDescriptorProto
 	fdProto2Ext2 *descriptorpb.FileDescriptorProto
@@ -132,7 +133,7 @@ func (x) TestFileDescContainingExtension(t *testing.T) {
 		{"grpc.testing.ToBeExtended", 23, fdProto2Ext2},
 		{"grpc.testing.ToBeExtended", 29, fdProto2Ext2},
 	} {
-		fd, err := s.fileDescEncodingContainingExtension(test.st, test.extNum, map[string]bool{})
+		fd, err := s.FileDescEncodingContainingExtension(test.st, test.extNum, map[string]bool{})
 		if err != nil {
 			t.Errorf("fileDescContainingExtension(%q) return error: %v", test.st, err)
 			continue
@@ -162,7 +163,7 @@ func (x) TestAllExtensionNumbersForTypeName(t *testing.T) {
 	}{
 		{"grpc.testing.ToBeExtended", []int32{13, 17, 19, 23, 29}},
 	} {
-		r, err := s.allExtensionNumbersForTypeName(test.st)
+		r, err := s.AllExtensionNumbersForTypeName(test.st)
 		sort.Sort(intArray(r))
 		if err != nil || !reflect.DeepEqual(r, test.want) {
 			t.Errorf("allExtensionNumbersForType(%q) = %v, %v, want %v, <nil>", test.st, r, err, test.want)
@@ -297,14 +298,14 @@ func (x) TestFileDescWithDependencies(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			s := NewServerV1(ServerOptions{}).(*serverReflectionServer)
+			s := reflection.NewServerV1(reflection.ServerOptions{}).(*internal.ServerReflectionServer)
 
 			sent := map[string]bool{}
 			for _, path := range test.sent {
 				sent[path] = true
 			}
 
-			descriptors, err := s.fileDescWithDependencies(test.root, sent)
+			descriptors, err := s.FileDescWithDependencies(test.root, sent)
 			if len(test.expect) == 0 {
 				// if we're not expecting any files then we're expecting an error
 				if err == nil {
@@ -407,7 +408,7 @@ func (x) TestReflectionEnd2end(t *testing.T) {
 	registerDynamicProto(s, fdDynamic, fdDynamicFile)
 
 	// Register reflection service on s.
-	Register(s)
+	reflection.Register(s)
 	go s.Serve(lis)
 	t.Cleanup(s.Stop)
 
@@ -843,7 +844,7 @@ type v1AlphaClientStreamAdapter struct {
 }
 
 func (s v1AlphaClientStreamAdapter) Send(request *v1reflectionpb.ServerReflectionRequest) error {
-	return s.ServerReflection_ServerReflectionInfoClient.Send(v1ToV1AlphaRequest(request))
+	return s.ServerReflection_ServerReflectionInfoClient.Send(internal.V1ToV1AlphaRequest(request))
 }
 
 func (s v1AlphaClientStreamAdapter) Recv() (*v1reflectionpb.ServerReflectionResponse, error) {
@@ -851,58 +852,5 @@ func (s v1AlphaClientStreamAdapter) Recv() (*v1reflectionpb.ServerReflectionResp
 	if err != nil {
 		return nil, err
 	}
-	return v1AlphaToV1Response(resp), nil
-}
-
-func v1AlphaToV1Response(v1alpha *v1alphareflectionpb.ServerReflectionResponse) *v1reflectionpb.ServerReflectionResponse {
-	var v1 v1reflectionpb.ServerReflectionResponse
-	v1.ValidHost = v1alpha.ValidHost
-	if v1alpha.OriginalRequest != nil {
-		v1.OriginalRequest = v1AlphaToV1Request(v1alpha.OriginalRequest)
-	}
-	switch mr := v1alpha.MessageResponse.(type) {
-	case *v1alphareflectionpb.ServerReflectionResponse_FileDescriptorResponse:
-		if mr != nil {
-			v1.MessageResponse = &v1reflectionpb.ServerReflectionResponse_FileDescriptorResponse{
-				FileDescriptorResponse: &v1reflectionpb.FileDescriptorResponse{
-					FileDescriptorProto: mr.FileDescriptorResponse.GetFileDescriptorProto(),
-				},
-			}
-		}
-	case *v1alphareflectionpb.ServerReflectionResponse_AllExtensionNumbersResponse:
-		if mr != nil {
-			v1.MessageResponse = &v1reflectionpb.ServerReflectionResponse_AllExtensionNumbersResponse{
-				AllExtensionNumbersResponse: &v1reflectionpb.ExtensionNumberResponse{
-					BaseTypeName:    mr.AllExtensionNumbersResponse.GetBaseTypeName(),
-					ExtensionNumber: mr.AllExtensionNumbersResponse.GetExtensionNumber(),
-				},
-			}
-		}
-	case *v1alphareflectionpb.ServerReflectionResponse_ListServicesResponse:
-		if mr != nil {
-			svcs := make([]*v1reflectionpb.ServiceResponse, len(mr.ListServicesResponse.GetService()))
-			for i, svc := range mr.ListServicesResponse.GetService() {
-				svcs[i] = &v1reflectionpb.ServiceResponse{
-					Name: svc.GetName(),
-				}
-			}
-			v1.MessageResponse = &v1reflectionpb.ServerReflectionResponse_ListServicesResponse{
-				ListServicesResponse: &v1reflectionpb.ListServiceResponse{
-					Service: svcs,
-				},
-			}
-		}
-	case *v1alphareflectionpb.ServerReflectionResponse_ErrorResponse:
-		if mr != nil {
-			v1.MessageResponse = &v1reflectionpb.ServerReflectionResponse_ErrorResponse{
-				ErrorResponse: &v1reflectionpb.ErrorResponse{
-					ErrorCode:    mr.ErrorResponse.GetErrorCode(),
-					ErrorMessage: mr.ErrorResponse.GetErrorMessage(),
-				},
-			}
-		}
-	default:
-		// no value set
-	}
-	return &v1
+	return internal.V1AlphaToV1Response(resp), nil
 }

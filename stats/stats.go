@@ -73,7 +73,9 @@ func (*PickerUpdated) isRPCStats() {}
 type InPayload struct {
 	// Client is true if this InPayload is from client side.
 	Client bool
-	// Payload is the payload with original type.
+	// Payload is the payload with original type.  This may be modified after
+	// the call to HandleRPC which provides the InPayload returns and must be
+	// copied if needed later.
 	Payload any
 
 	// Length is the size of the uncompressed payload data. Does not include any
@@ -141,7 +143,9 @@ func (s *InTrailer) isRPCStats() {}
 type OutPayload struct {
 	// Client is true if this OutPayload is from client side.
 	Client bool
-	// Payload is the payload with original type.
+	// Payload is the payload with original type.  This may be modified after
+	// the call to HandleRPC which provides the OutPayload returns and must be
+	// copied if needed later.
 	Payload any
 	// Length is the size of the uncompressed payload data. Does not include any
 	// framing (gRPC or HTTP/2).

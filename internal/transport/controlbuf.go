@@ -195,7 +195,7 @@ type goAway struct {
 	code      http2.ErrCode
 	debugData []byte
 	headsUp   bool
-	closeConn error // if set, loopyWriter will exit, resulting in conn closure
+	closeConn error // if set, loopyWriter will exit with this error
 }
 
 func (*goAway) isTransportResponseFrame() bool { return false }
@@ -498,22 +498,32 @@ type loopyWriter struct {
 	ssGoAwayHandler func(*goAway) (bool, error)
 }
 
-func newLoopyWriter(s side, fr *framer, cbuf *controlBuffer, bdpEst *bdpEstimator, conn net.Conn, logger *grpclog.PrefixLogger, bufferPool mem.BufferPool) *loopyWriter {
+func newLoopyWriter(
+	s side,
+	fr *framer,
+	cbuf *controlBuffer,
+	bdpEst *bdpEstimator,
+	conn net.Conn,
+	logger *grpclog.PrefixLogger,
+	goAwayHandler func(*goAway) (bool, error),
+	bufferPool mem.BufferPool,
+) *loopyWriter {
 	var buf bytes.Buffer
 	l := &loopyWriter{
-		side:          s,
-		cbuf:          cbuf,
-		sendQuota:     defaultWindowSize,
-		oiws:          defaultWindowSize,
-		estdStreams:   make(map[uint32]*outStream),
-		activeStreams: newOutStreamList(),
-		framer:        fr,
-		hBuf:          &buf,
-		hEnc:          hpack.NewEncoder(&buf),
-		bdpEst:        bdpEst,
-		conn:          conn,
-		logger:        logger,
-		bufferPool:    bufferPool,
+		side:            s,
+		cbuf:            cbuf,
+		sendQuota:       defaultWindowSize,
+		oiws:            defaultWindowSize,
+		estdStreams:     make(map[uint32]*outStream),
+		activeStreams:   newOutStreamList(),
+		framer:          fr,
+		hBuf:            &buf,
+		hEnc:            hpack.NewEncoder(&buf),
+		bdpEst:          bdpEst,
+		conn:            conn,
+		logger:          logger,
+		ssGoAwayHandler: goAwayHandler,
+		bufferPool:      bufferPool,
 	}
 	return l
 }

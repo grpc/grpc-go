@@ -172,10 +172,6 @@ type ClientOptions struct {
 	// If this is set, we will perform this customized check after doing the
 	// normal check(s) indicated by setting VType.
 	VerifyPeer CustomVerificationFunc
-	// ServerNameOverride is for testing only. If set to a non-empty string,
-	// it will override the virtual host name of authority (e.g. :authority
-	// header field) in requests.
-	ServerNameOverride string
 	// RootOptions is OPTIONAL on client side. If not set, we will try to use the
 	// default trust certificates in users' OS system.
 	RootOptions RootCertificateOptions
@@ -193,6 +189,11 @@ type ClientOptions struct {
 	// By default, the maximum version supported by this package is used,
 	// which is currently TLS 1.3.
 	MaxVersion uint16
+	// serverNameOverride is for testing only. If set to a non-empty string, it
+	// will override the virtual host name of authority (e.g. :authority header
+	// field) in requests and the target hostname used during server cert
+	// verification.
+	serverNameOverride string
 }
 
 // ServerOptions contains the fields needed to be filled by the server.
@@ -244,7 +245,7 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 		return nil, fmt.Errorf("the minimum TLS version is larger than the maximum TLS version")
 	}
 	config := &tls.Config{
-		ServerName: o.ServerNameOverride,
+		ServerName: o.serverNameOverride,
 		// We have to set InsecureSkipVerify to true to skip the default checks and
 		// use the verification function we built from buildVerifyFunc.
 		InsecureSkipVerify: true,
@@ -548,7 +549,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 			if verifiedChains == nil {
 				verifiedChains = [][]*x509.Certificate{rawCertList}
 			}
-			if err := CheckChainRevocation(verifiedChains, *c.revocationConfig); err != nil {
+			if err := checkChainRevocation(verifiedChains, *c.revocationConfig); err != nil {
 				return err
 			}
 		}
