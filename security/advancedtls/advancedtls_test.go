@@ -135,11 +135,11 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			clientOptions := &ClientOptions{
-				VType:           test.clientVType,
-				IdentityOptions: test.IdentityOptions,
-				RootOptions:     test.RootOptions,
-				MinVersion:      test.MinVersion,
-				MaxVersion:      test.MaxVersion,
+				VerificationType: test.clientVType,
+				IdentityOptions:  test.IdentityOptions,
+				RootOptions:      test.RootOptions,
+				MinVersion:       test.MinVersion,
+				MaxVersion:       test.MaxVersion,
 			}
 			_, err := clientOptions.config()
 			if err == nil {
@@ -179,11 +179,11 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			clientOptions := &ClientOptions{
-				VType:           test.clientVType,
-				IdentityOptions: test.IdentityOptions,
-				RootOptions:     test.RootOptions,
-				MinVersion:      test.MinVersion,
-				MaxVersion:      test.MaxVersion,
+				VerificationType: test.clientVType,
+				IdentityOptions:  test.IdentityOptions,
+				RootOptions:      test.RootOptions,
+				MinVersion:       test.MinVersion,
+				MaxVersion:       test.MaxVersion,
 			}
 			clientConfig, err := clientOptions.config()
 			if err != nil {
@@ -839,7 +839,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					GetRootCertificates: test.clientGetRoot,
 					RootProvider:        test.clientRootProvider,
 				},
-				VType:            test.clientVType,
+				VerificationType: test.clientVType,
 				RevocationConfig: test.clientRevocationConfig,
 			}
 			clientTLS, err := NewClientCreds(clientOptions)

@@ -175,6 +175,10 @@ type ClientOptions struct {
 	// RootOptions is OPTIONAL on client side. If not set, we will try to use the
 	// default trust certificates in users' OS system.
 	RootOptions RootCertificateOptions
+	// VerificationType defines at what type of server verification is done. See
+	// the `VerificationType` enum for the different options.
+	VerificationType VerificationType
+	// DEPRECATED: Renamed to `VerificationType`
 	// VType is the verification type on the client side.
 	VType VerificationType
 	// RevocationConfig is the configurations for certificate revocation checks.
@@ -227,7 +231,13 @@ type ServerOptions struct {
 }
 
 func (o *ClientOptions) config() (*tls.Config, error) {
-	if o.VType == SkipVerification && o.VerifyPeer == nil {
+	// TODO(gtcooke94). VType is deprecated, eventually remove this block. This
+	// will ensure that users still explicitly setting `VType` will get the
+	// setting to the right place
+	if o.VType != CertAndHostVerification {
+		o.VerificationType = o.VType
+	}
+	if o.VerificationType == SkipVerification && o.VerifyPeer == nil {
 		return nil, fmt.Errorf("client needs to provide custom verification mechanism if choose to skip default verification")
 	}
 	// Make sure users didn't specify more than one fields in
@@ -271,7 +281,7 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 	default:
 		// No root certificate options specified by user. Use the certificates
 		// stored in system default path as the last resort.
-		if o.VType != SkipVerification {
+		if o.VerificationType != SkipVerification {
 			systemRootCAs, err := x509.SystemCertPool()
 			if err != nil {
 				return nil, err
@@ -579,7 +589,7 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 		isClient:         true,
 		getRootCAs:       o.RootOptions.GetRootCertificates,
 		verifyFunc:       o.VerifyPeer,
-		vType:            o.VType,
+		vType:            o.VerificationType,
 		revocationConfig: o.RevocationConfig,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)

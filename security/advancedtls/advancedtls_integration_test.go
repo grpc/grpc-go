@@ -373,7 +373,7 @@ func (s) TestEnd2End(t *testing.T) {
 					RootCACerts:         test.clientRoot,
 					GetRootCertificates: test.clientGetRoot,
 				},
-				VType: test.clientVType,
+				VerificationType: test.clientVType,
 			}
 			clientTLSCreds, err := NewClientCreds(clientOptions)
 			if err != nil {
@@ -664,7 +664,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 				RootOptions: RootCertificateOptions{
 					RootProvider: clientRootProvider,
 				},
-				VType: CertVerification,
+				VerificationType: CertVerification,
 			}
 			clientTLSCreds, err := NewClientCreds(clientOptions)
 			if err != nil {
@@ -789,7 +789,7 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 				RootOptions: RootCertificateOptions{
 					RootCACerts: test.clientRoot,
 				},
-				VType: test.clientVType,
+				VerificationType: test.clientVType,
 			}
 			clientTLSCreds, err := NewClientCreds(clientOptions)
 			if err != nil {
@@ -929,9 +929,9 @@ func (s) TestTLSVersions(t *testing.T) {
 				RootOptions: RootCertificateOptions{
 					RootCACerts: cs.ClientTrust1,
 				},
-				VType:      CertAndHostVerification,
-				MinVersion: test.clientMinVersion,
-				MaxVersion: test.clientMaxVersion,
+				VerificationType: CertAndHostVerification,
+				MinVersion:       test.clientMinVersion,
+				MaxVersion:       test.clientMaxVersion,
 			}
 			clientTLSCreds, err := NewClientCreds(clientOptions)
 			if err != nil {
