@@ -114,11 +114,11 @@ type http2Client struct {
 	streamQuota           int64
 	streamsQuotaAvailable chan struct{}
 	waitingStreams        uint32
-	nextID                uint32
 	registeredCompressors string
 
 	// Do not access controlBuf with mu held.
 	mu            sync.Mutex // guard the following variables
+	nextID        uint32
 	state         transportState
 	activeStreams map[uint32]*Stream
 	// prevGoAway ID records the Last-Stream-ID in the previous GOAway frame.
@@ -808,20 +808,19 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 			t.waitingStreams--
 		}
 		t.streamQuota--
+		t.mu.Lock()
 		hdr.streamID = t.nextID
 		t.nextID += 2
-
+		if t.state == draining || t.activeStreams == nil { // Can be niled from Close().
+			t.mu.Unlock()
+			return false // Don't create a stream if the transport is already closed.
+		}
 		// Drain client transport if nextID > MaxStreamID which signals gRPC that
 		// the connection is closed and a new one must be created for subsequent RPCs.
 		transportDrainRequired = t.nextID > MaxStreamID
 
 		s.id = hdr.streamID
 		s.fc = &inFlow{limit: uint32(t.initialWindowSize)}
-		t.mu.Lock()
-		if t.state == draining || t.activeStreams == nil { // Can be niled from Close().
-			t.mu.Unlock()
-			return false // Don't create a stream if the transport is already closed.
-		}
 		t.activeStreams[s.id] = s
 		t.mu.Unlock()
 		if t.streamQuota > 0 && t.waitingStreams > 0 {
