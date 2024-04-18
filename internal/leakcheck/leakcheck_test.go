@@ -44,12 +44,12 @@ func TestCheck(t *testing.T) {
 		t.Error("blah")
 	}
 	e := &testErrorfer{}
-	check(e, time.Second)
+	checkGoroutines(e, time.Second)
 	if e.errorCount != leakCount {
-		t.Errorf("check found %v leaks, want %v leaks", e.errorCount, leakCount)
+		t.Errorf("checkGoroutines found %v leaks, want %v leaks", e.errorCount, leakCount)
 		t.Logf("leaked goroutines:\n%v", strings.Join(e.errors, "\n"))
 	}
-	check(t, 3*time.Second)
+	checkGoroutines(t, 3*time.Second)
 }
 
 func ignoredTestingLeak(d time.Duration) {
@@ -67,10 +67,10 @@ func TestCheckRegisterIgnore(t *testing.T) {
 		t.Error("blah")
 	}
 	e := &testErrorfer{}
-	check(e, time.Second)
+	checkGoroutines(e, time.Second)
 	if e.errorCount != leakCount {
-		t.Errorf("check found %v leaks, want %v leaks", e.errorCount, leakCount)
+		t.Errorf("checkGoroutines found %v leaks, want %v leaks", e.errorCount, leakCount)
 		t.Logf("leaked goroutines:\n%v", strings.Join(e.errors, "\n"))
 	}
-	check(t, 3*time.Second)
+	checkGoroutines(t, 3*time.Second)
 }

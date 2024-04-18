@@ -16,7 +16,7 @@
  *
  */
 
-// Package leakcheck contains functions to check leaked goroutines.
+// Package leakcheck contains functions to checkGoroutines leaked goroutines and buffers.
 //
 // Call "defer leakcheck.Check(t)" at the beginning of tests.
 package leakcheck
@@ -100,7 +100,7 @@ type Errorfer interface {
 	Errorf(format string, args ...any)
 }
 
-func check(efer Errorfer, timeout time.Duration) {
+func checkGoroutines(efer Errorfer, timeout time.Duration) {
 	// Loop, waiting for goroutines to shut down.
 	// Wait up to timeout, but finish as quickly as possible.
 	deadline := time.Now().Add(timeout)
@@ -120,5 +120,5 @@ func check(efer Errorfer, timeout time.Duration) {
 // interesting (created by gRPC) goroutines leaked. It waits up to 10 seconds
 // in the error cases.
 func Check(efer Errorfer) {
-	check(efer, 10*time.Second)
+	checkGoroutines(efer, 10*time.Second)
 }

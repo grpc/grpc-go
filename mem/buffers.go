@@ -180,9 +180,6 @@ func (s BufferSlice) WriteTo(out []byte) {
 }
 
 func (s BufferSlice) Materialize() []byte {
-	if s.Len() == 0 {
-		return nil
-	}
 	out := make([]byte, s.Len())
 	s.WriteTo(out)
 	return out
