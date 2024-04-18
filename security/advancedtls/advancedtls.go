@@ -175,8 +175,9 @@ type ClientOptions struct {
 	// RootOptions is OPTIONAL on client side. If not set, we will try to use the
 	// default trust certificates in users' OS system.
 	RootOptions RootCertificateOptions
-	// VerificationType defines at what type of server verification is done. See
+	// VerificationType defines what type of server verification is done. See
 	// the `VerificationType` enum for the different options.
+	// Default: CertAndHostVerification
 	VerificationType VerificationType
 	// DEPRECATED: Renamed to `VerificationType`
 	// VType is the verification type on the client side.
@@ -214,6 +215,11 @@ type ServerOptions struct {
 	RootOptions RootCertificateOptions
 	// If the server want the client to send certificates.
 	RequireClientCert bool
+	// VerificationType defines what type of client verification is done. See
+	// the `VerificationType` enum for the different options.
+	// Default: CertAndHostVerification
+	VerificationType VerificationType
+	// DEPRECATED: Renamed to `VerificationType`
 	// VType is the verification type on the server side.
 	VType VerificationType
 	// RevocationConfig is the configurations for certificate revocation checks.
@@ -233,7 +239,7 @@ type ServerOptions struct {
 func (o *ClientOptions) config() (*tls.Config, error) {
 	// TODO(gtcooke94). VType is deprecated, eventually remove this block. This
 	// will ensure that users still explicitly setting `VType` will get the
-	// setting to the right place
+	// setting to the right place.
 	if o.VType != CertAndHostVerification {
 		o.VerificationType = o.VType
 	}
@@ -313,7 +319,13 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 }
 
 func (o *ServerOptions) config() (*tls.Config, error) {
-	if o.RequireClientCert && o.VType == SkipVerification && o.VerifyPeer == nil {
+	// TODO(gtcooke94). VType is deprecated, eventually remove this block. This
+	// will ensure that users still explicitly setting `VType` will get the
+	// setting to the right place.
+	if o.VType != CertAndHostVerification {
+		o.VerificationType = o.VType
+	}
+	if o.RequireClientCert && o.VerificationType == SkipVerification && o.VerifyPeer == nil {
 		return nil, fmt.Errorf("server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
 	// Make sure users didn't specify more than one fields in
@@ -361,7 +373,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 	default:
 		// No root certificate options specified by user. Use the certificates
 		// stored in system default path as the last resort.
-		if o.VType != SkipVerification && o.RequireClientCert {
+		if o.VerificationType != SkipVerification && o.RequireClientCert {
 			systemRootCAs, err := x509.SystemCertPool()
 			if err != nil {
 				return nil, err
@@ -405,7 +417,7 @@ type advancedTLSCreds struct {
 	verifyFunc       CustomVerificationFunc
 	getRootCAs       func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 	isClient         bool
-	vType            VerificationType
+	verificationType VerificationType
 	revocationConfig *RevocationConfig
 }
 
@@ -505,7 +517,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 			}
 			rawCertList[i] = cert
 		}
-		if c.vType == CertAndHostVerification || c.vType == CertVerification {
+		if c.verificationType == CertAndHostVerification || c.verificationType == CertVerification {
 			// perform possible trust credential reloading and certificate check
 			rootCAs := c.config.RootCAs
 			if !c.isClient {
@@ -537,7 +549,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				opts.Intermediates.AddCert(cert)
 			}
 			// Perform default hostname check if specified.
-			if c.isClient && c.vType == CertAndHostVerification && serverName != "" {
+			if c.isClient && c.verificationType == CertAndHostVerification && serverName != "" {
 				parsedName, _, err := net.SplitHostPort(serverName)
 				if err != nil {
 					// If the serverName had no host port or if the serverName cannot be
@@ -589,7 +601,7 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 		isClient:         true,
 		getRootCAs:       o.RootOptions.GetRootCertificates,
 		verifyFunc:       o.VerifyPeer,
-		vType:            o.VerificationType,
+		verificationType: o.VerificationType,
 		revocationConfig: o.RevocationConfig,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
@@ -608,7 +620,7 @@ func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) 
 		isClient:         false,
 		getRootCAs:       o.RootOptions.GetRootCertificates,
 		verifyFunc:       o.VerifyPeer,
-		vType:            o.VType,
+		verificationType: o.VerificationType,
 		revocationConfig: o.RevocationConfig,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
