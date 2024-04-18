@@ -16,6 +16,9 @@
  *
  */
 
+/*
+Package mem does memory things
+*/
 package mem
 
 import (
