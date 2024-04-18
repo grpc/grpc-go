@@ -808,13 +808,15 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 			t.waitingStreams--
 		}
 		t.streamQuota--
+
 		t.mu.Lock()
-		hdr.streamID = t.nextID
-		t.nextID += 2
 		if t.state == draining || t.activeStreams == nil { // Can be niled from Close().
 			t.mu.Unlock()
 			return false // Don't create a stream if the transport is already closed.
 		}
+
+		hdr.streamID = t.nextID
+		t.nextID += 2
 		// Drain client transport if nextID > MaxStreamID which signals gRPC that
 		// the connection is closed and a new one must be created for subsequent RPCs.
 		transportDrainRequired = t.nextID > MaxStreamID
@@ -823,6 +825,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		s.fc = &inFlow{limit: uint32(t.initialWindowSize)}
 		t.activeStreams[s.id] = s
 		t.mu.Unlock()
+
 		if t.streamQuota > 0 && t.waitingStreams > 0 {
 			select {
 			case t.streamsQuotaAvailable <- struct{}{}:
