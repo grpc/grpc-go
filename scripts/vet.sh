@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -ex  # Exit on error; debugging enabled.
-set -o pipefail  # Fail a pipe if any sub-command fails.
+set -o # Fail a pipe if any sub-command fails.
 
 source "$(dirname $0)/vet-common.sh"
 
@@ -86,18 +86,22 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   popd
 done
 
-# - Collection of static analysis checks
-SC_OUT="$(mktemp)"
-staticcheck -go 1.19 -checks 'all' ./... > "${SC_OUT}" || true
 
-# Error for anything other than checks that need exclusions.
-grep -v "(ST1000)" "${SC_OUT}" | grep -v "(SA1019)" | grep -v "(ST1003)" | not grep -v "(ST1019)\|\(other import of\)"
+for MOD_FILE in $(find . -name 'go.mod'); do
+  MOD_DIR=$(dirname ${MOD_FILE})
+  pushd ${MOD_DIR}
+  # - Collection of static analysis checks
+  SC_OUT="$(mktemp)"
+  staticcheck -go 1.19 -checks 'all' ./... > "${SC_OUT}" || true
 
-# Exclude underscore checks for generated code.
-grep "(ST1003)" "${SC_OUT}" | not grep -v '\(.pb.go:\)\|\(code_string_test.go:\)\|\(grpc_testing_not_regenerate\)'
+  # Error for anything other than checks that need exclusions.
+  grep -v "(ST1000)" "${SC_OUT}" | grep -v "(SA1019)" | grep -v "(ST1003)" | not grep -v "(ST1019)\|\(other import of\)"
 
-# Error for duplicate imports not including grpc protos.
-grep "(ST1019)\|\(other import of\)" "${SC_OUT}" | not grep -Fv 'XXXXX PleaseIgnoreUnused
+  # Exclude underscore checks for generated code.
+  grep -s "(ST1003)" "${SC_OUT}" | not grep -sv '\(.pb.go:\)\|\(code_string_test.go:\)\|\(grpc_testing_not_regenerate\)'
+
+  # Error for duplicate imports not including grpc protos.
+  grep "(ST1019)\|\(other import of\)" "${SC_OUT}" | not grep -Fv 'XXXXX PleaseIgnoreUnused
 channelz/grpc_channelz_v1"
 go-control-plane/envoy
 grpclb/grpc_lb_v1"
@@ -106,16 +110,17 @@ interop/grpc_testing"
 orca/v3"
 proto/grpc_gcp"
 proto/grpc_lookup_v1"
+examples/features/proto/echo"
 reflection/grpc_reflection_v1"
 reflection/grpc_reflection_v1alpha"
 XXXXX PleaseIgnoreUnused'
 
-# Error for any package comments not in generated code.
-grep "(ST1000)" "${SC_OUT}" | not grep -v "\.pb\.go:"
+  # Error for any package comments not in generated code.
+  grep "(ST1000)" "${SC_OUT}" | not grep -v "\.pb\.go:"
 
-# Only ignore the following deprecated types/fields/functions and exclude
-# generated code.
-grep "(SA1019)" "${SC_OUT}" | not grep -Fv 'XXXXX PleaseIgnoreUnused
+  # Only ignore the following deprecated types/fields/functions and exclude
+  # generated code.
+  grep "(SA1019)" "${SC_OUT}" | not grep -Fv 'XXXXX PleaseIgnoreUnused
 XXXXX Protobuf related deprecation errors:
 "github.com/golang/protobuf
 .pb.go:
@@ -154,5 +159,7 @@ GetSuffixMatch
 GetTlsCertificateCertificateProviderInstance
 GetValidationContextCertificateProviderInstance
 XXXXX PleaseIgnoreUnused'
+  popd
+done
 
 echo SUCCESS

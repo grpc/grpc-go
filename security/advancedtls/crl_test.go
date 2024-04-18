@@ -224,7 +224,7 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 		t.Fatalf("parseRevocationList(dummyCrlFile) failed: %v", err)
 	}
 	crlExt := &CRL{certList: crl}
-	var crlIssuer pkix.Name = crl.Issuer
+	var crlIssuer = crl.Issuer
 
 	var revocationTests = []struct {
 		desc    string
