@@ -114,11 +114,11 @@ type http2Client struct {
 	streamQuota           int64
 	streamsQuotaAvailable chan struct{}
 	waitingStreams        uint32
-	nextID                uint32
 	registeredCompressors string
 
 	// Do not access controlBuf with mu held.
 	mu            sync.Mutex // guard the following variables
+	nextID        uint32
 	state         transportState
 	activeStreams map[uint32]*Stream
 	// prevGoAway ID records the Last-Stream-ID in the previous GOAway frame.
@@ -796,7 +796,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 	firstTry := true
 	var ch chan struct{}
 	transportDrainRequired := false
-	checkForStreamQuota := func(it any) bool {
+	checkForStreamQuota := func() bool {
 		if t.streamQuota <= 0 { // Can go negative if server decreases it.
 			if firstTry {
 				t.waitingStreams++
@@ -808,23 +808,24 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 			t.waitingStreams--
 		}
 		t.streamQuota--
-		h := it.(*headerFrame)
-		h.streamID = t.nextID
-		t.nextID += 2
 
-		// Drain client transport if nextID > MaxStreamID which signals gRPC that
-		// the connection is closed and a new one must be created for subsequent RPCs.
-		transportDrainRequired = t.nextID > MaxStreamID
-
-		s.id = h.streamID
-		s.fc = &inFlow{limit: uint32(t.initialWindowSize)}
 		t.mu.Lock()
 		if t.state == draining || t.activeStreams == nil { // Can be niled from Close().
 			t.mu.Unlock()
 			return false // Don't create a stream if the transport is already closed.
 		}
+
+		hdr.streamID = t.nextID
+		t.nextID += 2
+		// Drain client transport if nextID > MaxStreamID which signals gRPC that
+		// the connection is closed and a new one must be created for subsequent RPCs.
+		transportDrainRequired = t.nextID > MaxStreamID
+
+		s.id = hdr.streamID
+		s.fc = &inFlow{limit: uint32(t.initialWindowSize)}
 		t.activeStreams[s.id] = s
 		t.mu.Unlock()
+
 		if t.streamQuota > 0 && t.waitingStreams > 0 {
 			select {
 			case t.streamsQuotaAvailable <- struct{}{}:
@@ -834,13 +835,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		return true
 	}
 	var hdrListSizeErr error
-	checkForHeaderListSize := func(it any) bool {
+	checkForHeaderListSize := func() bool {
 		if t.maxSendHeaderListSize == nil {
 			return true
 		}
-		hdrFrame := it.(*headerFrame)
 		var sz int64
-		for _, f := range hdrFrame.hf {
+		for _, f := range hdr.hf {
 			if sz += int64(f.Size()); sz > int64(*t.maxSendHeaderListSize) {
 				hdrListSizeErr = status.Errorf(codes.Internal, "header list size to send violates the maximum size (%d bytes) set by server", *t.maxSendHeaderListSize)
 				return false
@@ -849,8 +849,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		return true
 	}
 	for {
-		success, err := t.controlBuf.executeAndPut(func(it any) bool {
-			return checkForHeaderListSize(it) && checkForStreamQuota(it)
+		success, err := t.controlBuf.executeAndPut(func() bool {
+			return checkForHeaderListSize() && checkForStreamQuota()
 		}, hdr)
 		if err != nil {
 			// Connection closed.
@@ -961,7 +961,7 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 		rst:     rst,
 		rstCode: rstCode,
 	}
-	addBackStreamQuota := func(any) bool {
+	addBackStreamQuota := func() bool {
 		t.streamQuota++
 		if t.streamQuota > 0 && t.waitingStreams > 0 {
 			select {
@@ -1117,7 +1117,7 @@ func (t *http2Client) updateWindow(s *Stream, n uint32) {
 // for the transport and the stream based on the current bdp
 // estimation.
 func (t *http2Client) updateFlowControl(n uint32) {
-	updateIWS := func(any) bool {
+	updateIWS := func() bool {
 		t.initialWindowSize = int32(n)
 		t.mu.Lock()
 		for _, s := range t.activeStreams {
@@ -1270,7 +1270,7 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame, isFirst bool) {
 		}
 		updateFuncs = append(updateFuncs, updateStreamQuota)
 	}
-	t.controlBuf.executeAndPut(func(any) bool {
+	t.controlBuf.executeAndPut(func() bool {
 		for _, f := range updateFuncs {
 			f()
 		}
