@@ -179,7 +179,7 @@ type ClientOptions struct {
 	VType VerificationType
 	// RevocationConfig is the configurations for certificate revocation checks.
 	// It could be nil if such checks are not needed.
-	RevocationConfig *RevocationConfig
+	RevocationConfig *RevocationOptions
 	// MinVersion contains the minimum TLS version that is acceptable.
 	// By default, TLS 1.2 is currently used as the minimum when acting as a
 	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
@@ -214,7 +214,7 @@ type ServerOptions struct {
 	VType VerificationType
 	// RevocationConfig is the configurations for certificate revocation checks.
 	// It could be nil if such checks are not needed.
-	RevocationConfig *RevocationConfig
+	RevocationConfig *RevocationOptions
 	// MinVersion contains the minimum TLS version that is acceptable.
 	// By default, TLS 1.2 is currently used as the minimum when acting as a
 	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
@@ -396,7 +396,7 @@ type advancedTLSCreds struct {
 	getRootCAs       func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 	isClient         bool
 	vType            VerificationType
-	revocationConfig *RevocationConfig
+	revocationConfig *RevocationOptions
 }
 
 func (c advancedTLSCreds) Info() credentials.ProtocolInfo {

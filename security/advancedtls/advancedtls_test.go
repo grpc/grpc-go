@@ -381,13 +381,13 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		return &GetRootCAsResults{TrustCerts: cs.ServerTrust3}, nil
 	}
 
-	makeStaticCRLRevocationConfig := func(crlPath string, allowUndetermined bool) *RevocationConfig {
+	makeStaticCRLRevocationConfig := func(crlPath string, allowUndetermined bool) *RevocationOptions {
 		rawCRL, err := os.ReadFile(crlPath)
 		if err != nil {
 			t.Fatalf("readFile(%v) failed err = %v", crlPath, err)
 		}
 		cRLProvider := NewStaticCRLProvider([][]byte{rawCRL})
-		return &RevocationConfig{
+		return &RevocationOptions{
 			AllowUndetermined: allowUndetermined,
 			CRLProvider:       cRLProvider,
 		}
@@ -407,7 +407,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		clientVType                VerificationType
 		clientRootProvider         certprovider.Provider
 		clientIdentityProvider     certprovider.Provider
-		clientRevocationConfig     *RevocationConfig
+		clientRevocationConfig     *RevocationOptions
 		clientExpectHandshakeError bool
 		serverMutualTLS            bool
 		serverCert                 []tls.Certificate
@@ -418,7 +418,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		serverVType                VerificationType
 		serverRootProvider         certprovider.Provider
 		serverIdentityProvider     certprovider.Provider
-		serverRevocationConfig     *RevocationConfig
+		serverRevocationConfig     *RevocationOptions
 		serverExpectError          bool
 	}{
 		// Client: nil setting except verifyFuncGood
@@ -711,7 +711,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientGetRoot:    getRootCAsForClient,
 			clientVerifyFunc: clientVerifyFuncGood,
 			clientVType:      CertVerification,
-			clientRevocationConfig: &RevocationConfig{
+			clientRevocationConfig: &RevocationOptions{
 				RootDir:           testdata.Path("crl"),
 				AllowUndetermined: true,
 				Cache:             cache,
@@ -720,7 +720,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverCert:      []tls.Certificate{cs.ServerCert1},
 			serverGetRoot:   getRootCAsForServer,
 			serverVType:     CertVerification,
-			serverRevocationConfig: &RevocationConfig{
+			serverRevocationConfig: &RevocationOptions{
 				RootDir:           testdata.Path("crl"),
 				AllowUndetermined: true,
 				Cache:             cache,
