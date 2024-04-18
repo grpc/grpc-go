@@ -20,7 +20,7 @@ package protoconv
 
 import (
 	"time"
-  
+
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 
