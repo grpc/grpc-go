@@ -57,7 +57,7 @@ func (b *Buffer) Ref() *Buffer {
 }
 
 func (b *Buffer) Free() {
-	if b == nil {
+	if b == nil || b.data == nil {
 		return
 	}
 	refs := b.refs.Add(-1)

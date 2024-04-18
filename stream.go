@@ -897,6 +897,7 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	}
 
 	defer data.Free()
+	defer payload.Free()
 
 	dataLen := data.Len()
 	payloadLen := payload.Len()
@@ -1791,6 +1792,7 @@ func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor,
 	}
 	compData, pf, err := compress(data, cp, comp, pool)
 	if err != nil {
+		data.Free()
 		return nil, nil, nil, err
 	}
 	hdr, payload = msgHeader(data, compData, pf)
