@@ -177,9 +177,9 @@ type ClientOptions struct {
 	RootOptions RootCertificateOptions
 	// VType is the verification type on the client side.
 	VType VerificationType
-	// RevocationConfig is the configurations for certificate revocation checks.
+	// RevocationOptions is the configurations for certificate revocation checks.
 	// It could be nil if such checks are not needed.
-	RevocationConfig *RevocationOptions
+	RevocationOptions *RevocationOptions
 	// MinVersion contains the minimum TLS version that is acceptable.
 	// By default, TLS 1.2 is currently used as the minimum when acting as a
 	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
@@ -212,9 +212,9 @@ type ServerOptions struct {
 	RequireClientCert bool
 	// VType is the verification type on the server side.
 	VType VerificationType
-	// RevocationConfig is the configurations for certificate revocation checks.
+	// RevocationOptions is the configurations for certificate revocation checks.
 	// It could be nil if such checks are not needed.
-	RevocationConfig *RevocationOptions
+	RevocationOptions *RevocationOptions
 	// MinVersion contains the minimum TLS version that is acceptable.
 	// By default, TLS 1.2 is currently used as the minimum when acting as a
 	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
@@ -580,7 +580,7 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 		getRootCAs:       o.RootOptions.GetRootCertificates,
 		verifyFunc:       o.VerifyPeer,
 		vType:            o.VType,
-		revocationConfig: o.RevocationConfig,
+		revocationConfig: o.RevocationOptions,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
@@ -599,7 +599,7 @@ func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) 
 		getRootCAs:       o.RootOptions.GetRootCertificates,
 		verifyFunc:       o.VerifyPeer,
 		vType:            o.VType,
-		revocationConfig: o.RevocationConfig,
+		revocationConfig: o.RevocationOptions,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil

@@ -77,7 +77,7 @@ type RevocationOptions struct {
 }
 
 // DEPRECATED: Renamed to `RevocationOptions`
-// RevocationOptions contains options for CRL lookup.
+// RevocationConfig contains options for CRL lookup.
 type RevocationConfig = RevocationOptions
 
 // revocationStatus is the revocation status for a certificate or chain.

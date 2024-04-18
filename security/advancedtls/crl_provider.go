@@ -34,7 +34,7 @@ const minCRLRefreshDuration = 1 * time.Minute
 //
 // The interface defines how gRPC gets CRLs from the provider during handshakes,
 // but doesn't prescribe a specific way to load and store CRLs. Such
-// implementations can be used in RevocationConfig of advancedtls.ClientOptions
+// implementations can be used in RevocationOptions of advancedtls.ClientOptions
 // and/or advancedtls.ServerOptions.
 // Please note that checking CRLs is directly on the path of connection
 // establishment, so implementations of the CRL function need to be fast, and
