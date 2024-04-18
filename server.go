@@ -1375,10 +1375,8 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 			}
 		}
 		if len(binlogs) != 0 {
-			mData := d.LazyMaterialize(s.opts.bufferPool)
-			defer mData.Free()
 			cm := &binarylog.ClientMessage{
-				Message: mData.ReadOnlyData(),
+				Message: d.Materialize(),
 			}
 			for _, binlog := range binlogs {
 				binlog.Log(ctx, cm)

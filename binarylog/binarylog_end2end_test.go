@@ -71,9 +71,7 @@ type testBinLogSink struct {
 
 func (s *testBinLogSink) Write(e *binlogpb.GrpcLogEntry) error {
 	s.mu.Lock()
-	// Need to clone the message since it directly references the underlying byte
-	// buffer, which will be freed before it is read for the purposes of the test
-	s.buf = append(s.buf, proto.Clone(e).(*binlogpb.GrpcLogEntry))
+	s.buf = append(s.buf, e)
 	s.mu.Unlock()
 	return nil
 }
