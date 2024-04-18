@@ -151,6 +151,7 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 		pickResult, err := p.Pick(info)
 		if err != nil {
 			if err == balancer.ErrNoSubConnAvailable {
+				lastPickErr = err
 				continue
 			}
 			if st, ok := status.FromError(err); ok {
