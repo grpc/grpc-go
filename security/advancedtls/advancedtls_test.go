@@ -149,6 +149,20 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 	}
 }
 
+// TODO(gtcooke94) Remove when deprecated `VType` is removed. This doesn't fit nicely into other table tests since it is setting a deprecated option.
+// Set VerificationType via the deprecated VType. Make sure it cascades to
+// VerificationType. This should error because one cannot skip default
+// verification and provide no root credentials",
+func (s) TestClientOptionsWithDeprecatedVType(t *testing.T) {
+	clientOptions := &ClientOptions{
+		VType: SkipVerification,
+	}
+	_, err := clientOptions.config()
+	if err == nil {
+		t.Fatalf("ClientOptions{%v}.config() returns no err, wantErr != nil", clientOptions)
+	}
+}
+
 func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 	tests := []struct {
 		desc                   string
@@ -269,6 +283,20 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 				t.Fatalf("ServerOptions{%v}.config() returns no err, wantErr != nil", serverOptions)
 			}
 		})
+	}
+}
+
+// TODO(gtcooke94) Remove when deprecated `VType` is removed. This doesn't fit nicely into other table tests since it is setting a deprecated option.
+// Set VerificationType via the deprecated VType. Make sure it cascades to
+// VerificationType. This should error because one cannot skip default
+// verification and provide no root credentials",
+func (s) TestServerOptionsWithDeprecatedVType(t *testing.T) {
+	serverOptions := &ServerOptions{
+		VType: SkipVerification,
+	}
+	_, err := serverOptions.config()
+	if err == nil {
+		t.Fatalf("ClientOptions{%v}.config() returns no err, wantErr != nil", serverOptions)
 	}
 }
 
