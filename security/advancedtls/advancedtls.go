@@ -35,8 +35,8 @@ import (
 	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
-// HandshakeVerificationInfo contains parameters available to users when
-// implementing PostHandshakeVerificationFunc.
+// HandshakeVerificationInfo contains information about a handshake needed for
+// verification for use when implementing the `PostHandshakeVerificationFunc`
 // The fields in this struct are read-only.
 type HandshakeVerificationInfo struct {
 	// The target server name that the client connects to when establishing the
@@ -54,10 +54,11 @@ type HandshakeVerificationInfo struct {
 	Leaf *x509.Certificate
 }
 
-// DEPRECATED: Renamed to `HandshakeVerificationInfo`
 // VerificationFuncParams contains parameters available to users when
 // implementing CustomVerificationFunc.
 // The fields in this struct are read-only.
+//
+// Deprecated: use HandshakeVerificationInfo instead.
 type VerificationFuncParams = HandshakeVerificationInfo
 
 // PostHandshakeVerificationResults contains the information about results of
@@ -66,7 +67,7 @@ type VerificationFuncParams = HandshakeVerificationInfo
 // future to include more information.
 type PostHandshakeVerificationResults struct{}
 
-// DEPRECATED: Renamed to `PostHandshakeVerificationResults`
+// Deprecated: use PostHandshakeVerificationResults instead.
 type VerificationResults = PostHandshakeVerificationResults
 
 // PostHandshakeVerificationFunc is the function defined by users to perform
@@ -76,11 +77,12 @@ type VerificationResults = PostHandshakeVerificationResults
 // if the authorization fails; otherwise returns an empty struct.
 type PostHandshakeVerificationFunc func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error)
 
-// DEPRECATED: Renamed to PostHandshakeVerificationFunc.
 // CustomVerificationFunc is the function defined by users to perform custom
 // verification check.
 // CustomVerificationFunc returns nil if the authorization fails; otherwise
 // returns an empty struct.
+//
+// Deprecated: use PostHandshakeVerificationFunc instead.
 type CustomVerificationFunc = PostHandshakeVerificationFunc
 
 // GetRootCAsParams contains the parameters available to users when
