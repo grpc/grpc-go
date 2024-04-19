@@ -158,7 +158,7 @@ func testResourceDeletionIgnored(t *testing.T, initialResource func(string) e2e.
 		t.Fatal(err)
 	}
 
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
 	if err != nil {
 		t.Fatalf("Failed to dial local test server: %v.", err)
 	}
@@ -213,7 +213,7 @@ func testResourceDeletionNotIgnored(t *testing.T, initialResource func(string) e
 		t.Fatal(err)
 	}
 
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -375,7 +375,7 @@ func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
 	}
 
 	// Create a ClientConn and make a successful RPCs.
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -442,7 +442,7 @@ func (s) TestListenerResourceDeletionOnServerNotIgnored(t *testing.T) {
 	}
 
 	// Create a ClientConn and make a successful RPCs.
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}

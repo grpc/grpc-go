@@ -56,9 +56,9 @@ func main() {
 			log.Fatalf("failed to create client-side xDS credentials: %v", err)
 		}
 	}
-	conn, err := grpc.Dial(*target, grpc.WithTransportCredentials(creds))
+	conn, err := grpc.NewClient(*target, grpc.WithTransportCredentials(creds))
 	if err != nil {
-		log.Fatalf("grpc.Dial(%s) failed: %v", *target, err)
+		log.Fatalf("grpc.NewClient(%s) failed: %v", *target, err)
 	}
 	defer conn.Close()
 

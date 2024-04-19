@@ -165,7 +165,7 @@ func (s) TestCSDS(t *testing.T) {
 	}()
 
 	// Create a client to the CSDS server.
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial CSDS server %q: %v", lis.Addr().String(), err)
 	}
@@ -434,7 +434,7 @@ func (s) TestCSDSNoXDSClient(t *testing.T) {
 	defer server.Stop()
 
 	// Create a client to the CSDS server.
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial CSDS server %q: %v", lis.Addr().String(), err)
 	}

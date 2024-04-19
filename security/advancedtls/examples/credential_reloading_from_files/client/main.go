@@ -82,7 +82,7 @@ func main() {
 		RootOptions: advancedtls.RootCertificateOptions{
 			RootProvider: rootProvider,
 		},
-		VType: advancedtls.CertVerification,
+		VerificationType: advancedtls.CertVerification,
 	}
 	clientTLSCreds, err := advancedtls.NewClientCreds(options)
 	if err != nil {
@@ -90,9 +90,9 @@ func main() {
 	}
 
 	// Make a connection using the credentials.
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(clientTLSCreds))
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(clientTLSCreds))
 	if err != nil {
-		log.Fatalf("grpc.DialContext to %s failed: %v", address, err)
+		log.Fatalf("grpc.NewClient to %s failed: %v", address, err)
 	}
 	client := pb.NewGreeterClient(conn)
 

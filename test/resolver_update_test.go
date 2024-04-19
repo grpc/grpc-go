@@ -56,9 +56,9 @@ func (s) TestResolverUpdateDuringBuild_ServiceConfigParseError(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{ServiceConfig: &serviceconfig.ParseResult{Err: errors.New("resolver build err")}})
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
+		t.Fatalf("NewClient(_, _) = _, %v; want _, nil", err)
 	}
 	defer cc.Close()
 
@@ -88,9 +88,9 @@ func (s) TestResolverUpdateDuringBuild_ServiceConfigInvalidTypeError(t *testing.
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{ServiceConfig: &serviceconfig.ParseResult{Config: fakeConfig{}}})
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
+		t.Fatalf("NewClient(_, _) = _, %v; want _, nil", err)
 	}
 	defer cc.Close()
 

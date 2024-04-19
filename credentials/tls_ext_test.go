@@ -103,9 +103,9 @@ func (s) TestTLS_MinVersion12(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	cc, err := grpc.Dial(ss.Address, grpc.WithTransportCredentials(clientCreds))
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(clientCreds))
 	if err != nil {
-		t.Fatalf("grpc.Dial error: %v", err)
+		t.Fatalf("grpc.NewClient error: %v", err)
 	}
 	defer cc.Close()
 
@@ -189,9 +189,9 @@ func (s) TestTLS_CipherSuites(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	cc, err := grpc.Dial("dns:"+ss.Address, grpc.WithTransportCredentials(clientCreds))
+	cc, err := grpc.NewClient("dns:"+ss.Address, grpc.WithTransportCredentials(clientCreds))
 	if err != nil {
-		t.Fatalf("grpc.Dial error: %v", err)
+		t.Fatalf("grpc.NewClient error: %v", err)
 	}
 	defer cc.Close()
 
