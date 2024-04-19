@@ -86,13 +86,12 @@ gRPC:
   provided by gRPC-Go, if available, instead of manually implementing retries.
   Refer to the [gRPC-Go retry example
   documentation](https://github.com/grpc/grpc-go/blob/master/examples/features/retry/README.md)
-  for more information.
-- Avoid using `FailOnNonTempDialError`, `WithBlock`, and
-  `WithReturnConnectionError`, as these options can introduce race conditions
-  and result in unreliable and difficult-to-debug code.
-- If making the outgoing RPC in order to handle an incoming RPC, be sure to
-  translate the status code before returning the error from your method handler.
-  For example, if the error is an `INVALID_ARGUMENT` error, that probably means
+  for more information.  Note that this is not a substitute for client-side
+  retries as errors that occur after an RPC starts on a server cannot be
+  retried through gRPC's built-in mechanism.
+- If making an outgoing RPC from a server handler, be sure to translate the
+  status code before returning the error from your method handler.  For example,
+  if the error is an `INVALID_ARGUMENT` status code, that probably means
   your service has a bug (otherwise it shouldn't have triggered this error), in
   which case `INTERNAL` is more appropriate to return back to your users.
 
@@ -120,12 +119,10 @@ log.Printf("MyRPC response: %v", res)
 To determine the type of error that occurred, you can use the status field of
 the error response:
 
-
 ```go
-resp, err := client.MakeRPC(context.Background(), request)
+resp, err := client.MakeRPC(context.TODO(), request)
 if err != nil {
-  status, ok := status.FromError(err)
-  if ok {
+  if status, ok := status.FromError(err); ok {
     // Handle the error based on its status code
     if status.Code() == codes.NotFound {
       log.Println("Requested resource not found")
@@ -145,57 +142,42 @@ log.Printf("Response received: %v", resp)
 
 ### Example: Using a backoff strategy
 
-
 When retrying failed RPCs, use a backoff strategy to avoid overwhelming the
 server or exacerbating network issues:
-
 
 ```go
 var res *MyResponse
 var err error
 
-// If the user doesn't have a context with a deadline, create one
-ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-defer cancel()
+retryableStatusCodes := map[codes.Code]bool{
+  codes.Unavailable: true, // etc
+}
 
-// Retry the RPC call a maximum number of times
+// Retry the RPC a maximum number of times.
 for i := 0; i < maxRetries; i++ {
+    // Make the RPC.
+    res, err = client.MyRPC(context.TODO(), &MyRequest{})
 
-    // Make the RPC call
-    res, err = client.MyRPC(ctx, &MyRequest{})
-
-    // Check if the RPC call was successful
-    if err == nil {
-        // The RPC was successful, so break out of the loop
+    // Check if the RPC was successful.
+    if !retryableStatusCodes[status.Code(err)] {
+        // The RPC was successful or errored in a non-retryable way;
+        // do not retry.
         break
     }
 
-    // The RPC failed, so wait for a backoff period before retrying
-    backoff := time.Duration(i) * time.Second
+    // The RPC is retryable; wait for a backoff period before retrying.
+    backoff := time.Duration(i+1) * time.Second
     log.Printf("Error calling MyRPC: %v; retrying in %v", err, backoff)
     time.Sleep(backoff)
 }
 
-// Check if the RPC call was successful after all retries
+// Check if the RPC was successful after all retries.
 if err != nil {
     // All retries failed, so handle the error appropriately
     log.Printf("Error calling MyRPC: %v", err)
     return nil, err
 }
 
-// Use the response as appropriate
+// Use the response as appropriate.
 log.Printf("MyRPC response: %v", res)
 ```
-
-
-## Conclusion
-
-The
-[`FailOnNonTempDialError`](https://pkg.go.dev/google.golang.org/grpc#FailOnNonTempDialError),
-[`WithBlock`](https://pkg.go.dev/google.golang.org/grpc#WithBlock), and
-[`WithReturnConnectionError`](https://pkg.go.dev/google.golang.org/grpc#WithReturnConnectionError)
-options are designed to handle errors at dial time, but they can introduce race
-conditions and result in unreliable and difficult-to-debug code.  Instead of
-relying on these options, we strongly encourage developers to use
-`grpc.NewClient`.  By following best practices for error handling in gRPC,
-developers can write more reliable and robust gRPC applications.
