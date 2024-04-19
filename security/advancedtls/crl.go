@@ -583,6 +583,7 @@ func extractCRLIssuer(crlBytes []byte) ([]byte, error) {
 	}
 	der := cryptobyte.String(crlBytes)
 	var issuer cryptobyte.String
+	//lint:ignore SA4000 Not really sure whyy.
 	if !der.ReadASN1(&der, cbasn1.SEQUENCE) ||
 		!der.ReadASN1(&der, cbasn1.SEQUENCE) ||
 		!der.SkipOptionalASN1(cbasn1.INTEGER) ||
