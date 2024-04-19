@@ -279,9 +279,9 @@ func (s) TestAuditLogger(t *testing.T) {
 			go s.Serve(lis)
 
 			// Setup gRPC test client with certificates containing a SPIFFE Id.
-			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(clientCreds))
+			clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(clientCreds))
 			if err != nil {
-				t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
+				t.Fatalf("grpc.NewClient(%v) failed: %v", lis.Addr().String(), err)
 			}
 			defer clientConn.Close()
 			client := testgrpc.NewTestServiceClient(clientConn)

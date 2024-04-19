@@ -413,7 +413,7 @@ func (x) TestReflectionEnd2end(t *testing.T) {
 	t.Cleanup(s.Stop)
 
 	// Create client.
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("cannot connect to server: %v", err)
 	}

@@ -56,7 +56,7 @@ func makeRPCs(cc *grpc.ClientConn, n int) {
 }
 
 func main() {
-	passthroughConn, err := grpc.Dial(
+	passthroughConn, err := grpc.NewClient(
 		fmt.Sprintf("passthrough:///%s", backendAddr), // Dial to "passthrough:///localhost:50051"
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
@@ -70,7 +70,7 @@ func main() {
 
 	fmt.Println()
 
-	exampleConn, err := grpc.Dial(
+	exampleConn, err := grpc.NewClient(
 		fmt.Sprintf("%s:///%s", exampleScheme, exampleServiceName), // Dial to "example:///resolver.example.grpc.io"
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
