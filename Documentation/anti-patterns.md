@@ -1,95 +1,71 @@
-## Anti-Patterns
+## Anti-Patterns of Client creation
 
-### Dialing in gRPC
+### How to properly create a `ClientConn`: `grpc.NewClient`
 
-[`grpc.NewClient`](https://pkg.go.dev/google.golang.org/grpc#NewClient) is a
-function in the gRPC library that creates a virtual connection from the gRPC
-client to the gRPC server.  It takes a target URI (which can represent the name
-of a logical backend service and could resolve to multiple actual addresses) and
+[`grpc.NewClient`](https://pkg.go.dev/google.golang.org/grpc#NewClient) is the
+function in the gRPC library that creates a virtual connection from a client
+application to a gRPC server.  It takes a target URI (which represents the name
+of a logical backend service and resolves to one or more physical addresses) and
 a list of options, and returns a
 [`ClientConn`](https://pkg.go.dev/google.golang.org/grpc#ClientConn) object that
-represents the connection to the server.  The `ClientConn` contains one or more
-actual connections to real server backends and attempts to keep these
-connections healthy by automatically reconnecting to them when they break.
-`NewClient` is made available from gRPC-Go >v1.63.
+represents the virtual connection to the server.  The `ClientConn` contains one
+or more actual connections to real servers and attempts to maintain these
+connections by automatically reconnecting to them when they break.  `NewClient`
+was introduced in gRPC-Go v1.63.
 
-`grpc.NewClient` automatically ignores `DialOptions` returned by `WithBlock`,
-`WithTimeout`, `WithReturnConnectionError`, and `FailOnNonTempDialError.
+### The wrong way: `grpc.Dial`
 
-### Difference between Dial and NewClient
+[`grpc.Dial`](https://pkg.go.dev/google.golang.org/grpc#Dial) is a deprecated
+function that also creates the same virtual connection pool as `grpc.NewClient`.
+However, unlike `grpc.NewClient`, it immediately starts connecting and supports
+a few additional `DialOption`s that control this initial connection attempt.
+These are: `WithBlock`, `WithTimeout`, `WithReturnConnectionError`, and
+`FailOnNonTempDialError.
 
-`grpc.Dial` uses passthrough as the default name resolver for backward
-compatibility while `grpc.NewClient` uses dns as its default name resolver.  This
-subtle diffrence is crucial in legacy systems that specify a custom dialer and
-expect it to receive the target string directly.  However, the usage of `Dial`
-and `DialContext` is discouraged and from gRPC-Go v1.63 users should use
-`grpc.NewClient` instead.  But keep in mind, `Dial` and `DialContext` will be
-supported throughout 1.x.
+That `grpc.Dial` creates connections immediately is not a problem in and of
+itself, but this behavior differs from how gRPC works in all other languages,
+and it can be convenient to have a constructor that does not perform I/O.  It
+can also be confusing to users, as most people expect a function called `Dial`
+to create _a_ connection which may need to be recreated if it is lost.
 
-#### Why is using grpc.Dial discouraged
+`grpc.Dial` uses "passthrough" as the default name resolver for backward
+compatibility while `grpc.NewClient` uses "dns" as its default name resolver.
+This subtle diffrence is important to legacy systems that also specified a
+custom dialer and expected it to receive the target string directly.
 
-[`grpc.Dial`](https://pkg.go.dev/google.golang.org/grpc#NewClient) is also a
-function in the gRPC library that creates a virtual connection from the gRPC
-client to the gRPC server.  The `Dial` function can also be configured with
-various options to customize the behavior of the client connection.  For example,
-developers could use options such a
-[`WithTransportCredentials`](https://pkg.go.dev/google.golang.org/grpc#WithTransportCredentials)
-to configure the transport credentials to use.
+For these reasons, using `grpc.Dial` is discouraged.  Even though it is marked
+as deprecated, we will continue to support it until a v2 is released (and no
+plans for a v2 exist at the time this was written).
 
-While `Dial` is commonly referred to as a "dialing" function, it doesn't
-actually perform the low-level network dialing operation like
-[`net.Dial`](https://pkg.go.dev/net#Dial) would.  Instead, it creates a virtual
-connection from the gRPC client to the gRPC server.
+### Especially bad: using deprecated `DialOptions`
 
-`Dial` does initiate the process of connecting to the server, but it uses the
-ClientConn object to manage and maintain that connection over time.  This is why
-errors encountered during the initial connection are no different from those
-that occur later on, and why it's important to handle errors from RPCs rather
-than relying on options like
-[`FailOnNonTempDialError`](https://pkg.go.dev/google.golang.org/grpc#FailOnNonTempDialError),
-[`WithBlock`](https://pkg.go.dev/google.golang.org/grpc#WithBlock), and
-[`WithReturnConnectionError`](https://pkg.go.dev/google.golang.org/grpc#WithReturnConnectionError).
-In fact, `Dial` does not always establish a connection to servers by default.
-The connection behavior is determined by the load balancing policy being used.
-For instance, an "active" load balancing policy such as Round Robin attempts to
-maintain a constant connection, while the default "pick first" policy delays
-connection until an RPC is executed.  Instead of using the WithBlock option,
-which may not be recommended in some cases, you can call the
-[`ClientConn.Connect`](https://pkg.go.dev/google.golang.org/grpc#ClientConn.Connect)
-method to explicitly initiate a connection.
+`FailOnNonTempDialError`, `WithBlock`, and `WithReturnConnectionError` are three
+`DialOption`s that are only supported by `Dial` because they only affect the
+behavior of `Dial` itself. `WithBlock` causes `Dial` to wait until the
+`ClientConn` reports its `State` as `connectivity.Connected`.  The other two deal
+with returning connection errors before the timeout (`WithTimeout` or on the
+context when using `DialContext`).
 
-### Using `FailOnNonTempDialError`, `WithBlock`, and `WithReturnConnectionError`
+The reason these options can be a problem is that connections with a
+`ClientConn` are dynamic -- they may come and go over time.  If your client
+successfully connects, the server could go down 1 second later, and your RPCs
+will fail.  "Knowing you are connected" does not tell you much in this regard.
 
-The gRPC API provides several options that can be used to configure the behavior
-of dialing and connecting to a gRPC server.  Some of these options, such as
-`FailOnNonTempDialError`, `WithBlock`, and `WithReturnConnectionError`, rely on
-failures at dial time.  However, we strongly discourage developers from using
-these options, as they can introduce race conditions and result in unreliable
-and difficult-to-debug code.
+Additionally, _all_ RPCs created on an "idle" or a "connecting" `ClientConn`
+will wait until their deadline or until a connection is established before
+failing.  This means that you don't need to check that a `ClientConn` is "ready"
+before starting your RPCs.  By default, RPCs will fail if the `ClientConn`
+enters the "transient failure" state, but setting `WaitForReady(true)` on a
+call will cause it to queue even in the "transient failure" state, and it will
+only ever fail due to a deadline, a server response, or a connection loss after
+the RPC was sent to a server.
 
-One of the most important reasons for avoiding these options, which is often
-overlooked, is that connections can fail at any point in time.  This means that
-you need to handle RPC failures caused by connection issues, regardless of
-whether a connection was never established in the first place, or if it was
-created and then immediately lost.  Implementing proper error handling for RPCs
-is crucial for maintaining the reliability and stability of your gRPC
-communication.
-
-###  Why we discourage using `FailOnNonTempDialError`, `WithBlock`, and `WithReturnConnectionError`
-
-When a client attempts to connect to a gRPC server, it can encounter a variety
-of errors, including network connectivity issues, server-side errors, and
-incorrect usage of the gRPC API.  The options `FailOnNonTempDialError`,
-`WithBlock`, and `WithReturnConnectionError` are designed to handle some of
-these errors, but they do so by relying on failures at dial time.  This means
-that they may not provide reliable or accurate information about the status of
-the connection.
-
-For example, if a client uses `WithBlock` to wait for a connection to be
-established, it may end up waiting indefinitely if the server is not responding.
-Similarly, if a client uses `WithReturnConnectionError` to return a connection
-error if dialing fails, it may miss opportunities to recover from transient
-network issues that are resolved shortly after the initial dial attempt.
+Some users of `Dial` use it as a way to validate the configuration of their
+system.  If you wish to maintain this behavior but migrate to `NewClient`, you
+can call `State` and `WaitForStateChange` until the channel is connected.
+However, if this fails, it does not mean that your configuration was bad - it
+could also mean the service is not reachable by the client due to connectivity
+reasons.
 
 ## Best practices for error handling in gRPC
 
