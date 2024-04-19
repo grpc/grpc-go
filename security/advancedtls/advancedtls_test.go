@@ -734,19 +734,19 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// Server: set valid credentials with the revocation config
 		// Expected Behavior: success, because none of the certificate chains sent in the connection are revoked
 		{
-			desc:             "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; mutualTLS",
-			clientCert:       []tls.Certificate{cs.ClientCert1},
-			clientGetRoot:    getRootCAsForClient,
-			clientVerifyFunc: clientVerifyFuncGood,
+			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; mutualTLS",
+			clientCert:             []tls.Certificate{cs.ClientCert1},
+			clientGetRoot:          getRootCAsForClient,
+			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVerificationType: CertVerification,
 			clientRevocationOptions: &RevocationOptions{
 				RootDir:           testdata.Path("crl"),
 				AllowUndetermined: true,
 				Cache:             cache,
 			},
-			serverMutualTLS: true,
-			serverCert:      []tls.Certificate{cs.ServerCert1},
-			serverGetRoot:   getRootCAsForServer,
+			serverMutualTLS:        true,
+			serverCert:             []tls.Certificate{cs.ServerCert1},
+			serverGetRoot:          getRootCAsForServer,
 			serverVerificationType: CertVerification,
 			serverRevocationOptions: &RevocationOptions{
 				RootDir:           testdata.Path("crl"),
@@ -762,12 +762,12 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientCert:              []tls.Certificate{cs.ClientCertForCRL},
 			clientGetRoot:           getRootCAsForClientCRL,
 			clientVerifyFunc:        clientVerifyFuncGood,
-			clientVerificationType: CertVerification,
+			clientVerificationType:  CertVerification,
 			clientRevocationOptions: makeStaticCRLRevocationOptions(testdata.Path("crl/provider_crl_empty.pem"), true),
 			serverMutualTLS:         true,
 			serverCert:              []tls.Certificate{cs.ServerCertForCRL},
 			serverGetRoot:           getRootCAsForServerCRL,
-			serverVerificationType:             CertVerification,
+			serverVerificationType:  CertVerification,
 		},
 		// Client: set valid credentials with the revocation config
 		// Server: set revoked credentials with the revocation config
@@ -777,12 +777,12 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientCert:              []tls.Certificate{cs.ClientCertForCRL},
 			clientGetRoot:           getRootCAsForClientCRL,
 			clientVerifyFunc:        clientVerifyFuncGood,
-			clientVerificationType: CertVerification,
+			clientVerificationType:  CertVerification,
 			clientRevocationOptions: makeStaticCRLRevocationOptions(testdata.Path("crl/provider_crl_server_revoked.pem"), true),
 			serverMutualTLS:         true,
 			serverCert:              []tls.Certificate{cs.ServerCertForCRL},
 			serverGetRoot:           getRootCAsForServerCRL,
-			serverVerificationType: CertVerification,
+			serverVerificationType:  CertVerification,
 			serverExpectError:       true,
 		},
 		// Client: set valid credentials with the revocation config
@@ -794,12 +794,12 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientCert:              []tls.Certificate{cs.ClientCertForCRL},
 			clientGetRoot:           getRootCAsForClientCRL,
 			clientVerifyFunc:        clientVerifyFuncGood,
-			clientVerificationType: CertVerification,
+			clientVerificationType:  CertVerification,
 			clientRevocationOptions: makeStaticCRLRevocationOptions(testdata.Path("crl/provider_malicious_crl_empty.pem"), false),
 			serverMutualTLS:         true,
 			serverCert:              []tls.Certificate{cs.ServerCertForCRL},
 			serverGetRoot:           getRootCAsForServerCRL,
-			serverVerificationType: CertVerification,
+			serverVerificationType:  CertVerification,
 			serverExpectError:       true,
 		},
 	} {
@@ -824,12 +824,8 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				},
 				RequireClientCert: test.serverMutualTLS,
 				VerifyPeer:        test.serverVerifyFunc,
-<<<<<<< HEAD
 				VerificationType:  test.serverVerificationType,
 				RevocationOptions: test.serverRevocationOptions,
-=======
-				RevocationConfig:  test.serverRevocationConfig,
->>>>>>> master
 			}
 			go func(done chan credentials.AuthInfo, lis net.Listener, serverOptions *ServerOptions) {
 				serverRawConn, err := lis.Accept()
@@ -871,13 +867,8 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					GetRootCertificates: test.clientGetRoot,
 					RootProvider:        test.clientRootProvider,
 				},
-<<<<<<< HEAD
-				VType:             test.clientVType,
+				VerificationType:  test.clientVerificationType,
 				RevocationOptions: test.clientRevocationOptions,
-=======
-				VerificationType: test.clientVerificationType,
-				RevocationConfig: test.clientRevocationConfig,
->>>>>>> master
 			}
 			clientTLS, err := NewClientCreds(clientOptions)
 			if err != nil {
