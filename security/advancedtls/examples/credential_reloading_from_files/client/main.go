@@ -82,7 +82,7 @@ func main() {
 		RootOptions: advancedtls.RootCertificateOptions{
 			RootProvider: rootProvider,
 		},
-		VType: advancedtls.CertVerification,
+		VerificationType: advancedtls.CertVerification,
 	}
 	clientTLSCreds, err := advancedtls.NewClientCreds(options)
 	if err != nil {
