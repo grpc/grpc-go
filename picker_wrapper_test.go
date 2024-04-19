@@ -70,8 +70,7 @@ func (s) TestBlockingPickTimeout(t *testing.T) {
 	bp := newPickerWrapper(nil)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
-	var err error
-	if _, _, err = bp.pick(ctx, true, balancer.PickInfo{}); status.Code(err) != codes.DeadlineExceeded {
+	if _, _, err := bp.pick(ctx, true, balancer.PickInfo{}); status.Code(err) != codes.DeadlineExceeded {
 		t.Errorf("bp.pick returned error %v, want DeadlineExceeded", err)
 	}
 }
