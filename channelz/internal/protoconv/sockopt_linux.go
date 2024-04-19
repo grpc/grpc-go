@@ -21,9 +21,10 @@ package protoconv
 import (
 	"time"
 
-	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
+
+	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 )

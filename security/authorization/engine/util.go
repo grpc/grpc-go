@@ -40,7 +40,7 @@ func compileCel(env *cel.Env, expr string) (*cel.Ast, error) {
 		return nil, iss.Err()
 	}
 	// Check the result type is a Boolean.
-	if !proto.Equal(checked.ResultType(), decls.Bool) {
+	if ot, _ := cel.TypeToExprType(checked.OutputType()); !proto.Equal(ot, decls.Bool) {
 		return nil, errors.New("failed to compile CEL string: get non-bool value")
 	}
 	return checked, nil

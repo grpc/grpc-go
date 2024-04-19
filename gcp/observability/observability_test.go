@@ -39,7 +39,6 @@ import (
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/metadata"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -64,21 +63,16 @@ func init() {
 }
 
 var (
-	defaultTestTimeout        = 10 * time.Second
-	testHeaderMetadata        = metadata.MD{"header": []string{"HeADer"}}
-	testTrailerMetadata       = metadata.MD{"trailer": []string{"TrAileR"}}
-	testOkPayload             = []byte{72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100}
-	testErrorPayload          = []byte{77, 97, 114, 116, 104, 97}
-	testErrorMessage          = "test case injected error"
-	infinitySizeBytes   int32 = 1024 * 1024 * 1024
-	defaultRequestCount       = 24
+	defaultTestTimeout  = 10 * time.Second
+	testOkPayload       = []byte{72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100}
+	defaultRequestCount = 24
 )
 
 const (
-	TypeOpenCensusViewDistribution string = "distribution"
-	TypeOpenCensusViewCount               = "count"
-	TypeOpenCensusViewSum                 = "sum"
-	TypeOpenCensusViewLastValue           = "last_value"
+	TypeOpenCensusViewDistribution = "distribution"
+	TypeOpenCensusViewCount        = "count"
+	TypeOpenCensusViewSum          = "sum"
+	TypeOpenCensusViewLastValue    = "last_value"
 )
 
 type fakeOpenCensusExporter struct {
@@ -503,12 +497,12 @@ func (s) TestCustomTagsTracingMetrics(t *testing.T) {
 		"labels":{"customtag1":"wow","customtag2":"nice"}
 	}`
 
-	cleanup, err := createTmpConfigInFileSystem(configJSON)
+	cleanup, _ := createTmpConfigInFileSystem(configJSON)
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	err = Start(ctx)
+	err := Start(ctx)
 	defer End()
 	if err != nil {
 		t.Fatalf("Start() failed with err: %v", err)
