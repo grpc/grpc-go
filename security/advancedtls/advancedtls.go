@@ -179,8 +179,9 @@ type ClientOptions struct {
 	// the `VerificationType` enum for the different options.
 	// Default: CertAndHostVerification
 	VerificationType VerificationType
-	// DEPRECATED: Renamed to `VerificationType`
 	// VType is the verification type on the client side.
+	//
+	// Deprecated: use VerificationType instead.
 	VType VerificationType
 	// RevocationConfig is the configurations for certificate revocation checks.
 	// It could be nil if such checks are not needed.
@@ -219,8 +220,9 @@ type ServerOptions struct {
 	// the `VerificationType` enum for the different options.
 	// Default: CertAndHostVerification
 	VerificationType VerificationType
-	// DEPRECATED: Renamed to `VerificationType`
 	// VType is the verification type on the server side.
+	//
+	// Deprecated: use VerificationType instead.
 	VType VerificationType
 	// RevocationConfig is the configurations for certificate revocation checks.
 	// It could be nil if such checks are not needed.
