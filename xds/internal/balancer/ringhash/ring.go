@@ -122,24 +122,20 @@ func newRing(subConns *resolver.AddressMap, minRingSize, maxRingSize uint64, log
 // Must be called with a non-empty subConns map.
 func normalizeWeights(subConns *resolver.AddressMap) ([]subConnWithWeight, float64) {
 	var weightSum uint32
-	keys := subConns.Keys()
-	for _, a := range keys {
-		weightSum += getWeightAttribute(a)
+	for _, a := range subConns.Values() {
+		weightSum += a.(*subConn).weight
 	}
-	ret := make([]subConnWithWeight, 0, len(keys))
+	ret := make([]subConnWithWeight, 0, len(subConns.Keys()))
 	min := float64(1.0)
-	for _, a := range keys {
-		v, _ := subConns.Get(a)
-		scInfo := v.(*subConn)
+	for _, a := range subConns.Values() {
+		scInfo := a.(*subConn)
 		// getWeightAttribute() returns 1 if the weight attribute is not found
 		// on the address. And since this function is guaranteed to be called
 		// with a non-empty subConns map, weightSum is guaranteed to be
 		// non-zero. So, we need not worry about divide a by zero error here.
-		nw := float64(getWeightAttribute(a)) / float64(weightSum)
+		nw := float64(scInfo.weight) / float64(weightSum)
 		ret = append(ret, subConnWithWeight{sc: scInfo, weight: nw})
-		if nw < min {
-			min = nw
-		}
+		min = math.Min(min, nw)
 	}
 	// Sort the addresses to return consistent results.
 	//
