@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/rls/internal/keys"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/pretty"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -143,7 +142,7 @@ type lbConfigJSON struct {
 //	- childPolicyConfigTargetFieldName:
 //	  - must be set and non-empty
 func (rlsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	logger.Infof("Received JSON service config: %v", pretty.ToJSON(c))
+	logger.Infof("Received JSON service config: %+v", c)
 	cfgJSON := &lbConfigJSON{}
 	if err := json.Unmarshal(c, cfgJSON); err != nil {
 		return nil, fmt.Errorf("rls: json unmarshal failed for service config %+v: %v", string(c), err)

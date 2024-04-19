@@ -482,7 +482,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 
 	// If we have a cached copy of the resource, notify the new watcher.
 	if state.cache != nil {
-		a.logger.Debugf("Resource type %q with resource name %q found in cache: %s", rType.TypeName(), resourceName, state.cache.ToJSON())
+		a.logger.Debugf("Resource type %q with resource name %q found in cache: %+v", rType.TypeName(), resourceName, state.cache)
 		resource := state.cache
 		a.serializer.Schedule(func(context.Context) { watcher.OnUpdate(resource) })
 	}

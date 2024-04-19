@@ -458,7 +458,7 @@ func (r *xdsResolver) onResourceNotFound() {
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) onListenerResourceUpdate(update xdsresource.ListenerUpdate) {
 	if r.logger.V(2) {
-		r.logger.Infof("Received update for Listener resource %q: %v", r.ldsResourceName, pretty.ToJSON(update))
+		r.logger.Infof("Received update for Listener resource %q: %+v", r.ldsResourceName, update)
 	}
 
 	r.currentListener = update
@@ -529,7 +529,7 @@ func (r *xdsResolver) onListenerResourceNotFound() {
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) onRouteConfigResourceUpdate(name string, update xdsresource.RouteConfigUpdate) {
 	if r.logger.V(2) {
-		r.logger.Infof("Received update for RouteConfiguration resource %q: %v", name, pretty.ToJSON(update))
+		r.logger.Infof("Received update for RouteConfiguration resource %q: %+v", name, update)
 	}
 
 	if r.rdsResourceName != name {

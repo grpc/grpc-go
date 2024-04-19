@@ -18,7 +18,6 @@
 package xdsresource
 
 import (
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -91,11 +90,6 @@ func (r *RouteConfigResourceData) Equal(other ResourceData) bool {
 	}
 	return proto.Equal(r.Resource.Raw, other.Raw())
 
-}
-
-// ToJSON returns a JSON string representation of the resource data.
-func (r *RouteConfigResourceData) ToJSON() string {
-	return pretty.ToJSON(r.Resource)
 }
 
 // Raw returns the underlying raw protobuf form of the route configuration

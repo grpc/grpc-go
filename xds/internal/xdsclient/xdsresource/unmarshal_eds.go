@@ -26,7 +26,6 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -122,7 +121,7 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		}
 		weight := locality.GetLoadBalancingWeight().GetValue()
 		if weight == 0 {
-			logger.Warningf("Ignoring locality %s with weight 0", pretty.ToJSON(l))
+			logger.Warningf("Ignoring locality %+v with weight 0", l)
 			continue
 		}
 		priority := locality.GetPriority()

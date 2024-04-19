@@ -33,7 +33,6 @@ import (
 	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/status"
 )
 
@@ -170,7 +169,7 @@ func (s *Server) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServer) error
 		logger.Warning("Failed to read LoadBalanceRequest from stream: %v", err)
 		return err
 	}
-	logger.Infof("Received LoadBalancerRequest:\n%s", pretty.ToJSON(req))
+	logger.Infof("Received LoadBalancerRequest:\n%+v", req)
 
 	// Initial request contains the service being load balanced for.
 	initialReq := req.GetInitialRequest()
@@ -221,7 +220,7 @@ func (s *Server) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServer) error
 			ServerList: &lbpb.ServerList{Servers: s.backends},
 		},
 	}
-	logger.Infof("Sending response with server list: %s", pretty.ToJSON(resp))
+	logger.Infof("Sending response with server list: %+v", resp)
 	if err := stream.Send(resp); err != nil {
 		logger.Warningf("Failed to send InitialLoadBalanceResponse on the stream: %v", err)
 		return err
@@ -239,7 +238,7 @@ func (s *Server) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServer) error
 		case <-s.stopped:
 			return nil
 		case <-time.After(10 * time.Second):
-			logger.Infof("Sending response with server list: %s", pretty.ToJSON(resp))
+			logger.Infof("Sending response with server list: %+v", resp)
 			if err := stream.Send(resp); err != nil {
 				logger.Warningf("Failed to send InitialLoadBalanceResponse on the stream: %v", err)
 				return err

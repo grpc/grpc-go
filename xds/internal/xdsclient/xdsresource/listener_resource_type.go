@@ -20,7 +20,6 @@ package xdsresource
 import (
 	"fmt"
 
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
@@ -128,11 +127,6 @@ func (l *ListenerResourceData) Equal(other ResourceData) bool {
 	}
 	return proto.Equal(l.Resource.Raw, other.Raw())
 
-}
-
-// ToJSON returns a JSON string representation of the resource data.
-func (l *ListenerResourceData) ToJSON() string {
-	return pretty.ToJSON(l.Resource)
 }
 
 // Raw returns the underlying raw protobuf form of the listener resource.

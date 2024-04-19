@@ -37,7 +37,6 @@ import (
 	"google.golang.org/grpc/internal/buffer"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -255,7 +254,7 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	b.stateMu.Lock()
 	if b.closed.HasFired() {
 		b.stateMu.Unlock()
-		b.logger.Warningf("Received service config after balancer close: %s", pretty.ToJSON(ccs.BalancerConfig))
+		b.logger.Warningf("Received service config after balancer close: %+v", ccs.BalancerConfig)
 		return errBalancerClosed
 	}
 

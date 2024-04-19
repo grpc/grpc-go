@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -114,7 +113,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 	}
 
 	if b.logger.V(2) {
-		b.logger.Infof("Received new config %s, resolver state %s", pretty.ToJSON(cfg), pretty.ToJSON(state.ResolverState))
+		b.logger.Infof("Received new config %+v, resolver state %+v", cfg, state.ResolverState)
 	}
 
 	var addrs []resolver.Address

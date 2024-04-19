@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/internal/pretty"
 	rlsgrpc "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 )
@@ -209,7 +208,7 @@ func (cc *controlChannel) lookup(reqKeys map[string]string, reason rlspb.RouteLo
 			Reason:          reason,
 			StaleHeaderData: staleHeaders,
 		}
-		cc.logger.Infof("Sending RLS request %+v", pretty.ToJSON(req))
+		cc.logger.Infof("Sending RLS request %+v", req)
 
 		ctx, cancel := context.WithTimeout(context.Background(), cc.rpcTimeout)
 		defer cancel()

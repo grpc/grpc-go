@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
@@ -296,7 +295,7 @@ func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, send
 		return err
 	}
 	if t.logger.V(perRPCVerbosityLevel) {
-		t.logger.Infof("ADS request sent: %v", pretty.ToJSON(req))
+		t.logger.Infof("ADS request sent: %+v", req)
 	} else {
 		t.logger.Debugf("ADS request sent for type %q, resources: %v, version %q, nonce %q", resourceURL, resourceNames, version, nonce)
 	}
@@ -310,7 +309,7 @@ func (t *Transport) recvAggregatedDiscoveryServiceResponse(stream adsStream) (re
 		return nil, "", "", "", err
 	}
 	if t.logger.V(perRPCVerbosityLevel) {
-		t.logger.Infof("ADS response received: %v", pretty.ToJSON(resp))
+		t.logger.Infof("ADS response received: %+v", resp)
 	} else {
 		t.logger.Debugf("ADS response received for type %q, version %q, nonce %q", resp.GetTypeUrl(), resp.GetVersionInfo(), resp.GetNonce())
 	}

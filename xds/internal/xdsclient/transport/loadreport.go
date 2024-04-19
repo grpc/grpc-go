@@ -26,7 +26,6 @@ import (
 
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
 	"google.golang.org/protobuf/proto"
@@ -152,7 +151,7 @@ func (t *Transport) sendLoads(ctx context.Context, stream lrsStream, clusterName
 func (t *Transport) sendFirstLoadStatsRequest(stream lrsStream, node *v3corepb.Node) error {
 	req := &v3lrspb.LoadStatsRequest{Node: node}
 	if t.logger.V(perRPCVerbosityLevel) {
-		t.logger.Infof("Sending initial LoadStatsRequest: %s", pretty.ToJSON(req))
+		t.logger.Infof("Sending initial LoadStatsRequest: %+v", req)
 	}
 	err := stream.Send(req)
 	if err == io.EOF {
@@ -167,7 +166,7 @@ func (t *Transport) recvFirstLoadStatsResponse(stream lrsStream) ([]string, time
 		return nil, 0, fmt.Errorf("failed to receive first LoadStatsResponse: %v", err)
 	}
 	if t.logger.V(perRPCVerbosityLevel) {
-		t.logger.Infof("Received first LoadStatsResponse: %s", pretty.ToJSON(resp))
+		t.logger.Infof("Received first LoadStatsResponse: %+v", resp)
 	}
 
 	rInterval := resp.GetLoadReportingInterval()
@@ -240,7 +239,7 @@ func (t *Transport) sendLoadStatsRequest(stream lrsStream, loads []*load.Data) e
 
 	req := &v3lrspb.LoadStatsRequest{ClusterStats: clusterStats}
 	if t.logger.V(perRPCVerbosityLevel) {
-		t.logger.Infof("Sending LRS loads: %s", pretty.ToJSON(req))
+		t.logger.Infof("Sending LRS loads: %+v", req)
 	}
 	err := stream.Send(req)
 	if err == io.EOF {

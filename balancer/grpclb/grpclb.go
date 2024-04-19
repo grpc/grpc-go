@@ -40,7 +40,6 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/resolver/dns"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -464,7 +463,7 @@ func (lb *lbBalancer) ResolverError(error) {
 
 func (lb *lbBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	if lb.logger.V(2) {
-		lb.logger.Infof("UpdateClientConnState: %s", pretty.ToJSON(ccs))
+		lb.logger.Infof("UpdateClientConnState: %+v", ccs)
 	}
 	gc, _ := ccs.BalancerConfig.(*grpclbServiceConfig)
 	lb.handleServiceConfig(gc)

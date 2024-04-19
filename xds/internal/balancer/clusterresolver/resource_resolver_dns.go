@@ -24,7 +24,6 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -129,7 +128,7 @@ func (dr *dnsDiscoveryMechanism) stop() {
 
 func (dr *dnsDiscoveryMechanism) UpdateState(state resolver.State) error {
 	if dr.logger.V(2) {
-		dr.logger.Infof("DNS discovery mechanism for resource %q reported an update: %s", dr.target, pretty.ToJSON(state))
+		dr.logger.Infof("DNS discovery mechanism for resource %q reported an update: %+v", dr.target, state)
 	}
 
 	dr.mu.Lock()

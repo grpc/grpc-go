@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/tlscreds"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -568,6 +567,6 @@ func newConfigFromContents(data []byte) (*Config, error) {
 	node.ClientFeatures = append(node.ClientFeatures, clientFeatureNoOverprovisioning, clientFeatureResourceWrapper)
 	config.NodeProto = node
 
-	logger.Debugf("Bootstrap config for creating xds-client: %v", pretty.ToJSON(config))
+	logger.Debugf("Bootstrap config for creating xds-client: %+v", config)
 	return config, nil
 }

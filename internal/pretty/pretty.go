@@ -32,7 +32,8 @@ const jsonIndent = "  "
 
 // ToJSON marshals the input into a json string.
 //
-// If marshal fails, it falls back to fmt.Sprintf("%+v").
+// Note that this function can take hundreds of milliseconds. If marshal fails,
+// it falls back to fmt.Sprintf("%+v").
 func ToJSON(e any) string {
 	if ee, ok := e.(protoadapt.MessageV1); ok {
 		e = protoadapt.MessageV2Of(ee)

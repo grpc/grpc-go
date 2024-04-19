@@ -20,7 +20,6 @@ package testutils
 
 import (
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -46,7 +45,7 @@ type ResolverClientConn struct {
 // the resolver. If the callback returns a non-nil error, the same will be
 // propagated to the resolver.
 func (t *ResolverClientConn) UpdateState(s resolver.State) error {
-	t.Logger.Logf("testutils.ResolverClientConn: UpdateState(%s)", pretty.ToJSON(s))
+	t.Logger.Logf("testutils.ResolverClientConn: UpdateState(%+v)", s)
 
 	if t.UpdateStateF != nil {
 		return t.UpdateStateF(s)

@@ -33,7 +33,6 @@ import (
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
@@ -287,7 +286,7 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 		}
 		b.xdsClient = c
 	}
-	b.logger.Infof("Received balancer config update: %s", pretty.ToJSON(state.BalancerConfig))
+	b.logger.Infof("Received balancer config update: %+v", state.BalancerConfig)
 
 	// The errors checked here should ideally never happen because the
 	// ServiceConfig in this case is prepared by the xdsResolver and is not
@@ -411,7 +410,7 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 		return
 	}
 
-	b.logger.Infof("Received Cluster resource: %s", pretty.ToJSON(update))
+	b.logger.Infof("Received Cluster resource: %+v", update)
 
 	// Update the watchers map with the update for the cluster.
 	state.lastUpdate = &update
