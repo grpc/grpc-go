@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 
 	"google.golang.org/grpc/credentials"
 )
@@ -46,18 +47,21 @@ func (p *Peer) String() string {
 	if p == nil {
 		return "Peer<nil>"
 	}
-	ret := "Peer{"
+	sb := &strings.Builder{}
+	sb.WriteString("Peer{")
 	if p.Addr != nil {
-		ret += fmt.Sprintf("Addr: '%s'", p.Addr.String())
+		fmt.Fprintf(sb, "Addr: '%s', ", p.Addr.String())
+	} else {
+		fmt.Fprintf(sb, "Addr: <nil>, ")
 	}
 	if p.AuthInfo != nil {
-		if len(ret) > 5 {
-			ret += ", "
-		}
-		ret += fmt.Sprintf("AuthInfo: '%s'", p.AuthInfo.AuthType())
+		fmt.Fprintf(sb, "AuthInfo: '%s'", p.AuthInfo.AuthType())
+	} else {
+		fmt.Fprintf(sb, "AuthInfo: <nil>")
 	}
-	ret += "}"
-	return ret
+	sb.WriteString("}")
+
+	return sb.String()
 }
 
 type peerKey struct{}

@@ -103,15 +103,15 @@ func TestPeerStringer(t *testing.T) {
 		{
 			addr:      &addr{"1.2.3.4:1234"},
 			authLevel: -1,
-			want:      "Peer{Addr: '1.2.3.4:1234'}",
+			want:      "Peer{Addr: '1.2.3.4:1234', AuthInfo: <nil>}",
 		},
 		{
 			authLevel: credentials.InvalidSecurityLevel,
-			want:      "Peer{AuthInfo: 'testAuthInfo'}",
+			want:      "Peer{Addr: <nil>, AuthInfo: 'testAuthInfo'}",
 		},
 		{
 			authLevel: -1,
-			want:      "Peer{}",
+			want:      "Peer{Addr: <nil>, AuthInfo: <nil>}",
 		},
 	}
 	for _, tc := range testCases {
