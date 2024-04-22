@@ -50,7 +50,7 @@ const (
 type MetricsServiceClient interface {
 	// Returns the values of all the gauges that are currently being maintained by
 	// the service
-	GetAllGauges(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (grpc.ServerStreamClient[GaugeResponse], error)
+	GetAllGauges(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GaugeResponse], error)
 	// Returns the value of one gauge
 	GetGauge(ctx context.Context, in *GaugeRequest, opts ...grpc.CallOption) (*GaugeResponse, error)
 }
@@ -63,13 +63,13 @@ func NewMetricsServiceClient(cc grpc.ClientConnInterface) MetricsServiceClient {
 	return &metricsServiceClient{cc}
 }
 
-func (c *metricsServiceClient) GetAllGauges(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (grpc.ServerStreamClient[GaugeResponse], error) {
+func (c *metricsServiceClient) GetAllGauges(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GaugeResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &MetricsService_ServiceDesc.Streams[0], MetricsService_GetAllGauges_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.StreamClientImpl[EmptyMessage, GaugeResponse]{ClientStream: stream}
+	x := &grpc.GenericClientStream[EmptyMessage, GaugeResponse]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (c *metricsServiceClient) GetAllGauges(ctx context.Context, in *EmptyMessag
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type MetricsService_GetAllGaugesClient = grpc.ServerStreamClient[GaugeResponse]
+type MetricsService_GetAllGaugesClient = grpc.ServerStreamingClient[GaugeResponse]
 
 func (c *metricsServiceClient) GetGauge(ctx context.Context, in *GaugeRequest, opts ...grpc.CallOption) (*GaugeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -98,7 +98,7 @@ func (c *metricsServiceClient) GetGauge(ctx context.Context, in *GaugeRequest, o
 type MetricsServiceServer interface {
 	// Returns the values of all the gauges that are currently being maintained by
 	// the service
-	GetAllGauges(*EmptyMessage, grpc.ServerStreamServer[GaugeResponse]) error
+	GetAllGauges(*EmptyMessage, grpc.ServerStreamingServer[GaugeResponse]) error
 	// Returns the value of one gauge
 	GetGauge(context.Context, *GaugeRequest) (*GaugeResponse, error)
 	mustEmbedUnimplementedMetricsServiceServer()
@@ -108,7 +108,7 @@ type MetricsServiceServer interface {
 type UnimplementedMetricsServiceServer struct {
 }
 
-func (UnimplementedMetricsServiceServer) GetAllGauges(*EmptyMessage, grpc.ServerStreamServer[GaugeResponse]) error {
+func (UnimplementedMetricsServiceServer) GetAllGauges(*EmptyMessage, grpc.ServerStreamingServer[GaugeResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method GetAllGauges not implemented")
 }
 func (UnimplementedMetricsServiceServer) GetGauge(context.Context, *GaugeRequest) (*GaugeResponse, error) {
@@ -132,11 +132,11 @@ func _MetricsService_GetAllGauges_Handler(srv interface{}, stream grpc.ServerStr
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(MetricsServiceServer).GetAllGauges(m, &grpc.StreamServerImpl[EmptyMessage, GaugeResponse]{ServerStream: stream})
+	return srv.(MetricsServiceServer).GetAllGauges(m, &grpc.GenericServerStream[EmptyMessage, GaugeResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type MetricsService_GetAllGaugesServer = grpc.ServerStreamServer[GaugeResponse]
+type MetricsService_GetAllGaugesServer = grpc.ServerStreamingServer[GaugeResponse]
 
 func _MetricsService_GetGauge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GaugeRequest)

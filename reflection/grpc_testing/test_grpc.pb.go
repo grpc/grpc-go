@@ -42,7 +42,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SearchServiceClient interface {
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
-	StreamingSearch(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamClient[SearchRequest, SearchResponse], error)
+	StreamingSearch(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[SearchRequest, SearchResponse], error)
 }
 
 type searchServiceClient struct {
@@ -63,25 +63,25 @@ func (c *searchServiceClient) Search(ctx context.Context, in *SearchRequest, opt
 	return out, nil
 }
 
-func (c *searchServiceClient) StreamingSearch(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamClient[SearchRequest, SearchResponse], error) {
+func (c *searchServiceClient) StreamingSearch(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[SearchRequest, SearchResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &SearchService_ServiceDesc.Streams[0], SearchService_StreamingSearch_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.StreamClientImpl[SearchRequest, SearchResponse]{ClientStream: stream}
+	x := &grpc.GenericClientStream[SearchRequest, SearchResponse]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type SearchService_StreamingSearchClient = grpc.BidiStreamClient[SearchRequest, SearchResponse]
+type SearchService_StreamingSearchClient = grpc.BidiStreamingClient[SearchRequest, SearchResponse]
 
 // SearchServiceServer is the server API for SearchService service.
 // All implementations must embed UnimplementedSearchServiceServer
 // for forward compatibility
 type SearchServiceServer interface {
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
-	StreamingSearch(grpc.BidiStreamServer[SearchRequest, SearchResponse]) error
+	StreamingSearch(grpc.BidiStreamingServer[SearchRequest, SearchResponse]) error
 	mustEmbedUnimplementedSearchServiceServer()
 }
 
@@ -92,7 +92,7 @@ type UnimplementedSearchServiceServer struct {
 func (UnimplementedSearchServiceServer) Search(context.Context, *SearchRequest) (*SearchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
 }
-func (UnimplementedSearchServiceServer) StreamingSearch(grpc.BidiStreamServer[SearchRequest, SearchResponse]) error {
+func (UnimplementedSearchServiceServer) StreamingSearch(grpc.BidiStreamingServer[SearchRequest, SearchResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method StreamingSearch not implemented")
 }
 func (UnimplementedSearchServiceServer) mustEmbedUnimplementedSearchServiceServer() {}
@@ -127,11 +127,11 @@ func _SearchService_Search_Handler(srv interface{}, ctx context.Context, dec fun
 }
 
 func _SearchService_StreamingSearch_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(SearchServiceServer).StreamingSearch(&grpc.StreamServerImpl[SearchRequest, SearchResponse]{ServerStream: stream})
+	return srv.(SearchServiceServer).StreamingSearch(&grpc.GenericServerStream[SearchRequest, SearchResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type SearchService_StreamingSearchServer = grpc.BidiStreamServer[SearchRequest, SearchResponse]
+type SearchService_StreamingSearchServer = grpc.BidiStreamingServer[SearchRequest, SearchResponse]
 
 // SearchService_ServiceDesc is the grpc.ServiceDesc for SearchService service.
 // It's only intended for direct use with grpc.RegisterService,

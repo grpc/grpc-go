@@ -317,11 +317,11 @@ func clientSignature(g *protogen.GeneratedFile, method *protogen.Method) string 
 func clientStreamInterface(g *protogen.GeneratedFile, method *protogen.Method) string {
 	typeParam := g.QualifiedGoIdent(method.Input.GoIdent) + ", " + g.QualifiedGoIdent(method.Output.GoIdent)
 	if method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
-		return g.QualifiedGoIdent(grpcPackage.Ident("BidiStreamClient")) + "[" + typeParam + "]"
+		return g.QualifiedGoIdent(grpcPackage.Ident("BidiStreamingClient")) + "[" + typeParam + "]"
 	} else if method.Desc.IsStreamingClient() {
-		return g.QualifiedGoIdent(grpcPackage.Ident("ClientStreamClient")) + "[" + typeParam + "]"
+		return g.QualifiedGoIdent(grpcPackage.Ident("ClientStreamingClient")) + "[" + typeParam + "]"
 	} else { // i.e. if method.Desc.IsStreamingServer()
-		return g.QualifiedGoIdent(grpcPackage.Ident("ServerStreamClient")) + "[" + g.QualifiedGoIdent(method.Output.GoIdent) + "]"
+		return g.QualifiedGoIdent(grpcPackage.Ident("ServerStreamingClient")) + "[" + g.QualifiedGoIdent(method.Output.GoIdent) + "]"
 	}
 }
 
@@ -347,7 +347,7 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	streamImpl := unexport(service.GoName) + method.GoName + "Client"
 	if *useGenericStreams {
 		typeParam := g.QualifiedGoIdent(method.Input.GoIdent) + ", " + g.QualifiedGoIdent(method.Output.GoIdent)
-		streamImpl = g.QualifiedGoIdent(grpcPackage.Ident("StreamClientImpl")) + "[" + typeParam + "]"
+		streamImpl = g.QualifiedGoIdent(grpcPackage.Ident("GenericClientStream")) + "[" + typeParam + "]"
 	}
 
 	serviceDescVar := service.GoName + "_ServiceDesc"
@@ -484,11 +484,11 @@ func genServiceDesc(file *protogen.File, g *protogen.GeneratedFile, serviceDescV
 func serverStreamInterface(g *protogen.GeneratedFile, method *protogen.Method) string {
 	typeParam := g.QualifiedGoIdent(method.Input.GoIdent) + ", " + g.QualifiedGoIdent(method.Output.GoIdent)
 	if method.Desc.IsStreamingClient() && method.Desc.IsStreamingServer() {
-		return g.QualifiedGoIdent(grpcPackage.Ident("BidiStreamServer")) + "[" + typeParam + "]"
+		return g.QualifiedGoIdent(grpcPackage.Ident("BidiStreamingServer")) + "[" + typeParam + "]"
 	} else if method.Desc.IsStreamingClient() {
-		return g.QualifiedGoIdent(grpcPackage.Ident("ClientStreamServer")) + "[" + typeParam + "]"
+		return g.QualifiedGoIdent(grpcPackage.Ident("ClientStreamingServer")) + "[" + typeParam + "]"
 	} else { // i.e. if method.Desc.IsStreamingServer()
-		return g.QualifiedGoIdent(grpcPackage.Ident("ServerStreamServer")) + "[" + g.QualifiedGoIdent(method.Output.GoIdent) + "]"
+		return g.QualifiedGoIdent(grpcPackage.Ident("ServerStreamingServer")) + "[" + g.QualifiedGoIdent(method.Output.GoIdent) + "]"
 	}
 }
 
@@ -518,7 +518,7 @@ func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	streamImpl := unexport(service.GoName) + method.GoName + "Server"
 	if *useGenericStreams {
 		typeParam := g.QualifiedGoIdent(method.Input.GoIdent) + ", " + g.QualifiedGoIdent(method.Output.GoIdent)
-		streamImpl = g.QualifiedGoIdent(grpcPackage.Ident("StreamServerImpl")) + "[" + typeParam + "]"
+		streamImpl = g.QualifiedGoIdent(grpcPackage.Ident("GenericServerStream")) + "[" + typeParam + "]"
 	}
 
 	g.P("func ", hnameFuncNameFormatter(hname), "(srv interface{}, stream ", grpcPackage.Ident("ServerStream"), ") error {")
