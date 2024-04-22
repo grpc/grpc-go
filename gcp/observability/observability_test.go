@@ -497,12 +497,15 @@ func (s) TestCustomTagsTracingMetrics(t *testing.T) {
 		"labels":{"customtag1":"wow","customtag2":"nice"}
 	}`
 
-	cleanup, _ := createTmpConfigInFileSystem(configJSON)
+	cleanup, err := createTmpConfigInFileSystem(configJSON)
+	if err != nil {
+		t.Fatalf("failed to create config in file system: %v", err)
+	}
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	err := Start(ctx)
+	err = Start(ctx)
 	defer End()
 	if err != nil {
 		t.Fatalf("Start() failed with err: %v", err)

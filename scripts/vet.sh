@@ -8,6 +8,11 @@ source "$(dirname $0)/vet-common.sh"
 # Check to make sure it's safe to modify the user's git repo.
 git status --porcelain | fail_on_output
 
+# Supress the return code of grep since we are using it to check for the absence of a string.
+noret_grep() {
+  grep "$@" || :
+}
+
 # Undo any edits made by this script.
 cleanup() {
   git reset --hard HEAD
@@ -42,9 +47,6 @@ not grep 'func Test[^(]' test/*.go
 # - Check for typos in test function names
 git grep --quiet 'func (s) ' -- "*_test.go" | not grep -v 'func (s) Test'
 git grep --quiet 'func [A-Z]' -- "*_test.go" | not grep -v 'func Test\|Benchmark\|Example'
-
-# - Do not import x/net/context.
-not git grep --quiet -l 'x/net/context' -- "*.go"
 
 # - Do not use time.After except in tests.  It has the potential to leak the
 #   timer since there is no way to stop it early.
@@ -83,24 +85,19 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   go mod tidy -compat=1.19
   git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
-  popd
-done
-
-for MOD_FILE in $(find . -name 'go.mod'); do
-  MOD_DIR=$(dirname ${MOD_FILE})
-  pushd ${MOD_DIR}
+  
   # - Collection of static analysis checks
   SC_OUT="$(mktemp)"
   staticcheck -go 1.19 -checks 'all' ./... >"${SC_OUT}" || true
 
   # Error for anything other than checks that need exclusions.
-  (grep -v "(ST1000)" "${SC_OUT}" || : )| (grep -v "(SA1019)" || :) | (grep -v "(ST1003)" || :) | (grep -v "(ST1019)\|\(other import of\)" || :) | not grep -v "(SA4000)"
+  noret_grep -v "(ST1000)" "${SC_OUT}" | noret_grep -v "(SA1019)" | noret_grep -v "(ST1003)" | noret_grep -v "(ST1019)\|\(other import of\)" | not grep -v "(SA4000)"
 
   # Exclude underscore checks for generated code.
-  (grep "(ST1003)" "${SC_OUT}" || :) | not grep -v '\(.pb.go:\)\|\(code_string_test.go:\)\|\(grpc_testing_not_regenerate\)'
+  noret_grep "(ST1003)" "${SC_OUT}" | not grep -v '\(.pb.go:\)\|\(code_string_test.go:\)\|\(grpc_testing_not_regenerate\)'
 
   # Error for duplicate imports not including grpc protos.
-  (grep "(ST1019)\|\(other import of\)" "${SC_OUT}" || :) | not grep -Fv 'XXXXX PleaseIgnoreUnused
+  noret_grep "(ST1019)\|\(other import of\)" "${SC_OUT}" | not grep -Fv 'XXXXX PleaseIgnoreUnused
 channelz/grpc_channelz_v1"
 go-control-plane/envoy
 grpclb/grpc_lb_v1"
@@ -115,15 +112,15 @@ reflection/grpc_reflection_v1alpha"
 XXXXX PleaseIgnoreUnused'
 
   # Error for any package comments not in generated code.
-  (grep "(ST1000)" "${SC_OUT}" || :) | not grep -v "\.pb\.go:"
+  noret_grep "(ST1000)" "${SC_OUT}" | not grep -v "\.pb\.go:"
 
   # Ignore a false positive when operands have side affectes.
   # TODO(https://github.com/dominikh/go-tools/issues/54): Remove this once the issue is fixed in staticcheck.
-  (grep "(SA4000)" "${SC_OUT}" || :) | not grep -ev "crl.go:\d*:\d*: identical expressions on the left and right side of the '||' operator (SA4000)"
+  noret_grep "(SA4000)" "${SC_OUT}" | not grep -ev "crl.go:\d*:\d*: identical expressions on the left and right side of the '||' operator (SA4000)"
 
   # Only ignore the following deprecated types/fields/functions and exclude
   # generated code.
-  (grep "(SA1019)" "${SC_OUT}" || :) | not grep -Fv 'XXXXX PleaseIgnoreUnused
+  noret_grep "(SA1019)" "${SC_OUT}" | not grep -Fv 'XXXXX PleaseIgnoreUnused
 XXXXX Protobuf related deprecation errors:
 "github.com/golang/protobuf
 .pb.go:
