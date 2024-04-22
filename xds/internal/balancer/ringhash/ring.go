@@ -126,13 +126,13 @@ func normalizeWeights(subConns *resolver.AddressMap) ([]subConnWithWeight, float
 		weightSum += a.(*subConn).weight
 	}
 	ret := make([]subConnWithWeight, 0, len(subConns.Keys()))
-	min := float64(1.0)
+	min := 1.0
 	for _, a := range subConns.Values() {
 		scInfo := a.(*subConn)
-		// getWeightAttribute() returns 1 if the weight attribute is not found
-		// on the address. And since this function is guaranteed to be called
-		// with a non-empty subConns map, weightSum is guaranteed to be
-		// non-zero. So, we need not worry about divide a by zero error here.
+		// (*subConn).weight returns 1 if the weight attribute is not found on
+		// the address. And since this function is guaranteed to be called with
+		// a non-empty subConns map, weightSum is guaranteed to be non-zero. So,
+		// we need not worry about divide by zero error here.
 		nw := float64(scInfo.weight) / float64(weightSum)
 		ret = append(ret, subConnWithWeight{sc: scInfo, weight: nw})
 		min = math.Min(min, nw)
