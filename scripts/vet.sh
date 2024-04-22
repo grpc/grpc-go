@@ -118,7 +118,7 @@ XXXXX PleaseIgnoreUnused'
   (grep "(ST1000)" "${SC_OUT}" || :) | not grep -v "\.pb\.go:"
 
   # Ignore a false positive when operands have side affectes.
-  # TODO(https://github.com/dominikh/go-tools/issues/314): Remove this once the issue is fixed in staticcheck.
+  # TODO(https://github.com/dominikh/go-tools/issues/54): Remove this once the issue is fixed in staticcheck.
   (grep "(SA4000)" "${SC_OUT}" || :) | not grep -ev "crl.go:\d*:\d*: identical expressions on the left and right side of the '||' operator (SA4000)"
 
   # Only ignore the following deprecated types/fields/functions and exclude
