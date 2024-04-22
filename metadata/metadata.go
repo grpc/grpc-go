@@ -94,13 +94,11 @@ func Pairs(kv ...string) MD {
 func (md MD) String() string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "MD{")
-	needSep := false
 	for k, v := range md {
-		if needSep {
+		if sb.Len() > 3 {
 			fmt.Fprintf(&sb, ", ")
 		}
 		fmt.Fprintf(&sb, "%s=[%s]", k, strings.Join(v, ", "))
-		needSep = true
 	}
 	fmt.Fprintf(&sb, "}")
 	return sb.String()
