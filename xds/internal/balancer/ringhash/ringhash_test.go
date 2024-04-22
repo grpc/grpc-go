@@ -419,12 +419,9 @@ func (s) TestAddrWeightChange(t *testing.T) {
 	// With the new update, the ring must look like this:
 	//   [
 	//     {idx:0 sc: {addr: testBackendAddrStrs[0], weight: 1}},
-	//     {idx:1 sc: {addr: testBackendAddrStrs[0], weight: 2}},
-	//     {idx:2 sc: {addr: testBackendAddrStrs[0], weight: 2}},
+	//     {idx:1 sc: {addr: testBackendAddrStrs[1], weight: 2}},
+	//     {idx:2 sc: {addr: testBackendAddrStrs[2], weight: 2}},
 	//   ].
-	for _, i := range p2.(*picker).ring.items {
-		t.Logf("ring items: %+v", *i)
-	}
 	if len(p2.(*picker).ring.items) != 3 {
 		t.Fatalf("new picker after changing address weight has %d entries, want 3", len(p2.(*picker).ring.items))
 	}
