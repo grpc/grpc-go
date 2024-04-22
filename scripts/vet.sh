@@ -8,7 +8,7 @@ source "$(dirname $0)/vet-common.sh"
 # Check to make sure it's safe to modify the user's git repo.
 git status --porcelain | fail_on_output
 
-# Supress the return code of grep since we are using it to check for the absence of a string.
+# Suppresses the return code of grep since grep would fail vet when there are no matches (for eg, empty file).
 noret_grep() {
   grep "$@" || :
 }
