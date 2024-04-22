@@ -73,8 +73,10 @@ type VerificationResults = PostHandshakeVerificationResults
 // PostHandshakeVerificationFunc is the function defined by users to perform
 // custom verification checks after chain building and regular handshake
 // verification has been completed.
-// PostHandshakeVerificationFunc returns nil
-// if the authorization fails; otherwise returns an empty struct.
+// PostHandshakeVerificationFunc should return (nil, error) if the authorization
+// fails, with the error containing information on why verification failed.
+// Otherwise returns a struct containing information about that results that is
+// currently empty and unused. It is left as an extension point for the future.
 type PostHandshakeVerificationFunc func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error)
 
 // CustomVerificationFunc is the function defined by users to perform custom
