@@ -23,7 +23,7 @@ import (
 	"sort"
 	"strconv"
 
-	xxhash "github.com/cespare/xxhash/v2"
+	"github.com/cespare/xxhash/v2"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
 )
@@ -101,7 +101,7 @@ func newRing(subConns *resolver.AddressMap, minRingSize, maxRingSize uint64, log
 		// updates.
 		idx := 0
 		for currentHashes < targetHashes {
-			h := xxhash.Sum64String(scw.sc.addr + "_" + strconv.Itoa(idx))
+			h := xxhash.Sum64String(scw.sc.hashKey + "_" + strconv.Itoa(idx))
 			items = append(items, &ringEntry{hash: h, sc: scw.sc})
 			idx++
 			currentHashes++
@@ -141,13 +141,13 @@ func normalizeWeights(subConns *resolver.AddressMap) ([]subConnWithWeight, float
 			min = nw
 		}
 	}
-	// Sort the addresses to return consistent results.
+	// Sort the hash keys to return consistent results.
 	//
 	// Note: this might not be necessary, but this makes sure the ring is
 	// consistent as long as the addresses are the same, for example, in cases
 	// where an address is added and then removed, the RPCs will still pick the
 	// same old SubConn.
-	sort.Slice(ret, func(i, j int) bool { return ret[i].sc.addr < ret[j].sc.addr })
+	sort.Slice(ret, func(i, j int) bool { return ret[i].sc.hashKey < ret[j].sc.hashKey })
 	return ret, min
 }
 

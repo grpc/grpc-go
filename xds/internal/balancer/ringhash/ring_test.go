@@ -23,7 +23,7 @@ import (
 	"math"
 	"testing"
 
-	xxhash "github.com/cespare/xxhash/v2"
+	"github.com/cespare/xxhash/v2"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/resolver"
 )
@@ -38,9 +38,9 @@ func init() {
 		testAddr("c", 4),
 	}
 	testSubConnMap = resolver.NewAddressMap()
-	testSubConnMap.Set(testAddrs[0], &subConn{addr: "a"})
-	testSubConnMap.Set(testAddrs[1], &subConn{addr: "b"})
-	testSubConnMap.Set(testAddrs[2], &subConn{addr: "c"})
+	testSubConnMap.Set(testAddrs[0], &subConn{hashKey: "a"})
+	testSubConnMap.Set(testAddrs[1], &subConn{hashKey: "b"})
+	testSubConnMap.Set(testAddrs[2], &subConn{hashKey: "c"})
 }
 
 func testAddr(addr string, weight uint32) resolver.Address {
@@ -60,7 +60,8 @@ func (s) TestRingNew(t *testing.T) {
 				for _, a := range testAddrs {
 					var count int
 					for _, ii := range r.items {
-						if ii.sc.addr == a.Addr {
+						// In those tests the hash key is the default, which is the address.
+						if ii.sc.hashKey == a.Addr {
 							count++
 						}
 					}

@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/ringhash"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -65,10 +66,10 @@ func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 }
 
 type subConn struct {
-	addr   string
-	weight uint32
-	sc     balancer.SubConn
-	logger *grpclog.PrefixLogger
+	hashKey string
+	weight  uint32
+	sc      balancer.SubConn
+	logger  *grpclog.PrefixLogger
 
 	mu sync.RWMutex
 	// This is the actual state of this SubConn (as updated by the ClientConn).
@@ -207,6 +208,7 @@ type ringhashBalancer struct {
 // - an address was added
 // - an address was removed
 // - an address's weight was updated
+// - an address's hash key was updated
 //
 // Note that this function doesn't trigger SubConn connecting, so all the new
 // SubConn states are Idle.
@@ -217,6 +219,10 @@ func (b *ringhashBalancer) updateAddresses(addrs []resolver.Address) bool {
 	for _, addr := range addrs {
 		addrsSet.Set(addr, true)
 		newWeight := getWeightAttribute(addr)
+		newHashKey := ringhash.GetAddrHashKey(addr)
+		if newHashKey == "" {
+			newHashKey = addr.Addr
+		}
 		if val, ok := b.subConns.Get(addr); !ok {
 			var sc balancer.SubConn
 			opts := balancer.NewSubConnOptions{
@@ -228,7 +234,7 @@ func (b *ringhashBalancer) updateAddresses(addrs []resolver.Address) bool {
 				b.logger.Warningf("Failed to create new SubConn: %v", err)
 				continue
 			}
-			scs := &subConn{addr: addr.Addr, weight: newWeight, sc: sc}
+			scs := &subConn{hashKey: newHashKey, weight: newWeight, sc: sc}
 			scs.logger = subConnPrefixLogger(b, scs)
 			scs.setState(connectivity.Idle)
 			b.state = b.csEvltr.recordTransition(connectivity.Shutdown, connectivity.Idle)
@@ -236,16 +242,23 @@ func (b *ringhashBalancer) updateAddresses(addrs []resolver.Address) bool {
 			b.scStates[sc] = scs
 			addrsUpdated = true
 		} else {
-			// We have seen this address before and created a subConn for it. If the
-			// weight associated with the address has changed, update the subConns map
-			// with the new weight. This will be used when a new ring is created.
+			// We have seen this address before and created a subConn for it. If
+			// the weight or the hash key associated with the address has
+			// changed, update the subConns map with the new weight and/or hash
+			// key. This will be used when a new ring is created.
 			//
-			// There is no need to call UpdateAddresses on the subConn at this point
-			// since *only* the weight attribute has changed, and that does not affect
-			// subConn uniqueness.
+			// There is no need to call UpdateAddresses on the subConn at this
+			// point since *only* the weight and/or hash key attribute has
+			// changed, and that does not affect subConn uniqueness.
 			scInfo := val.(*subConn)
 			if oldWeight := scInfo.weight; oldWeight != newWeight {
 				scInfo.weight = newWeight
+				b.subConns.Set(addr, scInfo)
+				// Return true to force recreation of the ring.
+				addrsUpdated = true
+			}
+			if oldHashKey := scInfo.hashKey; oldHashKey != newHashKey {
+				scInfo.hashKey = newHashKey
 				b.subConns.Set(addr, scInfo)
 				// Return true to force recreation of the ring.
 				addrsUpdated = true

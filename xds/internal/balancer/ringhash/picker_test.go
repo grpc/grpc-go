@@ -48,9 +48,9 @@ func newTestRing(cStats []connectivity.State) *ring {
 			idx:  i,
 			hash: uint64((i + 1) * 10),
 			sc: &subConn{
-				addr:  testSC.String(),
-				sc:    testSC,
-				state: st,
+				hashKey: testSC.String(),
+				sc:      testSC,
+				state:   st,
 			},
 		})
 	}

@@ -33,7 +33,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/resolver/ringhash"
 )
 
 var (
@@ -538,10 +538,10 @@ func (s) TestConnectivityStateEvaluatorRecordTransition(t *testing.T) {
 // the pointer is different. This test verifies that subConns are not recreated
 // in this scenario.
 func (s) TestAddrBalancerAttributesChange(t *testing.T) {
-	addrs1 := []resolver.Address{internal.SetLocalityID(resolver.Address{Addr: testBackendAddrStrs[0]}, internal.LocalityID{Region: "americas"})}
+	addrs1 := []resolver.Address{ringhash.SetAddrHashKey(resolver.Address{Addr: testBackendAddrStrs[0]}, "test_key")}
 	cc, b, _ := setupTest(t, addrs1)
 
-	addrs2 := []resolver.Address{internal.SetLocalityID(resolver.Address{Addr: testBackendAddrStrs[0]}, internal.LocalityID{Region: "americas"})}
+	addrs2 := []resolver.Address{ringhash.SetAddrHashKey(resolver.Address{Addr: testBackendAddrStrs[0]}, "test_key")}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{Addresses: addrs2},
 		BalancerConfig: testConfig,

@@ -98,13 +98,33 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			return nil, fmt.Errorf("duplicate endpoint with the same address %s", addr)
 		}
 		uniqueEndpointAddrs[addr] = true
+
+		hashKey := hashKey(lbEndpoint)
 		endpoints = append(endpoints, Endpoint{
 			HealthStatus: EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
 			Address:      addr,
 			Weight:       weight,
+			HashKey:      hashKey,
 		})
 	}
 	return endpoints, nil
+}
+
+// hashKey extracts and returns the hash key from the given LbEndpoint. If no
+// hash key is found, it returns an empty string.
+func hashKey(lbEndpoint *v3endpointpb.LbEndpoint) string {
+	// "The xDS resolver, described in A74, will be changed to set the hash_key
+	// endpoint attribute to the value of LbEndpoint.Metadata envoy.lb hash_key
+	// field, as described in Envoy's documentation for the ring hash load
+	// balancer." - A76
+	var hashKey string
+	envoyLB := lbEndpoint.GetMetadata().GetFilterMetadata()["envoy.lb"]
+	if envoyLB != nil {
+		if h := envoyLB.GetFields()["hash_key"]; h != nil {
+			hashKey = h.GetStringValue()
+		}
+	}
+	return hashKey
 }
 
 func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, error) {

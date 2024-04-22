@@ -27,7 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	xxhash "github.com/cespare/xxhash/v2"
+	"github.com/cespare/xxhash/v2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcutil"

@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/ringhash"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
@@ -276,6 +277,7 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 				ew = endpoint.Weight
 			}
 			addr = weightedroundrobin.SetAddrInfo(addr, weightedroundrobin.AddrInfo{Weight: lw * ew})
+			addr = ringhash.SetAddrHashKey(addr, endpoint.HashKey)
 			addrs = append(addrs, addr)
 		}
 	}

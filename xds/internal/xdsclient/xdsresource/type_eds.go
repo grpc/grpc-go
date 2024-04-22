@@ -52,6 +52,7 @@ type Endpoint struct {
 	Address      string
 	HealthStatus EndpointHealthStatus
 	Weight       uint32
+	HashKey      string
 }
 
 // Locality contains information of a locality.
