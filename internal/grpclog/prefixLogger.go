@@ -79,6 +79,34 @@ func (pl *PrefixLogger) Debugf(format string, args ...any) {
 
 }
 
+// LazyDebugf does info logging at verbose level 2, only
+// evaluating arguments if logging is enabled.
+func (pl *PrefixLogger) LazyDebugf(format string, args ...func() any) {
+	if !Logger.V(2) {
+		return
+	}
+	if pl != nil {
+		format = pl.prefix + format
+
+		// Build the argument list by evaluating the closures
+		var evaluatedArgs []any
+		for _, argFunc := range args {
+			evaluatedArgs = append(evaluatedArgs, argFunc())
+		}
+
+		pl.logger.InfoDepth(1, fmt.Sprintf(format, evaluatedArgs...))
+		return
+	}
+
+	// Build the argument list by evaluating the closures
+	var evaluatedArgs []any
+	for _, argFunc := range args {
+		evaluatedArgs = append(evaluatedArgs, argFunc())
+	}
+
+	InfoDepth(1, fmt.Sprintf(format, evaluatedArgs...))
+}
+
 // V reports whether verbosity level l is at least the requested verbose level.
 func (pl *PrefixLogger) V(l int) bool {
 	// TODO(6044): Refactor interfaces LoggerV2 and DepthLogger, and maybe
