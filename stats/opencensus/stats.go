@@ -122,9 +122,9 @@ func recordRPCData(ctx context.Context, s stats.RPCStats, mi *metricsInfo) {
 		return
 	}
 	switch st := s.(type) {
-	case *stats.InHeader, *stats.OutHeader, *stats.InTrailer, *stats.OutTrailer:
-		// Headers and Trailers are not relevant to the measures, as the
-		// measures concern number of messages and bytes for messages. This
+	case *stats.InHeader, *stats.OutHeader, *stats.InTrailer, *stats.OutTrailer, *stats.PickerUpdated:
+		// Headers, Trailers, and picker updates are not relevant to the measures,
+		// as the measures concern number of messages and bytes for messages. This
 		// aligns with flow control.
 	case *stats.Begin:
 		recordDataBegin(ctx, mi, st)
