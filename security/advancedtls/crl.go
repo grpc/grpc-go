@@ -583,7 +583,6 @@ func extractCRLIssuer(crlBytes []byte) ([]byte, error) {
 	}
 	der := cryptobyte.String(crlBytes)
 	var issuer cryptobyte.String
-
 	if !der.ReadASN1(&der, cbasn1.SEQUENCE) ||
 		!der.ReadASN1(&der, cbasn1.SEQUENCE) ||
 		!der.SkipOptionalASN1(cbasn1.INTEGER) ||
