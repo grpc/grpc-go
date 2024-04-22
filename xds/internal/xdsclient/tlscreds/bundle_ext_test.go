@@ -168,7 +168,7 @@ func (s) TestCaReloading(t *testing.T) {
 	serverCredentials := grpc.Creds(e2e.CreateServerTLSCredentials(t, tls.NoClientCert))
 	server := stubserver.StartTestService(t, nil, serverCredentials)
 
-	conn, err := grpc.Dial(
+	conn, err := grpc.NewClient(
 		server.Address,
 		grpc.WithCredentialsBundle(tlsBundle),
 		grpc.WithAuthority("x.test.example.com"),
@@ -241,7 +241,7 @@ func (s) TestMTLS(t *testing.T) {
 		t.Fatalf("Failed to create TLS bundle: %v", err)
 	}
 	defer stop()
-	conn, err := grpc.Dial(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
+	conn, err := grpc.NewClient(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
 	if err != nil {
 		t.Fatalf("Error dialing: %v", err)
 	}

@@ -31,14 +31,16 @@ popd
 protoc \
     --go-grpc_out="${TEMPDIR}" \
     --go-grpc_opt=paths=source_relative \
-    "$WORKDIR/testdata/golden.proto"
+    "examples/route_guide/routeguide/route_guide.proto"
 
-GOLDENFILE="${WORKDIR}/testdata/golden_grpc.pb.go"
-GENFILE="${TEMPDIR}/cmd/protoc-gen-go-grpc/testdata/golden_grpc.pb.go"
+GOLDENFILE="examples/route_guide/routeguide/route_guide_grpc.pb.go"
+GENFILE="${TEMPDIR}/examples/route_guide/routeguide/route_guide_grpc.pb.go"
 
-DIFF=$(diff "${GOLDENFILE}" "${GENFILE}")
+# diff is piped to [[ $? == 1 ]] to avoid exiting on diff but exit on error
+# (like if the file was not found). See man diff for more info.
+DIFF=$(diff "${GOLDENFILE}" "${GENFILE}" || [[ $? == 1 ]]) 
 if [[ -n "${DIFF}" ]]; then
-    echo -e "ERROR: Generated file golden_grpc.pb.go differs from golden file:\n${DIFF}"
+    echo -e "ERROR: Generated file differs from golden file:\n${DIFF}"
     echo -e "If you have made recent changes to protoc-gen-go-grpc," \
      "please regenerate the golden files by running:" \
      "\n\t go generate google.golang.org/grpc/..." >&2

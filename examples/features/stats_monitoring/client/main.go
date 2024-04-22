@@ -41,7 +41,7 @@ func main() {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStatsHandler(statshandler.New()),
 	}
-	conn, err := grpc.Dial(*addr, opts...)
+	conn, err := grpc.NewClient(*addr, opts...)
 	if err != nil {
 		log.Fatalf("failed to connect to server %q: %v", *addr, err)
 	}

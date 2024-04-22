@@ -103,6 +103,8 @@ type DiscoveryMechanism struct {
 	// OutlierDetection is the Outlier Detection LB configuration for this
 	// priority.
 	OutlierDetection json.RawMessage `json:"outlierDetection,omitempty"`
+	// TelemetryLabels are the telemetry labels associated with this cluster.
+	TelemetryLabels  map[string]string `json:"telemetryLabels,omitempty"`
 	outlierDetection outlierdetection.LBConfig
 }
 

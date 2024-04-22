@@ -458,7 +458,7 @@ func (s) TestGRPCLB_Basic(t *testing.T) {
 		grpc.WithContextDialer(fakeNameDialer),
 		grpc.WithUserAgent(testUserAgent),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -515,7 +515,7 @@ func (s) TestGRPCLB_Weighted(t *testing.T) {
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -595,7 +595,7 @@ func (s) TestGRPCLB_DropRequest(t *testing.T) {
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -767,7 +767,7 @@ func (s) TestGRPCLB_BalancerDisconnects(t *testing.T) {
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -938,7 +938,7 @@ func (s) TestGRPCLB_ExplicitFallback(t *testing.T) {
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}

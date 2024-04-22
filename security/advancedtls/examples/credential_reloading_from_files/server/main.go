@@ -89,7 +89,7 @@ func main() {
 			fmt.Printf("Client common name: %s.\n", params.Leaf.Subject.CommonName)
 			return &advancedtls.VerificationResults{}, nil
 		},
-		VType: advancedtls.CertVerification,
+		VerificationType: advancedtls.CertVerification,
 	}
 	serverTLSCreds, err := advancedtls.NewServerCreds(options)
 	if err != nil {

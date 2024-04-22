@@ -124,9 +124,9 @@ func (s) TestStreamWorkers_RPCsAndStop(t *testing.T) {
 	ccs := make([]*grpc.ClientConn, numChannels)
 	for i := 0; i < numChannels; i++ {
 		var err error
-		ccs[i], err = grpc.Dial(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		ccs[i], err = grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
-			t.Fatalf("[iteration: %d] grpc.Dial(%s) failed: %v", i, ss.Address, err)
+			t.Fatalf("[iteration: %d] grpc.NewClient(%s) failed: %v", i, ss.Address, err)
 		}
 		defer ccs[i].Close()
 		client := testgrpc.NewTestServiceClient(ccs[i])

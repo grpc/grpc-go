@@ -37,7 +37,6 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/idle"
-	"google.golang.org/grpc/internal/pretty"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
@@ -934,10 +933,14 @@ func equalAddresses(a, b []resolver.Address) bool {
 // updateAddrs updates ac.addrs with the new addresses list and handles active
 // connections or connection attempts.
 func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
-	ac.mu.Lock()
-	channelz.Infof(logger, ac.channelz, "addrConn: updateAddrs curAddr: %v, addrs: %v", pretty.ToJSON(ac.curAddr), pretty.ToJSON(addrs))
-
 	addrs = copyAddressesWithoutBalancerAttributes(addrs)
+	limit := len(addrs)
+	if limit > 5 {
+		limit = 5
+	}
+	channelz.Infof(logger, ac.channelz, "addrConn: updateAddrs addrs (%d of %d): %v", limit, len(addrs), addrs[:limit])
+
+	ac.mu.Lock()
 	if equalAddresses(ac.addrs, addrs) {
 		ac.mu.Unlock()
 		return
@@ -1172,6 +1175,10 @@ type addrConn struct {
 	// is received, transport is closed, ac has been torn down).
 	transport transport.ClientTransport // The current transport.
 
+	// This mutex is used on the RPC path, so its usage should be minimized as
+	// much as possible.
+	// TODO: Find a lock-free way to retrieve the transport and state from the
+	// addrConn.
 	mu      sync.Mutex
 	curAddr resolver.Address   // The current address.
 	addrs   []resolver.Address // All addresses that the resolver resolved to.

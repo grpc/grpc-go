@@ -99,9 +99,9 @@ func main() {
 		log.Fatalf("failed to load credentials: %v", err)
 	}
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(creds))
+	conn, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(creds))
 	if err != nil {
-		log.Fatalf("grpc.Dial(%q): %v", *addr, err)
+		log.Fatalf("grpc.NewClient(%q): %v", *addr, err)
 	}
 	defer conn.Close()
 
