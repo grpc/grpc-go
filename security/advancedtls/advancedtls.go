@@ -189,12 +189,12 @@ type ClientOptions struct {
 	// AdditionalPeerVerification is a custom verification check after certificate signature
 	// check.
 	// If this is set, we will perform this customized check after doing the
-	// normal check(s) indicated by setting VType.
+	// normal check(s) indicated by setting VerificationType.
 	AdditionalPeerVerification PostHandshakeVerificationFunc
 	// VerifyPeer is a custom verification check after certificate signature
 	// check.
 	// If this is set, we will perform this customized check after doing the
-	// normal check(s) indicated by setting VType.
+	// normal check(s) indicated by setting VerificationType.
 	//
 	// Deprecated: use AdditionalPeerVerification instead.
 	VerifyPeer PostHandshakeVerificationFunc
@@ -235,12 +235,12 @@ type ServerOptions struct {
 	// AdditionalPeerVerification is a custom verification check after certificate signature
 	// check.
 	// If this is set, we will perform this customized check after doing the
-	// normal check(s) indicated by setting VType.
+	// normal check(s) indicated by setting VerificationType.
 	AdditionalPeerVerification PostHandshakeVerificationFunc
 	// VerifyPeer is a custom verification check after certificate signature
 	// check.
 	// If this is set, we will perform this customized check after doing the
-	// normal check(s) indicated by setting VType.
+	// normal check(s) indicated by setting VerificationType.
 	//
 	// Deprecated: use AdditionalPeerVerification instead.
 	VerifyPeer PostHandshakeVerificationFunc

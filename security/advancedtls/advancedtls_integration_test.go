@@ -150,7 +150,6 @@ func (s) TestEnd2End(t *testing.T) {
 		serverRoot             *x509.CertPool
 		serverGetRoot          func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		serverVerifyFunc       PostHandshakeVerificationFunc
-		serverVType            VerificationType
 		serverVerificationType VerificationType
 	}{
 		// Test Scenarios:
