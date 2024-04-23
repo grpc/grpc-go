@@ -16,6 +16,7 @@
  *
  */
 
+// Package customroundrobin provides an example for the custom roundrobin balancer.
 package customroundrobin
 
 import (

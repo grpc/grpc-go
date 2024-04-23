@@ -224,7 +224,6 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 		t.Fatalf("parseRevocationList(dummyCrlFile) failed: %v", err)
 	}
 	crlExt := &CRL{certList: crl}
-	var crlIssuer pkix.Name = crl.Issuer
 
 	var revocationTests = []struct {
 		desc    string
@@ -290,7 +289,7 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 		{
 			desc: "Single unrevoked Issuer",
 			in: x509.Certificate{
-				Issuer:                crlIssuer,
+				Issuer:                crl.Issuer,
 				SerialNumber:          big.NewInt(2),
 				CRLDistributionPoints: []string{"test"},
 			},
