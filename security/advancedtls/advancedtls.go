@@ -272,9 +272,9 @@ type ServerOptions struct {
 }
 
 func (o *ClientOptions) config() (*tls.Config, error) {
-	// TODO(gtcooke94) Remove this block when remove o.VerifyPeer
-	// Set AdditionalPeerVerification if the user is still using VerifyPeer.
-	if o.VerifyPeer != nil {
+	// TODO(gtcooke94) Remove this block when o.VerifyPeer is remoed.
+	// VerifyPeer is deprecated, but do this to aid the transitory migration time.
+	if o.AdditionalPeerVerification == nil {
 		o.AdditionalPeerVerification = o.VerifyPeer
 	}
 	// TODO(gtcooke94). VType is deprecated, eventually remove this block. This
@@ -359,9 +359,9 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 }
 
 func (o *ServerOptions) config() (*tls.Config, error) {
-	// TODO(gtcooke94) Remove this block when remove o.VerifyPeer
-	// Set AdditionalPeerVerification if the user is still using VerifyPeer.
-	if o.VerifyPeer != nil {
+	// TODO(gtcooke94) Remove this block when o.VerifyPeer is remoed.
+	// VerifyPeer is deprecated, but do this to aid the transitory migration time.
+	if o.AdditionalPeerVerification == nil {
 		o.AdditionalPeerVerification = o.VerifyPeer
 	}
 	// TODO(gtcooke94). VType is deprecated, eventually remove this block. This
