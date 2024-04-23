@@ -21,16 +21,16 @@ package grpc
 // ServerStreamingClient represents the client side of a server-streaming (one
 // request, many responses) RPC. It is generic over the type of the response
 // message. It is used in generated code.
-type ServerStreamingClient[Req any] interface {
-	Recv() (*Req, error)
+type ServerStreamingClient[Res any] interface {
+	Recv() (*Res, error)
 	ClientStream
 }
 
 // ServerStreamingServer represents the server side of a server-streaming (one
 // request, many responses) RPC. It is generic over the type of the response
 // message. It is used in generated code.
-type ServerStreamingServer[Req any] interface {
-	Send(*Req) error
+type ServerStreamingServer[Res any] interface {
+	Send(*Res) error
 	ServerStream
 }
 
