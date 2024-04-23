@@ -106,7 +106,7 @@ type UsableRouteConfiguration struct {
 // ConstructUsableRouteConfiguration takes Route Configuration and converts it
 // into matchable route configuration, with instantiated HTTP Filters per route.
 func (fc *FilterChain) ConstructUsableRouteConfiguration(config RouteConfigUpdate) *UsableRouteConfiguration {
-	vhs := make([]VirtualHostWithInterceptors, len(config.VirtualHosts))
+	vhs := make([]VirtualHostWithInterceptors, 0, len(config.VirtualHosts))
 	for _, vh := range config.VirtualHosts {
 		vhwi, err := fc.convertVirtualHost(vh)
 		if err != nil {
