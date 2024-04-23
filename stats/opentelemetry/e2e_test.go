@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,19 +37,115 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata/metricdatatest"
 )
 
-func ExampleNewMetrics() {
-	// Will disable metrics, set with no metrics specified.
-	NewMetrics()
-	// Will enable these two metrics.
-	NewMetrics(ClientAttemptDuration, ServerCallDuration)
-	// Use DefaultClientMetrics to enable default client metrics. Equivalent to
-	// unset, which will pick up defaults.
+func Example_dialOption() {
+	// This is setting default bounds for a view. Setting these bounds through
+	// meter provider from SDK is recommended, as API calls in this module
+	// provide default bounds, but these calls are not guaranteed to be stable
+	// and API implementors are not required to implement bounds. Setting bounds
+	// through SDK ensures the bounds get picked up. The specific fields in
+	// Aggregation take precedence over defaults from API. For any fields unset
+	// in aggregation, defaults get picked up, so can have a mix of fields from
+	// SDK and fields created from API call. The overridden views themselves
+	// also follow same logic, only the specific views being created in the SDK
+	// use SDK information, the rest are created from API call.
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(
+		metric.WithReader(reader),
+		metric.WithView(metric.NewView(metric.Instrument{
+			Name: "grpc.client.call.duration",
+		},
+			metric.Stream{
+				Aggregation: metric.AggregationExplicitBucketHistogram{
+					Boundaries: DefaultSizeBounds, // The specific fields set in SDK take precedence over API.
+				},
+			},
+		)),
+	)
+
+	opts := Options{
+		MetricsOptions: MetricsOptions{
+			MeterProvider: provider,
+			Metrics:       DefaultMetrics, // equivalent to unset - distinct from empty
+			TargetAttributeFilter: func(str string) bool {
+				if strings.HasPrefix(str, "dns") { // Filter out DNS targets.
+					return false
+				}
+				return true
+			},
+		},
+	}
+	do := DialOption(opts)
+	cc, _ := grpc.NewClient("<target string>", do)
+	// Handle err.
+	if cc != nil {
+		defer cc.Close()
+	}
 }
 
-func ExampleMetrics_Remove() {
-	// Use DefaultClientMetrics without ClientAttemptDuration and
-	// ClientCallDurationName.
-	DefaultClientMetrics.Remove(ClientAttemptDuration, ClientCallDurationName)
+func Example_serverOption() {
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(metric.WithReader(reader))
+	opts := Options{
+		MetricsOptions: MetricsOptions{
+			MeterProvider: provider,
+			Metrics:       DefaultMetrics,
+			MethodAttributeFilter: func(str string) bool {
+				if str == "/grpc.testing.TestService/UnaryCall" {
+					return false
+				}
+				// Will allow duplex/any other type of RPC.
+				return true
+			},
+		},
+	}
+	cc, _ := grpc.NewClient("some-target", DialOption(opts))
+	// Handle err.
+	defer cc.Close()
+}
+
+func ExampleMetrics_excludeSome() {
+	// To exclude specific metrics, initialize Options as follows:
+	opts := Options{
+		MetricsOptions: MetricsOptions{
+			Metrics: DefaultMetrics.Remove(ClientAttemptDuration, ClientAttemptRcvdCompressedTotalMessageSize),
+		},
+	}
+	do := DialOption(opts)
+	cc, _ := grpc.NewClient("<target string>", do)
+	// Handle err.
+	if cc != nil {
+		defer cc.Close()
+	}
+}
+
+func ExampleMetrics_disableAll() {
+	// To disable all metrics, initialize Options as follows:
+	opts := Options{
+		MetricsOptions: MetricsOptions{
+			Metrics: NewMetrics(), // Distinct to nil, which creates default metrics. This empty set creates no metrics.
+		},
+	}
+	do := DialOption(opts)
+	cc, _ := grpc.NewClient("<target string>", do)
+	// Handle err.
+	if cc != nil {
+		defer cc.Close()
+	}
+}
+
+func ExampleMetrics_enableSome() {
+	// To only create specific metrics, initialize Options as follows:
+	opts := Options{
+		MetricsOptions: MetricsOptions{
+			Metrics: NewMetrics(ClientAttemptDuration, ClientAttemptRcvdCompressedTotalMessageSize), // only create these metrics
+		},
+	}
+	do := DialOption(opts)
+	cc, _ := grpc.NewClient("<target string>", do)
+	// Handle err.
+	if cc != nil {
+		defer cc.Close()
+	}
 }
 
 var defaultTestTimeout = 5 * time.Second
@@ -121,13 +218,13 @@ func setup(t *testing.T, tafOn bool, maf func(string) bool) (*metric.ManualReade
 	if err := ss.Start([]grpc.ServerOption{ServerOption(Options{
 		MetricsOptions: MetricsOptions{
 			MeterProvider:         provider,
-			Metrics:               DefaultServerMetrics,
+			Metrics:               DefaultMetrics,
 			TargetAttributeFilter: taf,
 			MethodAttributeFilter: maf,
 		}})}, DialOption(Options{
 		MetricsOptions: MetricsOptions{
 			MeterProvider:         provider,
-			Metrics:               DefaultClientMetrics,
+			Metrics:               DefaultMetrics,
 			TargetAttributeFilter: taf,
 			MethodAttributeFilter: maf,
 		},

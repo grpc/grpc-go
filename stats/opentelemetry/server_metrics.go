@@ -162,6 +162,3 @@ const (
 	// server transport's perspective.
 	ServerCallDuration Metric = "grpc.server.call.duration"
 )
-
-// DefaultServerMetrics are the default server metrics provided by this module.
-var DefaultServerMetrics = NewMetrics(ServerCallStarted, ServerCallSentCompressedTotalMessageSize, ServerCallRcvdCompressedTotalMessageSize, ServerCallDuration)

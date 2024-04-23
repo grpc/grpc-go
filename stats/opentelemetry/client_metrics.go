@@ -213,10 +213,7 @@ const (
 	// ClientAttemptRcvdCompressedTotalMessageSize is the compressed message
 	// bytes received per call attempt.
 	ClientAttemptRcvdCompressedTotalMessageSize Metric = "grpc.client.attempt.rcvd_total_compressed_message_size"
-	// ClientCallDurationName is the time taken by gRPC to complete an RPC from
+	// ClientCallDuration is the time taken by gRPC to complete an RPC from
 	// application's perspective.
-	ClientCallDurationName Metric = "grpc.client.call.duration"
+	ClientCallDuration Metric = "grpc.client.call.duration"
 )
-
-// DefaultClientMetrics are the default client metrics provided by this module.
-var DefaultClientMetrics = NewMetrics(ClientAttemptStarted, ClientAttemptDuration, ClientAttemptSentCompressedTotalMessageSize, ClientAttemptRcvdCompressedTotalMessageSize, ClientCallDurationName)
