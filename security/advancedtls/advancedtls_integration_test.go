@@ -138,19 +138,34 @@ func (s) TestEnd2End(t *testing.T) {
 	}
 	stage := &stageInfo{}
 	for _, test := range []struct {
+<<<<<<< HEAD
 		desc             string
 		clientCert       []tls.Certificate
 		clientGetCert    func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 		clientRoot       *x509.CertPool
 		clientGetRoot    func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		clientVerifyFunc PostHandshakeVerificationFunc
-		clientVType      VerificationType
+		clientVerificationType VerificationType
 		serverCert       []tls.Certificate
 		serverGetCert    func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 		serverRoot       *x509.CertPool
 		serverGetRoot    func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 		serverVerifyFunc PostHandshakeVerificationFunc
 		serverVType      VerificationType
+		serverVerificationType VerificationType
+=======
+		desc                   string
+		clientCert             []tls.Certificate
+		clientGetCert          func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
+		clientRoot             *x509.CertPool
+		clientGetRoot          func(params *GetRootCAsParams) (*GetRootCAsResults, error)
+		clientVerifyFunc       CustomVerificationFunc
+		serverCert             []tls.Certificate
+		serverGetCert          func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
+		serverRoot             *x509.CertPool
+		serverGetRoot          func(params *GetRootCAsParams) (*GetRootCAsResults, error)
+		serverVerifyFunc       CustomVerificationFunc
+>>>>>>> master
 	}{
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert
@@ -178,8 +193,8 @@ func (s) TestEnd2End(t *testing.T) {
 			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				return &PostHandshakeVerificationResults{}, nil
 			},
-			clientVType: CertVerification,
-			serverCert:  []tls.Certificate{cs.ServerCert1},
+			clientVerificationType: CertVerification,
+			serverCert:             []tls.Certificate{cs.ServerCert1},
 			serverGetRoot: func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 				switch stage.read() {
 				case 0, 1:
@@ -191,7 +206,7 @@ func (s) TestEnd2End(t *testing.T) {
 			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				return &PostHandshakeVerificationResults{}, nil
 			},
-			serverVType: CertVerification,
+			serverVerificationType: CertVerification,
 		},
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert
@@ -219,7 +234,7 @@ func (s) TestEnd2End(t *testing.T) {
 			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				return &PostHandshakeVerificationResults{}, nil
 			},
-			clientVType: CertVerification,
+			clientVerificationType: CertVerification,
 			serverGetCert: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
@@ -232,7 +247,7 @@ func (s) TestEnd2End(t *testing.T) {
 			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				return &PostHandshakeVerificationResults{}, nil
 			},
-			serverVType: CertVerification,
+			serverVerificationType: CertVerification,
 		},
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert
@@ -284,7 +299,7 @@ func (s) TestEnd2End(t *testing.T) {
 				}
 				return nil, fmt.Errorf("custom authz check fails")
 			},
-			clientVType: CertVerification,
+			clientVerificationType: CertVerification,
 			serverGetCert: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				switch stage.read() {
 				case 0:
@@ -297,7 +312,7 @@ func (s) TestEnd2End(t *testing.T) {
 			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				return &PostHandshakeVerificationResults{}, nil
 			},
-			serverVType: CertVerification,
+			serverVerificationType: CertVerification,
 		},
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert
@@ -317,9 +332,10 @@ func (s) TestEnd2End(t *testing.T) {
 			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				return &PostHandshakeVerificationResults{}, nil
 			},
-			clientVType: CertVerification,
-			serverCert:  []tls.Certificate{cs.ServerCert1},
-			serverRoot:  cs.ServerTrust1,
+			clientVerificationType: CertVerification,
+			serverCert:             []tls.Certificate{cs.ServerCert1},
+			serverRoot:             cs.ServerTrust1,
+			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				switch stage.read() {
 				case 0, 2:
@@ -330,7 +346,7 @@ func (s) TestEnd2End(t *testing.T) {
 					return nil, fmt.Errorf("custom authz check fails")
 				}
 			},
-			serverVType: CertVerification,
+			serverVerificationType: CertVerification,
 		},
 	} {
 		test := test
@@ -347,7 +363,7 @@ func (s) TestEnd2End(t *testing.T) {
 				},
 				RequireClientCert:          true,
 				AdditionalPeerVerification: test.serverVerifyFunc,
-				VType:                      test.serverVType,
+				VerificationType:  test.serverVerificationType,
 			}
 			serverTLSCreds, err := NewServerCreds(serverOptions)
 			if err != nil {
@@ -373,7 +389,7 @@ func (s) TestEnd2End(t *testing.T) {
 					RootCACerts:         test.clientRoot,
 					GetRootCertificates: test.clientGetRoot,
 				},
-				VType: test.clientVType,
+				VerificationType: test.clientVerificationType,
 			}
 			clientTLSCreds, err := NewClientCreds(clientOptions)
 			if err != nil {
@@ -638,7 +654,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 				AdditionalPeerVerification: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 					return &PostHandshakeVerificationResults{}, nil
 				},
-				VType: CertVerification,
+				VerificationType: CertVerification,
 			}
 			serverTLSCreds, err := NewServerCreds(serverOptions)
 			if err != nil {
@@ -664,7 +680,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 				RootOptions: RootCertificateOptions{
 					RootProvider: clientRootProvider,
 				},
-				VType: CertVerification,
+				VerificationType: CertVerification,
 			}
 			clientTLSCreds, err := NewClientCreds(clientOptions)
 			if err != nil {
@@ -731,34 +747,34 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 		t.Fatalf("cs.LoadCerts() failed, err: %v", err)
 	}
 	for _, test := range []struct {
-		desc        string
-		clientRoot  *x509.CertPool
-		clientVType VerificationType
-		serverCert  []tls.Certificate
-		serverVType VerificationType
-		expectError bool
+		desc                   string
+		clientRoot             *x509.CertPool
+		clientVerificationType VerificationType
+		serverCert             []tls.Certificate
+		serverVerificationType VerificationType
+		expectError            bool
 	}{
 		// Client side sets vType to CertAndHostVerification, and will do
 		// default hostname check. Server uses a cert without "localhost" or
 		// "127.0.0.1" as common name or SAN names, and will hence fail.
 		{
-			desc:        "Bad default hostname check",
-			clientRoot:  cs.ClientTrust1,
-			clientVType: CertAndHostVerification,
-			serverCert:  []tls.Certificate{cs.ServerCert1},
-			serverVType: CertAndHostVerification,
-			expectError: true,
+			desc:                   "Bad default hostname check",
+			clientRoot:             cs.ClientTrust1,
+			clientVerificationType: CertAndHostVerification,
+			serverCert:             []tls.Certificate{cs.ServerCert1},
+			serverVerificationType: CertAndHostVerification,
+			expectError:            true,
 		},
 		// Client side sets vType to CertAndHostVerification, and will do
 		// default hostname check. Server uses a certificate with "localhost" as
 		// common name, and will hence pass the default hostname check.
 		{
-			desc:        "Good default hostname check",
-			clientRoot:  cs.ClientTrust1,
-			clientVType: CertAndHostVerification,
-			serverCert:  []tls.Certificate{cs.ServerPeerLocalhost1},
-			serverVType: CertAndHostVerification,
-			expectError: false,
+			desc:                   "Good default hostname check",
+			clientRoot:             cs.ClientTrust1,
+			clientVerificationType: CertAndHostVerification,
+			serverCert:             []tls.Certificate{cs.ServerPeerLocalhost1},
+			serverVerificationType: CertAndHostVerification,
+			expectError:            false,
 		},
 	} {
 		test := test
@@ -769,7 +785,7 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 					Certificates: test.serverCert,
 				},
 				RequireClientCert: false,
-				VType:             test.serverVType,
+				VerificationType:  test.serverVerificationType,
 			}
 			serverTLSCreds, err := NewServerCreds(serverOptions)
 			if err != nil {
@@ -789,7 +805,7 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 				RootOptions: RootCertificateOptions{
 					RootCACerts: test.clientRoot,
 				},
-				VType: test.clientVType,
+				VerificationType: test.clientVerificationType,
 			}
 			clientTLSCreds, err := NewClientCreds(clientOptions)
 			if err != nil {
@@ -907,7 +923,7 @@ func (s) TestTLSVersions(t *testing.T) {
 					Certificates: []tls.Certificate{cs.ServerPeerLocalhost1},
 				},
 				RequireClientCert: false,
-				VType:             CertAndHostVerification,
+				VerificationType:  CertAndHostVerification,
 				MinVersion:        test.serverMinVersion,
 				MaxVersion:        test.serverMaxVersion,
 			}
@@ -929,9 +945,9 @@ func (s) TestTLSVersions(t *testing.T) {
 				RootOptions: RootCertificateOptions{
 					RootCACerts: cs.ClientTrust1,
 				},
-				VType:      CertAndHostVerification,
-				MinVersion: test.clientMinVersion,
-				MaxVersion: test.clientMaxVersion,
+				VerificationType: CertAndHostVerification,
+				MinVersion:       test.clientMinVersion,
+				MaxVersion:       test.clientMaxVersion,
 			}
 			clientTLSCreds, err := NewClientCreds(clientOptions)
 			if err != nil {

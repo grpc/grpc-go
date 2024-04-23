@@ -122,7 +122,7 @@ func (s) TestEncodeDoesntPanicOnServer(t *testing.T) {
 	defer backend.Stop()
 
 	// Create a channel to the above server.
-	cc, err := grpc.Dial(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial test backend at %q: %v", backend.Address, err)
 	}
@@ -159,7 +159,7 @@ func (s) TestDecodeDoesntPanicOnServer(t *testing.T) {
 
 	// Create a channel to the above server. Since we do not specify any codec
 	// here, the proto codec will get automatically used.
-	cc, err := grpc.Dial(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial test backend at %q: %v", backend.Address, err)
 	}
@@ -196,7 +196,7 @@ func (s) TestEncodeDoesntPanicOnClient(t *testing.T) {
 	ec := &errProtoCodec{name: t.Name(), encodingErr: encodingErr}
 
 	// Create a channel to the above server.
-	cc, err := grpc.Dial(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial test backend at %q: %v", backend.Address, err)
 	}
@@ -232,7 +232,7 @@ func (s) TestDecodeDoesntPanicOnClient(t *testing.T) {
 	ec := &errProtoCodec{name: t.Name(), decodingErr: decodingErr}
 
 	// Create a channel to the above server.
-	cc, err := grpc.Dial(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial test backend at %q: %v", backend.Address, err)
 	}
@@ -288,7 +288,7 @@ func (s) TestForceServerCodec(t *testing.T) {
 	defer backend.Stop()
 
 	// Create a channel to the above server.
-	cc, err := grpc.Dial(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial test backend at %q: %v", backend.Address, err)
 	}

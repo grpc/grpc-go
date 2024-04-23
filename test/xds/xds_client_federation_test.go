@@ -128,7 +128,7 @@ func (s) TestClientSideFederation(t *testing.T) {
 	}
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -213,7 +213,7 @@ func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 	}
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -258,7 +258,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 
 	// Create a ClientConn and make a successful RPC.
 	target := fmt.Sprintf("xds:///%s", serviceName)
-	cc, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
 	if err != nil {
 		t.Fatalf("Dialing target %q: %v", target, err)
 	}
@@ -327,7 +327,7 @@ func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
 	}
 
 	target := fmt.Sprintf("xds:///%s", serviceName)
-	cc, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
 	if err != nil {
 		t.Fatalf("Dialing target %q: %v", target, err)
 	}

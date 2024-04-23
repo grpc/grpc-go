@@ -43,7 +43,7 @@ var kacp = keepalive.ClientParameters{
 func main() {
 	flag.Parse()
 
-	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithKeepaliveParams(kacp))
+	conn, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithKeepaliveParams(kacp))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

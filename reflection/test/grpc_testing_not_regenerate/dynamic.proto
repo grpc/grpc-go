@@ -17,7 +17,7 @@
 
 syntax = "proto3";
 
-option go_package = "google.golang.org/grpc/reflection/grpc_testing_not_regenerate";
+option go_package = "google.golang.org/grpc/reflection/test/grpc_testing_not_regenerate";
 
 package grpc.testing;
 

@@ -20,6 +20,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -72,7 +73,7 @@ func (s) TestGracefulClientOnGoAway(t *testing.T) {
 	}
 	go s.Serve(lis)
 
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial server: %v", err)
 	}
@@ -759,5 +760,69 @@ func (s) TestTwoGoAwayPingFrames(t *testing.T) {
 	conn.Close()
 	if _, err := gsDone.Receive(ctx); err != nil {
 		t.Fatalf("Error waiting for graceful shutdown of the server: %v", err)
+	}
+}
+
+// TestClientSendsAGoAway tests the scenario where you get a go away ping
+// frames from the client during graceful shutdown.
+func (s) TestClientSendsAGoAway(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("error listening: %v", err)
+	}
+	ctCh := testutils.NewChannel()
+	go func() {
+		conn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("error in lis.Accept(): %v", err)
+		}
+		ct := newClientTester(t, conn)
+		ctCh.Send(ct)
+	}()
+	defer lis.Close()
+
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("error dialing: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	val, err := ctCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout waiting for client transport (should be given after http2 creation)")
+	}
+	ct := val.(*clientTester)
+	goAwayReceived := make(chan struct{})
+	errCh := make(chan error)
+	go func() {
+		for {
+			f, err := ct.fr.ReadFrame()
+			if err != nil {
+				return
+			}
+			switch fr := f.(type) {
+			case *http2.GoAwayFrame:
+				fr = f.(*http2.GoAwayFrame)
+				if fr.ErrCode == http2.ErrCodeNo {
+					t.Logf("GoAway received from client")
+					close(goAwayReceived)
+				}
+			default:
+				t.Errorf("server tester received unexpected frame type %T", f)
+				errCh <- fmt.Errorf("server tester received unexpected frame type %T", f)
+				close(errCh)
+			}
+		}
+	}()
+	cc.Close()
+	defer ct.conn.Close()
+	select {
+	case <-goAwayReceived:
+	case err := <-errCh:
+		t.Errorf("Error receiving the goAway: %v", err)
+	case <-ctx.Done():
+		t.Errorf("Context timed out")
 	}
 }

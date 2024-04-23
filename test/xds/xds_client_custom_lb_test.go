@@ -253,7 +253,7 @@ func (s) TestWrrLocality(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+			cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 			if err != nil {
 				t.Fatalf("Failed to dial local test server: %v", err)
 			}

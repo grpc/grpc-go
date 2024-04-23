@@ -385,9 +385,9 @@ func versions(minMajor, minMinor, maxMajor, maxMinor uint32) *altspb.RpcProtocol
 
 func establishAltsConnection(t *testing.T, handshakerAddress, serverAddress string) {
 	clientCreds := NewClientCreds(&ClientOptions{HandshakerServiceAddress: handshakerAddress})
-	conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(clientCreds))
+	conn, err := grpc.NewClient(serverAddress, grpc.WithTransportCredentials(clientCreds))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%v) failed: %v", serverAddress, err)
+		t.Fatalf("grpc.NewClient(%v) failed: %v", serverAddress, err)
 	}
 	defer conn.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestLongTimeout)

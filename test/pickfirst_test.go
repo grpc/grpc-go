@@ -80,9 +80,9 @@ func setupPickFirst(t *testing.T, backendCount int, opts ...grpc.DialOption) (*g
 		grpc.WithDefaultServiceConfig(pickFirstServiceConfig),
 	}
 	dopts = append(dopts, opts...)
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	t.Cleanup(func() { cc.Close() })
 
@@ -397,7 +397,10 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 
 	// Push an update with both addresses and shuffling disabled.  We should
 	// connect to backend 0.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0], addrs[1]}})
+	r.UpdateState(resolver.State{Endpoints: []resolver.Endpoint{
+		{Addresses: []resolver.Address{addrs[0]}},
+		{Addresses: []resolver.Address{addrs[1]}},
+	}})
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +409,10 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 	// but the channel should still be connected to backend 0.
 	shufState := resolver.State{
 		ServiceConfig: parseServiceConfig(t, r, serviceConfig),
-		Addresses:     []resolver.Address{addrs[0], addrs[1]},
+		Endpoints: []resolver.Endpoint{
+			{Addresses: []resolver.Address{addrs[0]}},
+			{Addresses: []resolver.Address{addrs[1]}},
+		},
 	}
 	r.UpdateState(shufState)
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
@@ -531,9 +537,9 @@ func setupPickFirstWithListenerWrapper(t *testing.T, backendCount int, opts ...g
 		grpc.WithDefaultServiceConfig(pickFirstServiceConfig),
 	}
 	dopts = append(dopts, opts...)
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	t.Cleanup(func() { cc.Close() })
 

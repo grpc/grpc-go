@@ -20,12 +20,6 @@
 // implementation and the protobuf representation of all the entities.
 package protoconv
 
-import (
-	"google.golang.org/grpc/grpclog"
-)
-
-var logger = grpclog.Component("channelz")
-
 func strFromPointer(s *string) string {
 	if s == nil {
 		return ""

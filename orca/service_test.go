@@ -106,9 +106,9 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
 
 	// Dial the test server.
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%s) failed: %v", lis.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(%s) failed: %v", lis.Addr().String(), err)
 	}
 	defer cc.Close()
 
