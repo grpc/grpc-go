@@ -90,9 +90,9 @@ func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
 // FileWatcherOptions represents a data structure holding a configuration for
 // FileWatcherCRLProvider.
 type FileWatcherOptions struct {
-	CRLDirectory               string          // Path of the directory containing CRL files
-	RefreshDuration            time.Duration   // Time interval (default value is 1 hour) between CRLDirectory scans, can't be smaller than 1 minute
-	CRLReloadingFailedCallback func(err error) // Custom callback executed when a CRL file can’t be processed
+	CRLDirectory               string          // Required: Path of the directory containing CRL files
+	RefreshDuration            time.Duration   // Optional, default 1 hour: Time interval between CRLDirectory scans, can't be smaller than 1 minute
+	CRLReloadingFailedCallback func(err error) // Optional: Custom callback executed when a CRL file can’t be processed
 }
 
 // FileWatcherCRLProvider implements the CRLProvider interface by periodically
