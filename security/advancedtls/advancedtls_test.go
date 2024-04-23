@@ -369,7 +369,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	getRootCAsForClient := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return &GetRootCAsResults{TrustCerts: cs.ClientTrust1}, nil
 	}
-	clientVerifyFuncGood := func(params *VerificationFuncParams) (*VerificationResults, error) {
+	clientVerifyFuncGood := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		if params.ServerName == "" {
 			return nil, errors.New("client side server name should have a value")
 		}
@@ -378,15 +378,15 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			return nil, errors.New("client side params parsing error")
 		}
 
-		return &VerificationResults{}, nil
+		return &PostHandshakeVerificationResults{}, nil
 	}
-	verifyFuncBad := func(params *VerificationFuncParams) (*VerificationResults, error) {
+	verifyFuncBad := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		return nil, fmt.Errorf("custom verification function failed")
 	}
 	getRootCAsForServer := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return &GetRootCAsResults{TrustCerts: cs.ServerTrust1}, nil
 	}
-	serverVerifyFunc := func(params *VerificationFuncParams) (*VerificationResults, error) {
+	serverVerifyFunc := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		if params.ServerName != "" {
 			return nil, errors.New("server side server name should not have a value")
 		}
@@ -395,7 +395,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			return nil, errors.New("server side params parsing error")
 		}
 
-		return &VerificationResults{}, nil
+		return &PostHandshakeVerificationResults{}, nil
 	}
 	getRootCAsForServerBad := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return nil, fmt.Errorf("bad root certificate reloading")
@@ -431,7 +431,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		clientGetCert              func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 		clientRoot                 *x509.CertPool
 		clientGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-		clientVerifyFunc           CustomVerificationFunc
+		clientVerifyFunc           PostHandshakeVerificationFunc
 		clientVerificationType     VerificationType
 		clientRootProvider         certprovider.Provider
 		clientIdentityProvider     certprovider.Provider
@@ -442,7 +442,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		serverGetCert              func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 		serverRoot                 *x509.CertPool
 		serverGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-		serverVerifyFunc           CustomVerificationFunc
+		serverVerifyFunc           PostHandshakeVerificationFunc
 		serverVerificationType     VerificationType
 		serverRootProvider         certprovider.Provider
 		serverIdentityProvider     certprovider.Provider
@@ -822,10 +822,10 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					GetRootCertificates: test.serverGetRoot,
 					RootProvider:        test.serverRootProvider,
 				},
-				RequireClientCert: test.serverMutualTLS,
-				VerifyPeer:        test.serverVerifyFunc,
-				VerificationType:  test.serverVerificationType,
-				RevocationConfig:  test.serverRevocationConfig,
+				RequireClientCert:          test.serverMutualTLS,
+				AdditionalPeerVerification: test.serverVerifyFunc,
+				VerificationType:           test.serverVerificationType,
+				RevocationConfig:           test.serverRevocationConfig,
 			}
 			go func(done chan credentials.AuthInfo, lis net.Listener, serverOptions *ServerOptions) {
 				serverRawConn, err := lis.Accept()
@@ -861,7 +861,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					GetIdentityCertificatesForClient: test.clientGetCert,
 					IdentityProvider:                 test.clientIdentityProvider,
 				},
-				VerifyPeer: test.clientVerifyFunc,
+				AdditionalPeerVerification: test.clientVerifyFunc,
 				RootOptions: RootCertificateOptions{
 					RootCACerts:         test.clientRoot,
 					GetRootCertificates: test.clientGetRoot,

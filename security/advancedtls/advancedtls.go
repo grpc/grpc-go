@@ -35,10 +35,10 @@ import (
 	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
-// VerificationFuncParams contains parameters available to users when
-// implementing CustomVerificationFunc.
+// HandshakeVerificationInfo contains information about a handshake needed for
+// verification for use when implementing the `PostHandshakeVerificationFunc`
 // The fields in this struct are read-only.
-type VerificationFuncParams struct {
+type HandshakeVerificationInfo struct {
 	// The target server name that the client connects to when establishing the
 	// connection. This field is only meaningful for client side. On server side,
 	// this field would be an empty string.
@@ -54,17 +54,36 @@ type VerificationFuncParams struct {
 	Leaf *x509.Certificate
 }
 
-// VerificationResults contains the information about results of
-// CustomVerificationFunc.
-// VerificationResults is an empty struct for now. It may be extended in the
+// VerificationFuncParams contains parameters available to users when
+// implementing CustomVerificationFunc.
+// The fields in this struct are read-only.
+//
+// Deprecated: use HandshakeVerificationInfo instead.
+type VerificationFuncParams = HandshakeVerificationInfo
+
+// PostHandshakeVerificationResults contains the information about results of
+// PostHandshakeVerificationFunc.
+// PostHandshakeVerificationResults is an empty struct for now. It may be extended in the
 // future to include more information.
-type VerificationResults struct{}
+type PostHandshakeVerificationResults struct{}
+
+// Deprecated: use PostHandshakeVerificationResults instead.
+type VerificationResults = PostHandshakeVerificationResults
+
+// PostHandshakeVerificationFunc is the function defined by users to perform
+// custom verification checks after chain building and regular handshake
+// verification has been completed.
+// PostHandshakeVerificationFunc should return (nil, error) if the authorization
+// should fail, with the error containing information on why it failed.
+type PostHandshakeVerificationFunc func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error)
 
 // CustomVerificationFunc is the function defined by users to perform custom
 // verification check.
 // CustomVerificationFunc returns nil if the authorization fails; otherwise
 // returns an empty struct.
-type CustomVerificationFunc func(params *VerificationFuncParams) (*VerificationResults, error)
+//
+// Deprecated: use PostHandshakeVerificationFunc instead.
+type CustomVerificationFunc = PostHandshakeVerificationFunc
 
 // GetRootCAsParams contains the parameters available to users when
 // implementing GetRootCAs.
@@ -167,11 +186,18 @@ type ClientOptions struct {
 	// IdentityOptions is OPTIONAL on client side. This field only needs to be
 	// set if mutual authentication is required on server side.
 	IdentityOptions IdentityCertificateOptions
+	// AdditionalPeerVerification is a custom verification check after certificate signature
+	// check.
+	// If this is set, we will perform this customized check after doing the
+	// normal check(s) indicated by setting VerificationType.
+	AdditionalPeerVerification PostHandshakeVerificationFunc
 	// VerifyPeer is a custom verification check after certificate signature
 	// check.
 	// If this is set, we will perform this customized check after doing the
-	// normal check(s) indicated by setting VType.
-	VerifyPeer CustomVerificationFunc
+	// normal check(s) indicated by setting VerificationType.
+	//
+	// Deprecated: use AdditionalPeerVerification instead.
+	VerifyPeer PostHandshakeVerificationFunc
 	// RootOptions is OPTIONAL on client side. If not set, we will try to use the
 	// default trust certificates in users' OS system.
 	RootOptions RootCertificateOptions
@@ -206,11 +232,18 @@ type ClientOptions struct {
 type ServerOptions struct {
 	// IdentityOptions is REQUIRED on server side.
 	IdentityOptions IdentityCertificateOptions
+	// AdditionalPeerVerification is a custom verification check after certificate signature
+	// check.
+	// If this is set, we will perform this customized check after doing the
+	// normal check(s) indicated by setting VerificationType.
+	AdditionalPeerVerification PostHandshakeVerificationFunc
 	// VerifyPeer is a custom verification check after certificate signature
 	// check.
 	// If this is set, we will perform this customized check after doing the
-	// normal check(s) indicated by setting VType.
-	VerifyPeer CustomVerificationFunc
+	// normal check(s) indicated by setting VerificationType.
+	//
+	// Deprecated: use AdditionalPeerVerification instead.
+	VerifyPeer PostHandshakeVerificationFunc
 	// RootOptions is OPTIONAL on server side. This field only needs to be set if
 	// mutual authentication is required(RequireClientCert is true).
 	RootOptions RootCertificateOptions
@@ -239,13 +272,18 @@ type ServerOptions struct {
 }
 
 func (o *ClientOptions) config() (*tls.Config, error) {
+	// TODO(gtcooke94) Remove this block when o.VerifyPeer is remoed.
+	// VerifyPeer is deprecated, but do this to aid the transitory migration time.
+	if o.AdditionalPeerVerification == nil {
+		o.AdditionalPeerVerification = o.VerifyPeer
+	}
 	// TODO(gtcooke94). VType is deprecated, eventually remove this block. This
 	// will ensure that users still explicitly setting `VType` will get the
 	// setting to the right place.
 	if o.VType != CertAndHostVerification {
 		o.VerificationType = o.VType
 	}
-	if o.VerificationType == SkipVerification && o.VerifyPeer == nil {
+	if o.VerificationType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("client needs to provide custom verification mechanism if choose to skip default verification")
 	}
 	// Make sure users didn't specify more than one fields in
@@ -321,13 +359,18 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 }
 
 func (o *ServerOptions) config() (*tls.Config, error) {
+	// TODO(gtcooke94) Remove this block when o.VerifyPeer is remoed.
+	// VerifyPeer is deprecated, but do this to aid the transitory migration time.
+	if o.AdditionalPeerVerification == nil {
+		o.AdditionalPeerVerification = o.VerifyPeer
+	}
 	// TODO(gtcooke94). VType is deprecated, eventually remove this block. This
 	// will ensure that users still explicitly setting `VType` will get the
 	// setting to the right place.
 	if o.VType != CertAndHostVerification {
 		o.VerificationType = o.VType
 	}
-	if o.RequireClientCert && o.VerificationType == SkipVerification && o.VerifyPeer == nil {
+	if o.RequireClientCert && o.VerificationType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
 	// Make sure users didn't specify more than one fields in
@@ -416,7 +459,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 // using TLS.
 type advancedTLSCreds struct {
 	config           *tls.Config
-	verifyFunc       CustomVerificationFunc
+	verifyFunc       PostHandshakeVerificationFunc
 	getRootCAs       func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 	isClient         bool
 	verificationType VerificationType
@@ -579,7 +622,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 		}
 		// Perform custom verification check if specified.
 		if c.verifyFunc != nil {
-			_, err := c.verifyFunc(&VerificationFuncParams{
+			_, err := c.verifyFunc(&HandshakeVerificationInfo{
 				ServerName:     serverName,
 				RawCerts:       rawCerts,
 				VerifiedChains: chains,
@@ -602,7 +645,7 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 		config:           conf,
 		isClient:         true,
 		getRootCAs:       o.RootOptions.GetRootCertificates,
-		verifyFunc:       o.VerifyPeer,
+		verifyFunc:       o.AdditionalPeerVerification,
 		verificationType: o.VerificationType,
 		revocationConfig: o.RevocationConfig,
 	}
@@ -621,7 +664,7 @@ func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) 
 		config:           conf,
 		isClient:         false,
 		getRootCAs:       o.RootOptions.GetRootCertificates,
-		verifyFunc:       o.VerifyPeer,
+		verifyFunc:       o.AdditionalPeerVerification,
 		verificationType: o.VerificationType,
 		revocationConfig: o.RevocationConfig,
 	}
