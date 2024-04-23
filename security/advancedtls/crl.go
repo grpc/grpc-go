@@ -55,8 +55,7 @@ type Cache interface {
 	Get(key any) (value any, ok bool)
 }
 
-// RevocationOptions allows a user to configure revocation using certificate
-// revocation lists (CRLs)
+// RevocationOptions allows a user to configure certificate revocation behavior.
 type RevocationOptions struct {
 	// RootDir is the directory to search for CRL files.
 	// Directory format must match OpenSSL X509_LOOKUP_hash_dir(3).
