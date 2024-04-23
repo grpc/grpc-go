@@ -459,7 +459,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 // using TLS.
 type advancedTLSCreds struct {
 	config            *tls.Config
-	verifyFunc       PostHandshakeVerificationFunc
+	verifyFunc        PostHandshakeVerificationFunc
 	getRootCAs        func(params *GetRootCAsParams) (*GetRootCAsResults, error)
 	isClient          bool
 	revocationOptions *RevocationOptions
@@ -645,7 +645,7 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 		config:            conf,
 		isClient:          true,
 		getRootCAs:        o.RootOptions.GetRootCertificates,
-		verifyFunc:       o.AdditionalPeerVerification,
+		verifyFunc:        o.AdditionalPeerVerification,
 		revocationOptions: o.RevocationOptions,
 		verificationType:  o.VerificationType,
 	}
@@ -661,20 +661,12 @@ func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) 
 		return nil, err
 	}
 	tc := &advancedTLSCreds{
-<<<<<<< HEAD
 		config:            conf,
 		isClient:          false,
 		getRootCAs:        o.RootOptions.GetRootCertificates,
-		verifyFunc:       o.AdditionalPeerVerification,
+		verifyFunc:        o.AdditionalPeerVerification,
 		revocationOptions: o.RevocationOptions,
 		verificationType:  o.VerificationType,
-=======
-		config:           conf,
-		isClient:         false,
-		getRootCAs:       o.RootOptions.GetRootCertificates,
-		verificationType: o.VerificationType,
-		revocationConfig: o.RevocationConfig,
->>>>>>> master
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
