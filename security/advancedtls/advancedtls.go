@@ -188,10 +188,17 @@ type ClientOptions struct {
 	// IdentityOptions is OPTIONAL on client side. This field only needs to be
 	// set if mutual authentication is required on server side.
 	IdentityOptions IdentityCertificateOptions
+	// AdditionalPeerVerification is a custom verification check after certificate signature
+	// check.
+	// If this is set, we will perform this customized check after doing the
+	// normal check(s) indicated by setting VType.
+	AdditionalPeerVerification PostHandshakeVerificationFunc
 	// VerifyPeer is a custom verification check after certificate signature
 	// check.
 	// If this is set, we will perform this customized check after doing the
 	// normal check(s) indicated by setting VType.
+	//
+	// Deprecated: use AdditionalPeerVerification instead.
 	VerifyPeer PostHandshakeVerificationFunc
 	// RootOptions is OPTIONAL on client side. If not set, we will try to use the
 	// default trust certificates in users' OS system.
@@ -221,10 +228,17 @@ type ClientOptions struct {
 type ServerOptions struct {
 	// IdentityOptions is REQUIRED on server side.
 	IdentityOptions IdentityCertificateOptions
+	// AdditionalPeerVerification is a custom verification check after certificate signature
+	// check.
+	// If this is set, we will perform this customized check after doing the
+	// normal check(s) indicated by setting VType.
+	AdditionalPeerVerification PostHandshakeVerificationFunc
 	// VerifyPeer is a custom verification check after certificate signature
 	// check.
 	// If this is set, we will perform this customized check after doing the
 	// normal check(s) indicated by setting VType.
+	//
+	// Deprecated: use AdditionalPeerVerification instead.
 	VerifyPeer PostHandshakeVerificationFunc
 	// RootOptions is OPTIONAL on server side. This field only needs to be set if
 	// mutual authentication is required(RequireClientCert is true).
@@ -248,7 +262,12 @@ type ServerOptions struct {
 }
 
 func (o *ClientOptions) config() (*tls.Config, error) {
-	if o.VType == SkipVerification && o.VerifyPeer == nil {
+	// TODO(gtcooke94) Remove this block when remove o.VerifyPeer
+	// Set AdditionalPeerVerification if the user is still using VerifyPeer.
+	if o.VerifyPeer != nil {
+		o.AdditionalPeerVerification = o.VerifyPeer
+	}
+	if o.VType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("client needs to provide custom verification mechanism if choose to skip default verification")
 	}
 	// Make sure users didn't specify more than one fields in
@@ -324,7 +343,12 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 }
 
 func (o *ServerOptions) config() (*tls.Config, error) {
-	if o.RequireClientCert && o.VType == SkipVerification && o.VerifyPeer == nil {
+	// TODO(gtcooke94) Remove this block when remove o.VerifyPeer
+	// Set AdditionalPeerVerification if the user is still using VerifyPeer.
+	if o.VerifyPeer != nil {
+		o.AdditionalPeerVerification = o.VerifyPeer
+	}
+	if o.RequireClientCert && o.VType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
 	// Make sure users didn't specify more than one fields in
@@ -599,7 +623,7 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 		config:           conf,
 		isClient:         true,
 		getRootCAs:       o.RootOptions.GetRootCertificates,
-		verifyFunc:       o.VerifyPeer,
+		verifyFunc:       o.AdditionalPeerVerification,
 		vType:            o.VType,
 		revocationConfig: o.RevocationConfig,
 	}
@@ -618,7 +642,7 @@ func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) 
 		config:           conf,
 		isClient:         false,
 		getRootCAs:       o.RootOptions.GetRootCertificates,
-		verifyFunc:       o.VerifyPeer,
+		verifyFunc:       o.AdditionalPeerVerification,
 		vType:            o.VType,
 		revocationConfig: o.RevocationConfig,
 	}

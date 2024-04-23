@@ -345,9 +345,9 @@ func (s) TestEnd2End(t *testing.T) {
 					RootCACerts:         test.serverRoot,
 					GetRootCertificates: test.serverGetRoot,
 				},
-				RequireClientCert: true,
-				VerifyPeer:        test.serverVerifyFunc,
-				VType:             test.serverVType,
+				RequireClientCert:          true,
+				AdditionalPeerVerification: test.serverVerifyFunc,
+				VType:                      test.serverVType,
 			}
 			serverTLSCreds, err := NewServerCreds(serverOptions)
 			if err != nil {
@@ -368,7 +368,7 @@ func (s) TestEnd2End(t *testing.T) {
 					Certificates:                     test.clientCert,
 					GetIdentityCertificatesForClient: test.clientGetCert,
 				},
-				VerifyPeer: test.clientVerifyFunc,
+				AdditionalPeerVerification: test.clientVerifyFunc,
 				RootOptions: RootCertificateOptions{
 					RootCACerts:         test.clientRoot,
 					GetRootCertificates: test.clientGetRoot,
@@ -635,7 +635,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 					RootProvider: serverRootProvider,
 				},
 				RequireClientCert: true,
-				VerifyPeer: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				AdditionalPeerVerification: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 					return &PostHandshakeVerificationResults{}, nil
 				},
 				VType: CertVerification,
@@ -658,7 +658,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 				IdentityOptions: IdentityCertificateOptions{
 					IdentityProvider: clientIdentityProvider,
 				},
-				VerifyPeer: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				AdditionalPeerVerification: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 					return &PostHandshakeVerificationResults{}, nil
 				},
 				RootOptions: RootCertificateOptions{

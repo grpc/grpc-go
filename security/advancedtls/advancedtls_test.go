@@ -794,10 +794,10 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					GetRootCertificates: test.serverGetRoot,
 					RootProvider:        test.serverRootProvider,
 				},
-				RequireClientCert: test.serverMutualTLS,
-				VerifyPeer:        test.serverVerifyFunc,
-				VType:             test.serverVType,
-				RevocationConfig:  test.serverRevocationConfig,
+				RequireClientCert:          test.serverMutualTLS,
+				AdditionalPeerVerification: test.serverVerifyFunc,
+				VType:                      test.serverVType,
+				RevocationConfig:           test.serverRevocationConfig,
 			}
 			go func(done chan credentials.AuthInfo, lis net.Listener, serverOptions *ServerOptions) {
 				serverRawConn, err := lis.Accept()
@@ -833,7 +833,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					GetIdentityCertificatesForClient: test.clientGetCert,
 					IdentityProvider:                 test.clientIdentityProvider,
 				},
-				VerifyPeer: test.clientVerifyFunc,
+				AdditionalPeerVerification: test.clientVerifyFunc,
 				RootOptions: RootCertificateOptions{
 					RootCACerts:         test.clientRoot,
 					GetRootCertificates: test.clientGetRoot,
