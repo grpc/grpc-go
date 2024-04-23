@@ -138,34 +138,20 @@ func (s) TestEnd2End(t *testing.T) {
 	}
 	stage := &stageInfo{}
 	for _, test := range []struct {
-<<<<<<< HEAD
-		desc             string
-		clientCert       []tls.Certificate
-		clientGetCert    func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
-		clientRoot       *x509.CertPool
-		clientGetRoot    func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-		clientVerifyFunc PostHandshakeVerificationFunc
-		clientVerificationType VerificationType
-		serverCert       []tls.Certificate
-		serverGetCert    func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
-		serverRoot       *x509.CertPool
-		serverGetRoot    func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-		serverVerifyFunc PostHandshakeVerificationFunc
-		serverVType      VerificationType
-		serverVerificationType VerificationType
-=======
 		desc                   string
 		clientCert             []tls.Certificate
 		clientGetCert          func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 		clientRoot             *x509.CertPool
 		clientGetRoot          func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-		clientVerifyFunc       CustomVerificationFunc
+		clientVerifyFunc       PostHandshakeVerificationFunc
+		clientVerificationType VerificationType
 		serverCert             []tls.Certificate
 		serverGetCert          func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 		serverRoot             *x509.CertPool
 		serverGetRoot          func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-		serverVerifyFunc       CustomVerificationFunc
->>>>>>> master
+		serverVerifyFunc       PostHandshakeVerificationFunc
+		serverVType            VerificationType
+		serverVerificationType VerificationType
 	}{
 		// Test Scenarios:
 		// At initialization(stage = 0), client will be initialized with cert
@@ -335,7 +321,6 @@ func (s) TestEnd2End(t *testing.T) {
 			clientVerificationType: CertVerification,
 			serverCert:             []tls.Certificate{cs.ServerCert1},
 			serverRoot:             cs.ServerTrust1,
-			serverVerifyFunc: func(params *VerificationFuncParams) (*VerificationResults, error) {
 			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				switch stage.read() {
 				case 0, 2:
@@ -363,7 +348,7 @@ func (s) TestEnd2End(t *testing.T) {
 				},
 				RequireClientCert:          true,
 				AdditionalPeerVerification: test.serverVerifyFunc,
-				VerificationType:  test.serverVerificationType,
+				VerificationType:           test.serverVerificationType,
 			}
 			serverTLSCreds, err := NewServerCreds(serverOptions)
 			if err != nil {
