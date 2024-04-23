@@ -74,7 +74,7 @@ type VerificationResults = PostHandshakeVerificationResults
 // custom verification checks after chain building and regular handshake
 // verification has been completed.
 // PostHandshakeVerificationFunc should return (nil, error) if the authorization
-// should fail, with the error containing information on why verification failed.
+// should fail, with the error containing information on why it failed.
 type PostHandshakeVerificationFunc func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error)
 
 // CustomVerificationFunc is the function defined by users to perform custom
