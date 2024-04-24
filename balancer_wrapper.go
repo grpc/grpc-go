@@ -261,9 +261,7 @@ func (acbw *acBalancerWrapper) updateState(s connectivity.State, err error) {
 }
 
 func (acbw *acBalancerWrapper) String() string {
-	acbw.ac.mu.Lock()
-	defer acbw.ac.mu.Unlock()
-	return fmt.Sprintf("SubConn(id:%d;addr:%s)", acbw.ac.channelz.ID, acbw.ac.curAddr.Addr)
+	return fmt.Sprintf("SubConn(id:%d)", acbw.ac.channelz.ID)
 }
 
 func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
