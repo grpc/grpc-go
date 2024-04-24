@@ -67,6 +67,9 @@ type VerificationFuncParams = HandshakeVerificationInfo
 // future to include more information.
 type PostHandshakeVerificationResults struct{}
 
+// VerificationResults contains the information about results of
+// CustomVerificationFunc.
+//
 // Deprecated: use PostHandshakeVerificationResults instead.
 type VerificationResults = PostHandshakeVerificationResults
 
