@@ -31,13 +31,13 @@ download_binary() {
           echo "protoc version $PROTOC_VERSION is already installed."
           return
         else
-          echo "Existing protoc version ($installed_version) differs. Installing version $PROTOC_VERSION..."
+          echo "Existing protoc version ($installed_version) differs. Kindly make sure you have $PROTOC_VERSION installed."
+#          exit 1
         fi
       else
         echo "Unable to determine installed protoc version. Starting the installation."
       fi
   fi
-  # Download URL (adjust if a newer release is available)
   DOWNLOAD_URL="https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-$2-$1.zip"
   # Download and unzip
   curl -LO "$DOWNLOAD_URL"

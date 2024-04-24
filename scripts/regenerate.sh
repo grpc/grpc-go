@@ -19,10 +19,13 @@ WORKDIR=$(mktemp -d)
 
 function finish {
   rm -rf "$WORKDIR"
+  # Revert back the PATH to client's original value
+  export PATH=RESTORED_PATH
 }
 trap finish EXIT
 
 GOBIN="${WORKDIR}"/bin
+RESTORED_PATH=PATH
 export PATH="${GOBIN}:${PATH}"
 mkdir -p "${GOBIN}"
 
@@ -48,7 +51,8 @@ mkdir -p "${WORKDIR}/googleapis/google/rpc"
 echo "curl https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto"
 curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto > "${WORKDIR}/googleapis/google/rpc/code.proto"
 
-source ./scripts/protoc_installer.sh $WORKDIR
+#chmod +x ./scripts/install_protoc.sh
+source ./scripts/install_protoc.sh $WORKDIR
 
 mkdir -p "${WORKDIR}/out"
 
