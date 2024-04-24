@@ -23,11 +23,8 @@ if [[ "$1" = "-install" ]]; then
   if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
     PROTOBUF_VERSION=25.2 # Shows up in pb.go files as v4.22.0
     PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
-    pushd /home/runner/go
-      wget https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/${PROTOC_FILENAME}
-      unzip ${PROTOC_FILENAME}
-      protoc --version # Check that the binary works.
-    popd
+    chmod +x ./scripts/install_protoc.sh
+    source ./scripts/install_protoc.sh "/home/runner/go"
   else
     # TODO: replace with install protoc when https://github.com/grpc/grpc-go/pull/7064 is merged.
     die "-install currently intended for use in CI only."
