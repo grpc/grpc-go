@@ -287,7 +287,9 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 		}
 		b.xdsClient = c
 	}
-	b.logger.Infof("Received balancer config update: %s", pretty.ToJSON(state.BalancerConfig))
+	if b.logger.V(2) {
+		b.logger.Infof("Received balancer config update: %s", pretty.ToJSON(state.BalancerConfig))
+	}
 
 	// The errors checked here should ideally never happen because the
 	// ServiceConfig in this case is prepared by the xdsResolver and is not
@@ -411,7 +413,9 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 		return
 	}
 
-	b.logger.Infof("Received Cluster resource: %s", pretty.ToJSON(update))
+	if b.logger.V(2) {
+		b.logger.Infof("Received Cluster resource: %s", pretty.ToJSON(update))
+	}
 
 	// Update the watchers map with the update for the cluster.
 	state.lastUpdate = &update

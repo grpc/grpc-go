@@ -194,5 +194,7 @@ func (ccr *ccResolverWrapper) addChannelzTraceEvent(s resolver.State) {
 	} else if len(ccr.curState.Addresses) == 0 && len(s.Addresses) > 0 {
 		updates = append(updates, "resolver returned new addresses")
 	}
-	channelz.Infof(logger, ccr.cc.channelz, "Resolver state updated: %s (%v)", pretty.ToJSON(s), strings.Join(updates, "; "))
+	if channelz.IsOn() || logger.V(2) {
+		channelz.Infof(logger, ccr.cc.channelz, "Resolver state updated: %s (%v)", pretty.ToJSON(s), strings.Join(updates, "; "))
+	}
 }

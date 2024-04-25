@@ -184,7 +184,9 @@ func (b *clusterResolverBalancer) handleClientConnUpdate(update *ccUpdate) {
 		return
 	}
 
-	b.logger.Infof("Received new balancer config: %v", pretty.ToJSON(update.state.BalancerConfig))
+	if b.logger.V(2) {
+		b.logger.Infof("Received new balancer config: %v", pretty.ToJSON(update.state.BalancerConfig))
+	}
 	cfg, _ := update.state.BalancerConfig.(*LBConfig)
 	if cfg == nil {
 		b.logger.Warningf("Ignoring unsupported balancer configuration of type: %T", update.state.BalancerConfig)
@@ -242,7 +244,9 @@ func (b *clusterResolverBalancer) updateChildConfig() {
 		b.logger.Warningf("Failed to parse child policy config. This should never happen because the config was generated: %v", err)
 		return
 	}
-	b.logger.Infof("Built child policy config: %v", pretty.ToJSON(childCfg))
+	if b.logger.V(2) {
+		b.logger.Infof("Built child policy config: %v", pretty.ToJSON(childCfg))
+	}
 
 	endpoints := make([]resolver.Endpoint, len(addrs))
 	for i, a := range addrs {

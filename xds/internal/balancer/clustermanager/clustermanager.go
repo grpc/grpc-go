@@ -128,7 +128,9 @@ func (b *bal) UpdateClientConnState(s balancer.ClientConnState) error {
 	if !ok {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
 	}
-	b.logger.Infof("update with config %+v, resolver state %+v", pretty.ToJSON(s.BalancerConfig), s.ResolverState)
+	if b.logger.V(2) {
+		b.logger.Infof("update with config %+v, resolver state %+v", pretty.ToJSON(s.BalancerConfig), s.ResolverState)
+	}
 
 	b.stateAggregator.pauseStateUpdates()
 	defer b.stateAggregator.resumeStateUpdates()
