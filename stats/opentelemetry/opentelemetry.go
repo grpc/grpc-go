@@ -20,6 +20,7 @@ package opentelemetry
 
 import (
 	"context"
+	"go.opentelemetry.io/otel/metric/noop"
 	"strings"
 	"time"
 
@@ -248,37 +249,40 @@ type serverMetrics struct {
 }
 
 func createInt64Counter(setOfMetrics map[Metric]bool, metricName Metric, meter metric.Meter, options ...metric.Int64CounterOption) metric.Int64Counter {
+	nop := noop.Int64Counter{}
 	if _, ok := setOfMetrics[metricName]; !ok {
-		return nil
+		return nop
 	}
 	ret, err := meter.Int64Counter(string(metricName), options...)
 	if err != nil {
 		logger.Errorf("failed to register metric \"%v\", will not record", metricName)
-		return nil
+		return nop
 	}
 	return ret
 }
 
 func createInt64Histogram(setOfMetrics map[Metric]bool, metricName Metric, meter metric.Meter, options ...metric.Int64HistogramOption) metric.Int64Histogram {
+	nop := noop.Int64Histogram{}
 	if _, ok := setOfMetrics[metricName]; !ok {
-		return nil
+		return nop
 	}
 	ret, err := meter.Int64Histogram(string(metricName), options...)
 	if err != nil {
 		logger.Errorf("failed to register metric \"%v\", will not record", metricName)
-		return nil
+		return nop
 	}
 	return ret
 }
 
 func createFloat64Histogram(setOfMetrics map[Metric]bool, metricName Metric, meter metric.Meter, options ...metric.Float64HistogramOption) metric.Float64Histogram {
+	nop := noop.Float64Histogram{}
 	if _, ok := setOfMetrics[metricName]; !ok {
-		return nil
+		return nop
 	}
 	ret, err := meter.Float64Histogram(string(metricName), options...)
 	if err != nil {
 		logger.Errorf("failed to register metric \"%v\", will not record", metricName)
-		return nil
+		return nop
 	}
 	return ret
 }

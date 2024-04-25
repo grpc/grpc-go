@@ -110,9 +110,7 @@ func (csh *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc
 func (csh *clientStatsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
 	s := status.Convert(err)
 	callLatency := float64(time.Since(startTime)) / float64(time.Second)
-	if csh.clientMetrics.callDuration != nil {
-		csh.clientMetrics.callDuration.Record(ctx, callLatency, metric.WithAttributes(attribute.String("grpc.method", ci.method), attribute.String("grpc.target", ci.target), attribute.String("grpc.status", canonicalString(s.Code()))))
-	}
+	csh.clientMetrics.callDuration.Record(ctx, callLatency, metric.WithAttributes(attribute.String("grpc.method", ci.method), attribute.String("grpc.target", ci.target), attribute.String("grpc.status", canonicalString(s.Code()))))
 }
 
 // TagConn exists to satisfy stats.Handler.
@@ -152,9 +150,7 @@ func (csh *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 			return
 		}
 
-		if csh.clientMetrics.attemptStarted != nil {
-			csh.clientMetrics.attemptStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", ci.method), attribute.String("grpc.target", ci.target)))
-		}
+		csh.clientMetrics.attemptStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", ci.method), attribute.String("grpc.target", ci.target)))
 	case *stats.OutPayload:
 		atomic.AddInt64(&mi.sentCompressedBytes, int64(st.CompressedLength))
 	case *stats.InPayload:
@@ -177,18 +173,11 @@ func (csh *clientStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInf
 		s, _ := status.FromError(e.Error)
 		st = canonicalString(s.Code())
 	}
+
 	clientAttributeOption := metric.WithAttributes(attribute.String("grpc.method", ci.method), attribute.String("grpc.target", ci.target), attribute.String("grpc.status", st))
-	if csh.clientMetrics.attemptDuration != nil {
-		csh.clientMetrics.attemptDuration.Record(ctx, latency, clientAttributeOption)
-	}
-
-	if csh.clientMetrics.attemptSentTotalCompressedMessageSize != nil {
-		csh.clientMetrics.attemptSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.sentCompressedBytes), clientAttributeOption)
-	}
-
-	if csh.clientMetrics.attemptRcvdTotalCompressedMessageSize != nil {
-		csh.clientMetrics.attemptRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.recvCompressedBytes), clientAttributeOption)
-	}
+	csh.clientMetrics.attemptDuration.Record(ctx, latency, clientAttributeOption)
+	csh.clientMetrics.attemptSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.sentCompressedBytes), clientAttributeOption)
+	csh.clientMetrics.attemptRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.recvCompressedBytes), clientAttributeOption)
 }
 
 const (

@@ -105,9 +105,7 @@ func (ssh *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats)
 func (ssh *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, mi *metricsInfo) {
 	switch st := s.(type) {
 	case *stats.InHeader:
-		if ssh.serverMetrics.callStarted != nil {
-			ssh.serverMetrics.callStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", mi.method)))
-		}
+		ssh.serverMetrics.callStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", mi.method)))
 	case *stats.OutPayload:
 		atomic.AddInt64(&mi.sentCompressedBytes, int64(st.CompressedLength))
 	case *stats.InPayload:
@@ -127,15 +125,9 @@ func (ssh *serverStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInf
 	}
 	serverAttributeOption := metric.WithAttributes(attribute.String("grpc.method", mi.method), attribute.String("grpc.status", st))
 
-	if ssh.serverMetrics.callDuration != nil {
-		ssh.serverMetrics.callDuration.Record(ctx, latency, serverAttributeOption)
-	}
-	if ssh.serverMetrics.callSentTotalCompressedMessageSize != nil {
-		ssh.serverMetrics.callSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.sentCompressedBytes), serverAttributeOption)
-	}
-	if ssh.serverMetrics.callRcvdTotalCompressedMessageSize != nil {
-		ssh.serverMetrics.callRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.recvCompressedBytes), serverAttributeOption)
-	}
+	ssh.serverMetrics.callDuration.Record(ctx, latency, serverAttributeOption)
+	ssh.serverMetrics.callSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.sentCompressedBytes), serverAttributeOption)
+	ssh.serverMetrics.callRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.recvCompressedBytes), serverAttributeOption)
 }
 
 const (

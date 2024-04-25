@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/stats/opentelemetry"
 
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -63,7 +64,7 @@ func Example_dialOption() {
 		},
 	}
 	do := opentelemetry.DialOption(opts)
-	cc, err := grpc.NewClient("<target string>", do)
+	cc, err := grpc.NewClient("<target string>", do, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		// Handle err.
 	}
@@ -86,7 +87,7 @@ func Example_serverOption() {
 			},
 		},
 	}
-	cc, err := grpc.NewClient("some-target", opentelemetry.DialOption(opts))
+	cc, err := grpc.NewClient("some-target", opentelemetry.DialOption(opts), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		// Handle err.
 	}
@@ -101,7 +102,7 @@ func ExampleMetrics_excludeSome() {
 		},
 	}
 	do := opentelemetry.DialOption(opts)
-	cc, err := grpc.NewClient("<target string>", do)
+	cc, err := grpc.NewClient("<target string>", do, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		// Handle err.
 	}
@@ -116,7 +117,7 @@ func ExampleMetrics_disableAll() {
 		},
 	}
 	do := opentelemetry.DialOption(opts)
-	cc, err := grpc.NewClient("<target string>", do)
+	cc, err := grpc.NewClient("<target string>", do, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		// Handle err.
 	}
@@ -131,7 +132,7 @@ func ExampleMetrics_enableSome() {
 		},
 	}
 	do := opentelemetry.DialOption(opts)
-	cc, err := grpc.NewClient("<target string>", do)
+	cc, err := grpc.NewClient("<target string>", do, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil { // might fail vet
 		// Handle err.
 	}
