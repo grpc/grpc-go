@@ -20,7 +20,6 @@ package opentelemetry
 
 import (
 	"context"
-	"go.opentelemetry.io/otel/metric/noop"
 	"strings"
 	"time"
 
@@ -30,6 +29,7 @@ import (
 	"google.golang.org/grpc/internal"
 
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
 )
 
 var logger = grpclog.Component("otel-plugin")
