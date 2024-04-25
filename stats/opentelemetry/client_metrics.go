@@ -49,21 +49,17 @@ func (csh *clientStatsHandler) initializeMetrics() {
 
 	setOfMetrics := csh.o.MetricsOptions.Metrics.metrics
 
-	clientMetrics := clientMetrics{}
-
-	clientMetrics.attemptStarted = createInt64Counter(setOfMetrics, "grpc.client.attempt.started", meter, metric.WithUnit("attempt"), metric.WithDescription("Number of client call attempts started."))
-	clientMetrics.attemptDuration = createFloat64Histogram(setOfMetrics, "grpc.client.attempt.duration", meter, metric.WithUnit("s"), metric.WithDescription("End-to-end time taken to complete a client call attempt."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
-	clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.client.attempt.sent_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes sent per client call attempt."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.client.attempt.rcvd_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes received per call attempt."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	clientMetrics.callDuration = createFloat64Histogram(setOfMetrics, "grpc.client.call.duration", meter, metric.WithUnit("s"), metric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
-
-	csh.clientMetrics = clientMetrics
+	csh.clientMetrics.attemptStarted = createInt64Counter(setOfMetrics, "grpc.client.attempt.started", meter, metric.WithUnit("attempt"), metric.WithDescription("Number of client call attempts started."))
+	csh.clientMetrics.attemptDuration = createFloat64Histogram(setOfMetrics, "grpc.client.attempt.duration", meter, metric.WithUnit("s"), metric.WithDescription("End-to-end time taken to complete a client call attempt."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	csh.clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.client.attempt.sent_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes sent per client call attempt."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	csh.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.client.attempt.rcvd_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes received per call attempt."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	csh.clientMetrics.callDuration = createFloat64Histogram(setOfMetrics, "grpc.client.call.duration", meter, metric.WithUnit("s"), metric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 }
 
 func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := &callInfo{
 		target: csh.determineTarget(cc),
-		method: removeLeadingSlash(csh.determineMethod(method, opts...)),
+		method: csh.determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
 
@@ -90,7 +86,7 @@ func (csh *clientStatsHandler) determineTarget(cc *grpc.ClientConn) string {
 func (csh *clientStatsHandler) determineMethod(method string, opts ...grpc.CallOption) string {
 	for _, opt := range opts {
 		if _, ok := opt.(grpc.StaticMethodCallOption); ok {
-			return method
+			return removeLeadingSlash(method)
 		}
 	}
 	return "other"
@@ -99,7 +95,7 @@ func (csh *clientStatsHandler) determineMethod(method string, opts ...grpc.CallO
 func (csh *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := &callInfo{
 		target: csh.determineTarget(cc),
-		method: removeLeadingSlash(csh.determineMethod(method, opts...)),
+		method: csh.determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
 	startTime := time.Now()
@@ -141,7 +137,7 @@ func (csh *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 func (csh *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
-		// Shouldn't happen because TagRPC populates this information.
+		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
 		return
 	}
 	csh.processRPCEvent(ctx, rs, ri.mi)
@@ -149,7 +145,6 @@ func (csh *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats)
 
 func (csh *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCStats, mi *metricsInfo) {
 	switch st := s.(type) {
-	case *stats.InHeader, *stats.OutHeader, *stats.InTrailer, *stats.OutTrailer:
 	case *stats.Begin:
 		ci := getCallInfo(ctx)
 		if ci == nil {
@@ -167,25 +162,20 @@ func (csh *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 	case *stats.End:
 		csh.processRPCEnd(ctx, mi, st)
 	default:
-		// Shouldn't happen. gRPC calls into stats handler, and will never not
-		// be one of the types above.
-		logger.Errorf("Received unexpected stats type (%T) with data: %v", s, s)
 	}
 }
 
 func (csh *clientStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInfo, e *stats.End) {
 	ci := getCallInfo(ctx)
 	if ci == nil {
-		// Shouldn't happen, set by interceptor, defensive programming.
+		logger.Error("ctx passed into client side stats handler metrics event handling has no metrics data present")
 		return
 	}
 	latency := float64(time.Since(mi.startTime)) / float64(time.Second)
-	var st string
+	st := "OK"
 	if e.Error != nil {
 		s, _ := status.FromError(e.Error)
 		st = canonicalString(s.Code())
-	} else {
-		st = "OK"
 	}
 	clientAttributeOption := metric.WithAttributes(attribute.String("grpc.method", ci.method), attribute.String("grpc.target", ci.target), attribute.String("grpc.status", st))
 	if csh.clientMetrics.attemptDuration != nil {

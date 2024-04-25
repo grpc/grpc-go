@@ -152,7 +152,7 @@ func DialOption(o Options) grpc.DialOption {
 // the server option returned from this function as an argument to
 // grpc.NewServer().
 //
-// For the metrics supported by this instrumentation code, specify the client
+// For the metrics supported by this instrumentation code, specify the server
 // metrics to record in metrics options. Also provide an implementation of a
 // MeterProvider. If the passed in Meter Provider does not have the view
 // configured for an individual metric turned on, the API call in this component

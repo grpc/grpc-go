@@ -49,13 +49,10 @@ func (ssh *serverStatsHandler) initializeMetrics() {
 	}
 	setOfMetrics := ssh.o.MetricsOptions.Metrics.metrics
 
-	serverMetrics := serverMetrics{}
-	serverMetrics.callStarted = createInt64Counter(setOfMetrics, "grpc.server.call.started", meter, metric.WithUnit("call"), metric.WithDescription("Number of server calls started."))
-	serverMetrics.callSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.sent_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes sent per server call."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	serverMetrics.callRcvdTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.rcvd_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes received per server call."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	serverMetrics.callDuration = createFloat64Histogram(setOfMetrics, "grpc.server.call.duration", meter, metric.WithUnit("s"), metric.WithDescription("End-to-end time taken to complete a call from server transport's perspective."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
-
-	ssh.serverMetrics = serverMetrics
+	ssh.serverMetrics.callStarted = createInt64Counter(setOfMetrics, "grpc.server.call.started", meter, metric.WithUnit("call"), metric.WithDescription("Number of server calls started."))
+	ssh.serverMetrics.callSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.sent_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes sent per server call."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	ssh.serverMetrics.callRcvdTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.rcvd_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes received per server call."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	ssh.serverMetrics.callDuration = createFloat64Histogram(setOfMetrics, "grpc.server.call.duration", meter, metric.WithUnit("s"), metric.WithDescription("End-to-end time taken to complete a call from server transport's perspective."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 }
 
 // TagConn exists to satisfy stats.Handler.
@@ -99,6 +96,7 @@ func (ssh *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 func (ssh *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
+		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
 		return
 	}
 	ssh.processRPCData(ctx, rs, ri.mi)
@@ -106,10 +104,6 @@ func (ssh *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats)
 
 func (ssh *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, mi *metricsInfo) {
 	switch st := s.(type) {
-	case *stats.Begin, *stats.OutHeader, *stats.InTrailer, *stats.OutTrailer:
-		// Headers and Trailers are not relevant to the measures, as the
-		// measures concern number of messages and bytes for messages. This
-		// aligns with flow control.
 	case *stats.InHeader:
 		if ssh.serverMetrics.callStarted != nil {
 			ssh.serverMetrics.callStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", mi.method)))
@@ -121,20 +115,15 @@ func (ssh *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCSt
 	case *stats.End:
 		ssh.processRPCEnd(ctx, mi, st)
 	default:
-		// Shouldn't happen. gRPC calls into stats handler, and will never not
-		// be one of the types above.
-		logger.Errorf("Received unexpected stats type (%T) with data: %v", s, s)
 	}
 }
 
 func (ssh *serverStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInfo, e *stats.End) {
 	latency := float64(time.Since(mi.startTime)) / float64(time.Second)
-	var st string
+	st := "OK"
 	if e.Error != nil {
 		s, _ := status.FromError(e.Error)
 		st = canonicalString(s.Code())
-	} else {
-		st = "OK"
 	}
 	serverAttributeOption := metric.WithAttributes(attribute.String("grpc.method", mi.method), attribute.String("grpc.status", st))
 
