@@ -220,7 +220,6 @@ type metricsInfo struct {
 
 	startTime time.Time
 	method    string
-	authority string
 }
 
 type clientMetrics struct {
@@ -249,40 +248,37 @@ type serverMetrics struct {
 }
 
 func createInt64Counter(setOfMetrics map[Metric]bool, metricName Metric, meter metric.Meter, options ...metric.Int64CounterOption) metric.Int64Counter {
-	nop := noop.Int64Counter{}
 	if _, ok := setOfMetrics[metricName]; !ok {
-		return nop
+		return noop.Int64Counter{}
 	}
 	ret, err := meter.Int64Counter(string(metricName), options...)
 	if err != nil {
 		logger.Errorf("failed to register metric \"%v\", will not record", metricName)
-		return nop
+		return noop.Int64Counter{}
 	}
 	return ret
 }
 
 func createInt64Histogram(setOfMetrics map[Metric]bool, metricName Metric, meter metric.Meter, options ...metric.Int64HistogramOption) metric.Int64Histogram {
-	nop := noop.Int64Histogram{}
 	if _, ok := setOfMetrics[metricName]; !ok {
-		return nop
+		return noop.Int64Histogram{}
 	}
 	ret, err := meter.Int64Histogram(string(metricName), options...)
 	if err != nil {
 		logger.Errorf("failed to register metric \"%v\", will not record", metricName)
-		return nop
+		return noop.Int64Histogram{}
 	}
 	return ret
 }
 
 func createFloat64Histogram(setOfMetrics map[Metric]bool, metricName Metric, meter metric.Meter, options ...metric.Float64HistogramOption) metric.Float64Histogram {
-	nop := noop.Float64Histogram{}
 	if _, ok := setOfMetrics[metricName]; !ok {
-		return nop
+		return noop.Float64Histogram{}
 	}
 	ret, err := meter.Float64Histogram(string(metricName), options...)
 	if err != nil {
 		logger.Errorf("failed to register metric \"%v\", will not record", metricName)
-		return nop
+		return noop.Float64Histogram{}
 	}
 	return ret
 }

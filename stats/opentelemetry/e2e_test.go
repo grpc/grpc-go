@@ -97,10 +97,7 @@ func setup(t *testing.T, tafOn bool, maf func(string) bool) (*metric.ManualReade
 	var taf func(string) bool
 	if tafOn {
 		taf = func(str string) bool {
-			if str == ss.Target {
-				return false
-			}
-			return true
+			return str != ss.Target
 		}
 	}
 	if err := ss.Start([]grpc.ServerOption{ServerOption(Options{
@@ -127,11 +124,8 @@ func setup(t *testing.T, tafOn bool, maf func(string) bool) (*metric.ManualReade
 // attribute into "other" if filter specifies.
 func (s) TestMethodTargetAttributeFilter(t *testing.T) {
 	maf := func(str string) bool {
-		if str == "/grpc.testing.TestService/UnaryCall" {
-			return false
-		}
 		// Will allow duplex/any other type of RPC.
-		return true
+		return str != "/grpc.testing.TestService/UnaryCall"
 	}
 	// pull out setup into a helper
 	reader, ss := setup(t, true, maf)

@@ -56,10 +56,7 @@ func Example_dialOption() {
 			MeterProvider: provider,
 			Metrics:       opentelemetry.DefaultMetrics, // equivalent to unset - distinct from empty
 			TargetAttributeFilter: func(str string) bool {
-				if strings.HasPrefix(str, "dns") { // Filter out DNS targets.
-					return false
-				}
-				return true
+				return !strings.HasPrefix(str, "dns") // Filter out DNS targets.
 			},
 		},
 	}
@@ -79,11 +76,8 @@ func Example_serverOption() {
 			MeterProvider: provider,
 			// Because Metrics is unset, the user will get default metrics.
 			MethodAttributeFilter: func(str string) bool {
-				if str == "/grpc.testing.TestService/UnaryCall" {
-					return false
-				}
 				// Will allow duplex/any other type of RPC.
-				return true
+				return str != "/grpc.testing.TestService/UnaryCall"
 			},
 		},
 	}
