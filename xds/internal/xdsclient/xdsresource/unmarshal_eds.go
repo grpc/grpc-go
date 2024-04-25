@@ -26,6 +26,7 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/protobuf/proto"
@@ -99,7 +100,7 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 		}
 		uniqueEndpointAddrs[addr] = true
 
-		hashKey := hashKey(lbEndpoint)
+		hashKey := getHashKey(lbEndpoint)
 		endpoints = append(endpoints, Endpoint{
 			HealthStatus: EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
 			Address:      addr,
@@ -110,21 +111,23 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 	return endpoints, nil
 }
 
-// hashKey extracts and returns the hash key from the given LbEndpoint. If no
+// getHashKey extracts and returns the hash key from the given LbEndpoint. If no
 // hash key is found, it returns an empty string.
-func hashKey(lbEndpoint *v3endpointpb.LbEndpoint) string {
+func getHashKey(lbEndpoint *v3endpointpb.LbEndpoint) string {
 	// "The xDS resolver, described in A74, will be changed to set the hash_key
 	// endpoint attribute to the value of LbEndpoint.Metadata envoy.lb hash_key
 	// field, as described in Envoy's documentation for the ring hash load
 	// balancer." - A76
-	var hashKey string
+	if envconfig.XDSEndpointHashKeyBackwardCompat {
+		return ""
+	}
 	envoyLB := lbEndpoint.GetMetadata().GetFilterMetadata()["envoy.lb"]
 	if envoyLB != nil {
 		if h := envoyLB.GetFields()["hash_key"]; h != nil {
-			hashKey = h.GetStringValue()
+			return h.GetStringValue()
 		}
 	}
-	return hashKey
+	return ""
 }
 
 func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, error) {

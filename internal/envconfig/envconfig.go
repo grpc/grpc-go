@@ -43,6 +43,9 @@ var (
 	// ALTSMaxConcurrentHandshakes is the maximum number of concurrent ALTS
 	// handshakes that can be performed.
 	ALTSMaxConcurrentHandshakes = uint64FromEnv("GRPC_ALTS_MAX_CONCURRENT_HANDSHAKES", 100, 1, 100)
+	// XDSEndpointHashKeyBackwardCompat is set to true if we should not parse
+	// the xds endpoint hash key from EDS LbEndpoint metadata.
+	XDSEndpointHashKeyBackwardCompat = boolFromEnv("GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT", false)
 )
 
 func boolFromEnv(envVar string, def bool) bool {
