@@ -138,8 +138,8 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 				VerificationType: test.clientVerificationType,
 				IdentityOptions:  test.IdentityOptions,
 				RootOptions:      test.RootOptions,
-				MinVersion:       test.MinVersion,
-				MaxVersion:       test.MaxVersion,
+				MinTLSVersion:    test.MinVersion,
+				MaxTLSVersion:    test.MaxVersion,
 			}
 			_, err := clientOptions.config()
 			if err == nil {
@@ -196,8 +196,8 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 				VerificationType: test.clientVerificationType,
 				IdentityOptions:  test.IdentityOptions,
 				RootOptions:      test.RootOptions,
-				MinVersion:       test.MinVersion,
-				MaxVersion:       test.MaxVersion,
+				MinTLSVersion:    test.MinVersion,
+				MaxTLSVersion:    test.MaxVersion,
 			}
 			clientConfig, err := clientOptions.config()
 			if err != nil {
@@ -275,8 +275,8 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 				RequireClientCert: test.requireClientCert,
 				IdentityOptions:   test.IdentityOptions,
 				RootOptions:       test.RootOptions,
-				MinVersion:        test.MinVersion,
-				MaxVersion:        test.MaxVersion,
+				MinTLSVersion:     test.MinVersion,
+				MaxTLSVersion:     test.MaxVersion,
 			}
 			_, err := serverOptions.config()
 			if err == nil {
@@ -342,8 +342,8 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 				RequireClientCert: test.requireClientCert,
 				IdentityOptions:   test.IdentityOptions,
 				RootOptions:       test.RootOptions,
-				MinVersion:        test.MinVersion,
-				MaxVersion:        test.MaxVersion,
+				MinTLSVersion:     test.MinVersion,
+				MaxTLSVersion:     test.MaxVersion,
 			}
 			serverConfig, err := serverOptions.config()
 			if err != nil {

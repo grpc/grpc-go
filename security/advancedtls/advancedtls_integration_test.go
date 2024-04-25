@@ -908,8 +908,8 @@ func (s) TestTLSVersions(t *testing.T) {
 				},
 				RequireClientCert: false,
 				VerificationType:  CertAndHostVerification,
-				MinVersion:        test.serverMinVersion,
-				MaxVersion:        test.serverMaxVersion,
+				MinTLSVersion:     test.serverMinVersion,
+				MaxTLSVersion:     test.serverMaxVersion,
 			}
 			serverTLSCreds, err := NewServerCreds(serverOptions)
 			if err != nil {
@@ -930,8 +930,8 @@ func (s) TestTLSVersions(t *testing.T) {
 					RootCACerts: cs.ClientTrust1,
 				},
 				VerificationType: CertAndHostVerification,
-				MinVersion:       test.clientMinVersion,
-				MaxVersion:       test.clientMaxVersion,
+				MinTLSVersion:    test.clientMinVersion,
+				MaxTLSVersion:    test.clientMaxVersion,
 			}
 			clientTLSCreds, err := NewClientCreds(clientOptions)
 			if err != nil {
