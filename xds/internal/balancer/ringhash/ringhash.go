@@ -434,7 +434,7 @@ func (b *ringhashBalancer) regeneratePicker() {
 		b.picker = base.NewErrPicker(b.mergeErrors())
 		return
 	}
-	b.picker = newPicker(b.ring, b.logger)
+	b.picker = newPicker(b.ring, b.config.RequestMetadataKey, b.logger)
 }
 
 func (b *ringhashBalancer) Close() {

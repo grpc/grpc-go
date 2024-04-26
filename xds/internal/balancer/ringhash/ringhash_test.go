@@ -63,7 +63,7 @@ func init() {
 }
 
 func ctxWithHash(h uint64) context.Context {
-	return SetRequestHash(context.Background(), h)
+	return SetXDSRequestHash(context.Background(), h)
 }
 
 // setupTest creates the balancer, and does an initial sanity check.
@@ -476,6 +476,52 @@ func (s) TestSubConnToConnectWhenOverallTransientFailure(t *testing.T) {
 		t.Fatalf("unexpected Connect() from SubConn %v", sc1)
 	case <-sc2.ConnectCh:
 		t.Fatalf("unexpected Connect() from SubConn %v", sc2)
+	case <-time.After(defaultTestShortTimeout):
+	}
+}
+
+// TestRequestHashKey tests the case where the ringhash balancer receives a
+// new picker when the request hash key changes.
+func (s) TestRequestHashKeyChanged(t *testing.T) {
+	wantAddrs := []resolver.Address{
+		{Addr: testBackendAddrStrs[0]},
+		{Addr: testBackendAddrStrs[1]},
+		{Addr: testBackendAddrStrs[2]},
+	}
+	cc, b, p0 := setupTest(t, wantAddrs)
+	ring0 := p0.(*picker).ring
+
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{Addresses: wantAddrs},
+		BalancerConfig: &LBConfig{
+			RequestMetadataKey: "test-key",
+		},
+	}); err != nil {
+		t.Fatalf("UpdateClientConnState returned err: %v", err)
+	}
+	var p1 balancer.Picker
+	select {
+	case p1 = <-cc.NewPickerCh:
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("timeout waiting for picker after UpdateClientConn with different addresses")
+	}
+	ring1 := p1.(*picker).ring
+	if ring1 == ring0 {
+		t.Fatalf("new picker after changing request hash key has the same ring as before, want different")
+	}
+
+	// Same config, there be no new picker.
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{Addresses: wantAddrs},
+		BalancerConfig: &LBConfig{
+			RequestMetadataKey: "test-key",
+		},
+	}); err != nil {
+		t.Fatalf("UpdateClientConnState returned err: %v", err)
+	}
+	select {
+	case <-cc.NewPickerCh:
+		t.Fatalf("unexpected picker after UpdateClientConn with the same addresses")
 	case <-time.After(defaultTestShortTimeout):
 	}
 }

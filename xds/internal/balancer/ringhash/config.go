@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -32,6 +33,8 @@ type LBConfig struct {
 
 	MinRingSize uint64 `json:"minRingSize,omitempty"`
 	MaxRingSize uint64 `json:"maxRingSize,omitempty"`
+
+	RequestMetadataKey string `json:"request_metadata_key,omitempty"`
 }
 
 const (
@@ -65,6 +68,11 @@ func parseConfig(c json.RawMessage) (*LBConfig, error) {
 	}
 	if cfg.MaxRingSize > envconfig.RingHashCap {
 		cfg.MaxRingSize = envconfig.RingHashCap
+	}
+	if cfg.RequestMetadataKey != "" {
+		if err := metadata.ValidatePair(cfg.RequestMetadataKey, ""); err != nil {
+			return nil, fmt.Errorf("invalid request_metadata_key %q: %w", cfg.RequestMetadataKey, err)
+		}
 	}
 	return &cfg, nil
 }

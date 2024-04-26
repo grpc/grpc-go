@@ -18,23 +18,45 @@
 
 package ringhash
 
-import "context"
+import (
+	"context"
+	"strings"
 
-type clusterKey struct{}
+	"github.com/cespare/xxhash/v2"
+	"google.golang.org/grpc/metadata"
+)
 
-func getRequestHash(ctx context.Context) uint64 {
-	requestHash, _ := ctx.Value(clusterKey{}).(uint64)
-	return requestHash
+type xdsHashKey struct{}
+
+// getRequestHash returns the request hash to use for this pick, and whether
+// a random hash was used.
+func getRequestHash(ctx context.Context, requestMetadataKey string) (uint64, bool) {
+	if requestMetadataKey == "" {
+		// No explicit request metadata key, use the hash set by the xDS
+		// resolver.
+		requestHash, _ := ctx.Value(xdsHashKey{}).(uint64)
+		return requestHash, false
+	}
+	md, _ := metadata.FromOutgoingContext(ctx)
+	values := md.Get(requestMetadataKey)
+	if len(values) == 0 || len(values) == 1 && values[0] == "" {
+		// If the header is not present, generate a random hash.
+		return 0, true
+	}
+	joinedValues := strings.Join(values, ",")
+	return xxhash.Sum64String(joinedValues), false
 }
 
-// GetRequestHashForTesting returns the request hash in the context; to be used
+// GetXDSRequestHashForTesting returns the request hash in the context; to be used
 // for testing only.
-func GetRequestHashForTesting(ctx context.Context) uint64 {
-	return getRequestHash(ctx)
+func GetXDSRequestHashForTesting(ctx context.Context) uint64 {
+	// for xDS the random hash is never generated in the picker.
+	h, _ := getRequestHash(ctx, "")
+	return h
 }
 
-// SetRequestHash adds the request hash to the context for use in Ring Hash Load
-// Balancing.
-func SetRequestHash(ctx context.Context, requestHash uint64) context.Context {
-	return context.WithValue(ctx, clusterKey{}, requestHash)
+// SetXDSRequestHash adds the request hash to the context for use in Ring Hash
+// Load Balancing using xDS route hash_policy.
+func SetXDSRequestHash(ctx context.Context, requestHash uint64) context.Context {
+	return context.WithValue(ctx, xdsHashKey{}, requestHash)
 }

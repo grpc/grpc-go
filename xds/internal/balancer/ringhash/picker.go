@@ -25,21 +25,24 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/status"
 )
 
 type picker struct {
-	ring          *ring
-	logger        *grpclog.PrefixLogger
-	subConnStates map[*subConn]connectivity.State
+	ring           *ring
+	logger         *grpclog.PrefixLogger
+	subConnStates  map[*subConn]connectivity.State
+	requestHashKey string
+	randuint64     func() uint64 // overridable for testing
 }
 
-func newPicker(ring *ring, logger *grpclog.PrefixLogger) *picker {
+func newPicker(ring *ring, requestHashKey string, logger *grpclog.PrefixLogger) *picker {
 	states := make(map[*subConn]connectivity.State)
 	for _, e := range ring.items {
 		states[e.sc] = e.sc.effectiveState()
 	}
-	return &picker{ring: ring, logger: logger, subConnStates: states}
+	return &picker{ring: ring, logger: logger, subConnStates: states, requestHashKey: requestHashKey, randuint64: grpcrand.Uint64}
 }
 
 // handleRICSResult is the return type of handleRICS. It's needed to wrap the
@@ -55,16 +58,24 @@ type handleRICSResult struct {
 // or Shutdown. TransientFailure will be handled specifically after this
 // function returns.
 //
-// The first return value indicates if the state is in Ready, Idle, Connecting
+// The second return value indicates if the state is in Ready, Idle, Connecting
 // or Shutdown. If it's true, the PickResult and error should be returned from
 // Pick() as is.
-func (p *picker) handleRICS(e *ringEntry) (handleRICSResult, bool) {
+func (p *picker) handleRICS(e *ringEntry, usingRandomHash bool) (handleRICSResult, bool) {
 	switch state := p.subConnStates[e.sc]; state {
 	case connectivity.Ready:
 		return handleRICSResult{pr: balancer.PickResult{SubConn: e.sc.sc}}, true
 	case connectivity.Idle:
 		// Trigger Connect() and queue the pick.
 		e.sc.queueConnect()
+		if usingRandomHash {
+			// "If the use of this random hash triggers a connection attempt
+			// (...), then before queuing the pick, the picker will scan forward
+			// searching for a subchannel in `READY` state. If it finds a
+			// subchannel in `READY` state, the picker returns it." - A76
+			p, err := p.returnNextReadySubConn(e)
+			return handleRICSResult{pr: p, err: err}, true
+		}
 		return handleRICSResult{err: balancer.ErrNoSubConnAvailable}, true
 	case connectivity.Connecting:
 		return handleRICSResult{err: balancer.ErrNoSubConnAvailable}, true
@@ -84,15 +95,19 @@ func (p *picker) handleRICS(e *ringEntry) (handleRICSResult, bool) {
 }
 
 func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	e := p.ring.pick(getRequestHash(info.Ctx))
-	if hr, ok := p.handleRICS(e); ok {
+	h, usingRandomHash := getRequestHash(info.Ctx, p.requestHashKey)
+	if usingRandomHash {
+		h = p.randuint64()
+	}
+	e := p.ring.pick(h)
+	if hr, ok := p.handleRICS(e, usingRandomHash); ok {
 		return hr.pr, hr.err
 	}
 	// ok was false, the entry is in transient failure.
-	return p.handleTransientFailure(e)
+	return p.handleTransientFailure(e, usingRandomHash)
 }
 
-func (p *picker) handleTransientFailure(e *ringEntry) (balancer.PickResult, error) {
+func (p *picker) handleTransientFailure(e *ringEntry, usingRandomHash bool) (balancer.PickResult, error) {
 	// Queue a connect on the first picked SubConn.
 	e.sc.queueConnect()
 
@@ -105,7 +120,7 @@ func (p *picker) handleTransientFailure(e *ringEntry) (balancer.PickResult, erro
 
 	// For the second SubConn, also check Ready/Idle/Connecting as if it's the
 	// first entry.
-	if hr, ok := p.handleRICS(e2); ok {
+	if hr, ok := p.handleRICS(e2, usingRandomHash); ok {
 		return hr.pr, hr.err
 	}
 
@@ -146,6 +161,19 @@ func (p *picker) handleTransientFailure(e *ringEntry) (balancer.PickResult, erro
 		}
 	}
 	return balancer.PickResult{}, fmt.Errorf("no connection is Ready")
+}
+
+// returnNextReadySubConn returns the first entry after e that has its
+// subconn in READY state. If no such entry is found, it returns
+// balancer.ErrNoSubConnAvailable.
+func (p *picker) returnNextReadySubConn(e *ringEntry) (balancer.PickResult, error) {
+	for i := range p.ring.items {
+		e := p.ring.items[(e.idx+i)%len(p.ring.items)]
+		if e.sc.state == connectivity.Ready {
+			return balancer.PickResult{SubConn: e.sc.sc}, nil
+		}
+	}
+	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }
 
 // nextSkippingDuplicates finds the next entry in the ring, with a different

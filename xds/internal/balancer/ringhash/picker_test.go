@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/metadata"
 )
 
 var testSubConns []*testutils.TestSubConn
@@ -57,7 +58,7 @@ func newTestRing(cStats []connectivity.State) *ring {
 	return &ring{items: items}
 }
 
-func (s) TestPickerPickFirstTwo(t *testing.T) {
+func (s) TestXdsPickerPickFirstTwo(t *testing.T) {
 	tests := []struct {
 		name            string
 		ring            *ring
@@ -107,9 +108,9 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newPicker(tt.ring, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
+			p := newPicker(tt.ring, "", igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
 			got, err := p.Pick(balancer.PickInfo{
-				Ctx: SetRequestHash(context.Background(), tt.hash),
+				Ctx: SetXDSRequestHash(context.Background(), tt.hash),
 			})
 			if err != tt.wantErr {
 				t.Errorf("Pick() error = %v, wantErr %v", err, tt.wantErr)
@@ -129,6 +130,56 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 	}
 }
 
+// TestPickerWithRequestHashKey tests that if an explicit request hash key is
+// set, it will be used to pick a SubConn.
+func (s) TestPickerWithRequestHashKey(t *testing.T) {
+	tests := []struct {
+		name    string
+		values  []string
+		ring    *ring
+		wantSC  balancer.SubConn
+		wantErr error
+	}{
+		{
+			name:   "hash key is not set, pick the first ready SubConn",
+			ring:   newTestRing([]connectivity.State{connectivity.Idle, connectivity.TransientFailure, connectivity.Connecting, connectivity.Ready}),
+			wantSC: testSubConns[3],
+		},
+		{
+			name:    "hash key is not set, no subchannel ready",
+			ring:    newTestRing([]connectivity.State{connectivity.Idle, connectivity.TransientFailure, connectivity.Connecting, connectivity.Shutdown}),
+			wantErr: balancer.ErrNoSubConnAvailable,
+		},
+		{
+			name:    "hash key is set to a single value, connect and queue the pick",
+			values:  []string{"test-value"}, // this hashes to the end of the test ring => endpoint 1 expected.
+			ring:    newTestRing([]connectivity.State{connectivity.Idle, connectivity.TransientFailure, connectivity.Connecting, connectivity.Ready}),
+			wantErr: balancer.ErrNoSubConnAvailable,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requestHashKey := "test-key"
+			ring := tt.ring
+			p := newPicker(ring, requestHashKey, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
+			p.randuint64 = func() uint64 { return 5 }
+
+			md := metadata.New(nil)
+			md.Set("test-key", tt.values...)
+			got, err := p.Pick(balancer.PickInfo{
+				Ctx: metadata.NewOutgoingContext(context.Background(), md),
+			})
+			if err != tt.wantErr {
+				t.Errorf("Pick() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got.SubConn != tt.wantSC {
+				t.Errorf("Pick() got = %v, want picked SubConn: %v", got, tt.wantSC)
+			}
+		})
+	}
+}
+
 // TestPickerPickTriggerTFConnect covers that if the picked SubConn is
 // TransientFailures, all SubConns until a non-TransientFailure are queued for
 // Connect().
@@ -137,8 +188,8 @@ func (s) TestPickerPickTriggerTFConnect(t *testing.T) {
 		connectivity.TransientFailure, connectivity.TransientFailure, connectivity.TransientFailure, connectivity.TransientFailure,
 		connectivity.Idle, connectivity.TransientFailure, connectivity.TransientFailure, connectivity.TransientFailure,
 	})
-	p := newPicker(ring, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
-	_, err := p.Pick(balancer.PickInfo{Ctx: SetRequestHash(context.Background(), 5)})
+	p := newPicker(ring, "", igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
+	_, err := p.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(context.Background(), 5)})
 	if err == nil {
 		t.Fatalf("Pick() error = %v, want non-nil", err)
 	}
@@ -167,8 +218,8 @@ func (s) TestPickerPickTriggerTFReturnReady(t *testing.T) {
 	ring := newTestRing([]connectivity.State{
 		connectivity.TransientFailure, connectivity.TransientFailure, connectivity.TransientFailure, connectivity.Ready,
 	})
-	p := newPicker(ring, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
-	pr, err := p.Pick(balancer.PickInfo{Ctx: SetRequestHash(context.Background(), 5)})
+	p := newPicker(ring, "", igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
+	pr, err := p.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(context.Background(), 5)})
 	if err != nil {
 		t.Fatalf("Pick() error = %v, want nil", err)
 	}
@@ -193,8 +244,8 @@ func (s) TestPickerPickTriggerTFWithIdle(t *testing.T) {
 	ring := newTestRing([]connectivity.State{
 		connectivity.TransientFailure, connectivity.TransientFailure, connectivity.Idle, connectivity.TransientFailure, connectivity.TransientFailure,
 	})
-	p := newPicker(ring, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
-	_, err := p.Pick(balancer.PickInfo{Ctx: SetRequestHash(context.Background(), 5)})
+	p := newPicker(ring, "", igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
+	_, err := p.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(context.Background(), 5)})
 	if err == balancer.ErrNoSubConnAvailable {
 		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}

@@ -94,6 +94,21 @@ func (s) TestParseConfig(t *testing.T) {
 			want:    nil,
 			wantErr: true,
 		},
+		{
+			name: "request metadata key set",
+			js:   `{"request_metadata_key": "x-foo"}`,
+			want: &LBConfig{
+				MinRingSize:        defaultMinSize,
+				MaxRingSize:        defaultMaxSize,
+				RequestMetadataKey: "x-foo",
+			},
+		},
+		{
+			name:    "invalid request metadata keys",
+			js:      `{"request_metadata_key": "!invalid"}`,
+			want:    nil,
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
