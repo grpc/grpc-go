@@ -105,6 +105,12 @@ func (s) TestXdsPickerPickFirstTwo(t *testing.T) {
 			wantErr:         balancer.ErrNoSubConnAvailable,
 			wantSCToConnect: testSubConns[1],
 		},
+		{
+			name:    "single channel in TransientFailure",
+			ring:    newTestRing([]connectivity.State{connectivity.TransientFailure}),
+			hash:    5,
+			wantErr: errSingleSubConnInTransientFailure,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -134,27 +140,47 @@ func (s) TestXdsPickerPickFirstTwo(t *testing.T) {
 // set, it will be used to pick a SubConn.
 func (s) TestPickerWithRequestHashKey(t *testing.T) {
 	tests := []struct {
-		name    string
-		values  []string
-		ring    *ring
-		wantSC  balancer.SubConn
-		wantErr error
+		name            string
+		values          []string
+		ring            *ring
+		wantSC          balancer.SubConn
+		wantSCToConnect balancer.SubConn
+		wantErr         error
 	}{
 		{
-			name:   "hash key is not set, pick the first ready SubConn",
-			ring:   newTestRing([]connectivity.State{connectivity.Idle, connectivity.TransientFailure, connectivity.Connecting, connectivity.Ready}),
+			name:            "hash key is not set, random picked an idle subconn, pick first ready SubConn",
+			ring:            newTestRing([]connectivity.State{connectivity.Idle, connectivity.TransientFailure, connectivity.Connecting, connectivity.Ready, connectivity.Ready}),
+			wantSC:          testSubConns[3],
+			wantSCToConnect: testSubConns[0],
+		},
+		{
+			name:            "hash key is not set, random picks an idle subconn, no subconn ready",
+			ring:            newTestRing([]connectivity.State{connectivity.Idle, connectivity.TransientFailure, connectivity.Connecting, connectivity.Shutdown}),
+			wantErr:         balancer.ErrNoSubConnAvailable,
+			wantSCToConnect: testSubConns[0],
+		},
+		{
+			name:   "hash key is not set, random picks a subconn in transient failure, pick first subchannel ready",
+			ring:   newTestRing([]connectivity.State{connectivity.TransientFailure, connectivity.TransientFailure, connectivity.Connecting, connectivity.Ready, connectivity.Ready}),
 			wantSC: testSubConns[3],
 		},
 		{
-			name:    "hash key is not set, no subchannel ready",
-			ring:    newTestRing([]connectivity.State{connectivity.Idle, connectivity.TransientFailure, connectivity.Connecting, connectivity.Shutdown}),
-			wantErr: balancer.ErrNoSubConnAvailable,
+			name:    "hash key is not set, random picked a subconn in transient failure, no subchannel ready",
+			ring:    newTestRing([]connectivity.State{connectivity.TransientFailure, connectivity.TransientFailure, connectivity.Connecting}),
+			wantErr: errNoSubConnReady,
 		},
 		{
-			name:    "hash key is set to a single value, connect and queue the pick",
-			values:  []string{"test-value"}, // this hashes to the end of the test ring => endpoint 1 expected.
-			ring:    newTestRing([]connectivity.State{connectivity.Idle, connectivity.TransientFailure, connectivity.Connecting, connectivity.Ready}),
-			wantErr: balancer.ErrNoSubConnAvailable,
+			name:   "hash key is set, return ready subconn",
+			values: []string{"test-value"}, // this hashes to the end of the test ring => ring entry 0 expected.
+			ring:   newTestRing([]connectivity.State{connectivity.Ready, connectivity.TransientFailure, connectivity.Connecting, connectivity.Ready}),
+			wantSC: testSubConns[0],
+		},
+		{
+			name:            "hash key is set, connect and queue the pick",
+			values:          []string{"test-value"}, // this hashes to the end of the test ring => ring entry 0 expected.
+			ring:            newTestRing([]connectivity.State{connectivity.Idle, connectivity.TransientFailure, connectivity.Connecting, connectivity.Ready}),
+			wantErr:         balancer.ErrNoSubConnAvailable,
+			wantSCToConnect: testSubConns[0],
 		},
 	}
 	for _, tt := range tests {
@@ -162,7 +188,10 @@ func (s) TestPickerWithRequestHashKey(t *testing.T) {
 			requestHashKey := "test-key"
 			ring := tt.ring
 			p := newPicker(ring, requestHashKey, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
-			p.randuint64 = func() uint64 { return 5 }
+			p.randuint64 = func() uint64 {
+				// always return the first entry on the ring.
+				return 5
+			}
 
 			md := metadata.New(nil)
 			md.Set("test-key", tt.values...)
@@ -175,6 +204,13 @@ func (s) TestPickerWithRequestHashKey(t *testing.T) {
 			}
 			if got.SubConn != tt.wantSC {
 				t.Errorf("Pick() got = %v, want picked SubConn: %v", got, tt.wantSC)
+			}
+			if sc := tt.wantSCToConnect; sc != nil {
+				select {
+				case <-sc.(*testutils.TestSubConn).ConnectCh:
+				case <-time.After(defaultTestShortTimeout):
+					t.Errorf("timeout waiting for Connect() from SubConn %v", sc)
+				}
 			}
 		})
 	}
