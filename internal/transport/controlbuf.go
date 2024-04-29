@@ -969,7 +969,7 @@ func (l *loopyWriter) processData() (bool, error) {
 		// TODO: Revisit once https://github.com/golang/go/issues/66655 is addressed.
 		pool := l.bufferPool
 		if pool == nil {
-			pool = mem.DefaultBufferPool
+			pool = mem.DefaultBufferPool()
 		}
 		buf = pool.Get(size)
 		defer pool.Put(buf)

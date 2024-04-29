@@ -78,7 +78,7 @@ func (s) TestSimpleParsing(t *testing.T) {
 		{append([]byte{0, 1, 0, 0, 0}, bigMsg...), nil, bigMsg, compressionNone},
 	} {
 		buf := &fullReader{test.p}
-		parser := &parser{r: buf, bufferPool: mem.DefaultBufferPool}
+		parser := &parser{r: buf, bufferPool: mem.DefaultBufferPool()}
 		pt, b, err := parser.recvMsg(math.MaxInt32)
 		if err != test.err || !bytes.Equal(b.Materialize(), test.b) || pt != test.pt {
 			t.Fatalf("parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, %v", test.p, pt, b, err, test.pt, test.b, test.err)
@@ -90,7 +90,7 @@ func (s) TestMultipleParsing(t *testing.T) {
 	// Set a byte stream consists of 3 messages with their headers.
 	p := []byte{0, 0, 0, 0, 1, 'a', 0, 0, 0, 0, 2, 'b', 'c', 0, 0, 0, 0, 1, 'd'}
 	b := &fullReader{p}
-	parser := &parser{r: b, bufferPool: mem.DefaultBufferPool}
+	parser := &parser{r: b, bufferPool: mem.DefaultBufferPool()}
 
 	wantRecvs := []struct {
 		pt   payloadFormat
@@ -131,7 +131,7 @@ func (s) TestEncode(t *testing.T) {
 			t.Errorf("encode(_, %v) = %v, %v; want %v, %v", test.msg, data, err, test.data, test.err)
 			continue
 		}
-		if hdr, _ := msgHeader(data, nil, compressionNone); !bytes.Equal(hdr, test.hdr) {
+		if hdr, _, _ := msgHeader(data, nil, compressionNone); !bytes.Equal(hdr, test.hdr) {
 			t.Errorf("msgHeader(%v, false) = %v; want %v", data, hdr, test.hdr)
 		}
 	}

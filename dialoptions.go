@@ -649,7 +649,7 @@ func defaultDialOptions() dialOptions {
 			WriteBufferSize: defaultWriteBufSize,
 			UseProxy:        true,
 			UserAgent:       grpcUA,
-			BufferPool:      mem.DefaultBufferPool,
+			BufferPool:      mem.DefaultBufferPool(),
 		},
 		bs:              internalbackoff.DefaultExponential,
 		healthCheckFunc: internal.HealthCheckFunc,

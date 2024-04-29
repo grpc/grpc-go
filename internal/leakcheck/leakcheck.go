@@ -33,19 +33,19 @@ import (
 )
 
 func SetTrackingBufferPool(efer Errorfer) {
-	mem.DefaultBufferPool = &trackingBufferPool{
-		pool:             mem.DefaultBufferPool,
+	mem.SetDefaultBufferPool(&trackingBufferPool{
+		pool:             mem.DefaultBufferPool(),
 		efer:             efer,
 		allocatedBuffers: make(map[*byte]string),
-	}
+	})
 }
 
 func checkTrackingBufferPool() {
-	p := mem.DefaultBufferPool.(*trackingBufferPool)
+	p := mem.DefaultBufferPool().(*trackingBufferPool)
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	mem.DefaultBufferPool = p.pool
+	mem.SetDefaultBufferPool(p.pool)
 	for _, trace := range p.allocatedBuffers {
 		p.efer.Errorf("Allocated buffer never freed:\n%s", trace)
 	}

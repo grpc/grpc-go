@@ -42,13 +42,14 @@ func (c *codecV2) Marshal(v any) (mem.BufferSlice, error) {
 		return nil, fmt.Errorf("proto: failed to marshal, message is %T, want proto.Message", v)
 	}
 
-	buf := mem.DefaultBufferPool.Get(proto.Size(vv))
+	pool := mem.DefaultBufferPool()
+	buf := pool.Get(proto.Size(vv))
 	_, err := proto.MarshalOptions{}.MarshalAppend(buf[:0], vv)
 	if err != nil {
-		mem.DefaultBufferPool.Put(buf)
+		mem.DefaultBufferPool().Put(buf)
 		return nil, err
 	} else {
-		return mem.BufferSlice{mem.NewBuffer(buf, mem.DefaultBufferPool.Put)}, nil
+		return mem.BufferSlice{mem.NewBuffer(buf, pool.Put)}, nil
 	}
 }
 
@@ -60,7 +61,7 @@ func (c *codecV2) Unmarshal(data mem.BufferSlice, v any) (err error) {
 
 	defer data.Free()
 
-	buf := data.LazyMaterialize(mem.DefaultBufferPool)
+	buf := data.LazyMaterialize(mem.DefaultBufferPool())
 	defer buf.Free()
 	// TODO: Upgrade proto.Unmarshal to support encoding.BufferSlice
 	return proto.Unmarshal(buf.ReadOnlyData(), vv)

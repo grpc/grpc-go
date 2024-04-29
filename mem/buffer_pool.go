@@ -21,6 +21,7 @@ package mem
 import (
 	"sort"
 	"sync"
+	"sync/atomic"
 )
 
 // BufferPool is a pool of buffers that can be shared, resulting in
@@ -49,7 +50,20 @@ var defaultBufferPoolSizes = []int{
 	1 << 20,  // 1MB
 }
 
-var DefaultBufferPool = NewBufferPool(defaultBufferPoolSizes...)
+var defaultBufferPool = func() *atomic.Pointer[BufferPool] {
+	pool := NewBufferPool(defaultBufferPoolSizes...)
+	ptr := new(atomic.Pointer[BufferPool])
+	ptr.Store(&pool)
+	return ptr
+}()
+
+func DefaultBufferPool() BufferPool {
+	return *defaultBufferPool.Load()
+}
+
+func SetDefaultBufferPool(pool BufferPool) {
+	defaultBufferPool.Store(&pool)
+}
 
 func NewBufferPool(poolSizes ...int) BufferPool {
 	sort.Ints(poolSizes)

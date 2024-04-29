@@ -176,7 +176,7 @@ func (s) TestTimerAndWatchStateOnErrorCallback(t *testing.T) {
 //   - resume mgmt server to accept requests.
 //   - update the mgmt server with resourceB and verifies that the watcher's
 //     update callback is invoked.
-func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
+func TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	// Create a restartable listener which can close existing connections.

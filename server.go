@@ -182,7 +182,7 @@ var defaultServerOptions = serverOptions{
 	connectionTimeout:     120 * time.Second,
 	writeBufferSize:       defaultWriteBufSize,
 	readBufferSize:        defaultReadBufSize,
-	bufferPool:            mem.DefaultBufferPool,
+	bufferPool:            mem.DefaultBufferPool(),
 }
 var globalServerOptions []ServerOption
 
@@ -1145,22 +1145,26 @@ func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, 
 		channelz.Error(logger, s.channelz, "grpc: server failed to encode response: ", err)
 		return err
 	}
-	defer data.Free()
 
 	compData, pf, err := compress(data, cp, comp, s.opts.bufferPool)
 	if err != nil {
+		data.Free()
 		channelz.Error(logger, s.channelz, "grpc: server failed to compress response: ", err)
 		return err
 	}
+	defer compData.Free()
 
-	hdr, payload := msgHeader(data, compData, pf)
+	hdr, data, payload := msgHeader(data, compData, pf)
+	defer data.Free()
+	defer payload.Free()
+
 	dataLen := data.Len()
 	payloadLen := payload.Len()
 	// TODO(dfawley): should we be checking len(data) instead?
 	if payloadLen > s.opts.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", payloadLen, s.opts.maxSendMessageSize)
 	}
-	err = t.Write(stream, hdr, payload, opts)
+	err = t.Write(stream, hdr, payload.Ref(), opts)
 	if err == nil {
 		if len(s.opts.statsHandlers) != 0 {
 			for _, sh := range s.opts.statsHandlers {

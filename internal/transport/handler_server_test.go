@@ -204,7 +204,7 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 		if tt.modrw != nil {
 			rw = tt.modrw(rw)
 		}
-		got, gotErr := NewServerHandlerTransport(rw, tt.req, nil, mem.DefaultBufferPool)
+		got, gotErr := NewServerHandlerTransport(rw, tt.req, nil, mem.DefaultBufferPool())
 		if (gotErr != nil) != (tt.wantErr != "") || (gotErr != nil && gotErr.Error() != tt.wantErr) {
 			t.Errorf("%s: error = %q; want %q", tt.name, gotErr.Error(), tt.wantErr)
 			continue
@@ -260,7 +260,7 @@ func newHandleStreamTest(t *testing.T) *handleStreamTest {
 		Body: bodyr,
 	}
 	rw := newTestHandlerResponseWriter().(testHandlerResponseWriter)
-	ht, err := NewServerHandlerTransport(rw, req, nil, mem.DefaultBufferPool)
+	ht, err := NewServerHandlerTransport(rw, req, nil, mem.DefaultBufferPool())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,7 +375,7 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		Body: bodyr,
 	}
 	rw := newTestHandlerResponseWriter().(testHandlerResponseWriter)
-	ht, err := NewServerHandlerTransport(rw, req, nil, mem.DefaultBufferPool)
+	ht, err := NewServerHandlerTransport(rw, req, nil, mem.DefaultBufferPool())
 	if err != nil {
 		t.Fatal(err)
 	}

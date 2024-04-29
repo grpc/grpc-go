@@ -714,7 +714,7 @@ const (
 
 // msgHeader returns a 5-byte header for the message being transmitted and the
 // payload, which is compData if non-nil or data otherwise.
-func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, payload mem.BufferSlice) {
+func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, dataRef, payload mem.BufferSlice) {
 	hdr = make([]byte, headerLen)
 	hdr[0] = byte(pf)
 
@@ -727,17 +727,9 @@ func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, pa
 		payload = data
 	}
 
-	// compData is never referenced for the binlog, so it never need an extra
-	// reference and will be released after being sent. Conversely, data needs to be
-	// referenced twice if compression was disabled since it will be released by the
-	// call to Write and the function that appends to the binlog.
-	if pf == compressionNone {
-		data.Ref()
-	}
-
 	// Write length of payload into buf
 	binary.BigEndian.PutUint32(hdr[payloadLen:], length)
-	return hdr, payload
+	return hdr, data, payload
 }
 
 func outPayload(client bool, msg any, dataLength, payloadLength int, t time.Time) *stats.OutPayload {
@@ -824,8 +816,7 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 
 	if payInfo != nil {
 		payInfo.compressedLength = compressedLength
-		out.Ref()
-		payInfo.uncompressedBytes = out
+		payInfo.uncompressedBytes = out.Ref()
 	}
 
 	return out, nil

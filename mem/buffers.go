@@ -29,9 +29,10 @@ import (
 type BufferSlice []*Buffer
 
 type Buffer struct {
-	data []byte
-	refs *atomic.Int32
-	free func([]byte)
+	data  []byte
+	refs  *atomic.Int32
+	free  func([]byte)
+	freed bool
 }
 
 func NewBuffer(data []byte, free func([]byte)) *Buffer {
@@ -45,52 +46,70 @@ func Copy(data []byte, pool BufferPool) *Buffer {
 }
 
 func (b *Buffer) ReadOnlyData() []byte {
-	if b == nil || b.refs.Load() <= 0 {
-		return nil
+	if b.freed {
+		panic("Cannot read freed buffer")
 	}
 	return b.data
 }
 
 func (b *Buffer) Ref() *Buffer {
+	if b.freed {
+		panic("Cannot ref freed buffer")
+	}
+
 	b.refs.Add(1)
-	return b
+	return &Buffer{
+		data: b.data,
+		refs: b.refs,
+		free: b.free,
+	}
 }
 
 func (b *Buffer) Free() {
-	if b == nil || b.data == nil {
-		return
-	}
-	refs := b.refs.Add(-1)
-	if refs != 0 {
+	if b.freed {
 		return
 	}
 
-	if b.free != nil {
+	b.freed = true
+	refs := b.refs.Add(-1)
+	if refs == 0 && b.free != nil {
 		b.free(b.data)
 	}
 	b.data = nil
 }
 
 func (b *Buffer) Len() int {
+	// Convenience: io.Reader returns (n int, err error), and n is often checked
+	// before err is checked. To mimic this, Len() should work on nil Buffers.
+	if b == nil {
+		return 0
+	}
 	return len(b.ReadOnlyData())
 }
 
 func (b *Buffer) Split(n int) *Buffer {
+	if b.freed {
+		panic("Cannot split freed buffer")
+	}
+
+	b.refs.Add(1)
+
 	data := b.data
-	free := b.free
+	var free func([]byte)
+	if f := b.free; f != nil {
+		free = func(_ []byte) {
+			f(data)
+		}
+	}
 
 	b.data = data[:n]
 	b.free = nil
 
-	newBuf := &Buffer{
+	return &Buffer{
 		data: data[n:],
 		refs: b.refs,
-		free: func(_ []byte) {
-			free(data)
-		},
+		free: free,
 	}
-
-	return newBuf.Ref()
 }
 
 type Writer struct {
@@ -154,16 +173,17 @@ func (s BufferSlice) Reader() *Reader {
 
 func (s BufferSlice) Len() (length int) {
 	for _, b := range s {
-		length += len(b.ReadOnlyData())
+		length += b.Len()
 	}
 	return length
 }
 
 func (s BufferSlice) Ref() BufferSlice {
-	for _, b := range s {
-		b.Ref()
+	out := make(BufferSlice, len(s))
+	for i, b := range s {
+		out[i] = b.Ref()
 	}
-	return s
+	return out
 }
 
 func (s BufferSlice) Free() {

@@ -61,12 +61,12 @@ func (p *PreparedMsg) Encode(s Stream, msg any) error {
 	p.encodedData = data
 	// TODO: it should be possible to grab the bufferPool from the underlying
 	// stream implementation.
-	compData, pf, err := compress(data, rpcInfo.preloaderInfo.cp, rpcInfo.preloaderInfo.comp, mem.DefaultBufferPool)
+	compData, pf, err := compress(data, rpcInfo.preloaderInfo.cp, rpcInfo.preloaderInfo.comp, mem.DefaultBufferPool())
 	if err != nil {
 		data.Free()
 		return err
 	}
 
-	p.hdr, p.payload = msgHeader(data, compData, pf)
+	p.hdr, p.encodedData, p.payload = msgHeader(data, compData, pf)
 	return nil
 }

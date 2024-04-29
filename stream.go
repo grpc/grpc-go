@@ -1389,6 +1389,7 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 	}
 
 	defer data.Free()
+	defer payload.Free()
 
 	// TODO(dfawley): should we be checking len(data) instead?
 	if payload.Len() > *as.callInfo.maxSendMessageSize {
@@ -1663,6 +1664,7 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	}
 
 	defer data.Free()
+	defer payload.Free()
 
 	dataLen := data.Len()
 	payloadLen := payload.Len()
@@ -1671,7 +1673,7 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	if payloadLen > ss.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payloadLen, ss.maxSendMessageSize)
 	}
-	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false}); err != nil {
+	if err := ss.t.Write(ss.s, hdr, payload.Ref(), &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
 	}
 
@@ -1795,6 +1797,6 @@ func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor,
 		data.Free()
 		return nil, nil, nil, err
 	}
-	hdr, payload = msgHeader(data, compData, pf)
+	hdr, data, payload = msgHeader(data, compData, pf)
 	return hdr, data, payload, nil
 }

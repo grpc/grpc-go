@@ -197,7 +197,9 @@ func (r *recvBufferReader) readClient(n int) (buf *mem.Buffer, err error) {
 func (r *recvBufferReader) readAdditional(m recvMsg, n int) (b *mem.Buffer, err error) {
 	r.recv.load()
 	if m.err != nil {
-		m.buffer.Free()
+		if m.buffer != nil {
+			m.buffer.Free()
+		}
 		return nil, m.err
 	}
 

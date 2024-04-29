@@ -816,7 +816,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		if len(f.Data()) > 0 {
 			pool := s.bufferPool
 			if pool == nil {
-				pool = mem.DefaultBufferPool
+				pool = mem.DefaultBufferPool()
 			}
 			s.write(recvMsg{buffer: mem.Copy(f.Data(), pool)})
 		}
