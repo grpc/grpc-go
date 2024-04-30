@@ -211,6 +211,24 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 					t.Fatalf("Failed to assign system-provided certificates on the client side.")
 				}
 			}
+			if test.MinVersion != 0 {
+				if clientConfig.MinVersion != test.MinVersion {
+					t.Fatalf("Failed to assign min tls version.")
+				}
+			} else {
+				if clientConfig.MinVersion != tls.VersionTLS12 {
+					t.Fatalf("Default min tls version not set correctly")
+				}
+			}
+			if test.MaxVersion != 0 {
+				if clientConfig.MaxVersion != test.MaxVersion {
+					t.Fatalf("Failed to assign max tls version.")
+				}
+			} else {
+				if clientConfig.MaxVersion != tls.VersionTLS13 {
+					t.Fatalf("Default max tls version not set correctly")
+				}
+			}
 		})
 	}
 }
