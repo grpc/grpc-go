@@ -410,6 +410,15 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 	if o.VType != CertAndHostVerification {
 		o.VerificationType = o.VType
 	}
+	// TODO(gtcooke94) MinVersion and MaxVersion are deprected, eventually
+	// remove this block. This is a temporary fallback to ensure that if the
+	// refactored names aren't set we use the old names.
+	if o.MinTLSVersion == 0 {
+		o.MinTLSVersion = o.MinVersion
+	}
+	if o.MaxTLSVersion == 0 {
+		o.MaxTLSVersion = o.MaxVersion
+	}
 	if o.RequireClientCert && o.VerificationType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
@@ -433,6 +442,14 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		// TLS package to use the verification function we built from
 		// buildVerifyFunc.
 		clientAuth = tls.RequireAnyClientCert
+	}
+	// If the MinTLSVersion isn't set, default to 1.2
+	if o.MinTLSVersion == 0 {
+		o.MinTLSVersion = tls.VersionTLS12
+	}
+	// If the MaxTLSVersion isn't set, default to 1.3
+	if o.MaxTLSVersion == 0 {
+		o.MaxTLSVersion = tls.VersionTLS13
 	}
 	config := &tls.Config{
 		ClientAuth: clientAuth,
