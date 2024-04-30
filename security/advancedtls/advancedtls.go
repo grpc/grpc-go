@@ -68,8 +68,7 @@ type VerificationFuncParams = HandshakeVerificationInfo
 type PostHandshakeVerificationResults struct{}
 
 // VerificationResults contains the information about results of
-// CustomVerificationFunc.
-//
+// PostHandshakeVerificationFunc.
 // Deprecated: use PostHandshakeVerificationResults instead.
 type VerificationResults = PostHandshakeVerificationResults
 
@@ -212,9 +211,9 @@ type ClientOptions struct {
 	//
 	// Deprecated: use VerificationType instead.
 	VType VerificationType
-	// RevocationConfig is the configurations for certificate revocation checks.
+	// RevocationOptions is the configurations for certificate revocation checks.
 	// It could be nil if such checks are not needed.
-	RevocationConfig *RevocationConfig
+	RevocationOptions *RevocationOptions
 	// MinVersion contains the minimum TLS version that is acceptable.
 	// By default, TLS 1.2 is currently used as the minimum when acting as a
 	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
@@ -260,9 +259,9 @@ type ServerOptions struct {
 	//
 	// Deprecated: use VerificationType instead.
 	VType VerificationType
-	// RevocationConfig is the configurations for certificate revocation checks.
+	// RevocationOptions is the configurations for certificate revocation checks.
 	// It could be nil if such checks are not needed.
-	RevocationConfig *RevocationConfig
+	RevocationOptions *RevocationOptions
 	// MinVersion contains the minimum TLS version that is acceptable.
 	// By default, TLS 1.2 is currently used as the minimum when acting as a
 	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
@@ -461,12 +460,12 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 // advancedTLSCreds is the credentials required for authenticating a connection
 // using TLS.
 type advancedTLSCreds struct {
-	config           *tls.Config
-	verifyFunc       PostHandshakeVerificationFunc
-	getRootCAs       func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-	isClient         bool
-	verificationType VerificationType
-	revocationConfig *RevocationConfig
+	config            *tls.Config
+	verifyFunc        PostHandshakeVerificationFunc
+	getRootCAs        func(params *GetRootCAsParams) (*GetRootCAsResults, error)
+	isClient          bool
+	revocationOptions *RevocationOptions
+	verificationType  VerificationType
 }
 
 func (c advancedTLSCreds) Info() credentials.ProtocolInfo {
@@ -614,12 +613,12 @@ func buildVerifyFunc(c *advancedTLSCreds,
 			leafCert = rawCertList[0]
 		}
 		// Perform certificate revocation check if specified.
-		if c.revocationConfig != nil {
+		if c.revocationOptions != nil {
 			verifiedChains := chains
 			if verifiedChains == nil {
 				verifiedChains = [][]*x509.Certificate{rawCertList}
 			}
-			if err := checkChainRevocation(verifiedChains, *c.revocationConfig); err != nil {
+			if err := checkChainRevocation(verifiedChains, *c.revocationOptions); err != nil {
 				return err
 			}
 		}
@@ -645,12 +644,12 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 		return nil, err
 	}
 	tc := &advancedTLSCreds{
-		config:           conf,
-		isClient:         true,
-		getRootCAs:       o.RootOptions.GetRootCertificates,
-		verifyFunc:       o.AdditionalPeerVerification,
-		verificationType: o.VerificationType,
-		revocationConfig: o.RevocationConfig,
+		config:            conf,
+		isClient:          true,
+		getRootCAs:        o.RootOptions.GetRootCertificates,
+		verifyFunc:        o.AdditionalPeerVerification,
+		revocationOptions: o.RevocationOptions,
+		verificationType:  o.VerificationType,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
@@ -664,12 +663,12 @@ func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) 
 		return nil, err
 	}
 	tc := &advancedTLSCreds{
-		config:           conf,
-		isClient:         false,
-		getRootCAs:       o.RootOptions.GetRootCertificates,
-		verifyFunc:       o.AdditionalPeerVerification,
-		verificationType: o.VerificationType,
-		revocationConfig: o.RevocationConfig,
+		config:            conf,
+		isClient:          false,
+		getRootCAs:        o.RootOptions.GetRootCertificates,
+		verifyFunc:        o.AdditionalPeerVerification,
+		revocationOptions: o.RevocationOptions,
+		verificationType:  o.VerificationType,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
