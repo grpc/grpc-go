@@ -90,7 +90,8 @@ func Pairs(kv ...string) MD {
 	return md
 }
 
-// String implements the Stringer interface for pretty-printing a MD. Ordering of the values is non-deterministic as it ranges over a map.
+// String implements the Stringer interface for pretty-printing a MD.
+// Ordering of the values is non-deterministic as it ranges over a map.
 func (md MD) String() string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "MD{")

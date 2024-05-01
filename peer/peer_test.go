@@ -21,6 +21,7 @@ package peer
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc/credentials"
@@ -32,7 +33,7 @@ type testAuthInfo struct {
 }
 
 func (ta testAuthInfo) AuthType() string {
-	return "testAuthInfo"
+	return fmt.Sprintf("testAuthInfo-%d", ta.SecurityLevel)
 }
 
 func TestPeerSecurityLevel(t *testing.T) {
@@ -68,17 +69,19 @@ func TestPeerSecurityLevel(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		ctx := NewContext(context.Background(), &Peer{AuthInfo: testAuthInfo{credentials.CommonAuthInfo{SecurityLevel: tc.authLevel}}})
-		p, ok := FromContext(ctx)
-		if !ok {
-			t.Fatalf("Unable to get peer from context")
-		}
-		err := credentials.CheckSecurityLevel(p.AuthInfo, tc.testLevel)
-		if tc.want && (err != nil) {
-			t.Fatalf("CheckSeurityLevel(%s, %s) returned failure but want success", tc.authLevel.String(), tc.testLevel.String())
-		} else if !tc.want && (err == nil) {
-			t.Fatalf("CheckSeurityLevel(%s, %s) returned success but want failure", tc.authLevel.String(), tc.testLevel.String())
-		}
+		t.Run(tc.authLevel.String()+"-"+tc.testLevel.String(), func(t *testing.T) {
+			ctx := NewContext(context.Background(), &Peer{AuthInfo: testAuthInfo{credentials.CommonAuthInfo{SecurityLevel: tc.authLevel}}})
+			p, ok := FromContext(ctx)
+			if !ok {
+				t.Fatalf("Unable to get peer from context")
+			}
+			err := credentials.CheckSecurityLevel(p.AuthInfo, tc.testLevel)
+			if tc.want && (err != nil) {
+				t.Fatalf("CheckSeurityLevel(%s, %s) returned failure but want success", tc.authLevel.String(), tc.testLevel.String())
+			} else if !tc.want && (err == nil) {
+				t.Fatalf("CheckSeurityLevel(%s, %s) returned success but want failure", tc.authLevel.String(), tc.testLevel.String())
+			}
+		})
 	}
 }
 
@@ -91,55 +94,51 @@ func (a *addr) String() string { return a.ipAddress }
 
 func TestPeerStringer(t *testing.T) {
 	testCases := []struct {
-		addr      *addr
-		authLevel credentials.SecurityLevel
-		want      string
+		peer *Peer
+		want string
 	}{
 		{
-			addr:      &addr{"example.com:1234"},
-			authLevel: credentials.PrivacyAndIntegrity,
-			want:      "Peer{Addr: 'example.com:1234', AuthInfo: 'testAuthInfo'}",
+			peer: &Peer{Addr: &addr{"example.com:1234"}, AuthInfo: testAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}},
+			want: "Peer{Addr: 'example.com:1234', LocalAddr: <nil>, AuthInfo: 'testAuthInfo-3'}",
 		},
 		{
-			addr:      &addr{"1.2.3.4:1234"},
-			authLevel: -1,
-			want:      "Peer{Addr: '1.2.3.4:1234', AuthInfo: <nil>}",
+			peer: &Peer{Addr: &addr{"example.com:1234"}, LocalAddr: &addr{"example.com:1234"}, AuthInfo: testAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}},
+			want: "Peer{Addr: 'example.com:1234', LocalAddr: 'example.com:1234', AuthInfo: 'testAuthInfo-3'}",
 		},
 		{
-			authLevel: credentials.InvalidSecurityLevel,
-			want:      "Peer{Addr: <nil>, AuthInfo: 'testAuthInfo'}",
+			peer: &Peer{Addr: &addr{"1.2.3.4:1234"}, AuthInfo: testAuthInfo{credentials.CommonAuthInfo{}}},
+			want: "Peer{Addr: '1.2.3.4:1234', LocalAddr: <nil>, AuthInfo: 'testAuthInfo-0'}",
 		},
 		{
-			authLevel: -1,
-			want:      "Peer{Addr: <nil>, AuthInfo: <nil>}",
+			peer: &Peer{AuthInfo: testAuthInfo{}},
+			want: "Peer{Addr: <nil>, LocalAddr: <nil>, AuthInfo: 'testAuthInfo-0'}",
+		},
+		{
+			peer: &Peer{},
+			want: "Peer{Addr: <nil>, LocalAddr: <nil>, AuthInfo: <nil>}",
+		},
+		{
+			peer: nil,
+			want: "Peer<nil>",
 		},
 	}
 	for _, tc := range testCases {
-		ctx := NewContext(context.Background(), &Peer{Addr: tc.addr, AuthInfo: testAuthInfo{credentials.CommonAuthInfo{SecurityLevel: tc.authLevel}}})
-		p, ok := FromContext(ctx)
-		if tc.authLevel == -1 {
-			p.AuthInfo = nil
-		}
-		if tc.addr == nil {
-			p.Addr = nil
-		}
-		if !ok {
-			t.Fatalf("Unable to get peer from context")
-		}
-		if p.String() != tc.want {
-			t.Fatalf("Error using peer String(): expected %q, got %q", tc.want, p.String())
-		}
+		t.Run(strings.ReplaceAll(tc.want, " ", ""), func(t *testing.T) {
+			ctx := NewContext(context.Background(), tc.peer)
+			p, ok := FromContext(ctx)
+			if !ok {
+				t.Fatalf("Unable to get peer from context")
+			}
+			if p.String() != tc.want {
+				t.Fatalf("Error using peer String(): expected %q, got %q", tc.want, p.String())
+			}
+		})
 	}
-	t.Run("test String on nil Peer", func(st *testing.T) {
-		var test *Peer
-		if test.String() != "Peer<nil>" {
-			st.Fatalf("Error using String on nil Peer. Expected 'Peer<nil>', got: '%s'", test.String())
-		}
-	})
-	t.Run("test Stringer on context", func(st *testing.T) {
-		ctx := NewContext(context.Background(), &Peer{Addr: &addr{"1.2.3.4:1234"}, AuthInfo: testAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}})
-		if fmt.Sprintf("%v", ctx) != "context.Background.WithValue(type peer.peerKey, val Peer{Addr: '1.2.3.4:1234', AuthInfo: 'testAuthInfo'})" {
-			st.Fatalf("Error printing context with embedded Peer. Got: %v", ctx)
-		}
-	})
+}
+
+func TestPeerStringerOnContext(t *testing.T) {
+	ctx := NewContext(context.Background(), &Peer{Addr: &addr{"1.2.3.4:1234"}, AuthInfo: testAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}})
+	if fmt.Sprintf("%v", ctx) != "context.Background.WithValue(type peer.peerKey, val Peer{Addr: '1.2.3.4:1234', LocalAddr: <nil>, AuthInfo: 'testAuthInfo-3'})" {
+		t.Fatalf("Error printing context with embedded Peer. Got: %v", ctx)
+	}
 }

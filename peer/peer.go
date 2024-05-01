@@ -54,6 +54,11 @@ func (p *Peer) String() string {
 	} else {
 		fmt.Fprintf(sb, "Addr: <nil>, ")
 	}
+	if p.LocalAddr != nil {
+		fmt.Fprintf(sb, "LocalAddr: '%s', ", p.LocalAddr.String())
+	} else {
+		fmt.Fprintf(sb, "LocalAddr: <nil>, ")
+	}
 	if p.AuthInfo != nil {
 		fmt.Fprintf(sb, "AuthInfo: '%s'", p.AuthInfo.AuthType())
 	} else {
