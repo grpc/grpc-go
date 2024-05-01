@@ -60,7 +60,6 @@ func (bc Exponential) Backoff(retries int) time.Duration {
 	backoff, max := float64(bc.Config.BaseDelay), float64(bc.Config.MaxDelay)
 	for backoff < max && retries > 0 {
 		backoff *= bc.Config.Multiplier
-		retries--
 	}
 	if backoff > max {
 		backoff = max
