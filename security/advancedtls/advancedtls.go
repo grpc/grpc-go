@@ -484,7 +484,8 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 	if cfg.ServerName == "" {
 		cfg.ServerName = authority
 	}
-	cfg.VerifyPeerCertificate = buildVerifyFunc(c, cfg.ServerName, rawConn)
+	peerVerifiedChains := [][]*x509.Certificate{}
+	cfg.VerifyPeerCertificate = buildVerifyFunc(c, cfg.ServerName, rawConn, &peerVerifiedChains)
 	conn := tls.Client(rawConn, cfg)
 	errChannel := make(chan error, 1)
 	go func() {
@@ -508,12 +509,14 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 		},
 	}
 	info.SPIFFEID = credinternal.SPIFFEIDFromState(conn.ConnectionState())
+	info.State.VerifiedChains = peerVerifiedChains
 	return credinternal.WrapSyscallConn(rawConn, conn), info, nil
 }
 
 func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	cfg := credinternal.CloneTLSConfig(c.config)
-	cfg.VerifyPeerCertificate = buildVerifyFunc(c, "", rawConn)
+	peerVerifiedChains := [][]*x509.Certificate{}
+	cfg.VerifyPeerCertificate = buildVerifyFunc(c, "", rawConn, &peerVerifiedChains)
 	conn := tls.Server(rawConn, cfg)
 	if err := conn.Handshake(); err != nil {
 		conn.Close()
@@ -526,6 +529,7 @@ func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credenti
 		},
 	}
 	info.SPIFFEID = credinternal.SPIFFEIDFromState(conn.ConnectionState())
+	info.State.VerifiedChains = peerVerifiedChains
 	return credinternal.WrapSyscallConn(rawConn, conn), info, nil
 }
 
@@ -552,7 +556,8 @@ func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 //     to true.
 func buildVerifyFunc(c *advancedTLSCreds,
 	serverName string,
-	rawConn net.Conn) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	rawConn net.Conn,
+	peerVerifiedChains *[][]*x509.Certificate) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		chains := verifiedChains
 		var leafCert *x509.Certificate
@@ -611,6 +616,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				return err
 			}
 			leafCert = rawCertList[0]
+			*peerVerifiedChains = chains
 		}
 		// Perform certificate revocation check if specified.
 		if c.revocationOptions != nil {
