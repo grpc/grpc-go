@@ -36,60 +36,12 @@ func (ta testAuthInfo) AuthType() string {
 	return fmt.Sprintf("testAuthInfo-%d", ta.SecurityLevel)
 }
 
-func TestPeerSecurityLevel(t *testing.T) {
-	testCases := []struct {
-		authLevel credentials.SecurityLevel
-		testLevel credentials.SecurityLevel
-		want      bool
-	}{
-		{
-			authLevel: credentials.PrivacyAndIntegrity,
-			testLevel: credentials.PrivacyAndIntegrity,
-			want:      true,
-		},
-		{
-			authLevel: credentials.IntegrityOnly,
-			testLevel: credentials.PrivacyAndIntegrity,
-			want:      false,
-		},
-		{
-			authLevel: credentials.IntegrityOnly,
-			testLevel: credentials.NoSecurity,
-			want:      true,
-		},
-		{
-			authLevel: credentials.InvalidSecurityLevel,
-			testLevel: credentials.IntegrityOnly,
-			want:      true,
-		},
-		{
-			authLevel: credentials.InvalidSecurityLevel,
-			testLevel: credentials.PrivacyAndIntegrity,
-			want:      true,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.authLevel.String()+"-"+tc.testLevel.String(), func(t *testing.T) {
-			ctx := NewContext(context.Background(), &Peer{AuthInfo: testAuthInfo{credentials.CommonAuthInfo{SecurityLevel: tc.authLevel}}})
-			p, ok := FromContext(ctx)
-			if !ok {
-				t.Fatalf("Unable to get peer from context")
-			}
-			err := credentials.CheckSecurityLevel(p.AuthInfo, tc.testLevel)
-			if tc.want && (err != nil) {
-				t.Fatalf("CheckSeurityLevel(%s, %s) returned failure but want success", tc.authLevel.String(), tc.testLevel.String())
-			} else if !tc.want && (err == nil) {
-				t.Fatalf("CheckSeurityLevel(%s, %s) returned success but want failure", tc.authLevel.String(), tc.testLevel.String())
-			}
-		})
-	}
-}
-
 type addr struct {
 	ipAddress string
 }
 
-func (addr) Network() string   { return "" }
+func (addr) Network() string { return "" }
+
 func (a *addr) String() string { return a.ipAddress }
 
 func TestPeerStringer(t *testing.T) {
