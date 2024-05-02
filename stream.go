@@ -905,8 +905,9 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	if payloadLen > *cs.callInfo.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payloadLen, *cs.callInfo.maxSendMessageSize)
 	}
+	payloadRef := payload.Ref()
 	op := func(a *csAttempt) error {
-		return a.sendMsg(m, hdr, payload.Ref(), dataLen)
+		return a.sendMsg(m, hdr, payloadRef, dataLen)
 	}
 	err = cs.withRetry(op, func() { cs.bufferForRetryLocked(len(hdr)+payloadLen, op) })
 	if len(cs.binlogs) != 0 && err == nil {

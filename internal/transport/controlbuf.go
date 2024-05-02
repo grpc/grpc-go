@@ -436,12 +436,13 @@ func (c *controlBuffer) finish() {
 	// These streams need to be cleaned out since the transport
 	// is still not aware of these yet.
 	for head := c.list.dequeueAll(); head != nil; head = head.next {
-		hdr, ok := head.it.(*headerFrame)
-		if !ok {
-			continue
-		}
-		if hdr.onOrphaned != nil { // It will be nil on the server-side.
-			hdr.onOrphaned(ErrConnClosing)
+		switch v := head.it.(type) {
+		case *headerFrame:
+			if v.onOrphaned != nil { // It will be nil on the server-side.
+				v.onOrphaned(ErrConnClosing)
+			}
+		case *dataFrame:
+			v.d.Free()
 		}
 	}
 	// In case throttle() is currently in flight, it needs to be unblocked.
