@@ -197,7 +197,7 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 		t.Fatal("Scheduled a callback after closing the serializer")
 	}
 
-	// Ensure that the lates callback is executed at this point.
+	// Ensure that the latest callback is executed at this point.
 	select {
 	case <-time.After(defaultTestShortTimeout):
 	case <-done:

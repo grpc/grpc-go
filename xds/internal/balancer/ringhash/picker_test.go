@@ -187,7 +187,7 @@ func (s) TestPickerPickTriggerTFReturnReady(t *testing.T) {
 
 // TestPickerPickTriggerTFWithIdle covers that if the picked SubConn is
 // TransientFailure, SubConn 2 is TransientFailure, 3 is Idle (init Idle). Pick
-// will be queue, SubConn 3 will Connect(), SubConn 4 and 5 (in TransientFailre)
+// will be queue, SubConn 3 will Connect(), SubConn 4 and 5 (in TransientFailure)
 // will not queue a Connect.
 func (s) TestPickerPickTriggerTFWithIdle(t *testing.T) {
 	ring := newTestRing([]connectivity.State{

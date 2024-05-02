@@ -126,7 +126,7 @@ func (cc ChannelCreds) String() string {
 	}
 
 	// We do not expect the Marshal call to fail since we wrote to cc.Config
-	// after a successful unmarshaling from JSON configuration. Therefore,
+	// after a successful unmarshalling from JSON configuration. Therefore,
 	// it is safe to ignore the error here.
 	b, _ := json.Marshal(cc.Config)
 	return cc.Type + "-" + string(b)
@@ -153,7 +153,7 @@ type ServerConfig struct {
 	// It is also used to dedup servers with the same server URI and creds.
 	ServerFeatures []string
 
-	// As part of unmarshaling the JSON config into this struct, we ensure that
+	// As part of unmarshalling the JSON config into this struct, we ensure that
 	// the credentials config is valid by building an instance of the specified
 	// credentials and store it here as a grpc.DialOption for easy access when
 	// dialing this xDS server.
