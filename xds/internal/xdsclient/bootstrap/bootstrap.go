@@ -568,6 +568,8 @@ func newConfigFromContents(data []byte) (*Config, error) {
 	node.ClientFeatures = append(node.ClientFeatures, clientFeatureNoOverprovisioning, clientFeatureResourceWrapper)
 	config.NodeProto = node
 
-	logger.Debugf("Bootstrap config for creating xds-client: %v", pretty.ToJSON(config))
+	if logger.V(2) {
+		logger.Infof("Bootstrap config for creating xds-client: %v", pretty.ToJSON(config))
+	}
 	return config, nil
 }
