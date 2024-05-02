@@ -350,10 +350,10 @@ func TestStringerMD(t *testing.T) {
 		{MD{"k1": []string{"v1"}}, []string{"MD{k1=[v1]}"}},
 		{MD{"k1": []string{"v1", "v2"}, "k2": []string{}, "k3": []string{"1", "2", "3"}}, []string{"MD{", "k1=[v1, v2]", "k2=[]", "k3=[1, 2, 3]", "}"}},
 	} {
-		strMd := test.md.String()
+		got := test.md.String()
 		for _, want := range test.want {
-			if !strings.Contains(strMd, want) {
-				t.Fatalf("Metadata string '%s' is missing '%s'", strMd, want)
+			if !strings.Contains(got, want) {
+				t.Fatalf("Metadata string %q is missing %q", got, want)
 			}
 		}
 	}
