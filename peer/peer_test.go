@@ -21,7 +21,6 @@ package peer
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 
 	"google.golang.org/grpc/credentials"
@@ -46,36 +45,43 @@ func (a *addr) String() string { return a.ipAddress }
 
 func TestPeerStringer(t *testing.T) {
 	testCases := []struct {
+		name string
 		peer *Peer
 		want string
 	}{
 		{
+			name: "+Addr-LocalAddr+ValidAuth",
 			peer: &Peer{Addr: &addr{"example.com:1234"}, AuthInfo: testAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}},
 			want: "Peer{Addr: 'example.com:1234', LocalAddr: <nil>, AuthInfo: 'testAuthInfo-3'}",
 		},
 		{
+			name: "+Addr+LocalAddr+ValidAuth",
 			peer: &Peer{Addr: &addr{"example.com:1234"}, LocalAddr: &addr{"example.com:1234"}, AuthInfo: testAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}},
 			want: "Peer{Addr: 'example.com:1234', LocalAddr: 'example.com:1234', AuthInfo: 'testAuthInfo-3'}",
 		},
 		{
+			name: "+Addr-LocalAddr+emptyAuth",
 			peer: &Peer{Addr: &addr{"1.2.3.4:1234"}, AuthInfo: testAuthInfo{credentials.CommonAuthInfo{}}},
 			want: "Peer{Addr: '1.2.3.4:1234', LocalAddr: <nil>, AuthInfo: 'testAuthInfo-0'}",
 		},
 		{
+			name: "-Addr-LocalAddr+emptyAuth",
 			peer: &Peer{AuthInfo: testAuthInfo{}},
 			want: "Peer{Addr: <nil>, LocalAddr: <nil>, AuthInfo: 'testAuthInfo-0'}",
 		},
 		{
+			name: "zeroedPeer",
 			peer: &Peer{},
 			want: "Peer{Addr: <nil>, LocalAddr: <nil>, AuthInfo: <nil>}",
 		},
 		{
+			name: "nilPeer",
 			peer: nil,
 			want: "Peer<nil>",
 		},
 	}
 	for _, tc := range testCases {
-		t.Run(strings.ReplaceAll(tc.want, " ", ""), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			ctx := NewContext(context.Background(), tc.peer)
 			p, ok := FromContext(ctx)
 			if !ok {
@@ -90,7 +96,8 @@ func TestPeerStringer(t *testing.T) {
 
 func TestPeerStringerOnContext(t *testing.T) {
 	ctx := NewContext(context.Background(), &Peer{Addr: &addr{"1.2.3.4:1234"}, AuthInfo: testAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}})
-	if fmt.Sprintf("%v", ctx) != "context.Background.WithValue(type peer.peerKey, val Peer{Addr: '1.2.3.4:1234', LocalAddr: <nil>, AuthInfo: 'testAuthInfo-3'})" {
-		t.Fatalf("Error printing context with embedded Peer. Got: %v", ctx)
+	want := "context.Background.WithValue(type peer.peerKey, val Peer{Addr: '1.2.3.4:1234', LocalAddr: <nil>, AuthInfo: 'testAuthInfo-3'})"
+	if got := fmt.Sprintf("%v", ctx); got != want {
+		t.Fatalf("Unexpected stringer output, got: %q; want: %q", got, want)
 	}
 }
