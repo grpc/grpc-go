@@ -61,9 +61,9 @@ type RevocationOptions struct {
 	// Directory format must match OpenSSL X509_LOOKUP_hash_dir(3).
 	// Deprecated: use CRLProvider instead.
 	RootDir string
-	// AllowUndetermined controls if certificate chains with RevocationUndetermined
+	// DenyUndetermined controls if certificate chains with RevocationUndetermined
 	// revocation status are allowed to complete.
-	AllowUndetermined bool
+	DenyUndetermined bool
 	// Cache will store CRL files if not nil, otherwise files are reloaded for every lookup.
 	// Only used for caching CRLs when using the RootDir setting.
 	// Deprecated: use CRLProvider instead.
@@ -222,11 +222,11 @@ func checkChainRevocation(verifiedChains [][]*x509.Certificate, cfg RevocationOp
 			count[RevocationRevoked]++
 			continue
 		case RevocationUndetermined:
-			if cfg.AllowUndetermined {
-				return nil
-			}
 			count[RevocationUndetermined]++
-			continue
+			if cfg.DenyUndetermined {
+				continue
+			}
+			return nil
 		}
 	}
 	return fmt.Errorf("no unrevoked chains found: %v", count)

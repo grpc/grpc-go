@@ -409,15 +409,15 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		return &GetRootCAsResults{TrustCerts: cs.ServerTrust3}, nil
 	}
 
-	makeStaticCRLRevocationOptions := func(crlPath string, allowUndetermined bool) *RevocationOptions {
+	makeStaticCRLRevocationOptions := func(crlPath string, denyUndetermined bool) *RevocationOptions {
 		rawCRL, err := os.ReadFile(crlPath)
 		if err != nil {
 			t.Fatalf("readFile(%v) failed err = %v", crlPath, err)
 		}
 		cRLProvider := NewStaticCRLProvider([][]byte{rawCRL})
 		return &RevocationOptions{
-			AllowUndetermined: allowUndetermined,
-			CRLProvider:       cRLProvider,
+			DenyUndetermined: denyUndetermined,
+			CRLProvider:      cRLProvider,
 		}
 	}
 
@@ -740,18 +740,18 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVerificationType: CertVerification,
 			clientRevocationOptions: &RevocationOptions{
-				RootDir:           testdata.Path("crl"),
-				AllowUndetermined: true,
-				Cache:             cache,
+				RootDir:          testdata.Path("crl"),
+				DenyUndetermined: false,
+				Cache:            cache,
 			},
 			serverMutualTLS:        true,
 			serverCert:             []tls.Certificate{cs.ServerCert1},
 			serverGetRoot:          getRootCAsForServer,
 			serverVerificationType: CertVerification,
 			serverRevocationOptions: &RevocationOptions{
-				RootDir:           testdata.Path("crl"),
-				AllowUndetermined: true,
-				Cache:             cache,
+				RootDir:          testdata.Path("crl"),
+				DenyUndetermined: false,
+				Cache:            cache,
 			},
 		},
 		// Client: set valid credentials with the revocation config
@@ -795,7 +795,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientGetRoot:           getRootCAsForClientCRL,
 			clientVerifyFunc:        clientVerifyFuncGood,
 			clientVerificationType:  CertVerification,
-			clientRevocationOptions: makeStaticCRLRevocationOptions(testdata.Path("crl/provider_malicious_crl_empty.pem"), false),
+			clientRevocationOptions: makeStaticCRLRevocationOptions(testdata.Path("crl/provider_malicious_crl_empty.pem"), true),
 			serverMutualTLS:         true,
 			serverCert:              []tls.Certificate{cs.ServerCertForCRL},
 			serverGetRoot:           getRootCAsForServerCRL,
