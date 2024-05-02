@@ -191,7 +191,7 @@ func (vi *viewInformation) Equal(vi2 *viewInformation) bool {
 }
 
 // distributionDataLatencyCount checks if the view information contains the
-// desired distrubtion latency total count that falls in buckets of 5 seconds or
+// desired distribution latency total count that falls in buckets of 5 seconds or
 // less. This must be called with non nil view information that is aggregated
 // with distribution data. Returns a nil error if correct count information
 // found, non nil error if correct information not found.
@@ -351,7 +351,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	wantMetrics := []struct {
 		metric   *view.View
 		wantVI   *viewInformation
-		wantTags [][]tag.Tag // for non determinstic (i.e. latency) metrics. First dimension represents rows.
+		wantTags [][]tag.Tag // for non deterministic (i.e. latency) metrics. First dimension represents rows.
 	}{
 		{
 			metric: ClientStartedRPCsView,
@@ -1113,7 +1113,7 @@ func (s) TestOpenCensusTags(t *testing.T) {
 				readerErrCh.Send(fmt.Errorf("no key: %v present in OpenCensus tag map", keyServerMethod.Name()))
 			}
 			if val != unaryCallMethodName {
-				readerErrCh.Send(fmt.Errorf("serverMethod receieved: %v, want server method: %v", val, unaryCallMethodName))
+				readerErrCh.Send(fmt.Errorf("serverMethod received: %v, want server method: %v", val, unaryCallMethodName))
 			}
 		} else {
 			readerErrCh.Send(fmt.Errorf("error while waiting for a tag map: %v", err))

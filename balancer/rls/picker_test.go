@@ -43,7 +43,7 @@ import (
 // TestNoNonEmptyTargetsReturnsError tests the case where the RLS Server returns
 // a response with no non empty targets. This should be treated as an Control
 // Plane RPC failure, and thus fail Data Plane RPC's with an error with the
-// appropriate information specfying data plane sent a response with no non
+// appropriate information specifying data plane sent a response with no non
 // empty targets.
 func (s) TestNoNonEmptyTargetsReturnsError(t *testing.T) {
 	// Setup RLS Server to return a response with an empty target string.

@@ -403,7 +403,7 @@ type ServerReflectionResponse_FileDescriptorResponse struct {
 }
 
 type ServerReflectionResponse_AllExtensionNumbersResponse struct {
-	// This message is used to answer all_extension_numbers_of_type requst.
+	// This message is used to answer all_extension_numbers_of_type request.
 	//
 	// Deprecated: The entire proto file grpc/reflection/v1alpha/reflection.proto is marked as deprecated.
 	AllExtensionNumbersResponse *ExtensionNumberResponse `protobuf:"bytes,5,opt,name=all_extension_numbers_response,json=allExtensionNumbersResponse,proto3,oneof"`

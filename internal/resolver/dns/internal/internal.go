@@ -28,7 +28,7 @@ import (
 
 // NetResolver groups the methods on net.Resolver that are used by the DNS
 // resolver implementation. This allows the default net.Resolver instance to be
-// overidden from tests.
+// overridden from tests.
 type NetResolver interface {
 	LookupHost(ctx context.Context, host string) (addrs []string, err error)
 	LookupSRV(ctx context.Context, service, proto, name string) (cname string, addrs []*net.SRV, err error)

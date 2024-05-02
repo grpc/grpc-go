@@ -18,7 +18,7 @@
 
 // Package local implements local transport credentials.
 // Local credentials reports the security level based on the type
-// of connetion. If the connection is local TCP, NoSecurity will be
+// of connection. If the connection is local TCP, NoSecurity will be
 // reported, and if the connection is UDS, PrivacyAndIntegrity will be
 // reported. If local credentials is not used in local connections
 // (local TCP or UDS), it will fail.

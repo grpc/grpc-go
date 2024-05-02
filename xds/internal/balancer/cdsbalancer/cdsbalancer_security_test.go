@@ -350,7 +350,7 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 		t.Fatalf("NewSubConn got handshake info %+v, want %+v", gotHI, wantHI)
 	}
 	if !gotHI.UseFallbackCreds() {
-		t.Fatal("NewSubConn got hanshake info that does not specify the use of fallback creds")
+		t.Fatal("NewSubConn got handshake info that does not specify the use of fallback creds")
 	}
 }
 

@@ -107,7 +107,7 @@ func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantU
 	}
 	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy")}
 	if diff := cmp.Diff(wantUpdate.update, got.update, cmpOpts...); diff != "" {
-		return fmt.Errorf("received unepected diff in the cluster resource update: (-want, got):\n%s", diff)
+		return fmt.Errorf("received unexpected diff in the cluster resource update: (-want, got):\n%s", diff)
 	}
 	return nil
 }
