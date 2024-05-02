@@ -584,7 +584,7 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 // C]; B->[C, D]). Verifies that the load balancing configuration pushed to the
 // cluster_resolver LB policy does not contain duplicates, and that the
 // discovery mechanism corresponding to cluster C is of higher priority than the
-// discovery mechanism for cluser D. Also verifies that the configuration is
+// discovery mechanism for cluster D. Also verifies that the configuration is
 // pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)

@@ -63,7 +63,7 @@ type adsStream = v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesC
 // protocol version.
 type Transport struct {
 	// These fields are initialized at creation time and are read-only afterwards.
-	cc              *grpc.ClientConn        // ClientConn to the mangement server.
+	cc              *grpc.ClientConn        // ClientConn to the management server.
 	serverURI       string                  // URI of the management server.
 	onRecvHandler   OnRecvHandlerFunc       // Resource update handler. xDS data model layer.
 	onErrorHandler  func(error)             // To report underlying stream errors.

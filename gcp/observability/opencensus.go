@@ -84,7 +84,7 @@ func newStackdriverExporter(config *config) (tracingMetricsExporter, error) {
 	mr := monitoredresource.Autodetect()
 	logger.Infof("Detected MonitoredResource:: %+v", mr)
 	var err error
-	// Custom labels completly overwrite any labels generated in the OpenCensus
+	// Custom labels completely overwrite any labels generated in the OpenCensus
 	// library, including their label that uniquely identifies the process.
 	// Thus, generate a unique process identifier here to uniquely identify
 	// process for metrics exporting to function correctly.

@@ -104,7 +104,7 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 		}
 	}
 	if ctx.Err() != nil {
-		t.Fatalf("Test timed out before state transiton to %q was verified.", watchStateRequested)
+		t.Fatalf("Test timed out before state transition to %q was verified.", watchStateRequested)
 	}
 
 	// Updating mgmt server with the same lds resource. Blocking on watcher's update

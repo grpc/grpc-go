@@ -194,7 +194,7 @@ func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 			return []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)}
 		}(),
 		Routes: func() []*v3routepb.RouteConfiguration {
-			// RouteConfiguration will has one entry in []VirutalHosts that contains the
+			// RouteConfiguration will has one entry in []VirtualHosts that contains the
 			// "fully" escaped service name in []Domains. This is to assert that gRPC
 			// uses the escaped service name to lookup VirtualHosts. RDS is also with
 			// old style name.

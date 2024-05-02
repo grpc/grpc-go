@@ -58,16 +58,16 @@ func (s) TestGetSocketOpt(t *testing.T) {
 	}
 
 	l := &unix.Linger{Onoff: 1, Linger: 5}
-	recvTimout := &unix.Timeval{Sec: 100}
+	recvTimeout := &unix.Timeval{Sec: 100}
 	sendTimeout := &unix.Timeval{Sec: 8888}
 	raw.Control(func(fd uintptr) {
 		err := unix.SetsockoptLinger(int(fd), syscall.SOL_SOCKET, syscall.SO_LINGER, l)
 		if err != nil {
 			t.Fatalf("failed to SetsockoptLinger(%v,%v,%v,%v) due to %v", int(fd), syscall.SOL_SOCKET, syscall.SO_LINGER, l, err)
 		}
-		err = unix.SetsockoptTimeval(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, recvTimout)
+		err = unix.SetsockoptTimeval(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, recvTimeout)
 		if err != nil {
-			t.Fatalf("failed to SetsockoptTimeval(%v,%v,%v,%v) due to %v", int(fd), syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, recvTimout, err)
+			t.Fatalf("failed to SetsockoptTimeval(%v,%v,%v,%v) due to %v", int(fd), syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, recvTimeout, err)
 		}
 		err = unix.SetsockoptTimeval(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDTIMEO, sendTimeout)
 		if err != nil {
@@ -78,8 +78,8 @@ func (s) TestGetSocketOpt(t *testing.T) {
 	if !reflect.DeepEqual(sktopt.Linger, l) {
 		t.Fatalf("get socket option linger, want: %v, got %v", l, sktopt.Linger)
 	}
-	if !reflect.DeepEqual(sktopt.RecvTimeout, recvTimout) {
-		t.Logf("get socket option recv timeout, want: %v, got %v, may be caused by system allowing non or partial setting of this value", recvTimout, sktopt.RecvTimeout)
+	if !reflect.DeepEqual(sktopt.RecvTimeout, recvTimeout) {
+		t.Logf("get socket option recv timeout, want: %v, got %v, may be caused by system allowing non or partial setting of this value", recvTimeout, sktopt.RecvTimeout)
 	}
 	if !reflect.DeepEqual(sktopt.SendTimeout, sendTimeout) {
 		t.Logf("get socket option send timeout, want: %v, got %v, may be caused by system allowing non or partial setting of this value", sendTimeout, sktopt.SendTimeout)

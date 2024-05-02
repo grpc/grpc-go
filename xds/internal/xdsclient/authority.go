@@ -184,7 +184,7 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 			//   server might respond with the requested resource before we send
 			//   out request for the same. If we don't check for `started` here,
 			//   and move the state to `received`, we will end up starting the
-			//   timer when the request gets sent out. And since the mangement
+			//   timer when the request gets sent out. And since the management
 			//   server already sent us the resource, there is a good chance
 			//   that it will not send it again. This would eventually lead to
 			//   the timer firing, even though we have the resource in the
