@@ -64,6 +64,11 @@ type RevocationOptions struct {
 	// DenyUndetermined controls if certificate chains with RevocationUndetermined
 	// revocation status are allowed to complete.
 	DenyUndetermined bool
+	// AllowUndetermined controls if certificate chains with RevocationUndetermined
+	// revocation status are allowed to complete.
+	//
+	// Deprecated: use DenyUndetermined instead
+	AllowUndetermined bool
 	// Cache will store CRL files if not nil, otherwise files are reloaded for every lookup.
 	// Only used for caching CRLs when using the RootDir setting.
 	// Deprecated: use CRLProvider instead.
@@ -223,6 +228,11 @@ func checkChainRevocation(verifiedChains [][]*x509.Certificate, cfg RevocationOp
 			continue
 		case RevocationUndetermined:
 			count[RevocationUndetermined]++
+			// TODO(gtcooke94) Remove when deprecated AllowUndetermined is removed
+			// For now, if the deprecated value is explicitly set, use it
+			if cfg.AllowUndetermined {
+				cfg.DenyUndetermined = !cfg.AllowUndetermined
+			}
 			if cfg.DenyUndetermined {
 				continue
 			}
