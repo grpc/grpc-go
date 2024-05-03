@@ -236,3 +236,49 @@ func (s) TestTLS_CipherSuitesOverridable(t *testing.T) {
 		t.Fatalf("EmptyCall err = %v; want <nil>", err)
 	}
 }
+
+// TestTLS_DisabledALPN tests the behaviour of a gRPC client when connecting to
+// a server that doesn't support ALPN.
+func (s) TestTLS_DisabledALPN(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Start a non gRPC TLS server.
+	config := &tls.Config{
+		Certificates: []tls.Certificate{serverCert},
+		NextProtos:   []string{}, // Empty list indicates ALPN is disabled.
+	}
+	listner, err := tls.Listen("tcp", ":0", config)
+	if err != nil {
+		t.Fatalf("Error starting TLS server: %v", err)
+	}
+	defer listner.Close()
+
+	// Start listening for server requests in a new go routine.
+	go func() {
+		conn, err := listner.Accept()
+		if err != nil {
+			t.Errorf("tls.Accept failed err = %v", err)
+		} else {
+            _, _ = conn.Write([]byte("Hello, World!"))
+			_ = conn.Close()
+		}
+	}()
+
+	clientCreds := credentials.NewTLS(&tls.Config{
+		ServerName: serverName,
+		RootCAs:    certPool,
+	})
+
+	cc, err := grpc.NewClient("dns:"+listner.Addr().String(), grpc.WithTransportCredentials(clientCreds))
+	if err != nil {
+		t.Fatalf("grpc.NewClient error: %v", err)
+	}
+	defer cc.Close()
+	client := testgrpc.NewTestServiceClient(cc)
+
+	const wantStr = "missing selected ALPN property"
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable || !strings.Contains(status.Convert(err).Message(), wantStr) {
+		t.Fatalf("EmptyCall err = %v; want code=%v, message contains %q", err, codes.Unavailable, wantStr)
+	}
+}
