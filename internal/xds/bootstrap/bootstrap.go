@@ -28,18 +28,15 @@ import (
 	"os"
 	"strings"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/google"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/tlscreds"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
 const (
@@ -58,50 +55,8 @@ const (
 	clientFeatureResourceWrapper    = "xds.config.resource-in-sotw"
 )
 
-func init() {
-	bootstrap.RegisterCredentials(&insecureCredsBuilder{})
-	bootstrap.RegisterCredentials(&googleDefaultCredsBuilder{})
-	bootstrap.RegisterCredentials(&tlsCredsBuilder{})
-}
-
 // For overriding in unit tests.
 var bootstrapFileReadFunc = os.ReadFile
-
-// insecureCredsBuilder implements the `Credentials` interface defined in
-// package `xds/bootstrap` and encapsulates an insecure credential.
-type insecureCredsBuilder struct{}
-
-func (i *insecureCredsBuilder) Build(json.RawMessage) (credentials.Bundle, func(), error) {
-	return insecure.NewBundle(), func() {}, nil
-}
-
-func (i *insecureCredsBuilder) Name() string {
-	return "insecure"
-}
-
-// tlsCredsBuilder implements the `Credentials` interface defined in
-// package `xds/bootstrap` and encapsulates a TLS credential.
-type tlsCredsBuilder struct{}
-
-func (t *tlsCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, func(), error) {
-	return tlscreds.NewBundle(config)
-}
-
-func (t *tlsCredsBuilder) Name() string {
-	return "tls"
-}
-
-// googleDefaultCredsBuilder implements the `Credentials` interface defined in
-// package `xds/boostrap` and encapsulates a Google Default credential.
-type googleDefaultCredsBuilder struct{}
-
-func (d *googleDefaultCredsBuilder) Build(json.RawMessage) (credentials.Bundle, func(), error) {
-	return google.NewDefaultCredentials(), func() {}, nil
-}
-
-func (d *googleDefaultCredsBuilder) Name() string {
-	return "google_default"
-}
 
 // ChannelCreds contains the credentials to be used while communicating with an
 // xDS server. It is also used to dedup servers with the same server URI.
