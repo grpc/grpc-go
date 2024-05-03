@@ -224,12 +224,14 @@ type ClientOptions struct {
 	// Deprecated: use MaxTLSVersion instead.
 	MaxVersion uint16
 	// MinTLSVersion contains the minimum TLS version that is acceptable.
+	// The value should be set using tls.VersionTLSxx from https://pkg.go.dev/crypto/tls
 	// By default, TLS 1.2 is currently used as the minimum when acting as a
 	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
 	// supported by this package, both as a client and as a server.  This
 	// default may be changed over time affecting backwards compatibility.
 	MinTLSVersion uint16
 	// MaxTLSVersion contains the maximum TLS version that is acceptable.
+	// The value should be set using tls.VersionTLSxx from https://pkg.go.dev/crypto/tls
 	// By default, the maximum version supported by this package is used,
 	// which is currently TLS 1.3.  This default may be changed over time
 	// affecting backwards compatibility.
@@ -282,12 +284,14 @@ type ServerOptions struct {
 	// Deprecated: use MaxTLSVersion instead.
 	MaxVersion uint16
 	// MinTLSVersion contains the minimum TLS version that is acceptable.
+	// The value should be set using tls.VersionTLSxx from https://pkg.go.dev/crypto/tls
 	// By default, TLS 1.2 is currently used as the minimum when acting as a
 	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
 	// supported by this package, both as a client and as a server.  This
 	// default may be changed over time affecting backwards compatibility.
 	MinTLSVersion uint16
 	// MaxTLSVersion contains the maximum TLS version that is acceptable.
+	// The value should be set using tls.VersionTLSxx from https://pkg.go.dev/crypto/tls
 	// By default, the maximum version supported by this package is used,
 	// which is currently TLS 1.3.  This default may be changed over time
 	// affecting backwards compatibility.
