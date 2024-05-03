@@ -27,8 +27,12 @@ import (
 	"net/url"
 	"os"
 
+	"google.golang.org/grpc/grpclog"
 	credinternal "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/internal/envconfig"
 )
+
+var logger = grpclog.Component("credentials")
 
 // TLSInfo contains the auth information for a TLS authenticated connection.
 // It implements the AuthInfo interface.
@@ -113,17 +117,20 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 		return nil, nil, ctx.Err()
 	}
 
-    // The negotiated protocol can be either of the following:
-    // 1. h2: When the server supports ALPN. Only HTTP/2 can be negotiated since
-    //    it is the only protocol advertised by the client during the handshake.
-    //    The tls library ensures that the server chooses a protocol advertised
-    //    by the client.
-    // 2. "" (empty string): If the server doesn't support ALPN. ALPN is a requirement
-    //    for using HTTP/2 over TLS. We can terminate the connection immediately.
-    np := conn.ConnectionState().NegotiatedProtocol
-    if np == "" {
-		_ = conn.Close()
-		return nil, nil, fmt.Errorf("cannot check peer: missing selected ALPN property")
+	// The negotiated protocol can be either of the following:
+	// 1. h2: When the server supports ALPN. Only HTTP/2 can be negotiated since
+	//    it is the only protocol advertised by the client during the handshake.
+	//    The tls library ensures that the server chooses a protocol advertised
+	//    by the client.
+	// 2. "" (empty string): If the server doesn't support ALPN. ALPN is a requirement
+	//    for using HTTP/2 over TLS. We can terminate the connection immediately.
+	np := conn.ConnectionState().NegotiatedProtocol
+	if np == "" {
+		if envconfig.EnforceALPNEnabled {
+			_ = conn.Close()
+			return nil, nil, fmt.Errorf("cannot check peer: missing selected ALPN property")
+		}
+		logger.Warning("Allowing TLS connection to server %q with ALPN disabled")
 	}
 	tlsInfo := TLSInfo{
 		State: conn.ConnectionState(),

@@ -24,6 +24,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/status"
@@ -243,6 +245,11 @@ func (s) TestTLS_DisabledALPN(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
+	initialVal := envconfig.EnforceALPNEnabled
+	defer func() {
+		envconfig.EnforceALPNEnabled = initialVal
+	}()
+
 	// Start a non gRPC TLS server.
 	config := &tls.Config{
 		Certificates: []tls.Certificate{serverCert},
@@ -254,31 +261,76 @@ func (s) TestTLS_DisabledALPN(t *testing.T) {
 	}
 	defer listner.Close()
 
-	// Start listening for server requests in a new go routine.
-	go func() {
-		conn, err := listner.Accept()
-		if err != nil {
-			t.Errorf("tls.Accept failed err = %v", err)
-		} else {
-            _, _ = conn.Write([]byte("Hello, World!"))
-			_ = conn.Close()
-		}
-	}()
-
-	clientCreds := credentials.NewTLS(&tls.Config{
-		ServerName: serverName,
-		RootCAs:    certPool,
-	})
-
-	cc, err := grpc.NewClient("dns:"+listner.Addr().String(), grpc.WithTransportCredentials(clientCreds))
-	if err != nil {
-		t.Fatalf("grpc.NewClient error: %v", err)
+	tests := []struct {
+		description            string
+		alpnEnforced           bool
+		wantErrMatchPattern    string
+		wantErrNonMatchPattern string
+	}{
+		{
+			description:         "enforced",
+			alpnEnforced:        true,
+			wantErrMatchPattern: "transport: .*missing selected ALPN property",
+		},
+		{
+			description:            "not_enforced",
+			wantErrNonMatchPattern: "transport:",
+		},
+		{
+			description:            "default_value",
+			wantErrNonMatchPattern: "transport:",
+			alpnEnforced:           initialVal,
+		},
 	}
-	defer cc.Close()
-	client := testgrpc.NewTestServiceClient(cc)
 
-	const wantStr = "missing selected ALPN property"
-	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable || !strings.Contains(status.Convert(err).Message(), wantStr) {
-		t.Fatalf("EmptyCall err = %v; want code=%v, message contains %q", err, codes.Unavailable, wantStr)
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			envconfig.EnforceALPNEnabled = tc.alpnEnforced
+			// Listen to one TCP connection request.
+			go func() {
+				conn, err := listner.Accept()
+				if err != nil {
+					t.Errorf("tls.Accept failed err = %v", err)
+				} else {
+					_, _ = conn.Write([]byte("Hello, World!"))
+					_ = conn.Close()
+				}
+			}()
+
+			clientCreds := credentials.NewTLS(&tls.Config{
+				ServerName: serverName,
+				RootCAs:    certPool,
+			})
+
+			cc, err := grpc.NewClient("dns:"+listner.Addr().String(), grpc.WithTransportCredentials(clientCreds))
+			if err != nil {
+				t.Fatalf("grpc.NewClient error: %v", err)
+			}
+			defer cc.Close()
+			client := testgrpc.NewTestServiceClient(cc)
+			_, rpcErr := client.EmptyCall(ctx, &testpb.Empty{})
+
+			if gotCode := status.Code(rpcErr); gotCode != codes.Unavailable {
+				t.Errorf("EmptyCall returned unexpected code: got=%v, want=%v", gotCode, codes.Unavailable)
+			}
+
+			matchPat, err := regexp.Compile(tc.wantErrMatchPattern)
+			if err != nil {
+				t.Fatalf("Error message match pattern %q is invalid due to error: %v", tc.wantErrMatchPattern, err)
+			}
+
+			if tc.wantErrMatchPattern != "" && !matchPat.MatchString(status.Convert(rpcErr).Message()) {
+				t.Errorf("EmptyCall err = %v; want pattern match %q", rpcErr, matchPat)
+			}
+
+			nonMatchPat, err := regexp.Compile(tc.wantErrNonMatchPattern)
+			if err != nil {
+				t.Fatalf("Error message non-match pattern %q is invalid due to error: %v", tc.wantErrNonMatchPattern, err)
+			}
+
+			if tc.wantErrNonMatchPattern != "" && nonMatchPat.MatchString(status.Convert(rpcErr).Message()) {
+				t.Errorf("EmptyCall err = %v; want pattern missing %q", rpcErr, nonMatchPat)
+			}
+		})
 	}
 }
