@@ -842,6 +842,9 @@ func (cc *ClientConn) newAddrConnLocked(addrs []resolver.Address, opts balancer.
 		stateChan:    make(chan struct{}),
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
+	// Start with our address set to the first address; this may be updated if
+	// we connect to different addresses.
+	ac.channelz.ChannelMetrics.Target.Store(&addrs[0].Addr)
 
 	channelz.AddTraceEvent(logger, ac.channelz, 0, &channelz.TraceEvent{
 		Desc:     "Subchannel created",
@@ -1304,6 +1307,7 @@ func (ac *addrConn) resetTransport() {
 func (ac *addrConn) tryAllAddrs(ctx context.Context, addrs []resolver.Address, connectDeadline time.Time) error {
 	var firstConnErr error
 	for _, addr := range addrs {
+		ac.channelz.ChannelMetrics.Target.Store(&addr.Addr)
 		if ctx.Err() != nil {
 			return errConnClosing
 		}
