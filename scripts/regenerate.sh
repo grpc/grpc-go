@@ -20,7 +20,7 @@ WORKDIR=$(mktemp -d)
 function finish {
   rm -rf "$WORKDIR"
   # Revert back the PATH to client's original value
-  export PATH=RESTORED_PATH
+  export PATH=$RESTORED_PATH
 }
 trap finish EXIT
 
