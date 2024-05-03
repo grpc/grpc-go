@@ -25,13 +25,12 @@ import (
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/xds/bootstrap/tlscreds"
-	"google.golang.org/grpc/xds/bootstrap"
 )
 
 func init() {
-	bootstrap.RegisterCredentials(&insecureCredsBuilder{})
-	bootstrap.RegisterCredentials(&googleDefaultCredsBuilder{})
-	bootstrap.RegisterCredentials(&tlsCredsBuilder{})
+	RegisterCredentials(&insecureCredsBuilder{})
+	RegisterCredentials(&googleDefaultCredsBuilder{})
+	RegisterCredentials(&tlsCredsBuilder{})
 }
 
 // insecureCredsBuilder implements the `Credentials` interface defined in
