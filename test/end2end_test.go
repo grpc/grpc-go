@@ -1006,7 +1006,7 @@ func testServerGracefulStopIdempotent(t *testing.T, e env) {
 	}
 }
 
-func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
+func (s) TestDetailedConnectionCloseErrorPropagatesToRPCError(t *testing.T) {
 	rpcStartedOnServer := make(chan struct{})
 	rpcDoneOnClient := make(chan struct{})
 	defer close(rpcDoneOnClient)
