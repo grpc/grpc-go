@@ -1462,6 +1462,10 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 		t.Fatalf("Test timed-out.")
 	case <-success:
 	}
+	// Drain the remaining buffers in the stream by reading until an error is
+	// encountered.
+	buffers, _ := str.Read(math.MaxInt)
+	buffers.Free()
 }
 
 var encodingTestStatus = status.New(codes.Internal, "\n")
