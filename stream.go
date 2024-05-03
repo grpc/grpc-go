@@ -872,7 +872,6 @@ func (cs *clientStream) replayBufferLocked(attempt *csAttempt) error {
 func (cs *clientStream) bufferForRetryLocked(sz int, op func(a *csAttempt) error, cleanup func()) {
 	// Note: we still will buffer if retry is disabled (for transparent retries).
 	if cs.committed {
-		// TODO: call cleanup here?
 		return
 	}
 	cs.bufferSize += sz
@@ -923,9 +922,19 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	op := func(a *csAttempt) error {
 		return a.sendMsg(m, hdr, payloadRef.Ref(), dataLen, payloadLen)
 	}
+
+	// onSuccess is invoked when the op is captured for a subsequent retry. If the
+	// stream was established by a previous message and therefore retries are
+	// disabled, onSuccess will not be invoked, and payloadRef can be freed
+	// immediately.
+	onSuccessCalled := false
 	err = cs.withRetry(op, func() {
 		cs.bufferForRetryLocked(len(hdr)+payloadLen, op, payloadRef.Free)
+		onSuccessCalled = true
 	})
+	if !onSuccessCalled {
+		payloadRef.Free()
+	}
 	if len(cs.binlogs) != 0 && err == nil {
 		cm := &binarylog.ClientMessage{
 			OnClientSide: true,

@@ -667,10 +667,7 @@ func encode(c baseCodec, msg any) (mem.BufferSlice, error) {
 //
 // TODO(dfawley): eliminate cp parameter by wrapping Compressor in an encoding.Compressor.
 func compress(in mem.BufferSlice, cp Compressor, compressor encoding.Compressor, pool mem.BufferPool) (mem.BufferSlice, payloadFormat, error) {
-	if compressor == nil && cp == nil {
-		return nil, compressionNone, nil
-	}
-	if in.Len() == 0 {
+	if (compressor == nil && cp == nil) || in.Len() == 0 {
 		return nil, compressionNone, nil
 	}
 	var out mem.BufferSlice

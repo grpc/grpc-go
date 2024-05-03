@@ -46,8 +46,8 @@ func checkTrackingBufferPool() {
 	defer p.lock.Unlock()
 
 	mem.SetDefaultBufferPool(p.pool)
-	for _, trace := range p.allocatedBuffers {
-		p.efer.Errorf("Allocated buffer never freed:\n%s", trace)
+	for b, trace := range p.allocatedBuffers {
+		p.efer.Errorf("Allocated buffer never freed %p:\n%s", b, trace)
 	}
 }
 
@@ -67,6 +67,9 @@ func sliceData(b []byte) *byte {
 func (p *trackingBufferPool) Get(length int) []byte {
 	p.lock.Lock()
 	defer p.lock.Unlock()
+	if length == 0 {
+		return nil
+	}
 
 	buf := p.pool.Get(length)
 
@@ -78,6 +81,10 @@ func (p *trackingBufferPool) Get(length int) []byte {
 func (p *trackingBufferPool) Put(buf []byte) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
+
+	if len(buf) == 0 {
+		return
+	}
 
 	key := sliceData(buf)
 	if _, ok := p.allocatedBuffers[key]; !ok {

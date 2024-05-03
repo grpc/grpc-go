@@ -36,7 +36,9 @@ type Buffer struct {
 }
 
 func NewBuffer(data []byte, free func([]byte)) *Buffer {
-	return (&Buffer{data: data, refs: new(atomic.Int32), free: free}).Ref()
+	b := &Buffer{data: data, refs: new(atomic.Int32), free: free}
+	b.refs.Add(1)
+	return b
 }
 
 func Copy(data []byte, pool BufferPool) *Buffer {
