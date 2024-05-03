@@ -1009,6 +1009,7 @@ func testServerGracefulStopIdempotent(t *testing.T, e env) {
 func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 	rpcStartedOnServer := make(chan struct{})
 	rpcDoneOnClient := make(chan struct{})
+	close(rpcDoneOnClient)
 	ss := &stubserver.StubServer{
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			close(rpcStartedOnServer)
@@ -1042,7 +1043,6 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 	if _, err := stream.Recv(); err == io.EOF || !isConnClosedErr(err) {
 		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: %q OR %q", stream, err, possibleConnResetMsg, possibleEOFMsg)
 	}
-	close(rpcDoneOnClient)
 }
 
 func (s) TestFailFast(t *testing.T) {
