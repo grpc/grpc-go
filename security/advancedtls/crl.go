@@ -55,8 +55,8 @@ type Cache interface {
 	Get(key any) (value any, ok bool)
 }
 
-// RevocationConfig contains options for CRL lookup.
-type RevocationConfig struct {
+// RevocationOptions allows a user to configure certificate revocation behavior.
+type RevocationOptions struct {
 	// RootDir is the directory to search for CRL files.
 	// Directory format must match OpenSSL X509_LOOKUP_hash_dir(3).
 	// Deprecated: use CRLProvider instead.
@@ -74,6 +74,11 @@ type RevocationConfig struct {
 	// handshake.
 	CRLProvider CRLProvider
 }
+
+// RevocationConfig contains options for CRL lookup.
+//
+// Deprecated: use RevocationOptions instead.
+type RevocationConfig = RevocationOptions
 
 // revocationStatus is the revocation status for a certificate or chain.
 type revocationStatus int
@@ -196,13 +201,13 @@ func x509NameHash(r pkix.RDNSequence) string {
 //   - Delta CRL files are not supported.
 //   - Certificate CRLDistributionPoint must be URLs, but are then ignored and converted into a file path.
 //   - CRL checks are done after path building, which goes against RFC4158.
-func checkRevocation(conn tls.ConnectionState, cfg RevocationConfig) error {
+func checkRevocation(conn tls.ConnectionState, cfg RevocationOptions) error {
 	return checkChainRevocation(conn.VerifiedChains, cfg)
 }
 
 // checkChainRevocation checks the verified certificate chain
 // for revoked certificates based on RFC5280.
-func checkChainRevocation(verifiedChains [][]*x509.Certificate, cfg RevocationConfig) error {
+func checkChainRevocation(verifiedChains [][]*x509.Certificate, cfg RevocationOptions) error {
 	// Iterate the verified chains looking for one that is RevocationUnrevoked.
 	// A single RevocationUnrevoked chain is enough to allow the connection, and a single RevocationRevoked
 	// chain does not mean the connection should fail.
@@ -232,7 +237,7 @@ func checkChainRevocation(verifiedChains [][]*x509.Certificate, cfg RevocationCo
 // 1. If any certificate is RevocationRevoked, return RevocationRevoked.
 // 2. If any certificate is RevocationUndetermined, return RevocationUndetermined.
 // 3. If all certificates are RevocationUnrevoked, return RevocationUnrevoked.
-func checkChain(chain []*x509.Certificate, cfg RevocationConfig) revocationStatus {
+func checkChain(chain []*x509.Certificate, cfg RevocationOptions) revocationStatus {
 	chainStatus := RevocationUnrevoked
 	for _, c := range chain {
 		switch checkCert(c, chain, cfg) {
@@ -269,7 +274,7 @@ func cachedCrl(rawIssuer []byte, cache Cache) (*CRL, bool) {
 }
 
 // fetchIssuerCRL fetches and verifies the CRL for rawIssuer from disk or cache if configured in cfg.
-func fetchIssuerCRL(rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) (*CRL, error) {
+func fetchIssuerCRL(rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg RevocationOptions) (*CRL, error) {
 	if cfg.Cache != nil {
 		if crl, ok := cachedCrl(rawIssuer, cfg.Cache); ok {
 			return crl, nil
@@ -290,7 +295,7 @@ func fetchIssuerCRL(rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg Revo
 	return crl, nil
 }
 
-func fetchCRL(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) (*CRL, error) {
+func fetchCRL(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationOptions) (*CRL, error) {
 	if cfg.CRLProvider != nil {
 		crl, err := cfg.CRLProvider.CRL(c)
 		if err != nil {
@@ -314,7 +319,7 @@ func fetchCRL(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revocat
 // RevocationUndetermined.
 // c is the certificate to check.
 // crlVerifyCrt is the group of possible certificates to verify the crl.
-func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) revocationStatus {
+func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationOptions) revocationStatus {
 	crl, err := fetchCRL(c, crlVerifyCrt, cfg)
 	if err != nil {
 		// We couldn't load any valid CRL files for the certificate, so we don't
@@ -486,7 +491,7 @@ func parseCRLExtensions(c *x509.RevocationList) (*CRL, error) {
 	return certList, nil
 }
 
-func fetchCRLOpenSSLHashDir(rawIssuer []byte, cfg RevocationConfig) (*CRL, error) {
+func fetchCRLOpenSSLHashDir(rawIssuer []byte, cfg RevocationOptions) (*CRL, error) {
 	var parsedCRL *CRL
 	// 6.3.3 (a) (1) (ii)
 	// According to X509_LOOKUP_hash_dir the format is issuer_hash.rN where N is an increasing number.

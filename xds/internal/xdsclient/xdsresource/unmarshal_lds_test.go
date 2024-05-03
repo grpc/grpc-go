@@ -1223,7 +1223,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			}),
 			wantName: v3LDSTarget,
-			wantErr:  "failed unmarshaling of network filter",
+			wantErr:  "failed unmarshalling of network filter",
 		},
 		{
 			name: "unexpected transport socket name",

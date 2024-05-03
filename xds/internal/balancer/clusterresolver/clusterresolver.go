@@ -136,7 +136,7 @@ func (bb) ParseConfig(j json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 		// double validation is present because Unmarshalling and Validating are
 		// coupled into one json.Unmarshal operation). We will switch this in
 		// the future to two separate operations.
-		return nil, fmt.Errorf("error unmarshaling xDS LB Policy: %v", err)
+		return nil, fmt.Errorf("error unmarshalling xDS LB Policy: %v", err)
 	}
 	return cfg, nil
 }

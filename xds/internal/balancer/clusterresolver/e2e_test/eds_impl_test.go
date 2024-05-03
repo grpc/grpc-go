@@ -629,7 +629,7 @@ func (s) TestEDS_ResourceRemoved(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Delete the endpoints resource from the mangement server.
+	// Delete the endpoints resource from the management server.
 	resources.Endpoints = nil
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)

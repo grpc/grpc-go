@@ -162,7 +162,7 @@ func TestLocalityStats(t *testing.T) {
 
 func TestResetAfterStats(t *testing.T) {
 	// Push a bunch of drops, call stats and load stats, and leave inProgress to be non-zero.
-	// Dump the stats. Verify expexted
+	// Dump the stats. Verify expected
 	// Push the same set of loads as before
 	// Now dump and verify the newly expected ones.
 	var (

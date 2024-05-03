@@ -120,7 +120,7 @@ func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, w
 	}
 	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw")}
 	if diff := cmp.Diff(wantUpdate.update, got.update, cmpOpts...); diff != "" {
-		return fmt.Errorf("received unepected diff in the route configuration resource update: (-want, got):\n%s", diff)
+		return fmt.Errorf("received unexpected diff in the route configuration resource update: (-want, got):\n%s", diff)
 	}
 	return nil
 }

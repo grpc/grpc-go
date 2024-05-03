@@ -495,7 +495,7 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 	defer mgmtServer.Stop()
 
 	// Generate bootstrap configuration pointing to the above management server
-	// with certificate provider configuration pointing to fake certifcate
+	// with certificate provider configuration pointing to fake certificate
 	// providers.
 	nodeID := uuid.NewString()
 	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
@@ -585,7 +585,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	defer cancel()
 
 	// Generate bootstrap configuration pointing to the above management server
-	// with certificate provider configuration pointing to fake certifcate
+	// with certificate provider configuration pointing to fake certificate
 	// providers.
 	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
 		NodeID:    nodeID,

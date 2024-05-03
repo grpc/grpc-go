@@ -2160,7 +2160,7 @@ func (s) TestWriteHeaderConnectionError(t *testing.T) {
 		t.Fatalf("Server has %d connections from the client, want 1", len(server.conns))
 	}
 
-	// Get the server transport for the connecton to the client.
+	// Get the server transport for the connection to the client.
 	var serverTransport *http2Server
 	for k := range server.conns {
 		serverTransport = k.(*http2Server)

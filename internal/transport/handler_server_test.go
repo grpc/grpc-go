@@ -187,7 +187,7 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				}
 
 				if !reflect.DeepEqual(ht.headerMD, want) {
-					return fmt.Errorf("metdata = %#v; want %#v", ht.headerMD, want)
+					return fmt.Errorf("metadata = %#v; want %#v", ht.headerMD, want)
 				}
 				return nil
 			},

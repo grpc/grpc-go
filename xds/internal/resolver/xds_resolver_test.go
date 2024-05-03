@@ -70,7 +70,7 @@ import (
 // Tests the case where xDS client creation is expected to fail because the
 // bootstrap configuration is not specified. The test verifies that xDS resolver
 // build fails as well.
-func (s) TestResolverBuilder_ClientCreationFails_NoBootstap(t *testing.T) {
+func (s) TestResolverBuilder_ClientCreationFails_NoBootstrap(t *testing.T) {
 	// Build an xDS resolver without specifying bootstrap env vars.
 	builder := resolver.Get(xdsresolver.Scheme)
 	if builder == nil {

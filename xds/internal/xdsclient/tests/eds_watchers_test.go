@@ -119,7 +119,7 @@ func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wan
 	}
 	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.EndpointsUpdate{}, "Raw")}
 	if diff := cmp.Diff(wantUpdate.update, got.update, cmpOpts...); diff != "" {
-		return fmt.Errorf("received unepected diff in the endpoints resource update: (-want, got):\n%s", diff)
+		return fmt.Errorf("received unexpected diff in the endpoints resource update: (-want, got):\n%s", diff)
 	}
 	return nil
 }

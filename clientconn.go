@@ -1751,7 +1751,7 @@ func encodeAuthority(authority string) string {
 			return false
 		case '!', '$', '&', '\'', '(', ')', '*', '+', ',', ';', '=': // Subdelim characters
 			return false
-		case ':', '[', ']', '@': // Authority related delimeters
+		case ':', '[', ']', '@': // Authority related delimiters
 			return false
 		}
 		// Everything else must be escaped.

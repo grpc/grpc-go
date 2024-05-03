@@ -430,7 +430,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 // doesn't get matched, and the Default Filter Chain pointing to RDS B does get
 // matched. RDS B is of the wrong route type for server side, so RPC's are
 // expected to eventually fail with that information. However, any RPC's on the
-// old configration should be allowed to complete due to the transition being
+// old configuration should be allowed to complete due to the transition being
 // graceful stop.After, it receives an LDS specifying RDS A (which incoming
 // RPC's will match to). This configuration should eventually be represented in
 // the Server's state, and RPCs should proceed successfully.

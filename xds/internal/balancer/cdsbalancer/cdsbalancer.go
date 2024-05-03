@@ -180,7 +180,7 @@ type cdsBalancer struct {
 
 // handleSecurityConfig processes the security configuration received from the
 // management server, creates appropriate certificate provider plugins, and
-// updates the HandhakeInfo which is added as an address attribute in
+// updates the HandshakeInfo which is added as an address attribute in
 // NewSubConn() calls.
 //
 // Only executed in the context of a serializer callback.

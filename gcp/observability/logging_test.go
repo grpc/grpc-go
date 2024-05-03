@@ -1161,7 +1161,7 @@ func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// the set config MaxMetdataBytes is in between len(mdValue) and len("key")
+	// the set config MaxMetadataBytes is in between len(mdValue) and len("key")
 	// + len(mdValue), and thus shouldn't log this metadata entry.
 	md := metadata.MD{
 		"key": []string{mdValue},

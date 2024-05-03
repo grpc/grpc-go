@@ -32,7 +32,7 @@ type Logger interface {
 	Errorf(format string, args ...any)
 }
 
-// ResolverClientConn is a fake implemetation of the resolver.ClientConn
+// ResolverClientConn is a fake implementation of the resolver.ClientConn
 // interface to be used in tests.
 type ResolverClientConn struct {
 	resolver.ClientConn // Embedding the interface to avoid implementing deprecated methods.
