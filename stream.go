@@ -360,7 +360,7 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		cs.attempt = a
 		return nil
 	}
-	if err := cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op) }); err != nil {
+	if err := cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op, nil) }); err != nil {
 		return nil, err
 	}
 
@@ -568,8 +568,13 @@ type clientStream struct {
 	// TODO(hedging): hedging will have multiple attempts simultaneously.
 	committed  bool // active attempt committed for retry?
 	onCommit   func()
-	buffer     []func(a *csAttempt) error // operations to replay on retry
-	bufferSize int                        // current size of buffer
+	buffer     []replayOp // operations to replay on retry
+	bufferSize int        // current size of buffer
+}
+
+type replayOp struct {
+	op      func(a *csAttempt) error
+	cleanup func()
 }
 
 // csAttempt implements a single transport stream attempt within a
@@ -607,6 +612,11 @@ func (cs *clientStream) commitAttemptLocked() {
 		cs.onCommit()
 	}
 	cs.committed = true
+	for _, op := range cs.buffer {
+		if op.cleanup != nil {
+			op.cleanup()
+		}
+	}
 	cs.buffer = nil
 }
 
@@ -852,16 +862,17 @@ func (cs *clientStream) Trailer() metadata.MD {
 
 func (cs *clientStream) replayBufferLocked(attempt *csAttempt) error {
 	for _, f := range cs.buffer {
-		if err := f(attempt); err != nil {
+		if err := f.op(attempt); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (cs *clientStream) bufferForRetryLocked(sz int, op func(a *csAttempt) error) {
+func (cs *clientStream) bufferForRetryLocked(sz int, op func(a *csAttempt) error, cleanup func()) {
 	// Note: we still will buffer if retry is disabled (for transparent retries).
 	if cs.committed {
+		// TODO: call cleanup here?
 		return
 	}
 	cs.bufferSize += sz
@@ -869,7 +880,7 @@ func (cs *clientStream) bufferForRetryLocked(sz int, op func(a *csAttempt) error
 		cs.commitAttemptLocked()
 		return
 	}
-	cs.buffer = append(cs.buffer, op)
+	cs.buffer = append(cs.buffer, replayOp{op: op, cleanup: cleanup})
 }
 
 func (cs *clientStream) SendMsg(m any) (err error) {
@@ -905,11 +916,16 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	if payloadLen > *cs.callInfo.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payloadLen, *cs.callInfo.maxSendMessageSize)
 	}
+
+	// always take an extra ref in case data == payload. The original ref will always
+	// be freed by the deferred free above.
 	payloadRef := payload.Ref()
 	op := func(a *csAttempt) error {
-		return a.sendMsg(m, hdr, payloadRef, dataLen)
+		return a.sendMsg(m, hdr, payloadRef.Ref(), dataLen, payloadLen)
 	}
-	err = cs.withRetry(op, func() { cs.bufferForRetryLocked(len(hdr)+payloadLen, op) })
+	err = cs.withRetry(op, func() {
+		cs.bufferForRetryLocked(len(hdr)+payloadLen, op, payloadRef.Free)
+	})
 	if len(cs.binlogs) != 0 && err == nil {
 		cm := &binarylog.ClientMessage{
 			OnClientSide: true,
@@ -965,7 +981,7 @@ func (cs *clientStream) CloseSend() error {
 		// RecvMsg.  This also matches historical behavior.
 		return nil
 	}
-	cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op) })
+	cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op, nil) })
 	if len(cs.binlogs) != 0 {
 		chc := &binarylog.ClientHalfClose{
 			OnClientSide: true,
@@ -1041,7 +1057,7 @@ func (cs *clientStream) finish(err error) {
 	cs.cancel()
 }
 
-func (a *csAttempt) sendMsg(m any, hdr []byte, payld mem.BufferSlice, dataLength int) error {
+func (a *csAttempt) sendMsg(m any, hdr []byte, payld mem.BufferSlice, dataLength, payloadLength int) error {
 	cs := a.cs
 	if a.trInfo != nil {
 		a.mu.Lock()
@@ -1050,7 +1066,6 @@ func (a *csAttempt) sendMsg(m any, hdr []byte, payld mem.BufferSlice, dataLength
 		}
 		a.mu.Unlock()
 	}
-	payloadLen := payld.Len()
 	if err := a.t.Write(a.s, hdr, payld, &transport.Options{Last: !cs.desc.ClientStreams}); err != nil {
 		if !cs.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
@@ -1062,7 +1077,7 @@ func (a *csAttempt) sendMsg(m any, hdr []byte, payld mem.BufferSlice, dataLength
 	}
 	if len(a.statsHandlers) != 0 {
 		for _, sh := range a.statsHandlers {
-			sh.HandleRPC(a.ctx, outPayload(true, m, dataLength, payloadLen, time.Now()))
+			sh.HandleRPC(a.ctx, outPayload(true, m, dataLength, payloadLength, time.Now()))
 		}
 	}
 	if channelz.IsOn() {
