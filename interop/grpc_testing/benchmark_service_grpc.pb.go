@@ -32,8 +32,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.62.0 or later.
-const _ = grpc.SupportPackageIsVersion8
+// Requires gRPC-Go v1.64.0 or later.
+const _ = grpc.SupportPackageIsVersion9
 
 const (
 	BenchmarkService_UnaryCall_FullMethodName           = "/grpc.testing.BenchmarkService/UnaryCall"
@@ -53,16 +53,16 @@ type BenchmarkServiceClient interface {
 	// Repeated sequence of one request followed by one response.
 	// Should be called streaming ping-pong
 	// The server returns the client payload as-is on each response
-	StreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingCallClient, error)
+	StreamingCall(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[SimpleRequest, SimpleResponse], error)
 	// Single-sided unbounded streaming from client to server
 	// The server returns the client payload as-is once the client does WritesDone
-	StreamingFromClient(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingFromClientClient, error)
+	StreamingFromClient(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[SimpleRequest, SimpleResponse], error)
 	// Single-sided unbounded streaming from server to client
 	// The server repeatedly returns the client payload as-is
-	StreamingFromServer(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (BenchmarkService_StreamingFromServerClient, error)
+	StreamingFromServer(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SimpleResponse], error)
 	// Two-sided unbounded streaming between server to client
 	// Both sides send the content of their own choice to the other
-	StreamingBothWays(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingBothWaysClient, error)
+	StreamingBothWays(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[SimpleRequest, SimpleResponse], error)
 }
 
 type benchmarkServiceClient struct {
@@ -83,80 +83,39 @@ func (c *benchmarkServiceClient) UnaryCall(ctx context.Context, in *SimpleReques
 	return out, nil
 }
 
-func (c *benchmarkServiceClient) StreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingCallClient, error) {
+func (c *benchmarkServiceClient) StreamingCall(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[SimpleRequest, SimpleResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[0], BenchmarkService_StreamingCall_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &benchmarkServiceStreamingCallClient{stream}
+	x := &grpc.GenericClientStream[SimpleRequest, SimpleResponse]{ClientStream: stream}
 	return x, nil
 }
 
-type BenchmarkService_StreamingCallClient interface {
-	Send(*SimpleRequest) error
-	Recv() (*SimpleResponse, error)
-	grpc.ClientStream
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BenchmarkService_StreamingCallClient = grpc.BidiStreamingClient[SimpleRequest, SimpleResponse]
 
-type benchmarkServiceStreamingCallClient struct {
-	grpc.ClientStream
-}
-
-func (x *benchmarkServiceStreamingCallClient) Send(m *SimpleRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *benchmarkServiceStreamingCallClient) Recv() (*SimpleResponse, error) {
-	m := new(SimpleResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *benchmarkServiceClient) StreamingFromClient(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingFromClientClient, error) {
+func (c *benchmarkServiceClient) StreamingFromClient(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[SimpleRequest, SimpleResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[1], BenchmarkService_StreamingFromClient_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &benchmarkServiceStreamingFromClientClient{stream}
+	x := &grpc.GenericClientStream[SimpleRequest, SimpleResponse]{ClientStream: stream}
 	return x, nil
 }
 
-type BenchmarkService_StreamingFromClientClient interface {
-	Send(*SimpleRequest) error
-	CloseAndRecv() (*SimpleResponse, error)
-	grpc.ClientStream
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BenchmarkService_StreamingFromClientClient = grpc.ClientStreamingClient[SimpleRequest, SimpleResponse]
 
-type benchmarkServiceStreamingFromClientClient struct {
-	grpc.ClientStream
-}
-
-func (x *benchmarkServiceStreamingFromClientClient) Send(m *SimpleRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *benchmarkServiceStreamingFromClientClient) CloseAndRecv() (*SimpleResponse, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(SimpleResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *benchmarkServiceClient) StreamingFromServer(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (BenchmarkService_StreamingFromServerClient, error) {
+func (c *benchmarkServiceClient) StreamingFromServer(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SimpleResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[2], BenchmarkService_StreamingFromServer_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &benchmarkServiceStreamingFromServerClient{stream}
+	x := &grpc.GenericClientStream[SimpleRequest, SimpleResponse]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -166,54 +125,21 @@ func (c *benchmarkServiceClient) StreamingFromServer(ctx context.Context, in *Si
 	return x, nil
 }
 
-type BenchmarkService_StreamingFromServerClient interface {
-	Recv() (*SimpleResponse, error)
-	grpc.ClientStream
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BenchmarkService_StreamingFromServerClient = grpc.ServerStreamingClient[SimpleResponse]
 
-type benchmarkServiceStreamingFromServerClient struct {
-	grpc.ClientStream
-}
-
-func (x *benchmarkServiceStreamingFromServerClient) Recv() (*SimpleResponse, error) {
-	m := new(SimpleResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *benchmarkServiceClient) StreamingBothWays(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingBothWaysClient, error) {
+func (c *benchmarkServiceClient) StreamingBothWays(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[SimpleRequest, SimpleResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[3], BenchmarkService_StreamingBothWays_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &benchmarkServiceStreamingBothWaysClient{stream}
+	x := &grpc.GenericClientStream[SimpleRequest, SimpleResponse]{ClientStream: stream}
 	return x, nil
 }
 
-type BenchmarkService_StreamingBothWaysClient interface {
-	Send(*SimpleRequest) error
-	Recv() (*SimpleResponse, error)
-	grpc.ClientStream
-}
-
-type benchmarkServiceStreamingBothWaysClient struct {
-	grpc.ClientStream
-}
-
-func (x *benchmarkServiceStreamingBothWaysClient) Send(m *SimpleRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *benchmarkServiceStreamingBothWaysClient) Recv() (*SimpleResponse, error) {
-	m := new(SimpleResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BenchmarkService_StreamingBothWaysClient = grpc.BidiStreamingClient[SimpleRequest, SimpleResponse]
 
 // BenchmarkServiceServer is the server API for BenchmarkService service.
 // All implementations must embed UnimplementedBenchmarkServiceServer
@@ -225,16 +151,16 @@ type BenchmarkServiceServer interface {
 	// Repeated sequence of one request followed by one response.
 	// Should be called streaming ping-pong
 	// The server returns the client payload as-is on each response
-	StreamingCall(BenchmarkService_StreamingCallServer) error
+	StreamingCall(grpc.BidiStreamingServer[SimpleRequest, SimpleResponse]) error
 	// Single-sided unbounded streaming from client to server
 	// The server returns the client payload as-is once the client does WritesDone
-	StreamingFromClient(BenchmarkService_StreamingFromClientServer) error
+	StreamingFromClient(grpc.ClientStreamingServer[SimpleRequest, SimpleResponse]) error
 	// Single-sided unbounded streaming from server to client
 	// The server repeatedly returns the client payload as-is
-	StreamingFromServer(*SimpleRequest, BenchmarkService_StreamingFromServerServer) error
+	StreamingFromServer(*SimpleRequest, grpc.ServerStreamingServer[SimpleResponse]) error
 	// Two-sided unbounded streaming between server to client
 	// Both sides send the content of their own choice to the other
-	StreamingBothWays(BenchmarkService_StreamingBothWaysServer) error
+	StreamingBothWays(grpc.BidiStreamingServer[SimpleRequest, SimpleResponse]) error
 	mustEmbedUnimplementedBenchmarkServiceServer()
 }
 
@@ -245,16 +171,16 @@ type UnimplementedBenchmarkServiceServer struct {
 func (UnimplementedBenchmarkServiceServer) UnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
 }
-func (UnimplementedBenchmarkServiceServer) StreamingCall(BenchmarkService_StreamingCallServer) error {
+func (UnimplementedBenchmarkServiceServer) StreamingCall(grpc.BidiStreamingServer[SimpleRequest, SimpleResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method StreamingCall not implemented")
 }
-func (UnimplementedBenchmarkServiceServer) StreamingFromClient(BenchmarkService_StreamingFromClientServer) error {
+func (UnimplementedBenchmarkServiceServer) StreamingFromClient(grpc.ClientStreamingServer[SimpleRequest, SimpleResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method StreamingFromClient not implemented")
 }
-func (UnimplementedBenchmarkServiceServer) StreamingFromServer(*SimpleRequest, BenchmarkService_StreamingFromServerServer) error {
+func (UnimplementedBenchmarkServiceServer) StreamingFromServer(*SimpleRequest, grpc.ServerStreamingServer[SimpleResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method StreamingFromServer not implemented")
 }
-func (UnimplementedBenchmarkServiceServer) StreamingBothWays(BenchmarkService_StreamingBothWaysServer) error {
+func (UnimplementedBenchmarkServiceServer) StreamingBothWays(grpc.BidiStreamingServer[SimpleRequest, SimpleResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method StreamingBothWays not implemented")
 }
 func (UnimplementedBenchmarkServiceServer) mustEmbedUnimplementedBenchmarkServiceServer() {}
@@ -289,103 +215,36 @@ func _BenchmarkService_UnaryCall_Handler(srv interface{}, ctx context.Context, d
 }
 
 func _BenchmarkService_StreamingCall_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BenchmarkServiceServer).StreamingCall(&benchmarkServiceStreamingCallServer{stream})
+	return srv.(BenchmarkServiceServer).StreamingCall(&grpc.GenericServerStream[SimpleRequest, SimpleResponse]{ServerStream: stream})
 }
 
-type BenchmarkService_StreamingCallServer interface {
-	Send(*SimpleResponse) error
-	Recv() (*SimpleRequest, error)
-	grpc.ServerStream
-}
-
-type benchmarkServiceStreamingCallServer struct {
-	grpc.ServerStream
-}
-
-func (x *benchmarkServiceStreamingCallServer) Send(m *SimpleResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *benchmarkServiceStreamingCallServer) Recv() (*SimpleRequest, error) {
-	m := new(SimpleRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BenchmarkService_StreamingCallServer = grpc.BidiStreamingServer[SimpleRequest, SimpleResponse]
 
 func _BenchmarkService_StreamingFromClient_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BenchmarkServiceServer).StreamingFromClient(&benchmarkServiceStreamingFromClientServer{stream})
+	return srv.(BenchmarkServiceServer).StreamingFromClient(&grpc.GenericServerStream[SimpleRequest, SimpleResponse]{ServerStream: stream})
 }
 
-type BenchmarkService_StreamingFromClientServer interface {
-	SendAndClose(*SimpleResponse) error
-	Recv() (*SimpleRequest, error)
-	grpc.ServerStream
-}
-
-type benchmarkServiceStreamingFromClientServer struct {
-	grpc.ServerStream
-}
-
-func (x *benchmarkServiceStreamingFromClientServer) SendAndClose(m *SimpleResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *benchmarkServiceStreamingFromClientServer) Recv() (*SimpleRequest, error) {
-	m := new(SimpleRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BenchmarkService_StreamingFromClientServer = grpc.ClientStreamingServer[SimpleRequest, SimpleResponse]
 
 func _BenchmarkService_StreamingFromServer_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(SimpleRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(BenchmarkServiceServer).StreamingFromServer(m, &benchmarkServiceStreamingFromServerServer{stream})
+	return srv.(BenchmarkServiceServer).StreamingFromServer(m, &grpc.GenericServerStream[SimpleRequest, SimpleResponse]{ServerStream: stream})
 }
 
-type BenchmarkService_StreamingFromServerServer interface {
-	Send(*SimpleResponse) error
-	grpc.ServerStream
-}
-
-type benchmarkServiceStreamingFromServerServer struct {
-	grpc.ServerStream
-}
-
-func (x *benchmarkServiceStreamingFromServerServer) Send(m *SimpleResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BenchmarkService_StreamingFromServerServer = grpc.ServerStreamingServer[SimpleResponse]
 
 func _BenchmarkService_StreamingBothWays_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BenchmarkServiceServer).StreamingBothWays(&benchmarkServiceStreamingBothWaysServer{stream})
+	return srv.(BenchmarkServiceServer).StreamingBothWays(&grpc.GenericServerStream[SimpleRequest, SimpleResponse]{ServerStream: stream})
 }
 
-type BenchmarkService_StreamingBothWaysServer interface {
-	Send(*SimpleResponse) error
-	Recv() (*SimpleRequest, error)
-	grpc.ServerStream
-}
-
-type benchmarkServiceStreamingBothWaysServer struct {
-	grpc.ServerStream
-}
-
-func (x *benchmarkServiceStreamingBothWaysServer) Send(m *SimpleResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *benchmarkServiceStreamingBothWaysServer) Recv() (*SimpleRequest, error) {
-	m := new(SimpleRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BenchmarkService_StreamingBothWaysServer = grpc.BidiStreamingServer[SimpleRequest, SimpleResponse]
 
 // BenchmarkService_ServiceDesc is the grpc.ServiceDesc for BenchmarkService service.
 // It's only intended for direct use with grpc.RegisterService,

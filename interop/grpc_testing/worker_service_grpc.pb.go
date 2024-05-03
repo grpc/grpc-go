@@ -32,8 +32,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.62.0 or later.
-const _ = grpc.SupportPackageIsVersion8
+// Requires gRPC-Go v1.64.0 or later.
+const _ = grpc.SupportPackageIsVersion9
 
 const (
 	WorkerService_RunServer_FullMethodName  = "/grpc.testing.WorkerService/RunServer"
@@ -52,14 +52,14 @@ type WorkerServiceClient interface {
 	// stats. Closing the stream will initiate shutdown of the test server
 	// and once the shutdown has finished, the OK status is sent to terminate
 	// this RPC.
-	RunServer(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunServerClient, error)
+	RunServer(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ServerArgs, ServerStatus], error)
 	// Start client with specified workload.
 	// First request sent specifies the ClientConfig followed by ClientStatus
 	// response. After that, a "Mark" can be sent anytime to request the latest
 	// stats. Closing the stream will initiate shutdown of the test client
 	// and once the shutdown has finished, the OK status is sent to terminate
 	// this RPC.
-	RunClient(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunClientClient, error)
+	RunClient(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ClientArgs, ClientStatus], error)
 	// Just return the core count - unary call
 	CoreCount(ctx context.Context, in *CoreRequest, opts ...grpc.CallOption) (*CoreResponse, error)
 	// Quit this worker
@@ -74,69 +74,31 @@ func NewWorkerServiceClient(cc grpc.ClientConnInterface) WorkerServiceClient {
 	return &workerServiceClient{cc}
 }
 
-func (c *workerServiceClient) RunServer(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunServerClient, error) {
+func (c *workerServiceClient) RunServer(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ServerArgs, ServerStatus], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[0], WorkerService_RunServer_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &workerServiceRunServerClient{stream}
+	x := &grpc.GenericClientStream[ServerArgs, ServerStatus]{ClientStream: stream}
 	return x, nil
 }
 
-type WorkerService_RunServerClient interface {
-	Send(*ServerArgs) error
-	Recv() (*ServerStatus, error)
-	grpc.ClientStream
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerService_RunServerClient = grpc.BidiStreamingClient[ServerArgs, ServerStatus]
 
-type workerServiceRunServerClient struct {
-	grpc.ClientStream
-}
-
-func (x *workerServiceRunServerClient) Send(m *ServerArgs) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *workerServiceRunServerClient) Recv() (*ServerStatus, error) {
-	m := new(ServerStatus)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *workerServiceClient) RunClient(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunClientClient, error) {
+func (c *workerServiceClient) RunClient(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ClientArgs, ClientStatus], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[1], WorkerService_RunClient_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &workerServiceRunClientClient{stream}
+	x := &grpc.GenericClientStream[ClientArgs, ClientStatus]{ClientStream: stream}
 	return x, nil
 }
 
-type WorkerService_RunClientClient interface {
-	Send(*ClientArgs) error
-	Recv() (*ClientStatus, error)
-	grpc.ClientStream
-}
-
-type workerServiceRunClientClient struct {
-	grpc.ClientStream
-}
-
-func (x *workerServiceRunClientClient) Send(m *ClientArgs) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *workerServiceRunClientClient) Recv() (*ClientStatus, error) {
-	m := new(ClientStatus)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerService_RunClientClient = grpc.BidiStreamingClient[ClientArgs, ClientStatus]
 
 func (c *workerServiceClient) CoreCount(ctx context.Context, in *CoreRequest, opts ...grpc.CallOption) (*CoreResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -168,14 +130,14 @@ type WorkerServiceServer interface {
 	// stats. Closing the stream will initiate shutdown of the test server
 	// and once the shutdown has finished, the OK status is sent to terminate
 	// this RPC.
-	RunServer(WorkerService_RunServerServer) error
+	RunServer(grpc.BidiStreamingServer[ServerArgs, ServerStatus]) error
 	// Start client with specified workload.
 	// First request sent specifies the ClientConfig followed by ClientStatus
 	// response. After that, a "Mark" can be sent anytime to request the latest
 	// stats. Closing the stream will initiate shutdown of the test client
 	// and once the shutdown has finished, the OK status is sent to terminate
 	// this RPC.
-	RunClient(WorkerService_RunClientServer) error
+	RunClient(grpc.BidiStreamingServer[ClientArgs, ClientStatus]) error
 	// Just return the core count - unary call
 	CoreCount(context.Context, *CoreRequest) (*CoreResponse, error)
 	// Quit this worker
@@ -187,10 +149,10 @@ type WorkerServiceServer interface {
 type UnimplementedWorkerServiceServer struct {
 }
 
-func (UnimplementedWorkerServiceServer) RunServer(WorkerService_RunServerServer) error {
+func (UnimplementedWorkerServiceServer) RunServer(grpc.BidiStreamingServer[ServerArgs, ServerStatus]) error {
 	return status.Errorf(codes.Unimplemented, "method RunServer not implemented")
 }
-func (UnimplementedWorkerServiceServer) RunClient(WorkerService_RunClientServer) error {
+func (UnimplementedWorkerServiceServer) RunClient(grpc.BidiStreamingServer[ClientArgs, ClientStatus]) error {
 	return status.Errorf(codes.Unimplemented, "method RunClient not implemented")
 }
 func (UnimplementedWorkerServiceServer) CoreCount(context.Context, *CoreRequest) (*CoreResponse, error) {
@@ -213,56 +175,18 @@ func RegisterWorkerServiceServer(s grpc.ServiceRegistrar, srv WorkerServiceServe
 }
 
 func _WorkerService_RunServer_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(WorkerServiceServer).RunServer(&workerServiceRunServerServer{stream})
+	return srv.(WorkerServiceServer).RunServer(&grpc.GenericServerStream[ServerArgs, ServerStatus]{ServerStream: stream})
 }
 
-type WorkerService_RunServerServer interface {
-	Send(*ServerStatus) error
-	Recv() (*ServerArgs, error)
-	grpc.ServerStream
-}
-
-type workerServiceRunServerServer struct {
-	grpc.ServerStream
-}
-
-func (x *workerServiceRunServerServer) Send(m *ServerStatus) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *workerServiceRunServerServer) Recv() (*ServerArgs, error) {
-	m := new(ServerArgs)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerService_RunServerServer = grpc.BidiStreamingServer[ServerArgs, ServerStatus]
 
 func _WorkerService_RunClient_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(WorkerServiceServer).RunClient(&workerServiceRunClientServer{stream})
+	return srv.(WorkerServiceServer).RunClient(&grpc.GenericServerStream[ClientArgs, ClientStatus]{ServerStream: stream})
 }
 
-type WorkerService_RunClientServer interface {
-	Send(*ClientStatus) error
-	Recv() (*ClientArgs, error)
-	grpc.ServerStream
-}
-
-type workerServiceRunClientServer struct {
-	grpc.ServerStream
-}
-
-func (x *workerServiceRunClientServer) Send(m *ClientStatus) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *workerServiceRunClientServer) Recv() (*ClientArgs, error) {
-	m := new(ClientArgs)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerService_RunClientServer = grpc.BidiStreamingServer[ClientArgs, ClientStatus]
 
 func _WorkerService_CoreCount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CoreRequest)

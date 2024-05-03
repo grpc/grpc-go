@@ -63,7 +63,7 @@ func (c *serverReflectionClient) ServerReflectionInfo(ctx context.Context, opts 
 	if err != nil {
 		return nil, err
 	}
-	x := &serverReflectionServerReflectionInfoClient{stream}
+	x := &serverReflectionServerReflectionInfoClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -118,7 +118,7 @@ func RegisterServerReflectionServer(s grpc.ServiceRegistrar, srv ServerReflectio
 }
 
 func _ServerReflection_ServerReflectionInfo_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ServerReflectionServer).ServerReflectionInfo(&serverReflectionServerReflectionInfoServer{stream})
+	return srv.(ServerReflectionServer).ServerReflectionInfo(&serverReflectionServerReflectionInfoServer{ServerStream: stream})
 }
 
 type ServerReflection_ServerReflectionInfoServer interface {
