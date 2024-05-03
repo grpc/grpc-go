@@ -21,11 +21,12 @@ function finish {
   rm -rf "$WORKDIR"
   # Revert back the PATH to client's original value
   export PATH=$RESTORED_PATH
+  echo "Restored PATH to older value: $PATH"
 }
 trap finish EXIT
 
 GOBIN="${WORKDIR}"/bin
-RESTORED_PATH=PATH
+RESTORED_PATH=$PATH
 export PATH="${GOBIN}:${PATH}"
 mkdir -p "${GOBIN}"
 
