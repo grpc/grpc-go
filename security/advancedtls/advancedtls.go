@@ -221,7 +221,7 @@ type ClientOptions struct {
 	MinVersion uint16
 	// MaxVersion contains the maximum TLS version that is acceptable.
 	//
-	// Deprecated: use MinTLSVersion instead.
+	// Deprecated: use MaxTLSVersion instead.
 	MaxVersion uint16
 	// MinTLSVersion contains the minimum TLS version that is acceptable.
 	// By default, TLS 1.2 is currently used as the minimum when acting as a
@@ -279,7 +279,7 @@ type ServerOptions struct {
 	MinVersion uint16
 	// MaxVersion contains the maximum TLS version that is acceptable.
 	//
-	// Deprecated: use MinTLSVersion instead.
+	// Deprecated: use MaxTLSVersion instead.
 	MaxVersion uint16
 	// MinTLSVersion contains the minimum TLS version that is acceptable.
 	// By default, TLS 1.2 is currently used as the minimum when acting as a
