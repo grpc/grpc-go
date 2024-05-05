@@ -1161,6 +1161,13 @@ func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, 
 	return err
 }
 
+// UpdateOpts update the server with new opts server options
+func (s *Server) UpdateOpts(newCertServerOptions ...ServerOption) {
+	for _, o := range newCertServerOptions {
+		o.apply(&s.opts)
+	}
+}
+
 // chainUnaryServerInterceptors chains all unary server interceptors into one.
 func chainUnaryServerInterceptors(s *Server) {
 	// Prepend opts.unaryInt to the chaining interceptors if it exists, since unaryInt will
