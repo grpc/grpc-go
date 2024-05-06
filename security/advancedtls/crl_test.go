@@ -546,10 +546,10 @@ func TestRevokedCert(t *testing.T) {
 	}
 
 	var revocationTests = []struct {
-		desc              string
-		in                tls.ConnectionState
-		revoked           bool
-		allowUndetermined bool
+		desc             string
+		in               tls.ConnectionState
+		revoked          bool
+		denyUndetermined bool
 	}{
 		{
 			desc:    "Single unrevoked",
@@ -586,24 +586,24 @@ func TestRevokedCert(t *testing.T) {
 			in: tls.ConnectionState{VerifiedChains: [][]*x509.Certificate{
 				{&x509.Certificate{CRLDistributionPoints: []string{"test"}}},
 			}},
-			revoked: true,
+			revoked:          true,
+			denyUndetermined: true,
 		},
 		{
 			desc: "Undetermined allowed",
 			in: tls.ConnectionState{VerifiedChains: [][]*x509.Certificate{
 				{&x509.Certificate{CRLDistributionPoints: []string{"test"}}},
 			}},
-			revoked:           false,
-			allowUndetermined: true,
+			revoked: false,
 		},
 	}
 
 	for _, tt := range revocationTests {
 		t.Run(fmt.Sprintf("%v with x509 crl hash dir", tt.desc), func(t *testing.T) {
 			err := checkRevocation(tt.in, RevocationOptions{
-				RootDir:           testdata.Path("crl"),
-				AllowUndetermined: tt.allowUndetermined,
-				Cache:             cache,
+				RootDir:          testdata.Path("crl"),
+				DenyUndetermined: tt.denyUndetermined,
+				Cache:            cache,
 			})
 			t.Logf("checkRevocation err = %v", err)
 			if tt.revoked && err == nil {
@@ -614,8 +614,8 @@ func TestRevokedCert(t *testing.T) {
 		})
 		t.Run(fmt.Sprintf("%v with static provider", tt.desc), func(t *testing.T) {
 			err := checkRevocation(tt.in, RevocationOptions{
-				AllowUndetermined: tt.allowUndetermined,
-				CRLProvider:       cRLProvider,
+				DenyUndetermined: tt.denyUndetermined,
+				CRLProvider:      cRLProvider,
 			})
 			t.Logf("checkRevocation err = %v", err)
 			if tt.revoked && err == nil {
