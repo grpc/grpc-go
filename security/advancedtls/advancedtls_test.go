@@ -138,8 +138,8 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 				VerificationType: test.clientVerificationType,
 				IdentityOptions:  test.IdentityOptions,
 				RootOptions:      test.RootOptions,
-				MinVersion:       test.MinVersion,
-				MaxVersion:       test.MaxVersion,
+				MinTLSVersion:    test.MinVersion,
+				MaxTLSVersion:    test.MaxVersion,
 			}
 			_, err := clientOptions.config()
 			if err == nil {
@@ -196,8 +196,8 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 				VerificationType: test.clientVerificationType,
 				IdentityOptions:  test.IdentityOptions,
 				RootOptions:      test.RootOptions,
-				MinVersion:       test.MinVersion,
-				MaxVersion:       test.MaxVersion,
+				MinTLSVersion:    test.MinVersion,
+				MaxTLSVersion:    test.MaxVersion,
 			}
 			clientConfig, err := clientOptions.config()
 			if err != nil {
@@ -209,6 +209,24 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 				clientOptions.RootOptions.GetRootCertificates == nil && clientOptions.RootOptions.RootProvider == nil {
 				if clientConfig.RootCAs == nil {
 					t.Fatalf("Failed to assign system-provided certificates on the client side.")
+				}
+			}
+			if test.MinVersion != 0 {
+				if clientConfig.MinVersion != test.MinVersion {
+					t.Fatalf("Failed to assign min tls version.")
+				}
+			} else {
+				if clientConfig.MinVersion != tls.VersionTLS12 {
+					t.Fatalf("Default min tls version not set correctly")
+				}
+			}
+			if test.MaxVersion != 0 {
+				if clientConfig.MaxVersion != test.MaxVersion {
+					t.Fatalf("Failed to assign max tls version.")
+				}
+			} else {
+				if clientConfig.MaxVersion != tls.VersionTLS13 {
+					t.Fatalf("Default max tls version not set correctly")
 				}
 			}
 		})
@@ -275,8 +293,8 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 				RequireClientCert: test.requireClientCert,
 				IdentityOptions:   test.IdentityOptions,
 				RootOptions:       test.RootOptions,
-				MinVersion:        test.MinVersion,
-				MaxVersion:        test.MaxVersion,
+				MinTLSVersion:     test.MinVersion,
+				MaxTLSVersion:     test.MaxVersion,
 			}
 			_, err := serverOptions.config()
 			if err == nil {
@@ -342,8 +360,8 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 				RequireClientCert: test.requireClientCert,
 				IdentityOptions:   test.IdentityOptions,
 				RootOptions:       test.RootOptions,
-				MinVersion:        test.MinVersion,
-				MaxVersion:        test.MaxVersion,
+				MinTLSVersion:     test.MinVersion,
+				MaxTLSVersion:     test.MaxVersion,
 			}
 			serverConfig, err := serverOptions.config()
 			if err != nil {

@@ -215,14 +215,26 @@ type ClientOptions struct {
 	// It could be nil if such checks are not needed.
 	RevocationOptions *RevocationOptions
 	// MinVersion contains the minimum TLS version that is acceptable.
-	// By default, TLS 1.2 is currently used as the minimum when acting as a
-	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
-	// supported by this package, both as a client and as a server.
+	//
+	// Deprecated: use MinTLSVersion instead.
 	MinVersion uint16
 	// MaxVersion contains the maximum TLS version that is acceptable.
-	// By default, the maximum version supported by this package is used,
-	// which is currently TLS 1.3.
+	//
+	// Deprecated: use MaxTLSVersion instead.
 	MaxVersion uint16
+	// MinTLSVersion contains the minimum TLS version that is acceptable.
+	// The value should be set using tls.VersionTLSxx from https://pkg.go.dev/crypto/tls
+	// By default, TLS 1.2 is currently used as the minimum when acting as a
+	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
+	// supported by this package, both as a client and as a server.  This
+	// default may be changed over time affecting backwards compatibility.
+	MinTLSVersion uint16
+	// MaxTLSVersion contains the maximum TLS version that is acceptable.
+	// The value should be set using tls.VersionTLSxx from https://pkg.go.dev/crypto/tls
+	// By default, the maximum version supported by this package is used,
+	// which is currently TLS 1.3.  This default may be changed over time
+	// affecting backwards compatibility.
+	MaxTLSVersion uint16
 	// serverNameOverride is for testing only. If set to a non-empty string, it
 	// will override the virtual host name of authority (e.g. :authority header
 	// field) in requests and the target hostname used during server cert
@@ -263,14 +275,26 @@ type ServerOptions struct {
 	// It could be nil if such checks are not needed.
 	RevocationOptions *RevocationOptions
 	// MinVersion contains the minimum TLS version that is acceptable.
-	// By default, TLS 1.2 is currently used as the minimum when acting as a
-	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
-	// supported by this package, both as a client and as a server.
+	//
+	// Deprecated: use MinTLSVersion instead.
 	MinVersion uint16
 	// MaxVersion contains the maximum TLS version that is acceptable.
-	// By default, the maximum version supported by this package is used,
-	// which is currently TLS 1.3.
+	//
+	// Deprecated: use MaxTLSVersion instead.
 	MaxVersion uint16
+	// MinTLSVersion contains the minimum TLS version that is acceptable.
+	// The value should be set using tls.VersionTLSxx from https://pkg.go.dev/crypto/tls
+	// By default, TLS 1.2 is currently used as the minimum when acting as a
+	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
+	// supported by this package, both as a client and as a server.  This
+	// default may be changed over time affecting backwards compatibility.
+	MinTLSVersion uint16
+	// MaxTLSVersion contains the maximum TLS version that is acceptable.
+	// The value should be set using tls.VersionTLSxx from https://pkg.go.dev/crypto/tls
+	// By default, the maximum version supported by this package is used,
+	// which is currently TLS 1.3.  This default may be changed over time
+	// affecting backwards compatibility.
+	MaxTLSVersion uint16
 }
 
 func (o *ClientOptions) config() (*tls.Config, error) {
@@ -284,6 +308,15 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 	// setting to the right place.
 	if o.VType != CertAndHostVerification {
 		o.VerificationType = o.VType
+	}
+	// TODO(gtcooke94) MinVersion and MaxVersion are deprected, eventually
+	// remove this block. This is a temporary fallback to ensure that if the
+	// refactored names aren't set we use the old names.
+	if o.MinTLSVersion == 0 {
+		o.MinTLSVersion = o.MinVersion
+	}
+	if o.MaxTLSVersion == 0 {
+		o.MaxTLSVersion = o.MaxVersion
 	}
 	if o.VerificationType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("client needs to provide custom verification mechanism if choose to skip default verification")
@@ -299,16 +332,24 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 	if o.IdentityOptions.GetIdentityCertificatesForServer != nil {
 		return nil, fmt.Errorf("GetIdentityCertificatesForServer cannot be specified on the client side")
 	}
-	if o.MinVersion > o.MaxVersion {
+	if o.MinTLSVersion > o.MaxTLSVersion {
 		return nil, fmt.Errorf("the minimum TLS version is larger than the maximum TLS version")
+	}
+	// If the MinTLSVersion isn't set, default to 1.2
+	if o.MinTLSVersion == 0 {
+		o.MinTLSVersion = tls.VersionTLS12
+	}
+	// If the MaxTLSVersion isn't set, default to 1.3
+	if o.MaxTLSVersion == 0 {
+		o.MaxTLSVersion = tls.VersionTLS13
 	}
 	config := &tls.Config{
 		ServerName: o.serverNameOverride,
 		// We have to set InsecureSkipVerify to true to skip the default checks and
 		// use the verification function we built from buildVerifyFunc.
 		InsecureSkipVerify: true,
-		MinVersion:         o.MinVersion,
-		MaxVersion:         o.MaxVersion,
+		MinVersion:         o.MinTLSVersion,
+		MaxVersion:         o.MaxTLSVersion,
 	}
 	// Propagate root-certificate-related fields in tls.Config.
 	switch {
@@ -372,6 +413,15 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 	if o.VType != CertAndHostVerification {
 		o.VerificationType = o.VType
 	}
+	// TODO(gtcooke94) MinVersion and MaxVersion are deprected, eventually
+	// remove this block. This is a temporary fallback to ensure that if the
+	// refactored names aren't set we use the old names.
+	if o.MinTLSVersion == 0 {
+		o.MinTLSVersion = o.MinVersion
+	}
+	if o.MaxTLSVersion == 0 {
+		o.MaxTLSVersion = o.MaxVersion
+	}
 	if o.RequireClientCert && o.VerificationType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
@@ -386,7 +436,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 	if o.IdentityOptions.GetIdentityCertificatesForClient != nil {
 		return nil, fmt.Errorf("GetIdentityCertificatesForClient cannot be specified on the server side")
 	}
-	if o.MinVersion > o.MaxVersion {
+	if o.MinTLSVersion > o.MaxTLSVersion {
 		return nil, fmt.Errorf("the minimum TLS version is larger than the maximum TLS version")
 	}
 	clientAuth := tls.NoClientCert
@@ -396,10 +446,18 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		// buildVerifyFunc.
 		clientAuth = tls.RequireAnyClientCert
 	}
+	// If the MinTLSVersion isn't set, default to 1.2
+	if o.MinTLSVersion == 0 {
+		o.MinTLSVersion = tls.VersionTLS12
+	}
+	// If the MaxTLSVersion isn't set, default to 1.3
+	if o.MaxTLSVersion == 0 {
+		o.MaxTLSVersion = tls.VersionTLS13
+	}
 	config := &tls.Config{
 		ClientAuth: clientAuth,
-		MinVersion: o.MinVersion,
-		MaxVersion: o.MaxVersion,
+		MinVersion: o.MinTLSVersion,
+		MaxVersion: o.MaxTLSVersion,
 	}
 	// Propagate root-certificate-related fields in tls.Config.
 	switch {
