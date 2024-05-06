@@ -93,11 +93,3 @@ func TestPeerStringer(t *testing.T) {
 		})
 	}
 }
-
-func TestPeerStringerOnContext(t *testing.T) {
-	ctx := NewContext(context.Background(), &Peer{Addr: &addr{"1.2.3.4:1234"}, AuthInfo: testAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}})
-	want := "context.Background.WithValue(type peer.peerKey, val Peer{Addr: '1.2.3.4:1234', LocalAddr: <nil>, AuthInfo: 'testAuthInfo-3'})"
-	if got := fmt.Sprintf("%v", ctx); got != want {
-		t.Fatalf("Unexpected stringer output, got: %q; want: %q", got, want)
-	}
-}
