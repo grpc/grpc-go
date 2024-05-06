@@ -134,14 +134,14 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			clientOptions := &ClientOptions{
+			clientOptions := &Options{
 				VerificationType: test.clientVerificationType,
 				IdentityOptions:  test.IdentityOptions,
 				RootOptions:      test.RootOptions,
 				MinTLSVersion:    test.MinVersion,
 				MaxTLSVersion:    test.MaxVersion,
 			}
-			_, err := clientOptions.config()
+			_, err := clientOptions.clientConfig()
 			if err == nil {
 				t.Fatalf("ClientOptions{%v}.config() returns no err, wantErr != nil", clientOptions)
 			}
@@ -154,10 +154,10 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 // VerificationType. This should error because one cannot skip default
 // verification and provide no root credentials",
 func (s) TestClientOptionsWithDeprecatedVType(t *testing.T) {
-	clientOptions := &ClientOptions{
+	clientOptions := &Options{
 		VType: SkipVerification,
 	}
-	_, err := clientOptions.config()
+	_, err := clientOptions.clientConfig()
 	if err == nil {
 		t.Fatalf("ClientOptions{%v}.config() returns no err, wantErr != nil", clientOptions)
 	}
@@ -192,14 +192,14 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			clientOptions := &ClientOptions{
+			clientOptions := &Options{
 				VerificationType: test.clientVerificationType,
 				IdentityOptions:  test.IdentityOptions,
 				RootOptions:      test.RootOptions,
 				MinTLSVersion:    test.MinVersion,
 				MaxTLSVersion:    test.MaxVersion,
 			}
-			clientConfig, err := clientOptions.config()
+			clientConfig, err := clientOptions.clientConfig()
 			if err != nil {
 				t.Fatalf("ClientOptions{%v}.config() = %v, wantErr == nil", clientOptions, err)
 			}
@@ -288,7 +288,7 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			serverOptions := &ServerOptions{
+			serverOptions := &Options{
 				VerificationType:  test.serverVerificationType,
 				RequireClientCert: test.requireClientCert,
 				IdentityOptions:   test.IdentityOptions,
@@ -296,9 +296,9 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 				MinTLSVersion:     test.MinVersion,
 				MaxTLSVersion:     test.MaxVersion,
 			}
-			_, err := serverOptions.config()
+			_, err := serverOptions.serverConfig()
 			if err == nil {
-				t.Fatalf("ServerOptions{%v}.config() returns no err, wantErr != nil", serverOptions)
+				t.Fatalf("ServerOptions{%v}.serverConfig() returns no err, wantErr != nil", serverOptions)
 			}
 		})
 	}
@@ -309,10 +309,10 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 // VerificationType. This should error because one cannot skip default
 // verification and provide no root credentials",
 func (s) TestServerOptionsWithDeprecatedVType(t *testing.T) {
-	serverOptions := &ServerOptions{
+	serverOptions := &Options{
 		VType: SkipVerification,
 	}
-	_, err := serverOptions.config()
+	_, err := serverOptions.serverConfig()
 	if err == nil {
 		t.Fatalf("ClientOptions{%v}.config() returns no err, wantErr != nil", serverOptions)
 	}
@@ -355,7 +355,7 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			serverOptions := &ServerOptions{
+			serverOptions := &Options{
 				VerificationType:  test.serverVerificationType,
 				RequireClientCert: test.requireClientCert,
 				IdentityOptions:   test.IdentityOptions,
@@ -363,7 +363,7 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 				MinTLSVersion:     test.MinVersion,
 				MaxTLSVersion:     test.MaxVersion,
 			}
-			serverConfig, err := serverOptions.config()
+			serverConfig, err := serverOptions.serverConfig()
 			if err != nil {
 				t.Fatalf("ServerOptions{%v}.config() = %v, wantErr == nil", serverOptions, err)
 			}
@@ -829,7 +829,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				t.Fatalf("Failed to listen: %v", err)
 			}
 			// Start a server using ServerOptions in another goroutine.
-			serverOptions := &ServerOptions{
+			serverOptions := &Options{
 				IdentityOptions: IdentityCertificateOptions{
 					Certificates:                     test.serverCert,
 					GetIdentityCertificatesForServer: test.serverGetCert,
@@ -845,7 +845,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				VerificationType:           test.serverVerificationType,
 				RevocationOptions:          test.serverRevocationOptions,
 			}
-			go func(done chan credentials.AuthInfo, lis net.Listener, serverOptions *ServerOptions) {
+			go func(done chan credentials.AuthInfo, lis net.Listener, serverOptions *Options) {
 				serverRawConn, err := lis.Accept()
 				if err != nil {
 					close(done)
@@ -873,7 +873,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				t.Fatalf("Client failed to connect to %s. Error: %v", lisAddr, err)
 			}
 			defer conn.Close()
-			clientOptions := &ClientOptions{
+			clientOptions := &Options{
 				IdentityOptions: IdentityCertificateOptions{
 					Certificates:                     test.clientCert,
 					GetIdentityCertificatesForClient: test.clientGetCert,
@@ -944,7 +944,7 @@ func (s) TestAdvancedTLSOverrideServerName(t *testing.T) {
 	if err := cs.LoadCerts(); err != nil {
 		t.Fatalf("cs.LoadCerts() failed, err: %v", err)
 	}
-	clientOptions := &ClientOptions{
+	clientOptions := &Options{
 		RootOptions: RootCertificateOptions{
 			RootCACerts: cs.ClientTrust1,
 		},
@@ -988,16 +988,16 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			serverOptions := &ServerOptions{
+			serverOptions := &Options{
 				IdentityOptions: IdentityCertificateOptions{
 					GetIdentityCertificatesForServer: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 						return []*tls.Certificate{&cs.ServerCert1, &cs.ServerCert2, &cs.ServerPeer3}, nil
 					},
 				},
 			}
-			serverConfig, err := serverOptions.config()
+			serverConfig, err := serverOptions.serverConfig()
 			if err != nil {
-				t.Fatalf("serverOptions.config() failed: %v", err)
+				t.Fatalf("serverOptions.serverConfig() failed: %v", err)
 			}
 			pointFormatUncompressed := uint8(0)
 			clientHello := &tls.ClientHelloInfo{
