@@ -336,7 +336,7 @@ func (s) TestEnd2End(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			// Start a server using ServerOptions in another goroutine.
-			serverOptions := &ServerOptions{
+			serverOptions := &Options{
 				IdentityOptions: IdentityCertificateOptions{
 					Certificates:                     test.serverCert,
 					GetIdentityCertificatesForServer: test.serverGetCert,
@@ -363,7 +363,7 @@ func (s) TestEnd2End(t *testing.T) {
 			addr := fmt.Sprintf("localhost:%v", lis.Addr().(*net.TCPAddr).Port)
 			pb.RegisterGreeterServer(s, greeterServer{})
 			go s.Serve(lis)
-			clientOptions := &ClientOptions{
+			clientOptions := &Options{
 				IdentityOptions: IdentityCertificateOptions{
 					Certificates:                     test.clientCert,
 					GetIdentityCertificatesForClient: test.clientGetCert,
@@ -627,7 +627,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			defer serverIdentityProvider.Close()
 			defer serverRootProvider.Close()
 			// Start a server and create a client using advancedtls API with Provider.
-			serverOptions := &ServerOptions{
+			serverOptions := &Options{
 				IdentityOptions: IdentityCertificateOptions{
 					IdentityProvider: serverIdentityProvider,
 				},
@@ -654,7 +654,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			addr := fmt.Sprintf("localhost:%v", lis.Addr().(*net.TCPAddr).Port)
 			pb.RegisterGreeterServer(s, greeterServer{})
 			go s.Serve(lis)
-			clientOptions := &ClientOptions{
+			clientOptions := &Options{
 				IdentityOptions: IdentityCertificateOptions{
 					IdentityProvider: clientIdentityProvider,
 				},
@@ -764,7 +764,7 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			// Start a server using ServerOptions in another goroutine.
-			serverOptions := &ServerOptions{
+			serverOptions := &Options{
 				IdentityOptions: IdentityCertificateOptions{
 					Certificates: test.serverCert,
 				},
@@ -785,7 +785,7 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 			addr := fmt.Sprintf("localhost:%v", lis.Addr().(*net.TCPAddr).Port)
 			pb.RegisterGreeterServer(s, greeterServer{})
 			go s.Serve(lis)
-			clientOptions := &ClientOptions{
+			clientOptions := &Options{
 				RootOptions: RootCertificateOptions{
 					RootCACerts: test.clientRoot,
 				},
@@ -902,7 +902,7 @@ func (s) TestTLSVersions(t *testing.T) {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			// Start a server using ServerOptions in another goroutine.
-			serverOptions := &ServerOptions{
+			serverOptions := &Options{
 				IdentityOptions: IdentityCertificateOptions{
 					Certificates: []tls.Certificate{cs.ServerPeerLocalhost1},
 				},
@@ -925,7 +925,7 @@ func (s) TestTLSVersions(t *testing.T) {
 			addr := fmt.Sprintf("localhost:%v", lis.Addr().(*net.TCPAddr).Port)
 			pb.RegisterGreeterServer(s, greeterServer{})
 			go s.Serve(lis)
-			clientOptions := &ClientOptions{
+			clientOptions := &Options{
 				RootOptions: RootCertificateOptions{
 					RootCACerts: cs.ClientTrust1,
 				},

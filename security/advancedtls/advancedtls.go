@@ -184,66 +184,16 @@ const (
 )
 
 // ClientOptions contains the fields needed to be filled by the client.
-type ClientOptions struct {
-	// IdentityOptions is OPTIONAL on client side. This field only needs to be
-	// set if mutual authentication is required on server side.
-	IdentityOptions IdentityCertificateOptions
-	// AdditionalPeerVerification is a custom verification check after certificate signature
-	// check.
-	// If this is set, we will perform this customized check after doing the
-	// normal check(s) indicated by setting VerificationType.
-	AdditionalPeerVerification PostHandshakeVerificationFunc
-	// VerifyPeer is a custom verification check after certificate signature
-	// check.
-	// If this is set, we will perform this customized check after doing the
-	// normal check(s) indicated by setting VerificationType.
-	//
-	// Deprecated: use AdditionalPeerVerification instead.
-	VerifyPeer PostHandshakeVerificationFunc
-	// RootOptions is OPTIONAL on client side. If not set, we will try to use the
-	// default trust certificates in users' OS system.
-	RootOptions RootCertificateOptions
-	// VerificationType defines what type of server verification is done. See
-	// the `VerificationType` enum for the different options.
-	// Default: CertAndHostVerification
-	VerificationType VerificationType
-	// VType is the verification type on the client side.
-	//
-	// Deprecated: use VerificationType instead.
-	VType VerificationType
-	// RevocationOptions is the configurations for certificate revocation checks.
-	// It could be nil if such checks are not needed.
-	RevocationOptions *RevocationOptions
-	// MinVersion contains the minimum TLS version that is acceptable.
-	//
-	// Deprecated: use MinTLSVersion instead.
-	MinVersion uint16
-	// MaxVersion contains the maximum TLS version that is acceptable.
-	//
-	// Deprecated: use MaxTLSVersion instead.
-	MaxVersion uint16
-	// MinTLSVersion contains the minimum TLS version that is acceptable.
-	// The value should be set using tls.VersionTLSxx from https://pkg.go.dev/crypto/tls
-	// By default, TLS 1.2 is currently used as the minimum when acting as a
-	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
-	// supported by this package, both as a client and as a server.  This
-	// default may be changed over time affecting backwards compatibility.
-	MinTLSVersion uint16
-	// MaxTLSVersion contains the maximum TLS version that is acceptable.
-	// The value should be set using tls.VersionTLSxx from https://pkg.go.dev/crypto/tls
-	// By default, the maximum version supported by this package is used,
-	// which is currently TLS 1.3.  This default may be changed over time
-	// affecting backwards compatibility.
-	MaxTLSVersion uint16
-	// serverNameOverride is for testing only. If set to a non-empty string, it
-	// will override the virtual host name of authority (e.g. :authority header
-	// field) in requests and the target hostname used during server cert
-	// verification.
-	serverNameOverride string
-}
+// Deprecated: use Options instead.
+type ClientOptions = Options
 
-// ServerOptions contains the fields needed to be filled by the server.
-type ServerOptions struct {
+// Options contains the fields needed to be filled by the server.
+// Deprecated: use Options instead.
+type ServerOptions = Options
+
+// Options contains the fields a user can configure when settings up TLS clients
+// and servers
+type Options struct {
 	// IdentityOptions is REQUIRED on server side.
 	IdentityOptions IdentityCertificateOptions
 	// AdditionalPeerVerification is a custom verification check after certificate signature
@@ -261,7 +211,9 @@ type ServerOptions struct {
 	// RootOptions is OPTIONAL on server side. This field only needs to be set if
 	// mutual authentication is required(RequireClientCert is true).
 	RootOptions RootCertificateOptions
-	// If the server want the client to send certificates.
+	// If the server want the client to send certificates. This value is only
+	// relevant when configuring options for the server. Is not used for
+	// client-side configuration.
 	RequireClientCert bool
 	// VerificationType defines what type of client verification is done. See
 	// the `VerificationType` enum for the different options.
@@ -295,9 +247,14 @@ type ServerOptions struct {
 	// which is currently TLS 1.3.  This default may be changed over time
 	// affecting backwards compatibility.
 	MaxTLSVersion uint16
+	// serverNameOverride is for testing only and only relevant on the client
+	// side. If set to a non-empty string, it will override the virtual host
+	// name of authority (e.g. :authority header field) in requests and the
+	// target hostname used during server cert verification.
+	serverNameOverride string
 }
 
-func (o *ClientOptions) config() (*tls.Config, error) {
+func (o *Options) clientConfig() (*tls.Config, error) {
 	// TODO(gtcooke94) Remove this block when o.VerifyPeer is remoed.
 	// VerifyPeer is deprecated, but do this to aid the transitory migration time.
 	if o.AdditionalPeerVerification == nil {
@@ -401,7 +358,7 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 	return config, nil
 }
 
-func (o *ServerOptions) config() (*tls.Config, error) {
+func (o *Options) serverConfig() (*tls.Config, error) {
 	// TODO(gtcooke94) Remove this block when o.VerifyPeer is remoed.
 	// VerifyPeer is deprecated, but do this to aid the transitory migration time.
 	if o.AdditionalPeerVerification == nil {
@@ -696,8 +653,8 @@ func buildVerifyFunc(c *advancedTLSCreds,
 
 // NewClientCreds uses ClientOptions to construct a TransportCredentials based
 // on TLS.
-func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) {
-	conf, err := o.config()
+func NewClientCreds(o *Options) (credentials.TransportCredentials, error) {
+	conf, err := o.clientConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -715,8 +672,8 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 
 // NewServerCreds uses ServerOptions to construct a TransportCredentials based
 // on TLS.
-func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) {
-	conf, err := o.config()
+func NewServerCreds(o *Options) (credentials.TransportCredentials, error) {
+	conf, err := o.serverConfig()
 	if err != nil {
 		return nil, err
 	}
