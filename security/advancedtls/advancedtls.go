@@ -187,11 +187,11 @@ const (
 // Deprecated: use Options instead.
 type ClientOptions = Options
 
-// Options contains the fields needed to be filled by the server.
+// ServerOptions contains the fields needed to be filled by the server.
 // Deprecated: use Options instead.
 type ServerOptions = Options
 
-// Options contains the fields a user can configure when settings up TLS clients
+// Options contains the fields a user can configure when setting up TLS clients
 // and servers
 type Options struct {
 	// IdentityOptions is OPTIONAL on client side. This field only needs to be
@@ -213,7 +213,7 @@ type Options struct {
 	// RootOptions is OPTIONAL on server side. This field only needs to be set if
 	// mutual authentication is required(RequireClientCert is true).
 	RootOptions RootCertificateOptions
-	// If the server want the client to send certificates. This value is only
+	// If the server requires the client to send certificates. This value is only
 	// relevant when configuring options for the server. Is not used for
 	// client-side configuration.
 	RequireClientCert bool
