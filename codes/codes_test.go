@@ -94,9 +94,9 @@ func (s) TestUnmarshalJSON_MarshalUnmarshal(t *testing.T) {
 
 func (s) TestUnmarshalJSON_InvalidIntegerCode(t *testing.T) {
 	var got Code
-	wantErr := "invalid code: 200"
+	wantErr := "invalid code: 200" // for integer invalid code, expect integer value in error message
 	err := got.UnmarshalJSON([]byte("200"))
-	if err.Error() != wantErr { // for integer invalid code, expect integer value in error message
+	if err.Error() != wantErr {
 		t.Errorf("got.UnmarshalJSON(200) != %s; got=%s", wantErr, err.Error())
 	}
 }
