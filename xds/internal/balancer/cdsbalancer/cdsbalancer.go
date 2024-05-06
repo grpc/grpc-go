@@ -609,21 +609,7 @@ func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []cluste
 			Cluster:               cluster.ClusterName,
 			EDSServiceName:        cluster.EDSServiceName,
 			MaxConcurrentRequests: cluster.MaxRequests,
-		}
-		if cluster.LRSServerConfig == xdsresource.ClusterLRSServerSelf {
-			bootstrapConfig := b.xdsClient.BootstrapConfig()
-			parsedName := xdsresource.ParseName(cluster.ClusterName)
-			if parsedName.Scheme == xdsresource.FederationScheme {
-				// Is a federation resource name, find the corresponding
-				// authority server config.
-				if cfg, ok := bootstrapConfig.Authorities[parsedName.Authority]; ok {
-					dm.LoadReportingServer = cfg.XDSServer
-				}
-			} else {
-				// Not a federation resource name, use the default
-				// authority.
-				dm.LoadReportingServer = bootstrapConfig.XDSServer
-			}
+			LoadReportingServer:   cluster.LRSServerConfig,
 		}
 	case xdsresource.ClusterTypeLogicalDNS:
 		dm = clusterresolver.DiscoveryMechanism{

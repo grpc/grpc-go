@@ -133,9 +133,13 @@ type ResourceData interface {
 // DecodeOptions wraps the options required by ResourceType implementation for
 // decoding configuration received from the xDS management server.
 type DecodeOptions struct {
-	// BootstrapConfig contains the bootstrap configuration passed to the
-	// top-level xdsClient. This contains useful data for resource validation.
+	// BootstrapConfig contains the complete bootstrap configuration passed to
+	// the xDS client. This contains useful data for resource validation.
 	BootstrapConfig *bootstrap.Config
+	// ServerConfig contains the server config (from the above bootstrap
+	// configuration) of the xDS server from which the current resource, for
+	// which Decode() is being invoked, was received.
+	ServerConfig *bootstrap.ServerConfig
 }
 
 // DecodeResult is the result of a decode operation.
