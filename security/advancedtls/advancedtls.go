@@ -87,17 +87,20 @@ type PostHandshakeVerificationFunc func(params *HandshakeVerificationInfo) (*Pos
 // Deprecated: use PostHandshakeVerificationFunc instead.
 type CustomVerificationFunc = PostHandshakeVerificationFunc
 
-// GetRootCAsParams contains the parameters available to users when
-// implementing GetRootCAs.
-type GetRootCAsParams struct {
-	RawConn  net.Conn
+// ConnectionInfo contains the parameters available to users when
+// implementing GetRootCertificates.
+type ConnectionInfo struct {
+	// RawConn is the raw net.Conn representing a connection.
+	RawConn net.Conn
+	// RawCerts is the byte representation of the presented peer cert chain.
 	RawCerts [][]byte
 }
 
-// GetRootCAsResults contains the results of GetRootCAs.
+// RootCertificates is the result of GetRootCertificates.
 // If users want to reload the root trust certificate, it is required to return
 // the proper TrustCerts in GetRootCAs.
-type GetRootCAsResults struct {
+type RootCertificates struct {
+	// TrustCerts is the pool of trusted certificates.
 	TrustCerts *x509.CertPool
 }
 
@@ -111,7 +114,7 @@ type RootCertificateOptions struct {
 	RootCACerts *x509.CertPool
 	// If GetRootCertificates is set, it will be invoked to obtain root certs for
 	// every new connection.
-	GetRootCertificates func(params *GetRootCAsParams) (*GetRootCAsResults, error)
+	GetRootCertificates func(params *ConnectionInfo) (*RootCertificates, error)
 	// If RootProvider is set, we will use the root certs from the Provider's
 	// KeyMaterial() call in the new connections. The Provider must have initial
 	// credentials if specified. Otherwise, KeyMaterial() will block forever.
@@ -319,12 +322,12 @@ func (o *Options) clientConfig() (*tls.Config, error) {
 		// callback is not contained in tls.Config, we have nothing to set here.
 		// We will invoke the callback in ClientHandshake.
 	case o.RootOptions.RootProvider != nil:
-		o.RootOptions.GetRootCertificates = func(*GetRootCAsParams) (*GetRootCAsResults, error) {
+		o.RootOptions.GetRootCertificates = func(*ConnectionInfo) (*RootCertificates, error) {
 			km, err := o.RootOptions.RootProvider.KeyMaterial(context.Background())
 			if err != nil {
 				return nil, err
 			}
-			return &GetRootCAsResults{TrustCerts: km.Roots}, nil
+			return &RootCertificates{TrustCerts: km.Roots}, nil
 		}
 	default:
 		// No root certificate options specified by user. Use the certificates
@@ -427,12 +430,12 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 		// callback is not contained in tls.Config, we have nothing to set here.
 		// We will invoke the callback in ServerHandshake.
 	case o.RootOptions.RootProvider != nil:
-		o.RootOptions.GetRootCertificates = func(*GetRootCAsParams) (*GetRootCAsResults, error) {
+		o.RootOptions.GetRootCertificates = func(*ConnectionInfo) (*RootCertificates, error) {
 			km, err := o.RootOptions.RootProvider.KeyMaterial(context.Background())
 			if err != nil {
 				return nil, err
 			}
-			return &GetRootCAsResults{TrustCerts: km.Roots}, nil
+			return &RootCertificates{TrustCerts: km.Roots}, nil
 		}
 	default:
 		// No root certificate options specified by user. Use the certificates
@@ -479,7 +482,7 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 type advancedTLSCreds struct {
 	config            *tls.Config
 	verifyFunc        PostHandshakeVerificationFunc
-	getRootCAs        func(params *GetRootCAsParams) (*GetRootCAsResults, error)
+	getRootCAs        func(params *ConnectionInfo) (*RootCertificates, error)
 	isClient          bool
 	revocationOptions *RevocationOptions
 	verificationType  VerificationType
@@ -589,7 +592,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 			}
 			// Reload root CA certs.
 			if rootCAs == nil && c.getRootCAs != nil {
-				results, err := c.getRootCAs(&GetRootCAsParams{
+				results, err := c.getRootCAs(&ConnectionInfo{
 					RawConn:  rawConn,
 					RawCerts: rawCerts,
 				})

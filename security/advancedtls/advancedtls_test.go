@@ -254,7 +254,7 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 			serverVerificationType: CertVerification,
 			RootOptions: RootCertificateOptions{
 				RootCACerts: x509.NewCertPool(),
-				GetRootCertificates: func(*GetRootCAsParams) (*GetRootCAsResults, error) {
+				GetRootCertificates: func(*ConnectionInfo) (*RootCertificates, error) {
 					return nil, nil
 				},
 			},
@@ -384,8 +384,8 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	if err := cs.LoadCerts(); err != nil {
 		t.Fatalf("cs.LoadCerts() failed, err: %v", err)
 	}
-	getRootCAsForClient := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
-		return &GetRootCAsResults{TrustCerts: cs.ClientTrust1}, nil
+	getRootCAsForClient := func(params *ConnectionInfo) (*RootCertificates, error) {
+		return &RootCertificates{TrustCerts: cs.ClientTrust1}, nil
 	}
 	clientVerifyFuncGood := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		if params.ServerName == "" {
@@ -401,8 +401,8 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	verifyFuncBad := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		return nil, fmt.Errorf("custom verification function failed")
 	}
-	getRootCAsForServer := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
-		return &GetRootCAsResults{TrustCerts: cs.ServerTrust1}, nil
+	getRootCAsForServer := func(params *ConnectionInfo) (*RootCertificates, error) {
+		return &RootCertificates{TrustCerts: cs.ServerTrust1}, nil
 	}
 	serverVerifyFunc := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		if params.ServerName != "" {
@@ -415,16 +415,16 @@ func (s) TestClientServerHandshake(t *testing.T) {
 
 		return &PostHandshakeVerificationResults{}, nil
 	}
-	getRootCAsForServerBad := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
+	getRootCAsForServerBad := func(params *ConnectionInfo) (*RootCertificates, error) {
 		return nil, fmt.Errorf("bad root certificate reloading")
 	}
 
-	getRootCAsForClientCRL := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
-		return &GetRootCAsResults{TrustCerts: cs.ClientTrust3}, nil
+	getRootCAsForClientCRL := func(params *ConnectionInfo) (*RootCertificates, error) {
+		return &RootCertificates{TrustCerts: cs.ClientTrust3}, nil
 	}
 
-	getRootCAsForServerCRL := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
-		return &GetRootCAsResults{TrustCerts: cs.ServerTrust3}, nil
+	getRootCAsForServerCRL := func(params *ConnectionInfo) (*RootCertificates, error) {
+		return &RootCertificates{TrustCerts: cs.ServerTrust3}, nil
 	}
 
 	makeStaticCRLRevocationOptions := func(crlPath string, denyUndetermined bool) *RevocationOptions {
@@ -448,7 +448,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		clientCert                 []tls.Certificate
 		clientGetCert              func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 		clientRoot                 *x509.CertPool
-		clientGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
+		clientGetRoot              func(params *ConnectionInfo) (*RootCertificates, error)
 		clientVerifyFunc           PostHandshakeVerificationFunc
 		clientVerificationType     VerificationType
 		clientRootProvider         certprovider.Provider
@@ -459,7 +459,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		serverCert                 []tls.Certificate
 		serverGetCert              func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 		serverRoot                 *x509.CertPool
-		serverGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
+		serverGetRoot              func(params *ConnectionInfo) (*RootCertificates, error)
 		serverVerifyFunc           PostHandshakeVerificationFunc
 		serverVerificationType     VerificationType
 		serverRootProvider         certprovider.Provider
