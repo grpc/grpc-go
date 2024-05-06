@@ -194,6 +194,8 @@ type ServerOptions = Options
 // Options contains the fields a user can configure when settings up TLS clients
 // and servers
 type Options struct {
+	// IdentityOptions is OPTIONAL on client side. This field only needs to be
+	// set if mutual authentication is required on server side.
 	// IdentityOptions is REQUIRED on server side.
 	IdentityOptions IdentityCertificateOptions
 	// AdditionalPeerVerification is a custom verification check after certificate signature
@@ -215,7 +217,7 @@ type Options struct {
 	// relevant when configuring options for the server. Is not used for
 	// client-side configuration.
 	RequireClientCert bool
-	// VerificationType defines what type of client verification is done. See
+	// VerificationType defines what type of peer verification is done. See
 	// the `VerificationType` enum for the different options.
 	// Default: CertAndHostVerification
 	VerificationType VerificationType
