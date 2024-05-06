@@ -509,6 +509,7 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 		},
 	}
 	info.SPIFFEID = credinternal.SPIFFEIDFromState(conn.ConnectionState())
+	// set the VerifiedChains
 	info.State.VerifiedChains = peerVerifiedChains
 	return credinternal.WrapSyscallConn(rawConn, conn), info, nil
 }
@@ -529,6 +530,7 @@ func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credenti
 		},
 	}
 	info.SPIFFEID = credinternal.SPIFFEIDFromState(conn.ConnectionState())
+	// set the VerifiedChains
 	info.State.VerifiedChains = peerVerifiedChains
 	return credinternal.WrapSyscallConn(rawConn, conn), info, nil
 }
