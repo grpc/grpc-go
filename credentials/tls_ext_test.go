@@ -262,29 +262,29 @@ func (s) TestTLS_DisabledALPN(t *testing.T) {
 	defer listner.Close()
 
 	tests := []struct {
-		description            string
+		name                   string
 		alpnEnforced           bool
 		wantErrMatchPattern    string
 		wantErrNonMatchPattern string
 	}{
 		{
-			description:         "enforced",
+			name:                "enforced",
 			alpnEnforced:        true,
 			wantErrMatchPattern: "transport: .*missing selected ALPN property",
 		},
 		{
-			description:            "not_enforced",
+			name:                   "not_enforced",
 			wantErrNonMatchPattern: "transport:",
 		},
 		{
-			description:            "default_value",
+			name:                   "default_value",
 			wantErrNonMatchPattern: "transport:",
 			alpnEnforced:           initialVal,
 		},
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.description, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			envconfig.EnforceALPNEnabled = tc.alpnEnforced
 			// Listen to one TCP connection request.
 			go func() {
