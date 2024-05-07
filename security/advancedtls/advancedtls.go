@@ -96,6 +96,12 @@ type ConnectionInfo struct {
 	RawCerts [][]byte
 }
 
+// GetRootCAsParams contains the parameters available to users when
+// implementing GetRootCAs.
+//
+// Deprecated: use ConnectionInfo instead.
+type GetRootCAsParams = ConnectionInfo
+
 // RootCertificates is the result of GetRootCertificates.
 // If users want to reload the root trust certificate, it is required to return
 // the proper TrustCerts in GetRootCAs.
@@ -103,6 +109,13 @@ type RootCertificates struct {
 	// TrustCerts is the pool of trusted certificates.
 	TrustCerts *x509.CertPool
 }
+
+// GetRootCAsResults contains the results of GetRootCAs.
+// If users want to reload the root trust certificate, it is required to return
+// the proper TrustCerts in GetRootCAs.
+//
+// Deprecated: use RootCertificates instead.
+type GetRootCAsResults = RootCertificates
 
 // RootCertificateOptions contains options to obtain root trust certificates
 // for both the client and the server.

@@ -387,6 +387,11 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	getRootCAsForClient := func(params *ConnectionInfo) (*RootCertificates, error) {
 		return &RootCertificates{TrustCerts: cs.ClientTrust1}, nil
 	}
+
+	getRootCAsForClientDeprecatedTypes := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
+		return &GetRootCAsResults{TrustCerts: cs.ClientTrust1}, nil
+	}
+
 	clientVerifyFuncGood := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		if params.ServerName == "" {
 			return nil, errors.New("client side server name should have a value")
@@ -503,6 +508,20 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverCert:                 []tls.Certificate{cs.ServerCert1},
 			serverVerificationType:     CertVerification,
 			serverExpectError:          true,
+		},
+		// Client: set clientGetRoot with deprecated types, clientVerifyFunc and
+		// clientCert Server: set serverRoot and serverCert with mutual TLS on
+		// Expected Behavior: success
+		{
+			desc:                   "Client sets peer cert, reload root function with deprecatd types with verifyFuncGood; server sets peer cert and root cert; mutualTLS",
+			clientCert:             []tls.Certificate{cs.ClientCert1},
+			clientGetRoot:          getRootCAsForClientDeprecatedTypes,
+			clientVerifyFunc:       clientVerifyFuncGood,
+			clientVerificationType: CertVerification,
+			serverMutualTLS:        true,
+			serverCert:             []tls.Certificate{cs.ServerCert1},
+			serverRoot:             cs.ServerTrust1,
+			serverVerificationType: CertVerification,
 		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
 		// Server: set serverRoot and serverCert with mutual TLS on
