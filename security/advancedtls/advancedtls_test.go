@@ -103,8 +103,8 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 			desc:                   "More than one fields in RootCertificateOptions is specified",
 			clientVerificationType: CertVerification,
 			RootOptions: RootCertificateOptions{
-				RootCACerts:  x509.NewCertPool(),
-				RootProvider: fakeProvider{},
+				RootCertificates: x509.NewCertPool(),
+				RootProvider:     fakeProvider{},
 			},
 		},
 		{
@@ -205,7 +205,7 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 			}
 			// Verify that the system-provided certificates would be used
 			// when no verification method was set in clientOptions.
-			if clientOptions.RootOptions.RootCACerts == nil &&
+			if clientOptions.RootOptions.RootCertificates == nil &&
 				clientOptions.RootOptions.GetRootCertificates == nil && clientOptions.RootOptions.RootProvider == nil {
 				if clientConfig.RootCAs == nil {
 					t.Fatalf("Failed to assign system-provided certificates on the client side.")
@@ -253,7 +253,7 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 			requireClientCert:      true,
 			serverVerificationType: CertVerification,
 			RootOptions: RootCertificateOptions{
-				RootCACerts: x509.NewCertPool(),
+				RootCertificates: x509.NewCertPool(),
 				GetRootCertificates: func(*ConnectionInfo) (*RootCertificates, error) {
 					return nil, nil
 				},
@@ -369,7 +369,7 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 			}
 			// Verify that the system-provided certificates would be used
 			// when no verification method was set in serverOptions.
-			if serverOptions.RootOptions.RootCACerts == nil &&
+			if serverOptions.RootOptions.RootCertificates == nil &&
 				serverOptions.RootOptions.GetRootCertificates == nil && serverOptions.RootOptions.RootProvider == nil {
 				if serverConfig.ClientCAs == nil {
 					t.Fatalf("Failed to assign system-provided certificates on the server side.")
@@ -855,7 +855,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					IdentityProvider:                 test.serverIdentityProvider,
 				},
 				RootOptions: RootCertificateOptions{
-					RootCACerts:         test.serverRoot,
+					RootCertificates:    test.serverRoot,
 					GetRootCertificates: test.serverGetRoot,
 					RootProvider:        test.serverRootProvider,
 				},
@@ -900,7 +900,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				},
 				AdditionalPeerVerification: test.clientVerifyFunc,
 				RootOptions: RootCertificateOptions{
-					RootCACerts:         test.clientRoot,
+					RootCertificates:    test.clientRoot,
 					GetRootCertificates: test.clientGetRoot,
 					RootProvider:        test.clientRootProvider,
 				},
@@ -965,7 +965,7 @@ func (s) TestAdvancedTLSOverrideServerName(t *testing.T) {
 	}
 	clientOptions := &Options{
 		RootOptions: RootCertificateOptions{
-			RootCACerts: cs.ClientTrust1,
+			RootCertificates: cs.ClientTrust1,
 		},
 		serverNameOverride: expectedServerName,
 	}

@@ -342,7 +342,7 @@ func (s) TestEnd2End(t *testing.T) {
 					GetIdentityCertificatesForServer: test.serverGetCert,
 				},
 				RootOptions: RootCertificateOptions{
-					RootCACerts:         test.serverRoot,
+					RootCertificates:    test.serverRoot,
 					GetRootCertificates: test.serverGetRoot,
 				},
 				RequireClientCert:          true,
@@ -370,7 +370,7 @@ func (s) TestEnd2End(t *testing.T) {
 				},
 				AdditionalPeerVerification: test.clientVerifyFunc,
 				RootOptions: RootCertificateOptions{
-					RootCACerts:         test.clientRoot,
+					RootCertificates:    test.clientRoot,
 					GetRootCertificates: test.clientGetRoot,
 				},
 				VerificationType: test.clientVerificationType,
@@ -787,7 +787,7 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 			go s.Serve(lis)
 			clientOptions := &Options{
 				RootOptions: RootCertificateOptions{
-					RootCACerts: test.clientRoot,
+					RootCertificates: test.clientRoot,
 				},
 				VerificationType: test.clientVerificationType,
 			}
@@ -927,7 +927,7 @@ func (s) TestTLSVersions(t *testing.T) {
 			go s.Serve(lis)
 			clientOptions := &Options{
 				RootOptions: RootCertificateOptions{
-					RootCACerts: cs.ClientTrust1,
+					RootCertificates: cs.ClientTrust1,
 				},
 				VerificationType: CertAndHostVerification,
 				MinTLSVersion:    test.clientMinVersion,

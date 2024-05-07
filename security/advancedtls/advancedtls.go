@@ -122,8 +122,13 @@ type GetRootCAsResults = RootCertificates
 // At most one option could be set. If none of them are set, we
 // use the system default trust certificates.
 type RootCertificateOptions struct {
+	// If RootCertificates is set, it will be used every time when verifying
+	// the peer certificates, without performing root certificate reloading.
+	RootCertificates *x509.CertPool
 	// If RootCACerts is set, it will be used every time when verifying
 	// the peer certificates, without performing root certificate reloading.
+	//
+	// Deprecated: use RootCertificates instead.
 	RootCACerts *x509.CertPool
 	// If GetRootCertificates is set, it will be invoked to obtain root certs for
 	// every new connection.
@@ -293,6 +298,12 @@ func (o *Options) clientConfig() (*tls.Config, error) {
 	if o.MaxTLSVersion == 0 {
 		o.MaxTLSVersion = o.MaxVersion
 	}
+	// TODO(gtcooke94) RootCACerts is deprecated, eventually remove this block.
+	// This will ensure that users still explicitly setting RootCACerts will get
+	// the setting int the right place.
+	if o.RootOptions.RootCACerts != nil {
+		o.RootOptions.RootCertificates = o.RootOptions.RootCACerts
+	}
 	if o.VerificationType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("client needs to provide custom verification mechanism if choose to skip default verification")
 	}
@@ -328,8 +339,8 @@ func (o *Options) clientConfig() (*tls.Config, error) {
 	}
 	// Propagate root-certificate-related fields in tls.Config.
 	switch {
-	case o.RootOptions.RootCACerts != nil:
-		config.RootCAs = o.RootOptions.RootCACerts
+	case o.RootOptions.RootCertificates != nil:
+		config.RootCAs = o.RootOptions.RootCertificates
 	case o.RootOptions.GetRootCertificates != nil:
 		// In cases when users provide GetRootCertificates callback, since this
 		// callback is not contained in tls.Config, we have nothing to set here.
@@ -397,6 +408,12 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 	if o.MaxTLSVersion == 0 {
 		o.MaxTLSVersion = o.MaxVersion
 	}
+	// TODO(gtcooke94) RootCACerts is deprecated, eventually remove this block.
+	// This will ensure that users still explicitly setting RootCACerts will get
+	// the setting int the right place.
+	if o.RootOptions.RootCACerts != nil {
+		o.RootOptions.RootCertificates = o.RootOptions.RootCACerts
+	}
 	if o.RequireClientCert && o.VerificationType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
@@ -436,8 +453,8 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 	}
 	// Propagate root-certificate-related fields in tls.Config.
 	switch {
-	case o.RootOptions.RootCACerts != nil:
-		config.ClientCAs = o.RootOptions.RootCACerts
+	case o.RootOptions.RootCertificates != nil:
+		config.ClientCAs = o.RootOptions.RootCertificates
 	case o.RootOptions.GetRootCertificates != nil:
 		// In cases when users provide GetRootCertificates callback, since this
 		// callback is not contained in tls.Config, we have nothing to set here.
@@ -493,12 +510,12 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 // advancedTLSCreds is the credentials required for authenticating a connection
 // using TLS.
 type advancedTLSCreds struct {
-	config            *tls.Config
-	verifyFunc        PostHandshakeVerificationFunc
-	getRootCAs        func(params *ConnectionInfo) (*RootCertificates, error)
-	isClient          bool
-	revocationOptions *RevocationOptions
-	verificationType  VerificationType
+	config              *tls.Config
+	verifyFunc          PostHandshakeVerificationFunc
+	getRootCertificates func(params *ConnectionInfo) (*RootCertificates, error)
+	isClient            bool
+	revocationOptions   *RevocationOptions
+	verificationType    VerificationType
 }
 
 func (c advancedTLSCreds) Info() credentials.ProtocolInfo {
@@ -564,10 +581,10 @@ func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credenti
 
 func (c *advancedTLSCreds) Clone() credentials.TransportCredentials {
 	return &advancedTLSCreds{
-		config:     credinternal.CloneTLSConfig(c.config),
-		verifyFunc: c.verifyFunc,
-		getRootCAs: c.getRootCAs,
-		isClient:   c.isClient,
+		config:              credinternal.CloneTLSConfig(c.config),
+		verifyFunc:          c.verifyFunc,
+		getRootCertificates: c.getRootCertificates,
+		isClient:            c.isClient,
 	}
 }
 
@@ -604,8 +621,8 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				rootCAs = c.config.ClientCAs
 			}
 			// Reload root CA certs.
-			if rootCAs == nil && c.getRootCAs != nil {
-				results, err := c.getRootCAs(&ConnectionInfo{
+			if rootCAs == nil && c.getRootCertificates != nil {
+				results, err := c.getRootCertificates(&ConnectionInfo{
 					RawConn:  rawConn,
 					RawCerts: rawCerts,
 				})
@@ -677,12 +694,12 @@ func NewClientCreds(o *Options) (credentials.TransportCredentials, error) {
 		return nil, err
 	}
 	tc := &advancedTLSCreds{
-		config:            conf,
-		isClient:          true,
-		getRootCAs:        o.RootOptions.GetRootCertificates,
-		verifyFunc:        o.AdditionalPeerVerification,
-		revocationOptions: o.RevocationOptions,
-		verificationType:  o.VerificationType,
+		config:              conf,
+		isClient:            true,
+		getRootCertificates: o.RootOptions.GetRootCertificates,
+		verifyFunc:          o.AdditionalPeerVerification,
+		revocationOptions:   o.RevocationOptions,
+		verificationType:    o.VerificationType,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
@@ -696,12 +713,12 @@ func NewServerCreds(o *Options) (credentials.TransportCredentials, error) {
 		return nil, err
 	}
 	tc := &advancedTLSCreds{
-		config:            conf,
-		isClient:          false,
-		getRootCAs:        o.RootOptions.GetRootCertificates,
-		verifyFunc:        o.AdditionalPeerVerification,
-		revocationOptions: o.RevocationOptions,
-		verificationType:  o.VerificationType,
+		config:              conf,
+		isClient:            false,
+		getRootCertificates: o.RootOptions.GetRootCertificates,
+		verifyFunc:          o.AdditionalPeerVerification,
+		revocationOptions:   o.RevocationOptions,
+		verificationType:    o.VerificationType,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
