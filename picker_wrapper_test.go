@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/transport"
@@ -72,23 +71,6 @@ func (s) TestBlockingPickTimeout(t *testing.T) {
 	defer cancel()
 	if _, _, err := bp.pick(ctx, true, balancer.PickInfo{}); status.Code(err) != codes.DeadlineExceeded {
 		t.Errorf("bp.pick returned error %v, want DeadlineExceeded", err)
-	}
-}
-
-func (s) TestBlockingPickErrNoSubConnAvailableTimeout(t *testing.T) {
-	bp := newPickerWrapper(nil)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
-	defer cancel()
-
-	bp.updatePicker(base.NewErrPicker(balancer.ErrNoSubConnAvailable))
-	var err error
-	if _, _, err = bp.pick(ctx, true, balancer.PickInfo{}); status.Code(err) != codes.DeadlineExceeded {
-		t.Errorf("bp.pick returned error %v, want DeadlineExceeded", err)
-	}
-
-	serr, _ := status.FromError(err)
-	if serr.Message() != "latest balancer error: "+balancer.ErrNoSubConnAvailable.Error() {
-		t.Errorf("bp.pick returned error %v, want balancer.ErrNoSubConnAvailable", err)
 	}
 }
 
