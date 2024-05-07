@@ -20,6 +20,7 @@ package codes
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -93,10 +94,10 @@ func (s) TestUnmarshalJSON_MarshalUnmarshal(t *testing.T) {
 }
 
 func (s) TestUnmarshalJSON_InvalidIntegerCode(t *testing.T) {
+	wantErr := errors.New("invalid code: 200") // for integer invalid code, expect integer value in error message
+
 	var got Code
-	wantErr := "invalid code: 200" // for integer invalid code, expect integer value in error message
-	err := got.UnmarshalJSON([]byte("200"))
-	if err.Error() != wantErr {
-		t.Errorf("got.UnmarshalJSON(200) != %s; got=%s", wantErr, err.Error())
+	if err := got.UnmarshalJSON([]byte("200")); wantErr.Error() != err.Error() {
+		t.Errorf("got.UnmarshalJSON(200) != %v; wantErr: %v", err, wantErr)
 	}
 }
