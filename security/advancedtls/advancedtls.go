@@ -124,8 +124,9 @@ type GetRootCAsResults = RootCertificates
 
 // RootCertificateOptions contains options to obtain root trust certificates
 // for both the client and the server.
-// At most one option should be set. If none of them are set, we
-// use the system default trust certificates. Setting more than one will result in undefined behavior.
+// At most one option should be set. If none of them are set, we use the system
+// default trust certificates. Setting more than one option will result in
+// undefined behavior.
 type RootCertificateOptions struct {
 	// If RootCertificates is set, it will be used every time when verifying
 	// the peer certificates, without performing root certificate reloading.
