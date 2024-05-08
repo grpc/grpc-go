@@ -25,7 +25,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/xds/bootstrap"
@@ -42,15 +41,41 @@ import (
 
 var logger = grpclog.Component("csm-observability-plugin")
 
-// AddLabels adds CSM labels to the provided context's metadata, as a encoded
+// pluginOption emits CSM Labels from the environment and metadata exchange
+// for csm channels and all servers.
+//
+// Do not use this directly; use NewPluginOption instead.
+type pluginOption struct {
+	// localLabels are the labels that identify the local environment a binary
+	// is run in, and will be emitted from the CSM Plugin Option.
+	localLabels map[string]string
+	// metadataExchangeLabelsEncoded are the metadata exchange labels to be sent
+	// as the value of metadata key "x-envoy-peer-metadata" in proto wire format
+	// and base 64 encoded. This gets sent out from all the servers running in
+	// this process and for csm channels.
+	metadataExchangeLabelsEncoded string
+}
+
+// NewPluginOption returns a new pluginOption with local labels and metadata
+// exchange labels derived from the environment.
+func NewPluginOption(ctx context.Context) internal.PluginOption {
+	localLabels, metadataExchangeLabelsEncoded := constructMetadataFromEnv(ctx)
+
+	return &pluginOption{
+		localLabels:                   localLabels,
+		metadataExchangeLabelsEncoded: metadataExchangeLabelsEncoded,
+	}
+}
+
+// AddLabels adds CSM labels to the provided context's metadata, as an encoded
 // protobuf Struct as the value of x-envoy-metadata.
-func (cpo *PluginOption) AddLabels(ctx context.Context) context.Context {
+func (cpo *pluginOption) AddLabels(ctx context.Context) context.Context {
 	return metadata.AppendToOutgoingContext(ctx, metadataExchangeKey, cpo.metadataExchangeLabelsEncoded)
 }
 
-// NewLabelsMD returns a metadata.MD with the CSM labels as a encoded protobuf
+// NewLabelsMD returns a metadata.MD with the CSM labels as an encoded protobuf
 // Struct as the value of x-envoy-metadata.
-func (cpo *PluginOption) NewLabelsMD() metadata.MD {
+func (cpo *pluginOption) NewLabelsMD() metadata.MD {
 	return metadata.New(map[string]string{
 		metadataExchangeKey: cpo.metadataExchangeLabelsEncoded,
 	})
@@ -60,7 +85,7 @@ func (cpo *PluginOption) NewLabelsMD() metadata.MD {
 // "unknown" for labels not found. Labels returned depend on the remote type.
 // Additionally, local labels determined at initialization time are appended to
 // labels returned, in addition to the optionalLabels provided.
-func (cpo *PluginOption) GetLabels(md metadata.MD, optionalLabels map[string]string) map[string]string {
+func (cpo *pluginOption) GetLabels(md metadata.MD, optionalLabels map[string]string) map[string]string {
 	labels := map[string]string{ // Remote labels if type is unknown (i.e. unset or error processing x-envoy-peer-metadata)
 		"csm.remote_workload_type":              "unknown",
 		"csm.remote_workload_canonical_service": "unknown",
@@ -80,92 +105,93 @@ func (cpo *PluginOption) GetLabels(md metadata.MD, optionalLabels map[string]str
 	// This can't happen if corresponding csm client because of proto wire
 	// format encoding, but since it is arbitrary off the wire be safe.
 	if len(val) != 1 {
+		logger.Warningf("length of md values of \"x-envoy-peer-metadata\" is not 1, is %v", len(val))
 		return labels
 	}
 
 	protoWireFormat, err := base64.RawStdEncoding.DecodeString(val[0])
 	if err != nil {
+		logger.Warningf("error base 64 decoding value of \"x-envoy-peer-metadata\": %v", err)
 		return labels
 	}
 
 	spb := &structpb.Struct{}
 	if err := proto.Unmarshal(protoWireFormat, spb); err != nil {
+		logger.Warningf("error unmarshalling value of \"x-envoy-peer-metadata\" into proto: %v", err)
 		return labels
 	}
 
 	fields := spb.GetFields()
 
-	appendToLabelsFromMetadata(labels, "csm.remote_workload_type", "type", fields)
+	labels["csm.remote_workload_type"] = getFromMetadata("type", fields)
 	// The value of “csm.remote_workload_canonical_service” comes from
 	// MetadataExchange with the key “canonical_service”. (Note that this should
 	// be read even if the remote type is unknown.)
-	appendToLabelsFromMetadata(labels, "csm.remote_workload_canonical_service", "canonical_service", fields)
+	labels["csm.remote_workload_canonical_service"] = getFromMetadata("canonical_service", fields)
 
 	// Unset/unknown types, and types that aren't GKE or GCP return early with
 	// just local labels, remote_workload_type and
 	// remote_workload_canonical_service labels.
-	typeVal := labels["csm.remote_workload_type"]
-	if typeVal != "gcp_kubernetes_engine" && typeVal != "gcp_compute_engine" {
+	workloadType := labels["csm.remote_workload_type"]
+	if workloadType != "gcp_kubernetes_engine" && workloadType != "gcp_compute_engine" {
 		return labels
 	}
 	// GKE and GCE labels.
-	appendToLabelsFromMetadata(labels, "csm.remote_workload_project_id", "project_id", fields)
-	appendToLabelsFromMetadata(labels, "csm.remote_workload_location", "location", fields)
-	appendToLabelsFromMetadata(labels, "csm.remote_workload_name", "workload_name", fields)
-	if typeVal == "gcp_compute_engine" {
+	labels["csm.remote_workload_project_id"] = getFromMetadata("project_id", fields)
+	labels["csm.remote_workload_location"] = getFromMetadata("location", fields)
+	labels["csm.remote_workload_name"] = getFromMetadata("workload_name", fields)
+	if workloadType == "gcp_compute_engine" {
 		return labels
 	}
 
 	// GKE only labels.
-	appendToLabelsFromMetadata(labels, "csm.remote_workload_cluster_name", "cluster_name", fields)
-	appendToLabelsFromMetadata(labels, "csm.remote_workload_namespace_name", "namespace_name", fields)
+	labels["csm.remote_workload_cluster_name"] = getFromMetadata("cluster_name", fields)
+	labels["csm.remote_workload_namespace_name"] = getFromMetadata("namespace_name", fields)
 	return labels
 }
 
-// appendToLabelsFromMetadata appends to the labels map passed in. It sets
-// "unknown" if the metadata is not found in the struct proto, or if the value
-// is not a string value.
-func appendToLabelsFromMetadata(labels map[string]string, labelKey string, metadataKey string, metadata map[string]*structpb.Value) {
-	labelVal := "unknown"
+// getFromMetadata gets the value for the metadata key from the protobuf
+// metadata. Returns "unknown" if the metadata is not found in the protobuf
+// metadata, or if the value is not a string value. Returns the string value
+// otherwise.
+func getFromMetadata(metadataKey string, metadata map[string]*structpb.Value) string {
+	ret := "unknown"
 	if metadata != nil {
 		if metadataVal, ok := metadata[metadataKey]; ok {
 			if _, ok := metadataVal.GetKind().(*structpb.Value_StringValue); ok {
-				labelVal = metadataVal.GetStringValue()
+				ret = metadataVal.GetStringValue()
 			}
 		}
 	}
-	labels[labelKey] = labelVal
+	return ret
 }
 
-// appendToLabelsFromResource appends to the labels map passed in. It sets
-// "unknown" if the resourceKey is not found in the attribute set or is not a
-// string value, the string value otherwise.
-func appendToLabelsFromResource(labels map[string]string, labelKey string, resourceKey attribute.Key, set *attribute.Set) {
-	labelVal := "unknown"
+// getFromResource gets the value for the resource key from the attribute set.
+// Returns "unknown" if the resourceKey is not found in the attribute set or is
+// not a string value, the string value otherwise.
+func getFromResource(resourceKey attribute.Key, set *attribute.Set) string {
+	ret := "unknown"
 	if set != nil {
 		if resourceVal, ok := set.Value(resourceKey); ok && resourceVal.Type() == attribute.STRING {
-			labelVal = resourceVal.AsString()
+			ret = resourceVal.AsString()
 		}
 	}
-	labels[labelKey] = labelVal
+	return ret
 }
 
-// appendToLabelsFromEnv appends an environment variable key value pair to the
-// labels passed in. It sets "unknown" if environment variable is unset, the
-// environment variable otherwise.
-func appendToLabelsFromEnv(labels map[string]string, labelKey string, envvar string) {
-	envvarVal := "unknown"
-	if val, ok := os.LookupEnv(envvar); ok {
-		envvarVal = val
+// getEnv returns "unknown" if environment variable is unset, the environment
+// variable otherwise.
+func getEnv(name string) string {
+	ret := "unknown"
+	if val, ok := os.LookupEnv(name); ok {
+		ret = val
 	}
-	labels[labelKey] = envvarVal
+	return ret
 }
 
 var (
 	// This function will be overridden in unit tests.
-	getAttrSetFromResourceDetector = func() *attribute.Set {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-		defer cancel()
+	getAttrSetFromResourceDetector = func(ctx context.Context) *attribute.Set {
 		r, err := resource.New(ctx, resource.WithDetectors(gcp.NewDetector()))
 
 		if err != nil {
@@ -182,12 +208,15 @@ var (
 // constructMetadataFromEnv creates local labels and labels to send to the peer
 // using metadata exchange based off resource detection and environment
 // variables.
-func constructMetadataFromEnv() (map[string]string, string) {
-	set := getAttrSetFromResourceDetector()
+//
+// Returns local labels, and base 64 encoded protobuf.Struct containing metadata
+// exchange labels.
+func constructMetadataFromEnv(ctx context.Context) (map[string]string, string) {
+	set := getAttrSetFromResourceDetector(ctx)
 
 	labels := make(map[string]string)
-	appendToLabelsFromResource(labels, "type", "cloud.platform", set)
-	appendToLabelsFromEnv(labels, "canonical_service", "CSM_CANONICAL_SERVICE_NAME")
+	labels["type"] = getFromResource("cloud.platform", set)
+	labels["canonical_service"] = getEnv("CSM_CANONICAL_SERVICE_NAME")
 
 	// If type is not GCE or GKE only metadata exchange labels are "type" and
 	// "canonical_service".
@@ -197,7 +226,7 @@ func constructMetadataFromEnv() (map[string]string, string) {
 	}
 
 	// GCE and GKE labels:
-	appendToLabelsFromEnv(labels, "workload_name", "CSM_WORKLOAD_NAME")
+	labels["workload_name"] = getEnv("CSM_WORKLOAD_NAME")
 
 	locationVal := "unknown"
 	if resourceVal, ok := set.Value("cloud.availability_zone"); ok && resourceVal.Type() == attribute.STRING {
@@ -207,16 +236,14 @@ func constructMetadataFromEnv() (map[string]string, string) {
 	}
 	labels["location"] = locationVal
 
-	appendToLabelsFromResource(labels, "project_id", "cloud.account.id", set)
-
+	labels["project_id"] = getFromResource("cloud.account.id", set)
 	if cloudPlatformVal == "gcp_compute_engine" {
 		return initializeLocalAndMetadataLabels(labels)
 	}
 
 	// GKE specific labels:
-	appendToLabelsFromResource(labels, "namespace_name", "k8s.namespace.name", set)
-	appendToLabelsFromResource(labels, "cluster_name", "k8s.cluster.name", set)
-
+	labels["namespace_name"] = getFromResource("k8s.namespace.name", set)
+	labels["cluster_name"] = getFromResource("k8s.cluster.name", set)
 	return initializeLocalAndMetadataLabels(labels)
 }
 
@@ -238,10 +265,10 @@ func parseMeshIDFromNodeID(nodeID string) string {
 	return meshID
 }
 
-// initializeLocalAndMetadataLabels initializes the global csm local labels for
-// this binary to record. It also builds out a base 64 encoded protobuf.Struct
-// containing the metadata exchange labels to be sent as part of metadata
-// exchange from a plugin option.
+// initializeLocalAndMetadataLabels csm local labels for a CSM Plugin Option to
+// record. It also builds out a base 64 encoded protobuf.Struct containing the
+// metadata exchange labels to be sent as part of metadata exchange from a CSM
+// Plugin Option.
 func initializeLocalAndMetadataLabels(labels map[string]string) (map[string]string, string) {
 	// The value of “csm.workload_canonical_service” comes from
 	// “CSM_CANONICAL_SERVICE_NAME” env var, “unknown” if unset.
@@ -289,32 +316,6 @@ func getNodeID() string {
 
 // metadataExchangeKey is the key for HTTP metadata exchange.
 const metadataExchangeKey = "x-envoy-peer-metadata"
-
-// PluginOption emits CSM Labels from the environment and metadata exchange
-// for csm channels and all servers.
-//
-// Do not use this directly; use NewPluginOption instead.
-type PluginOption struct {
-	// localLabels are the labels that identify the local environment a binary
-	// is run in, and will be emitted from the CSM Plugin Option.
-	localLabels map[string]string
-	// metadataExchangeLabelsEncoded are the metadata exchange labels to be sent
-	// as the value of metadata key "x-envoy-peer-metadata" in proto wire format
-	// and base 64 encoded. This gets sent out from all the servers running in
-	// this process and for csm channels.
-	metadataExchangeLabelsEncoded string
-}
-
-// NewPluginOption returns a new PluginOption with local labels and metadata
-// exchange labels derived from the environment.
-func NewPluginOption() internal.PluginOption {
-	localLabels, metadataExchangeLabelsEncoded := constructMetadataFromEnv()
-
-	return &PluginOption{
-		localLabels:                   localLabels,
-		metadataExchangeLabelsEncoded: metadataExchangeLabelsEncoded,
-	}
-}
 
 func determineTargetCSM(target string) bool {
 	// On the client-side, the channel target is used to determine if a channel is a

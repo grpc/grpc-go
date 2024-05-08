@@ -19,10 +19,12 @@
 package csm
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
@@ -44,8 +46,10 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+var defaultTestTimeout = 5 * time.Second
+
 // clearEnv unsets all the environment variables relevant to the csm
-// PluginOption.
+// pluginOption.
 func clearEnv() {
 	os.Unsetenv(envconfig.XDSBootstrapFileContentEnv)
 	os.Unsetenv(envconfig.XDSBootstrapFileNameEnv)
@@ -56,7 +60,9 @@ func clearEnv() {
 
 func (s) TestGetLabels(t *testing.T) {
 	clearEnv()
-	cpo := NewPluginOption()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cpo := NewPluginOption(ctx)
 
 	tests := []struct {
 		name                   string
@@ -492,12 +498,14 @@ func (s) TestSetLabels(t *testing.T) {
 				// of reading from resource.
 				attrSet := attribute.NewSet(attributes...)
 				origGetAttrSet := getAttrSetFromResourceDetector
-				getAttrSetFromResourceDetector = func() *attribute.Set {
+				getAttrSetFromResourceDetector = func(context.Context) *attribute.Set {
 					return &attrSet
 				}
 				defer func() { getAttrSetFromResourceDetector = origGetAttrSet }()
 
-				localLabelsGot, mdEncoded := constructMetadataFromEnv()
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+				localLabelsGot, mdEncoded := constructMetadataFromEnv(ctx)
 				if diff := cmp.Diff(localLabelsGot, test.localLabelsWant); diff != "" {
 					t.Fatalf("constructMetadataFromEnv() want: %v, got %v", test.localLabelsWant, localLabelsGot)
 				}

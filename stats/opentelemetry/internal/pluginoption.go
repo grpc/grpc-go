@@ -30,8 +30,8 @@ import (
 // OpenTelemetry instrumentation component.
 //
 // This API is experimental. In the future, we hope to stabilize and expose this
-// API to allow pluggable plugin options to allow users to inject labels of
-// their choosing into metrics recorded.
+// API to allow plugins to inject labels of their choosing into metrics
+// recorded.
 type PluginOption interface {
 	// AddLabels adds metadata exchange labels to the outgoing metadata of the
 	// context.
