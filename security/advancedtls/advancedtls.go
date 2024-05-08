@@ -16,9 +16,14 @@
  *
  */
 
-// Package advancedtls is a utility library containing functions to construct
-// credentials.TransportCredentials that can perform credential reloading and
-// custom verification check.
+// Package advancedtls is a library containing APIs for configuring grpc
+// connetions with TLS. The APIs here give the user more customizable control to
+// fit their security landscape, thus the "advanced" moniker. This package
+// provides both interfaces and generally useful implementations of those
+// interfaces, for example periodic credential reloading, support for
+// certificate revocation lists, and customizable certificate verification
+// behaviors. If the provided implementations do not fit a given use case, a
+// custom implementation of the interface can be injected.
 package advancedtls
 
 import (
