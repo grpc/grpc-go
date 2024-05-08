@@ -36,7 +36,7 @@ import (
 // authority, without holding c.authorityMu.
 //
 // Caller must not hold c.authorityMu.
-func (c *clientImpl) findAuthority(n *xdsresource.Name) (_ *authority, unref func(), _ error) {
+func (c *clientImpl) findAuthority(n *xdsresource.Name) (*authority, func(), error) {
 	scheme, authority := n.Scheme, n.Authority
 
 	c.authorityMu.Lock()
