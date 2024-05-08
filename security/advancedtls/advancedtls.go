@@ -153,18 +153,18 @@ func (o RootCertificateOptions) nonNilFieldCount() int {
 
 // IdentityCertificateOptions contains options to obtain identity certificates
 // for both the client and the server.
-// At most one option could be set.
+// At most one option should be set. Setting more than one option will result in undefined behavior.
 type IdentityCertificateOptions struct {
 	// If Certificates is set, it will be used every time when needed to present
-	//identity certificates, without performing identity certificate reloading.
+	// identity certificates, without performing identity certificate reloading.
 	Certificates []tls.Certificate
 	// If GetIdentityCertificatesForClient is set, it will be invoked to obtain
 	// identity certs for every new connection.
-	// This field MUST be set on client side.
+	// This field is only relevant when set on the client side.
 	GetIdentityCertificatesForClient func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 	// If GetIdentityCertificatesForServer is set, it will be invoked to obtain
 	// identity certs for every new connection.
-	// This field MUST be set on server side.
+	// This field is only relevant when set on the server side.
 	GetIdentityCertificatesForServer func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 	// If IdentityProvider is set, we will use the identity certs from the
 	// Provider's KeyMaterial() call in the new connections. The Provider must
