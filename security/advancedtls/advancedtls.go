@@ -618,7 +618,6 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				return err
 			}
 			leafCert = rawCertList[0]
-			*peerVerifiedChains = chains
 		}
 		// Perform certificate revocation check if specified.
 		if c.revocationOptions != nil {
@@ -640,6 +639,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 			})
 			return err
 		}
+		*peerVerifiedChains = chains
 		return nil
 	}
 }
