@@ -242,7 +242,9 @@ func (b *clusterResolverBalancer) updateChildConfig() {
 		b.logger.Warningf("Failed to parse child policy config. This should never happen because the config was generated: %v", err)
 		return
 	}
-	b.logger.Infof("Built child policy config: %v", pretty.ToJSON(childCfg))
+	if b.logger.V(2) {
+		b.logger.Infof("Built child policy config: %s", pretty.ToJSON(childCfg))
+	}
 
 	endpoints := make([]resolver.Endpoint, len(addrs))
 	for i, a := range addrs {
