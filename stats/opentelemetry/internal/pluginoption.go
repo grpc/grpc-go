@@ -18,26 +18,21 @@
 package internal
 
 import (
-	"context"
-
 	"google.golang.org/grpc/metadata"
 )
 
 // PluginOption is the interface which represents a plugin option for the
 // OpenTelemetry instrumentation component. This plugin option emits labels from
-// metadata and also sets labels in different forms of metadata. These labels
-// are intended to be added to applicable OpenTelemetry metrics recorded in the
+// metadata and also creates metadata containing labels. These labels are
+// intended to be added to applicable OpenTelemetry metrics recorded in the
 // OpenTelemetry instrumentation component.
 //
 // This API is experimental. In the future, we hope to stabilize and expose this
 // API to allow plugins to inject labels of their choosing into metrics
 // recorded.
 type PluginOption interface {
-	// AddLabels adds metadata exchange labels to the outgoing metadata of the
-	// context.
-	AddLabels(context.Context) context.Context
-	// NewLabelsMD creates metadata exchange labels as a new MD.
-	NewLabelsMD() metadata.MD
+	// GetMetadata creates a MD with metadata exchange labels.
+	GetMetadata() metadata.MD
 	// GetLabels emits relevant labels from the metadata provided and the
 	// optional labels provided, alongside any relevant labels.
 	GetLabels(metadata.MD, map[string]string) map[string]string

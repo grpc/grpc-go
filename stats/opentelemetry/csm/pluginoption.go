@@ -44,7 +44,7 @@ var logger = grpclog.Component("csm-observability-plugin")
 // pluginOption emits CSM Labels from the environment and metadata exchange
 // for csm channels and all servers.
 //
-// Do not use this directly; use NewPluginOption instead.
+// Do not use this directly; use newPluginOption instead.
 type pluginOption struct {
 	// localLabels are the labels that identify the local environment a binary
 	// is run in, and will be emitted from the CSM Plugin Option.
@@ -56,9 +56,9 @@ type pluginOption struct {
 	metadataExchangeLabelsEncoded string
 }
 
-// NewPluginOption returns a new pluginOption with local labels and metadata
+// newPluginOption returns a new pluginOption with local labels and metadata
 // exchange labels derived from the environment.
-func NewPluginOption(ctx context.Context) internal.PluginOption {
+func newPluginOption(ctx context.Context) internal.PluginOption {
 	localLabels, metadataExchangeLabelsEncoded := constructMetadataFromEnv(ctx)
 
 	return &pluginOption{
@@ -67,15 +67,9 @@ func NewPluginOption(ctx context.Context) internal.PluginOption {
 	}
 }
 
-// AddLabels adds CSM labels to the provided context's metadata, as an encoded
-// protobuf Struct as the value of x-envoy-metadata.
-func (cpo *pluginOption) AddLabels(ctx context.Context) context.Context {
-	return metadata.AppendToOutgoingContext(ctx, metadataExchangeKey, cpo.metadataExchangeLabelsEncoded)
-}
-
 // NewLabelsMD returns a metadata.MD with the CSM labels as an encoded protobuf
-// Struct as the value of x-envoy-metadata.
-func (cpo *pluginOption) NewLabelsMD() metadata.MD {
+// Struct as the value of "x-envoy-peer-metadata".
+func (cpo *pluginOption) GetMetadata() metadata.MD {
 	return metadata.New(map[string]string{
 		metadataExchangeKey: cpo.metadataExchangeLabelsEncoded,
 	})

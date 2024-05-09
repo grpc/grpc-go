@@ -62,7 +62,7 @@ func (s) TestGetLabels(t *testing.T) {
 	clearEnv()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cpo := NewPluginOption(ctx)
+	cpo := newPluginOption(ctx)
 
 	tests := []struct {
 		name                   string
