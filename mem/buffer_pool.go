@@ -67,31 +67,32 @@ func SetDefaultBufferPool(pool BufferPool) {
 
 func NewBufferPool(poolSizes ...int) BufferPool {
 	sort.Ints(poolSizes)
-	pools := make([]*bufferPool, len(poolSizes))
+	pools := make([]*sizedBufferPool, len(poolSizes))
 	for i, s := range poolSizes {
 		pools[i] = newBufferPool(s)
 	}
-	return &simpleBufferPool{
+	return &tieredBufferPool{
 		sizedPools:   pools,
 		fallbackPool: newBufferPool(0),
 	}
 }
 
-// simpleBufferPool is a simple implementation of BufferPool.
-type simpleBufferPool struct {
-	sizedPools   []*bufferPool
-	fallbackPool *bufferPool
+// tieredBufferPool implements the BufferPool interface with multiple tiers of
+// buffer pools for different sizes of buffers.
+type tieredBufferPool struct {
+	sizedPools   []*sizedBufferPool
+	fallbackPool *sizedBufferPool
 }
 
-func (p *simpleBufferPool) Get(size int) []byte {
+func (p *tieredBufferPool) Get(size int) []byte {
 	return p.getPool(size).Get(size)
 }
 
-func (p *simpleBufferPool) Put(buf []byte) {
+func (p *tieredBufferPool) Put(buf []byte) {
 	p.getPool(len(buf)).Put(buf)
 }
 
-func (p *simpleBufferPool) getPool(size int) *bufferPool {
+func (p *tieredBufferPool) getPool(size int) *sizedBufferPool {
 	poolIdx := sort.Search(len(p.sizedPools), func(i int) bool {
 		return p.sizedPools[i].defaultSize >= size
 	})
@@ -103,12 +104,12 @@ func (p *simpleBufferPool) getPool(size int) *bufferPool {
 	return p.sizedPools[poolIdx]
 }
 
-type bufferPool struct {
+type sizedBufferPool struct {
 	pool        sync.Pool
 	defaultSize int
 }
 
-func (p *bufferPool) Get(size int) []byte {
+func (p *sizedBufferPool) Get(size int) []byte {
 	bs := *p.pool.Get().(*[]byte)
 
 	if cap(bs) < size {
@@ -120,7 +121,7 @@ func (p *bufferPool) Get(size int) []byte {
 	return bs[:size]
 }
 
-func (p *bufferPool) Put(buf []byte) {
+func (p *sizedBufferPool) Put(buf []byte) {
 	buf = buf[:cap(buf)]
 	// TODO: replace this loop with `clear`, though the compiler should be smart
 	// enough to optimize this.
@@ -130,8 +131,8 @@ func (p *bufferPool) Put(buf []byte) {
 	p.pool.Put(&buf)
 }
 
-func newBufferPool(size int) *bufferPool {
-	return &bufferPool{
+func newBufferPool(size int) *sizedBufferPool {
+	return &sizedBufferPool{
 		pool: sync.Pool{
 			New: func() any {
 				buf := make([]byte, size)

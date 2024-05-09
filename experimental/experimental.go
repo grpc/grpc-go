@@ -28,6 +28,7 @@ package experimental
 import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/mem"
 )
 
 // WithRecvBufferPool returns a grpc.DialOption that configures the use of
@@ -35,7 +36,7 @@ import (
 // the application's workload, this could result in reduced memory allocation.
 //
 // If you are unsure about how to implement a memory pool but want to utilize
-// one, begin with grpc.NewSharedBufferPool.
+// one, begin with mem.NewBufferPool.
 //
 // Note: The shared buffer pool feature will not be active if any of the
 // following options are used: WithStatsHandler, EnableTracing, or binary
@@ -43,8 +44,8 @@ import (
 //
 // Note: It is not recommended to use the shared buffer pool when compression is
 // enabled.
-func WithRecvBufferPool(bufferPool grpc.SharedBufferPool) grpc.DialOption {
-	return internal.WithRecvBufferPool.(func(grpc.SharedBufferPool) grpc.DialOption)(bufferPool)
+func WithRecvBufferPool(bufferPool mem.BufferPool) grpc.DialOption {
+	return internal.WithRecvBufferPool.(func(mem.BufferPool) grpc.DialOption)(bufferPool)
 }
 
 // RecvBufferPool returns a grpc.ServerOption that configures the server to use
@@ -60,6 +61,6 @@ func WithRecvBufferPool(bufferPool grpc.SharedBufferPool) grpc.DialOption {
 //
 // Note: It is not recommended to use the shared buffer pool when compression is
 // enabled.
-func RecvBufferPool(bufferPool grpc.SharedBufferPool) grpc.ServerOption {
-	return internal.RecvBufferPool.(func(grpc.SharedBufferPool) grpc.ServerOption)(bufferPool)
+func RecvBufferPool(bufferPool mem.BufferPool) grpc.ServerOption {
+	return internal.RecvBufferPool.(func(mem.BufferPool) grpc.ServerOption)(bufferPool)
 }

@@ -33,12 +33,7 @@ type baseCodec interface {
 	Unmarshal(data mem.BufferSlice, v any) error
 }
 
-type namedBaseCodec interface {
-	baseCodec
-	Name() string
-}
-
-func getCodec(name string) namedBaseCodec {
+func getCodec(name string) encoding.CodecV2 {
 	codecV2 := encoding.GetCodecV2(name)
 	if codecV2 != nil {
 		return codecV2
@@ -56,7 +51,7 @@ func newCodecV0Bridge(c Codec) baseCodec {
 	return codecV0Bridge{c}
 }
 
-func newCodecV1Bridge(c encoding.Codec) namedBaseCodec {
+func newCodecV1Bridge(c encoding.Codec) encoding.CodecV2 {
 	return codecV1Bridge{
 		codecV0Bridge: codecV0Bridge{c},
 		name:          c.Name(),
@@ -85,7 +80,7 @@ func (c codecV0Bridge) Unmarshal(data mem.BufferSlice, v any) (err error) {
 	return c.codec.Unmarshal(data.Materialize(), v)
 }
 
-var _ namedBaseCodec = codecV1Bridge{}
+var _ encoding.CodecV2 = codecV1Bridge{}
 
 type codecV1Bridge struct {
 	codecV0Bridge

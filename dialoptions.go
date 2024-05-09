@@ -712,7 +712,7 @@ func WithIdleTimeout(d time.Duration) DialOption {
 	})
 }
 
-func withRecvBufferPool(bufferPool SharedBufferPool) DialOption {
+func withRecvBufferPool(bufferPool mem.BufferPool) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.BufferPool = bufferPool
 	})

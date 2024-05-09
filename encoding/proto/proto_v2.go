@@ -46,7 +46,7 @@ func (c *codecV2) Marshal(v any) (mem.BufferSlice, error) {
 	buf := pool.Get(proto.Size(vv))
 	_, err := proto.MarshalOptions{}.MarshalAppend(buf[:0], vv)
 	if err != nil {
-		mem.DefaultBufferPool().Put(buf)
+		pool.Put(buf)
 		return nil, err
 	} else {
 		return mem.BufferSlice{mem.NewBuffer(buf, pool.Put)}, nil

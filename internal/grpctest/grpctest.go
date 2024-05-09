@@ -53,13 +53,13 @@ func (Tester) Setup(t *testing.T) {
 
 // Teardown performs a leak check.
 func (Tester) Teardown(t *testing.T) {
-	if atomic.LoadUint32(&lcFailed) == 1 {
-		return
-	}
+	//if atomic.LoadUint32(&lcFailed) == 1 {
+	//	return
+	//}
 	leakcheck.Check(errorer{t: t})
-	if atomic.LoadUint32(&lcFailed) == 1 {
-		t.Log("Leak check disabled for future tests")
-	}
+	//if atomic.LoadUint32(&lcFailed) == 1 {
+	//	t.Log("Leak check disabled for future tests")
+	//}
 	TLogger.EndTest(t)
 }
 

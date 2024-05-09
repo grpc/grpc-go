@@ -216,6 +216,9 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 func (h *testStreamHandler) handleStreamEncodingRequiredStatus(s *Stream) {
 	// raw newline is not accepted by http2 framer so it must be encoded.
 	h.t.WriteStatus(s, encodingTestStatus)
+	// Drain any remaining buffers from the stream since it was closed early.
+	buffers, _ := s.Read(math.MaxInt)
+	buffers.Free()
 }
 
 func (h *testStreamHandler) handleStreamInvalidHeaderField(s *Stream) {
@@ -1496,6 +1499,9 @@ func (s) TestEncodingRequiredStatus(t *testing.T) {
 	}
 	ct.Close(fmt.Errorf("closed manually by test"))
 	server.stop()
+	// Drain any remaining buffers from the stream since it was closed early.
+	buffers, _ := s.Read(math.MaxInt)
+	buffers.Free()
 }
 
 func (s) TestInvalidHeaderField(t *testing.T) {

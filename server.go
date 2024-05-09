@@ -608,7 +608,7 @@ func WaitForHandlers(w bool) ServerOption {
 	})
 }
 
-func recvBufferPool(bufferPool SharedBufferPool) ServerOption {
+func recvBufferPool(bufferPool mem.BufferPool) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.bufferPool = bufferPool
 	})

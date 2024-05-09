@@ -916,8 +916,8 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payloadLen, *cs.callInfo.maxSendMessageSize)
 	}
 
-	// always take an extra ref in case data == payload. The original ref will always
-	// be freed by the deferred free above.
+	// always take an extra ref in case data == payload (i.e. when the data isn't
+	// compressed). The original ref will always be freed by the deferred free above.
 	payloadRef := payload.Ref()
 	op := func(a *csAttempt) error {
 		return a.sendMsg(m, hdr, payloadRef.Ref(), dataLen, payloadLen)
