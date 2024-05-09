@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"testing"
@@ -241,7 +242,6 @@ func (s) TestTLS_CipherSuitesOverridable(t *testing.T) {
 // TestTLS_DisabledALPN tests the behaviour of a gRPC client when connecting to
 // a server that doesn't support ALPN.
 func (s) TestTLS_DisabledALPN(t *testing.T) {
-	// ctx := context.Background()
 
 	initialVal := envconfig.EnforceALPNEnabled
 	defer func() {
@@ -255,18 +255,17 @@ func (s) TestTLS_DisabledALPN(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		alpnEnforced   bool
-		wantStatusCode codes.Code
+		name         string
+		alpnEnforced bool
+		wantErr      bool
 	}{
 		{
-			name:           "enforced",
-			alpnEnforced:   true,
-			wantStatusCode: codes.OK,
+			name:         "enforced",
+			alpnEnforced: true,
+			wantErr:      true,
 		},
 		{
-			name:           "not_enforced",
-			wantStatusCode: codes.OK,
+			name: "not_enforced",
 		},
 	}
 
@@ -277,32 +276,34 @@ func (s) TestTLS_DisabledALPN(t *testing.T) {
 				t.Fatalf("Error starting TLS server: %v", err)
 			}
 			envconfig.EnforceALPNEnabled = tc.alpnEnforced
-			ss := stubserver.StubServer{
-				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-					t.Log("Call received!")
-					return &testpb.Empty{}, nil
-				},
-				Listener: listner,
+
+			go func() {
+				conn, err := listner.Accept()
+				if err != nil {
+					t.Errorf("tls.Accept failed err = %v", err)
+				} else {
+					conn.Write([]byte("Hello, World!"))
+					conn.Close()
+				}
+			}()
+
+			serverAddr := listner.Addr().String()
+			conn, err := net.Dial("tcp", serverAddr)
+			if err != nil {
+				t.Fatalf("net.Dial(%s) failed: %v", serverAddr, err)
 			}
+			defer conn.Close()
 
-			clientCreds := credentials.NewTLS(&tls.Config{
-				ServerName: serverName,
-				RootCAs:    certPool,
-			})
-
-			if err := ss.Start([]grpc.ServerOption{}, grpc.WithTransportCredentials(clientCreds)); err != nil {
-				t.Fatalf("Falied: %v", err)
-			}
-
-			defer ss.Stop()
-			defer listner.Close()
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
-			_, rpcErr := ss.Client.EmptyCall(ctx, &testpb.Empty{})
+			clientCfg := tls.Config{ServerName: serverName,
+				RootCAs: certPool,
+			}
+			_, _, err = credentials.NewTLS(&clientCfg).ClientHandshake(ctx, serverName, conn)
 
-			if gotCode := status.Code(rpcErr); gotCode != tc.wantStatusCode {
-				t.Errorf("EmptyCall returned unexpected code: got=%v, want=%v", gotCode, tc.wantStatusCode)
+			if gotErr := (err != nil); gotErr != tc.wantErr {
+				t.Errorf("ClientHandshake returned unexpected error: got=%v, want=%t", gotErr, tc.wantErr)
 			}
 		})
 	}
