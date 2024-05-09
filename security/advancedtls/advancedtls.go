@@ -249,6 +249,11 @@ type Options struct {
 	// RevocationOptions is the configurations for certificate revocation checks.
 	// It could be nil if such checks are not needed.
 	RevocationOptions *RevocationOptions
+	// RevocationConfig is the configurations for certificate revocation checks.
+	// It could be nil if such checks are not needed.
+	//
+	// Deprecated: use RevocationOptions instead.
+	RevocationConfig *RevocationConfig
 	// MinVersion contains the minimum TLS version that is acceptable.
 	//
 	// Deprecated: use MinTLSVersion instead.
@@ -689,6 +694,12 @@ func buildVerifyFunc(c *advancedTLSCreds,
 // NewClientCreds uses ClientOptions to construct a TransportCredentials based
 // on TLS.
 func NewClientCreds(o *Options) (credentials.TransportCredentials, error) {
+	// TODO(gtcooke94) RevocationConfig is deprecated, eventually remove this block.
+	// This will ensure that users still explicitly setting RevocationConfig will get
+	// the setting in the right place.
+	if o.RevocationConfig != nil {
+		o.RevocationOptions = o.RevocationConfig
+	}
 	conf, err := o.clientConfig()
 	if err != nil {
 		return nil, err
@@ -708,6 +719,12 @@ func NewClientCreds(o *Options) (credentials.TransportCredentials, error) {
 // NewServerCreds uses ServerOptions to construct a TransportCredentials based
 // on TLS.
 func NewServerCreds(o *Options) (credentials.TransportCredentials, error) {
+	// TODO(gtcooke94) RevocationConfig is deprecated, eventually remove this block.
+	// This will ensure that users still explicitly setting RevocationConfig will get
+	// the setting in the right place.
+	if o.RevocationConfig != nil {
+		o.RevocationOptions = o.RevocationConfig
+	}
 	conf, err := o.serverConfig()
 	if err != nil {
 		return nil, err
