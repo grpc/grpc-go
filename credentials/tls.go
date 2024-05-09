@@ -127,10 +127,10 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 	np := conn.ConnectionState().NegotiatedProtocol
 	if np == "" {
 		if envconfig.EnforceALPNEnabled {
-			_ = conn.Close()
-			return nil, nil, fmt.Errorf("cannot check peer: missing selected ALPN property")
+			conn.Close()
+			return nil, nil, fmt.Errorf("credentials: cannot check peer: missing selected ALPN property")
 		}
-		logger.Warning("Allowing TLS connection to server %q with ALPN disabled")
+		logger.Warningf("Allowing TLS connection to server %q with ALPN disabled. TLS connections to servers with ALPN disabled will be disallowed in future grpc-go releases", cfg.ServerName)
 	}
 	tlsInfo := TLSInfo{
 		State: conn.ConnectionState(),
