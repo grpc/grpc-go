@@ -242,14 +242,12 @@ func (s) TestTLS_CipherSuitesOverridable(t *testing.T) {
 // TestTLS_DisabledALPN tests the behaviour of a gRPC client when connecting to
 // a server that doesn't support ALPN.
 func (s) TestTLS_DisabledALPN(t *testing.T) {
-
 	initialVal := envconfig.EnforceALPNEnabled
 	defer func() {
 		envconfig.EnforceALPNEnabled = initialVal
 	}()
 
-	// Start a non gRPC TLS server.
-	config := &tls.Config{
+	serverCfg := &tls.Config{
 		Certificates: []tls.Certificate{serverCert},
 		NextProtos:   []string{}, // Empty list indicates ALPN is disabled.
 	}
@@ -271,11 +269,12 @@ func (s) TestTLS_DisabledALPN(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			listner, err := tls.Listen("tcp", "localhost:0", config)
+			envconfig.EnforceALPNEnabled = tc.alpnEnforced
+
+			listner, err := tls.Listen("tcp", "localhost:0", serverCfg)
 			if err != nil {
 				t.Fatalf("Error starting TLS server: %v", err)
 			}
-			envconfig.EnforceALPNEnabled = tc.alpnEnforced
 
 			go func() {
 				conn, err := listner.Accept()
