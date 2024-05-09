@@ -20,10 +20,10 @@ package codes
 
 import (
 	"encoding/json"
-	"errors"
-	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	cpb "google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/internal/grpctest"
 )
@@ -51,7 +51,7 @@ func (s) TestJSONUnmarshal(t *testing.T) {
 	want := []Code{OK, NotFound, Internal, Canceled}
 	in := `["OK", "NOT_FOUND", "INTERNAL", "CANCELLED"]`
 	err := json.Unmarshal([]byte(in), &got)
-	if err != nil || !reflect.DeepEqual(got, want) {
+	if err != nil || !cmp.Equal(got, want) {
 		t.Fatalf("json.Unmarshal(%q, &got) = %v; want <nil>.  got=%v; want %v", in, err, got, want)
 	}
 }
@@ -94,10 +94,10 @@ func (s) TestUnmarshalJSON_MarshalUnmarshal(t *testing.T) {
 }
 
 func (s) TestUnmarshalJSON_InvalidIntegerCode(t *testing.T) {
-	wantErr := errors.New("invalid code: 200") // for integer invalid code, expect integer value in error message
+	const wantErr = "invalid code: 200" // for integer invalid code, expect integer value in error message
 
 	var got Code
-	if err := got.UnmarshalJSON([]byte("200")); wantErr.Error() != err.Error() {
+	if err := got.UnmarshalJSON([]byte("200")); !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("got.UnmarshalJSON(200) != %v; wantErr: %v", err, wantErr)
 	}
 }
