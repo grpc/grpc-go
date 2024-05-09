@@ -248,7 +248,7 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Delete the cluster resource from the mangement server.
+	// Delete the cluster resource from the management server.
 	resources.Clusters = nil
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)

@@ -658,7 +658,7 @@ func defaultDialOptions() dialOptions {
 	}
 }
 
-// withGetMinConnectDeadline specifies the function that clientconn uses to
+// withMinConnectDeadline specifies the function that clientconn uses to
 // get minConnectDeadline. This can be used to make connection attempts happen
 // faster/slower.
 //

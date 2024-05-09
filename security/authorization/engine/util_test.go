@@ -29,9 +29,9 @@ import (
 
 func (s) TestStringConvert(t *testing.T) {
 	declarations := []*expr.Decl{
-		decls.NewIdent("request.url_path", decls.String, nil),
-		decls.NewIdent("request.host", decls.String, nil),
-		decls.NewIdent("connection.uri_san_peer_certificate", decls.String, nil),
+		decls.NewConst("request.url_path", decls.String, nil),
+		decls.NewConst("request.host", decls.String, nil),
+		decls.NewConst("connection.uri_san_peer_certificate", decls.String, nil),
 	}
 	env, err := cel.NewEnv()
 	if err != nil {

@@ -34,7 +34,7 @@ const minCRLRefreshDuration = 1 * time.Minute
 //
 // The interface defines how gRPC gets CRLs from the provider during handshakes,
 // but doesn't prescribe a specific way to load and store CRLs. Such
-// implementations can be used in RevocationConfig of advancedtls.ClientOptions
+// implementations can be used in RevocationOptions of advancedtls.ClientOptions
 // and/or advancedtls.ServerOptions.
 // Please note that checking CRLs is directly on the path of connection
 // establishment, so implementations of the CRL function need to be fast, and
@@ -90,9 +90,9 @@ func (p *StaticCRLProvider) CRL(cert *x509.Certificate) (*CRL, error) {
 // FileWatcherOptions represents a data structure holding a configuration for
 // FileWatcherCRLProvider.
 type FileWatcherOptions struct {
-	CRLDirectory               string          // Path of the directory containing CRL files
-	RefreshDuration            time.Duration   // Time interval (default value is 1 hour) between CRLDirectory scans, can't be smaller than 1 minute
-	CRLReloadingFailedCallback func(err error) // Custom callback executed when a CRL file can’t be processed
+	CRLDirectory               string          // Required: Path of the directory containing CRL files
+	RefreshDuration            time.Duration   // Optional: Time interval (default 1 hour) between CRLDirectory scans, can't be smaller than 1 minute
+	CRLReloadingFailedCallback func(err error) // Optional: Custom callback executed when a CRL file can’t be processed
 }
 
 // FileWatcherCRLProvider implements the CRLProvider interface by periodically

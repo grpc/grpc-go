@@ -30,8 +30,8 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal"
 
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
@@ -104,7 +104,7 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 		}
 	}
 	if ctx.Err() != nil {
-		t.Fatalf("Test timed out before state transiton to %q was verified.", watchStateRequested)
+		t.Fatalf("Test timed out before state transition to %q was verified.", watchStateRequested)
 	}
 
 	// Updating mgmt server with the same lds resource. Blocking on watcher's update

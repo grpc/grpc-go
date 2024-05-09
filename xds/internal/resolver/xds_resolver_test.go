@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	xdsbootstrap "google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -47,7 +48,6 @@ import (
 	rinternal "google.golang.org/grpc/xds/internal/resolver/internal"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -70,7 +70,7 @@ import (
 // Tests the case where xDS client creation is expected to fail because the
 // bootstrap configuration is not specified. The test verifies that xDS resolver
 // build fails as well.
-func (s) TestResolverBuilder_ClientCreationFails_NoBootstap(t *testing.T) {
+func (s) TestResolverBuilder_ClientCreationFails_NoBootstrap(t *testing.T) {
 	// Build an xDS resolver without specifying bootstrap env vars.
 	builder := resolver.Get(xdsresolver.Scheme)
 	if builder == nil {

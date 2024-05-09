@@ -526,7 +526,7 @@ func (s) TestBalancerClose(t *testing.T) {
 		BalancerConfig: mockBalancerConfig{},
 	}
 	if err := gsb.UpdateClientConnState(ccs); err != errBalancerClosed {
-		t.Fatalf("gsb.UpdateCLientConnState(%v) returned error %v, want %v", ccs, err, errBalancerClosed)
+		t.Fatalf("gsb.UpdateClientConnState(%v) returned error %v, want %v", ccs, err, errBalancerClosed)
 	}
 
 	// After the graceful switch load balancer has been closed, any resolver error

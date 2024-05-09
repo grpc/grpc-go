@@ -2197,7 +2197,7 @@ func (s) TestWriteHeaderConnectionError(t *testing.T) {
 		t.Fatalf("Server has %d connections from the client, want 1", len(server.conns))
 	}
 
-	// Get the server transport for the connecton to the client.
+	// Get the server transport for the connection to the client.
 	var serverTransport *http2Server
 	for k := range server.conns {
 		serverTransport = k.(*http2Server)
@@ -2734,11 +2734,11 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 			t.Errorf("Expected settings frame, got %v", fr)
 		}
 		fr, _ = sfr.ReadFrame()
-		if fr, ok := fr.(*http2.SettingsFrame); !ok && fr.IsAck() {
+		if fr, ok := fr.(*http2.SettingsFrame); !ok || !fr.IsAck() {
 			t.Errorf("Expected settings ACK frame, got %v", fr)
 		}
 		fr, _ = sfr.ReadFrame()
-		if fr, ok := fr.(*http2.HeadersFrame); !ok && fr.Flags.Has(http2.FlagHeadersEndStream) {
+		if fr, ok := fr.(*http2.HeadersFrame); !ok || !fr.Flags.Has(http2.FlagHeadersEndHeaders) {
 			t.Errorf("Expected Headers frame with END_HEADERS frame, got %v", fr)
 		}
 		close(greetDone)

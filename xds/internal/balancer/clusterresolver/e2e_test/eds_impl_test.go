@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	rrutil "google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -42,7 +43,6 @@ import (
 	"google.golang.org/grpc/status"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -629,7 +629,7 @@ func (s) TestEDS_ResourceRemoved(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Delete the endpoints resource from the mangement server.
+	// Delete the endpoints resource from the management server.
 	resources.Endpoints = nil
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)

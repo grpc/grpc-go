@@ -555,7 +555,7 @@ func checkInPayload(t *testing.T, d *gotData, e *expectedData) {
 	}
 	*idx++
 	if st.Length != proto.Size(expectedPayload) {
-		t.Fatalf("st.Lenght = %v, want %v", st.Length, proto.Size(expectedPayload))
+		t.Fatalf("st.Length = %v, want %v", st.Length, proto.Size(expectedPayload))
 	}
 
 	// Below are sanity checks that WireLength and RecvTime are populated.
@@ -663,7 +663,7 @@ func checkOutPayload(t *testing.T, d *gotData, e *expectedData) {
 	}
 	*idx++
 	if st.Length != proto.Size(expectedPayload) {
-		t.Fatalf("st.Lenght = %v, want %v", st.Length, proto.Size(expectedPayload))
+		t.Fatalf("st.Length = %v, want %v", st.Length, proto.Size(expectedPayload))
 	}
 
 	// Below are sanity checks that Length, CompressedLength and SentTime are populated.

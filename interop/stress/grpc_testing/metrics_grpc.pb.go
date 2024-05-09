@@ -36,8 +36,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.62.0 or later.
-const _ = grpc.SupportPackageIsVersion8
+// Requires gRPC-Go v1.64.0 or later.
+const _ = grpc.SupportPackageIsVersion9
 
 const (
 	MetricsService_GetAllGauges_FullMethodName = "/grpc.testing.MetricsService/GetAllGauges"
@@ -50,7 +50,7 @@ const (
 type MetricsServiceClient interface {
 	// Returns the values of all the gauges that are currently being maintained by
 	// the service
-	GetAllGauges(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (MetricsService_GetAllGaugesClient, error)
+	GetAllGauges(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GaugeResponse], error)
 	// Returns the value of one gauge
 	GetGauge(ctx context.Context, in *GaugeRequest, opts ...grpc.CallOption) (*GaugeResponse, error)
 }
@@ -63,13 +63,13 @@ func NewMetricsServiceClient(cc grpc.ClientConnInterface) MetricsServiceClient {
 	return &metricsServiceClient{cc}
 }
 
-func (c *metricsServiceClient) GetAllGauges(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (MetricsService_GetAllGaugesClient, error) {
+func (c *metricsServiceClient) GetAllGauges(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GaugeResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &MetricsService_ServiceDesc.Streams[0], MetricsService_GetAllGauges_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &metricsServiceGetAllGaugesClient{stream}
+	x := &grpc.GenericClientStream[EmptyMessage, GaugeResponse]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -79,22 +79,8 @@ func (c *metricsServiceClient) GetAllGauges(ctx context.Context, in *EmptyMessag
 	return x, nil
 }
 
-type MetricsService_GetAllGaugesClient interface {
-	Recv() (*GaugeResponse, error)
-	grpc.ClientStream
-}
-
-type metricsServiceGetAllGaugesClient struct {
-	grpc.ClientStream
-}
-
-func (x *metricsServiceGetAllGaugesClient) Recv() (*GaugeResponse, error) {
-	m := new(GaugeResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MetricsService_GetAllGaugesClient = grpc.ServerStreamingClient[GaugeResponse]
 
 func (c *metricsServiceClient) GetGauge(ctx context.Context, in *GaugeRequest, opts ...grpc.CallOption) (*GaugeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -112,7 +98,7 @@ func (c *metricsServiceClient) GetGauge(ctx context.Context, in *GaugeRequest, o
 type MetricsServiceServer interface {
 	// Returns the values of all the gauges that are currently being maintained by
 	// the service
-	GetAllGauges(*EmptyMessage, MetricsService_GetAllGaugesServer) error
+	GetAllGauges(*EmptyMessage, grpc.ServerStreamingServer[GaugeResponse]) error
 	// Returns the value of one gauge
 	GetGauge(context.Context, *GaugeRequest) (*GaugeResponse, error)
 	mustEmbedUnimplementedMetricsServiceServer()
@@ -122,7 +108,7 @@ type MetricsServiceServer interface {
 type UnimplementedMetricsServiceServer struct {
 }
 
-func (UnimplementedMetricsServiceServer) GetAllGauges(*EmptyMessage, MetricsService_GetAllGaugesServer) error {
+func (UnimplementedMetricsServiceServer) GetAllGauges(*EmptyMessage, grpc.ServerStreamingServer[GaugeResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method GetAllGauges not implemented")
 }
 func (UnimplementedMetricsServiceServer) GetGauge(context.Context, *GaugeRequest) (*GaugeResponse, error) {
@@ -146,21 +132,11 @@ func _MetricsService_GetAllGauges_Handler(srv interface{}, stream grpc.ServerStr
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(MetricsServiceServer).GetAllGauges(m, &metricsServiceGetAllGaugesServer{stream})
+	return srv.(MetricsServiceServer).GetAllGauges(m, &grpc.GenericServerStream[EmptyMessage, GaugeResponse]{ServerStream: stream})
 }
 
-type MetricsService_GetAllGaugesServer interface {
-	Send(*GaugeResponse) error
-	grpc.ServerStream
-}
-
-type metricsServiceGetAllGaugesServer struct {
-	grpc.ServerStream
-}
-
-func (x *metricsServiceGetAllGaugesServer) Send(m *GaugeResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MetricsService_GetAllGaugesServer = grpc.ServerStreamingServer[GaugeResponse]
 
 func _MetricsService_GetGauge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GaugeRequest)

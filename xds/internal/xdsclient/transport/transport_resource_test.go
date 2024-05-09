@@ -74,7 +74,7 @@ type resourcesWithTypeURL struct {
 
 // TestHandleResponseFromManagementServer covers different scenarios of the
 // transport receiving a response from the management server. In all scenarios,
-// the trasport is expected to pass the received responses as-is to the data
+// the transport is expected to pass the received responses as-is to the data
 // model layer for validation and not perform any validation on its own.
 func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 	const (

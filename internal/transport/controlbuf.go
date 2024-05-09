@@ -338,7 +338,7 @@ func (c *controlBuffer) put(it cbItem) error {
 	return err
 }
 
-func (c *controlBuffer) executeAndPut(f func(it any) bool, it cbItem) (bool, error) {
+func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
 	var wakeUp bool
 	c.mu.Lock()
 	if c.err != nil {
@@ -346,7 +346,7 @@ func (c *controlBuffer) executeAndPut(f func(it any) bool, it cbItem) (bool, err
 		return false, c.err
 	}
 	if f != nil {
-		if !f(it) { // f wasn't successful
+		if !f() { // f wasn't successful
 			c.mu.Unlock()
 			return false, nil
 		}

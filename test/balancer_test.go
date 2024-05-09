@@ -429,7 +429,7 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 		grpc.WithResolvers(r),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, attrBalancerName)),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -753,7 +753,7 @@ func (s) TestAuthorityInBuildOptions(t *testing.T) {
 				grpc.WithResolvers(r),
 				grpc.WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, balancerName)),
 			}, test.dopts...)
-			cc, err := grpc.Dial(r.Scheme()+":///"+dialTarget, dopts...)
+			cc, err := grpc.NewClient(r.Scheme()+":///"+dialTarget, dopts...)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -863,9 +863,9 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 		grpc.WithResolvers(r),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, t.Name())),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.Dial(): %v", err)
+		t.Fatalf("grpc.NewClient(): %v", err)
 	}
 	defer cc.Close()
 	tc := testgrpc.NewTestServiceClient(cc)

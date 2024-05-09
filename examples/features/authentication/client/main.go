@@ -66,7 +66,7 @@ func main() {
 		grpc.WithTransportCredentials(creds),
 	}
 
-	conn, err := grpc.Dial(*addr, opts...)
+	conn, err := grpc.NewClient(*addr, opts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

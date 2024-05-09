@@ -242,9 +242,9 @@ func startServer(t *testing.T, headerFields ...[]string) (serverAddr string, cle
 }
 
 func doHTTPHeaderTest(lisAddr string, errCode codes.Code) error {
-	cc, err := grpc.Dial(lisAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(lisAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return fmt.Errorf("dial(%q): %v", lisAddr, err)
+		return fmt.Errorf("NewClient(%q): %v", lisAddr, err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

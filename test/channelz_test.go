@@ -158,6 +158,10 @@ func (s) TestCZGetSubChannel(t *testing.T) {
 		if sc == nil {
 			return false, fmt.Errorf("subchannel with id %v is nil", scid)
 		}
+		target := sc.ChannelMetrics.Target.Load()
+		if target == nil || !strings.HasPrefix(*target, "localhost") {
+			t.Fatalf("subchannel target must never be set incorrectly; got: %v, want <HasPrefix('localhost')>", target)
+		}
 		state := sc.ChannelMetrics.State.Load()
 		if state == nil || *state != connectivity.Ready {
 			return false, fmt.Errorf("Got subchannel state=%v; want %q", state, connectivity.Ready)
@@ -302,7 +306,7 @@ func (s) TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 
 func (s) TestCZTopChannelRegistrationAndDeletionWhenDialFail(t *testing.T) {
 	// Make dial fails (due to no transport security specified)
-	_, err := grpc.Dial("fake.addr")
+	_, err := grpc.NewClient("fake.addr")
 	if err == nil {
 		t.Fatal("expecting dial to fail")
 	}
