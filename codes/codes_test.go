@@ -98,6 +98,6 @@ func (s) TestUnmarshalJSON_InvalidIntegerCode(t *testing.T) {
 
 	var got Code
 	if err := got.UnmarshalJSON([]byte("200")); !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("got.UnmarshalJSON(200) != %v; wantErr: %v", err, wantErr)
+		t.Errorf("got.UnmarshalJSON(200) = %v; wantErr: %v", err, wantErr)
 	}
 }
