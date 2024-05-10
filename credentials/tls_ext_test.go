@@ -239,18 +239,13 @@ func (s) TestTLS_CipherSuitesOverridable(t *testing.T) {
 	}
 }
 
-// TestTLS_DisabledALPN tests the behaviour of a gRPC client when connecting to
-// a server that doesn't support ALPN.
+// TestTLS_DisabledALPN tests the behaviour of a TransportCredentials when
+// connecting to a server that doesn't support ALPN.
 func (s) TestTLS_DisabledALPN(t *testing.T) {
 	initialVal := envconfig.EnforceALPNEnabled
 	defer func() {
 		envconfig.EnforceALPNEnabled = initialVal
 	}()
-
-	serverCfg := &tls.Config{
-		Certificates: []tls.Certificate{serverCert},
-		NextProtos:   []string{}, // Empty list indicates ALPN is disabled.
-	}
 
 	tests := []struct {
 		name         string
@@ -271,19 +266,25 @@ func (s) TestTLS_DisabledALPN(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			envconfig.EnforceALPNEnabled = tc.alpnEnforced
 
-			listner, err := tls.Listen("tcp", "localhost:0", serverCfg)
+			listner, err := tls.Listen("tcp", "localhost:0", &tls.Config{
+				Certificates: []tls.Certificate{serverCert},
+				NextProtos:   []string{}, // Empty list indicates ALPN is disabled.
+			})
 			if err != nil {
 				t.Fatalf("Error starting TLS server: %v", err)
 			}
 
+			errCh := make(chan error)
+
 			go func() {
 				conn, err := listner.Accept()
 				if err != nil {
-					t.Errorf("tls.Accept failed err = %v", err)
+					errCh <- fmt.Errorf("tls.Accept failed: %v", err)
 				} else {
 					conn.Write([]byte("Hello, World!"))
 					conn.Close()
 				}
+				close(errCh)
 			}()
 
 			serverAddr := listner.Addr().String()
@@ -296,13 +297,18 @@ func (s) TestTLS_DisabledALPN(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
-			clientCfg := tls.Config{ServerName: serverName,
-				RootCAs: certPool,
+			clientCfg := tls.Config{
+				ServerName: serverName,
+				RootCAs:    certPool,
 			}
 			_, _, err = credentials.NewTLS(&clientCfg).ClientHandshake(ctx, serverName, conn)
 
 			if gotErr := (err != nil); gotErr != tc.wantErr {
-				t.Errorf("ClientHandshake returned unexpected error: got=%v, want=%t", gotErr, tc.wantErr)
+				t.Errorf("ClientHandshake returned unexpected error: got=%v, want=%t", err, tc.wantErr)
+			}
+
+			if err = <-errCh; err != nil {
+				t.Fatalf("Server reported unexpected error: %v", err)
 			}
 		})
 	}
