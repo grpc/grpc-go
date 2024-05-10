@@ -28,6 +28,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz"
@@ -76,10 +77,13 @@ const (
 		"deny_rules": []
 	}
 	`
+	authzOptStatic      = "static"
+	authzOptFileWatcher = "filewatcher"
 )
 
 var (
-	port = flag.Int("port", 50051, "the port to serve on")
+	port     = flag.Int("port", 50051, "the port to serve on")
+	authzOpt = flag.String("authz-option", authzOptStatic, "the authz option (static or file watcher)")
 
 	errMissingMetadata = status.Errorf(codes.InvalidArgument, "missing metadata")
 )
@@ -197,13 +201,30 @@ func main() {
 		log.Fatalf("Loading credentials: %v", err)
 	}
 
-	// Create an authorization interceptor using a static policy.
-	staticInteceptor, err := authz.NewStatic(authzPolicy)
-	if err != nil {
-		log.Fatalf("Creating a static authz interceptor: %v", err)
+	// Create authorization interceptors according to the authz-option command-line flag.
+	var unaryAuthzInt grpc.UnaryServerInterceptor
+	var streamAuthzInt grpc.StreamServerInterceptor
+	switch *authzOpt {
+	case authzOptStatic:
+		// Create an authorization interceptor using a static policy.
+		staticInt, err := authz.NewStatic(authzPolicy)
+		if err != nil {
+			log.Fatalf("Creating a static authz interceptor: %v", err)
+		}
+		unaryAuthzInt, streamAuthzInt = staticInt.UnaryInterceptor, staticInt.StreamInterceptor
+	case authzOptFileWatcher:
+		// Create an authorization interceptor by watching a policy file.
+		fileWatcherInt, err := authz.NewFileWatcher(data.Path("rbac/policy.json"), 100*time.Millisecond)
+		if err != nil {
+			log.Fatalf("Creating a file watcher authz interceptor: %v", err)
+		}
+		unaryAuthzInt, streamAuthzInt = fileWatcherInt.UnaryInterceptor, fileWatcherInt.StreamInterceptor
+	default:
+		log.Fatalf("Invalid authz option: %s", *authzOpt)
 	}
-	unaryInts := grpc.ChainUnaryInterceptor(authUnaryInterceptor, staticInteceptor.UnaryInterceptor)
-	streamInts := grpc.ChainStreamInterceptor(authStreamInterceptor, staticInteceptor.StreamInterceptor)
+
+	unaryInts := grpc.ChainUnaryInterceptor(authUnaryInterceptor, unaryAuthzInt)
+	streamInts := grpc.ChainStreamInterceptor(authStreamInterceptor, streamAuthzInt)
 	s := grpc.NewServer(grpc.Creds(creds), unaryInts, streamInts)
 
 	// Register EchoServer on the server.
