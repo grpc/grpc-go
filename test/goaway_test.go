@@ -800,6 +800,7 @@ func (s) TestClientSendsAGoAway(t *testing.T) {
 		for {
 			f, err := ct.fr.ReadFrame()
 			if err != nil {
+				t.Logf("error reading frame: %v", err)
 				return
 			}
 			switch fr := f.(type) {
@@ -808,6 +809,7 @@ func (s) TestClientSendsAGoAway(t *testing.T) {
 				if fr.ErrCode == http2.ErrCodeNo {
 					t.Logf("GoAway received from client")
 					close(goAwayReceived)
+					return
 				}
 			default:
 				t.Errorf("server tester received unexpected frame type %T", f)
@@ -816,6 +818,7 @@ func (s) TestClientSendsAGoAway(t *testing.T) {
 			}
 		}
 	}()
+	cc.WaitForStateChange(ctx, connectivity.Connecting)
 	cc.Close()
 	defer ct.conn.Close()
 	select {
