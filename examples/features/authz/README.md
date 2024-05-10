@@ -1,6 +1,6 @@
 # RBAC authorization
 
-This example uses the `StaticInterceptor` from the `google.golang.org/grpc/authz`
+This example uses the `StaticInterceptor` and `FileWatcherInterceptor` from the `google.golang.org/grpc/authz`
 package. It uses a header based RBAC policy to match each gRPC method to a
 required role. For simplicity, the context is injected with mock metadata which
 includes the required roles, but this should be fetched from an appropriate
@@ -8,7 +8,7 @@ service based on the authenticated context.
 
 ## Try it
 
-Server requires the following roles on an authenticated user to authorize usage
+Server is expected to require the following roles on an authenticated user to authorize usage
 of these methods:
 
 - `UnaryEcho` requires the role `UNARY_ECHO:W`
@@ -21,6 +21,8 @@ for simplicity, this should use a proper ID provider in production).
 If the above is successful, it uses the username in the token to set appropriate
 roles (hardcoded to the 2 required roles above if the username matches `super-user`
 for simplicity, these roles should be supplied externally as well).
+
+### Authorization with static policy
 
 Start the server with:
 
@@ -38,3 +40,23 @@ Start the client with:
 ```
 go run client/main.go
 ```
+
+### Authorization by watching a policy file
+
+The server can accept an optional `--authz-option filewatcher` flag to set up authorization policy by reading a [policy file](/examples/data/rbac/policy.json), and to look for update on the policy file every 100 millisecond. Having `GRPC_GO_LOG_SEVERITY_LEVEL` environment variable set to `info` will log out the reload activity of the policy every time a file update is detected.
+
+Start the server with:
+
+```
+GRPC_GO_LOG_SEVERITY_LEVEL=info go run server/main.go --authz-option filewatcher
+```
+
+Start the client with:
+
+```
+go run client/main.go
+```
+
+The client will first hit `codes.PermissionDenied` error when invoking `UnaryEcho` although a legit username (`super-user`) is associated. This is because the policy file has an intentional glitch (falsely asks for role `UNARY_ECHO:RW`).
+
+While the server is still running, edit and save the policy file to replace `UNARY_ECHO:RW` with the correct role `UNARY_ECHO:W` (policy reload activity should now be found in server logs). This time when the client is started again with the command above, it will be able to get responses just as in the static-policy example.
