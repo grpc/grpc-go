@@ -192,7 +192,9 @@ func (s) TestToRPCErr(t *testing.T) {
 }
 
 func (s) TestNilReply(t *testing.T) {
-	type XxxReply struct{}
+	type XxxReply struct {
+		proto.Message
+	}
 
 	handler := func() (any, error) {
 		return func() (*XxxReply, error) {
