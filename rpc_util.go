@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -641,7 +642,8 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 // error if it is too large to be transmitted by grpc.  If msg is nil, it
 // generates an empty message.
 func encode(c baseCodec, msg any) ([]byte, error) {
-	if msg == nil { // NOTE: typed nils will not be caught by this check
+	if msg == nil ||
+		reflect.ValueOf(msg).IsNil() { // in gRPC, msg must be a ptr(or nil ptr)
 		return nil, nil
 	}
 	b, err := c.Marshal(msg)

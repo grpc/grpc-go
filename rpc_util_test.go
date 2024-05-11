@@ -191,6 +191,22 @@ func (s) TestToRPCErr(t *testing.T) {
 	}
 }
 
+func (s) TestNilReply(t *testing.T) {
+	type XxxReply struct{}
+
+	handler := func() (any, error) {
+		return func() (*XxxReply, error) {
+			return nil, nil
+		}()
+	}
+
+	reply, _ := handler()
+	raw, err := encode(encoding.GetCodec(protoenc.Name), reply)
+	if err != nil || raw != nil {
+		t.Fatal(err)
+	}
+}
+
 // bmEncode benchmarks encoding a Protocol Buffer message containing mSize
 // bytes.
 func bmEncode(b *testing.B, mSize int) {
