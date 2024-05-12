@@ -1841,3 +1841,14 @@ func (cc *ClientConn) determineAuthority() error {
 	channelz.Infof(logger, cc.channelz, "Channel authority set to %q", cc.authority)
 	return nil
 }
+
+// sanitizeRPCConfig sanitizes the RPCConfig supplied by the server by
+// enforcing any limits specified in the client's dial options
+func (cc *ClientConn) sanitizeRPCConfig(c *iresolver.RPCConfig) {
+	// Enforce max retry attempts
+	if c.MethodConfig.RetryPolicy != nil {
+		if c.MethodConfig.RetryPolicy.MaxAttempts > cc.dopts.maxRetryAttempts {
+			c.MethodConfig.RetryPolicy.MaxAttempts = cc.dopts.maxRetryAttempts
+		}
+	}
+}

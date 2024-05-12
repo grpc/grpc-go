@@ -233,6 +233,9 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 
 	if rpcConfig != nil {
+		// sanitize the rpcConfig based on the client's dial options
+		cc.sanitizeRPCConfig(rpcConfig)
+
 		if rpcConfig.Context != nil {
 			ctx = rpcConfig.Context
 		}

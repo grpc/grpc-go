@@ -285,10 +285,6 @@ func convertRetryPolicy(jrp *jsonRetryPolicy) (p *internalserviceconfig.RetryPol
 		BackoffMultiplier:    jrp.BackoffMultiplier,
 		RetryableStatusCodes: make(map[codes.Code]bool),
 	}
-	if rp.MaxAttempts > 5 {
-		// TODO(retry): Make the max maxAttempts configurable.
-		rp.MaxAttempts = 5
-	}
 	for _, code := range jrp.RetryableStatusCodes {
 		rp.RetryableStatusCodes[code] = true
 	}
