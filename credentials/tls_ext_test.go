@@ -266,7 +266,7 @@ func (s) TestTLS_DisabledALPN(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			envconfig.EnforceALPNEnabled = tc.alpnEnforced
 
-			listner, err := tls.Listen("tcp", "localhost:0", &tls.Config{
+			listener, err := tls.Listen("tcp", "localhost:0", &tls.Config{
 				Certificates: []tls.Certificate{serverCert},
 				NextProtos:   []string{}, // Empty list indicates ALPN is disabled.
 			})
@@ -277,17 +277,18 @@ func (s) TestTLS_DisabledALPN(t *testing.T) {
 			errCh := make(chan error)
 
 			go func() {
-				conn, err := listner.Accept()
+				conn, err := listener.Accept()
 				if err != nil {
-					errCh <- fmt.Errorf("tls.Accept failed: %v", err)
+					errCh <- fmt.Errorf("listener.Accept returned error: %v", err)
 				} else {
+					// The first write to the TLS listener initiates the TLS handshake.
 					conn.Write([]byte("Hello, World!"))
 					conn.Close()
 				}
 				close(errCh)
 			}()
 
-			serverAddr := listner.Addr().String()
+			serverAddr := listener.Addr().String()
 			conn, err := net.Dial("tcp", serverAddr)
 			if err != nil {
 				t.Fatalf("net.Dial(%s) failed: %v", serverAddr, err)
@@ -307,8 +308,16 @@ func (s) TestTLS_DisabledALPN(t *testing.T) {
 				t.Errorf("ClientHandshake returned unexpected error: got=%v, want=%t", err, tc.wantErr)
 			}
 
-			if err = <-errCh; err != nil {
-				t.Fatalf("Server reported unexpected error: %v", err)
+			err = nil
+			select {
+			case err = <-errCh:
+				break
+			case <-ctx.Done():
+				err = ctx.Err()
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
 			}
 		})
 	}
