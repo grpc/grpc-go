@@ -73,18 +73,18 @@ func testPick(t *testing.T, p balancer.Picker, info balancer.PickInfo, wantSC ba
 	}
 }
 
-func (s) TestClusterPicks(t *testing.T) {
+func TestClusterPicks(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
-"children": {
-	"cds:cluster_1":{ "childPolicy": [{"round_robin":""}] },
-	"cds:cluster_2":{ "childPolicy": [{"round_robin":""}] }
-}
-}`
+ "children": {
+	 "cds:cluster_1":{ "childPolicy": [{"round_robin":""}] },
+	 "cds:cluster_2":{ "childPolicy": [{"round_robin":""}] }
+ }
+ }`
 	config1, err := parser.ParseConfig([]byte(configJSON1))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
@@ -152,18 +152,18 @@ func (s) TestClusterPicks(t *testing.T) {
 
 // TestConfigUpdateAddCluster covers the cases the balancer receives config
 // update with extra clusters.
-func (s) TestConfigUpdateAddCluster(t *testing.T) {
+func TestConfigUpdateAddCluster(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
-"children": {
-	"cds:cluster_1":{ "childPolicy": [{"round_robin":""}] },
-	"cds:cluster_2":{ "childPolicy": [{"round_robin":""}] }
-}
-}`
+ "children": {
+	 "cds:cluster_1":{ "childPolicy": [{"round_robin":""}] },
+	 "cds:cluster_2":{ "childPolicy": [{"round_robin":""}] }
+ }
+ }`
 	config1, err := parser.ParseConfig([]byte(configJSON1))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
@@ -231,12 +231,12 @@ func (s) TestConfigUpdateAddCluster(t *testing.T) {
 	// A config update with different routes, and different actions. Expect a
 	// new subconn and a picker update.
 	configJSON2 := `{
-"children": {
-	"cds:cluster_1":{ "childPolicy": [{"round_robin":""}] },
-	"cds:cluster_2":{ "childPolicy": [{"round_robin":""}] },
-	"cds:cluster_3":{ "childPolicy": [{"round_robin":""}] }
-}
-}`
+ "children": {
+	 "cds:cluster_1":{ "childPolicy": [{"round_robin":""}] },
+	 "cds:cluster_2":{ "childPolicy": [{"round_robin":""}] },
+	 "cds:cluster_3":{ "childPolicy": [{"round_robin":""}] }
+ }
+ }`
 	config2, err := parser.ParseConfig([]byte(configJSON2))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
@@ -310,18 +310,18 @@ func (s) TestConfigUpdateAddCluster(t *testing.T) {
 
 // TestRoutingConfigUpdateDeleteAll covers the cases the balancer receives
 // config update with no clusters. Pick should fail with details in error.
-func (s) TestRoutingConfigUpdateDeleteAll(t *testing.T) {
+func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
-"children": {
-	"cds:cluster_1":{ "childPolicy": [{"round_robin":""}] },
-	"cds:cluster_2":{ "childPolicy": [{"round_robin":""}] }
-}
-}`
+ "children": {
+	 "cds:cluster_1":{ "childPolicy": [{"round_robin":""}] },
+	 "cds:cluster_2":{ "childPolicy": [{"round_robin":""}] }
+ }
+ }`
 	config1, err := parser.ParseConfig([]byte(configJSON1))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
@@ -471,7 +471,7 @@ func (s) TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	}
 }
 
-func (s) TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
+func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	const (
 		userAgent          = "ua"
 		defaultTestTimeout = 1 * time.Second
@@ -502,10 +502,10 @@ func (s) TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	bal := builder.Build(cc, bOpts)
 
 	configJSON1 := fmt.Sprintf(`{
-"children": {
-	"cds:cluster_1":{ "childPolicy": [{"%s":""}] }
-}
-}`, t.Name())
+ "children": {
+	 "cds:cluster_1":{ "childPolicy": [{"%s":""}] }
+ }
+ }`, t.Name())
 	config1, err := parser.ParseConfig([]byte(configJSON1))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
@@ -525,7 +525,7 @@ func (s) TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	}
 }
 
-const initIdleBalancerName = "test-init-idle-balancer"
+const initIdleBalancerName = "test-init-Idle-balancer"
 
 var errTestInitIdle = fmt.Errorf("init Idle balancer error 0")
 
@@ -555,18 +555,18 @@ func init() {
 
 // TestInitialIdle covers the case that if the child reports Idle, the overall
 // state will be Idle.
-func (s) TestInitialIdle(t *testing.T) {
+func TestInitialIdle(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
 
-	configJSON := `{
-"children": {
-	"cds:cluster_1":{ "childPolicy": [{"test-init-idle-balancer":""}] }
-}
-}`
-	config, err := parser.ParseConfig([]byte(configJSON))
+	configJSON1 := `{
+ "children": {
+	 "cds:cluster_1":{ "childPolicy": [{"test-init-Idle-balancer":""}] }
+ }
+ }`
+	config1, err := parser.ParseConfig([]byte(configJSON1))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
@@ -579,7 +579,7 @@ func (s) TestInitialIdle(t *testing.T) {
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
 		}},
-		BalancerConfig: config,
+		BalancerConfig: config1,
 	}); err != nil {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
@@ -591,8 +591,8 @@ func (s) TestInitialIdle(t *testing.T) {
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
 	}
 
-	if state := <-cc.NewStateCh; state != connectivity.Idle {
-		t.Fatalf("Received aggregated state: %v, want Idle", state)
+	if state1 := <-cc.NewStateCh; state1 != connectivity.Idle {
+		t.Fatalf("Received aggregated state: %v, want Idle", state1)
 	}
 }
 
@@ -602,17 +602,17 @@ func (s) TestInitialIdle(t *testing.T) {
 // switches this child to a pick first load balancer. Once that balancer updates
 // it's state and completes the graceful switch process the new picker should
 // reflect this change.
-func (s) TestClusterGracefulSwitch(t *testing.T) {
+func TestClusterGracefulSwitch(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
-"children": {
-	"csp:cluster":{ "childPolicy": [{"round_robin":""}] }
-}
-}`
+ "children": {
+	 "csp:cluster":{ "childPolicy": [{"round_robin":""}] }
+ }
+ }`
 	config1, err := parser.ParseConfig([]byte(configJSON1))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
@@ -651,10 +651,10 @@ func (s) TestClusterGracefulSwitch(t *testing.T) {
 	})
 	// Same cluster, different balancer type.
 	configJSON2 := fmt.Sprintf(`{
-"children": {
-	"csp:cluster":{ "childPolicy": [{"%s":""}] }
-}
-}`, childPolicyName)
+ "children": {
+	 "csp:cluster":{ "childPolicy": [{"%s":""}] }
+ }
+ }`, childPolicyName)
 	config2, err := parser.ParseConfig([]byte(configJSON2))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
@@ -732,10 +732,10 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
-"children": {
-	"cds:cluster_1":{ "childPolicy": [{"update_state_balancer":""}] }
-}
-}`
+ "children": {
+	 "cds:cluster_1":{ "childPolicy": [{"update_state_balancer":""}] }
+ }
+ }`
 	config1, err := parser.ParseConfig([]byte(configJSON1))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)

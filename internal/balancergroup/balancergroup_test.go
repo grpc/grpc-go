@@ -18,6 +18,7 @@ package balancergroup
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -609,8 +610,15 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 			return bal.UpdateClientConnState(ccs)
 		},
 	})
-	bg.UpdateBuilder(testBalancerIDs[0], childPolicyName)
-	if err := bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}}); err != nil {
+	cfgJSON := json.RawMessage(fmt.Sprintf(`[{%q: {}}]`, t.Name()))
+	lbCfg, err := ParseConfig(cfgJSON)
+	if err != nil {
+		t.Fatalf("ParseConfig(%s) failed: %v", string(cfgJSON), err)
+	}
+	if err := bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{
+		ResolverState:  resolver.State{Addresses: testBackendAddrs[2:4]},
+		BalancerConfig: lbCfg,
+	}); err != nil {
 		t.Fatalf("error updating ClientConn state: %v", err)
 	}
 
