@@ -609,8 +609,7 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 			return bal.UpdateClientConnState(ccs)
 		},
 	})
-	builder := balancer.Get(childPolicyName)
-	bg.UpdateBuilder(testBalancerIDs[0], builder)
+	bg.UpdateBuilder(testBalancerIDs[0], childPolicyName)
 	if err := bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}}); err != nil {
 		t.Fatalf("error updating ClientConn state: %v", err)
 	}

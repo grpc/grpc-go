@@ -380,9 +380,14 @@ func (bg *BalancerGroup) Add(id string, builder balancer.Builder) {
 // UpdateBuilder updates the builder for a current child, starting the Graceful
 // Switch process for that child.
 //
-// TODO: update this API to take the name of the new builder instead.
-func (bg *BalancerGroup) UpdateBuilder(id string, builder balancer.Builder) {
+// Returns a non-nil error if the provided builder is not registered.
+func (bg *BalancerGroup) UpdateBuilder(id, builder string) error {
+	bldr := balancer.Get(builder)
+	if bldr == nil {
+		return fmt.Errorf("balancer builder %q not found", builder)
+	}
 	bg.outgoingMu.Lock()
+	defer bg.outgoingMu.Unlock()
 	// This does not deal with the balancer cache because this call should come
 	// after an Add call for a given child balancer. If the child is removed,
 	// the caller will call Add if the child balancer comes back which would
@@ -390,10 +395,11 @@ func (bg *BalancerGroup) UpdateBuilder(id string, builder balancer.Builder) {
 	sbc := bg.idToBalancerConfig[id]
 	if sbc == nil {
 		// simply ignore it if not present, don't error
-		return
+		return nil
 	}
-	sbc.gracefulSwitch(builder)
-	bg.outgoingMu.Unlock()
+	sbc.gracefulSwitch(bldr)
+	return nil
+
 }
 
 // Remove removes the balancer with id from the group.

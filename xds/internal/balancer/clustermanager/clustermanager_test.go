@@ -73,7 +73,7 @@ func testPick(t *testing.T, p balancer.Picker, info balancer.PickInfo, wantSC ba
 	}
 }
 
-func TestClusterPicks(t *testing.T) {
+func (s) TestClusterPicks(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
@@ -152,7 +152,7 @@ func TestClusterPicks(t *testing.T) {
 
 // TestConfigUpdateAddCluster covers the cases the balancer receives config
 // update with extra clusters.
-func TestConfigUpdateAddCluster(t *testing.T) {
+func (s) TestConfigUpdateAddCluster(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
@@ -310,7 +310,7 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 
 // TestRoutingConfigUpdateDeleteAll covers the cases the balancer receives
 // config update with no clusters. Pick should fail with details in error.
-func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
+func (s) TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
@@ -471,7 +471,7 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	}
 }
 
-func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
+func (s) TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	const (
 		userAgent          = "ua"
 		defaultTestTimeout = 1 * time.Second
@@ -525,7 +525,7 @@ func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	}
 }
 
-const initIdleBalancerName = "test-init-Idle-balancer"
+const initIdleBalancerName = "test-init-idle-balancer"
 
 var errTestInitIdle = fmt.Errorf("init Idle balancer error 0")
 
@@ -555,18 +555,18 @@ func init() {
 
 // TestInitialIdle covers the case that if the child reports Idle, the overall
 // state will be Idle.
-func TestInitialIdle(t *testing.T) {
+func (s) TestInitialIdle(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
 
-	configJSON1 := `{
+	configJSON := `{
 "children": {
-	"cds:cluster_1":{ "childPolicy": [{"test-init-Idle-balancer":""}] }
+	"cds:cluster_1":{ "childPolicy": [{"test-init-idle-balancer":""}] }
 }
 }`
-	config1, err := parser.ParseConfig([]byte(configJSON1))
+	config, err := parser.ParseConfig([]byte(configJSON))
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
@@ -579,7 +579,7 @@ func TestInitialIdle(t *testing.T) {
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
 		}},
-		BalancerConfig: config1,
+		BalancerConfig: config,
 	}); err != nil {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
@@ -591,8 +591,8 @@ func TestInitialIdle(t *testing.T) {
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
 	}
 
-	if state1 := <-cc.NewStateCh; state1 != connectivity.Idle {
-		t.Fatalf("Received aggregated state: %v, want Idle", state1)
+	if state := <-cc.NewStateCh; state != connectivity.Idle {
+		t.Fatalf("Received aggregated state: %v, want Idle", state)
 	}
 }
 
@@ -602,7 +602,7 @@ func TestInitialIdle(t *testing.T) {
 // switches this child to a pick first load balancer. Once that balancer updates
 // it's state and completes the graceful switch process the new picker should
 // reflect this change.
-func TestClusterGracefulSwitch(t *testing.T) {
+func (s) TestClusterGracefulSwitch(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)

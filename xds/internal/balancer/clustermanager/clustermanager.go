@@ -46,7 +46,6 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 	b := &bal{}
 	b.logger = prefixLogger(b)
 	b.stateAggregator = newBalancerStateAggregator(cc, b.logger)
-	b.stateAggregator.start()
 	b.bg = balancergroup.New(balancergroup.Options{
 		CC:                      cc,
 		BuildOpts:               opts,
@@ -79,7 +78,6 @@ type bal struct {
 }
 
 func (b *bal) updateChildren(s balancer.ClientConnState, newConfig *lbConfig) {
-	update := false
 	addressesSplit := hierarchy.Group(s.ResolverState.Addresses)
 
 	// Remove sub-pickers and sub-balancers that are not in the new cluster list.
@@ -87,7 +85,6 @@ func (b *bal) updateChildren(s balancer.ClientConnState, newConfig *lbConfig) {
 		if _, ok := newConfig.Children[name]; !ok {
 			b.stateAggregator.remove(name)
 			b.bg.Remove(name)
-			update = true
 		}
 	}
 
@@ -101,9 +98,15 @@ func (b *bal) updateChildren(s balancer.ClientConnState, newConfig *lbConfig) {
 			// Then add to the balancer group.
 			b.bg.Add(name, balancer.Get(newT.ChildPolicy.Name))
 		} else {
-			// Already present, check for type change and if so send down a new builder.
+			// Already present, check for type change and if so send down a new
+			// builder.
 			if newT.ChildPolicy.Name != b.children[name].ChildPolicy.Name {
-				b.bg.UpdateBuilder(name, balancer.Get(newT.ChildPolicy.Name))
+				// Safe to ignore the returned error value because ParseConfig
+				// ensures that the child policy name is a registered LB policy.
+				b.bg.UpdateBuilder(name, newT.ChildPolicy.Name)
+				// Picker update is sent to the parent ClientConn only after the
+				// new child policy returns a picker. So, there is no need to
+				// set needUpdateStateOnResume to true here.
 			}
 		}
 		// TODO: handle error? How to aggregate errors and return?
@@ -118,9 +121,10 @@ func (b *bal) updateChildren(s balancer.ClientConnState, newConfig *lbConfig) {
 	}
 
 	b.children = newConfig.Children
-	if update {
-		b.stateAggregator.buildAndUpdate()
-	}
+
+	// Adding, removing or updating a sub-balancer will result in the
+	// needUpdateStateOnResume bit to true which results in a picker update once
+	// resumeStateUpdates() is called.
 }
 
 func (b *bal) UpdateClientConnState(s balancer.ClientConnState) error {
