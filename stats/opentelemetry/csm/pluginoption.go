@@ -16,7 +16,7 @@
  *
  */
 
-// Package csm contains the implementation of the CSM Plugin Option.
+// Package csm contains utilities for Google Cloud Service Mesh observability.
 package csm
 
 import (
@@ -149,53 +149,46 @@ func (cpo *pluginOption) GetLabels(md metadata.MD, optionalLabels map[string]str
 // metadata, or if the value is not a string value. Returns the string value
 // otherwise.
 func getFromMetadata(metadataKey string, metadata map[string]*structpb.Value) string {
-	ret := "unknown"
 	if metadata != nil {
 		if metadataVal, ok := metadata[metadataKey]; ok {
 			if _, ok := metadataVal.GetKind().(*structpb.Value_StringValue); ok {
-				ret = metadataVal.GetStringValue()
+				return metadataVal.GetStringValue()
 			}
 		}
 	}
-	return ret
+	return "unknown"
 }
 
 // getFromResource gets the value for the resource key from the attribute set.
 // Returns "unknown" if the resourceKey is not found in the attribute set or is
 // not a string value, the string value otherwise.
 func getFromResource(resourceKey attribute.Key, set *attribute.Set) string {
-	ret := "unknown"
 	if set != nil {
 		if resourceVal, ok := set.Value(resourceKey); ok && resourceVal.Type() == attribute.STRING {
-			ret = resourceVal.AsString()
+			return resourceVal.AsString()
 		}
 	}
-	return ret
+	return "unknown"
 }
 
 // getEnv returns "unknown" if environment variable is unset, the environment
 // variable otherwise.
 func getEnv(name string) string {
-	ret := "unknown"
 	if val, ok := os.LookupEnv(name); ok {
-		ret = val
+		return val
 	}
-	return ret
+	return "unknown"
 }
 
 var (
 	// This function will be overridden in unit tests.
 	getAttrSetFromResourceDetector = func(ctx context.Context) *attribute.Set {
 		r, err := resource.New(ctx, resource.WithDetectors(gcp.NewDetector()))
-
 		if err != nil {
 			logger.Errorf("error reading OpenTelemetry resource: %v", err)
+			return nil
 		}
-		var set *attribute.Set
-		if r != nil {
-			set = r.Set()
-		}
-		return set
+		return r.Set()
 	}
 )
 
@@ -311,26 +304,15 @@ func getNodeID() string {
 // metadataExchangeKey is the key for HTTP metadata exchange.
 const metadataExchangeKey = "x-envoy-peer-metadata"
 
-func determineTargetCSM(target string) bool {
+func determineTargetCSM(parsedTarget *url.URL) bool {
 	// On the client-side, the channel target is used to determine if a channel is a
 	// CSM channel or not. CSM channels need to have an “xds” scheme and a
 	// "traffic-director-global.xds.googleapis.com" authority. In the cases where no
 	// authority is mentioned, the authority is assumed to be CSM. MetadataExchange
 	// is performed only for CSM channels. Non-metadata exchange labels are detected
 	// as described below.
-	parsedTarget, err := url.Parse(target)
-	if err != nil {
-		// Shouldn't happen as Dial would fail if target couldn't be parsed, but
-		// log just in case to inform user.
-		logger.Errorf("passed in target %v failed to parse: %v", parsedTarget, err)
-		return false
-	}
 
-	if parsedTarget.Scheme == "xds" {
-		if parsedTarget.Host == "" {
-			return true // "In the cases where no authority is mentioned, the authority is assumed to be csm"
-		}
-		return parsedTarget.Host == "traffic-director-global.xds.googleapis.com"
-	}
-	return false
+	// "In the cases where no authority is mentioned, the authority is assumed
+	// to be csm".
+	return parsedTarget.Scheme == "xds" && (parsedTarget.Host == "" || parsedTarget.Host == "traffic-director-global.xds.googleapis.com")
 }

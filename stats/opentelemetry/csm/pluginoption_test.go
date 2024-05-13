@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -291,7 +292,11 @@ func (s) TestDetermineTargetCSM(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := determineTargetCSM(test.target); got != test.targetCSM {
+			parsedTarget, err := url.Parse(test.target)
+			if err != nil {
+				t.Fatalf("test target %v failed to parse: %v", test.target, err)
+			}
+			if got := determineTargetCSM(parsedTarget); got != test.targetCSM {
 				t.Fatalf("cpo.determineTargetCSM(%v): got %v, want %v", test.target, got, test.targetCSM)
 			}
 		})

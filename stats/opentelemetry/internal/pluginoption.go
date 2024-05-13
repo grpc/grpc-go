@@ -27,9 +27,8 @@ import (
 // intended to be added to applicable OpenTelemetry metrics recorded in the
 // OpenTelemetry instrumentation component.
 //
-// This API is experimental. In the future, we hope to stabilize and expose this
-// API to allow plugins to inject labels of their choosing into metrics
-// recorded.
+// In the future, we hope to stabilize and expose this API to allow plugins to
+// inject labels of their choosing into metrics recorded.
 type PluginOption interface {
 	// GetMetadata creates a MD with metadata exchange labels.
 	GetMetadata() metadata.MD
