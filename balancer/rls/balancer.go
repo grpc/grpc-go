@@ -303,7 +303,10 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		// `resizeCache` boolean) because `cacheMu` needs to be grabbed before
 		// `stateMu` if we are to hold both locks at the same time.
 		b.cacheMu.Lock()
-		b.dataCache.resize(newCfg.cacheSizeBytes)
+		evicted := b.dataCache.resize(newCfg.cacheSizeBytes)
+		if evicted {
+			b.sendNewPickerLocked()
+		}
 		b.cacheMu.Unlock()
 	}
 	return nil
