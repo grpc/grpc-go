@@ -93,7 +93,7 @@ func (cpo *pluginOption) GetLabels(md metadata.MD, optionalLabels map[string]str
 	// caller only passes in two potential xDS Optional Labels: service_name and
 	// service_namespace.
 	for k, v := range optionalLabels {
-		labels[k] = v
+		labels["csm." + k] = v
 	}
 	val := md.Get("x-envoy-peer-metadata")
 	// This can't happen if corresponding csm client because of proto wire
