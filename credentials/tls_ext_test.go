@@ -239,9 +239,9 @@ func (s) TestTLS_CipherSuitesOverridable(t *testing.T) {
 	}
 }
 
-// TestTLS_DisabledALPN tests the behaviour of a TransportCredentials when
+// TestTLS_DisabledALPNClient tests the behaviour of TransportCredentials when
 // connecting to a server that doesn't support ALPN.
-func (s) TestTLS_DisabledALPN(t *testing.T) {
+func (s) TestTLS_DisabledALPNClient(t *testing.T) {
 	initialVal := envconfig.EnforceALPNEnabled
 	defer func() {
 		envconfig.EnforceALPNEnabled = initialVal
@@ -301,6 +301,7 @@ func (s) TestTLS_DisabledALPN(t *testing.T) {
 			clientCfg := tls.Config{
 				ServerName: serverName,
 				RootCAs:    certPool,
+				NextProtos: []string{"h2"},
 			}
 			_, _, err = credentials.NewTLS(&clientCfg).ClientHandshake(ctx, serverName, conn)
 
@@ -318,6 +319,79 @@ func (s) TestTLS_DisabledALPN(t *testing.T) {
 
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestTLS_DisabledALPNServer tests the behaviour of TransportCredentials when
+// accepting a request from a client that doesn't support ALPN.
+func (s) TestTLS_DisabledALPNServer(t *testing.T) {
+	initialVal := envconfig.EnforceALPNEnabled
+	defer func() {
+		envconfig.EnforceALPNEnabled = initialVal
+	}()
+
+	tests := []struct {
+		name         string
+		alpnEnforced bool
+		wantErr      bool
+	}{
+		{
+			name:         "enforced",
+			alpnEnforced: true,
+			wantErr:      true,
+		},
+		{
+			name: "not_enforced",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			envconfig.EnforceALPNEnabled = tc.alpnEnforced
+
+			listener, err := net.Listen("tcp", "localhost:0")
+			if err != nil {
+				t.Fatalf("Error starting server: %v", err)
+			}
+
+			errCh := make(chan error)
+
+			go func() {
+				conn, err := listener.Accept()
+				if err != nil {
+					errCh <- fmt.Errorf("listener.Accept returned error: %v", err)
+					close(errCh)
+					return
+				}
+				defer conn.Close()
+				serverCfg := tls.Config{
+					Certificates: []tls.Certificate{serverCert},
+					NextProtos:   []string{"h2"},
+				}
+				_, _, err = credentials.NewTLS(&serverCfg).ServerHandshake(conn)
+				if gotErr := (err != nil); gotErr != tc.wantErr {
+					t.Errorf("ServerHandshake returned unexpected error: got=%v, want=%t", err, tc.wantErr)
+				}
+				close(errCh)
+			}()
+
+			serverAddr := listener.Addr().String()
+			clientCfg := &tls.Config{
+				Certificates: []tls.Certificate{serverCert},
+				NextProtos:   []string{}, // Empty list indicates ALPN is disabled.
+				RootCAs:      certPool,
+				ServerName:   serverName,
+			}
+			conn, err := tls.Dial("tcp", serverAddr, clientCfg)
+			if err != nil {
+				t.Fatalf("tls.Dial(%s) failed: %v", serverAddr, err)
+			}
+			defer conn.Close()
+
+			if err := <-errCh; err != nil {
+				t.Fatalf("Unexpected server error: %v", err)
 			}
 		})
 	}

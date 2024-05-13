@@ -151,8 +151,20 @@ func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error)
 		conn.Close()
 		return nil, nil, err
 	}
+	cs := conn.ConnectionState()
+    // The negotiated application protocol can be empty only if the client doesn't 
+    // support ALPN. In such cases, we can close the connection since ALPN is required
+    // for using HTTP/2 over TLS.
+	if cs.NegotiatedProtocol == "" {
+		if envconfig.EnforceALPNEnabled {
+			conn.Close()
+			return nil, nil, fmt.Errorf("credentials: cannot check peer: missing selected ALPN property")
+		} else if logger.V(2) {
+			logger.Info("Allowing TLS connection from client with ALPN disabled. TLS connections with ALPN disabled will be disallowed in future grpc-go releases")
+		}
+	}
 	tlsInfo := TLSInfo{
-		State: conn.ConnectionState(),
+		State: cs,
 		CommonAuthInfo: CommonAuthInfo{
 			SecurityLevel: PrivacyAndIntegrity,
 		},
