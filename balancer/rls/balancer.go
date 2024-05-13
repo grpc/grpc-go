@@ -74,9 +74,10 @@ var (
 
 	// Following functions are no-ops in actual code, but can be overridden in
 	// tests to give tests visibility into exactly when certain events happen.
-	clientConnUpdateHook = func() {}
-	dataCachePurgeHook   = func() {}
-	resetBackoffHook     = func() {}
+	clientConnUpdateHook         = func() {}
+	dataCachePurgeHook           = func() {}
+	resetBackoffHook             = func() {}
+	entryWithValidBackoffEvicted = func() {}
 )
 
 func init() {
@@ -297,13 +298,19 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	if resizeCache {
 		// If the new config changes reduces the size of the data cache, we
 		// might have to evict entries to get the cache size down to the newly
-		// specified size.
+		// specified size. If we do evict an entry with valid backoff timer,
+		// the new picker needs to be sent to the channel to re-process any
+		// RPCs queued as a result of this backoff timer.
 		//
 		// And we cannot do this operation above (where we compute the
 		// `resizeCache` boolean) because `cacheMu` needs to be grabbed before
 		// `stateMu` if we are to hold both locks at the same time.
 		b.cacheMu.Lock()
-		b.dataCache.resize(newCfg.cacheSizeBytes)
+		evicted := b.dataCache.resize(newCfg.cacheSizeBytes)
+		if evicted {
+			b.sendNewPickerLocked()
+			entryWithValidBackoffEvicted()
+		}
 		b.cacheMu.Unlock()
 	}
 	return nil
