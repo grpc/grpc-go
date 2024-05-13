@@ -43,9 +43,9 @@ func (s *subBalancerState) String() string {
 }
 
 type balancerStateAggregator struct {
-	cc      balancer.ClientConn
-	logger  *grpclog.PrefixLogger
-	csEvltr *balancer.ConnectivityStateEvaluator
+	cc     balancer.ClientConn
+	logger *grpclog.PrefixLogger
+	csEval *balancer.ConnectivityStateEvaluator
 
 	mu sync.Mutex
 	// This field is used to ensure that no updates are forwarded to the parent
@@ -65,7 +65,7 @@ func newBalancerStateAggregator(cc balancer.ClientConn, logger *grpclog.PrefixLo
 	return &balancerStateAggregator{
 		cc:              cc,
 		logger:          logger,
-		csEvltr:         &balancer.ConnectivityStateEvaluator{},
+		csEval:          &balancer.ConnectivityStateEvaluator{},
 		idToPickerState: make(map[string]*subBalancerState),
 	}
 }
@@ -93,7 +93,7 @@ func (bsa *balancerStateAggregator) add(id string) {
 		},
 		stateToAggregate: connectivity.Connecting,
 	}
-	bsa.csEvltr.RecordTransition(connectivity.Shutdown, connectivity.Connecting)
+	bsa.csEval.RecordTransition(connectivity.Shutdown, connectivity.Connecting)
 	bsa.buildAndUpdateLocked()
 }
 
@@ -111,7 +111,7 @@ func (bsa *balancerStateAggregator) remove(id string) {
 	// csEvltr to remove the previous state for any aggregated state
 	// evaluations. Transitions to and from connectivity.Shutdown are ignored
 	// by csEvltr.
-	bsa.csEvltr.RecordTransition(bsa.idToPickerState[id].stateToAggregate, connectivity.Shutdown)
+	bsa.csEval.RecordTransition(bsa.idToPickerState[id].stateToAggregate, connectivity.Shutdown)
 	// Remove id and picker from picker map. This also results in future updates
 	// for this ID to be ignored.
 	delete(bsa.idToPickerState, id)
@@ -159,7 +159,7 @@ func (bsa *balancerStateAggregator) UpdateState(id string, state balancer.State)
 		// update the state, to prevent the aggregated state from being always
 		// CONNECTING. Otherwise, stateToAggregate is the same as
 		// state.ConnectivityState.
-		bsa.csEvltr.RecordTransition(pickerSt.stateToAggregate, state.ConnectivityState)
+		bsa.csEval.RecordTransition(pickerSt.stateToAggregate, state.ConnectivityState)
 		pickerSt.stateToAggregate = state.ConnectivityState
 	}
 	pickerSt.state = state
@@ -190,7 +190,7 @@ func (bsa *balancerStateAggregator) buildLocked() balancer.State {
 	// or TransientFailure.
 	bsa.logger.Infof("Child pickers: %+v", bsa.idToPickerState)
 	return balancer.State{
-		ConnectivityState: bsa.csEvltr.CurrentState(),
+		ConnectivityState: bsa.csEval.CurrentState(),
 		Picker:            newPickerGroup(bsa.idToPickerState),
 	}
 }
