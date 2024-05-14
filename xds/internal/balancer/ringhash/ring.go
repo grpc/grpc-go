@@ -122,12 +122,13 @@ func newRing(subConns *resolver.AddressMap, minRingSize, maxRingSize uint64, log
 // Must be called with a non-empty subConns map.
 func normalizeWeights(subConns *resolver.AddressMap) ([]subConnWithWeight, float64) {
 	var weightSum uint32
-	for _, a := range subConns.Values() {
+	scVals := subConns.Values()
+	for _, a := range scVals {
 		weightSum += a.(*subConn).weight
 	}
-	ret := make([]subConnWithWeight, 0, len(subConns.Keys()))
+	ret := make([]subConnWithWeight, 0, subConns.Len())
 	min := 1.0
-	for _, a := range subConns.Values() {
+	for _, a := range scVals {
 		scInfo := a.(*subConn)
 		// (*subConn).weight returns 1 if the weight attribute is not found on
 		// the address. And since this function is guaranteed to be called with
