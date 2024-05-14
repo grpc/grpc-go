@@ -800,7 +800,7 @@ func (s) TestClientSendsAGoAway(t *testing.T) {
 		for {
 			f, err := ct.fr.ReadFrame()
 			if err != nil {
-				t.Logf("error reading frame: %v", err)
+				errCh <- fmt.Errorf("error reading frame: %v", err)
 				return
 			}
 			switch fr := f.(type) {
