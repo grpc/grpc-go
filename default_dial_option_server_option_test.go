@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -72,6 +73,29 @@ func (s) TestDisableGlobalOptions(t *testing.T) {
 		t.Fatalf("Dialing received unexpected error: %v, want error containing \"%v\"", err, noTSecStr)
 	}
 	internal.ClearGlobalDialOptions()
+}
+
+type testLateApplyDialOption struct{}
+
+func (do *testLateApplyDialOption) DialOption(parsedTarget url.URL) DialOption {
+	if parsedTarget.Scheme == "passthrough" {
+		return WithTransportCredentials(insecure.NewCredentials()) // credentials provided, should pass NewClient.
+	}
+	return WithReadBufferSize(10) // no credentials, should fail NewClient
+}
+
+func (s) TestGlobalLateApplyDialOption(t *testing.T) {
+	internal.AddGlobalLateApplyDialOptions.(func(opt ...LateApplyDialOption))(&testLateApplyDialOption{}) // Do I need a clear?
+	noTSecStr := "no transport security set"
+	if _, err := NewClient("fake"); !strings.Contains(fmt.Sprint(err), noTSecStr) {
+		t.Fatalf("Dialing received unexpected error: %v, want error containing \"%v\"", err, noTSecStr)
+	}
+	cc, err := NewClient("passthrough:///nice")
+	if err != nil {
+		t.Fatalf("Dialing with insecure credentials failed: %v", err)
+	}
+	defer cc.Close()
+	internal.ClearGlobalLateApplyDialOptions()
 }
 
 func (s) TestAddGlobalServerOptions(t *testing.T) {

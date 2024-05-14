@@ -21,6 +21,7 @@ package grpc
 import (
 	"context"
 	"net"
+	"net/url"
 	"time"
 
 	"google.golang.org/grpc/backoff"
@@ -42,6 +43,12 @@ func init() {
 	}
 	internal.ClearGlobalDialOptions = func() {
 		globalDialOptions = nil
+	}
+	internal.AddGlobalLateApplyDialOptions = func(opt ...LateApplyDialOption) {
+		globalLateApplyDialOptions = append(globalLateApplyDialOptions, opt...)
+	}
+	internal.ClearGlobalLateApplyDialOptions = func() {
+		globalLateApplyDialOptions = nil
 	}
 	internal.WithBinaryLogger = withBinaryLogger
 	internal.JoinDialOptions = newJoinDialOption
@@ -88,6 +95,14 @@ type DialOption interface {
 }
 
 var globalDialOptions []DialOption
+
+// LateApplyDialOption takes a parsed target and returns a dial option to apply.
+type LateApplyDialOption interface {
+	// DialOption returns a Dial Option to apply.
+	DialOption(parsedTarget url.URL) DialOption
+}
+
+var globalLateApplyDialOptions []LateApplyDialOption
 
 // EmptyDialOption does not alter the dial configuration. It can be embedded in
 // another structure to build custom dial options.

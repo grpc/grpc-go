@@ -106,6 +106,14 @@ var (
 	// This is used in the 1.0 release of gcp/observability, and thus must not be
 	// deleted or changed.
 	ClearGlobalDialOptions func()
+
+	// AddGlobalLateApplyDialOptions adds a slice of lateApplyDialOptions that
+	// will be configured for newly created ClientConns.
+	AddGlobalLateApplyDialOptions any // func (opt ...lateApplyDialOption)
+	// ClearGlobalLateApplyDialOptions clears the slice of global late apply
+	// dial options.
+	ClearGlobalLateApplyDialOptions func()
+
 	// JoinDialOptions combines the dial options passed as arguments into a
 	// single dial option.
 	JoinDialOptions any // func(...grpc.DialOption) grpc.DialOption

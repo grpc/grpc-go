@@ -152,6 +152,25 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	for _, opt := range opts {
 		opt.apply(&cc.dopts)
 	}
+
+	// Register ClientConn with channelz.
+	cc.channelzRegistration(target)
+	// TODO: Ideally it should be impossible to error from this function after
+	// channelz registration.  This will require removing some channelz logs
+	// from the following functions that can error.  Errors can be returned to
+	// the user, and successful logs can be emitted here, after the checks have
+	// passed and channelz is subsequently registered.
+
+	// Determine the resolver to use.
+	if err := cc.parseTargetAndFindResolver(); err != nil {
+		channelz.RemoveEntry(cc.channelz.ID)
+		return nil, err
+	}
+
+	for _, lateApplyOpt := range globalLateApplyDialOptions {
+		lateApplyOpt.DialOption(cc.parsedTarget.URL).apply(&cc.dopts)
+	}
+
 	chainUnaryClientInterceptors(cc)
 	chainStreamClientInterceptors(cc)
 
@@ -168,20 +187,6 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	}
 	cc.mkp = cc.dopts.copts.KeepaliveParams
 
-	// Register ClientConn with channelz.
-	cc.channelzRegistration(target)
-
-	// TODO: Ideally it should be impossible to error from this function after
-	// channelz registration.  This will require removing some channelz logs
-	// from the following functions that can error.  Errors can be returned to
-	// the user, and successful logs can be emitted here, after the checks have
-	// passed and channelz is subsequently registered.
-
-	// Determine the resolver to use.
-	if err := cc.parseTargetAndFindResolver(); err != nil {
-		channelz.RemoveEntry(cc.channelz.ID)
-		return nil, err
-	}
 	if err = cc.determineAuthority(); err != nil {
 		channelz.RemoveEntry(cc.channelz.ID)
 		return nil, err
