@@ -16,9 +16,15 @@
  *
  */
 
-// Package advancedtls is a utility library containing functions to construct
-// credentials.TransportCredentials that can perform credential reloading and
-// custom verification check.
+// Package advancedtls provides gRPC transport credentials that allow easy
+// configuration of advanced TLS features. The APIs here give the user more
+// customizable control to fit their security landscape, thus the "advanced"
+// moniker. This package provides both interfaces and generally useful
+// implementations of those interfaces, for example periodic credential
+// reloading, support for certificate revocation lists, and customizable
+// certificate verification behaviors. If the provided implementations do not
+// fit a given use case, a custom implementation of the interface can be
+// injected.
 package advancedtls
 
 import (
@@ -119,8 +125,9 @@ type GetRootCAsResults = RootCertificates
 
 // RootCertificateOptions contains options to obtain root trust certificates
 // for both the client and the server.
-// At most one option could be set. If none of them are set, we
-// use the system default trust certificates.
+// At most one field should be set. If none of them are set, we use the system
+// default trust certificates. Setting more than one field will result in
+// undefined behavior.
 type RootCertificateOptions struct {
 	// If RootCertificates is set, it will be used every time when verifying
 	// the peer certificates, without performing root certificate reloading.
@@ -153,18 +160,18 @@ func (o RootCertificateOptions) nonNilFieldCount() int {
 
 // IdentityCertificateOptions contains options to obtain identity certificates
 // for both the client and the server.
-// At most one option could be set.
+// At most one field should be set. Setting more than one field will result in undefined behavior.
 type IdentityCertificateOptions struct {
 	// If Certificates is set, it will be used every time when needed to present
-	//identity certificates, without performing identity certificate reloading.
+	// identity certificates, without performing identity certificate reloading.
 	Certificates []tls.Certificate
 	// If GetIdentityCertificatesForClient is set, it will be invoked to obtain
 	// identity certs for every new connection.
-	// This field MUST be set on client side.
+	// This field is only relevant when set on the client side.
 	GetIdentityCertificatesForClient func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 	// If GetIdentityCertificatesForServer is set, it will be invoked to obtain
 	// identity certs for every new connection.
-	// This field MUST be set on server side.
+	// This field is only relevant when set on the server side.
 	GetIdentityCertificatesForServer func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 	// If IdentityProvider is set, we will use the identity certs from the
 	// Provider's KeyMaterial() call in the new connections. The Provider must
