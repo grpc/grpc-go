@@ -556,6 +556,11 @@ func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 //  1. does not have a good support on root cert reloading.
 //  2. will ignore basic certificate check when setting InsecureSkipVerify
 //     to true.
+//
+// peerVerifiedChains(output param): verified chain of certs from leaf to the
+// trust cert that the peer trusts.
+//  1. For server it is, client certs + Root ca that the server trusts
+//  2. For client it is, server certs + Root ca that the client trusts
 func buildVerifyFunc(c *advancedTLSCreds,
 	serverName string,
 	rawConn net.Conn,
@@ -637,7 +642,9 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				VerifiedChains: chains,
 				Leaf:           leafCert,
 			})
-			return err
+			if err != nil {
+				return err
+			}
 		}
 		*peerVerifiedChains = chains
 		return nil
