@@ -909,7 +909,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					cert, _ := test.clientGetCert(&tls.CertificateRequestInfo{})
 					clientCert = cert
 				} else if test.clientIdentityProvider != nil {
-					km, _ := test.clientIdentityProvider.KeyMaterial(nil)
+					km, _ := test.clientIdentityProvider.KeyMaterial(context.TODO())
 					clientCert = &km.Certs[0]
 				}
 				if !bytes.Equal((*serverVerifiedChains[0][0]).Raw, clientCert.Certificate[0]) {
@@ -923,7 +923,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					result, _ := test.serverGetRoot(&GetRootCAsParams{})
 					serverRoot = result.TrustCerts
 				} else if test.serverRootProvider != nil {
-					km, _ := test.serverRootProvider.KeyMaterial(nil)
+					km, _ := test.serverRootProvider.KeyMaterial(context.TODO())
 					serverRoot = km.Roots
 				}
 				serverVerifiedChainsCp := x509.NewCertPool()
@@ -944,7 +944,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					cert, _ := test.serverGetCert(&tls.ClientHelloInfo{})
 					serverCert = cert[0]
 				} else if test.serverIdentityProvider != nil {
-					km, _ := test.serverIdentityProvider.KeyMaterial(nil)
+					km, _ := test.serverIdentityProvider.KeyMaterial(context.TODO())
 					serverCert = &km.Certs[0]
 				}
 				if !bytes.Equal((*clientVerifiedChains[0][0]).Raw, serverCert.Certificate[0]) {
@@ -958,7 +958,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					result, _ := test.clientGetRoot(&GetRootCAsParams{})
 					clientRoot = result.TrustCerts
 				} else if test.clientRootProvider != nil {
-					km, _ := test.clientRootProvider.KeyMaterial(nil)
+					km, _ := test.clientRootProvider.KeyMaterial(context.TODO())
 					clientRoot = km.Roots
 				}
 				clientVerifiedChainsCp := x509.NewCertPool()
