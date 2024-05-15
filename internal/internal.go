@@ -107,12 +107,12 @@ var (
 	// deleted or changed.
 	ClearGlobalDialOptions func()
 
-	// AddGlobalLateApplyDialOptions adds a slice of lateApplyDialOptions that
-	// will be configured for newly created ClientConns.
-	AddGlobalLateApplyDialOptions any // func (opt ...lateApplyDialOption)
-	// ClearGlobalLateApplyDialOptions clears the slice of global late apply
+	// AddGlobalPerTargetDialOptions adds a PerTargetDialOption that will be
+	// configured for newly created ClientConns.
+	AddGlobalPerTargetDialOptions any // func (opt any)
+	// ClearGlobalPerTargetDialOptions clears the slice of global late apply
 	// dial options.
-	ClearGlobalLateApplyDialOptions func()
+	ClearGlobalPerTargetDialOptions func()
 
 	// JoinDialOptions combines the dial options passed as arguments into a
 	// single dial option.
@@ -134,7 +134,8 @@ var (
 	// deleted or changed.
 	BinaryLogger any // func(binarylog.Logger) grpc.ServerOption
 
-	// SubscribeToConnectivityStateChanges adds a grpcsync.Subscriber to a provided grpc.ClientConn
+	// SubscribeToConnectivityStateChanges adds a grpcsync.Subscriber to a
+	// provided grpc.ClientConn.
 	SubscribeToConnectivityStateChanges any // func(*grpc.ClientConn, grpcsync.Subscriber)
 
 	// NewXDSResolverWithConfigForTesting creates a new xds resolver builder using
@@ -203,14 +204,17 @@ var (
 	// resource name.
 	TriggerXDSResourceNameNotFoundClient any // func(string, string) error
 
-	// FromOutgoingContextRaw returns the un-merged, intermediary contents of metadata.rawMD.
+	// FromOutgoingContextRaw returns the un-merged, intermediary contents of
+	// metadata.rawMD.
 	FromOutgoingContextRaw any // func(context.Context) (metadata.MD, [][]string, bool)
 
-	// UserSetDefaultScheme is set to true if the user has overridden the default resolver scheme.
+	// UserSetDefaultScheme is set to true if the user has overridden the
+	// default resolver scheme.
 	UserSetDefaultScheme bool = false
 )
 
-// HealthChecker defines the signature of the client-side LB channel health checking function.
+// HealthChecker defines the signature of the client-side LB channel health
+// checking function.
 //
 // The implementation is expected to create a health checking RPC stream by
 // calling newStream(), watch for the health status of serviceName, and report

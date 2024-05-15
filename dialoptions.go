@@ -44,11 +44,13 @@ func init() {
 	internal.ClearGlobalDialOptions = func() {
 		globalDialOptions = nil
 	}
-	internal.AddGlobalLateApplyDialOptions = func(opt ...LateApplyDialOption) {
-		globalLateApplyDialOptions = append(globalLateApplyDialOptions, opt...)
+	internal.AddGlobalPerTargetDialOptions = func(opt any) {
+		if ptdo, ok := opt.(perTargetDialOption); ok {
+			globalPerTargetDialOptions = append(globalPerTargetDialOptions, ptdo)
+		}
 	}
-	internal.ClearGlobalLateApplyDialOptions = func() {
-		globalLateApplyDialOptions = nil
+	internal.ClearGlobalPerTargetDialOptions = func() {
+		globalPerTargetDialOptions = nil
 	}
 	internal.WithBinaryLogger = withBinaryLogger
 	internal.JoinDialOptions = newJoinDialOption
@@ -96,13 +98,16 @@ type DialOption interface {
 
 var globalDialOptions []DialOption
 
-// LateApplyDialOption takes a parsed target and returns a dial option to apply.
-type LateApplyDialOption interface {
+// perTargetDialOption takes a parsed target and returns a dial option to apply.
+//
+// This gets called after NewClient() parses the target, and allows per target
+// configuration set through a returned DialOption.
+type perTargetDialOption interface {
 	// DialOption returns a Dial Option to apply.
 	DialOption(parsedTarget url.URL) DialOption
 }
 
-var globalLateApplyDialOptions []LateApplyDialOption
+var globalPerTargetDialOptions []perTargetDialOption
 
 // EmptyDialOption does not alter the dial configuration. It can be embedded in
 // another structure to build custom dial options.

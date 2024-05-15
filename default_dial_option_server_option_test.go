@@ -75,19 +75,24 @@ func (s) TestDisableGlobalOptions(t *testing.T) {
 	internal.ClearGlobalDialOptions()
 }
 
-type testLateApplyDialOption struct{}
+type testPerTargetDialOption struct{}
 
-func (do *testLateApplyDialOption) DialOption(parsedTarget url.URL) DialOption {
+func (do *testPerTargetDialOption) DialOption(parsedTarget url.URL) DialOption {
 	if parsedTarget.Scheme == "passthrough" {
 		return WithTransportCredentials(insecure.NewCredentials()) // credentials provided, should pass NewClient.
 	}
-	return WithReadBufferSize(10) // no credentials, should fail NewClient
+	return EmptyDialOption{} // no credentials, should fail NewClient
 }
 
-func (s) TestGlobalLateApplyDialOption(t *testing.T) {
-	internal.AddGlobalLateApplyDialOptions.(func(opt ...LateApplyDialOption))(&testLateApplyDialOption{}) // Do I need a clear?
+// TestGlobalPerTargetDialOption configures a global per target dial option that
+// produces transport credentials for channels using "passthrough" scheme.
+// Channels that use the passthrough scheme should this be successfully created
+// due to picking up transport credentials, whereas other channels should fail
+// at creation due to not having transport credentials.
+func (s) TestGlobalPerTargetDialOption(t *testing.T) {
+	internal.AddGlobalPerTargetDialOptions.(func(opt any))(&testPerTargetDialOption{})
 	noTSecStr := "no transport security set"
-	if _, err := NewClient("fake"); !strings.Contains(fmt.Sprint(err), noTSecStr) {
+	if _, err := NewClient("dns:///fake"); !strings.Contains(fmt.Sprint(err), noTSecStr) {
 		t.Fatalf("Dialing received unexpected error: %v, want error containing \"%v\"", err, noTSecStr)
 	}
 	cc, err := NewClient("passthrough:///nice")
@@ -95,7 +100,7 @@ func (s) TestGlobalLateApplyDialOption(t *testing.T) {
 		t.Fatalf("Dialing with insecure credentials failed: %v", err)
 	}
 	defer cc.Close()
-	internal.ClearGlobalLateApplyDialOptions()
+	internal.ClearGlobalPerTargetDialOptions()
 }
 
 func (s) TestAddGlobalServerOptions(t *testing.T) {

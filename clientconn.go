@@ -153,22 +153,13 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 		opt.apply(&cc.dopts)
 	}
 
-	// Register ClientConn with channelz.
-	cc.channelzRegistration(target)
-	// TODO: Ideally it should be impossible to error from this function after
-	// channelz registration.  This will require removing some channelz logs
-	// from the following functions that can error.  Errors can be returned to
-	// the user, and successful logs can be emitted here, after the checks have
-	// passed and channelz is subsequently registered.
-
 	// Determine the resolver to use.
 	if err := cc.parseTargetAndFindResolver(); err != nil {
-		channelz.RemoveEntry(cc.channelz.ID)
 		return nil, err
 	}
 
-	for _, lateApplyOpt := range globalLateApplyDialOptions {
-		lateApplyOpt.DialOption(cc.parsedTarget.URL).apply(&cc.dopts)
+	for _, opt := range globalPerTargetDialOptions {
+		opt.DialOption(cc.parsedTarget.URL).apply(&cc.dopts)
 	}
 
 	chainUnaryClientInterceptors(cc)
@@ -188,9 +179,12 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	cc.mkp = cc.dopts.copts.KeepaliveParams
 
 	if err = cc.determineAuthority(); err != nil {
-		channelz.RemoveEntry(cc.channelz.ID)
 		return nil, err
 	}
+
+	// Register ClientConn with channelz.
+	cc.channelzRegistration(target)
+	channelz.Infof(logger, cc.channelz, "Channel authority set to %q", cc.authority)
 
 	cc.csMgr = newConnectivityStateManager(cc.ctx, cc.channelz)
 	cc.pickerWrapper = newPickerWrapper(cc.dopts.copts.StatsHandlers)
@@ -1686,14 +1680,14 @@ func (cc *ClientConn) connectionError() error {
 //
 // Doesn't grab cc.mu as this method is expected to be called only at Dial time.
 func (cc *ClientConn) parseTargetAndFindResolver() error {
-	channelz.Infof(logger, cc.channelz, "original dial target is: %q", cc.target)
+	logger.Infof("original dial target is: %q", cc.target)
 
 	var rb resolver.Builder
 	parsedTarget, err := parseTarget(cc.target)
 	if err != nil {
-		channelz.Infof(logger, cc.channelz, "dial target %q parse failed: %v", cc.target, err)
+		logger.Infof("dial target %q parse failed: %v", cc.target, err)
 	} else {
-		channelz.Infof(logger, cc.channelz, "parsed dial target is: %#v", parsedTarget)
+		logger.Infof("parsed dial target is: %#v", parsedTarget)
 		rb = cc.getResolver(parsedTarget.URL.Scheme)
 		if rb != nil {
 			cc.parsedTarget = parsedTarget
@@ -1712,15 +1706,15 @@ func (cc *ClientConn) parseTargetAndFindResolver() error {
 		defScheme = resolver.GetDefaultScheme()
 	}
 
-	channelz.Infof(logger, cc.channelz, "fallback to scheme %q", defScheme)
+	logger.Infof("fallback to scheme %q", defScheme)
 	canonicalTarget := defScheme + ":///" + cc.target
 
 	parsedTarget, err = parseTarget(canonicalTarget)
 	if err != nil {
-		channelz.Infof(logger, cc.channelz, "dial target %q parse failed: %v", canonicalTarget, err)
+		logger.Infof("dial target %q parse failed: %v", canonicalTarget, err)
 		return err
 	}
-	channelz.Infof(logger, cc.channelz, "parsed dial target is: %+v", parsedTarget)
+	logger.Infof("parsed dial target is: %+v", parsedTarget)
 	rb = cc.getResolver(parsedTarget.URL.Scheme)
 	if rb == nil {
 		return fmt.Errorf("could not get resolver for default scheme: %q", parsedTarget.URL.Scheme)
@@ -1843,6 +1837,5 @@ func (cc *ClientConn) determineAuthority() error {
 	} else {
 		cc.authority = encodeAuthority(endpoint)
 	}
-	channelz.Infof(logger, cc.channelz, "Channel authority set to %q", cc.authority)
 	return nil
 }
