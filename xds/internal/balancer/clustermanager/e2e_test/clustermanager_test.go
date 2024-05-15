@@ -257,12 +257,10 @@ func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 	// Make a UnaryCall RPC and verify that it is routed to cluster2, and the
 	// new endpoints resource.
 	for ; ctx.Err() != nil; <-time.After(defaultTestShortTimeout) {
-		if err := makeUnaryCallRPCAndVerifyPeer(ctx, client, server3.Address); err != nil {
-			t.Log(err)
+		if err := makeUnaryCallRPCAndVerifyPeer(ctx, client, server3.Address); err == nil {
+			break
 		}
-		// If we get here, it means that the RPC was routed to endpoint3, and
-		// that means that the new pickfirst policy is active.
-		break
+		t.Log(err)
 	}
 	if ctx.Err() != nil {
 		t.Fatal("Timeout when waiting for RPCs to cluster2 to be routed to the new endpoints resource")
@@ -312,14 +310,11 @@ func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 	// Make a UnaryCall RPC and verify that it starts to fail.
 	for ; ctx.Err() != nil; <-time.After(defaultTestShortTimeout) {
 		_, err := client.UnaryCall(ctx, &testpb.SimpleRequest{})
-		if got, want := status.Code(err), codes.Unavailable; got != want {
-			t.Logf("UnaryCall() returned code: %v, want %v", got, want)
-			continue
+		got := status.Code(err)
+		if got == codes.Unavailable {
+			break
 		}
-		// If we get here, it means that the RPC failed with UNAVAILABLE, and
-		// that should be due to the fact that the new cluster resource has an
-		// unsupported LB policy.
-		break
+		t.Logf("UnaryCall() returned code: %v, want %v", got, codes.Unavailable)
 	}
 	if ctx.Err() != nil {
 		t.Fatal("Timeout when waiting for RPCs to cluster2 to start failing")
