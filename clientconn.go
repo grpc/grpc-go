@@ -197,7 +197,7 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 
 // Dial calls DialContext(context.Background(), target, opts...).
 //
-// Deprecated: use NewClient instead.  Will be supported throughout 1.x.
+// This function is not recommend any longer; use NewClient instead.  Will be supported throughout 1.x.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
 }
@@ -212,7 +212,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 // to most users, but could matter to legacy users that specify a custom dialer
 // and expect it to receive the target string directly.
 //
-// Deprecated: use NewClient instead.  Will be supported throughout 1.x.
+// This function is not recommend any longer; use NewClient instead.  Will be supported throughout 1.x.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	// At the end of this method, we kick the channel out of idle, rather than
 	// waiting for the first rpc.
