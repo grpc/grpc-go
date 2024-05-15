@@ -274,8 +274,7 @@ func (s) TestTLS_DisabledALPNClient(t *testing.T) {
 				t.Fatalf("Error starting TLS server: %v", err)
 			}
 
-			errCh := make(chan error)
-
+			errCh := make(chan error, 1)
 			go func() {
 				conn, err := listener.Accept()
 				if err != nil {
@@ -309,16 +308,13 @@ func (s) TestTLS_DisabledALPNClient(t *testing.T) {
 				t.Errorf("ClientHandshake returned unexpected error: got=%v, want=%t", err, tc.wantErr)
 			}
 
-			err = nil
 			select {
-			case err = <-errCh:
-				break
+			case err := <-errCh:
+				if err != nil {
+					t.Fatalf("Unexpected error received from server: %v", err)
+				}
 			case <-ctx.Done():
-				err = ctx.Err()
-			}
-
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
+				t.Fatalf("Timeout waiting for error from server")
 			}
 		})
 	}
@@ -357,7 +353,6 @@ func (s) TestTLS_DisabledALPNServer(t *testing.T) {
 			}
 
 			errCh := make(chan error)
-
 			go func() {
 				conn, err := listener.Accept()
 				if err != nil {
@@ -390,8 +385,11 @@ func (s) TestTLS_DisabledALPNServer(t *testing.T) {
 			}
 			defer conn.Close()
 
-			if err := <-errCh; err != nil {
-				t.Fatalf("Unexpected server error: %v", err)
+			select {
+			case err := <-errCh:
+				if err != nil {
+					t.Fatalf("Unexpected server error: %v", err)
+				}
 			}
 		})
 	}
