@@ -352,12 +352,11 @@ func (s) TestTLS_DisabledALPNServer(t *testing.T) {
 				t.Fatalf("Error starting server: %v", err)
 			}
 
-			errCh := make(chan error)
+			errCh := make(chan error, 1)
 			go func() {
 				conn, err := listener.Accept()
 				if err != nil {
 					errCh <- fmt.Errorf("listener.Accept returned error: %v", err)
-					close(errCh)
 					return
 				}
 				defer conn.Close()
