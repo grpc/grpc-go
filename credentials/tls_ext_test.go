@@ -385,8 +385,13 @@ func (s) TestTLS_DisabledALPNServer(t *testing.T) {
 			}
 			defer conn.Close()
 
-			if err := <-errCh; err != nil {
-				t.Fatalf("Unexpected server error: %v", err)
+			select {
+			case <-time.After(defaultTestTimeout):
+				t.Fatal("Timed out waiting for completion")
+			case err := <-errCh:
+				if err != nil {
+					t.Fatalf("Unexpected server error: %v", err)
+				}
 			}
 		})
 	}
