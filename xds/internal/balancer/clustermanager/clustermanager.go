@@ -77,7 +77,6 @@ type bal struct {
 }
 
 func (b *bal) setErrorPickerForChild(childName string, err error) {
-	b.logger.Warningf("%v", err)
 	b.stateAggregator.UpdateState(childName, balancer.State{
 		ConnectivityState: connectivity.TransientFailure,
 		Picker:            base.NewErrPicker(err),
@@ -100,6 +99,7 @@ func (b *bal) updateChildren(s balancer.ClientConnState, newConfig *lbConfig) er
 
 	var retErr error
 	for childName, childCfg := range newConfig.Children {
+		lbCfg := childCfg.ChildPolicy.Config
 		if _, ok := b.children[childName]; !ok {
 			// Add new sub-balancers to the aggregator and balancergroup.
 			b.stateAggregator.add(childName)
@@ -115,50 +115,42 @@ func (b *bal) updateChildren(s balancer.ClientConnState, newConfig *lbConfig) er
 			// continue to succeed.
 			newPolicyName, oldPolicyName := childCfg.ChildPolicy.Name, b.children[childName].ChildPolicy.Name
 			if newPolicyName != oldPolicyName {
-				newCfg, err := childCfg.ChildPolicy.MarshalJSON()
+				var err error
+				var cfgJSON []byte
+				cfgJSON, err = childCfg.ChildPolicy.MarshalJSON()
 				if err != nil {
 					retErr = fmt.Errorf("failed to JSON marshal load balancing policy for child %q: %v", childName, err)
 					b.setErrorPickerForChild(childName, retErr)
 					continue
 				}
-				lbCfg, err := balancergroup.ParseConfig(newCfg)
+				// This overwrites lbCfg to be in the format expected by the
+				// gracefulswitch balancer. So, when this config is pushed to
+				// the child (below), it will result in a graceful switch to the
+				// new child policy.
+				lbCfg, err = balancergroup.ParseConfig(cfgJSON)
 				if err != nil {
 					retErr = fmt.Errorf("failed to parse load balancing policy for child %q: %v", childName, err)
 					b.setErrorPickerForChild(childName, retErr)
 					continue
 				}
-				if err := b.bg.UpdateClientConnState(childName, balancer.ClientConnState{
-					ResolverState: resolver.State{
-						Addresses:     addressesSplit[childName],
-						ServiceConfig: s.ResolverState.ServiceConfig,
-						Attributes:    s.ResolverState.Attributes,
-					},
-					BalancerConfig: lbCfg,
-				}); err != nil {
-					retErr = fmt.Errorf("failed to update load balancing policy for child %q from %q to %q: %v", childName, oldPolicyName, newPolicyName, err)
-					b.setErrorPickerForChild(childName, retErr)
-					continue
-				}
-				// Picker update is sent to the parent ClientConn only after the
-				// new child policy returns a picker. So, there is no need to
-				// set needUpdateStateOnResume to true here.
-				continue
 			}
 		}
 
-		// We get here for new sub-balancers and existing ones whose child
-		// policy type did not change and push the new configuration to them.
 		if err := b.bg.UpdateClientConnState(childName, balancer.ClientConnState{
 			ResolverState: resolver.State{
 				Addresses:     addressesSplit[childName],
 				ServiceConfig: s.ResolverState.ServiceConfig,
 				Attributes:    s.ResolverState.Attributes,
 			},
-			BalancerConfig: childCfg.ChildPolicy.Config,
+			BalancerConfig: lbCfg,
 		}); err != nil {
 			retErr = fmt.Errorf("failed to push new configuration %v to child %q", childCfg.ChildPolicy.Config, childName)
 			b.setErrorPickerForChild(childName, retErr)
 		}
+
+		// Picker update is sent to the parent ClientConn only after the
+		// new child policy returns a picker. So, there is no need to
+		// set needUpdateStateOnResume to true here.
 	}
 
 	b.children = newConfig.Children
