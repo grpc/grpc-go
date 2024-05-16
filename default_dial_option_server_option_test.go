@@ -41,6 +41,7 @@ func (s) TestAddGlobalDialOptions(t *testing.T) {
 	// Set and check the DialOptions
 	opts := []DialOption{WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials())}
 	internal.AddGlobalDialOptions.(func(opt ...DialOption))(opts...)
+	defer internal.ClearGlobalDialOptions()
 	for i, opt := range opts {
 		if globalDialOptions[i] != opt {
 			t.Fatalf("Unexpected global dial option at index %d: %v != %v", i, globalDialOptions[i], opt)
@@ -65,6 +66,7 @@ func (s) TestAddGlobalDialOptions(t *testing.T) {
 func (s) TestDisableGlobalOptions(t *testing.T) {
 	// Set transport credentials as a global option.
 	internal.AddGlobalDialOptions.(func(opt ...DialOption))(WithTransportCredentials(insecure.NewCredentials()))
+	defer internal.ClearGlobalDialOptions()
 	// Dial with the disable global options dial option. This dial should fail
 	// due to the global dial options with credentials not being picked up due
 	// to global options being disabled.
@@ -72,12 +74,11 @@ func (s) TestDisableGlobalOptions(t *testing.T) {
 	if _, err := Dial("fake", internal.DisableGlobalDialOptions.(func() DialOption)()); !strings.Contains(fmt.Sprint(err), noTSecStr) {
 		t.Fatalf("Dialing received unexpected error: %v, want error containing \"%v\"", err, noTSecStr)
 	}
-	internal.ClearGlobalDialOptions()
 }
 
 type testPerTargetDialOption struct{}
 
-func (do *testPerTargetDialOption) DialOption(parsedTarget url.URL) DialOption {
+func (do *testPerTargetDialOption) DialOptionForTarget(parsedTarget url.URL) DialOption {
 	if parsedTarget.Scheme == "passthrough" {
 		return WithTransportCredentials(insecure.NewCredentials()) // credentials provided, should pass NewClient.
 	}
@@ -86,11 +87,12 @@ func (do *testPerTargetDialOption) DialOption(parsedTarget url.URL) DialOption {
 
 // TestGlobalPerTargetDialOption configures a global per target dial option that
 // produces transport credentials for channels using "passthrough" scheme.
-// Channels that use the passthrough scheme should this be successfully created
-// due to picking up transport credentials, whereas other channels should fail
-// at creation due to not having transport credentials.
+// Channels that use the passthrough scheme should be successfully created due
+// to picking up transport credentials, whereas other channels should fail at
+// creation due to not having transport credentials.
 func (s) TestGlobalPerTargetDialOption(t *testing.T) {
 	internal.AddGlobalPerTargetDialOptions.(func(opt any))(&testPerTargetDialOption{})
+	defer internal.ClearGlobalPerTargetDialOptions()
 	noTSecStr := "no transport security set"
 	if _, err := NewClient("dns:///fake"); !strings.Contains(fmt.Sprint(err), noTSecStr) {
 		t.Fatalf("Dialing received unexpected error: %v, want error containing \"%v\"", err, noTSecStr)
@@ -99,8 +101,7 @@ func (s) TestGlobalPerTargetDialOption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dialing with insecure credentials failed: %v", err)
 	}
-	defer cc.Close()
-	internal.ClearGlobalPerTargetDialOptions()
+	cc.Close()
 }
 
 func (s) TestAddGlobalServerOptions(t *testing.T) {
@@ -108,6 +109,7 @@ func (s) TestAddGlobalServerOptions(t *testing.T) {
 	// Set and check the ServerOptions
 	opts := []ServerOption{Creds(insecure.NewCredentials()), MaxRecvMsgSize(maxRecvSize)}
 	internal.AddGlobalServerOptions.(func(opt ...ServerOption))(opts...)
+	defer internal.ClearGlobalServerOptions()
 	for i, opt := range opts {
 		if globalServerOptions[i] != opt {
 			t.Fatalf("Unexpected global server option at index %d: %v != %v", i, globalServerOptions[i], opt)
@@ -120,7 +122,6 @@ func (s) TestAddGlobalServerOptions(t *testing.T) {
 		t.Fatalf("Unexpected s.opts.maxReceiveMessageSize: %d != %d", s.opts.maxReceiveMessageSize, maxRecvSize)
 	}
 
-	internal.ClearGlobalServerOptions()
 	if len(globalServerOptions) != 0 {
 		t.Fatalf("Unexpected len of globalServerOptions: %d != 0", len(globalServerOptions))
 	}

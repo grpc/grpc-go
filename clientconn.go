@@ -159,7 +159,7 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	}
 
 	for _, opt := range globalPerTargetDialOptions {
-		opt.DialOption(cc.parsedTarget.URL).apply(&cc.dopts)
+		opt.DialOptionForTarget(cc.parsedTarget.URL).apply(&cc.dopts)
 	}
 
 	chainUnaryClientInterceptors(cc)
@@ -182,8 +182,10 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 		return nil, err
 	}
 
-	// Register ClientConn with channelz.
+	// Register ClientConn with channelz. Note that this is only done after
+	// channel creation cannot fail.
 	cc.channelzRegistration(target)
+	channelz.Infof(logger, cc.channelz, "parsed dial target is: %#v", cc.parsedTarget)
 	channelz.Infof(logger, cc.channelz, "Channel authority set to %q", cc.authority)
 
 	cc.csMgr = newConnectivityStateManager(cc.ctx, cc.channelz)
@@ -1684,10 +1686,7 @@ func (cc *ClientConn) parseTargetAndFindResolver() error {
 
 	var rb resolver.Builder
 	parsedTarget, err := parseTarget(cc.target)
-	if err != nil {
-		logger.Infof("dial target %q parse failed: %v", cc.target, err)
-	} else {
-		logger.Infof("parsed dial target is: %#v", parsedTarget)
+	if err == nil {
 		rb = cc.getResolver(parsedTarget.URL.Scheme)
 		if rb != nil {
 			cc.parsedTarget = parsedTarget
@@ -1706,15 +1705,12 @@ func (cc *ClientConn) parseTargetAndFindResolver() error {
 		defScheme = resolver.GetDefaultScheme()
 	}
 
-	logger.Infof("fallback to scheme %q", defScheme)
 	canonicalTarget := defScheme + ":///" + cc.target
 
 	parsedTarget, err = parseTarget(canonicalTarget)
 	if err != nil {
-		logger.Infof("dial target %q parse failed: %v", canonicalTarget, err)
 		return err
 	}
-	logger.Infof("parsed dial target is: %+v", parsedTarget)
 	rb = cc.getResolver(parsedTarget.URL.Scheme)
 	if rb == nil {
 		return fmt.Errorf("could not get resolver for default scheme: %q", parsedTarget.URL.Scheme)

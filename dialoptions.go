@@ -104,7 +104,7 @@ var globalDialOptions []DialOption
 // configuration set through a returned DialOption.
 type perTargetDialOption interface {
 	// DialOption returns a Dial Option to apply.
-	DialOption(parsedTarget url.URL) DialOption
+	DialOptionForTarget(parsedTarget url.URL) DialOption
 }
 
 var globalPerTargetDialOptions []perTargetDialOption
