@@ -62,7 +62,8 @@ func newPickerWrapper(statsHandlers []stats.Handler) *pickerWrapper {
 	return pw
 }
 
-// updatePicker is called by UpdateBalancerState. It unblocks all blocked pick.
+// updatePicker is called by UpdateState calls from the LB policy. It
+// unblocks all blocked pick.
 func (pw *pickerWrapper) updatePicker(p balancer.Picker) {
 	old := pw.pickerGen.Swap(&pickerGeneration{
 		picker:     p,
