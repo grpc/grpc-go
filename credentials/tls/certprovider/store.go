@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 )
 
 // provStore is the global singleton certificate provider store.
@@ -67,8 +68,7 @@ func (c closedProvider) Close() {
 // singleCloseWrappedProvider wraps a provider instance with a reference count
 // to properly handle multiple calls to Close.
 type singleCloseWrappedProvider struct {
-	mu       sync.RWMutex
-	provider Provider
+	provider atomic.Pointer[Provider]
 }
 
 // store is a collection of provider instances, safe for concurrent access.
@@ -96,20 +96,21 @@ func (wp *wrappedProvider) Close() {
 // Close overrides the Close method of the embedded provider to avoid release the
 // already released reference.
 func (w *singleCloseWrappedProvider) Close() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	w.provider.Close()
-	w.provider = closedProvider{}
+	newProvider := Provider(closedProvider{})
+	oldProvider := w.provider.Swap(&newProvider)
+	(*oldProvider).Close()
 }
 
 // KeyMaterial returns the key material sourced by the Provider.
 // Callers are expected to use the returned value as read-only.
 func (w *singleCloseWrappedProvider) KeyMaterial(ctx context.Context) (*KeyMaterial, error) {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
+	return (*w.provider.Load()).KeyMaterial(ctx)
+}
 
-	return w.provider.KeyMaterial(ctx)
+// withProvider set provider to wrapper.
+func (w *singleCloseWrappedProvider) withProvider(provider Provider) *singleCloseWrappedProvider {
+	w.provider.Store(&provider)
+	return w
 }
 
 // BuildableConfig wraps parsed provider configuration and functionality to
@@ -149,7 +150,7 @@ func (bc *BuildableConfig) Build(opts BuildOptions) (Provider, error) {
 	}
 	if wp, ok := provStore.providers[sk]; ok {
 		wp.refCount++
-		return &singleCloseWrappedProvider{provider: wp}, nil
+		return (&singleCloseWrappedProvider{}).withProvider(wp), nil
 	}
 
 	provider := bc.starter(opts)
@@ -163,7 +164,7 @@ func (bc *BuildableConfig) Build(opts BuildOptions) (Provider, error) {
 		store:    provStore,
 	}
 	provStore.providers[sk] = wp
-	return &singleCloseWrappedProvider{provider: wp}, nil
+	return (&singleCloseWrappedProvider{}).withProvider(wp), nil
 }
 
 // String returns the provider name and config as a colon separated string.
