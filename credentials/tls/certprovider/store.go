@@ -64,8 +64,8 @@ func (c closedProvider) KeyMaterial(ctx context.Context) (*KeyMaterial, error) {
 func (c closedProvider) Close() {
 }
 
-// singleCloseWrappedProvider wraps a provider instance with a reference count to avoid double
-// close still in use provider.
+// singleCloseWrappedProvider wraps a provider instance with a reference count
+// to properly handle multiple calls to Close.
 type singleCloseWrappedProvider struct {
 	mu       sync.RWMutex
 	provider Provider
