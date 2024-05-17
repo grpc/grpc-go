@@ -253,7 +253,7 @@ func (s) TestGetLabels(t *testing.T) {
 				md.Append(metadataExchangeKey, "extra-val")
 			}
 
-			labelsGot := cpo.GetLabels(md, nil)
+			labelsGot := cpo.GetLabels(md)
 			if diff := cmp.Diff(labelsGot, test.labelsWant); diff != "" {
 				t.Fatalf("cpo.GetLabels returned unexpected value (-got, +want): %v", diff)
 			}

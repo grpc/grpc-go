@@ -79,7 +79,7 @@ func (cpo *pluginOption) GetMetadata() metadata.MD {
 // "unknown" for labels not found. Labels returned depend on the remote type.
 // Additionally, local labels determined at initialization time are appended to
 // labels returned, in addition to the optionalLabels provided.
-func (cpo *pluginOption) GetLabels(md metadata.MD, optionalLabels map[string]string) map[string]string {
+func (cpo *pluginOption) GetLabels(md metadata.MD) map[string]string {
 	labels := map[string]string{ // Remote labels if type is unknown (i.e. unset or error processing x-envoy-peer-metadata)
 		"csm.remote_workload_type":              "unknown",
 		"csm.remote_workload_canonical_service": "unknown",
@@ -89,12 +89,6 @@ func (cpo *pluginOption) GetLabels(md metadata.MD, optionalLabels map[string]str
 		labels[k] = v
 	}
 
-	// Append the optional labels. To avoid string comparisons, assume the
-	// caller only passes in two potential xDS Optional Labels: service_name and
-	// service_namespace.
-	for k, v := range optionalLabels {
-		labels["csm." + k] = v
-	}
 	val := md.Get("x-envoy-peer-metadata")
 	// This can't happen if corresponding csm client because of proto wire
 	// format encoding, but since it is arbitrary off the wire be safe.
