@@ -107,8 +107,10 @@ func (w *singleCloseWrappedProvider) KeyMaterial(ctx context.Context) (*KeyMater
 	return (*w.provider.Load()).KeyMaterial(ctx)
 }
 
-// withProvider set provider to wrapper.
-func (w *singleCloseWrappedProvider) withProvider(provider Provider) *singleCloseWrappedProvider {
+// newSingleCloseWrappedProvider create wrapper a provider instance with a reference count
+// to properly handle multiple calls to Close.
+func newSingleCloseWrappedProvider(provider Provider) *singleCloseWrappedProvider {
+	w := &singleCloseWrappedProvider{}
 	w.provider.Store(&provider)
 	return w
 }
@@ -150,7 +152,7 @@ func (bc *BuildableConfig) Build(opts BuildOptions) (Provider, error) {
 	}
 	if wp, ok := provStore.providers[sk]; ok {
 		wp.refCount++
-		return (&singleCloseWrappedProvider{}).withProvider(wp), nil
+		return newSingleCloseWrappedProvider(wp), nil
 	}
 
 	provider := bc.starter(opts)
@@ -164,7 +166,7 @@ func (bc *BuildableConfig) Build(opts BuildOptions) (Provider, error) {
 		store:    provStore,
 	}
 	provStore.providers[sk] = wp
-	return (&singleCloseWrappedProvider{}).withProvider(wp), nil
+	return newSingleCloseWrappedProvider(wp), nil
 }
 
 // String returns the provider name and config as a colon separated string.
