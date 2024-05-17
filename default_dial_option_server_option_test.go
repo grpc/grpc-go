@@ -122,6 +122,7 @@ func (s) TestAddGlobalServerOptions(t *testing.T) {
 		t.Fatalf("Unexpected s.opts.maxReceiveMessageSize: %d != %d", s.opts.maxReceiveMessageSize, maxRecvSize)
 	}
 
+	internal.ClearGlobalServerOptions()
 	if len(globalServerOptions) != 0 {
 		t.Fatalf("Unexpected len of globalServerOptions: %d != 0", len(globalServerOptions))
 	}
