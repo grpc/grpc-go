@@ -168,7 +168,7 @@ Server side metadata sending and receiving examples are available [here](../exam
 
 ### Receiving metadata
 
-To read metadata sent by the client, the server needs to retrieve it from RPC context.
+To read metadata sent by the client, the server needs to retrieve it from RPC context using `FromIncomingContext`. Do not use `FromOutgoingContext` on server as it is for client-side only.
 If it is a unary call, the RPC handler's context can be used.
 For streaming calls, the server needs to get context from the stream.
 
