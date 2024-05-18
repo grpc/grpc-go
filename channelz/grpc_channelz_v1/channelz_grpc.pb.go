@@ -52,6 +52,9 @@ const (
 // ChannelzClient is the client API for Channelz service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Channelz is a service exposed by gRPC servers that provides detailed debug
+// information.
 type ChannelzClient interface {
 	// Gets all root channels (i.e. channels the application has directly
 	// created). This does not include subchannels nor non-top level channels.
@@ -151,6 +154,9 @@ func (c *channelzClient) GetSocket(ctx context.Context, in *GetSocketRequest, op
 // ChannelzServer is the server API for Channelz service.
 // All implementations should embed UnimplementedChannelzServer
 // for forward compatibility
+//
+// Channelz is a service exposed by gRPC servers that provides detailed debug
+// information.
 type ChannelzServer interface {
 	// Gets all root channels (i.e. channels the application has directly
 	// created). This does not include subchannels nor non-top level channels.
