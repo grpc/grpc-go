@@ -1391,7 +1391,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				LRSServerConfig: ClusterLRSServerSelf,
 				Raw:             v3ClusterAnyWithTelemetryLabelsIgnoreSome,
 				TelemetryLabels: map[string]string{
-					"service_name": "grpc-service",
+					"csm.service_name": "grpc-service",
 				},
 			},
 		},
