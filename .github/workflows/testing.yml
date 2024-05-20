@@ -66,6 +66,7 @@ jobs:
 
           - type: tests
             goversion: '1.20'
+            skipotel: true
     steps:
       # Setup the environment.
       - name: Setup GOARCH
@@ -105,8 +106,13 @@ jobs:
           cd "${GITHUB_WORKSPACE}"
           for MOD_FILE in $(find . -name 'go.mod' | grep -Ev '^\./go\.mod'); do
             pushd "$(dirname ${MOD_FILE})"
-            go test ${{ matrix.testflags }} -cpu 1,4 -timeout 2m ./...
+            # Skip OpenTelemetry module if 3 releases ago, Go OpenTelemetry only supports
+            # previous two releases.
+            if [[ ! "matrix.skipotel" ]] || [[ dirname != ./stats/opentelemetry ]]; then
+               go test ${{ matrix.testflags }} -cpu 1,4 -timeout 2m ./...
+            fi
             popd
+
           done
 
       # Non-core gRPC tests (examples, interop, etc)
