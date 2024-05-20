@@ -101,7 +101,9 @@ var globalDialOptions []DialOption
 // perTargetDialOption takes a parsed target and returns a dial option to apply.
 //
 // This gets called after NewClient() parses the target, and allows per target
-// configuration set through a returned DialOption.
+// configuration set through a returned DialOption. The DialOption will not take
+// effect if specifies a resolver builder, as that Dial Option is factored in
+// while parsing target.
 type perTargetDialOption interface {
 	// DialOption returns a Dial Option to apply.
 	DialOptionForTarget(parsedTarget url.URL) DialOption

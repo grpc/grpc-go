@@ -154,7 +154,7 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	}
 
 	// Determine the resolver to use.
-	if err := cc.parseTargetAndFindResolver(); err != nil {
+	if err := cc.initParsedTargetAndResolverBuilder(); err != nil {
 		return nil, err
 	}
 
@@ -178,7 +178,7 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	}
 	cc.mkp = cc.dopts.copts.KeepaliveParams
 
-	if err = cc.determineAuthority(); err != nil {
+	if err = cc.initAuthority(); err != nil {
 		return nil, err
 	}
 
@@ -588,11 +588,11 @@ type ClientConn struct {
 
 	// The following are initialized at dial time, and are read-only after that.
 	target          string            // User's dial target.
-	parsedTarget    resolver.Target   // See parseTargetAndFindResolver().
-	authority       string            // See determineAuthority().
+	parsedTarget    resolver.Target   // See initParsedTargetAndResolverBuilder().
+	authority       string            // See initAuthority().
 	dopts           dialOptions       // Default and user specified dial options.
 	channelz        *channelz.Channel // Channelz object.
-	resolverBuilder resolver.Builder  // See parseTargetAndFindResolver().
+	resolverBuilder resolver.Builder  // See initParsedTargetAndResolverBuilder().
 	idlenessMgr     *idle.Manager
 
 	// The following provide their own synchronization, and therefore don't
@@ -1674,14 +1674,14 @@ func (cc *ClientConn) connectionError() error {
 	return cc.lastConnectionError
 }
 
-// parseTargetAndFindResolver parses the user's dial target and stores the
-// parsed target in `cc.parsedTarget`.
+// initParsedTargetAndResolverBuilder parses the user's dial target and stores
+// the parsed target in `cc.parsedTarget`.
 //
 // The resolver to use is determined based on the scheme in the parsed target
 // and the same is stored in `cc.resolverBuilder`.
 //
 // Doesn't grab cc.mu as this method is expected to be called only at Dial time.
-func (cc *ClientConn) parseTargetAndFindResolver() error {
+func (cc *ClientConn) initParsedTargetAndResolverBuilder() error {
 	logger.Infof("original dial target is: %q", cc.target)
 
 	var rb resolver.Builder
@@ -1800,7 +1800,7 @@ func encodeAuthority(authority string) string {
 // credentials do not match the authority configured through the dial option.
 //
 // Doesn't grab cc.mu as this method is expected to be called only at Dial time.
-func (cc *ClientConn) determineAuthority() error {
+func (cc *ClientConn) initAuthority() error {
 	dopts := cc.dopts
 	// Historically, we had two options for users to specify the serverName or
 	// authority for a channel. One was through the transport credentials
