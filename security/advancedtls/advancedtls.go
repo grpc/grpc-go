@@ -35,6 +35,8 @@ import (
 	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
+type CertChains [][]*x509.Certificate
+
 // HandshakeVerificationInfo contains information about a handshake needed for
 // verification for use when implementing the `PostHandshakeVerificationFunc`
 // The fields in this struct are read-only.
@@ -47,7 +49,7 @@ type HandshakeVerificationInfo struct {
 	RawCerts [][]byte
 	// The verification chain obtained by checking peer RawCerts against the
 	// trust certificate bundle(s), if applicable.
-	VerifiedChains [][]*x509.Certificate
+	VerifiedChains CertChains
 	// The leaf certificate sent from peer, if choosing to verify the peer
 	// certificate(s) and that verification passed. This field would be nil if
 	// either user chose not to verify or the verification failed.
@@ -484,7 +486,7 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 	if cfg.ServerName == "" {
 		cfg.ServerName = authority
 	}
-	peerVerifiedChains := [][]*x509.Certificate{}
+	peerVerifiedChains := CertChains{}
 	cfg.VerifyPeerCertificate = buildVerifyFunc(c, cfg.ServerName, rawConn, &peerVerifiedChains)
 	conn := tls.Client(rawConn, cfg)
 	errChannel := make(chan error, 1)
@@ -515,7 +517,7 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 
 func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	cfg := credinternal.CloneTLSConfig(c.config)
-	peerVerifiedChains := [][]*x509.Certificate{}
+	peerVerifiedChains := CertChains{}
 	cfg.VerifyPeerCertificate = buildVerifyFunc(c, "", rawConn, &peerVerifiedChains)
 	conn := tls.Server(rawConn, cfg)
 	if err := conn.Handshake(); err != nil {
@@ -562,7 +564,7 @@ func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 func buildVerifyFunc(c *advancedTLSCreds,
 	serverName string,
 	rawConn net.Conn,
-	peerVerifiedChains *[][]*x509.Certificate) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	peerVerifiedChains *CertChains) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		chains := verifiedChains
 		var leafCert *x509.Certificate
@@ -626,7 +628,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 		if c.revocationOptions != nil {
 			verifiedChains := chains
 			if verifiedChains == nil {
-				verifiedChains = [][]*x509.Certificate{rawCertList}
+				verifiedChains = CertChains{rawCertList}
 			}
 			if err := checkChainRevocation(verifiedChains, *c.revocationOptions); err != nil {
 				return err
