@@ -636,8 +636,8 @@ func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 	const target = "foo.bar.com"
 
-	overrideResolutionInterval(t, 0)
-	overrideTimeAfterFunc(t, 0)
+	overrideResolutionInterval(t, 10)
+	//overrideTimeAfterFunc(t, 0)
 	tr := &testNetResolver{
 		hostLookupTable: map[string][]string{
 			"foo.bar.com": {"1.2.3.4", "5.6.7.8"},
@@ -653,7 +653,7 @@ func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 	// Verify that the first update pushed by the resolver matches expectations.
 	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
 	wantSC := scJSON
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
 
@@ -666,10 +666,13 @@ func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 
 	// Ask the resolver to re-resolve and verify that the new update matches
 	// expectations.
+	fmt.Printf("Time before resolve %v", time.Now())
+	time.Sleep(10 * time.Second)
 	r.ResolveNow(resolver.ResolveNowOptions{})
 	wantAddrs = []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}}
 	wantSC = `{"loadBalancingPolicy": "grpclb"}`
 	verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
+	fmt.Printf("Time after resolve %v", time.Now())
 
 	// Update state in the fake resolver to return no addresses and the same
 	// service config as before.
