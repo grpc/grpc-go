@@ -315,6 +315,9 @@ func (o *Options) clientConfig() (*tls.Config, error) {
 	// the setting int the right place.
 	if o.RootOptions.RootCACerts != nil {
 		o.RootOptions.RootCertificates = o.RootOptions.RootCACerts
+		// There are additional checks that only 1 field of `RootOptions` is
+		// non-nil, so set the deprecated field to nil
+		o.RootOptions.RootCACerts = nil
 	}
 	if o.VerificationType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("client needs to provide custom verification mechanism if choose to skip default verification")
@@ -425,6 +428,9 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 	// the setting int the right place.
 	if o.RootOptions.RootCACerts != nil {
 		o.RootOptions.RootCertificates = o.RootOptions.RootCACerts
+		// There are additional checks that only 1 field of `RootOptions` is
+		// non-nil, so set the deprecated field to nil
+		o.RootOptions.RootCACerts = nil
 	}
 	if o.RequireClientCert && o.VerificationType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
