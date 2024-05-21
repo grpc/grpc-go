@@ -27,10 +27,20 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
 
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/noop"
 )
+
+func init() {
+	otelinternal.SetPluginOption = func(o *Options, po otelinternal.PluginOption) {
+		o.MetricsOptions.pluginOption = po
+	}
+}
+
+// metadataExchangeKey is the key for HTTP metadata exchange.
+const metadataExchangeKey = "x-envoy-peer-metadata"
 
 var logger = grpclog.Component("otel-plugin")
 
@@ -113,11 +123,9 @@ type MetricsOptions struct {
 	// will be recorded.
 	Metrics *Metrics
 
-	// TargetAttributeFilter is a callback that takes the target string of the
-	// channel and returns a bool representing whether to use target as a label
-	// value or use the string "other". If unset, will use the target string as
-	// is. This only applies for client side metrics.
-	TargetAttributeFilter func(string) bool
+	// OptionalLabels are labels received from xDS that this component should
+	// add to metrics that record after receiving incoming metadata.
+	OptionalLabels []string
 
 	// MethodAttributeFilter is to record the method name of RPCs handled by
 	// grpc.UnknownServiceHandler, but take care to limit the values allowed, as
@@ -126,6 +134,9 @@ type MetricsOptions struct {
 	// grpc.StaticMethodCallOption as a call option into Invoke or NewStream.
 	// This only applies for server side metrics.
 	MethodAttributeFilter func(string) bool
+
+	// pluginOption is used to get labels to attach to certain metrics, if set.
+	pluginOption otelinternal.PluginOption
 }
 
 // DialOption returns a dial option which enables OpenTelemetry instrumentation
@@ -146,6 +157,8 @@ func DialOption(o Options) grpc.DialOption {
 	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
 }
 
+var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
+
 // ServerOption returns a server option which enables OpenTelemetry
 // instrumentation code for a grpc.Server.
 //
@@ -161,7 +174,7 @@ func DialOption(o Options) grpc.DialOption {
 func ServerOption(o Options) grpc.ServerOption {
 	ssh := &serverStatsHandler{o: o}
 	ssh.initializeMetrics()
-	return grpc.StatsHandler(ssh)
+	return joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
 }
 
 // callInfo is information pertaining to the lifespan of the RPC client side.
@@ -220,6 +233,10 @@ type metricsInfo struct {
 
 	startTime time.Time
 	method    string
+
+	labelsReceived bool
+	labels         map[string]string // labels to attach to metrics emitted
+	xDSLabels      map[string]string
 }
 
 type clientMetrics struct {
