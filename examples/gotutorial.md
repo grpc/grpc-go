@@ -278,17 +278,17 @@ In this section, we'll look at creating a Go client for our `RouteGuide` service
 
 ### Creating a stub
 
-To call service methods, we first need to create a gRPC *channel* to communicate with the server. We create this by passing the server address and port number to `grpc.Dial()` as follows:
+To call service methods, we first need to create a gRPC *channel* to communicate with the server. We create this by passing the server address and port number to `grpc.NewClient()` as follows:
 
 ```go
-conn, err := grpc.Dial(*serverAddr)
+conn, err := grpc.NewClient(*serverAddr)
 if err != nil {
     ...
 }
 defer conn.Close()
 ```
 
-You can use `DialOptions` to set the auth credentials (e.g., TLS, GCE credentials, JWT credentials) in `grpc.Dial` if the service you request requires that - however, we don't need to do this for our `RouteGuide` service.
+You can use `DialOptions` to set the auth credentials (e.g., TLS, GCE credentials, JWT credentials) in `grpc.NewClient` if the service you request requires that - however, we don't need to do this for our `RouteGuide` service.
 
 Once the gRPC *channel* is setup, we need a client *stub* to perform RPCs. We get this using the `NewRouteGuideClient` method provided in the `pb` package we generated from our `.proto` file.
 
