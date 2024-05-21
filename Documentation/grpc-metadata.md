@@ -168,7 +168,8 @@ Server side metadata sending and receiving examples are available [here](../exam
 
 ### Receiving metadata
 
-To read metadata sent by the client, the server needs to retrieve it from RPC context using `FromIncomingContext`. Do not use `FromOutgoingContext` on server as it is for client-side only.
+To read metadata sent by the client, the server needs to retrieve it from RPC
+context using [FromIncomingContext](https://pkg.go.dev/google.golang.org/grpc/metadata#FromIncomingContext).
 If it is a unary call, the RPC handler's context can be used.
 For streaming calls, the server needs to get context from the stream.
 
@@ -194,7 +195,9 @@ func (s *server) SomeStreamingRPC(stream pb.Service_SomeStreamingRPCServer) erro
 
 #### Unary call
 
-To send header and trailer to client in unary call, the server can call [SendHeader](https://godoc.org/google.golang.org/grpc#SendHeader) and [SetTrailer](https://godoc.org/google.golang.org/grpc#SetTrailer) functions in module [grpc](https://godoc.org/google.golang.org/grpc).
+To send header and trailer to client in unary call, the server can call
+[SendHeader](https://godoc.org/google.golang.org/grpc#SendHeader) and [SetTrailer](https://godoc.org/google.golang.org/grpc#SetTrailer)
+functions in module [grpc](https://godoc.org/google.golang.org/grpc).
 These two functions take a context as the first parameter.
 It should be the RPC handler's context or one derived from it:
 
@@ -211,7 +214,7 @@ func (s *server) SomeRPC(ctx context.Context, in *pb.someRequest) (*pb.someRespo
 
 #### Streaming call
 
-For streaming calls, header and trailer can be sent using function `SendHeader` and `SetTrailer` in interface [ServerStream](https://godoc.org/google.golang.org/grpc#ServerStream):
+For streaming calls, header and trailer can be sent using function [SendHeader](https://godoc.org/google.golang.org/grpc#SendHeader) and [SetTrailer](https://godoc.org/google.golang.org/grpc#SetTrailer) in interface [ServerStream](https://godoc.org/google.golang.org/grpc#ServerStream):
 
 ```go
 func (s *server) SomeStreamingRPC(stream pb.Service_SomeStreamingRPCServer) error {
@@ -223,6 +226,10 @@ func (s *server) SomeStreamingRPC(stream pb.Service_SomeStreamingRPCServer) erro
     stream.SetTrailer(trailer)
 }
 ```
+
+Do not use
+[FromOutgoingContext](https://pkg.go.dev/google.golang.org/grpc/metadata#FromOutgoingContext) on the server to write metadata to be sent to the client.
+[FromOutgoingContext](https://pkg.go.dev/google.golang.org/grpc/metadata#FromOutgoingContext) is for client-side use only.
 
 ## Updating metadata from a server interceptor
 
