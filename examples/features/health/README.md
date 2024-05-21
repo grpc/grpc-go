@@ -41,7 +41,7 @@ serviceConfig := grpc.WithDefaultServiceConfig(`{
   }
 }`)
 
-conn, err := grpc.Dial(..., serviceConfig)
+conn, err := grpc.NewClient(..., serviceConfig)
 ```
 
 See [A17 - Client-Side Health Checking](https://github.com/grpc/proposal/blob/master/A17-client-side-health-checking.md) for more details.
