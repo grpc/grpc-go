@@ -32,7 +32,7 @@ import (
 type PluginOption interface {
 	// GetMetadata creates a MD with metadata exchange labels.
 	GetMetadata() metadata.MD
-	// GetLabels emits relevant labels from the incoming RPC metadata, alongside
-	// any relevant labels.
-	GetLabels(metadata.MD) map[string]string
+	// GetLabels emits labels to be attached to metrics for the RPC that
+	// contains the provided incomingMetadata.
+	GetLabels(incomingMetadata metadata.MD) map[string]string
 }
