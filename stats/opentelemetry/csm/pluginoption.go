@@ -305,8 +305,5 @@ func determineTargetCSM(parsedTarget *url.URL) bool {
 	// authority is mentioned, the authority is assumed to be CSM. MetadataExchange
 	// is performed only for CSM channels. Non-metadata exchange labels are detected
 	// as described below.
-
-	// "In the cases where no authority is mentioned, the authority is assumed
-	// to be csm".
 	return parsedTarget.Scheme == "xds" && (parsedTarget.Host == "" || parsedTarget.Host == "traffic-director-global.xds.googleapis.com")
 }
