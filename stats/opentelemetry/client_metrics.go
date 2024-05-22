@@ -27,8 +27,8 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
+	otelattribute "go.opentelemetry.io/otel/attribute"
+	otelmetric "go.opentelemetry.io/otel/metric"
 )
 
 type clientStatsHandler struct {
@@ -51,11 +51,11 @@ func (csh *clientStatsHandler) initializeMetrics() {
 
 	setOfMetrics := csh.o.MetricsOptions.Metrics.metrics
 
-	csh.clientMetrics.attemptStarted = createInt64Counter(setOfMetrics, "grpc.client.attempt.started", meter, metric.WithUnit("attempt"), metric.WithDescription("Number of client call attempts started."))
-	csh.clientMetrics.attemptDuration = createFloat64Histogram(setOfMetrics, "grpc.client.attempt.duration", meter, metric.WithUnit("s"), metric.WithDescription("End-to-end time taken to complete a client call attempt."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
-	csh.clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.client.attempt.sent_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes sent per client call attempt."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	csh.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.client.attempt.rcvd_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes received per call attempt."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	csh.clientMetrics.callDuration = createFloat64Histogram(setOfMetrics, "grpc.client.call.duration", meter, metric.WithUnit("s"), metric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	csh.clientMetrics.attemptStarted = createInt64Counter(setOfMetrics, "grpc.client.attempt.started", meter, otelmetric.WithUnit("attempt"), otelmetric.WithDescription("Number of client call attempts started."))
+	csh.clientMetrics.attemptDuration = createFloat64Histogram(setOfMetrics, "grpc.client.attempt.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	csh.clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.client.attempt.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	csh.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.client.attempt.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	csh.clientMetrics.callDuration = createFloat64Histogram(setOfMetrics, "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 }
 
 func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
@@ -67,9 +67,10 @@ func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method stri
 
 	if csh.o.MetricsOptions.pluginOption != nil {
 		md := csh.o.MetricsOptions.pluginOption.GetMetadata()
-		val := md.Get("x-envoy-peer-metadata")
-		if len(val) == 1 {
-			ctx = metadata.AppendToOutgoingContext(ctx, metadataExchangeKey, val[0])
+		for k, v := range md {
+			if len(v) == 1 {
+				ctx = metadata.AppendToOutgoingContext(ctx, k, v[0])
+			}
 		}
 	}
 
@@ -108,6 +109,16 @@ func (csh *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc
 		method: csh.determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
+
+	if csh.o.MetricsOptions.pluginOption != nil {
+		md := csh.o.MetricsOptions.pluginOption.GetMetadata()
+		for k, v := range md {
+			if len(v) == 1 {
+				ctx = metadata.AppendToOutgoingContext(ctx, k, v[0])
+			}
+		}
+	}
+
 	startTime := time.Now()
 
 	callback := func(err error) {
@@ -120,7 +131,7 @@ func (csh *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc
 func (csh *clientStatsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
 	s := status.Convert(err)
 	callLatency := float64(time.Since(startTime)) / float64(time.Second)
-	csh.clientMetrics.callDuration.Record(ctx, callLatency, metric.WithAttributes(attribute.String("grpc.method", ci.method), attribute.String("grpc.target", ci.target), attribute.String("grpc.status", canonicalString(s.Code()))))
+	csh.clientMetrics.callDuration.Record(ctx, callLatency, otelmetric.WithAttributes(otelattribute.String("grpc.method", ci.method), otelattribute.String("grpc.target", ci.target), otelattribute.String("grpc.status", canonicalString(s.Code()))))
 }
 
 // TagConn exists to satisfy stats.Handler.
@@ -141,12 +152,12 @@ func (csh *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 	if labels = istats.GetLabels(ctx); labels == nil {
 		labels = &istats.Labels{
 			TelemetryLabels: make(map[string]string),
-		} // Create optional labels map only if first stats handler in possible chain for a channel.
+		}
+		ctx = istats.SetLabels(ctx, labels)
 	}
-	ctx = istats.SetLabels(ctx, labels)
 	mi := &metricsInfo{ // populates information about RPC start.
 		startTime: time.Now(),
-		xDSLabels: labels.TelemetryLabels,
+		xdsLabels: labels.TelemetryLabels,
 		method:    info.FullMethodName,
 	}
 	ri := &rpcInfo{
@@ -173,25 +184,24 @@ func (csh *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 			return
 		}
 
-		csh.clientMetrics.attemptStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", ci.method), attribute.String("grpc.target", ci.target)))
+		csh.clientMetrics.attemptStarted.Add(ctx, 1, otelmetric.WithAttributes(otelattribute.String("grpc.method", ci.method), otelattribute.String("grpc.target", ci.target)))
 	case *stats.OutPayload:
 		atomic.AddInt64(&mi.sentCompressedBytes, int64(st.CompressedLength))
 	case *stats.InPayload:
 		atomic.AddInt64(&mi.recvCompressedBytes, int64(st.CompressedLength))
 	case *stats.InHeader:
-		csh.getLabelsFromPluginOption(mi, st.Header)
+		csh.setLabelsFromPluginOption(mi, st.Header)
 	case *stats.InTrailer:
-		csh.getLabelsFromPluginOption(mi, st.Trailer)
+		csh.setLabelsFromPluginOption(mi, st.Trailer)
 	case *stats.End:
 		csh.processRPCEnd(ctx, mi, st)
 	default:
 	}
 }
 
-func (csh *clientStatsHandler) getLabelsFromPluginOption(mi *metricsInfo, incomingMetadata metadata.MD) {
-	if !mi.labelsReceived && csh.o.MetricsOptions.pluginOption != nil {
-		mi.labels = csh.o.MetricsOptions.pluginOption.GetLabels(incomingMetadata)
-		mi.labelsReceived = true
+func (csh *clientStatsHandler) setLabelsFromPluginOption(mi *metricsInfo, incomingMetadata metadata.MD) {
+	if mi.pluginOptionLabels != nil && csh.o.MetricsOptions.pluginOption != nil {
+		mi.pluginOptionLabels = csh.o.MetricsOptions.pluginOption.GetLabels(incomingMetadata)
 	}
 }
 
@@ -208,23 +218,23 @@ func (csh *clientStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInf
 		st = canonicalString(s.Code())
 	}
 
-	attributes := []attribute.KeyValue{
-		attribute.String("grpc.method", ci.method),
-		attribute.String("grpc.target", ci.target),
-		attribute.String("grpc.status", st),
+	attributes := []otelattribute.KeyValue{
+		otelattribute.String("grpc.method", ci.method),
+		otelattribute.String("grpc.target", ci.target),
+		otelattribute.String("grpc.status", st),
 	}
 
-	for k, v := range mi.labels {
-		attributes = append(attributes, attribute.String(k, v))
+	for k, v := range mi.pluginOptionLabels {
+		attributes = append(attributes, otelattribute.String(k, v))
 	}
 
 	for _, o := range csh.o.MetricsOptions.OptionalLabels {
-		if val, ok := mi.xDSLabels[o]; ok {
-			attributes = append(attributes, attribute.String(o, val))
+		if val, ok := mi.xdsLabels[o]; ok {
+			attributes = append(attributes, otelattribute.String(o, val))
 		}
 	}
 
-	clientAttributeOption := metric.WithAttributes(attributes...)
+	clientAttributeOption := otelmetric.WithAttributes(attributes...)
 	csh.clientMetrics.attemptDuration.Record(ctx, latency, clientAttributeOption)
 	csh.clientMetrics.attemptSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.sentCompressedBytes), clientAttributeOption)
 	csh.clientMetrics.attemptRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.recvCompressedBytes), clientAttributeOption)
