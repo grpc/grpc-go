@@ -88,9 +88,6 @@ func compareUpdateMetadata(ctx context.Context, dumpFunc func() (*v3statuspb.Cli
 		protocmp.Transform(),
 		protocmp.IgnoreFields((*v3statuspb.ClientConfig_GenericXdsConfig)(nil), "last_updated"),
 		protocmp.IgnoreFields((*v3adminpb.UpdateFailureState)(nil), "last_update_attempt", "details"),
-		// cmpopts.EquateEmpty(),
-		cmp.Comparer(func(a, b time.Time) bool { return true }),
-		// cmpopts.EquateErrors(),
 	}
 
 	var lastErr error
