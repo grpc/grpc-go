@@ -191,7 +191,8 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 // to the corresponding generated interface file.
 func genServiceComments(g *protogen.GeneratedFile, service *protogen.Service) {
 	if service.Comments.Leading != "" {
-		// Add empty comment line to attach this service's comments to the godoc comments previously output for all services.
+		// Add empty comment line to attach this service's comments to
+		// the godoc comments previously output for all services.
 		g.P("//")
 		g.P(strings.TrimSpace(service.Comments.Leading.String()))
 	}
