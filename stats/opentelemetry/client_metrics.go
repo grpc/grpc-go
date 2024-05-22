@@ -60,7 +60,7 @@ func (csh *clientStatsHandler) initializeMetrics() {
 
 func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := &callInfo{
-		target: csh.determineTarget(cc),
+		target: cc.CanonicalTarget(),
 		method: csh.determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
@@ -80,17 +80,6 @@ func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method stri
 	return err
 }
 
-// determineTarget determines the target to record attributes with. This will be
-// "other" if target filter is set and specifies, the target name as is
-// otherwise.
-func (csh *clientStatsHandler) determineTarget(cc *grpc.ClientConn) string {
-	target := cc.CanonicalTarget()
-	if f := csh.o.MetricsOptions.TargetAttributeFilter; f != nil && !f(target) {
-		target = "other"
-	}
-	return target
-}
-
 // determineMethod determines the method to record attributes with. This will be
 // "other" if StaticMethod isn't specified or if method filter is set and
 // specifies, the method name as is otherwise.
@@ -105,7 +94,7 @@ func (csh *clientStatsHandler) determineMethod(method string, opts ...grpc.CallO
 
 func (csh *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := &callInfo{
-		target: csh.determineTarget(cc),
+		target: cc.CanonicalTarget(),
 		method: csh.determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
