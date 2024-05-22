@@ -31,9 +31,9 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -120,7 +120,7 @@ func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, w
 	}
 	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw")}
 	if diff := cmp.Diff(wantUpdate.update, got.update, cmpOpts...); diff != "" {
-		return fmt.Errorf("received unepected diff in the route configuration resource update: (-want, got):\n%s", diff)
+		return fmt.Errorf("received unexpected diff in the route configuration resource update: (-want, got):\n%s", diff)
 	}
 	return nil
 }

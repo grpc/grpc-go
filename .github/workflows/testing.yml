@@ -22,11 +22,11 @@ jobs:
     steps:
       # Setup the environment.
       - name: Setup Go
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        uses: actions/setup-go@v5
         with:
           go-version: '1.22'
       - name: Checkout repo
-        uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633 # v4.1.2
+        uses: actions/checkout@v4
 
       # Run the vet-proto checks.
       - name: vet-proto
@@ -83,12 +83,12 @@ jobs:
         run: echo "${{ matrix.grpcenv }}" >> $GITHUB_ENV
 
       - name: Setup Go
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.goversion }}
 
       - name: Checkout repo
-        uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633 # v4.1.2
+        uses: actions/checkout@v4
 
       # Only run vet for 'vet' runs.
       - name: Run vet.sh
@@ -105,8 +105,15 @@ jobs:
           cd "${GITHUB_WORKSPACE}"
           for MOD_FILE in $(find . -name 'go.mod' | grep -Ev '^\./go\.mod'); do
             pushd "$(dirname ${MOD_FILE})"
-            go test ${{ matrix.testflags }} -cpu 1,4 -timeout 2m ./...
+            # Skip OpenTelemetry module if 3 releases ago, Go OpenTelemetry only supports
+            # previous two releases.
+            if [[ "${{ matrix.goversion }}" == "1.20" && "${PWD}" =~ /stats/opentelemetry$ ]]; then
+              echo "Skipping ${MOD_FILE}"
+            else
+               go test ${{ matrix.testflags }} -cpu 1,4 -timeout 2m ./...
+            fi
             popd
+
           done
 
       # Non-core gRPC tests (examples, interop, etc)

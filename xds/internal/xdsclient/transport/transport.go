@@ -33,8 +33,8 @@ import (
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -63,7 +63,7 @@ type adsStream = v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesC
 // protocol version.
 type Transport struct {
 	// These fields are initialized at creation time and are read-only afterwards.
-	cc              *grpc.ClientConn        // ClientConn to the mangement server.
+	cc              *grpc.ClientConn        // ClientConn to the management server.
 	serverURI       string                  // URI of the management server.
 	onRecvHandler   OnRecvHandlerFunc       // Resource update handler. xDS data model layer.
 	onErrorHandler  func(error)             // To report underlying stream errors.

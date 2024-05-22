@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package engine provides a CEL-based authorization engine for gRPC.
 package engine
 
 import (
@@ -28,7 +29,6 @@ import (
 	"github.com/google/cel-go/interpreter"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/proto"
 )
@@ -71,7 +71,6 @@ func (activation activationImpl) Parent() interpreter.Activation {
 
 // AuthorizationArgs is the input of the CEL-based authorization engine.
 type AuthorizationArgs struct {
-	md         metadata.MD
 	peerInfo   *peer.Peer
 	fullMethod string
 }
@@ -211,7 +210,7 @@ func exprToProgram(condition *expr.Expr, env *cel.Env) (cel.Program, error) {
 		return nil, iss.Err()
 	}
 	// Check that the expression will evaluate to a boolean.
-	if !proto.Equal(ast.ResultType(), decls.Bool) {
+	if ot, _ := cel.TypeToExprType(ast.OutputType()); !proto.Equal(ot, decls.Bool) {
 		return nil, fmt.Errorf("expected boolean condition")
 	}
 	// Build the program plan.

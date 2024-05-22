@@ -9,10 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install checkout
-        uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633 # v4.1.2
+        uses: actions/checkout@v4
 
       - name: Install checkout
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        uses: actions/setup-go@v5
         with:
           go-version: "stable"
 
@@ -20,4 +20,4 @@ jobs:
         run: go test -coverprofile=coverage.out -coverpkg=./... ./...
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@ab904c41d6ece82784817410c45d8b8c02684457 # v3.1.6
+        uses: codecov/codecov-action@v3

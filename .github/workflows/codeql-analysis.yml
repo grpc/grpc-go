@@ -25,13 +25,13 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633 # v4.1.2
+      uses: actions/checkout@v4
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@a82bad71823183e5b120ab52d521460ecb0585fe # v2.24.9
+      uses: github/codeql-action/init@v2
       with:
         languages: go
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@a82bad71823183e5b120ab52d521460ecb0585fe # v2.24.9
+      uses: github/codeql-action/analyze@v2

@@ -17,7 +17,7 @@
  */
 
 // Package endpointsharding implements a load balancing policy that manages
-// homogenous child policies each owning a single endpoint.
+// homogeneous child policies each owning a single endpoint.
 //
 // # Experimental
 //
@@ -48,7 +48,7 @@ type ChildState struct {
 	State    balancer.State
 }
 
-// NewBalancer returns a load balancing policy that manages homogenous child
+// NewBalancer returns a load balancing policy that manages homogeneous child
 // policies each owning a single endpoint.
 func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	es := &endpointSharding{

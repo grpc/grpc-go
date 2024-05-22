@@ -103,8 +103,8 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 			desc:                   "More than one fields in RootCertificateOptions is specified",
 			clientVerificationType: CertVerification,
 			RootOptions: RootCertificateOptions{
-				RootCACerts:  x509.NewCertPool(),
-				RootProvider: fakeProvider{},
+				RootCertificates: x509.NewCertPool(),
+				RootProvider:     fakeProvider{},
 			},
 		},
 		{
@@ -134,14 +134,14 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			clientOptions := &ClientOptions{
+			clientOptions := &Options{
 				VerificationType: test.clientVerificationType,
 				IdentityOptions:  test.IdentityOptions,
 				RootOptions:      test.RootOptions,
-				MinVersion:       test.MinVersion,
-				MaxVersion:       test.MaxVersion,
+				MinTLSVersion:    test.MinVersion,
+				MaxTLSVersion:    test.MaxVersion,
 			}
-			_, err := clientOptions.config()
+			_, err := clientOptions.clientConfig()
 			if err == nil {
 				t.Fatalf("ClientOptions{%v}.config() returns no err, wantErr != nil", clientOptions)
 			}
@@ -154,10 +154,10 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 // VerificationType. This should error because one cannot skip default
 // verification and provide no root credentials",
 func (s) TestClientOptionsWithDeprecatedVType(t *testing.T) {
-	clientOptions := &ClientOptions{
+	clientOptions := &Options{
 		VType: SkipVerification,
 	}
-	_, err := clientOptions.config()
+	_, err := clientOptions.clientConfig()
 	if err == nil {
 		t.Fatalf("ClientOptions{%v}.config() returns no err, wantErr != nil", clientOptions)
 	}
@@ -188,27 +188,52 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 			MinVersion: tls.VersionTLS12,
 			MaxVersion: tls.VersionTLS13,
 		},
+		{
+			desc:                   "Deprecated option is set and forwarded",
+			clientVerificationType: CertVerification,
+			RootOptions: RootCertificateOptions{
+				RootCACerts: x509.NewCertPool(),
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			clientOptions := &ClientOptions{
+			clientOptions := &Options{
 				VerificationType: test.clientVerificationType,
 				IdentityOptions:  test.IdentityOptions,
 				RootOptions:      test.RootOptions,
-				MinVersion:       test.MinVersion,
-				MaxVersion:       test.MaxVersion,
+				MinTLSVersion:    test.MinVersion,
+				MaxTLSVersion:    test.MaxVersion,
 			}
-			clientConfig, err := clientOptions.config()
+			clientConfig, err := clientOptions.clientConfig()
 			if err != nil {
 				t.Fatalf("ClientOptions{%v}.config() = %v, wantErr == nil", clientOptions, err)
 			}
 			// Verify that the system-provided certificates would be used
 			// when no verification method was set in clientOptions.
-			if clientOptions.RootOptions.RootCACerts == nil &&
+			if clientOptions.RootOptions.RootCertificates == nil &&
 				clientOptions.RootOptions.GetRootCertificates == nil && clientOptions.RootOptions.RootProvider == nil {
 				if clientConfig.RootCAs == nil {
 					t.Fatalf("Failed to assign system-provided certificates on the client side.")
+				}
+			}
+			if test.MinVersion != 0 {
+				if clientConfig.MinVersion != test.MinVersion {
+					t.Fatalf("Failed to assign min tls version.")
+				}
+			} else {
+				if clientConfig.MinVersion != tls.VersionTLS12 {
+					t.Fatalf("Default min tls version not set correctly")
+				}
+			}
+			if test.MaxVersion != 0 {
+				if clientConfig.MaxVersion != test.MaxVersion {
+					t.Fatalf("Failed to assign max tls version.")
+				}
+			} else {
+				if clientConfig.MaxVersion != tls.VersionTLS13 {
+					t.Fatalf("Default max tls version not set correctly")
 				}
 			}
 		})
@@ -235,8 +260,8 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 			requireClientCert:      true,
 			serverVerificationType: CertVerification,
 			RootOptions: RootCertificateOptions{
-				RootCACerts: x509.NewCertPool(),
-				GetRootCertificates: func(*GetRootCAsParams) (*GetRootCAsResults, error) {
+				RootCertificates: x509.NewCertPool(),
+				GetRootCertificates: func(*ConnectionInfo) (*RootCertificates, error) {
 					return nil, nil
 				},
 			},
@@ -270,17 +295,17 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			serverOptions := &ServerOptions{
+			serverOptions := &Options{
 				VerificationType:  test.serverVerificationType,
 				RequireClientCert: test.requireClientCert,
 				IdentityOptions:   test.IdentityOptions,
 				RootOptions:       test.RootOptions,
-				MinVersion:        test.MinVersion,
-				MaxVersion:        test.MaxVersion,
+				MinTLSVersion:     test.MinVersion,
+				MaxTLSVersion:     test.MaxVersion,
 			}
-			_, err := serverOptions.config()
+			_, err := serverOptions.serverConfig()
 			if err == nil {
-				t.Fatalf("ServerOptions{%v}.config() returns no err, wantErr != nil", serverOptions)
+				t.Fatalf("ServerOptions{%v}.serverConfig() returns no err, wantErr != nil", serverOptions)
 			}
 		})
 	}
@@ -291,10 +316,10 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 // VerificationType. This should error because one cannot skip default
 // verification and provide no root credentials",
 func (s) TestServerOptionsWithDeprecatedVType(t *testing.T) {
-	serverOptions := &ServerOptions{
+	serverOptions := &Options{
 		VType: SkipVerification,
 	}
-	_, err := serverOptions.config()
+	_, err := serverOptions.serverConfig()
 	if err == nil {
 		t.Fatalf("ClientOptions{%v}.config() returns no err, wantErr != nil", serverOptions)
 	}
@@ -333,25 +358,34 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 			MinVersion: tls.VersionTLS12,
 			MaxVersion: tls.VersionTLS13,
 		},
+		{
+			desc: "Deprecated option is set and forwarded",
+			IdentityOptions: IdentityCertificateOptions{
+				Certificates: []tls.Certificate{},
+			},
+			RootOptions: RootCertificateOptions{
+				RootCACerts: x509.NewCertPool(),
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			serverOptions := &ServerOptions{
+			serverOptions := &Options{
 				VerificationType:  test.serverVerificationType,
 				RequireClientCert: test.requireClientCert,
 				IdentityOptions:   test.IdentityOptions,
 				RootOptions:       test.RootOptions,
-				MinVersion:        test.MinVersion,
-				MaxVersion:        test.MaxVersion,
+				MinTLSVersion:     test.MinVersion,
+				MaxTLSVersion:     test.MaxVersion,
 			}
-			serverConfig, err := serverOptions.config()
+			serverConfig, err := serverOptions.serverConfig()
 			if err != nil {
 				t.Fatalf("ServerOptions{%v}.config() = %v, wantErr == nil", serverOptions, err)
 			}
 			// Verify that the system-provided certificates would be used
 			// when no verification method was set in serverOptions.
-			if serverOptions.RootOptions.RootCACerts == nil &&
+			if serverOptions.RootOptions.RootCertificates == nil &&
 				serverOptions.RootOptions.GetRootCertificates == nil && serverOptions.RootOptions.RootProvider == nil {
 				if serverConfig.ClientCAs == nil {
 					t.Fatalf("Failed to assign system-provided certificates on the server side.")
@@ -366,10 +400,15 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	if err := cs.LoadCerts(); err != nil {
 		t.Fatalf("cs.LoadCerts() failed, err: %v", err)
 	}
-	getRootCAsForClient := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
+	getRootCertificatesForClient := func(params *ConnectionInfo) (*RootCertificates, error) {
+		return &RootCertificates{TrustCerts: cs.ClientTrust1}, nil
+	}
+
+	getRootCertificatesForClientDeprecatedTypes := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return &GetRootCAsResults{TrustCerts: cs.ClientTrust1}, nil
 	}
-	clientVerifyFuncGood := func(params *VerificationFuncParams) (*VerificationResults, error) {
+
+	clientVerifyFuncGood := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		if params.ServerName == "" {
 			return nil, errors.New("client side server name should have a value")
 		}
@@ -378,15 +417,15 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			return nil, errors.New("client side params parsing error")
 		}
 
-		return &VerificationResults{}, nil
+		return &PostHandshakeVerificationResults{}, nil
 	}
-	verifyFuncBad := func(params *VerificationFuncParams) (*VerificationResults, error) {
+	verifyFuncBad := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		return nil, fmt.Errorf("custom verification function failed")
 	}
-	getRootCAsForServer := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
-		return &GetRootCAsResults{TrustCerts: cs.ServerTrust1}, nil
+	getRootCertificatesForServer := func(params *ConnectionInfo) (*RootCertificates, error) {
+		return &RootCertificates{TrustCerts: cs.ServerTrust1}, nil
 	}
-	serverVerifyFunc := func(params *VerificationFuncParams) (*VerificationResults, error) {
+	serverVerifyFunc := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		if params.ServerName != "" {
 			return nil, errors.New("server side server name should not have a value")
 		}
@@ -395,29 +434,29 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			return nil, errors.New("server side params parsing error")
 		}
 
-		return &VerificationResults{}, nil
+		return &PostHandshakeVerificationResults{}, nil
 	}
-	getRootCAsForServerBad := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
+	getRootCertificatesForServerBad := func(params *ConnectionInfo) (*RootCertificates, error) {
 		return nil, fmt.Errorf("bad root certificate reloading")
 	}
 
-	getRootCAsForClientCRL := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
-		return &GetRootCAsResults{TrustCerts: cs.ClientTrust3}, nil
+	getRootCertificatesForClientCRL := func(params *ConnectionInfo) (*RootCertificates, error) {
+		return &RootCertificates{TrustCerts: cs.ClientTrust3}, nil
 	}
 
-	getRootCAsForServerCRL := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
-		return &GetRootCAsResults{TrustCerts: cs.ServerTrust3}, nil
+	getRootCertificatesForServerCRL := func(params *ConnectionInfo) (*RootCertificates, error) {
+		return &RootCertificates{TrustCerts: cs.ServerTrust3}, nil
 	}
 
-	makeStaticCRLRevocationConfig := func(crlPath string, allowUndetermined bool) *RevocationConfig {
+	makeStaticCRLRevocationOptions := func(crlPath string, denyUndetermined bool) *RevocationOptions {
 		rawCRL, err := os.ReadFile(crlPath)
 		if err != nil {
 			t.Fatalf("readFile(%v) failed err = %v", crlPath, err)
 		}
 		cRLProvider := NewStaticCRLProvider([][]byte{rawCRL})
-		return &RevocationConfig{
-			AllowUndetermined: allowUndetermined,
-			CRLProvider:       cRLProvider,
+		return &RevocationOptions{
+			DenyUndetermined: denyUndetermined,
+			CRLProvider:      cRLProvider,
 		}
 	}
 
@@ -430,23 +469,23 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		clientCert                 []tls.Certificate
 		clientGetCert              func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 		clientRoot                 *x509.CertPool
-		clientGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-		clientVerifyFunc           CustomVerificationFunc
+		clientGetRoot              func(params *ConnectionInfo) (*RootCertificates, error)
+		clientVerifyFunc           PostHandshakeVerificationFunc
 		clientVerificationType     VerificationType
 		clientRootProvider         certprovider.Provider
 		clientIdentityProvider     certprovider.Provider
-		clientRevocationConfig     *RevocationConfig
+		clientRevocationOptions    *RevocationOptions
 		clientExpectHandshakeError bool
 		serverMutualTLS            bool
 		serverCert                 []tls.Certificate
 		serverGetCert              func(*tls.ClientHelloInfo) ([]*tls.Certificate, error)
 		serverRoot                 *x509.CertPool
-		serverGetRoot              func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-		serverVerifyFunc           CustomVerificationFunc
+		serverGetRoot              func(params *ConnectionInfo) (*RootCertificates, error)
+		serverVerifyFunc           PostHandshakeVerificationFunc
 		serverVerificationType     VerificationType
 		serverRootProvider         certprovider.Provider
 		serverIdentityProvider     certprovider.Provider
-		serverRevocationConfig     *RevocationConfig
+		serverRevocationOptions    *RevocationOptions
 		serverExpectError          bool
 	}{
 		// Client: nil setting except verifyFuncGood
@@ -466,7 +505,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// Expected Behavior: success
 		{
 			desc:                   "Client sets reload root function with verifyFuncGood; server sends peer cert",
-			clientGetRoot:          getRootCAsForClient,
+			clientGetRoot:          getRootCertificatesForClient,
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVerificationType: CertVerification,
 			serverCert:             []tls.Certificate{cs.ServerCert1},
@@ -478,7 +517,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// Reason: custom verification function is bad
 		{
 			desc:                       "Client sets reload root function with verifyFuncBad; server sends peer cert",
-			clientGetRoot:              getRootCAsForClient,
+			clientGetRoot:              getRootCertificatesForClient,
 			clientVerifyFunc:           verifyFuncBad,
 			clientVerificationType:     CertVerification,
 			clientExpectHandshakeError: true,
@@ -486,13 +525,27 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverVerificationType:     CertVerification,
 			serverExpectError:          true,
 		},
+		// Client: set clientGetRoot with deprecated types, clientVerifyFunc and
+		// clientCert Server: set serverRoot and serverCert with mutual TLS on
+		// Expected Behavior: success
+		{
+			desc:                   "Client sets peer cert, reload root function with deprecatd types with verifyFuncGood; server sets peer cert and root cert; mutualTLS",
+			clientCert:             []tls.Certificate{cs.ClientCert1},
+			clientGetRoot:          getRootCertificatesForClientDeprecatedTypes,
+			clientVerifyFunc:       clientVerifyFuncGood,
+			clientVerificationType: CertVerification,
+			serverMutualTLS:        true,
+			serverCert:             []tls.Certificate{cs.ServerCert1},
+			serverRoot:             cs.ServerTrust1,
+			serverVerificationType: CertVerification,
+		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
 		// Server: set serverRoot and serverCert with mutual TLS on
 		// Expected Behavior: success
 		{
 			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; server sets peer cert and root cert; mutualTLS",
 			clientCert:             []tls.Certificate{cs.ClientCert1},
-			clientGetRoot:          getRootCAsForClient,
+			clientGetRoot:          getRootCertificatesForClient,
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVerificationType: CertVerification,
 			serverMutualTLS:        true,
@@ -506,12 +559,12 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		{
 			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; mutualTLS",
 			clientCert:             []tls.Certificate{cs.ClientCert1},
-			clientGetRoot:          getRootCAsForClient,
+			clientGetRoot:          getRootCertificatesForClient,
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVerificationType: CertVerification,
 			serverMutualTLS:        true,
 			serverCert:             []tls.Certificate{cs.ServerCert1},
-			serverGetRoot:          getRootCAsForServer,
+			serverGetRoot:          getRootCertificatesForServer,
 			serverVerificationType: CertVerification,
 		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
@@ -522,12 +575,12 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		{
 			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, bad reload root function; mutualTLS",
 			clientCert:             []tls.Certificate{cs.ClientCert1},
-			clientGetRoot:          getRootCAsForClient,
+			clientGetRoot:          getRootCertificatesForClient,
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVerificationType: CertVerification,
 			serverMutualTLS:        true,
 			serverCert:             []tls.Certificate{cs.ServerCert1},
-			serverGetRoot:          getRootCAsForServerBad,
+			serverGetRoot:          getRootCertificatesForServerBad,
 			serverVerificationType: CertVerification,
 			serverExpectError:      true,
 		},
@@ -539,14 +592,14 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientGetCert: func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				return &cs.ClientCert1, nil
 			},
-			clientGetRoot:          getRootCAsForClient,
+			clientGetRoot:          getRootCertificatesForClient,
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVerificationType: CertVerification,
 			serverMutualTLS:        true,
 			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				return []*tls.Certificate{&cs.ServerCert1}, nil
 			},
-			serverGetRoot:          getRootCAsForServer,
+			serverGetRoot:          getRootCertificatesForServer,
 			serverVerifyFunc:       serverVerifyFunc,
 			serverVerificationType: CertVerification,
 		},
@@ -560,14 +613,14 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientGetCert: func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				return &cs.ServerCert1, nil
 			},
-			clientGetRoot:          getRootCAsForClient,
+			clientGetRoot:          getRootCertificatesForClient,
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVerificationType: CertVerification,
 			serverMutualTLS:        true,
 			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				return []*tls.Certificate{&cs.ServerCert1}, nil
 			},
-			serverGetRoot:          getRootCAsForServer,
+			serverGetRoot:          getRootCertificatesForServer,
 			serverVerifyFunc:       serverVerifyFunc,
 			serverVerificationType: CertVerification,
 			serverExpectError:      true,
@@ -581,7 +634,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientGetCert: func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				return &cs.ClientCert1, nil
 			},
-			clientGetRoot:              getRootCAsForServer,
+			clientGetRoot:              getRootCertificatesForServer,
 			clientVerifyFunc:           clientVerifyFuncGood,
 			clientVerificationType:     CertVerification,
 			clientExpectHandshakeError: true,
@@ -589,7 +642,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				return []*tls.Certificate{&cs.ServerCert1}, nil
 			},
-			serverGetRoot:          getRootCAsForServer,
+			serverGetRoot:          getRootCertificatesForServer,
 			serverVerifyFunc:       serverVerifyFunc,
 			serverVerificationType: CertVerification,
 			serverExpectError:      true,
@@ -604,14 +657,14 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientGetCert: func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				return &cs.ClientCert1, nil
 			},
-			clientGetRoot:          getRootCAsForClient,
+			clientGetRoot:          getRootCertificatesForClient,
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVerificationType: CertVerification,
 			serverMutualTLS:        true,
 			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				return []*tls.Certificate{&cs.ClientCert1}, nil
 			},
-			serverGetRoot:          getRootCAsForServer,
+			serverGetRoot:          getRootCertificatesForServer,
 			serverVerifyFunc:       serverVerifyFunc,
 			serverVerificationType: CertVerification,
 			serverExpectError:      true,
@@ -625,7 +678,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientGetCert: func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				return &cs.ClientCert1, nil
 			},
-			clientGetRoot:              getRootCAsForClient,
+			clientGetRoot:              getRootCertificatesForClient,
 			clientVerifyFunc:           clientVerifyFuncGood,
 			clientVerificationType:     CertVerification,
 			clientExpectHandshakeError: true,
@@ -633,7 +686,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverGetCert: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 				return []*tls.Certificate{&cs.ServerCert1}, nil
 			},
-			serverGetRoot:          getRootCAsForClient,
+			serverGetRoot:          getRootCertificatesForClient,
 			serverVerifyFunc:       serverVerifyFunc,
 			serverVerificationType: CertVerification,
 			serverExpectError:      true,
@@ -645,13 +698,13 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		{
 			desc:                       "Client sets peer cert, reload root function with verifyFuncGood; Server sets bad custom check; mutualTLS",
 			clientCert:                 []tls.Certificate{cs.ClientCert1},
-			clientGetRoot:              getRootCAsForClient,
+			clientGetRoot:              getRootCertificatesForClient,
 			clientVerifyFunc:           clientVerifyFuncGood,
 			clientVerificationType:     CertVerification,
 			clientExpectHandshakeError: true,
 			serverMutualTLS:            true,
 			serverCert:                 []tls.Certificate{cs.ServerCert1},
-			serverGetRoot:              getRootCAsForServer,
+			serverGetRoot:              getRootCertificatesForServer,
 			serverVerifyFunc:           verifyFuncBad,
 			serverVerificationType:     CertVerification,
 			serverExpectError:          true,
@@ -736,71 +789,71 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		{
 			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; mutualTLS",
 			clientCert:             []tls.Certificate{cs.ClientCert1},
-			clientGetRoot:          getRootCAsForClient,
+			clientGetRoot:          getRootCertificatesForClient,
 			clientVerifyFunc:       clientVerifyFuncGood,
 			clientVerificationType: CertVerification,
-			clientRevocationConfig: &RevocationConfig{
-				RootDir:           testdata.Path("crl"),
-				AllowUndetermined: true,
-				Cache:             cache,
+			clientRevocationOptions: &RevocationOptions{
+				RootDir:          testdata.Path("crl"),
+				DenyUndetermined: false,
+				Cache:            cache,
 			},
 			serverMutualTLS:        true,
 			serverCert:             []tls.Certificate{cs.ServerCert1},
-			serverGetRoot:          getRootCAsForServer,
+			serverGetRoot:          getRootCertificatesForServer,
 			serverVerificationType: CertVerification,
-			serverRevocationConfig: &RevocationConfig{
-				RootDir:           testdata.Path("crl"),
-				AllowUndetermined: true,
-				Cache:             cache,
+			serverRevocationOptions: &RevocationOptions{
+				RootDir:          testdata.Path("crl"),
+				DenyUndetermined: false,
+				Cache:            cache,
 			},
 		},
 		// Client: set valid credentials with the revocation config
 		// Server: set valid credentials with the revocation config
 		// Expected Behavior: success, because none of the certificate chains sent in the connection are revoked
 		{
-			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; Client uses CRL; mutualTLS",
-			clientCert:             []tls.Certificate{cs.ClientCertForCRL},
-			clientGetRoot:          getRootCAsForClientCRL,
-			clientVerifyFunc:       clientVerifyFuncGood,
-			clientVerificationType: CertVerification,
-			clientRevocationConfig: makeStaticCRLRevocationConfig(testdata.Path("crl/provider_crl_empty.pem"), true),
-			serverMutualTLS:        true,
-			serverCert:             []tls.Certificate{cs.ServerCertForCRL},
-			serverGetRoot:          getRootCAsForServerCRL,
-			serverVerificationType: CertVerification,
+			desc:                    "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; Client uses CRL; mutualTLS",
+			clientCert:              []tls.Certificate{cs.ClientCertForCRL},
+			clientGetRoot:           getRootCertificatesForClientCRL,
+			clientVerifyFunc:        clientVerifyFuncGood,
+			clientVerificationType:  CertVerification,
+			clientRevocationOptions: makeStaticCRLRevocationOptions(testdata.Path("crl/provider_crl_empty.pem"), true),
+			serverMutualTLS:         true,
+			serverCert:              []tls.Certificate{cs.ServerCertForCRL},
+			serverGetRoot:           getRootCertificatesForServerCRL,
+			serverVerificationType:  CertVerification,
 		},
 		// Client: set valid credentials with the revocation config
 		// Server: set revoked credentials with the revocation config
 		// Expected Behavior: fail, server creds are revoked
 		{
-			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets revoked cert; Client uses CRL; mutualTLS",
-			clientCert:             []tls.Certificate{cs.ClientCertForCRL},
-			clientGetRoot:          getRootCAsForClientCRL,
-			clientVerifyFunc:       clientVerifyFuncGood,
-			clientVerificationType: CertVerification,
-			clientRevocationConfig: makeStaticCRLRevocationConfig(testdata.Path("crl/provider_crl_server_revoked.pem"), true),
-			serverMutualTLS:        true,
-			serverCert:             []tls.Certificate{cs.ServerCertForCRL},
-			serverGetRoot:          getRootCAsForServerCRL,
-			serverVerificationType: CertVerification,
-			serverExpectError:      true,
+			desc:                    "Client sets peer cert, reload root function with verifyFuncGood; Server sets revoked cert; Client uses CRL; mutualTLS",
+			clientCert:              []tls.Certificate{cs.ClientCertForCRL},
+			clientGetRoot:           getRootCertificatesForClientCRL,
+			clientVerifyFunc:        clientVerifyFuncGood,
+			clientVerificationType:  CertVerification,
+			clientRevocationOptions: makeStaticCRLRevocationOptions(testdata.Path("crl/provider_crl_server_revoked.pem"), true),
+			serverMutualTLS:         true,
+			serverCert:              []tls.Certificate{cs.ServerCertForCRL},
+			serverGetRoot:           getRootCertificatesForServerCRL,
+			serverVerificationType:  CertVerification,
+			serverExpectError:       true,
 		},
 		// Client: set valid credentials with the revocation config
 		// Server: set valid credentials with the revocation config
 		// Expected Behavior: fail, because CRL is issued by the malicious CA. It
 		// can't be properly processed, and we don't allow RevocationUndetermined.
 		{
-			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; Client uses CRL; mutualTLS",
-			clientCert:             []tls.Certificate{cs.ClientCertForCRL},
-			clientGetRoot:          getRootCAsForClientCRL,
-			clientVerifyFunc:       clientVerifyFuncGood,
-			clientVerificationType: CertVerification,
-			clientRevocationConfig: makeStaticCRLRevocationConfig(testdata.Path("crl/provider_malicious_crl_empty.pem"), false),
-			serverMutualTLS:        true,
-			serverCert:             []tls.Certificate{cs.ServerCertForCRL},
-			serverGetRoot:          getRootCAsForServerCRL,
-			serverVerificationType: CertVerification,
-			serverExpectError:      true,
+			desc:                    "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; Client uses CRL; mutualTLS",
+			clientCert:              []tls.Certificate{cs.ClientCertForCRL},
+			clientGetRoot:           getRootCertificatesForClientCRL,
+			clientVerifyFunc:        clientVerifyFuncGood,
+			clientVerificationType:  CertVerification,
+			clientRevocationOptions: makeStaticCRLRevocationOptions(testdata.Path("crl/provider_malicious_crl_empty.pem"), true),
+			serverMutualTLS:         true,
+			serverCert:              []tls.Certificate{cs.ServerCertForCRL},
+			serverGetRoot:           getRootCertificatesForServerCRL,
+			serverVerificationType:  CertVerification,
+			serverExpectError:       true,
 		},
 	} {
 		test := test
@@ -811,23 +864,23 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				t.Fatalf("Failed to listen: %v", err)
 			}
 			// Start a server using ServerOptions in another goroutine.
-			serverOptions := &ServerOptions{
+			serverOptions := &Options{
 				IdentityOptions: IdentityCertificateOptions{
 					Certificates:                     test.serverCert,
 					GetIdentityCertificatesForServer: test.serverGetCert,
 					IdentityProvider:                 test.serverIdentityProvider,
 				},
 				RootOptions: RootCertificateOptions{
-					RootCACerts:         test.serverRoot,
+					RootCertificates:    test.serverRoot,
 					GetRootCertificates: test.serverGetRoot,
 					RootProvider:        test.serverRootProvider,
 				},
-				RequireClientCert: test.serverMutualTLS,
-				VerifyPeer:        test.serverVerifyFunc,
-				VerificationType:  test.serverVerificationType,
-				RevocationConfig:  test.serverRevocationConfig,
+				RequireClientCert:          test.serverMutualTLS,
+				AdditionalPeerVerification: test.serverVerifyFunc,
+				VerificationType:           test.serverVerificationType,
+				RevocationOptions:          test.serverRevocationOptions,
 			}
-			go func(done chan credentials.AuthInfo, lis net.Listener, serverOptions *ServerOptions) {
+			go func(done chan credentials.AuthInfo, lis net.Listener, serverOptions *Options) {
 				serverRawConn, err := lis.Accept()
 				if err != nil {
 					close(done)
@@ -855,20 +908,20 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				t.Fatalf("Client failed to connect to %s. Error: %v", lisAddr, err)
 			}
 			defer conn.Close()
-			clientOptions := &ClientOptions{
+			clientOptions := &Options{
 				IdentityOptions: IdentityCertificateOptions{
 					Certificates:                     test.clientCert,
 					GetIdentityCertificatesForClient: test.clientGetCert,
 					IdentityProvider:                 test.clientIdentityProvider,
 				},
-				VerifyPeer: test.clientVerifyFunc,
+				AdditionalPeerVerification: test.clientVerifyFunc,
 				RootOptions: RootCertificateOptions{
-					RootCACerts:         test.clientRoot,
+					RootCertificates:    test.clientRoot,
 					GetRootCertificates: test.clientGetRoot,
 					RootProvider:        test.clientRootProvider,
 				},
-				VerificationType: test.clientVerificationType,
-				RevocationConfig: test.clientRevocationConfig,
+				VerificationType:  test.clientVerificationType,
+				RevocationOptions: test.clientRevocationOptions,
 			}
 			clientTLS, err := NewClientCreds(clientOptions)
 			if err != nil {
@@ -926,9 +979,9 @@ func (s) TestAdvancedTLSOverrideServerName(t *testing.T) {
 	if err := cs.LoadCerts(); err != nil {
 		t.Fatalf("cs.LoadCerts() failed, err: %v", err)
 	}
-	clientOptions := &ClientOptions{
+	clientOptions := &Options{
 		RootOptions: RootCertificateOptions{
-			RootCACerts: cs.ClientTrust1,
+			RootCertificates: cs.ClientTrust1,
 		},
 		serverNameOverride: expectedServerName,
 	}
@@ -970,16 +1023,16 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
-			serverOptions := &ServerOptions{
+			serverOptions := &Options{
 				IdentityOptions: IdentityCertificateOptions{
 					GetIdentityCertificatesForServer: func(info *tls.ClientHelloInfo) ([]*tls.Certificate, error) {
 						return []*tls.Certificate{&cs.ServerCert1, &cs.ServerCert2, &cs.ServerPeer3}, nil
 					},
 				},
 			}
-			serverConfig, err := serverOptions.config()
+			serverConfig, err := serverOptions.serverConfig()
 			if err != nil {
-				t.Fatalf("serverOptions.config() failed: %v", err)
+				t.Fatalf("serverOptions.serverConfig() failed: %v", err)
 			}
 			pointFormatUncompressed := uint8(0)
 			clientHello := &tls.ClientHelloInfo{

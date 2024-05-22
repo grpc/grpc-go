@@ -551,7 +551,7 @@ func checkInPayload(t *testing.T, d *gotData, e *expectedData) {
 			t.Fatalf("st.Data = %v, want %v", st.Data, b)
 		}
 		if st.Length != len(b) {
-			t.Fatalf("st.Lenght = %v, want %v", st.Length, len(b))
+			t.Fatalf("st.Length = %v, want %v", st.Length, len(b))
 		}
 	} else {
 		b, err := proto.Marshal(e.requests[e.reqIdx])
@@ -566,7 +566,7 @@ func checkInPayload(t *testing.T, d *gotData, e *expectedData) {
 			t.Fatalf("st.Data = %v, want %v", st.Data, b)
 		}
 		if st.Length != len(b) {
-			t.Fatalf("st.Lenght = %v, want %v", st.Length, len(b))
+			t.Fatalf("st.Length = %v, want %v", st.Length, len(b))
 		}
 	}
 	// Below are sanity checks that WireLength and RecvTime are populated.
@@ -670,7 +670,7 @@ func checkOutPayload(t *testing.T, d *gotData, e *expectedData) {
 			t.Fatalf("st.Data = %v, want %v", st.Data, b)
 		}
 		if st.Length != len(b) {
-			t.Fatalf("st.Lenght = %v, want %v", st.Length, len(b))
+			t.Fatalf("st.Length = %v, want %v", st.Length, len(b))
 		}
 	} else {
 		b, err := proto.Marshal(e.responses[e.respIdx])
@@ -685,7 +685,7 @@ func checkOutPayload(t *testing.T, d *gotData, e *expectedData) {
 			t.Fatalf("st.Data = %v, want %v", st.Data, b)
 		}
 		if st.Length != len(b) {
-			t.Fatalf("st.Lenght = %v, want %v", st.Length, len(b))
+			t.Fatalf("st.Length = %v, want %v", st.Length, len(b))
 		}
 	}
 	// Below are sanity checks that WireLength and SentTime are populated.

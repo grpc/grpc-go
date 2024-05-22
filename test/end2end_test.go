@@ -1006,9 +1006,10 @@ func testServerGracefulStopIdempotent(t *testing.T, e env) {
 	}
 }
 
-func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
+func (s) TestDetailedConnectionCloseErrorPropagatesToRPCError(t *testing.T) {
 	rpcStartedOnServer := make(chan struct{})
 	rpcDoneOnClient := make(chan struct{})
+	defer close(rpcDoneOnClient)
 	ss := &stubserver.StubServer{
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			close(rpcStartedOnServer)
@@ -1024,25 +1025,27 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Start an RPC. Then, while the RPC is still being accepted or handled at the server, abruptly
-	// stop the server, killing the connection. The RPC error message should include details about the specific
-	// connection error that was encountered.
+	// Start an RPC. Then, while the RPC is still being accepted or handled at
+	// the server, abruptly stop the server, killing the connection. The RPC
+	// error message should include details about the specific connection error
+	// that was encountered.
 	stream, err := ss.Client.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall = _, %v, want _, <nil>", ss.Client, err)
 	}
-	// Block until the RPC has been started on the server. This ensures that the ClientConn will find a healthy
-	// connection for the RPC to go out on initially, and that the TCP connection will shut down strictly after
-	// the RPC has been started on it.
+	// Block until the RPC has been started on the server. This ensures that the
+	// ClientConn will find a healthy connection for the RPC to go out on
+	// initially, and that the TCP connection will shut down strictly after the
+	// RPC has been started on it.
 	<-rpcStartedOnServer
 	ss.S.Stop()
-	// The precise behavior of this test is subject to raceyness around the timing
-	// of when TCP packets are sent from client to server, and when we tell the
-	// server to stop, so we need to account for both possible error messages.
+	// The precise behavior of this test is subject to raceyness around the
+	// timing of when TCP packets are sent from client to server, and when we
+	// tell the server to stop, so we need to account for both possible error
+	// messages.
 	if _, err := stream.Recv(); err == io.EOF || !isConnClosedErr(err) {
 		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: %q OR %q", stream, err, possibleConnResetMsg, possibleEOFMsg)
 	}
-	close(rpcDoneOnClient)
 }
 
 func (s) TestFailFast(t *testing.T) {

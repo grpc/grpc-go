@@ -31,10 +31,10 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -669,9 +669,8 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, resource1)},
 			},
 			wantUpdate: xdsresource.ClusterUpdate{
-				ClusterName:     "resource-name-1",
-				EDSServiceName:  "eds-service-name",
-				LRSServerConfig: xdsresource.ClusterLRSServerSelf,
+				ClusterName:    "resource-name-1",
+				EDSServiceName: "eds-service-name",
 			},
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
 				"resource-name-1": {
@@ -689,9 +688,8 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, resource1), testutils.MarshalAny(t, resource2)},
 			},
 			wantUpdate: xdsresource.ClusterUpdate{
-				ClusterName:     "resource-name-1",
-				EDSServiceName:  "eds-service-name",
-				LRSServerConfig: xdsresource.ClusterLRSServerSelf,
+				ClusterName:    "resource-name-1",
+				EDSServiceName: "eds-service-name",
 			},
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
 				"resource-name-1": {
@@ -762,6 +760,16 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			}
 			if gotErr != nil && !strings.Contains(gotErr.Error(), test.wantErr) {
 				t.Fatalf("Got error from handling update: %v, want %v", gotErr, test.wantErr)
+			}
+
+			// For tests expected to succeed, we expect an LRS server config in
+			// the update from the xDS client, because the LRS bit is turned on
+			// in the cluster resource. We *cannot* set the LRS server config in
+			// the test table because we do not have the address of the xDS
+			// server at that point, hence we do it here before verifying the
+			// received update.
+			if test.wantErr == "" {
+				test.wantUpdate.LRSServerConfig = xdstestutils.ServerConfigForAddress(t, mgmtServer.Address)
 			}
 			cmpOpts := []cmp.Option{
 				cmpopts.EquateEmpty(),
