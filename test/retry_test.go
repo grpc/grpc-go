@@ -102,7 +102,7 @@ func (s) TestRetryUnary(t *testing.T) {
 	}
 }
 
-func (s) TestRetryMaxAttemptsUnary(t *testing.T) {
+func (s) TestMaxCallAttemptsUnary(t *testing.T) {
 	callCount := 0
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
@@ -120,7 +120,7 @@ func (s) TestRetryMaxAttemptsUnary(t *testing.T) {
 		{serviceMaxAttempts: 9, clientMaxAttempts: 7, expectedAttempts: 7},
 		{serviceMaxAttempts: 3, clientMaxAttempts: 10, expectedAttempts: 3},
 		{serviceMaxAttempts: 8, clientMaxAttempts: -1, expectedAttempts: 5}, // 5 is default max
-		{serviceMaxAttempts: 3, clientMaxAttempts: 0, expectedAttempts: 1},
+		{serviceMaxAttempts: 3, clientMaxAttempts: 0, expectedAttempts: 3},
 	}
 	for num, tc := range testCases {
 		clientOpts := []grpc.DialOption{
@@ -137,9 +137,7 @@ func (s) TestRetryMaxAttemptsUnary(t *testing.T) {
 		  }
 		}]}`, tc.serviceMaxAttempts)),
 		}
-		if tc.clientMaxAttempts >= 0 {
-			clientOpts = append(clientOpts, grpc.WithMaxRetryAttempts(tc.clientMaxAttempts))
-		}
+		clientOpts = append(clientOpts, grpc.WithMaxCallAttempts(tc.clientMaxAttempts))
 		func() {
 			callCount = 0
 			if err := ss.Start([]grpc.ServerOption{}, clientOpts...); err != nil {
@@ -535,7 +533,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 	}
 }
 
-func (s) TestRetryMaxAttemptsStreaming(t *testing.T) {
+func (s) TestMaxCallAttemptsStreaming(t *testing.T) {
 	testCases := []struct {
 		serviceMaxAttempts int
 		clientMaxAttempts  int
@@ -545,7 +543,7 @@ func (s) TestRetryMaxAttemptsStreaming(t *testing.T) {
 		{serviceMaxAttempts: 9, clientMaxAttempts: 7, expectedAttempts: 7},
 		{serviceMaxAttempts: 3, clientMaxAttempts: 10, expectedAttempts: 3},
 		{serviceMaxAttempts: 8, clientMaxAttempts: -1, expectedAttempts: 5}, // 5 is default max
-		{serviceMaxAttempts: 3, clientMaxAttempts: 0, expectedAttempts: 1},
+		{serviceMaxAttempts: 3, clientMaxAttempts: 0, expectedAttempts: 3},
 	}
 
 	for _, tc := range testCases {
@@ -574,9 +572,7 @@ func (s) TestRetryMaxAttemptsStreaming(t *testing.T) {
 				},
 			}
 
-			if tc.clientMaxAttempts >= 0 {
-				clientOpts = append(clientOpts, grpc.WithMaxRetryAttempts(tc.clientMaxAttempts))
-			}
+			clientOpts = append(clientOpts, grpc.WithMaxCallAttempts(tc.clientMaxAttempts))
 			if err := ss.Start([]grpc.ServerOption{}, clientOpts...); err != nil {
 				t.Fatalf("Error starting endpoint server: %v", err)
 			}

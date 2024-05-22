@@ -80,7 +80,7 @@ type dialOptions struct {
 	idleTimeout                 time.Duration
 	recvBufferPool              SharedBufferPool
 	defaultScheme               string
-	maxRetryAttempts            int
+	maxCallAttempts             int
 }
 
 // DialOption configures how we set up the connection.
@@ -651,12 +651,12 @@ func defaultDialOptions() dialOptions {
 			UseProxy:        true,
 			UserAgent:       grpcUA,
 		},
-		bs:               internalbackoff.DefaultExponential,
-		healthCheckFunc:  internal.HealthCheckFunc,
-		idleTimeout:      30 * time.Minute,
-		recvBufferPool:   nopBufferPool{},
-		defaultScheme:    "dns",
-		maxRetryAttempts: 5, // https://github.com/grpc/proposal/blob/master/A6-client-retries.md#limits-on-retries-and-hedges
+		bs:              internalbackoff.DefaultExponential,
+		healthCheckFunc: internal.HealthCheckFunc,
+		idleTimeout:     30 * time.Minute,
+		recvBufferPool:  nopBufferPool{},
+		defaultScheme:   "dns",
+		maxCallAttempts: 5, // https://github.com/grpc/proposal/blob/master/A6-client-retries.md#limits-on-retries-and-hedges
 	}
 }
 
@@ -714,16 +714,19 @@ func WithIdleTimeout(d time.Duration) DialOption {
 	})
 }
 
-// WithMaxRetryAttempts returns a DialOption that configures the maximum number
+// WithMaxCallAttempts returns a DialOption that configures the maximum number
 // of retry attempts for the channel. Service owners may specify a higher value
 // for these parameters, but higher values will be treated as equal to the
 // maximum value by the client implementation. This mitigates security concerns
 // related to the service config being transferred to the client via DNS.
 //
-// A default value of 5 will be used if this dial option is not set.
-func WithMaxRetryAttempts(n int) DialOption {
+// A value of 5 will be used if this dial option is not set or n < 2.
+func WithMaxCallAttempts(n int) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.maxRetryAttempts = n
+		if n < 2 {
+			n = 5
+		}
+		o.maxCallAttempts = n
 	})
 }
 

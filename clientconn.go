@@ -1847,8 +1847,8 @@ func (cc *ClientConn) determineAuthority() error {
 func (cc *ClientConn) sanitizeRPCConfig(c *iresolver.RPCConfig) {
 	// Enforce max retry attempts
 	if c.MethodConfig.RetryPolicy != nil {
-		if c.MethodConfig.RetryPolicy.MaxAttempts > cc.dopts.maxRetryAttempts {
-			c.MethodConfig.RetryPolicy.MaxAttempts = cc.dopts.maxRetryAttempts
+		if c.MethodConfig.RetryPolicy.MaxAttempts > cc.dopts.maxCallAttempts {
+			c.MethodConfig.RetryPolicy.MaxAttempts = cc.dopts.maxCallAttempts
 		}
 	}
 }
