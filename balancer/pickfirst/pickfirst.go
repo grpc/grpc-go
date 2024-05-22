@@ -16,6 +16,7 @@
  *
  */
 
+// Package pickfirst contains the pick_first load balancing policy.
 package pickfirst
 
 import (
