@@ -67,9 +67,9 @@ func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method stri
 
 	if csh.o.MetricsOptions.pluginOption != nil {
 		md := csh.o.MetricsOptions.pluginOption.GetMetadata()
-		for k, v := range md {
-			if len(v) == 1 {
-				ctx = metadata.AppendToOutgoingContext(ctx, k, v[0])
+		for k, vs := range md {
+			for _, v := range vs {
+				ctx = metadata.AppendToOutgoingContext(ctx, k, v)
 			}
 		}
 	}
@@ -112,9 +112,9 @@ func (csh *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc
 
 	if csh.o.MetricsOptions.pluginOption != nil {
 		md := csh.o.MetricsOptions.pluginOption.GetMetadata()
-		for k, v := range md {
-			if len(v) == 1 {
-				ctx = metadata.AppendToOutgoingContext(ctx, k, v[0])
+		for k, vs := range md {
+			for _, v := range vs {
+				ctx = metadata.AppendToOutgoingContext(ctx, k, v)
 			}
 		}
 	}
