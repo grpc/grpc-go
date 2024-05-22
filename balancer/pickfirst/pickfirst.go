@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/pretty"
@@ -35,6 +36,8 @@ import (
 func init() {
 	balancer.Register(pickfirstBuilder{})
 }
+
+var logger = grpclog.Component("pick-first-lb")
 
 const (
 	// PickFirstBalancerName is the name of the pick_first balancer.
