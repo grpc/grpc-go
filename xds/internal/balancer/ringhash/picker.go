@@ -19,13 +19,17 @@
 package ringhash
 
 import (
+	"context"
 	"errors"
+	"strings"
 
+	"github.com/cespare/xxhash/v2"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -52,8 +56,9 @@ func newPicker(ring *ring, requestHashKey string, logger *grpclog.PrefixLogger) 
 
 // handleRICSResult is the return type of handleRICS. It's needed to wrap the
 // returned error from Pick() in a struct and whether we triggered a connection
-// attempt. Without this, the return values would be `balancer.PickResult, bool, error, bool`,
-// and linter would complain because error is not the last return value.
+// attempt. Without this, the return values would be `balancer.PickResult, bool,
+// error, bool`, and linter would complain because error is not the last return
+// value.
 type handleRICSResult struct {
 	pr               balancer.PickResult
 	triggeredConnect bool
@@ -93,13 +98,10 @@ func (p *picker) handleRICS(e *ringEntry) (handleRICSResult, bool) {
 }
 
 func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	h, usingRandomHash := getRequestHash(info.Ctx, p.requestHashKey)
-	if usingRandomHash {
-		h = p.randuint64()
-	}
+	h, usesRandomHash := p.getRequestHash(info.Ctx)
 	e := p.ring.pick(h)
 	if hr, ok := p.handleRICS(e); ok {
-		if usingRandomHash && hr.triggeredConnect {
+		if usesRandomHash && hr.triggeredConnect {
 			// "If the use of this random hash triggers a connection attempt
 			// (...), then before queuing the pick, the picker will scan forward
 			// searching for a subchannel in `READY` state. If it finds a
@@ -111,13 +113,32 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		return hr.pr, hr.err
 	}
 	// ok was false, the entry is in transient failure.
-	return p.handleTransientFailure(e, usingRandomHash)
+	return p.handleTransientFailure(e, usesRandomHash)
 }
 
-func (p *picker) handleTransientFailure(e *ringEntry, usingRandomHash bool) (balancer.PickResult, error) {
+// getRequestHash returns the request hash to use for this pick, and whether
+// a random hash was used.
+func (p *picker) getRequestHash(ctx context.Context) (uint64, bool) {
+	if p.requestHashKey == "" {
+		// No explicit request metadata key, use the hash set by the xDS
+		// resolver. Note that for xDS, the random hash is never generated
+		// in the picker.
+		return GetXDSRequestHash(ctx), false
+	}
+	md, _ := metadata.FromOutgoingContext(ctx)
+	values := md.Get(p.requestHashKey)
+	if len(values) == 0 || len(values) == 1 && values[0] == "" {
+		// If the header is not present, generate a random hash.
+		return p.randuint64(), true
+	}
+	joinedValues := strings.Join(values, ",")
+	return xxhash.Sum64String(joinedValues), false
+}
+
+func (p *picker) handleTransientFailure(e *ringEntry, usesRandomHash bool) (balancer.PickResult, error) {
 	// Queue a connect on the first picked SubConn.
 	e.sc.queueConnect()
-	if usingRandomHash {
+	if usesRandomHash {
 		// "If the use of this random hash triggers a connection attempt
 		// (...), then before queuing the pick, the picker will scan forward
 		// searching for a subchannel in `READY` state. If it finds a
@@ -179,13 +200,12 @@ func (p *picker) handleTransientFailure(e *ringEntry, usingRandomHash bool) (bal
 	return balancer.PickResult{}, errNoSubConnReady
 }
 
-// nextReadySubConn returns the first entry after e that has its
-// subconn in READY state. If no such entry is found, a PickResult with a
+// nextReadySubConn returns the first entry after e that has its subconn in
+// READY state. If no such entry is found, it returns nil.
 func (p *picker) nextReadySubConn(e *ringEntry) balancer.SubConn {
-	for i := range p.ring.items {
-		e := p.ring.items[(e.idx+i)%len(p.ring.items)]
-		if e.sc.state == connectivity.Ready {
-			return e.sc.sc
+	for next := p.ring.next(e); next != e; next = p.ring.next(next) {
+		if next.sc.state == connectivity.Ready {
+			return next.sc.sc
 		}
 	}
 	return nil

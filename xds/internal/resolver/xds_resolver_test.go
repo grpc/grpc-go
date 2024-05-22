@@ -488,7 +488,7 @@ func (s) TestResolverRequestHash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
-	gotHash := ringhash.GetXDSRequestHashForTesting(res.Context)
+	gotHash := ringhash.GetXDSRequestHash(res.Context)
 	wantHash := xxhash.Sum64String("/products")
 	if gotHash != wantHash {
 		t.Fatalf("Got request hash: %v, want: %v", gotHash, wantHash)

@@ -97,13 +97,30 @@ func hasNotPrintable(msg string) bool {
 	return false
 }
 
-// ValidatePair validate a key-value pair with the following rules (the pseudo-header will be skipped) :
+// ValidatePair validates a key-value pair with the following rules (the pseudo-header will be skipped) :
 //
 // - key must contain one or more characters.
 // - the characters in the key must be contained in [0-9 a-z _ - .].
 // - if the key ends with a "-bin" suffix, no validation of the corresponding value is performed.
-// - the characters in the every value must be printable (in [%x20-%x7E]).
+// - the characters in every value must be printable (in [%x20-%x7E]).
 func ValidatePair(key string, vals ...string) error {
+	if err := ValidateKey(key); err != nil {
+		return err
+	}
+	if strings.HasSuffix(key, "-bin") {
+		return nil
+	}
+	// check value
+	for _, val := range vals {
+		if hasNotPrintable(val) {
+			return fmt.Errorf("header key %q contains value with non-printable ASCII characters", key)
+		}
+	}
+	return nil
+}
+
+// ValidateKey validates
+func ValidateKey(key string) error {
 	// key should not be empty
 	if key == "" {
 		return fmt.Errorf("there is an empty key in the header")
@@ -117,15 +134,6 @@ func ValidatePair(key string, vals ...string) error {
 		r := key[i]
 		if !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r != '.' && r != '-' && r != '_' {
 			return fmt.Errorf("header key %q contains illegal characters not in [0-9a-z-_.]", key)
-		}
-	}
-	if strings.HasSuffix(key, "-bin") {
-		return nil
-	}
-	// check value
-	for _, val := range vals {
-		if hasNotPrintable(val) {
-			return fmt.Errorf("header key %q contains value with non-printable ASCII characters", key)
 		}
 	}
 	return nil

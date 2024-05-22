@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -379,5 +380,66 @@ func (s) TestNextSkippingDuplicatesOnlyDup(t *testing.T) {
 	// This ring only has duplicates of items[0], should return nil.
 	if got := nextSkippingDuplicates(dupTestRing, dupTestRing.items[0]); got != nil {
 		t.Errorf("nextSkippingDuplicates() = %v, want nil", got)
+	}
+}
+func (s) TestGetRequestHash(t *testing.T) {
+	tests := []struct {
+		name               string
+		requestMetadataKey string
+		xdsValue           uint64
+		explicitValue      []string
+		wantHash           uint64
+		wantRandom         bool
+	}{
+		{
+			name:     "xds hash",
+			xdsValue: 123,
+			wantHash: 123,
+		},
+		{
+			name:               "explicit key, no value",
+			requestMetadataKey: "test-key",
+			wantHash:           42,
+			wantRandom:         true,
+		},
+		{
+			name:               "explicit key, empty value",
+			requestMetadataKey: "test-key",
+			explicitValue:      []string{""},
+			wantHash:           42,
+			wantRandom:         true,
+		},
+		{
+			name:               "explicit key, non empty value",
+			requestMetadataKey: "test-key",
+			explicitValue:      []string{"test-value"},
+			wantHash:           xxhash.Sum64String("test-value"),
+		},
+		{
+			name:               "explicit key, multiple values",
+			requestMetadataKey: "test-key",
+			explicitValue:      []string{"test-value", "test-value-2"},
+			wantHash:           xxhash.Sum64String("test-value,test-value-2"),
+		},
+	}
+	testRing := newTestRing([]connectivity.State{connectivity.Idle})
+	for _, tt := range tests {
+		p := newPicker(testRing, tt.requestMetadataKey, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
+		p.randuint64 = func() uint64 { return 42 }
+
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			if tt.explicitValue != nil {
+				ctx = metadata.NewOutgoingContext(context.Background(), metadata.MD{"test-key": tt.explicitValue})
+			}
+			if tt.xdsValue != 0 {
+				ctx = SetXDSRequestHash(context.Background(), tt.xdsValue)
+			}
+			gotHash, gotRandom := p.getRequestHash(ctx)
+
+			if gotHash != tt.wantHash || gotRandom != tt.wantRandom {
+				t.Errorf("getRequestHash(%v) = (%v, %v), want (%v, %v)", tt.explicitValue, gotRandom, gotHash, tt.wantRandom, tt.wantHash)
+			}
+		})
 	}
 }

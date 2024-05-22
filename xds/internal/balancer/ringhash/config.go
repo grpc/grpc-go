@@ -21,6 +21,7 @@ package ringhash
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/metadata"
@@ -70,8 +71,12 @@ func parseConfig(c json.RawMessage) (*LBConfig, error) {
 		cfg.MaxRingSize = envconfig.RingHashCap
 	}
 	if cfg.RequestMetadataKey != "" {
-		if err := metadata.ValidatePair(cfg.RequestMetadataKey, ""); err != nil {
-			return nil, fmt.Errorf("invalid request_metadata_key %q: %w", cfg.RequestMetadataKey, err)
+		// See rules in https://github.com/grpc/proposal/blob/54074388ca49e7c8eb1060af238ce98a63ad9daa/A76-ring-hash-improvements.md#explicitly-setting-the-request-hash-key
+		if err := metadata.ValidateKey(cfg.RequestMetadataKey); err != nil {
+			return nil, fmt.Errorf("invalid request_metadata_key %q: %s", cfg.RequestMetadataKey, err)
+		}
+		if strings.HasSuffix(cfg.RequestMetadataKey, "-bin") {
+			return nil, fmt.Errorf("invalid request_metadata_key %q: key must not end with \"-bin\"", cfg.RequestMetadataKey)
 		}
 	}
 	return &cfg, nil

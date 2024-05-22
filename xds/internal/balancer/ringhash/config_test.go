@@ -109,6 +109,12 @@ func (s) TestParseConfig(t *testing.T) {
 			want:    nil,
 			wantErr: true,
 		},
+		{
+			name:    "binary request metadata keys",
+			js:      `{"request_metadata_key": "header-with-bin"}`,
+			want:    nil,
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
