@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
@@ -183,12 +184,12 @@ func parseServiceConfig(js string) *serviceconfig.ParseResult {
 	}
 	c := rsc.LoadBalancingConfig
 	if c == nil {
-		name := PickFirstBalancerName
+		name := pickfirst.PickFirstBalancerName
 		if rsc.LoadBalancingPolicy != nil {
 			name = *rsc.LoadBalancingPolicy
 		}
 		if balancer.Get(name) == nil {
-			name = PickFirstBalancerName
+			name = pickfirst.PickFirstBalancerName
 		}
 		cfg := []map[string]any{{name: struct{}{}}}
 		strCfg, err := json.Marshal(cfg)

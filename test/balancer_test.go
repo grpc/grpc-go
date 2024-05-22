@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
@@ -847,7 +848,7 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 	stub.Register(t.Name(), stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			cc := &testCCWrapper{ClientConn: bd.ClientConn}
-			bd.Data = balancer.Get(grpc.PickFirstBalancerName).Build(cc, bd.BuildOptions)
+			bd.Data = balancer.Get(pickfirst.PickFirstBalancerName).Build(cc, bd.BuildOptions)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			bal := bd.Data.(balancer.Balancer)

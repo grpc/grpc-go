@@ -16,7 +16,7 @@
  *
  */
 
-package grpc
+package pickfirst
 
 import (
 	"encoding/json"
@@ -31,6 +31,10 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
+
+func init() {
+	balancer.Register(pickfirstBuilder{})
+}
 
 const (
 	// PickFirstBalancerName is the name of the pick_first balancer.

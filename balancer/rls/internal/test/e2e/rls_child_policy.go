@@ -23,8 +23,8 @@ import (
 	"errors"
 	"fmt"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -68,7 +68,7 @@ type bb struct {
 func (bb bb) Name() string { return bb.name }
 
 func (bb bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	pf := balancer.Get(grpc.PickFirstBalancerName)
+	pf := balancer.Get(pickfirst.PickFirstBalancerName)
 	b := &bal{
 		Balancer: pf.Build(cc, opts),
 		bf:       bb.bf,
