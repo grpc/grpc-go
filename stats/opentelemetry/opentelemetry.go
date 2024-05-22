@@ -154,6 +154,8 @@ func DialOption(o Options) grpc.DialOption {
 	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
 }
 
+var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
+
 // ServerOption returns a server option which enables OpenTelemetry
 // instrumentation code for a grpc.Server.
 //
@@ -169,7 +171,7 @@ func DialOption(o Options) grpc.DialOption {
 func ServerOption(o Options) grpc.ServerOption {
 	ssh := &serverStatsHandler{o: o}
 	ssh.initializeMetrics()
-	return grpc.StatsHandler(ssh)
+	return joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
 }
 
 // callInfo is information pertaining to the lifespan of the RPC client side.
