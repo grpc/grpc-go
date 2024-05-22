@@ -40,6 +40,9 @@ const (
 // ProfilingClient is the client API for Profiling service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// The Profiling service exposes functions to remotely manage the gRPC
+// profiling behaviour in a program.
 type ProfilingClient interface {
 	// Enable allows users to toggle profiling on and off remotely.
 	Enable(ctx context.Context, in *EnableRequest, opts ...grpc.CallOption) (*EnableResponse, error)
@@ -79,6 +82,9 @@ func (c *profilingClient) GetStreamStats(ctx context.Context, in *GetStreamStats
 // ProfilingServer is the server API for Profiling service.
 // All implementations should embed UnimplementedProfilingServer
 // for forward compatibility
+//
+// The Profiling service exposes functions to remotely manage the gRPC
+// profiling behaviour in a program.
 type ProfilingServer interface {
 	// Enable allows users to toggle profiling on and off remotely.
 	Enable(context.Context, *EnableRequest) (*EnableResponse, error)

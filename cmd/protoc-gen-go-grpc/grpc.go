@@ -187,6 +187,17 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	}
 }
 
+// genServiceComments copies the comments from the RPC proto definitions
+// to the corresponding generated interface file.
+func genServiceComments(g *protogen.GeneratedFile, service *protogen.Service) {
+	if service.Comments.Leading != "" {
+		// Add empty comment line to attach this service's comments to
+		// the godoc comments previously output for all services.
+		g.P("//")
+		g.P(strings.TrimSpace(service.Comments.Leading.String()))
+	}
+}
+
 func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
 	// Full methods constants.
 	helper.genFullMethods(g, service)
@@ -197,6 +208,9 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	g.P("// ", clientName, " is the client API for ", service.GoName, " service.")
 	g.P("//")
 	g.P("// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.")
+
+	// Copy comments from proto file.
+	genServiceComments(g, service)
 
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 		g.P("//")
@@ -251,6 +265,10 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	g.P("// ", serverType, " is the server API for ", service.GoName, " service.")
 	g.P("// All implementations ", mustOrShould, " embed Unimplemented", serverType)
 	g.P("// for forward compatibility")
+
+	// Copy comments from proto file.
+	genServiceComments(g, service)
+
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 		g.P("//")
 		g.P(deprecationComment)
