@@ -200,7 +200,7 @@ func (csh *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 }
 
 func (csh *clientStatsHandler) setLabelsFromPluginOption(ai *attemptInfo, incomingMetadata metadata.MD) {
-	if ai.pluginOptionLabels != nil && csh.o.MetricsOptions.pluginOption != nil {
+	if ai.pluginOptionLabels == nil && csh.o.MetricsOptions.pluginOption != nil {
 		ai.pluginOptionLabels = csh.o.MetricsOptions.pluginOption.GetLabels(incomingMetadata)
 	}
 }
