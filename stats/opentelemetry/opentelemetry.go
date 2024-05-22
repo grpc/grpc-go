@@ -27,10 +27,14 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
 
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/noop"
 )
+
+// metadataExchangeKey is the key for HTTP metadata exchange.
+const metadataExchangeKey = "x-envoy-peer-metadata"
 
 var logger = grpclog.Component("otel-plugin")
 
@@ -126,6 +130,13 @@ type MetricsOptions struct {
 	// grpc.StaticMethodCallOption as a call option into Invoke or NewStream.
 	// This only applies for server side metrics.
 	MethodAttributeFilter func(string) bool
+
+	// OptionalLabels are labels received from xDS that this component should
+	// add to metrics that record after receiving incoming metadata.
+	OptionalLabels []string
+
+	// pluginOption is used to get labels to attach to certain metrics, if set.
+	pluginOption otelinternal.PluginOption
 }
 
 // DialOption returns a dial option which enables OpenTelemetry instrumentation
@@ -220,6 +231,10 @@ type metricsInfo struct {
 
 	startTime time.Time
 	method    string
+
+	labelsReceived bool
+	labels         map[string]string // labels to attach to metrics emitted
+	xDSLabels      map[string]string
 }
 
 type clientMetrics struct {

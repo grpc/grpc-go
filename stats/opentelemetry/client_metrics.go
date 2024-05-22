@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	istats "google.golang.org/grpc/internal/stats"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 
@@ -62,6 +64,14 @@ func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method stri
 		method: csh.determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
+
+	if csh.o.MetricsOptions.pluginOption != nil {
+		md := csh.o.MetricsOptions.pluginOption.GetMetadata()
+		val := md.Get("x-envoy-peer-metadata")
+		if len(val) == 1 {
+			ctx = metadata.AppendToOutgoingContext(ctx, metadataExchangeKey, val[0])
+		}
+	}
 
 	startTime := time.Now()
 	err := invoker(ctx, method, req, reply, cc, opts...)
@@ -123,8 +133,21 @@ func (csh *clientStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management.
 func (csh *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	// Numerous stats handlers can be used for the same channel. The cluster
+	// impl balancer which writes to this will only write once, thus have this
+	// stats handler's per attempt scoped context point to the same optional
+	// labels map if set.
+	var labels *istats.Labels
+	if labels = istats.GetLabels(ctx); labels == nil {
+		labels = &istats.Labels{
+			TelemetryLabels: make(map[string]string),
+		} // Create optional labels map only if first stats handler in possible chain for a channel.
+	}
+	ctx = istats.SetLabels(ctx, labels)
 	mi := &metricsInfo{ // populates information about RPC start.
 		startTime: time.Now(),
+		xDSLabels: labels.TelemetryLabels,
+		method:    info.FullMethodName,
 	}
 	ri := &rpcInfo{
 		mi: mi,
@@ -155,9 +178,20 @@ func (csh *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 		atomic.AddInt64(&mi.sentCompressedBytes, int64(st.CompressedLength))
 	case *stats.InPayload:
 		atomic.AddInt64(&mi.recvCompressedBytes, int64(st.CompressedLength))
+	case *stats.InHeader:
+		csh.getLabelsFromPluginOption(mi, st.Header)
+	case *stats.InTrailer:
+		csh.getLabelsFromPluginOption(mi, st.Trailer)
 	case *stats.End:
 		csh.processRPCEnd(ctx, mi, st)
 	default:
+	}
+}
+
+func (csh *clientStatsHandler) getLabelsFromPluginOption(mi *metricsInfo, incomingMetadata metadata.MD) {
+	if !mi.labelsReceived && csh.o.MetricsOptions.pluginOption != nil {
+		mi.labels = csh.o.MetricsOptions.pluginOption.GetLabels(incomingMetadata)
+		mi.labelsReceived = true
 	}
 }
 
@@ -174,7 +208,23 @@ func (csh *clientStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInf
 		st = canonicalString(s.Code())
 	}
 
-	clientAttributeOption := metric.WithAttributes(attribute.String("grpc.method", ci.method), attribute.String("grpc.target", ci.target), attribute.String("grpc.status", st))
+	attributes := []attribute.KeyValue{
+		attribute.String("grpc.method", ci.method),
+		attribute.String("grpc.target", ci.target),
+		attribute.String("grpc.status", st),
+	}
+
+	for k, v := range mi.labels {
+		attributes = append(attributes, attribute.String(k, v))
+	}
+
+	for _, o := range csh.o.MetricsOptions.OptionalLabels {
+		if val, ok := mi.xDSLabels[o]; ok {
+			attributes = append(attributes, attribute.String(o, val))
+		}
+	}
+
+	clientAttributeOption := metric.WithAttributes(attributes...)
 	csh.clientMetrics.attemptDuration.Record(ctx, latency, clientAttributeOption)
 	csh.clientMetrics.attemptSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.sentCompressedBytes), clientAttributeOption)
 	csh.clientMetrics.attemptRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.recvCompressedBytes), clientAttributeOption)
