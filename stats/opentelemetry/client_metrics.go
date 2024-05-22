@@ -155,13 +155,13 @@ func (csh *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 		}
 		ctx = istats.SetLabels(ctx, labels)
 	}
-	mi := &metricsInfo{ // populates information about RPC start.
+	ai := &attemptInfo{ // populates information about RPC start.
 		startTime: time.Now(),
 		xdsLabels: labels.TelemetryLabels,
 		method:    info.FullMethodName,
 	}
 	ri := &rpcInfo{
-		mi: mi,
+		ai: ai,
 	}
 	return setRPCInfo(ctx, ri)
 }
@@ -172,10 +172,10 @@ func (csh *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats)
 		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
 		return
 	}
-	csh.processRPCEvent(ctx, rs, ri.mi)
+	csh.processRPCEvent(ctx, rs, ri.ai)
 }
 
-func (csh *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCStats, mi *metricsInfo) {
+func (csh *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
 	switch st := s.(type) {
 	case *stats.Begin:
 		ci := getCallInfo(ctx)
@@ -186,32 +186,32 @@ func (csh *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 
 		csh.clientMetrics.attemptStarted.Add(ctx, 1, otelmetric.WithAttributes(otelattribute.String("grpc.method", ci.method), otelattribute.String("grpc.target", ci.target)))
 	case *stats.OutPayload:
-		atomic.AddInt64(&mi.sentCompressedBytes, int64(st.CompressedLength))
+		atomic.AddInt64(&ai.sentCompressedBytes, int64(st.CompressedLength))
 	case *stats.InPayload:
-		atomic.AddInt64(&mi.recvCompressedBytes, int64(st.CompressedLength))
+		atomic.AddInt64(&ai.recvCompressedBytes, int64(st.CompressedLength))
 	case *stats.InHeader:
-		csh.setLabelsFromPluginOption(mi, st.Header)
+		csh.setLabelsFromPluginOption(ai, st.Header)
 	case *stats.InTrailer:
-		csh.setLabelsFromPluginOption(mi, st.Trailer)
+		csh.setLabelsFromPluginOption(ai, st.Trailer)
 	case *stats.End:
-		csh.processRPCEnd(ctx, mi, st)
+		csh.processRPCEnd(ctx, ai, st)
 	default:
 	}
 }
 
-func (csh *clientStatsHandler) setLabelsFromPluginOption(mi *metricsInfo, incomingMetadata metadata.MD) {
-	if mi.pluginOptionLabels != nil && csh.o.MetricsOptions.pluginOption != nil {
-		mi.pluginOptionLabels = csh.o.MetricsOptions.pluginOption.GetLabels(incomingMetadata)
+func (csh *clientStatsHandler) setLabelsFromPluginOption(ai *attemptInfo, incomingMetadata metadata.MD) {
+	if ai.pluginOptionLabels != nil && csh.o.MetricsOptions.pluginOption != nil {
+		ai.pluginOptionLabels = csh.o.MetricsOptions.pluginOption.GetLabels(incomingMetadata)
 	}
 }
 
-func (csh *clientStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInfo, e *stats.End) {
+func (csh *clientStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo, e *stats.End) {
 	ci := getCallInfo(ctx)
 	if ci == nil {
 		logger.Error("ctx passed into client side stats handler metrics event handling has no metrics data present")
 		return
 	}
-	latency := float64(time.Since(mi.startTime)) / float64(time.Second)
+	latency := float64(time.Since(ai.startTime)) / float64(time.Second)
 	st := "OK"
 	if e.Error != nil {
 		s, _ := status.FromError(e.Error)
@@ -224,20 +224,20 @@ func (csh *clientStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInf
 		otelattribute.String("grpc.status", st),
 	}
 
-	for k, v := range mi.pluginOptionLabels {
+	for k, v := range ai.pluginOptionLabels {
 		attributes = append(attributes, otelattribute.String(k, v))
 	}
 
 	for _, o := range csh.o.MetricsOptions.OptionalLabels {
-		if val, ok := mi.xdsLabels[o]; ok {
+		if val, ok := ai.xdsLabels[o]; ok {
 			attributes = append(attributes, otelattribute.String(o, val))
 		}
 	}
 
 	clientAttributeOption := otelmetric.WithAttributes(attributes...)
 	csh.clientMetrics.attemptDuration.Record(ctx, latency, clientAttributeOption)
-	csh.clientMetrics.attemptSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.sentCompressedBytes), clientAttributeOption)
-	csh.clientMetrics.attemptRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.recvCompressedBytes), clientAttributeOption)
+	csh.clientMetrics.attemptSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.sentCompressedBytes), clientAttributeOption)
+	csh.clientMetrics.attemptRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.recvCompressedBytes), clientAttributeOption)
 }
 
 const (

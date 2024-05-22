@@ -195,7 +195,7 @@ func getCallInfo(ctx context.Context) *callInfo {
 // rpcInfo is RPC information scoped to the RPC attempt life span client side,
 // and the RPC life span server side.
 type rpcInfo struct {
-	mi *metricsInfo
+	ai *attemptInfo
 }
 
 type rpcInfoKey struct{}
@@ -215,9 +215,9 @@ func removeLeadingSlash(mn string) string {
 	return strings.TrimLeft(mn, "/")
 }
 
-// metricsInfo is RPC information scoped to the RPC attempt life span client
+// attemptInfo is RPC information scoped to the RPC attempt life span client
 // side, and the RPC life span server side.
-type metricsInfo struct {
+type attemptInfo struct {
 	// access these counts atomically for hedging in the future:
 	// number of bytes after compression (within each message) from side (client
 	// || server).
