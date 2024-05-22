@@ -63,7 +63,7 @@ func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...grpc.CallO
 	if err != nil {
 		return nil, err
 	}
-	x := &loadBalancerBalanceLoadClient{stream}
+	x := &loadBalancerBalanceLoadClient{ClientStream: stream}
 	return x, nil
 }
 
@@ -117,7 +117,7 @@ func RegisterLoadBalancerServer(s grpc.ServiceRegistrar, srv LoadBalancerServer)
 }
 
 func _LoadBalancer_BalanceLoad_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(LoadBalancerServer).BalanceLoad(&loadBalancerBalanceLoadServer{stream})
+	return srv.(LoadBalancerServer).BalanceLoad(&loadBalancerBalanceLoadServer{ServerStream: stream})
 }
 
 type LoadBalancer_BalanceLoadServer interface {

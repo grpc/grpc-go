@@ -27,7 +27,7 @@ import (
 	_ "google.golang.org/grpc/balancer/roundrobin"
 	_ "google.golang.org/grpc/balancer/weightedtarget"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 )
 
 const (

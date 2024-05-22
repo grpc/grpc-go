@@ -633,7 +633,7 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error)
 			}
 			hcm := &v3httppb.HttpConnectionManager{}
 			if err := tc.UnmarshalTo(hcm); err != nil {
-				return nil, fmt.Errorf("network filters {%+v} failed unmarshaling of network filter {%+v}: %v", filters, filter, err)
+				return nil, fmt.Errorf("network filters {%+v} failed unmarshalling of network filter {%+v}: %v", filters, filter, err)
 			}
 			// "Any filters after HttpConnectionManager should be ignored during
 			// connection processing but still be considered for validity.

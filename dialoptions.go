@@ -21,6 +21,7 @@ package grpc
 import (
 	"context"
 	"net"
+	"net/url"
 	"time"
 
 	"google.golang.org/grpc/backoff"
@@ -42,6 +43,14 @@ func init() {
 	}
 	internal.ClearGlobalDialOptions = func() {
 		globalDialOptions = nil
+	}
+	internal.AddGlobalPerTargetDialOptions = func(opt any) {
+		if ptdo, ok := opt.(perTargetDialOption); ok {
+			globalPerTargetDialOptions = append(globalPerTargetDialOptions, ptdo)
+		}
+	}
+	internal.ClearGlobalPerTargetDialOptions = func() {
+		globalPerTargetDialOptions = nil
 	}
 	internal.WithBinaryLogger = withBinaryLogger
 	internal.JoinDialOptions = newJoinDialOption
@@ -88,6 +97,19 @@ type DialOption interface {
 }
 
 var globalDialOptions []DialOption
+
+// perTargetDialOption takes a parsed target and returns a dial option to apply.
+//
+// This gets called after NewClient() parses the target, and allows per target
+// configuration set through a returned DialOption. The DialOption will not take
+// effect if specifies a resolver builder, as that Dial Option is factored in
+// while parsing target.
+type perTargetDialOption interface {
+	// DialOption returns a Dial Option to apply.
+	DialOptionForTarget(parsedTarget url.URL) DialOption
+}
+
+var globalPerTargetDialOptions []perTargetDialOption
 
 // EmptyDialOption does not alter the dial configuration. It can be embedded in
 // another structure to build custom dial options.

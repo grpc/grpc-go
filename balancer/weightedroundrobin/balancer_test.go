@@ -693,7 +693,7 @@ type srvWeight struct {
 const rrIterations = 100
 
 // checkWeights does rrIterations RPCs and expects the different backends to be
-// routed in a ratio as deterimined by the srvWeights passed in.  Allows for
+// routed in a ratio as determined by the srvWeights passed in.  Allows for
 // some variance (+/- 2 RPCs per backend).
 func checkWeights(ctx context.Context, t *testing.T, sws ...srvWeight) {
 	t.Helper()

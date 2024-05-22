@@ -28,18 +28,15 @@ import (
 	"os"
 	"strings"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/google"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/tlscreds"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
 const (
@@ -58,50 +55,8 @@ const (
 	clientFeatureResourceWrapper    = "xds.config.resource-in-sotw"
 )
 
-func init() {
-	bootstrap.RegisterCredentials(&insecureCredsBuilder{})
-	bootstrap.RegisterCredentials(&googleDefaultCredsBuilder{})
-	bootstrap.RegisterCredentials(&tlsCredsBuilder{})
-}
-
 // For overriding in unit tests.
 var bootstrapFileReadFunc = os.ReadFile
-
-// insecureCredsBuilder implements the `Credentials` interface defined in
-// package `xds/bootstrap` and encapsulates an insecure credential.
-type insecureCredsBuilder struct{}
-
-func (i *insecureCredsBuilder) Build(json.RawMessage) (credentials.Bundle, func(), error) {
-	return insecure.NewBundle(), func() {}, nil
-}
-
-func (i *insecureCredsBuilder) Name() string {
-	return "insecure"
-}
-
-// tlsCredsBuilder implements the `Credentials` interface defined in
-// package `xds/bootstrap` and encapsulates a TLS credential.
-type tlsCredsBuilder struct{}
-
-func (t *tlsCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, func(), error) {
-	return tlscreds.NewBundle(config)
-}
-
-func (t *tlsCredsBuilder) Name() string {
-	return "tls"
-}
-
-// googleDefaultCredsBuilder implements the `Credentials` interface defined in
-// package `xds/boostrap` and encapsulates a Google Default credential.
-type googleDefaultCredsBuilder struct{}
-
-func (d *googleDefaultCredsBuilder) Build(json.RawMessage) (credentials.Bundle, func(), error) {
-	return google.NewDefaultCredentials(), func() {}, nil
-}
-
-func (d *googleDefaultCredsBuilder) Name() string {
-	return "google_default"
-}
 
 // ChannelCreds contains the credentials to be used while communicating with an
 // xDS server. It is also used to dedup servers with the same server URI.
@@ -126,7 +81,7 @@ func (cc ChannelCreds) String() string {
 	}
 
 	// We do not expect the Marshal call to fail since we wrote to cc.Config
-	// after a successful unmarshaling from JSON configuration. Therefore,
+	// after a successful unmarshalling from JSON configuration. Therefore,
 	// it is safe to ignore the error here.
 	b, _ := json.Marshal(cc.Config)
 	return cc.Type + "-" + string(b)
@@ -153,7 +108,7 @@ type ServerConfig struct {
 	// It is also used to dedup servers with the same server URI and creds.
 	ServerFeatures []string
 
-	// As part of unmarshaling the JSON config into this struct, we ensure that
+	// As part of unmarshalling the JSON config into this struct, we ensure that
 	// the credentials config is valid by building an instance of the specified
 	// credentials and store it here as a grpc.DialOption for easy access when
 	// dialing this xDS server.
@@ -568,6 +523,8 @@ func newConfigFromContents(data []byte) (*Config, error) {
 	node.ClientFeatures = append(node.ClientFeatures, clientFeatureNoOverprovisioning, clientFeatureResourceWrapper)
 	config.NodeProto = node
 
-	logger.Debugf("Bootstrap config for creating xds-client: %v", pretty.ToJSON(config))
+	if logger.V(2) {
+		logger.Infof("Bootstrap config for creating xds-client: %v", pretty.ToJSON(config))
+	}
 	return config, nil
 }

@@ -425,7 +425,7 @@ func TestGetIssuerCRLCache(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			cache.Purge()
-			_, err := fetchIssuerCRL(tt.rawIssuer, tt.certs, RevocationConfig{
+			_, err := fetchIssuerCRL(tt.rawIssuer, tt.certs, RevocationOptions{
 				RootDir: testdata.Path("."),
 				Cache:   cache,
 			})
@@ -546,10 +546,10 @@ func TestRevokedCert(t *testing.T) {
 	}
 
 	var revocationTests = []struct {
-		desc              string
-		in                tls.ConnectionState
-		revoked           bool
-		allowUndetermined bool
+		desc             string
+		in               tls.ConnectionState
+		revoked          bool
+		denyUndetermined bool
 	}{
 		{
 			desc:    "Single unrevoked",
@@ -586,24 +586,24 @@ func TestRevokedCert(t *testing.T) {
 			in: tls.ConnectionState{VerifiedChains: [][]*x509.Certificate{
 				{&x509.Certificate{CRLDistributionPoints: []string{"test"}}},
 			}},
-			revoked: true,
+			revoked:          true,
+			denyUndetermined: true,
 		},
 		{
 			desc: "Undetermined allowed",
 			in: tls.ConnectionState{VerifiedChains: [][]*x509.Certificate{
 				{&x509.Certificate{CRLDistributionPoints: []string{"test"}}},
 			}},
-			revoked:           false,
-			allowUndetermined: true,
+			revoked: false,
 		},
 	}
 
 	for _, tt := range revocationTests {
 		t.Run(fmt.Sprintf("%v with x509 crl hash dir", tt.desc), func(t *testing.T) {
-			err := checkRevocation(tt.in, RevocationConfig{
-				RootDir:           testdata.Path("crl"),
-				AllowUndetermined: tt.allowUndetermined,
-				Cache:             cache,
+			err := checkRevocation(tt.in, RevocationOptions{
+				RootDir:          testdata.Path("crl"),
+				DenyUndetermined: tt.denyUndetermined,
+				Cache:            cache,
 			})
 			t.Logf("checkRevocation err = %v", err)
 			if tt.revoked && err == nil {
@@ -613,9 +613,9 @@ func TestRevokedCert(t *testing.T) {
 			}
 		})
 		t.Run(fmt.Sprintf("%v with static provider", tt.desc), func(t *testing.T) {
-			err := checkRevocation(tt.in, RevocationConfig{
-				AllowUndetermined: tt.allowUndetermined,
-				CRLProvider:       cRLProvider,
+			err := checkRevocation(tt.in, RevocationOptions{
+				DenyUndetermined: tt.denyUndetermined,
+				CRLProvider:      cRLProvider,
 			})
 			t.Logf("checkRevocation err = %v", err)
 			if tt.revoked && err == nil {
@@ -738,7 +738,7 @@ func TestVerifyConnection(t *testing.T) {
 			cliCfg := tls.Config{
 				RootCAs: cp,
 				VerifyConnection: func(cs tls.ConnectionState) error {
-					return checkRevocation(cs, RevocationConfig{RootDir: dir})
+					return checkRevocation(cs, RevocationOptions{RootDir: dir})
 				},
 			}
 			conn, err := tls.Dial(lis.Addr().Network(), lis.Addr().String(), &cliCfg)
@@ -761,7 +761,7 @@ func TestIssuerNonPrintableString(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to decode issuer: %s", err)
 	}
-	_, err = fetchCRLOpenSSLHashDir(rawIssuer, RevocationConfig{RootDir: testdata.Path("crl")})
+	_, err = fetchCRLOpenSSLHashDir(rawIssuer, RevocationOptions{RootDir: testdata.Path("crl")})
 	if err != nil {
 		t.Fatalf("fetchCRL failed: %s", err)
 	}
@@ -791,7 +791,7 @@ func TestCRLCacheExpirationReloading(t *testing.T) {
 	crl.certList.RevokedCertificates = nil
 	crl.certList.NextUpdate = time.Now().Add(time.Hour)
 	cache.Add(hex.EncodeToString(rawIssuer), crl)
-	var cfg = RevocationConfig{RootDir: testdata.Path("crl"), Cache: cache}
+	var cfg = RevocationOptions{RootDir: testdata.Path("crl"), Cache: cache}
 	revocationStatus := checkChain(certs, cfg)
 	if revocationStatus != RevocationUnrevoked {
 		t.Fatalf("Certificate check should be RevocationUnrevoked, was %v", revocationStatus)

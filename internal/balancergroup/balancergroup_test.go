@@ -314,7 +314,7 @@ func (s) TestBalancerGroup_locality_caching(t *testing.T) {
 }
 
 // Sub-balancers are put in cache when they are shut down. If balancer group is
-// closed within close timeout, all subconns should still be rmeoved
+// closed within close timeout, all subconns should still be removed
 // immediately.
 func (s) TestBalancerGroup_locality_caching_close_group(t *testing.T) {
 	_, bg, cc, addrToSC := initBalancerGroupForCachingTest(t, defaultTestTimeout)
@@ -388,7 +388,7 @@ func (s) TestBalancerGroup_locality_caching_readd_with_different_builder(t *test
 	gator, bg, cc, addrToSC := initBalancerGroupForCachingTest(t, defaultTestTimeout)
 
 	// Re-add sub-balancer-1, but with a different balancer builder. The
-	// sub-balancer was still in cache, but cann't be reused. This should cause
+	// sub-balancer was still in cache, but can't be reused. This should cause
 	// old sub-balancer's subconns to be shut down immediately, and new
 	// subconns to be created.
 	gator.Add(testBalancerIDs[1], 1)

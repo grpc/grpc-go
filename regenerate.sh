@@ -93,7 +93,7 @@ Mgrpc/testing/empty.proto=google.golang.org/grpc/interop/grpc_testing
 
 for src in ${SOURCES[@]}; do
   echo "protoc ${src}"
-  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS}:${WORKDIR}/out \
+  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS},use_generic_streams_experimental=true:${WORKDIR}/out \
     -I"." \
     -I${WORKDIR}/grpc-proto \
     -I${WORKDIR}/googleapis \
