@@ -188,6 +188,13 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 			MinVersion: tls.VersionTLS12,
 			MaxVersion: tls.VersionTLS13,
 		},
+		{
+			desc:                   "Deprecated option is set and forwarded",
+			clientVerificationType: CertVerification,
+			RootOptions: RootCertificateOptions{
+				RootCACerts: x509.NewCertPool(),
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
@@ -350,6 +357,15 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 			},
 			MinVersion: tls.VersionTLS12,
 			MaxVersion: tls.VersionTLS13,
+		},
+		{
+			desc: "Deprecated option is set and forwarded",
+			IdentityOptions: IdentityCertificateOptions{
+				Certificates: []tls.Certificate{},
+			},
+			RootOptions: RootCertificateOptions{
+				RootCACerts: x509.NewCertPool(),
+			},
 		},
 	}
 	for _, test := range tests {

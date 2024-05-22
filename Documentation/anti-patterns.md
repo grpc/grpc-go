@@ -20,7 +20,7 @@ function that also creates the same virtual connection pool as `grpc.NewClient`.
 However, unlike `grpc.NewClient`, it immediately starts connecting and supports
 a few additional `DialOption`s that control this initial connection attempt.
 These are: `WithBlock`, `WithTimeout`, `WithReturnConnectionError`, and
-`FailOnNonTempDialError.
+`FailOnNonTempDialError`.
 
 That `grpc.Dial` creates connections immediately is not a problem in and of
 itself, but this behavior differs from how gRPC works in all other languages,
