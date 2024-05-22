@@ -39,9 +39,6 @@ func init() {
 	}
 }
 
-// metadataExchangeKey is the key for HTTP metadata exchange.
-const metadataExchangeKey = "x-envoy-peer-metadata"
-
 var logger = grpclog.Component("otel-plugin")
 
 var canonicalString = internal.CanonicalString.(func(codes.Code) string)
@@ -123,8 +120,8 @@ type MetricsOptions struct {
 	// will be recorded.
 	Metrics *Metrics
 
-	// OptionalLabels are labels received from xDS that this component should
-	// add to metrics that record after receiving incoming metadata.
+	// OptionalLabels are labels received from LB Policies that this component
+	// should add to metrics that record after receiving incoming metadata.
 	OptionalLabels []string
 
 	// MethodAttributeFilter is to record the method name of RPCs handled by
@@ -200,7 +197,7 @@ func getCallInfo(ctx context.Context) *callInfo {
 // rpcInfo is RPC information scoped to the RPC attempt life span client side,
 // and the RPC life span server side.
 type rpcInfo struct {
-	mi *metricsInfo
+	ai *attemptInfo
 }
 
 type rpcInfoKey struct{}
@@ -220,9 +217,9 @@ func removeLeadingSlash(mn string) string {
 	return strings.TrimLeft(mn, "/")
 }
 
-// metricsInfo is RPC information scoped to the RPC attempt life span client
+// attemptInfo is RPC information scoped to the RPC attempt life span client
 // side, and the RPC life span server side.
-type metricsInfo struct {
+type attemptInfo struct {
 	// access these counts atomically for hedging in the future:
 	// number of bytes after compression (within each message) from side (client
 	// || server).
@@ -234,9 +231,8 @@ type metricsInfo struct {
 	startTime time.Time
 	method    string
 
-	labelsReceived bool
-	labels         map[string]string // labels to attach to metrics emitted
-	xDSLabels      map[string]string
+	pluginOptionLabels map[string]string // pluginOptionLabels to attach to metrics emitted
+	xdsLabels          map[string]string
 }
 
 type clientMetrics struct {

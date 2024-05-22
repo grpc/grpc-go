@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-package internal
+// Package testingutils contains helpers for OpenTelemetry tests.
+package testingutils
 
 import (
 	"context"

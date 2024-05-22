@@ -195,12 +195,12 @@ func (ssh *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 		}
 	}
 
-	mi := &metricsInfo{
+	ai := &attemptInfo{
 		startTime: time.Now(),
 		method:    removeLeadingSlash(method),
 	}
 	ri := &rpcInfo{
-		mi: mi,
+		ai: ai,
 	}
 	return setRPCInfo(ctx, ri)
 }
@@ -212,46 +212,45 @@ func (ssh *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats)
 		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
 		return
 	}
-	ssh.processRPCData(ctx, rs, ri.mi)
+	ssh.processRPCData(ctx, rs, ri.ai)
 }
 
-func (ssh *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, mi *metricsInfo) {
+func (ssh *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
 	switch st := s.(type) {
 	case *stats.InHeader:
-		if !mi.labelsReceived && ssh.o.MetricsOptions.pluginOption != nil {
-			mi.labels = ssh.o.MetricsOptions.pluginOption.GetLabels(st.Header)
-			mi.labelsReceived = true
+		if ai.pluginOptionLabels == nil && ssh.o.MetricsOptions.pluginOption != nil {
+			ai.pluginOptionLabels = ssh.o.MetricsOptions.pluginOption.GetLabels(st.Header)
 		}
-		ssh.serverMetrics.callStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", mi.method)))
+		ssh.serverMetrics.callStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", ai.method)))
 	case *stats.OutPayload:
-		atomic.AddInt64(&mi.sentCompressedBytes, int64(st.CompressedLength))
+		atomic.AddInt64(&ai.sentCompressedBytes, int64(st.CompressedLength))
 	case *stats.InPayload:
-		atomic.AddInt64(&mi.recvCompressedBytes, int64(st.CompressedLength))
+		atomic.AddInt64(&ai.recvCompressedBytes, int64(st.CompressedLength))
 	case *stats.End:
-		ssh.processRPCEnd(ctx, mi, st)
+		ssh.processRPCEnd(ctx, ai, st)
 	default:
 	}
 }
 
-func (ssh *serverStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInfo, e *stats.End) {
-	latency := float64(time.Since(mi.startTime)) / float64(time.Second)
+func (ssh *serverStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo, e *stats.End) {
+	latency := float64(time.Since(ai.startTime)) / float64(time.Second)
 	st := "OK"
 	if e.Error != nil {
 		s, _ := status.FromError(e.Error)
 		st = canonicalString(s.Code())
 	}
 	attributes := []attribute.KeyValue{
-		attribute.String("grpc.method", mi.method),
+		attribute.String("grpc.method", ai.method),
 		attribute.String("grpc.status", st),
 	}
-	for k, v := range mi.labels {
+	for k, v := range ai.pluginOptionLabels {
 		attributes = append(attributes, attribute.String(k, v))
 	}
 
 	serverAttributeOption := metric.WithAttributes(attributes...)
 	ssh.serverMetrics.callDuration.Record(ctx, latency, serverAttributeOption)
-	ssh.serverMetrics.callSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.sentCompressedBytes), serverAttributeOption)
-	ssh.serverMetrics.callRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.recvCompressedBytes), serverAttributeOption)
+	ssh.serverMetrics.callSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.sentCompressedBytes), serverAttributeOption)
+	ssh.serverMetrics.callRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.recvCompressedBytes), serverAttributeOption)
 }
 
 const (
