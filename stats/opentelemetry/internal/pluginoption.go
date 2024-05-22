@@ -21,6 +21,9 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// SetPluginOption sets the plugin option on Options.
+var SetPluginOption any // func(*Options, PluginOption)
+
 // PluginOption is the interface which represents a plugin option for the
 // OpenTelemetry instrumentation component. This plugin option emits labels from
 // metadata and also creates metadata containing labels. These labels are
