@@ -27,6 +27,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -181,7 +182,7 @@ func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 	// Create a wrapped pickfirst LB policy. When the endpoint picking policy on
 	// the cluster resource is changed to pickfirst, this will allow us to
 	// verify that load balancing configuration is pushed to it.
-	pfBuilder := balancer.Get(grpc.PickFirstBalancerName)
+	pfBuilder := balancer.Get(pickfirst.Name)
 	internal.BalancerUnregister(pfBuilder.Name())
 
 	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
