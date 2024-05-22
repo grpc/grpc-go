@@ -27,8 +27,8 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
+	otelattribute "go.opentelemetry.io/otel/attribute"
+	otelmetric "go.opentelemetry.io/otel/metric"
 )
 
 type serverStatsHandler struct {
@@ -50,10 +50,10 @@ func (ssh *serverStatsHandler) initializeMetrics() {
 	}
 	setOfMetrics := ssh.o.MetricsOptions.Metrics.metrics
 
-	ssh.serverMetrics.callStarted = createInt64Counter(setOfMetrics, "grpc.server.call.started", meter, metric.WithUnit("call"), metric.WithDescription("Number of server calls started."))
-	ssh.serverMetrics.callSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.sent_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes sent per server call."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	ssh.serverMetrics.callRcvdTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.rcvd_total_compressed_message_size", meter, metric.WithUnit("By"), metric.WithDescription("Compressed message bytes received per server call."), metric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	ssh.serverMetrics.callDuration = createFloat64Histogram(setOfMetrics, "grpc.server.call.duration", meter, metric.WithUnit("s"), metric.WithDescription("End-to-end time taken to complete a call from server transport's perspective."), metric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	ssh.serverMetrics.callStarted = createInt64Counter(setOfMetrics, "grpc.server.call.started", meter, otelmetric.WithUnit("call"), otelmetric.WithDescription("Number of server calls started."))
+	ssh.serverMetrics.callSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	ssh.serverMetrics.callRcvdTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	ssh.serverMetrics.callDuration = createFloat64Histogram(setOfMetrics, "grpc.server.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a call from server transport's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 }
 
 // attachLabelsTransport stream intercepts SetHeader and SendHeader calls of the
@@ -218,11 +218,10 @@ func (ssh *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats)
 func (ssh *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, mi *metricsInfo) {
 	switch st := s.(type) {
 	case *stats.InHeader:
-		if !mi.labelsReceived && ssh.o.MetricsOptions.pluginOption != nil {
-			mi.labels = ssh.o.MetricsOptions.pluginOption.GetLabels(st.Header)
-			mi.labelsReceived = true
+		if mi.pluginOptionLabels != nil && ssh.o.MetricsOptions.pluginOption != nil {
+			mi.pluginOptionLabels = ssh.o.MetricsOptions.pluginOption.GetLabels(st.Header)
 		}
-		ssh.serverMetrics.callStarted.Add(ctx, 1, metric.WithAttributes(attribute.String("grpc.method", mi.method)))
+		ssh.serverMetrics.callStarted.Add(ctx, 1, otelmetric.WithAttributes(otelattribute.String("grpc.method", mi.method)))
 	case *stats.OutPayload:
 		atomic.AddInt64(&mi.sentCompressedBytes, int64(st.CompressedLength))
 	case *stats.InPayload:
@@ -240,15 +239,15 @@ func (ssh *serverStatsHandler) processRPCEnd(ctx context.Context, mi *metricsInf
 		s, _ := status.FromError(e.Error)
 		st = canonicalString(s.Code())
 	}
-	attributes := []attribute.KeyValue{
-		attribute.String("grpc.method", mi.method),
-		attribute.String("grpc.status", st),
+	attributes := []otelattribute.KeyValue{
+		otelattribute.String("grpc.method", mi.method),
+		otelattribute.String("grpc.status", st),
 	}
-	for k, v := range mi.labels {
-		attributes = append(attributes, attribute.String(k, v))
+	for k, v := range mi.pluginOptionLabels {
+		attributes = append(attributes, otelattribute.String(k, v))
 	}
 
-	serverAttributeOption := metric.WithAttributes(attributes...)
+	serverAttributeOption := otelmetric.WithAttributes(attributes...)
 	ssh.serverMetrics.callDuration.Record(ctx, latency, serverAttributeOption)
 	ssh.serverMetrics.callSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.sentCompressedBytes), serverAttributeOption)
 	ssh.serverMetrics.callRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&mi.recvCompressedBytes), serverAttributeOption)
