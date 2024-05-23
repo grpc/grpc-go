@@ -37,6 +37,11 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
+const (
+	// https://github.com/grpc/proposal/blob/master/A6-client-retries.md#limits-on-retries-and-hedges
+	defaultMaxCallAttempts = 5
+)
+
 func init() {
 	internal.AddGlobalDialOptions = func(opt ...DialOption) {
 		globalDialOptions = append(globalDialOptions, opt...)
@@ -678,7 +683,7 @@ func defaultDialOptions() dialOptions {
 		idleTimeout:     30 * time.Minute,
 		recvBufferPool:  nopBufferPool{},
 		defaultScheme:   "dns",
-		maxCallAttempts: 5, // https://github.com/grpc/proposal/blob/master/A6-client-retries.md#limits-on-retries-and-hedges
+		maxCallAttempts: defaultMaxCallAttempts,
 	}
 }
 

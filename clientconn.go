@@ -170,7 +170,7 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	}
 
 	if cc.dopts.defaultServiceConfigRawJSON != nil {
-		scpr := parseServiceConfig(*cc.dopts.defaultServiceConfigRawJSON)
+		scpr := parseServiceConfig(*cc.dopts.defaultServiceConfigRawJSON, cc.dopts.maxCallAttempts)
 		if scpr.Err != nil {
 			return nil, fmt.Errorf("%s: %v", invalidDefaultServiceConfigErrPrefix, scpr.Err)
 		}
@@ -694,7 +694,7 @@ var emptyServiceConfig *ServiceConfig
 
 func init() {
 	balancer.Register(pickfirstBuilder{})
-	cfg := parseServiceConfig("{}")
+	cfg := parseServiceConfig("{}", 5)
 	if cfg.Err != nil {
 		panic(fmt.Sprintf("impossible error parsing empty service config: %v", cfg.Err))
 	}
@@ -1834,15 +1834,4 @@ func (cc *ClientConn) initAuthority() error {
 		cc.authority = encodeAuthority(endpoint)
 	}
 	return nil
-}
-
-// sanitizeRPCConfig sanitizes the RPCConfig supplied by the server by
-// enforcing any limits specified in the client's dial options
-func (cc *ClientConn) sanitizeRPCConfig(c *iresolver.RPCConfig) {
-	// Enforce max retry attempts
-	if c.MethodConfig.RetryPolicy != nil {
-		if c.MethodConfig.RetryPolicy.MaxAttempts > cc.dopts.maxCallAttempts {
-			c.MethodConfig.RetryPolicy.MaxAttempts = cc.dopts.maxCallAttempts
-		}
-	}
 }
