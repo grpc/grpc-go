@@ -418,6 +418,14 @@ func NewConfigFromContents(data []byte) (*Config, error) {
 }
 
 func newConfigFromContents(data []byte) (*Config, error) {
+	// Normalize the input configuration.
+	buf := bytes.Buffer{}
+	err := json.Indent(&buf, data, "", "")
+	if err != nil {
+		return nil, fmt.Errorf("xds: error normalizing JSON bootstrap configuration: %v", err)
+	}
+	data = bytes.TrimSpace(buf.Bytes())
+
 	config := &Config{}
 
 	var jsonData map[string]json.RawMessage
