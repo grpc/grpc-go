@@ -16,7 +16,8 @@
  *
  */
 
-package grpc
+// Package pickfirst contains the pick_first load balancing policy.
+package pickfirst
 
 import (
 	"encoding/json"
@@ -25,6 +26,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/pretty"
@@ -32,10 +34,16 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
+func init() {
+	balancer.Register(pickfirstBuilder{})
+}
+
+var logger = grpclog.Component("pick-first-lb")
+
 const (
-	// PickFirstBalancerName is the name of the pick_first balancer.
-	PickFirstBalancerName = "pick_first"
-	logPrefix             = "[pick-first-lb %p] "
+	// Name is the name of the pick_first balancer.
+	Name      = "pick_first"
+	logPrefix = "[pick-first-lb %p] "
 )
 
 type pickfirstBuilder struct{}
@@ -47,7 +55,7 @@ func (pickfirstBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions)
 }
 
 func (pickfirstBuilder) Name() string {
-	return PickFirstBalancerName
+	return Name
 }
 
 type pfConfig struct {

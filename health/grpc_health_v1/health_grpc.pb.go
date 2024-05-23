@@ -43,6 +43,10 @@ const (
 // HealthClient is the client API for Health service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Health is gRPC's mechanism for checking whether a server is able to handle
+// RPCs. Its semantics are documented in
+// https://github.com/grpc/grpc/blob/master/doc/health-checking.md.
 type HealthClient interface {
 	// Check gets the health of the specified service. If the requested service
 	// is unknown, the call will fail with status NOT_FOUND. If the caller does
@@ -126,6 +130,10 @@ func (x *healthWatchClient) Recv() (*HealthCheckResponse, error) {
 // HealthServer is the server API for Health service.
 // All implementations should embed UnimplementedHealthServer
 // for forward compatibility
+//
+// Health is gRPC's mechanism for checking whether a server is able to handle
+// RPCs. Its semantics are documented in
+// https://github.com/grpc/grpc/blob/master/doc/health-checking.md.
 type HealthServer interface {
 	// Check gets the health of the specified service. If the requested service
 	// is unknown, the call will fail with status NOT_FOUND. If the caller does
