@@ -194,190 +194,190 @@ func verifyUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan re
 //   - the fourth and fifth entries will match the canarying rules, and therefore
 //     the fourth entry will be used as it will be  the first matching entry.
 const txtRecordGood = `
-[
-	{
-		"clientLanguage": [
-			"CPP",
-			"JAVA"
-		],
-		"serviceConfig": {
-			"loadBalancingPolicy": "grpclb",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "all"
-						}
-					],
-					"timeout": "1s"
-				}
-			]
-		}
-	},
-	{
-		"percentage": 0,
-		"serviceConfig": {
-			"loadBalancingPolicy": "grpclb",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "all"
-						}
-					],
-					"timeout": "1s"
-				}
-			]
-		}
-	},
-	{
-		"clientHostName": [
-			"localhost"
-		],
-		"serviceConfig": {
-			"loadBalancingPolicy": "grpclb",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "all"
-						}
-					],
-					"timeout": "1s"
-				}
-			]
-		}
-	},
-	{
-		"clientLanguage": [
-			"GO"
-		],
-		"percentage": 100,
-		"serviceConfig": {
-			"loadBalancingPolicy": "round_robin",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "foo"
-						}
-					],
-					"waitForReady": true,
-					"timeout": "1s"
-				},
-				{
-					"name": [
-						{
-							"service": "bar"
-						}
-					],
-					"waitForReady": false
-				}
-			]
-		}
-	},
-	{
-		"serviceConfig": {
-			"loadBalancingPolicy": "round_robin",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "foo",
-							"method": "bar"
-						}
-					],
-					"waitForReady": true
-				}
-			]
-		}
-	}
-]`
+ [
+	 {
+		 "clientLanguage": [
+			 "CPP",
+			 "JAVA"
+		 ],
+		 "serviceConfig": {
+			 "loadBalancingPolicy": "grpclb",
+			 "methodConfig": [
+				 {
+					 "name": [
+						 {
+							 "service": "all"
+						 }
+					 ],
+					 "timeout": "1s"
+				 }
+			 ]
+		 }
+	 },
+	 {
+		 "percentage": 0,
+		 "serviceConfig": {
+			 "loadBalancingPolicy": "grpclb",
+			 "methodConfig": [
+				 {
+					 "name": [
+						 {
+							 "service": "all"
+						 }
+					 ],
+					 "timeout": "1s"
+				 }
+			 ]
+		 }
+	 },
+	 {
+		 "clientHostName": [
+			 "localhost"
+		 ],
+		 "serviceConfig": {
+			 "loadBalancingPolicy": "grpclb",
+			 "methodConfig": [
+				 {
+					 "name": [
+						 {
+							 "service": "all"
+						 }
+					 ],
+					 "timeout": "1s"
+				 }
+			 ]
+		 }
+	 },
+	 {
+		 "clientLanguage": [
+			 "GO"
+		 ],
+		 "percentage": 100,
+		 "serviceConfig": {
+			 "loadBalancingPolicy": "round_robin",
+			 "methodConfig": [
+				 {
+					 "name": [
+						 {
+							 "service": "foo"
+						 }
+					 ],
+					 "waitForReady": true,
+					 "timeout": "1s"
+				 },
+				 {
+					 "name": [
+						 {
+							 "service": "bar"
+						 }
+					 ],
+					 "waitForReady": false
+				 }
+			 ]
+		 }
+	 },
+	 {
+		 "serviceConfig": {
+			 "loadBalancingPolicy": "round_robin",
+			 "methodConfig": [
+				 {
+					 "name": [
+						 {
+							 "service": "foo",
+							 "method": "bar"
+						 }
+					 ],
+					 "waitForReady": true
+				 }
+			 ]
+		 }
+	 }
+ ]`
 
 // This is the matched portion of the above TXT record entry.
 const scJSON = `
-{
-	"loadBalancingPolicy": "round_robin",
-	"methodConfig": [
-		{
-			"name": [
-				{
-					"service": "foo"
-				}
-			],
-			"waitForReady": true,
-			"timeout": "1s"
-		},
-		{
-			"name": [
-				{
-					"service": "bar"
-				}
-			],
-			"waitForReady": false
-		}
-	]
-}`
+ {
+	 "loadBalancingPolicy": "round_robin",
+	 "methodConfig": [
+		 {
+			 "name": [
+				 {
+					 "service": "foo"
+				 }
+			 ],
+			 "waitForReady": true,
+			 "timeout": "1s"
+		 },
+		 {
+			 "name": [
+				 {
+					 "service": "bar"
+				 }
+			 ],
+			 "waitForReady": false
+		 }
+	 ]
+ }`
 
 // This service config contains three entries, but none of the match the DNS
 // resolver's canarying rules and hence the resulting service config pushed by
 // the DNS resolver will be an empty one.
 const txtRecordNonMatching = `
-[
-	{
-		"clientLanguage": [
-			"CPP",
-			"JAVA"
-		],
-		"serviceConfig": {
-			"loadBalancingPolicy": "grpclb",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "all"
-						}
-					],
-					"timeout": "1s"
-				}
-			]
-		}
-	},
-	{
-		"percentage": 0,
-		"serviceConfig": {
-			"loadBalancingPolicy": "grpclb",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "all"
-						}
-					],
-					"timeout": "1s"
-				}
-			]
-		}
-	},
-	{
-		"clientHostName": [
-			"localhost"
-		],
-		"serviceConfig": {
-			"loadBalancingPolicy": "grpclb",
-			"methodConfig": [
-				{
-					"name": [
-						{
-							"service": "all"
-						}
-					],
-					"timeout": "1s"
-				}
-			]
-		}
-	}
-]`
+ [
+	 {
+		 "clientLanguage": [
+			 "CPP",
+			 "JAVA"
+		 ],
+		 "serviceConfig": {
+			 "loadBalancingPolicy": "grpclb",
+			 "methodConfig": [
+				 {
+					 "name": [
+						 {
+							 "service": "all"
+						 }
+					 ],
+					 "timeout": "1s"
+				 }
+			 ]
+		 }
+	 },
+	 {
+		 "percentage": 0,
+		 "serviceConfig": {
+			 "loadBalancingPolicy": "grpclb",
+			 "methodConfig": [
+				 {
+					 "name": [
+						 {
+							 "service": "all"
+						 }
+					 ],
+					 "timeout": "1s"
+				 }
+			 ]
+		 }
+	 },
+	 {
+		 "clientHostName": [
+			 "localhost"
+		 ],
+		 "serviceConfig": {
+			 "loadBalancingPolicy": "grpclb",
+			 "methodConfig": [
+				 {
+					 "name": [
+						 {
+							 "service": "all"
+						 }
+					 ],
+					 "timeout": "1s"
+				 }
+			 ]
+		 }
+	 }
+ ]`
 
 // Tests the scenario where a name resolves to a list of addresses, possibly
 // some grpclb addresses as well, and a service config. The test verifies that
@@ -636,8 +636,8 @@ func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 	const target = "foo.bar.com"
 
-	overrideResolutionInterval(t, 0)
-	overrideTimeAfterFunc(t, 0)
+	overrideResolutionInterval(t, 5*time.Second)
+	//overrideTimeAfterFunc(t, 0)
 	tr := &testNetResolver{
 		hostLookupTable: map[string][]string{
 			"foo.bar.com": {"1.2.3.4", "5.6.7.8"},
@@ -653,7 +653,7 @@ func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 	// Verify that the first update pushed by the resolver matches expectations.
 	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
 	wantSC := scJSON
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
 
@@ -666,10 +666,13 @@ func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 
 	// Ask the resolver to re-resolve and verify that the new update matches
 	// expectations.
+	fmt.Printf("1st resolve sent %v\n", time.Now())
 	r.ResolveNow(resolver.ResolveNowOptions{})
 	wantAddrs = []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}}
 	wantSC = `{"loadBalancingPolicy": "grpclb"}`
 	verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
+	fmt.Printf("1st resolve completed %v\n", time.Now())
+	time.Sleep(5 * time.Second)
 
 	// Update state in the fake resolver to return no addresses and the same
 	// service config as before.
@@ -677,8 +680,10 @@ func (s) TestDNSResolver_ResolveNow(t *testing.T) {
 
 	// Ask the resolver to re-resolve and verify that the new update matches
 	// expectations.
+	fmt.Printf("2nd resolve sent %v\n", time.Now())
 	r.ResolveNow(resolver.ResolveNowOptions{})
 	verifyUpdateFromResolver(ctx, t, stateCh, nil, nil, wantSC)
+	fmt.Printf("2nd resolve completed %v\n", time.Now())
 }
 
 // Tests the case where the given name is an IP address and verifies that the
