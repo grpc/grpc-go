@@ -210,18 +210,18 @@ func main() {
 	var streamAuthzInterceptor grpc.StreamServerInterceptor
 	if *authzOpt == authzOptStatic {
 		// Create an authorization interceptor using a static policy.
-		staticInt, err := authz.NewStatic(authzPolicy)
+		staticInterceptor, err := authz.NewStatic(authzPolicy)
 		if err != nil {
 			log.Fatalf("Creating a static authz interceptor: %v", err)
 		}
-		unaryAuthzInterceptor, streamAuthzInterceptor = staticInt.UnaryInterceptor, staticInt.StreamInterceptor
+		unaryAuthzInterceptor, streamAuthzInterceptor = staticInterceptor.UnaryInterceptor, staticInterceptor.StreamInterceptor
 	} else if *authzOpt == authzOptFileWatcher {
 		// Create an authorization interceptor by watching a policy file.
-		fileWatcherInt, err := authz.NewFileWatcher(data.Path("rbac/policy.json"), 100*time.Millisecond)
+		fileWatcherInterceptor, err := authz.NewFileWatcher(data.Path("rbac/policy.json"), 100*time.Millisecond)
 		if err != nil {
 			log.Fatalf("Creating a file watcher authz interceptor: %v", err)
 		}
-		unaryAuthzInterceptor, streamAuthzInterceptor = fileWatcherInt.UnaryInterceptor, fileWatcherInt.StreamInterceptor
+		unaryAuthzInterceptor, streamAuthzInterceptor = fileWatcherInterceptor.UnaryInterceptor, fileWatcherInterceptor.StreamInterceptor
 	}
 
 	unaryInterceptors := grpc.ChainUnaryInterceptor(authUnaryInterceptor, unaryAuthzInterceptor)
