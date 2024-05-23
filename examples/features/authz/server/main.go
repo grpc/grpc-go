@@ -224,9 +224,9 @@ func main() {
 		unaryAuthzInterceptor, streamAuthzInterceptor = fileWatcherInt.UnaryInterceptor, fileWatcherInt.StreamInterceptor
 	}
 
-	unaryInts := grpc.ChainUnaryInterceptor(authUnaryInterceptor, unaryAuthzInterceptor)
-	streamInts := grpc.ChainStreamInterceptor(authStreamInterceptor, streamAuthzInterceptor)
-	s := grpc.NewServer(grpc.Creds(creds), unaryInts, streamInts)
+	unaryInterceptors := grpc.ChainUnaryInterceptor(authUnaryInterceptor, unaryAuthzInterceptor)
+	streamInterceptors := grpc.ChainStreamInterceptor(authStreamInterceptor, streamAuthzInterceptor)
+	s := grpc.NewServer(grpc.Creds(creds), unaryInterceptors, streamInterceptors)
 
 	// Register EchoServer on the server.
 	pb.RegisterEchoServer(s, &server{})
