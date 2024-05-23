@@ -96,7 +96,7 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 	if s.opts.bootstrapContentsForTesting != nil {
 		// Bootstrap file contents may be specified as a server option for tests.
 		newXDSClient = func() (xdsclient.XDSClient, func(), error) {
-			return xdsclient.NewWithBootstrapContentsForTesting(s.opts.bootstrapContentsForTesting)
+			return xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: s.opts.bootstrapContentsForTesting})
 		}
 	}
 	xdsClient, xdsClientClose, err := newXDSClient()

@@ -25,9 +25,6 @@
 package xdsresource
 
 import (
-	"fmt"
-
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
@@ -40,8 +37,6 @@ func init() {
 	xdsinternal.ResourceTypeMapForTesting[version.V3RouteConfigURL] = routeConfigType
 	xdsinternal.ResourceTypeMapForTesting[version.V3ClusterURL] = clusterType
 	xdsinternal.ResourceTypeMapForTesting[version.V3EndpointsURL] = endpointsType
-
-	internal.TriggerXDSResourceNameNotFoundForTesting = triggerResourceNotFoundForTesting
 }
 
 // Producer contains a single method to discover resource configuration from a
@@ -170,21 +165,4 @@ func (r resourceTypeState) TypeName() string {
 
 func (r resourceTypeState) AllResourcesRequiredInSotW() bool {
 	return r.allResourcesRequiredInSotW
-}
-
-func triggerResourceNotFoundForTesting(cb func(Type, string) error, typeName, resourceName string) error {
-	var typ Type
-	switch typeName {
-	case ListenerResourceTypeName:
-		typ = listenerType
-	case RouteConfigTypeName:
-		typ = routeConfigType
-	case ClusterResourceTypeName:
-		typ = clusterType
-	case EndpointsResourceTypeName:
-		typ = endpointsType
-	default:
-		return fmt.Errorf("unknown type name %q", typeName)
-	}
-	return cb(typ, resourceName)
 }

@@ -292,6 +292,9 @@ func (a *Authority) UnmarshalJSON(data []byte) error {
 // Config provides the xDS client with several key bits of information that it
 // requires in its interaction with the management server. The Config is
 // initialized from the bootstrap file.
+//
+// Users must use one of the NewXxx() functions to create a Config instance, and
+// not initialize it manually.
 type Config struct {
 	// XDSServer is the management server to connect to.
 	//
@@ -415,6 +418,14 @@ func NewConfigFromContents(data []byte) (*Config, error) {
 }
 
 func newConfigFromContents(data []byte) (*Config, error) {
+	// Normalize the input configuration.
+	buf := bytes.Buffer{}
+	err := json.Indent(&buf, data, "", "")
+	if err != nil {
+		return nil, fmt.Errorf("xds: error normalizing JSON bootstrap configuration: %v", err)
+	}
+	data = bytes.TrimSpace(buf.Bytes())
+
 	config := &Config{}
 
 	var jsonData map[string]json.RawMessage

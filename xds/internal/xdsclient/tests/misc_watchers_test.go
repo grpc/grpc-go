@@ -102,7 +102,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -213,7 +213,7 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 	}
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}

@@ -228,7 +228,7 @@ func setupWithManagementServer(t *testing.T) (*e2e.ManagementServer, string, *gr
 	})
 	t.Cleanup(cleanup)
 
-	xdsC, xdsClose, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	xdsC, xdsClose, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -344,7 +344,7 @@ func (s) TestConfigurationUpdate_EmptyCluster(t *testing.T) {
 	// Setup a management server and an xDS client to talk to it.
 	_, _, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	t.Cleanup(cleanup)
-	xdsClient, xdsClose, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	xdsClient, xdsClose, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
