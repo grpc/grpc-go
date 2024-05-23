@@ -64,9 +64,9 @@ go run client/main.go
 ```
 
 The client will first hit `codes.PermissionDenied` error when invoking
-`UnaryEcho` although a legit username (`super-user`) is associated. This is
-because the policy file has an intentional glitch (falsely asks for role
-`UNARY_ECHO:RW`).
+`UnaryEcho` although a legitimate username (`super-user`) is associated with the
+RPC. This is because the policy file has an intentional glitch (falsely asks for
+role `UNARY_ECHO:RW`).
 
 While the server is still running, edit and save the policy file to replace
 `UNARY_ECHO:RW` with the correct role `UNARY_ECHO:W` (policy reload activity
