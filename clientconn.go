@@ -694,7 +694,7 @@ var emptyServiceConfig *ServiceConfig
 
 func init() {
 	balancer.Register(pickfirstBuilder{})
-	cfg := parseServiceConfig("{}", 5)
+	cfg := parseServiceConfig("{}", defaultMaxCallAttempts)
 	if cfg.Err != nil {
 		panic(fmt.Sprintf("impossible error parsing empty service config: %v", cfg.Err))
 	}

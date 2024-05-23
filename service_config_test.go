@@ -60,7 +60,7 @@ func runParseTests(t *testing.T, testCases []parseTestCase) {
 	t.Helper()
 	for i, c := range testCases {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			scpr := parseServiceConfig(c.scjs, 5)
+			scpr := parseServiceConfig(c.scjs, defaultMaxCallAttempts)
 			var sc *ServiceConfig
 			sc, _ = scpr.Config.(*ServiceConfig)
 			if !c.wantErr {

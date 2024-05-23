@@ -751,7 +751,7 @@ func WithIdleTimeout(d time.Duration) DialOption {
 func WithMaxCallAttempts(n int) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		if n < 2 {
-			n = 5
+			n = defaultMaxCallAttempts
 		}
 		o.maxCallAttempts = n
 	})

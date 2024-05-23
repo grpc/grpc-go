@@ -233,7 +233,6 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 
 	if rpcConfig != nil {
-
 		if rpcConfig.Context != nil {
 			ctx = rpcConfig.Context
 		}
