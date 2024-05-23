@@ -42,6 +42,8 @@ const (
 // RouteGuideClient is the client API for RouteGuide service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Interface exported by the server.
 type RouteGuideClient interface {
 	// A simple RPC.
 	//
@@ -135,6 +137,8 @@ type RouteGuide_RouteChatClient = grpc.BidiStreamingClient[RouteNote, RouteNote]
 // RouteGuideServer is the server API for RouteGuide service.
 // All implementations must embed UnimplementedRouteGuideServer
 // for forward compatibility
+//
+// Interface exported by the server.
 type RouteGuideServer interface {
 	// A simple RPC.
 	//

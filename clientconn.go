@@ -693,7 +693,6 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 var emptyServiceConfig *ServiceConfig
 
 func init() {
-	balancer.Register(pickfirstBuilder{})
 	cfg := parseServiceConfig("{}", defaultMaxCallAttempts)
 	if cfg.Err != nil {
 		panic(fmt.Sprintf("impossible error parsing empty service config: %v", cfg.Err))

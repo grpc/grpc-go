@@ -41,6 +41,8 @@ import (
 	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
+type CertificateChains [][]*x509.Certificate
+
 // HandshakeVerificationInfo contains information about a handshake needed for
 // verification for use when implementing the `PostHandshakeVerificationFunc`
 // The fields in this struct are read-only.
@@ -53,7 +55,7 @@ type HandshakeVerificationInfo struct {
 	RawCerts [][]byte
 	// The verification chain obtained by checking peer RawCerts against the
 	// trust certificate bundle(s), if applicable.
-	VerifiedChains [][]*x509.Certificate
+	VerifiedChains CertificateChains
 	// The leaf certificate sent from peer, if choosing to verify the peer
 	// certificate(s) and that verification passed. This field would be nil if
 	// either user chose not to verify or the verification failed.
@@ -552,7 +554,8 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 	if cfg.ServerName == "" {
 		cfg.ServerName = authority
 	}
-	cfg.VerifyPeerCertificate = buildVerifyFunc(c, cfg.ServerName, rawConn)
+	peerVerifiedChains := CertificateChains{}
+	cfg.VerifyPeerCertificate = buildVerifyFunc(c, cfg.ServerName, rawConn, &peerVerifiedChains)
 	conn := tls.Client(rawConn, cfg)
 	errChannel := make(chan error, 1)
 	go func() {
@@ -576,12 +579,14 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 		},
 	}
 	info.SPIFFEID = credinternal.SPIFFEIDFromState(conn.ConnectionState())
+	info.State.VerifiedChains = peerVerifiedChains
 	return credinternal.WrapSyscallConn(rawConn, conn), info, nil
 }
 
 func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	cfg := credinternal.CloneTLSConfig(c.config)
-	cfg.VerifyPeerCertificate = buildVerifyFunc(c, "", rawConn)
+	peerVerifiedChains := CertificateChains{}
+	cfg.VerifyPeerCertificate = buildVerifyFunc(c, "", rawConn, &peerVerifiedChains)
 	conn := tls.Server(rawConn, cfg)
 	if err := conn.Handshake(); err != nil {
 		conn.Close()
@@ -594,6 +599,7 @@ func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credenti
 		},
 	}
 	info.SPIFFEID = credinternal.SPIFFEIDFromState(conn.ConnectionState())
+	info.State.VerifiedChains = peerVerifiedChains
 	return credinternal.WrapSyscallConn(rawConn, conn), info, nil
 }
 
@@ -618,9 +624,15 @@ func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 //  1. does not have a good support on root cert reloading.
 //  2. will ignore basic certificate check when setting InsecureSkipVerify
 //     to true.
+//
+// peerVerifiedChains(output param): verified chain of certs from leaf to the
+// trust cert that the peer trusts.
+//  1. For server it is, client certs + Root ca that the server trusts
+//  2. For client it is, server certs + Root ca that the client trusts
 func buildVerifyFunc(c *advancedTLSCreds,
 	serverName string,
-	rawConn net.Conn) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	rawConn net.Conn,
+	peerVerifiedChains *CertificateChains) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		chains := verifiedChains
 		var leafCert *x509.Certificate
@@ -684,7 +696,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 		if c.revocationOptions != nil {
 			verifiedChains := chains
 			if verifiedChains == nil {
-				verifiedChains = [][]*x509.Certificate{rawCertList}
+				verifiedChains = CertificateChains{rawCertList}
 			}
 			if err := checkChainRevocation(verifiedChains, *c.revocationOptions); err != nil {
 				return err
@@ -698,8 +710,11 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				VerifiedChains: chains,
 				Leaf:           leafCert,
 			})
-			return err
+			if err != nil {
+				return err
+			}
 		}
+		*peerVerifiedChains = chains
 		return nil
 	}
 }

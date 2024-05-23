@@ -18,12 +18,13 @@ package balancergroup
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedtarget/weightedaggregator"
 	"google.golang.org/grpc/connectivity"
@@ -601,7 +602,7 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 	childPolicyName := t.Name()
 	stub.Register(childPolicyName, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = balancer.Get(grpc.PickFirstBalancerName).Build(bd.ClientConn, bd.BuildOptions)
+			bd.Data = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			ccs.ResolverState.Addresses = ccs.ResolverState.Addresses[1:]
@@ -609,9 +610,15 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 			return bal.UpdateClientConnState(ccs)
 		},
 	})
-	builder := balancer.Get(childPolicyName)
-	bg.UpdateBuilder(testBalancerIDs[0], builder)
-	if err := bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}}); err != nil {
+	cfgJSON := json.RawMessage(fmt.Sprintf(`[{%q: {}}]`, t.Name()))
+	lbCfg, err := ParseConfig(cfgJSON)
+	if err != nil {
+		t.Fatalf("ParseConfig(%s) failed: %v", string(cfgJSON), err)
+	}
+	if err := bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{
+		ResolverState:  resolver.State{Addresses: testBackendAddrs[2:4]},
+		BalancerConfig: lbCfg,
+	}); err != nil {
 		t.Fatalf("error updating ClientConn state: %v", err)
 	}
 
