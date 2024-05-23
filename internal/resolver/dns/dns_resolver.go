@@ -209,12 +209,12 @@ func (d *dnsResolver) watcher() {
 			err = d.cc.UpdateState(*state)
 		}
 
-		var waitTime time.Duration
+		var nextResolutionTime time.Time
 		if err == nil {
 			// Success resolving, wait for the next ResolveNow. However, also wait 30
 			// seconds at the very least to prevent constantly re-resolving.
 			backoffIndex = 1
-			waitTime = MinResolutionInterval
+			nextResolutionTime = time.Now().Add(MinResolutionInterval)
 			select {
 			case <-d.ctx.Done():
 				return
@@ -223,13 +223,13 @@ func (d *dnsResolver) watcher() {
 		} else {
 			// Poll on an error found in DNS Resolver or an error received from
 			// ClientConn.
-			waitTime = backoff.DefaultExponential.Backoff(backoffIndex)
+			nextResolutionTime = time.Now().Add(backoff.DefaultExponential.Backoff(backoffIndex))
 			backoffIndex++
 		}
 		select {
 		case <-d.ctx.Done():
 			return
-		case <-internal.TimeAfterFunc(waitTime):
+		case <-internal.TimeAfterFunc(time.Until(nextResolutionTime)):
 		}
 	}
 }
