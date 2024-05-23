@@ -742,10 +742,11 @@ func WithIdleTimeout(d time.Duration) DialOption {
 }
 
 // WithMaxCallAttempts returns a DialOption that configures the maximum number
-// of retry attempts for the channel. Service owners may specify a higher value
-// for these parameters, but higher values will be treated as equal to the
-// maximum value by the client implementation. This mitigates security concerns
-// related to the service config being transferred to the client via DNS.
+// of attempts per call (including retries and hedging) using the channel.
+// Service owners may specify a higher value for these parameters, but higher
+// values will be treated as equal to the maximum value by the client
+// implementation. This mitigates security concerns related to the service
+// config being transferred to the client via DNS.
 //
 // A value of 5 will be used if this dial option is not set or n < 2.
 func WithMaxCallAttempts(n int) DialOption {
