@@ -190,7 +190,11 @@ func (csh *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 
 func (csh *clientStatsHandler) setLabelsFromPluginOption(ai *attemptInfo, incomingMetadata metadata.MD) {
 	if ai.pluginOptionLabels == nil && csh.o.MetricsOptions.pluginOption != nil {
-		ai.pluginOptionLabels = csh.o.MetricsOptions.pluginOption.GetLabels(incomingMetadata)
+		labels := csh.o.MetricsOptions.pluginOption.GetLabels(incomingMetadata)
+		if labels == nil {
+			labels = map[string]string{} // Shouldn't return a nil map. Make it empty if so to ignore future Get Calls for this Attempt.
+		}
+		ai.pluginOptionLabels = labels
 	}
 }
 
