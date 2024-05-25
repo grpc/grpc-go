@@ -38,7 +38,7 @@ func TestDial(t *testing.T) {
 		return func() {
 			hsDialer = temp
 		}
-	}()
+	}()()
 
 	// First call to Dial, it should create a connection to the server running
 	// at the given address.
