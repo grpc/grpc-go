@@ -1290,3 +1290,45 @@ func (s) TestMinResolutionInterval(t *testing.T) {
 		r.ResolveNow(resolver.ResolveNowOptions{})
 	}
 }
+
+// TestMinResolutionInterval_NoExtraDelay verifies that there is no extra delay
+// between two resolution requests apart from [MinResolutionInterval]
+// i.e. if a request is made after [MinResolutionInterval], it should resolve
+// immediately. Test sets [MinResolutionInterval] to 1 second and calls
+// ResolveNow() 4 times with a wait of 1 second between each request.
+// A correct implementation should resolve all requests without timing out in
+// test duration of 5 seconds.
+func (s) TestMinResolutionInterval_NoExtraDelay(t *testing.T) {
+	const target = "foo.bar.com"
+
+	overrideResolutionInterval(t, 1*time.Second)
+	tr := &testNetResolver{
+		hostLookupTable: map[string][]string{
+			"foo.bar.com": {"1.2.3.4", "5.6.7.8"},
+		},
+		txtLookupTable: map[string][]string{
+			"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+		},
+	}
+	overrideNetResolver(t, tr)
+
+	r, stateCh, _ := buildResolverWithTestClientConn(t, target)
+
+	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
+	wantSC := scJSON
+
+	// set context timeout to test duration of 5 seconds
+	// to make sure all 4 resolutions happen successfully
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// We chose to make 4 requests to strike a balance between coverage and
+	// test duration. This number is sufficiently large to validate the
+	// behavior across multiple resolution attempts, while also reducing
+	// the likelihood of flakiness due to timing issues.
+	for i := 0; i < 4; i++ {
+		verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
+		time.Sleep(1 * time.Second) // respect resolution rate of 1 second for re-resolve
+		r.ResolveNow(resolver.ResolveNowOptions{})
+	}
+}
