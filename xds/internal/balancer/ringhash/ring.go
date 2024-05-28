@@ -116,12 +116,22 @@ func newRing(subConns *resolver.AddressMap, minRingSize, maxRingSize uint64, log
 	return &ring{items: items}
 }
 
-// normalizeWeights divides all the weights by the sum, so that the total weight
-// is 1.
+// normalizeWeights calculates the normalized weights for each subConn in the
+// given subConns map. It returns a slice of subConnWithWeight structs, where
+// each struct contains a subConn and its corresponding weight. The function
+// also returns the minimum weight among all subConns.
+//
+// The weight of each subConn is calculated by dividing its weight attribute by
+// the sum of all subConn weights. If the weight attribute is not found on the
+// address, a default weight of 1 is used.
+//
+// The addresses are sorted in ascending order to ensure consistent results.
 //
 // Must be called with a non-empty subConns map.
 func normalizeWeights(subConns *resolver.AddressMap) ([]subConnWithWeight, float64) {
 	var weightSum uint32
+	// Since attributes are explicitly ignored in the AddressMap key, we need to
+	// iterate over the values to get the weights.
 	scVals := subConns.Values()
 	for _, a := range scVals {
 		weightSum += a.(*subConn).weight
