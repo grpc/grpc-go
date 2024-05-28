@@ -782,6 +782,11 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 		// not be established yet.
 		delete(l.estdStreams, c.streamID)
 		str.deleteSelf()
+		for head := str.itl.dequeueAll(); head != nil; head = head.next {
+			if df, ok := head.it.(*dataFrame); ok {
+				df.d.Free()
+			}
+		}
 	}
 	if c.rst { // If RST_STREAM needs to be sent.
 		if err := l.framer.fr.WriteRSTStream(c.streamID, c.rstCode); err != nil {

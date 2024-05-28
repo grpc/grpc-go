@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/internal/leakcheck"
 )
@@ -53,13 +54,14 @@ func (Tester) Setup(t *testing.T) {
 
 // Teardown performs a leak check.
 func (Tester) Teardown(t *testing.T) {
-	//if atomic.LoadUint32(&lcFailed) == 1 {
-	//	return
-	//}
-	leakcheck.Check(errorer{t: t})
-	//if atomic.LoadUint32(&lcFailed) == 1 {
-	//	t.Log("Leak check disabled for future tests")
-	//}
+	leakcheck.CheckTrackingBufferPool()
+	if atomic.LoadUint32(&lcFailed) == 1 {
+		return
+	}
+	leakcheck.CheckGoroutines(errorer{t: t}, 10*time.Second)
+	if atomic.LoadUint32(&lcFailed) == 1 {
+		t.Log("Goroutine leak check disabled for future tests")
+	}
 	TLogger.EndTest(t)
 }
 
