@@ -205,7 +205,9 @@ func backendOptions(t *testing.T, servers []*stubserver.StubServer) []e2e.Backen
 func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T) {
 	// origin: https://github.com/grpc/grpc/blob/083bbee4805c14ce62e6c9535fe936f68b854c4f/test/cpp/end2end/xds/xds_ring_hash_end2end_test.cc#L97
 
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+		AllowResourceSubset: true,
+	})
 	defer stop()
 
 	nonExistantServers := makeNonExistingBackends(t, 2)
@@ -264,7 +266,8 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T
 
 	err := xdsServer.Update(context.Background(), e2e.UpdateOptions{
 		NodeID:    nodeID,
-		Clusters:  []*v3clusterpb.Cluster{cluster},
+		Endpoints: []*endpointv3.ClusterLoadAssignment{ep1, ep2},
+		Clusters:  []*v3clusterpb.Cluster{cluster, cluster1, cluster2},
 		Routes:    []*v3routepb.RouteConfiguration{route},
 		Listeners: []*v3listenerpb.Listener{listener},
 	})
@@ -279,27 +282,6 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T
 	conn.Connect() // force triggering resource fetch. This isn't great, see comment below.
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
-
-	// Wait to give time to the LB policy to request the child clusters.
-	// This is because go-control-plane, which we rely on for the tests,
-	// refuses to send a snapshot when the client does not request exactly
-	// the resources it contains.
-	// IMO it would be much better if the management server only sent resources
-	// requested by the client, so that we can set it from the beginning and
-	// avoid having to control and time the management server to mach the client
-	// requests.
-	time.Sleep(1 * time.Second)
-
-	err = xdsServer.Update(context.Background(), e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Endpoints: []*endpointv3.ClusterLoadAssignment{ep1, ep2},
-		Clusters:  []*v3clusterpb.Cluster{cluster, cluster1, cluster2},
-		Routes:    []*v3routepb.RouteConfiguration{route},
-		Listeners: []*v3listenerpb.Listener{listener},
-	})
-	if err != nil {
-		t.Fatalf("failed to update xDS resources: %v", err)
-	}
 
 	// Here we use the hostname field in the response proto to verify which
 	// backend we routed to. In c-core it uses the number of requests received
