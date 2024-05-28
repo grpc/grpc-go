@@ -60,12 +60,12 @@ func securityConfigValidator(bc *bootstrap.Config, sc *SecurityConfig) error {
 		return nil
 	}
 	if sc.IdentityInstanceName != "" {
-		if _, ok := bc.CertProviderConfigs[sc.IdentityInstanceName]; !ok {
+		if _, ok := bc.CertProviderConfigs()[sc.IdentityInstanceName]; !ok {
 			return fmt.Errorf("identity certificate provider instance name %q missing in bootstrap configuration", sc.IdentityInstanceName)
 		}
 	}
 	if sc.RootInstanceName != "" {
-		if _, ok := bc.CertProviderConfigs[sc.RootInstanceName]; !ok {
+		if _, ok := bc.CertProviderConfigs()[sc.RootInstanceName]; !ok {
 			return fmt.Errorf("root certificate provider instance name %q missing in bootstrap configuration", sc.RootInstanceName)
 		}
 	}

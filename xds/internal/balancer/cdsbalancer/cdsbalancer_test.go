@@ -597,16 +597,18 @@ func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 		ServiceName: serviceName,
 		EnableLRS:   true,
 	})
+	lrsServerCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fmt.Sprintf("passthrough:///%s", mgmtServer.Address)})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
+
 	wantChildCfg := &clusterresolver.LBConfig{
 		DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
-			Cluster:        clusterName,
-			Type:           clusterresolver.DiscoveryMechanismTypeEDS,
-			EDSServiceName: serviceName,
-			LoadReportingServer: &bootstrap.ServerConfig{
-				ServerURI: mgmtServer.Address,
-				Creds:     bootstrap.ChannelCreds{Type: "insecure"},
-			},
-			OutlierDetection: json.RawMessage(`{}`),
+			Cluster:             clusterName,
+			Type:                clusterresolver.DiscoveryMechanismTypeEDS,
+			EDSServiceName:      serviceName,
+			LoadReportingServer: lrsServerCfg,
+			OutlierDetection:    json.RawMessage(`{}`),
 		}},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 	}

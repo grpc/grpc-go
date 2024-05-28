@@ -84,7 +84,7 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration, i
 	}
 
 	c.logger = prefixLogger(c)
-	c.logger.Infof("Created client to xDS management server: %s", config.XDSServer)
+	c.logger.Infof("Created client to xDS management server: %s", config.XDSServers()[0])
 	return c, nil
 }
 

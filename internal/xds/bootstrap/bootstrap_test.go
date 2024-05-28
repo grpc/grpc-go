@@ -25,17 +25,16 @@ import (
 	"os"
 	"testing"
 
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/bootstrap"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
-
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
 var (
@@ -177,7 +176,7 @@ var (
 				},
 				{
 					"server_uri": "backup.never.use.com:1234",
-					"channel_creds": [{ "type": "not-google-default" }]
+					"channel_creds": [{ "type": "google_default" }]
 				}
 			]
 		}`,
@@ -205,61 +204,79 @@ var (
 			},
 		},
 	}
-	v3NodeProto = &v3corepb.Node{
-		Id:                   "ENVOY_NODE_ID",
+	v3Node = node{
+		ID:                   "ENVOY_NODE_ID",
 		Metadata:             metadata,
-		UserAgentName:        gRPCUserAgentName,
-		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-		ClientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
+		userAgentName:        gRPCUserAgentName,
+		userAgentVersionType: userAgentVersion{UserAgentVersion: grpc.Version},
+		clientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
 	}
-	nilCredsConfigNoServerFeatures = &Config{
-		XDSServer: &ServerConfig{
-			ServerURI: "trafficdirector.googleapis.com:443",
-			Creds:     ChannelCreds{Type: "insecure"},
-		},
-		NodeProto: v3NodeProto,
-		ClientDefaultListenerResourceNameTemplate: "%s",
+	configWithInsecureCreds = &Config{
+		xDSServers: []*ServerConfig{{
+			serverURI:     "trafficdirector.googleapis.com:443",
+			channelCreds:  []ChannelCreds{{Type: "insecure"}},
+			selectedCreds: ChannelCreds{Type: "insecure"},
+		}},
+		node: v3Node,
+		clientDefaultListenerResourceNameTemplate: "%s",
 	}
-	nonNilCredsConfigV3 = &Config{
-		XDSServer: &ServerConfig{
-			ServerURI:      "trafficdirector.googleapis.com:443",
-			Creds:          ChannelCreds{Type: "google_default"},
-			ServerFeatures: []string{"xds_v3"},
-		},
-		NodeProto: v3NodeProto,
-		ClientDefaultListenerResourceNameTemplate: "%s",
+	configWithMultipleChannelCredsAndV3 = &Config{
+		xDSServers: []*ServerConfig{{
+			serverURI:      "trafficdirector.googleapis.com:443",
+			channelCreds:   []ChannelCreds{{Type: "not-google-default"}, {Type: "google_default"}},
+			serverFeatures: []string{"xds_v3"},
+			selectedCreds:  ChannelCreds{Type: "google_default"},
+		}},
+		node: v3Node,
+		clientDefaultListenerResourceNameTemplate: "%s",
 	}
-	nonNilCredsConfigWithDeletionIgnored = &Config{
-		XDSServer: &ServerConfig{
-			ServerURI:              "trafficdirector.googleapis.com:443",
-			Creds:                  ChannelCreds{Type: "google_default"},
-			IgnoreResourceDeletion: true,
-			ServerFeatures:         []string{"ignore_resource_deletion", "xds_v3"},
-		},
-		NodeProto: v3NodeProto,
-		ClientDefaultListenerResourceNameTemplate: "%s",
+	configWithGoogleDefaultCredsAndV3 = &Config{
+		xDSServers: []*ServerConfig{{
+			serverURI:      "trafficdirector.googleapis.com:443",
+			channelCreds:   []ChannelCreds{{Type: "google_default"}},
+			serverFeatures: []string{"xds_v3"},
+			selectedCreds:  ChannelCreds{Type: "google_default"},
+		}},
+		node: v3Node,
+		clientDefaultListenerResourceNameTemplate: "%s",
 	}
-	nonNilCredsConfigNoServerFeatures = &Config{
-		XDSServer: &ServerConfig{
-			ServerURI: "trafficdirector.googleapis.com:443",
-			Creds:     ChannelCreds{Type: "google_default"},
+	configWithMultipleServers = &Config{
+		xDSServers: []*ServerConfig{
+			{
+				serverURI:      "trafficdirector.googleapis.com:443",
+				channelCreds:   []ChannelCreds{{Type: "google_default"}},
+				serverFeatures: []string{"xds_v3"},
+				selectedCreds:  ChannelCreds{Type: "google_default"},
+			},
+			{
+				serverURI:     "backup.never.use.com:1234",
+				channelCreds:  []ChannelCreds{{Type: "google_default"}},
+				selectedCreds: ChannelCreds{Type: "google_default"},
+			},
 		},
-		NodeProto: v3NodeProto,
-		ClientDefaultListenerResourceNameTemplate: "%s",
+		node: v3Node,
+		clientDefaultListenerResourceNameTemplate: "%s",
+	}
+	configWithGoogleDefaultCredsAndIgnoreResourceDeletion = &Config{
+		xDSServers: []*ServerConfig{{
+			serverURI:      "trafficdirector.googleapis.com:443",
+			channelCreds:   []ChannelCreds{{Type: "google_default"}},
+			serverFeatures: []string{"ignore_resource_deletion", "xds_v3"},
+			selectedCreds:  ChannelCreds{Type: "google_default"},
+		}},
+		node: v3Node,
+		clientDefaultListenerResourceNameTemplate: "%s",
+	}
+	configWithGoogleDefaultCredsAndNoServerFeatures = &Config{
+		xDSServers: []*ServerConfig{{
+			serverURI:     "trafficdirector.googleapis.com:443",
+			channelCreds:  []ChannelCreds{{Type: "google_default"}},
+			selectedCreds: ChannelCreds{Type: "google_default"},
+		}},
+		node: v3Node,
+		clientDefaultListenerResourceNameTemplate: "%s",
 	}
 )
-
-func (c *Config) compare(want *Config) error {
-	if diff := cmp.Diff(want, c,
-		cmpopts.EquateEmpty(),
-		cmp.Comparer(proto.Equal),
-		cmp.Comparer(func(a, b grpc.DialOption) bool { return (a != nil) == (b != nil) }),
-		cmp.Transformer("certproviderconfigstring", func(a *certprovider.BuildableConfig) string { return a.String() }),
-	); diff != "" {
-		return fmt.Errorf("unexpected diff in config (-want, +got):\n%s", diff)
-	}
-	return nil
-}
 
 func fileReadFromFileMap(bootstrapFileMap map[string]string, name string) ([]byte, error) {
 	if b, ok := bootstrapFileMap[name]; ok {
@@ -293,8 +310,8 @@ func testNewConfigWithFileNameEnv(t *testing.T, fileName string, wantError bool,
 	if wantError {
 		return
 	}
-	if err := c.compare(wantConfig); err != nil {
-		t.Fatal(err)
+	if diff := cmp.Diff(wantConfig, c); diff != "" {
+		t.Fatalf("Unexpected diff in bootstrap configuration (-want, +got):\n%s", diff)
 	}
 }
 
@@ -317,14 +334,13 @@ func testNewConfigWithFileContentEnv(t *testing.T, fileName string, wantError bo
 	if wantError {
 		return
 	}
-	if err := c.compare(wantConfig); err != nil {
-		t.Fatal(err)
+	if diff := cmp.Diff(wantConfig, c); diff != "" {
+		t.Fatalf("Unexpected diff in bootstrap configuration (-want, +got):\n%s", diff)
 	}
 }
 
-// TestNewConfigV3ProtoFailure exercises the functionality in NewConfig with
-// different bootstrap file contents which are expected to fail.
-func TestNewConfigV3ProtoFailure(t *testing.T) {
+// Tests NewConfig with bootstrap file contents that are expected to fail.
+func (s) TestNewConfig_Failure(t *testing.T) {
 	bootstrapFileMap := map[string]string{
 		"empty":          "",
 		"badJSON":        `["test": 123]`,
@@ -369,21 +385,10 @@ func TestNewConfigV3ProtoFailure(t *testing.T) {
 	cancel := setupBootstrapOverride(bootstrapFileMap)
 	defer cancel()
 
-	tests := []struct {
-		name      string
-		wantError bool
-	}{
-		{"nonExistentBootstrapFile", true},
-		{"empty", true},
-		{"badJSON", true},
-		{"noBalancerName", true},
-		{"emptyXdsServer", true},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			testNewConfigWithFileNameEnv(t, test.name, true, nil)
-			testNewConfigWithFileContentEnv(t, test.name, true, nil)
+	for _, name := range []string{"nonExistentBootstrapFile", "empty", "badJSON", "noBalancerName", "emptyXdsServer"} {
+		t.Run(name, func(t *testing.T) {
+			testNewConfigWithFileNameEnv(t, name, true, nil)
+			testNewConfigWithFileContentEnv(t, name, true, nil)
 		})
 	}
 }
@@ -391,7 +396,7 @@ func TestNewConfigV3ProtoFailure(t *testing.T) {
 // TestNewConfigV3ProtoSuccess exercises the functionality in NewConfig with
 // different bootstrap file contents. It overrides the fileReadFunc by returning
 // bootstrap file contents defined in this test, instead of reading from a file.
-func TestNewConfigV3ProtoSuccess(t *testing.T) {
+func (s) TestNewConfig_Success(t *testing.T) {
 	cancel := setupBootstrapOverride(v3BootstrapFileMap)
 	defer cancel()
 
@@ -400,26 +405,28 @@ func TestNewConfigV3ProtoSuccess(t *testing.T) {
 		wantConfig *Config
 	}{
 		{
-			"emptyNodeProto", &Config{
-				XDSServer: &ServerConfig{
-					ServerURI: "trafficdirector.googleapis.com:443",
-					Creds:     ChannelCreds{Type: "insecure"},
+			name: "emptyNodeProto",
+			wantConfig: &Config{
+				xDSServers: []*ServerConfig{{
+					serverURI:     "trafficdirector.googleapis.com:443",
+					channelCreds:  []ChannelCreds{{Type: "insecure"}},
+					selectedCreds: ChannelCreds{Type: "insecure"},
+				}},
+				node: node{
+					userAgentName:        gRPCUserAgentName,
+					userAgentVersionType: userAgentVersion{UserAgentVersion: grpc.Version},
+					clientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
 				},
-				NodeProto: &v3corepb.Node{
-					UserAgentName:        gRPCUserAgentName,
-					UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-					ClientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
-				},
-				ClientDefaultListenerResourceNameTemplate: "%s",
+				clientDefaultListenerResourceNameTemplate: "%s",
 			},
 		},
-		{"unknownTopLevelFieldInFile", nilCredsConfigNoServerFeatures},
-		{"unknownFieldInNodeProto", nilCredsConfigNoServerFeatures},
-		{"unknownFieldInXdsServer", nilCredsConfigNoServerFeatures},
-		{"multipleChannelCreds", nonNilCredsConfigV3},
-		{"goodBootstrap", nonNilCredsConfigV3},
-		{"multipleXDSServers", nonNilCredsConfigV3},
-		{"serverSupportsIgnoreResourceDeletion", nonNilCredsConfigWithDeletionIgnored},
+		{"unknownTopLevelFieldInFile", configWithInsecureCreds},
+		{"unknownFieldInNodeProto", configWithInsecureCreds},
+		{"unknownFieldInXdsServer", configWithInsecureCreds},
+		{"multipleChannelCreds", configWithMultipleChannelCredsAndV3},
+		{"goodBootstrap", configWithGoogleDefaultCredsAndV3},
+		{"multipleXDSServers", configWithMultipleServers},
+		{"serverSupportsIgnoreResourceDeletion", configWithGoogleDefaultCredsAndIgnoreResourceDeletion},
 	}
 
 	for _, test := range tests {
@@ -436,7 +443,7 @@ func TestNewConfigV3ProtoSuccess(t *testing.T) {
 // "GRPC_XDS_BOOTSTRAP" which specifies the file name containing the bootstrap
 // configuration takes precedence over "GRPC_XDS_BOOTSTRAP_CONFIG", which
 // directly specifies the bootstrap configuration in itself.
-func TestNewConfigBootstrapEnvPriority(t *testing.T) {
+func (s) TestNewConfigBootstrapEnvPriority(t *testing.T) {
 	oldFileReadFunc := bootstrapFileReadFunc
 	bootstrapFileReadFunc = func(filename string) ([]byte, error) {
 		return fileReadFromFileMap(v3BootstrapFileMap, filename)
@@ -444,11 +451,11 @@ func TestNewConfigBootstrapEnvPriority(t *testing.T) {
 	defer func() { bootstrapFileReadFunc = oldFileReadFunc }()
 
 	goodFileName1 := "serverFeaturesIncludesXDSV3"
-	goodConfig1 := nonNilCredsConfigV3
+	goodConfig1 := configWithGoogleDefaultCredsAndV3
 
 	goodFileName2 := "serverFeaturesExcludesXDSV3"
 	goodFileContent2 := v3BootstrapFileMap[goodFileName2]
-	goodConfig2 := nonNilCredsConfigNoServerFeatures
+	goodConfig2 := configWithGoogleDefaultCredsAndNoServerFeatures
 
 	origBootstrapFileName := envconfig.XDSBootstrapFileName
 	envconfig.XDSBootstrapFileName = ""
@@ -470,8 +477,8 @@ func TestNewConfigBootstrapEnvPriority(t *testing.T) {
 	if err != nil {
 		t.Errorf("NewConfig() failed: %v", err)
 	}
-	if err := c.compare(goodConfig1); err != nil {
-		t.Error(err)
+	if diff := cmp.Diff(goodConfig1, c); diff != "" {
+		t.Errorf("Unexpected diff in bootstrap configuration (-want, +got):\n%s", diff)
 	}
 
 	envconfig.XDSBootstrapFileName = ""
@@ -480,8 +487,8 @@ func TestNewConfigBootstrapEnvPriority(t *testing.T) {
 	if err != nil {
 		t.Errorf("NewConfig() failed: %v", err)
 	}
-	if err := c.compare(goodConfig2); err != nil {
-		t.Error(err)
+	if diff := cmp.Diff(goodConfig2, c); diff != "" {
+		t.Errorf("Unexpected diff in bootstrap configuration (-want, +got):\n%s", diff)
 	}
 
 	// Set both, file name should be read.
@@ -491,8 +498,8 @@ func TestNewConfigBootstrapEnvPriority(t *testing.T) {
 	if err != nil {
 		t.Errorf("NewConfig() failed: %v", err)
 	}
-	if err := c.compare(goodConfig1); err != nil {
-		t.Error(err)
+	if diff := cmp.Diff(goodConfig1, c); diff != "" {
+		t.Errorf("Unexpected diff in bootstrap configuration (-want, +got):\n%s", diff)
 	}
 }
 
@@ -547,7 +554,7 @@ type fakeCertProvider struct {
 	certprovider.Provider
 }
 
-func TestNewConfigWithCertificateProviders(t *testing.T) {
+func (s) TestNewConfigWithCertificateProviders(t *testing.T) {
 	bootstrapFileMap := map[string]string{
 		"badJSONCertProviderConfig": `
 		{
@@ -649,7 +656,7 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 	getBuilder := internal.GetCertificateProviderBuilder.(func(string) certprovider.Builder)
 	parser := getBuilder(fakeCertProviderName)
 	if parser == nil {
-		t.Fatalf("missing certprovider plugin %q", fakeCertProviderName)
+		t.Fatalf("Missing certprovider plugin %q", fakeCertProviderName)
 	}
 	wantCfg, err := parser.ParseConfig(json.RawMessage(`{"configKey": "configValue"}`))
 	if err != nil {
@@ -659,24 +666,18 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 	cancel := setupBootstrapOverride(bootstrapFileMap)
 	defer cancel()
 
-	// Cannot use xdstestutils.ServerConfigForAddress here, as it would lead to
-	// a cyclic dependency.
-	jsonCfg := `{
-		"server_uri": "trafficdirector.googleapis.com:443",
-		"channel_creds": [{"type": "insecure"}],
-		"server_features": ["xds_v3"]
-	}`
-	serverCfg, err := ServerConfigFromJSON([]byte(jsonCfg))
-	if err != nil {
-		t.Fatalf("Failed to create server config from JSON %s: %v", jsonCfg, err)
-	}
 	goodConfig := &Config{
-		XDSServer: serverCfg,
-		NodeProto: v3NodeProto,
-		CertProviderConfigs: map[string]*certprovider.BuildableConfig{
+		xDSServers: []*ServerConfig{{
+			serverURI:      "trafficdirector.googleapis.com:443",
+			channelCreds:   []ChannelCreds{{Type: "insecure"}},
+			serverFeatures: []string{"xds_v3"},
+			selectedCreds:  ChannelCreds{Type: "insecure"},
+		}},
+		certProviderConfigs: map[string]*certprovider.BuildableConfig{
 			"fakeProviderInstance": wantCfg,
 		},
-		ClientDefaultListenerResourceNameTemplate: "%s",
+		clientDefaultListenerResourceNameTemplate: "%s",
+		node: v3Node,
 	}
 	tests := []struct {
 		name       string
@@ -695,7 +696,7 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 		{
 
 			name:       "allUnknownCertProviders",
-			wantConfig: nonNilCredsConfigV3,
+			wantConfig: configWithGoogleDefaultCredsAndV3,
 		},
 		{
 			name:       "goodCertProviderConfig",
@@ -711,7 +712,7 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 	}
 }
 
-func TestNewConfigWithServerListenerResourceNameTemplate(t *testing.T) {
+func (s) TestNewConfigWithServerListenerResourceNameTemplate(t *testing.T) {
 	cancel := setupBootstrapOverride(map[string]string{
 		"badServerListenerResourceNameTemplate:": `
 		{
@@ -760,13 +761,14 @@ func TestNewConfigWithServerListenerResourceNameTemplate(t *testing.T) {
 		{
 			name: "goodServerListenerResourceNameTemplate",
 			wantConfig: &Config{
-				XDSServer: &ServerConfig{
-					ServerURI: "trafficdirector.googleapis.com:443",
-					Creds:     ChannelCreds{Type: "google_default"},
-				},
-				NodeProto:                                 v3NodeProto,
-				ServerListenerResourceNameTemplate:        "grpc/server?xds.resource.listening_address=%s",
-				ClientDefaultListenerResourceNameTemplate: "%s",
+				xDSServers: []*ServerConfig{{
+					serverURI:     "trafficdirector.googleapis.com:443",
+					channelCreds:  []ChannelCreds{{Type: "google_default"}},
+					selectedCreds: ChannelCreds{Type: "google_default"},
+				}},
+				node:                               v3Node,
+				serverListenerResourceNameTemplate: "grpc/server?xds.resource.listening_address=%s",
+				clientDefaultListenerResourceNameTemplate: "%s",
 			},
 		},
 	}
@@ -779,9 +781,9 @@ func TestNewConfigWithServerListenerResourceNameTemplate(t *testing.T) {
 	}
 }
 
-func TestNewConfigWithFederation(t *testing.T) {
+func (s) TestNewConfigWithFederation(t *testing.T) {
 	cancel := setupBootstrapOverride(map[string]string{
-		"badClientListenerResourceNameTemplate": `
+		"badclientListenerResourceNameTemplate": `
 		{
 			"node": { "id": "ENVOY_NODE_ID" },
 			"xds_servers" : [{
@@ -789,7 +791,7 @@ func TestNewConfigWithFederation(t *testing.T) {
 			}],
 			"client_default_listener_resource_name_template": 123456789
 		}`,
-		"badClientListenerResourceNameTemplatePerAuthority": `
+		"badclientListenerResourceNameTemplatePerAuthority": `
 		{
 			"node": { "id": "ENVOY_NODE_ID" },
 			"xds_servers" : [{
@@ -898,31 +900,33 @@ func TestNewConfigWithFederation(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name:    "badClientListenerResourceNameTemplate",
+			name:    "badclientListenerResourceNameTemplate",
 			wantErr: true,
 		},
 		{
-			name:    "badClientListenerResourceNameTemplatePerAuthority",
+			name:    "badclientListenerResourceNameTemplatePerAuthority",
 			wantErr: true,
 		},
 		{
 			name: "good",
 			wantConfig: &Config{
-				XDSServer: &ServerConfig{
-					ServerURI: "trafficdirector.googleapis.com:443",
-					Creds:     ChannelCreds{Type: "google_default"},
-				},
-				NodeProto:                                 v3NodeProto,
-				ServerListenerResourceNameTemplate:        "xdstp://xds.example.com/envoy.config.listener.v3.Listener/grpc/server?listening_address=%s",
-				ClientDefaultListenerResourceNameTemplate: "xdstp://xds.example.com/envoy.config.listener.v3.Listener/%s",
-				Authorities: map[string]*Authority{
+				xDSServers: []*ServerConfig{{
+					serverURI:     "trafficdirector.googleapis.com:443",
+					channelCreds:  []ChannelCreds{{Type: "google_default"}},
+					selectedCreds: ChannelCreds{Type: "google_default"},
+				}},
+				node:                               v3Node,
+				serverListenerResourceNameTemplate: "xdstp://xds.example.com/envoy.config.listener.v3.Listener/grpc/server?listening_address=%s",
+				clientDefaultListenerResourceNameTemplate: "xdstp://xds.example.com/envoy.config.listener.v3.Listener/%s",
+				authorities: map[string]*Authority{
 					"xds.td.com": {
 						ClientListenerResourceNameTemplate: "xdstp://xds.td.com/envoy.config.listener.v3.Listener/%s",
-						XDSServer: &ServerConfig{
-							ServerURI:      "td.com",
-							Creds:          ChannelCreds{Type: "google_default"},
-							ServerFeatures: []string{"xds_v3"},
-						},
+						XDSServers: []*ServerConfig{{
+							serverURI:      "td.com",
+							channelCreds:   []ChannelCreds{{Type: "google_default"}},
+							serverFeatures: []string{"xds_v3"},
+							selectedCreds:  ChannelCreds{Type: "google_default"},
+						}},
 					},
 				},
 			},
@@ -930,24 +934,26 @@ func TestNewConfigWithFederation(t *testing.T) {
 		{
 			name: "goodWithDefaultDefaultClientListenerTemplate",
 			wantConfig: &Config{
-				XDSServer: &ServerConfig{
-					ServerURI: "trafficdirector.googleapis.com:443",
-					Creds:     ChannelCreds{Type: "google_default"},
-				},
-				NodeProto: v3NodeProto,
-				ClientDefaultListenerResourceNameTemplate: "%s",
+				xDSServers: []*ServerConfig{{
+					serverURI:     "trafficdirector.googleapis.com:443",
+					channelCreds:  []ChannelCreds{{Type: "google_default"}},
+					selectedCreds: ChannelCreds{Type: "google_default"},
+				}},
+				node: v3Node,
+				clientDefaultListenerResourceNameTemplate: "%s",
 			},
 		},
 		{
 			name: "goodWithDefaultClientListenerTemplatePerAuthority",
 			wantConfig: &Config{
-				XDSServer: &ServerConfig{
-					ServerURI: "trafficdirector.googleapis.com:443",
-					Creds:     ChannelCreds{Type: "google_default"},
-				},
-				NodeProto: v3NodeProto,
-				ClientDefaultListenerResourceNameTemplate: "xdstp://xds.example.com/envoy.config.listener.v3.Listener/%s",
-				Authorities: map[string]*Authority{
+				xDSServers: []*ServerConfig{{
+					serverURI:     "trafficdirector.googleapis.com:443",
+					channelCreds:  []ChannelCreds{{Type: "google_default"}},
+					selectedCreds: ChannelCreds{Type: "google_default"},
+				}},
+				node: v3Node,
+				clientDefaultListenerResourceNameTemplate: "xdstp://xds.example.com/envoy.config.listener.v3.Listener/%s",
+				authorities: map[string]*Authority{
 					"xds.td.com": {
 						ClientListenerResourceNameTemplate: "xdstp://xds.td.com/envoy.config.listener.v3.Listener/%s",
 					},
@@ -960,13 +966,14 @@ func TestNewConfigWithFederation(t *testing.T) {
 		{
 			name: "goodWithNoServerPerAuthority",
 			wantConfig: &Config{
-				XDSServer: &ServerConfig{
-					ServerURI: "trafficdirector.googleapis.com:443",
-					Creds:     ChannelCreds{Type: "google_default"},
-				},
-				NodeProto: v3NodeProto,
-				ClientDefaultListenerResourceNameTemplate: "xdstp://xds.example.com/envoy.config.listener.v3.Listener/%s",
-				Authorities: map[string]*Authority{
+				xDSServers: []*ServerConfig{{
+					serverURI:     "trafficdirector.googleapis.com:443",
+					channelCreds:  []ChannelCreds{{Type: "google_default"}},
+					selectedCreds: ChannelCreds{Type: "google_default"},
+				}},
+				node: v3Node,
+				clientDefaultListenerResourceNameTemplate: "xdstp://xds.example.com/envoy.config.listener.v3.Listener/%s",
+				authorities: map[string]*Authority{
 					"xds.td.com": {
 						ClientListenerResourceNameTemplate: "xdstp://xds.td.com/envoy.config.listener.v3.Listener/%s",
 					},
@@ -983,23 +990,18 @@ func TestNewConfigWithFederation(t *testing.T) {
 	}
 }
 
-func TestServerConfigMarshalAndUnmarshal(t *testing.T) {
-	jsonCfg := `{
-		"server_uri": "test-server",
-		"channel_creds": [{"type": "insecure"}],
-		"server_features": ["xds_v3"]
-	}`
-	origConfig, err := ServerConfigFromJSON([]byte(jsonCfg))
+func (s) TestServerConfigMarshalAndUnmarshal(t *testing.T) {
+	origConfig, err := ServerConfigForTesting(ServerConfigTestingOptions{URI: "test-server", ServerFeatures: []string{"xds_v3"}})
 	if err != nil {
-		t.Fatalf("Failed to create server config from JSON %s: %v", jsonCfg, err)
+		t.Fatalf("Failed to create server config for testing: %v", err)
 	}
-	bs, err := json.Marshal(origConfig)
+	marshaledCfg, err := json.Marshal(origConfig)
 	if err != nil {
 		t.Fatalf("failed to marshal: %v", err)
 	}
 
 	unmarshaledConfig := new(ServerConfig)
-	if err := json.Unmarshal(bs, unmarshaledConfig); err != nil {
+	if err := json.Unmarshal(marshaledCfg, unmarshaledConfig); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 	if diff := cmp.Diff(origConfig, unmarshaledConfig); diff != "" {
@@ -1007,13 +1009,190 @@ func TestServerConfigMarshalAndUnmarshal(t *testing.T) {
 	}
 }
 
-func TestDefaultBundles(t *testing.T) {
+func (s) TestDefaultBundles(t *testing.T) {
 	tests := []string{"google_default", "insecure", "tls"}
 
 	for _, typename := range tests {
 		t.Run(typename, func(t *testing.T) {
 			if c := bootstrap.GetCredentials(typename); c == nil {
 				t.Errorf(`bootstrap.GetCredentials(%s) credential is nil, want non-nil`, typename)
+			}
+		})
+	}
+}
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func newStructProtoFromMap(t *testing.T, input map[string]interface{}) *structpb.Struct {
+	t.Helper()
+
+	ret, err := structpb.NewStruct(input)
+	if err != nil {
+		t.Fatalf("Failed to create new struct proto from map %v: %v", input, err)
+	}
+	return ret
+}
+
+func (s) TestNode_MarshalAndUnmarshal(t *testing.T) {
+	tests := []struct {
+		desc      string
+		inputJSON []byte
+		wantNode  node
+	}{
+		{
+			desc: "basic happy case",
+			inputJSON: []byte(`{
+  "id": "id",
+  "cluster": "cluster",
+  "locality": {
+    "region": "region",
+    "zone": "zone",
+    "sub_zone": "sub_zone"
+  },
+  "metadata": {
+	"k1": "v1",
+	"k2": 101,
+	"k3": 280.0
+  }
+}`),
+			wantNode: node{
+				ID:      "id",
+				Cluster: "cluster",
+				Locality: locality{
+					Region:  "region",
+					Zone:    "zone",
+					SubZone: "sub_zone",
+				},
+				Metadata: newStructProtoFromMap(t, map[string]interface{}{
+					"k1": "v1",
+					"k2": 101,
+					"k3": 280.0,
+				}),
+				userAgentName:        "gRPC Go",
+				userAgentVersionType: userAgentVersion{UserAgentVersion: grpc.Version},
+				clientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
+			},
+		},
+		{
+			desc: "client controlled fields",
+			inputJSON: []byte(`{
+  "id": "id",
+  "cluster": "cluster",
+  "user_agent_name": "user_agent_name",
+  "user_agent_version_type": {
+	"user_agent_version": "version"
+  },
+  "client_features": ["feature1", "feature2"]
+}`),
+			wantNode: node{
+				ID:                   "id",
+				Cluster:              "cluster",
+				userAgentName:        "gRPC Go",
+				userAgentVersionType: userAgentVersion{UserAgentVersion: grpc.Version},
+				clientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			// Unmarshal the input JSON into a node struct and check if it
+			// matches expectations.
+			unmarshaledNode := newNode()
+			if err := json.Unmarshal([]byte(test.inputJSON), &unmarshaledNode); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(test.wantNode, unmarshaledNode); diff != "" {
+				t.Fatalf("Unexpected diff in node: (-want, +got):\n%s", diff)
+			}
+
+			// Marshal the recently unmarshaled node struct into JSON and
+			// remarshal it into another node struct, and check that it still
+			// matches expectations.
+			marshaledJSON, err := json.Marshal(unmarshaledNode)
+			if err != nil {
+				t.Fatalf("node.MarshalJSON() failed: %v", err)
+			}
+			reUnmarshaledNode := newNode()
+			if err := json.Unmarshal([]byte(marshaledJSON), &reUnmarshaledNode); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(test.wantNode, reUnmarshaledNode); diff != "" {
+				t.Fatalf("Unexpected diff in node: (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func (s) TestNode_ToProto(t *testing.T) {
+	tests := []struct {
+		desc      string
+		inputNode node
+		wantProto *v3corepb.Node
+	}{
+		{
+			desc: "all fields set",
+			inputNode: func() node {
+				n := newNode()
+				n.ID = "id"
+				n.Cluster = "cluster"
+				n.Locality = locality{
+					Region:  "region",
+					Zone:    "zone",
+					SubZone: "sub_zone",
+				}
+				n.Metadata = newStructProtoFromMap(t, map[string]interface{}{
+					"k1": "v1",
+					"k2": 101,
+					"k3": 280.0,
+				})
+				return n
+			}(),
+			wantProto: &v3corepb.Node{
+				Id:      "id",
+				Cluster: "cluster",
+				Locality: &v3corepb.Locality{
+					Region:  "region",
+					Zone:    "zone",
+					SubZone: "sub_zone",
+				},
+				Metadata: newStructProtoFromMap(t, map[string]interface{}{
+					"k1": "v1",
+					"k2": 101,
+					"k3": 280.0,
+				}),
+				UserAgentName:        "gRPC Go",
+				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+				ClientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
+			},
+		},
+		{
+			desc: "some fields unset",
+			inputNode: func() node {
+				n := newNode()
+				n.ID = "id"
+				return n
+			}(),
+			wantProto: &v3corepb.Node{
+				Id:                   "id",
+				UserAgentName:        "gRPC Go",
+				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+				ClientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			gotProto := test.inputNode.toProto()
+			if diff := cmp.Diff(test.wantProto, gotProto, protocmp.Transform()); diff != "" {
+				t.Fatalf("Unexpected diff in node proto: (-want, +got):\n%s", diff)
 			}
 		})
 	}

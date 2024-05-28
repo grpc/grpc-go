@@ -139,9 +139,13 @@ func (r *xdsResolver) sanityChecksOnBootstrapConfig(target resolver.Target, opts
 	// Find the client listener template to use from the bootstrap config:
 	// - If authority is not set in the target, use the top level template
 	// - If authority is set, use the template from the authority map.
-	template := bootstrapConfig.ClientDefaultListenerResourceNameTemplate
+	template := bootstrapConfig.ClientDefaultListenerResourceNameTemplate()
 	if authority := target.URL.Host; authority != "" {
-		a := bootstrapConfig.Authorities[authority]
+		authorities := bootstrapConfig.Authorities()
+		if authorities == nil {
+			return "", fmt.Errorf("xds: authority %q specified in dial target %q is not found in the bootstrap file", authority, target)
+		}
+		a := authorities[authority]
 		if a == nil {
 			return "", fmt.Errorf("xds: authority %q specified in dial target %q is not found in the bootstrap file", authority, target)
 		}

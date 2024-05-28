@@ -108,6 +108,6 @@ func NewClientWithName(name string) *Client {
 		loadReportCh: testutils.NewChannel(),
 		lrsCancelCh:  testutils.NewChannel(),
 		loadStore:    load.NewStore(),
-		bootstrapCfg: &bootstrap.Config{ClientDefaultListenerResourceNameTemplate: "%s"},
+		bootstrapCfg: &bootstrap.Config{},
 	}
 }

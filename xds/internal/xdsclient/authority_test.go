@@ -64,11 +64,21 @@ func setupTest(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptio
 		t.Fatalf("Failed to spin up the xDS management server: %q", err)
 	}
 
+	contents, err := e2e.DefaultBootstrapContents(nodeID, ms.Address)
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+	config, err := bootstrap.NewConfigFromContents(contents)
+	if err != nil {
+		t.Fatalf("Failed to build bootstrap configuration: %v", err)
+	}
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: ms.Address})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
 	a, err := newAuthority(authorityArgs{
-		serverCfg: testutils.ServerConfigForAddress(t, ms.Address),
-		bootstrapCfg: &bootstrap.Config{
-			NodeProto: &v3corepb.Node{Id: nodeID},
-		},
+		serverCfg:          serverCfg,
+		bootstrapCfg:       config,
 		serializer:         grpcsync.NewCallbackSerializer(ctx),
 		resourceTypeGetter: rtRegistry.get,
 		watchExpiryTimeout: watchExpiryTimeout,

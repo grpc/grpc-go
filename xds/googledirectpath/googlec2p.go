@@ -65,6 +65,8 @@ const (
 var (
 	onGCE = googlecloud.OnGCE
 
+	randInt = rand.Int
+
 	newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
 		return xdsclient.NewWithConfig(config)
 	}
@@ -159,8 +161,6 @@ func (r *c2pResolver) Close() {
 	r.clientCloseFunc()
 }
 
-var id = fmt.Sprintf("C2P-%d", rand.Int())
-
 func newNodeConfig(zone string, ipv6Capable bool) string {
 	metadata := ""
 	if ipv6Capable {
@@ -174,7 +174,7 @@ func newNodeConfig(zone string, ipv6Capable bool) string {
 			"zone": "%s"
 		}
 		%s
-	}`, id, zone, metadata)
+	}`, fmt.Sprintf("C2P-%d", randInt()), zone, metadata)
 }
 
 func newAuthoritiesConfig(xdsServer string) string {
@@ -192,7 +192,7 @@ func newXdsServerConfig(xdsServerURI string) string {
 	{
 		"server_uri": "%s",
 		"channel_creds": [{"type": "google_default"}],
-		"server_features": ["xds_v3", "ignore_resource_deletion", "xds.config.resource-in-sotw"]
+		"server_features": ["ignore_resource_deletion"]
 	}`, xdsServerURI)
 }
 

@@ -27,8 +27,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/status"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
@@ -44,7 +44,10 @@ func (s) TestLRSClient(t *testing.T) {
 	defer sCleanup()
 
 	nodeID := uuid.New().String()
-	serverCfg1 := xdstestutils.ServerConfigForAddress(t, fs1.Address)
+	serverCfg1, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fs1.Address})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
 	bc, err := e2e.DefaultBootstrapContents(nodeID, fs1.Address)
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
@@ -78,8 +81,11 @@ func (s) TestLRSClient(t *testing.T) {
 	defer sCleanup2()
 
 	// Report to a different address should create new ClientConn.
-	serverCgf2 := xdstestutils.ServerConfigForAddress(t, fs2.Address)
-	store2, lrsCancel2 := xdsC.ReportLoad(serverCgf2)
+	serverCfg2, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fs2.Address})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
+	store2, lrsCancel2 := xdsC.ReportLoad(serverCfg2)
 	defer lrsCancel2()
 	if u, err := fs2.NewConnChan.Receive(ctx); err != nil {
 		t.Errorf("unexpected timeout: %v, %v, want NewConn", u, err)

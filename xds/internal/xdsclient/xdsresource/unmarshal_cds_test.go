@@ -1263,6 +1263,11 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		})
 	)
 
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: "test-server"})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
+
 	tests := []struct {
 		name       string
 		resource   *anypb.Any
@@ -1319,48 +1324,48 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		{
 			name:      "v3 cluster",
 			resource:  v3ClusterAny,
-			serverCfg: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
+			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
 			wantUpdate: ClusterUpdate{
 				ClusterName:     v3ClusterName,
 				EDSServiceName:  v3Service,
-				LRSServerConfig: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
+				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAny,
 			},
 		},
 		{
 			name:      "v3 cluster wrapped",
 			resource:  testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3ClusterAny}),
-			serverCfg: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
+			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
 			wantUpdate: ClusterUpdate{
 				ClusterName:     v3ClusterName,
 				EDSServiceName:  v3Service,
-				LRSServerConfig: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
+				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAny,
 			},
 		},
 		{
 			name:      "v3 cluster with EDS config source self",
 			resource:  v3ClusterAnyWithEDSConfigSourceSelf,
-			serverCfg: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
+			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
 			wantUpdate: ClusterUpdate{
 				ClusterName:     v3ClusterName,
 				EDSServiceName:  v3Service,
-				LRSServerConfig: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
+				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAnyWithEDSConfigSourceSelf,
 			},
 		},
 		{
 			name:      "v3 cluster with telemetry case",
 			resource:  v3ClusterAnyWithTelemetryLabels,
-			serverCfg: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
+			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
 			wantUpdate: ClusterUpdate{
 				ClusterName:     v3ClusterName,
 				EDSServiceName:  v3Service,
-				LRSServerConfig: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
+				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAnyWithTelemetryLabels,
 				TelemetryLabels: map[string]string{
 					"csm.service_name":           "grpc-service",
@@ -1371,12 +1376,12 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		{
 			name:      "v3 metadata ignore other types not string and not com.google.csm.telemetry_labels",
 			resource:  v3ClusterAnyWithTelemetryLabelsIgnoreSome,
-			serverCfg: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
+			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
 			wantUpdate: ClusterUpdate{
 				ClusterName:     v3ClusterName,
 				EDSServiceName:  v3Service,
-				LRSServerConfig: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
+				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAnyWithTelemetryLabelsIgnoreSome,
 				TelemetryLabels: map[string]string{
 					"csm.service_name": "grpc-service",

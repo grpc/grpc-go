@@ -57,7 +57,7 @@ func SetupManagementServer(t *testing.T, opts ManagementServerOptions) (*Managem
 	}()
 
 	nodeID := uuid.New().String()
-	bootstrapContents, err := DefaultBootstrapContents(nodeID, server.Address)
+	bootstrapContents, err := DefaultBootstrapContents(nodeID, fmt.Sprintf("passthrough:///%s", server.Address))
 	if err != nil {
 		server.Stop()
 		t.Fatal(err)
