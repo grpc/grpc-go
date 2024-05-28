@@ -17,8 +17,7 @@ set -eu -o pipefail
 
 source "$(dirname $0)/vet-common.sh"
 
-# Perform installation of protoc from source based on OS.
-
+# The version of protoc that will be installed.
 PROTOC_VERSION="25.2"
 
 # Function to download pre-built binaries for Linux with
@@ -32,7 +31,7 @@ download_binary() {
           return
         else
           echo "Existing protoc version ($installed_version) differs. Kindly make sure you have $PROTOC_VERSION installed."
-#          exit 1
+          exit 1
         fi
       else
         echo "Unable to determine installed protoc version. Starting the installation."
@@ -46,18 +45,19 @@ download_binary() {
   rm "protoc-${PROTOC_VERSION}-$2-$1.zip"
 }
 
-# Determine architecture
-if [[ $(uname -m) == "x86_64" ]]; then
-  ARCH="x86_64"
-elif [[ $(uname -m) == "aarch64" ]] || [[ $(uname -m) == "arm64" ]] ; then
-  ARCH="aarch_64"
-else
-  die "Unsupported architecture. Please consider manual installation."
-fi
+# Detect the architecture
+case "$(uname -m)" in
+  "x86_64") ARCH="x86_64";;
+  "aarch64") ARCH="aarch_64";;
+  "arm64") ARCH="aarch_64";;
+*) die "Unsupported architecture. Please consider manual installation from \
+       https://github.com/protocolbuffers/protobuf/releases/ and add to PATH."
+esac
+
 # Detect the Operating System
 case "$(uname -s)" in
   "Darwin") download_binary $ARCH "osx" "$1";;
   "Linux") download_binary $ARCH "linux" "$1";;
-*) echo "Please consider manual installation from \
+*) die "Unsupported OS. Please consider manual installation from \
    https://github.com/protocolbuffers/protobuf/releases/ and add to PATH" ;;
 esac

@@ -20,14 +20,11 @@ trap cleanup EXIT
 # consistent with the place where all binaries installed by scripts in this repo
 # go.)
 if [[ "$1" = "-install" ]]; then
-  if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
-    PROTOBUF_VERSION=25.2 # Shows up in pb.go files as v4.22.0
-    PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
-    source ./scripts/install_protoc.sh "/home/runner/go"
-  else
-    # TODO: replace with install protoc when https://github.com/grpc/grpc-go/pull/7064 is merged.
-    die "-install currently intended for use in CI only."
-  fi
+    if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
+      source ./scripts/install_protoc.sh "/home/runner/go"
+    else
+      die "run protoc installer https://github.com/grpc/grpc-go/scripts/install_protoc.sh."
+    fi
   echo SUCCESS
   exit 0
 elif [[ "$#" -ne 0 ]]; then
