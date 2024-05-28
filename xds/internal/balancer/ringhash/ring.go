@@ -140,7 +140,7 @@ func normalizeWeights(subConns *resolver.AddressMap) ([]subConnWithWeight, float
 	min := 1.0
 	for _, a := range scVals {
 		scInfo := a.(*subConn)
-		// (*subConn).weight returns 1 if the weight attribute is not found on
+		// (*subConn).weight is set to 1 if the weight attribute is not found on
 		// the address. And since this function is guaranteed to be called with
 		// a non-empty subConns map, weightSum is guaranteed to be non-zero. So,
 		// we need not worry about divide by zero error here.
