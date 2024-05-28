@@ -64,8 +64,6 @@ jobs:
           - type: tests
             goversion: '1.21'
 
-          - type: tests
-            goversion: '1.20'
     steps:
       # Setup the environment.
       - name: Setup GOARCH
