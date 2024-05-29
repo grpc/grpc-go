@@ -24,13 +24,13 @@ COPY . .
 
 # Build a static binary without cgo so that we can copy just the binary in the
 # final image, and can get rid of the Go compiler and gRPC-Go dependencies.
-RUN go build -tags osusergo,netgo interop/xds/server/server.go
+RUN cd interop/xds/server && go build -tags osusergo,netgo server.go
 
-# Second stage of the build which copies over only the client binary and skips
+# Second stage of the build which copies over only the server binary and skips
 # the Go compiler and gRPC repo from the earlier stage. This significantly
 # reduces the docker image size.
 FROM alpine
-COPY --from=build /go/src/grpc-go/server .
+COPY --from=build /go/src/grpc-go/interop/xds/server/server .
 ENV GRPC_GO_LOG_VERBOSITY_LEVEL=99
 ENV GRPC_GO_LOG_SEVERITY_LEVEL="info"
 ENV GRPC_GO_LOG_FORMATTER="json"

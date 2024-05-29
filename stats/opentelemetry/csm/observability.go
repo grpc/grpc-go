@@ -42,7 +42,7 @@ func EnableObservability(ctx context.Context, options opentelemetry.Options) fun
 	csmPluginOption := newPluginOption(ctx)
 	clientSideOTelWithCSM := dialOptionWithCSMPluginOption(options, csmPluginOption)
 	clientSideOTel := opentelemetry.DialOption(options)
-	internal.AddGlobalPerTargetDialOptions.(func(opt any))(perTargetDialOption{
+	internal.AddGlobalPerTargetDialOptions.(func(opt any))(&perTargetDialOption{
 		clientSideOTelWithCSM: clientSideOTelWithCSM,
 		clientSideOTel:        clientSideOTel,
 	})

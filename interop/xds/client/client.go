@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -35,15 +36,21 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/grpclog"
+	_ "google.golang.org/grpc/interop/xds"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/stats/opentelemetry"
+	"google.golang.org/grpc/stats/opentelemetry/csm"
 	"google.golang.org/grpc/status"
 	_ "google.golang.org/grpc/xds"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-	_ "google.golang.org/grpc/interop/xds" // to register Custom LB.
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/sdk/metric"
 )
 
 func init() {
@@ -169,16 +176,19 @@ func (as *accumulatedStats) finishRPC(rpcType string, err error) {
 }
 
 var (
-	failOnFailedRPC = flag.Bool("fail_on_failed_rpc", false, "Fail client if any RPCs fail after first success")
-	numChannels     = flag.Int("num_channels", 1, "Num of channels")
-	printResponse   = flag.Bool("print_response", false, "Write RPC response to stdout")
-	qps             = flag.Int("qps", 1, "QPS per channel, for each type of RPC")
-	rpc             = flag.String("rpc", "UnaryCall", "Types of RPCs to make, ',' separated string. RPCs can be EmptyCall or UnaryCall. Deprecated: Use Configure RPC to XdsUpdateClientConfigureServiceServer instead.")
-	rpcMetadata     = flag.String("metadata", "", "The metadata to send with RPC, in format EmptyCall:key1:value1,UnaryCall:key2:value2. Deprecated: Use Configure RPC to XdsUpdateClientConfigureServiceServer instead.")
-	rpcTimeout      = flag.Duration("rpc_timeout", 20*time.Second, "Per RPC timeout")
-	server          = flag.String("server", "localhost:8080", "Address of server to connect to")
-	statsPort       = flag.Int("stats_port", 8081, "Port to expose peer distribution stats service")
-	secureMode      = flag.Bool("secure_mode", false, "If true, retrieve security configuration from the management server. Else, use insecure credentials.")
+	failOnFailedRPC        = flag.Bool("fail_on_failed_rpc", false, "Fail client if any RPCs fail after first success")
+	numChannels            = flag.Int("num_channels", 1, "Num of channels")
+	printResponse          = flag.Bool("print_response", false, "Write RPC response to stdout")
+	qps                    = flag.Int("qps", 1, "QPS per channel, for each type of RPC")
+	rpc                    = flag.String("rpc", "UnaryCall", "Types of RPCs to make, ',' separated string. RPCs can be EmptyCall or UnaryCall. Deprecated: Use Configure RPC to XdsUpdateClientConfigureServiceServer instead.")
+	rpcMetadata            = flag.String("metadata", "", "The metadata to send with RPC, in format EmptyCall:key1:value1,UnaryCall:key2:value2. Deprecated: Use Configure RPC to XdsUpdateClientConfigureServiceServer instead.")
+	rpcTimeout             = flag.Duration("rpc_timeout", 20*time.Second, "Per RPC timeout")
+	server                 = flag.String("server", "localhost:8080", "Address of server to connect to")
+	statsPort              = flag.Int("stats_port", 8081, "Port to expose peer distribution stats service")
+	secureMode             = flag.Bool("secure_mode", false, "If true, retrieve security configuration from the management server. Else, use insecure credentials.")
+	enableCSMObservability = flag.Bool("enable_csm_observability", false, "Whether to enable CSM Observability")
+	requestPayloadSize     = flag.Int("request_payload_size", 0, "Ask the server to respond with SimpleResponse.payload.body of the given length (may not be implemented on the server).")
+	responsePayloadSize    = flag.Int("response_payload_size", 0, "Ask the server to respond with SimpleResponse.payload.body of the given length (may not be implemented on the server).")
 
 	rpcCfgs atomic.Value
 
@@ -368,6 +378,22 @@ func parseRPCMetadata(rpcMetadataStr string, rpcs []string) []*rpcConfig {
 
 func main() {
 	flag.Parse()
+	if *enableCSMObservability {
+		exporter, err := prometheus.New()
+		if err != nil {
+			logger.Fatalf("Failed to start prometheus exporter: %v", err)
+		}
+		provider := metric.NewMeterProvider(
+			metric.WithReader(exporter),
+		)
+		go http.ListenAndServe("0.0.0.0:9464", promhttp.Handler())
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+		cleanup := csm.EnableObservability(ctx, opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
+		defer cleanup()
+	}
+
 	rpcCfgs.Store(parseRPCMetadata(*rpcMetadata, parseRPCTypes(*rpc)))
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *statsPort))
@@ -430,8 +456,16 @@ func makeOneRPC(c testgrpc.TestServiceClient, cfg *rpcConfig) (*peer.Peer, *rpcI
 	accStats.startRPC(cfg.typ)
 	switch cfg.typ {
 	case unaryCall:
+		sr := &testpb.SimpleRequest{FillServerId: true}
+		if *requestPayloadSize > 0 {
+			sr.Payload = &testpb.Payload{Body: make([]byte, *requestPayloadSize)}
+		}
+		if *responsePayloadSize > 0 {
+			sr.ResponseSize = int32(*responsePayloadSize)
+		}
+		sr.ResponseSize = int32(*responsePayloadSize)
 		var resp *testpb.SimpleResponse
-		resp, err = c.UnaryCall(ctx, &testpb.SimpleRequest{FillServerId: true}, grpc.Peer(&p), grpc.Header(&header))
+		resp, err = c.UnaryCall(ctx, sr, grpc.Peer(&p), grpc.Header(&header))
 		// For UnaryCall, also read hostname from response, in case the server
 		// isn't updated to send headers.
 		if resp != nil {
