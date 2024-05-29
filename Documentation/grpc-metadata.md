@@ -12,11 +12,11 @@ Four kinds of service method:
 - [Client streaming RPC](https://grpc.io/docs/guides/concepts.html#client-streaming-rpc)
 - [Bidirectional streaming RPC](https://grpc.io/docs/guides/concepts.html#bidirectional-streaming-rpc)
 
-And concept of [metadata](https://grpc.io/docs/guides/concepts.html#metadata).
+And concept of [metadata].
 
 ## Constructing metadata
 
-A metadata can be created using package [metadata][11].
+A metadata can be created using package [metadata].
 The type MD is actually a map from string to a list of strings:
 
 ```go
@@ -62,17 +62,6 @@ md := metadata.Pairs(
     "key-bin", string([]byte{96, 102}), // this binary data will be encoded (base64) before sending
                                         // and will be decoded after being transferred.
 )
-```
-
-## Retrieving metadata from context
-
-Metadata can be retrieved from context using `FromIncomingContext`:
-
-```go
-func (s *server) SomeRPC(ctx context.Context, in *pb.SomeRequest) (*pb.SomeResponse, err) {
-    md, ok := metadata.FromIncomingContext(ctx)
-    // do something with metadata
-}
 ```
 
 ## Sending and receiving metadata - client side
@@ -129,7 +118,7 @@ Metadata that a client can receive includes header and trailer.
 #### Unary call
 
 Header and trailer sent along with a unary call can be retrieved using function
-[Header][8] and [Trailer][9] in [CallOption][10]:
+[Header] and [Trailer] in [CallOption]:
 
 ```go
 var header, trailer metadata.MD // variable to store header and trailer
@@ -152,7 +141,7 @@ For streaming calls including:
 - Bidirectional streaming RPC
 
 Header and trailer can be retrieved from the returned stream using function
-`Header` and `Trailer` in interface [ClientStream][7]:
+`Header` and `Trailer` in interface [ClientStream]:
 
 ```go
 stream, err := client.SomeStreamingRPC(ctx)
@@ -173,7 +162,7 @@ Server side metadata sending and receiving examples are available
 ### Receiving metadata
 
 To read metadata sent by the client, the server needs to retrieve it from RPC
-context using [FromIncomingContext][1].
+context using [FromIncomingContext].
 If it is a unary call, the RPC handler's context can be used.
 For streaming calls, the server needs to get context from the stream.
 
@@ -200,15 +189,15 @@ func (s *server) SomeStreamingRPC(stream pb.Service_SomeStreamingRPCServer) erro
 #### Unary call
 
 To send header and trailer to client in unary call, the server can call
-[SendHeader][2] and [SetTrailer][3] functions in module [grpc][6].
+[SetHeader] and [SetTrailer] functions in module [grpc].
 These two functions take a context as the first parameter.
 It should be the RPC handler's context or one derived from it:
 
 ```go
 func (s *server) SomeRPC(ctx context.Context, in *pb.someRequest) (*pb.someResponse, error) {
-    // create and send header
+    // create and set header
     header := metadata.Pairs("header-key", "val")
-    grpc.SendHeader(ctx, header)
+    grpc.SetHeader(ctx, header)
     // create and set trailer
     trailer := metadata.Pairs("trailer-key", "val")
     grpc.SetTrailer(ctx, trailer)
@@ -218,36 +207,38 @@ func (s *server) SomeRPC(ctx context.Context, in *pb.someRequest) (*pb.someRespo
 #### Streaming call
 
 For streaming calls, header and trailer can be sent using function
-[SendHeader][2] and [SetTrailer][3] in interface [ServerStream][5]:
+[SetHeader] and [SetTrailer] in interface [ServerStream]:
 
 ```go
 func (s *server) SomeStreamingRPC(stream pb.Service_SomeStreamingRPCServer) error {
-    // create and send header
+    // create and set header
     header := metadata.Pairs("header-key", "val")
-    stream.SendHeader(header)
+    stream.SetHeader(header)
     // create and set trailer
     trailer := metadata.Pairs("trailer-key", "val")
     stream.SetTrailer(trailer)
 }
 ```
 
+**Important**
+
 Do not use
-[FromOutgoingContext][4] on the server to write metadata to be sent to the client.
-[FromOutgoingContext][4] is for client-side use only.
+[FromOutgoingContext] on the server to write metadata to be sent to the client.
+[FromOutgoingContext] is for client-side use only.
 
 ## Updating metadata from a server interceptor
 
 An example for updating metadata from a server interceptor is
 available [here](../examples/features/metadata_interceptor/server/main.go).
 
-[1]: <https://pkg.go.dev/google.golang.org/grpc/metadata#FromIncomingContext> "FromIncomingContext"
-[2]: <https://godoc.org/google.golang.org/grpc#SendHeader> "SendHeader"
-[3]: https://godoc.org/google.golang.org/grpc#SetTrailer "SetTrailer"
-[4]: https://pkg.go.dev/google.golang.org/grpc/metadata#FromOutgoingContext "FromOutgoingContext"
-[5]: https://godoc.org/google.golang.org/grpc#ServerStream "ServerStream"
-[6]: https://godoc.org/google.golang.org/grpc "grpc"
-[7]: https://godoc.org/google.golang.org/grpc#ClientStream "ClientStream"
-[8]: https://godoc.org/google.golang.org/grpc#Header "Header"
-[9]: https://godoc.org/google.golang.org/grpc#Trailer "Trailer"
-[10]: https://godoc.org/google.golang.org/grpc#CallOption, "CallOption"
-[11]: https://godoc.org/google.golang.org/grpc/metadata "Metadata"
+[FromIncomingContext]: <https://pkg.go.dev/google.golang.org/grpc/metadata#FromIncomingContext>
+[SetHeader]: <https://godoc.org/google.golang.org/grpc#SetHeader>
+[SetTrailer]: https://godoc.org/google.golang.org/grpc#SetTrailer
+[FromOutgoingContext]: https://pkg.go.dev/google.golang.org/grpc/metadata#FromOutgoingContext
+[ServerStream]: https://godoc.org/google.golang.org/grpc#ServerStream
+[grpc]: https://godoc.org/google.golang.org/grpc
+[ClientStream]: https://godoc.org/google.golang.org/grpc#ClientStream
+[Header]: https://godoc.org/google.golang.org/grpc#Header
+[Trailer]: https://godoc.org/google.golang.org/grpc#Trailer
+[CallOption]: https://godoc.org/google.golang.org/grpc#CallOption
+[metadata]: https://godoc.org/google.golang.org/grpc/metadata
