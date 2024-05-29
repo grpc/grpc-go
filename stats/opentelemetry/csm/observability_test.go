@@ -344,7 +344,7 @@ func unaryInterceptorAttachxDSLabels(ctx context.Context, method string, req, re
 	ctx = istats.SetLabels(ctx, &istats.Labels{
 		TelemetryLabels: map[string]string{
 			// mock what the cluster impl would write here ("csm." xDS Labels)
-			"csm.service_name":      "service_name_val",
+			"csm.service_name":           "service_name_val",
 			"csm.service_namespace_name": "service_namespace_val",
 		},
 	})
