@@ -32,6 +32,10 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
+	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
+	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
 
 type watchState int
@@ -586,26 +590,54 @@ func (a *authority) reportLoad() (*load.Store, func()) {
 	return a.transport.ReportLoad()
 }
 
-func (a *authority) dumpResources() map[string]map[string]xdsresource.UpdateWithMD {
+func (a *authority) dumpResources() ([]*v3statuspb.ClientConfig_GenericXdsConfig, error) {
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 
-	dump := make(map[string]map[string]xdsresource.UpdateWithMD)
+	var ret []*v3statuspb.ClientConfig_GenericXdsConfig
 	for rType, resourceStates := range a.resources {
-		states := make(map[string]xdsresource.UpdateWithMD)
+		typeURL := rType.TypeURL()
 		for name, state := range resourceStates {
 			var raw *anypb.Any
 			if state.cache != nil {
 				raw = state.cache.Raw()
 			}
-			states[name] = xdsresource.UpdateWithMD{
-				MD:  state.md,
-				Raw: raw,
+			config := &v3statuspb.ClientConfig_GenericXdsConfig{
+				TypeUrl:      typeURL,
+				Name:         name,
+				VersionInfo:  state.md.Version,
+				XdsConfig:    raw,
+				LastUpdated:  timestamppb.New(state.md.Timestamp),
+				ClientStatus: serviceStatusToProto(state.md.Status),
 			}
+			if errState := state.md.ErrState; errState != nil {
+				config.ErrorState = &v3adminpb.UpdateFailureState{
+					LastUpdateAttempt: timestamppb.New(errState.Timestamp),
+					Details:           errState.Err.Error(),
+					VersionInfo:       errState.Version,
+				}
+			}
+			ret = append(ret, config)
 		}
-		dump[rType.TypeURL()] = states
 	}
-	return dump
+	return ret, nil
+}
+
+func serviceStatusToProto(serviceStatus xdsresource.ServiceStatus) v3adminpb.ClientResourceStatus {
+	switch serviceStatus {
+	case xdsresource.ServiceStatusUnknown:
+		return v3adminpb.ClientResourceStatus_UNKNOWN
+	case xdsresource.ServiceStatusRequested:
+		return v3adminpb.ClientResourceStatus_REQUESTED
+	case xdsresource.ServiceStatusNotExist:
+		return v3adminpb.ClientResourceStatus_DOES_NOT_EXIST
+	case xdsresource.ServiceStatusACKed:
+		return v3adminpb.ClientResourceStatus_ACKED
+	case xdsresource.ServiceStatusNACKed:
+		return v3adminpb.ClientResourceStatus_NACKED
+	default:
+		return v3adminpb.ClientResourceStatus_UNKNOWN
+	}
 }
 
 func combineErrors(rType string, topLevelErrors []error, perResourceErrors map[string]error) error {

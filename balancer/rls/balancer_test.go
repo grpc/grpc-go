@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/balancer/rls/internal/test/e2e"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -37,7 +38,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
-	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	rlstest "google.golang.org/grpc/internal/testutils/rls"
@@ -46,6 +46,8 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/testdata"
+
+	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
@@ -919,7 +921,7 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	}
 	stub.Register(childPolicyName, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = balancer.Get(grpc.PickFirstBalancerName).Build(bd.ClientConn, bd.BuildOptions)
+			bd.Data = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
 		ParseConfig: func(sc json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			cfg := &childPolicyConfig{}

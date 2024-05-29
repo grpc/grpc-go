@@ -20,45 +20,21 @@ package xdsclient_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
-	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
-	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 
+	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
-
-func compareDump(ctx context.Context, client xdsclient.XDSClient, want map[string]map[string]xdsresource.UpdateWithMD) error {
-	var lastErr error
-	for {
-		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("Timeout when waiting for expected dump: %v", lastErr)
-		}
-		cmpOpts := cmp.Options{
-			cmpopts.EquateEmpty(),
-			cmp.Comparer(func(a, b time.Time) bool { return true }),
-			cmpopts.EquateErrors(),
-			protocmp.Transform(),
-		}
-		diff := cmp.Diff(want, client.DumpResources(), cmpOpts)
-		if diff == "" {
-			return nil
-		}
-		lastErr = fmt.Errorf("DumpResources() returned unexpected dump, diff (-want +got):\n%s", diff)
-		time.Sleep(100 * time.Millisecond)
-	}
-}
 
 func (s) TestDumpResources(t *testing.T) {
 	// Initialize the xDS resources to be used in this test.
@@ -107,7 +83,7 @@ func (s) TestDumpResources(t *testing.T) {
 	// Dump resources and expect empty configs.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := compareDump(ctx, client, nil); err != nil {
+	if err := compareUpdateMetadata(ctx, client.DumpResources, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -124,25 +100,49 @@ func (s) TestDumpResources(t *testing.T) {
 	for _, target := range edsTargets {
 		xdsresource.WatchEndpoints(client, target, noopEndpointsWatcher{})
 	}
-	want := map[string]map[string]xdsresource.UpdateWithMD{
-		"type.googleapis.com/envoy.config.listener.v3.Listener": {
-			ldsTargets[0]: {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}},
-			ldsTargets[1]: {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}},
+	want := []*v3statuspb.ClientConfig_GenericXdsConfig{
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
+			Name:         ldsTargets[0],
+			ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
 		},
-		"type.googleapis.com/envoy.config.route.v3.RouteConfiguration": {
-			rdsTargets[0]: {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}},
-			rdsTargets[1]: {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
+			Name:         ldsTargets[1],
+			ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
 		},
-		"type.googleapis.com/envoy.config.cluster.v3.Cluster": {
-			cdsTargets[0]: {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}},
-			cdsTargets[1]: {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+			Name:         rdsTargets[0],
+			ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
 		},
-		"type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment": {
-			edsTargets[0]: {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}},
-			edsTargets[1]: {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+			Name:         rdsTargets[1],
+			ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
+		},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+			Name:         cdsTargets[0],
+			ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
+		},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+			Name:         cdsTargets[1],
+			ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
+		},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+			Name:         edsTargets[0],
+			ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
+		},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+			Name:         edsTargets[1],
+			ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
 		},
 	}
-	if err := compareDump(ctx, client, want); err != nil {
+	if err := compareUpdateMetadata(ctx, client.DumpResources, want); err != nil {
 		t.Fatal(err)
 	}
 
@@ -158,25 +158,65 @@ func (s) TestDumpResources(t *testing.T) {
 	}
 
 	// Dump resources and expect ACK configs.
-	want = map[string]map[string]xdsresource.UpdateWithMD{
-		"type.googleapis.com/envoy.config.listener.v3.Listener": {
-			ldsTargets[0]: {Raw: listenerAnys[0], MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"}},
-			ldsTargets[1]: {Raw: listenerAnys[1], MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"}},
+	want = []*v3statuspb.ClientConfig_GenericXdsConfig{
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
+			Name:         ldsTargets[0],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+			VersionInfo:  "1",
+			XdsConfig:    listenerAnys[0],
 		},
-		"type.googleapis.com/envoy.config.route.v3.RouteConfiguration": {
-			rdsTargets[0]: {Raw: routeAnys[0], MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"}},
-			rdsTargets[1]: {Raw: routeAnys[1], MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"}},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
+			Name:         ldsTargets[1],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+			VersionInfo:  "1",
+			XdsConfig:    listenerAnys[1],
 		},
-		"type.googleapis.com/envoy.config.cluster.v3.Cluster": {
-			cdsTargets[0]: {Raw: clusterAnys[0], MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"}},
-			cdsTargets[1]: {Raw: clusterAnys[1], MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"}},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+			Name:         rdsTargets[0],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+			VersionInfo:  "1",
+			XdsConfig:    routeAnys[0],
 		},
-		"type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment": {
-			edsTargets[0]: {Raw: endpointAnys[0], MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"}},
-			edsTargets[1]: {Raw: endpointAnys[1], MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"}},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+			Name:         rdsTargets[1],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+			VersionInfo:  "1",
+			XdsConfig:    routeAnys[1],
+		},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+			Name:         cdsTargets[0],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+			VersionInfo:  "1",
+			XdsConfig:    clusterAnys[0],
+		},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+			Name:         cdsTargets[1],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+			VersionInfo:  "1",
+			XdsConfig:    clusterAnys[1],
+		},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+			Name:         edsTargets[0],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+			VersionInfo:  "1",
+			XdsConfig:    endpointAnys[0],
+		},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+			Name:         edsTargets[1],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+			VersionInfo:  "1",
+			XdsConfig:    endpointAnys[1],
 		},
 	}
-	if err := compareDump(ctx, client, want); err != nil {
+	if err := compareUpdateMetadata(ctx, client.DumpResources, want); err != nil {
 		t.Fatal(err)
 	}
 
@@ -198,58 +238,77 @@ func (s) TestDumpResources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Verify that the xDS client reports the first resource of each type as
-	// being in "NACKed" state, and the second resource of each type to be in
-	// "ACKed" state. The version for the ACKed resource would be "2", while
-	// that for the NACKed resource would be "1". In the NACKed resource, the
-	// version which is NACKed is stored in the ErrorState field.
-	want = map[string]map[string]xdsresource.UpdateWithMD{
-		"type.googleapis.com/envoy.config.listener.v3.Listener": {
-			ldsTargets[0]: {
-				Raw: listenerAnys[0],
-				MD: xdsresource.UpdateMetadata{
-					Status:   xdsresource.ServiceStatusNACKed,
-					Version:  "1",
-					ErrState: &xdsresource.UpdateErrorMetadata{Version: "2", Err: cmpopts.AnyError},
-				},
+	want = []*v3statuspb.ClientConfig_GenericXdsConfig{
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
+			Name:         ldsTargets[0],
+			ClientStatus: v3adminpb.ClientResourceStatus_NACKED,
+			VersionInfo:  "1",
+			ErrorState: &v3adminpb.UpdateFailureState{
+				VersionInfo: "2",
 			},
-			ldsTargets[1]: {Raw: listenerAnys[1], MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "2"}},
+			XdsConfig: listenerAnys[0],
 		},
-		"type.googleapis.com/envoy.config.route.v3.RouteConfiguration": {
-			rdsTargets[0]: {
-				Raw: routeAnys[0],
-				MD: xdsresource.UpdateMetadata{
-					Status:   xdsresource.ServiceStatusNACKed,
-					Version:  "1",
-					ErrState: &xdsresource.UpdateErrorMetadata{Version: "2", Err: cmpopts.AnyError},
-				},
-			},
-			rdsTargets[1]: {Raw: routeAnys[1], MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "2"}},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
+			Name:         ldsTargets[1],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+			VersionInfo:  "2",
+			XdsConfig:    listenerAnys[1],
 		},
-		"type.googleapis.com/envoy.config.cluster.v3.Cluster": {
-			cdsTargets[0]: {
-				Raw: clusterAnys[0],
-				MD: xdsresource.UpdateMetadata{
-					Status:   xdsresource.ServiceStatusNACKed,
-					Version:  "1",
-					ErrState: &xdsresource.UpdateErrorMetadata{Version: "2", Err: cmpopts.AnyError},
-				},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+			Name:         rdsTargets[0],
+			ClientStatus: v3adminpb.ClientResourceStatus_NACKED,
+			VersionInfo:  "1",
+			ErrorState: &v3adminpb.UpdateFailureState{
+				VersionInfo: "2",
 			},
-			cdsTargets[1]: {Raw: clusterAnys[1], MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "2"}},
+			XdsConfig: routeAnys[0],
 		},
-		"type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment": {
-			edsTargets[0]: {
-				Raw: endpointAnys[0],
-				MD: xdsresource.UpdateMetadata{
-					Status:   xdsresource.ServiceStatusNACKed,
-					Version:  "1",
-					ErrState: &xdsresource.UpdateErrorMetadata{Version: "2", Err: cmpopts.AnyError},
-				},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+			Name:         rdsTargets[1],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+			VersionInfo:  "2",
+			XdsConfig:    routeAnys[1],
+		},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+			Name:         cdsTargets[0],
+			ClientStatus: v3adminpb.ClientResourceStatus_NACKED,
+			VersionInfo:  "1",
+			ErrorState: &v3adminpb.UpdateFailureState{
+				VersionInfo: "2",
 			},
-			edsTargets[1]: {Raw: endpointAnys[1], MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "2"}},
+			XdsConfig: clusterAnys[0],
+		},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+			Name:         cdsTargets[1],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+			VersionInfo:  "2",
+			XdsConfig:    clusterAnys[1],
+		},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+			Name:         edsTargets[0],
+			ClientStatus: v3adminpb.ClientResourceStatus_NACKED,
+			VersionInfo:  "1",
+			ErrorState: &v3adminpb.UpdateFailureState{
+				VersionInfo: "2",
+			},
+			XdsConfig: endpointAnys[0],
+		},
+		{
+			TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+			Name:         edsTargets[1],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+			VersionInfo:  "2",
+			XdsConfig:    endpointAnys[1],
 		},
 	}
-	if err := compareDump(ctx, client, want); err != nil {
+	if err := compareUpdateMetadata(ctx, client.DumpResources, want); err != nil {
 		t.Fatal(err)
 	}
 }

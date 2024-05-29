@@ -477,6 +477,97 @@ func (s) TestRetryStreaming(t *testing.T) {
 	}
 }
 
+func (s) TestMaxCallAttempts(t *testing.T) {
+	testCases := []struct {
+		serviceMaxAttempts int
+		clientMaxAttempts  int
+		expectedAttempts   int
+	}{
+		{serviceMaxAttempts: 9, clientMaxAttempts: 4, expectedAttempts: 4},
+		{serviceMaxAttempts: 9, clientMaxAttempts: 7, expectedAttempts: 7},
+		{serviceMaxAttempts: 3, clientMaxAttempts: 10, expectedAttempts: 3},
+		{serviceMaxAttempts: 8, clientMaxAttempts: -1, expectedAttempts: 5}, // 5 is default max
+		{serviceMaxAttempts: 3, clientMaxAttempts: 0, expectedAttempts: 3},
+	}
+
+	for _, tc := range testCases {
+		clientOpts := []grpc.DialOption{
+			grpc.WithMaxCallAttempts(tc.clientMaxAttempts),
+			grpc.WithDefaultServiceConfig(fmt.Sprintf(`{
+				"methodConfig": [{
+					"name": [{"service": "grpc.testing.TestService"}],
+					"waitForReady": true,
+					"retryPolicy": {
+						"MaxAttempts": %d,
+						"InitialBackoff": ".01s",
+						"MaxBackoff": ".01s",
+						"BackoffMultiplier": 1.0,
+						"RetryableStatusCodes": [ "UNAVAILABLE" ]
+					}
+					}]}`, tc.serviceMaxAttempts),
+			),
+		}
+
+		streamCallCount := 0
+		unaryCallCount := 0
+
+		ss := &stubserver.StubServer{
+			FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+				streamCallCount++
+				return status.New(codes.Unavailable, "this is a test error").Err()
+			},
+			EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
+				unaryCallCount++
+				return nil, status.New(codes.Unavailable, "this is a test error").Err()
+			},
+		}
+
+		func() {
+
+			if err := ss.Start([]grpc.ServerOption{}, clientOpts...); err != nil {
+				t.Fatalf("Error starting endpoint server: %v", err)
+			}
+			defer ss.Stop()
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			for {
+				if ctx.Err() != nil {
+					t.Fatalf("Timed out waiting for service config update")
+				}
+				if ss.CC.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").WaitForReady != nil {
+					break
+				}
+				time.Sleep(time.Millisecond)
+			}
+
+			// Test streaming RPC
+			stream, err := ss.Client.FullDuplexCall(ctx)
+			if err != nil {
+				t.Fatalf("Error while creating stream: %v", err)
+			}
+			if got, err := stream.Recv(); err == nil {
+				t.Fatalf("client: Recv() = %s, %v; want <nil>, error", got, err)
+			} else if status.Code(err) != codes.Unavailable {
+				t.Fatalf("client: Recv() = _, %v; want _, Unavailable", err)
+			}
+			if streamCallCount != tc.expectedAttempts {
+				t.Fatalf("stream expectedAttempts = %v; want %v", streamCallCount, tc.expectedAttempts)
+			}
+
+			// Test unary RPC
+			if ugot, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+				t.Fatalf("client: EmptyCall() = %s, %v; want <nil>, error", ugot, err)
+			} else if status.Code(err) != codes.Unavailable {
+				t.Fatalf("client: EmptyCall() = _, %v; want _, Unavailable", err)
+			}
+			if unaryCallCount != tc.expectedAttempts {
+				t.Fatalf("unary expectedAttempts = %v; want %v", unaryCallCount, tc.expectedAttempts)
+			}
+		}()
+	}
+}
+
 type retryStatsHandler struct {
 	mu sync.Mutex
 	s  []stats.RPCStats

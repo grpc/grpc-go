@@ -19,6 +19,7 @@
 package advancedtls
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -188,6 +189,13 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 			MinVersion: tls.VersionTLS12,
 			MaxVersion: tls.VersionTLS13,
 		},
+		{
+			desc:                   "Deprecated option is set and forwarded",
+			clientVerificationType: CertVerification,
+			RootOptions: RootCertificateOptions{
+				RootCACerts: x509.NewCertPool(),
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
@@ -350,6 +358,15 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 			},
 			MinVersion: tls.VersionTLS12,
 			MaxVersion: tls.VersionTLS13,
+		},
+		{
+			desc: "Deprecated option is set and forwarded",
+			IdentityOptions: IdentityCertificateOptions{
+				Certificates: []tls.Certificate{},
+			},
+			RootOptions: RootCertificateOptions{
+				RootCACerts: x509.NewCertPool(),
+			},
 		},
 	}
 	for _, test := range tests {
@@ -932,6 +949,76 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			if !compare(clientAuthInfo, serverAuthInfo) {
 				t.Fatalf("c.ClientHandshake(_, %v, _) = %v, want %v.", lisAddr,
 					clientAuthInfo, serverAuthInfo)
+			}
+			serverVerifiedChains := serverAuthInfo.(credentials.TLSInfo).State.VerifiedChains
+			if test.serverMutualTLS && !test.serverExpectError {
+				if len(serverVerifiedChains) == 0 {
+					t.Fatalf("server verified chains is empty")
+				}
+				var clientCert *tls.Certificate
+				if len(test.clientCert) > 0 {
+					clientCert = &test.clientCert[0]
+				} else if test.clientGetCert != nil {
+					cert, _ := test.clientGetCert(&tls.CertificateRequestInfo{})
+					clientCert = cert
+				} else if test.clientIdentityProvider != nil {
+					km, _ := test.clientIdentityProvider.KeyMaterial(context.TODO())
+					clientCert = &km.Certs[0]
+				}
+				if !bytes.Equal((*serverVerifiedChains[0][0]).Raw, clientCert.Certificate[0]) {
+					t.Fatal("server verifiedChains leaf cert doesn't match client cert")
+				}
+
+				var serverRoot *x509.CertPool
+				if test.serverRoot != nil {
+					serverRoot = test.serverRoot
+				} else if test.serverGetRoot != nil {
+					result, _ := test.serverGetRoot(&GetRootCAsParams{})
+					serverRoot = result.TrustCerts
+				} else if test.serverRootProvider != nil {
+					km, _ := test.serverRootProvider.KeyMaterial(context.TODO())
+					serverRoot = km.Roots
+				}
+				serverVerifiedChainsCp := x509.NewCertPool()
+				serverVerifiedChainsCp.AddCert(serverVerifiedChains[0][len(serverVerifiedChains[0])-1])
+				if !serverVerifiedChainsCp.Equal(serverRoot) {
+					t.Fatalf("server verified chain hierarchy doesn't match")
+				}
+			}
+			clientVerifiedChains := clientAuthInfo.(credentials.TLSInfo).State.VerifiedChains
+			if test.serverMutualTLS && !test.clientExpectHandshakeError {
+				if len(clientVerifiedChains) == 0 {
+					t.Fatalf("client verified chains is empty")
+				}
+				var serverCert *tls.Certificate
+				if len(test.serverCert) > 0 {
+					serverCert = &test.serverCert[0]
+				} else if test.serverGetCert != nil {
+					cert, _ := test.serverGetCert(&tls.ClientHelloInfo{})
+					serverCert = cert[0]
+				} else if test.serverIdentityProvider != nil {
+					km, _ := test.serverIdentityProvider.KeyMaterial(context.TODO())
+					serverCert = &km.Certs[0]
+				}
+				if !bytes.Equal((*clientVerifiedChains[0][0]).Raw, serverCert.Certificate[0]) {
+					t.Fatal("client verifiedChains leaf cert doesn't match server cert")
+				}
+
+				var clientRoot *x509.CertPool
+				if test.clientRoot != nil {
+					clientRoot = test.clientRoot
+				} else if test.clientGetRoot != nil {
+					result, _ := test.clientGetRoot(&GetRootCAsParams{})
+					clientRoot = result.TrustCerts
+				} else if test.clientRootProvider != nil {
+					km, _ := test.clientRootProvider.KeyMaterial(context.TODO())
+					clientRoot = km.Roots
+				}
+				clientVerifiedChainsCp := x509.NewCertPool()
+				clientVerifiedChainsCp.AddCert(clientVerifiedChains[0][len(clientVerifiedChains[0])-1])
+				if !clientVerifiedChainsCp.Equal(clientRoot) {
+					t.Fatalf("client verified chain hierarchy doesn't match")
+				}
 			}
 		})
 	}

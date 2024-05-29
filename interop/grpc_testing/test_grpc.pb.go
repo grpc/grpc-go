@@ -49,6 +49,9 @@ const (
 // TestServiceClient is the client API for TestService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// A simple service to test the various types of RPCs and experiment with
+// performance with various types of payload.
 type TestServiceClient interface {
 	// One empty request followed by one empty response.
 	EmptyCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
@@ -187,6 +190,9 @@ func (c *testServiceClient) UnimplementedCall(ctx context.Context, in *Empty, op
 // TestServiceServer is the server API for TestService service.
 // All implementations must embed UnimplementedTestServiceServer
 // for forward compatibility
+//
+// A simple service to test the various types of RPCs and experiment with
+// performance with various types of payload.
 type TestServiceServer interface {
 	// One empty request followed by one empty response.
 	EmptyCall(context.Context, *Empty) (*Empty, error)
@@ -420,6 +426,9 @@ const (
 // UnimplementedServiceClient is the client API for UnimplementedService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// A simple service NOT implemented at servers so clients can test for
+// that case.
 type UnimplementedServiceClient interface {
 	// A call that no server should implement
 	UnimplementedCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
@@ -446,6 +455,9 @@ func (c *unimplementedServiceClient) UnimplementedCall(ctx context.Context, in *
 // UnimplementedServiceServer is the server API for UnimplementedService service.
 // All implementations must embed UnimplementedUnimplementedServiceServer
 // for forward compatibility
+//
+// A simple service NOT implemented at servers so clients can test for
+// that case.
 type UnimplementedServiceServer interface {
 	// A call that no server should implement
 	UnimplementedCall(context.Context, *Empty) (*Empty, error)
@@ -514,6 +526,8 @@ const (
 // ReconnectServiceClient is the client API for ReconnectService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// A service used to control reconnect server.
 type ReconnectServiceClient interface {
 	Start(ctx context.Context, in *ReconnectParams, opts ...grpc.CallOption) (*Empty, error)
 	Stop(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ReconnectInfo, error)
@@ -550,6 +564,8 @@ func (c *reconnectServiceClient) Stop(ctx context.Context, in *Empty, opts ...gr
 // ReconnectServiceServer is the server API for ReconnectService service.
 // All implementations must embed UnimplementedReconnectServiceServer
 // for forward compatibility
+//
+// A service used to control reconnect server.
 type ReconnectServiceServer interface {
 	Start(context.Context, *ReconnectParams) (*Empty, error)
 	Stop(context.Context, *Empty) (*ReconnectInfo, error)
@@ -643,6 +659,8 @@ const (
 // LoadBalancerStatsServiceClient is the client API for LoadBalancerStatsService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// A service used to obtain stats for verifying LB behavior.
 type LoadBalancerStatsServiceClient interface {
 	// Gets the backend distribution for RPCs sent by a test client.
 	GetClientStats(ctx context.Context, in *LoadBalancerStatsRequest, opts ...grpc.CallOption) (*LoadBalancerStatsResponse, error)
@@ -681,6 +699,8 @@ func (c *loadBalancerStatsServiceClient) GetClientAccumulatedStats(ctx context.C
 // LoadBalancerStatsServiceServer is the server API for LoadBalancerStatsService service.
 // All implementations must embed UnimplementedLoadBalancerStatsServiceServer
 // for forward compatibility
+//
+// A service used to obtain stats for verifying LB behavior.
 type LoadBalancerStatsServiceServer interface {
 	// Gets the backend distribution for RPCs sent by a test client.
 	GetClientStats(context.Context, *LoadBalancerStatsRequest) (*LoadBalancerStatsResponse, error)
@@ -778,6 +798,8 @@ const (
 // HookServiceClient is the client API for HookService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Hook service. Used to keep Kubernetes from shutting the pod down.
 type HookServiceClient interface {
 	// Sends a request that will "hang" until the return status is set by a call
 	// to a SetReturnStatus
@@ -829,6 +851,8 @@ func (c *hookServiceClient) ClearReturnStatus(ctx context.Context, in *Empty, op
 // HookServiceServer is the server API for HookService service.
 // All implementations must embed UnimplementedHookServiceServer
 // for forward compatibility
+//
+// Hook service. Used to keep Kubernetes from shutting the pod down.
 type HookServiceServer interface {
 	// Sends a request that will "hang" until the return status is set by a call
 	// to a SetReturnStatus
@@ -953,6 +977,8 @@ const (
 // XdsUpdateHealthServiceClient is the client API for XdsUpdateHealthService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// A service to remotely control health status of an xDS test server.
 type XdsUpdateHealthServiceClient interface {
 	SetServing(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
 	SetNotServing(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
@@ -1000,6 +1026,8 @@ func (c *xdsUpdateHealthServiceClient) SendHookRequest(ctx context.Context, in *
 // XdsUpdateHealthServiceServer is the server API for XdsUpdateHealthService service.
 // All implementations must embed UnimplementedXdsUpdateHealthServiceServer
 // for forward compatibility
+//
+// A service to remotely control health status of an xDS test server.
 type XdsUpdateHealthServiceServer interface {
 	SetServing(context.Context, *Empty) (*Empty, error)
 	SetNotServing(context.Context, *Empty) (*Empty, error)
@@ -1119,6 +1147,8 @@ const (
 // XdsUpdateClientConfigureServiceClient is the client API for XdsUpdateClientConfigureService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// A service to dynamically update the configuration of an xDS test client.
 type XdsUpdateClientConfigureServiceClient interface {
 	// Update the tes client's configuration.
 	Configure(ctx context.Context, in *ClientConfigureRequest, opts ...grpc.CallOption) (*ClientConfigureResponse, error)
@@ -1145,6 +1175,8 @@ func (c *xdsUpdateClientConfigureServiceClient) Configure(ctx context.Context, i
 // XdsUpdateClientConfigureServiceServer is the server API for XdsUpdateClientConfigureService service.
 // All implementations must embed UnimplementedXdsUpdateClientConfigureServiceServer
 // for forward compatibility
+//
+// A service to dynamically update the configuration of an xDS test client.
 type XdsUpdateClientConfigureServiceServer interface {
 	// Update the tes client's configuration.
 	Configure(context.Context, *ClientConfigureRequest) (*ClientConfigureResponse, error)
