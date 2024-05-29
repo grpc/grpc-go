@@ -121,9 +121,9 @@ func newRing(subConns *resolver.AddressMap, minRingSize, maxRingSize uint64, log
 // each struct contains a subConn and its corresponding weight. The function
 // also returns the minimum weight among all subConns.
 //
-// The weight of each subConn is calculated by dividing its weight attribute by
-// the sum of all subConn weights. If the weight attribute is not found on the
-// address, a default weight of 1 is used.
+// The normalized weight of each subConn is calculated by dividing its weight
+// attribute by the sum of all subConn weights. If the weight attribute is not
+// found on the address, a default weight of 1 is used.
 //
 // The addresses are sorted in ascending order to ensure consistent results.
 //
