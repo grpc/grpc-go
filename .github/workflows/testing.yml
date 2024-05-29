@@ -103,15 +103,8 @@ jobs:
           cd "${GITHUB_WORKSPACE}"
           for MOD_FILE in $(find . -name 'go.mod' | grep -Ev '^\./go\.mod'); do
             pushd "$(dirname ${MOD_FILE})"
-            # Skip OpenTelemetry module if 3 releases ago, Go OpenTelemetry only supports
-            # previous two releases.
-            if [[ "${{ matrix.goversion }}" == "1.20" && "${PWD}" =~ /stats/opentelemetry$ ]]; then
-              echo "Skipping ${MOD_FILE}"
-            else
-               go test ${{ matrix.testflags }} -cpu 1,4 -timeout 2m ./...
-            fi
+            go test ${{ matrix.testflags }} -cpu 1,4 -timeout 2m ./...
             popd
-
           done
 
       # Non-core gRPC tests (examples, interop, etc)
