@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 )
 
 // SetupManagementServer performs the following:
@@ -109,4 +110,31 @@ func DefaultBootstrapContents(nodeID, serverURI string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to create bootstrap configuration: %v", err)
 	}
 	return bs, nil
+}
+
+// SetupDNS unregisters the DNS resolver and registers a manual resolver for the
+// same scheme. This allows the test to mock the DNS resolution by supplying the
+// addresses of the test backends.
+//
+// Returns the following:
+//   - a channel onto which the DNS target being resolved is written to by the
+//     mock DNS resolver
+//   - a channel to notify close of the DNS resolver
+//   - a channel to notify re-resolution requests to the DNS resolver
+//   - a manual resolver which is used to mock the actual DNS resolution
+//   - a cleanup function which re-registers the original DNS resolver
+func SetupDNS() (chan resolver.Target, chan struct{}, chan resolver.ResolveNowOptions, *manual.Resolver, func()) {
+	targetCh := make(chan resolver.Target, 1)
+	closeCh := make(chan struct{}, 1)
+	resolveNowCh := make(chan resolver.ResolveNowOptions, 1)
+
+	mr := manual.NewBuilderWithScheme("dns")
+	mr.BuildCallback = func(target resolver.Target, _ resolver.ClientConn, _ resolver.BuildOptions) { targetCh <- target }
+	mr.CloseCallback = func() { closeCh <- struct{}{} }
+	mr.ResolveNowCallback = func(opts resolver.ResolveNowOptions) { resolveNowCh <- opts }
+
+	dnsResolverBuilder := resolver.Get("dns")
+	resolver.Register(mr)
+
+	return targetCh, closeCh, resolveNowCh, mr, func() { resolver.Register(dnsResolverBuilder) }
 }
