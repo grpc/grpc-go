@@ -38,9 +38,9 @@ func init() {
 		testAddr("c", 4),
 	}
 	testSubConnMap = resolver.NewAddressMap()
-	testSubConnMap.Set(testAddrs[0], &subConn{addr: "a"})
-	testSubConnMap.Set(testAddrs[1], &subConn{addr: "b"})
-	testSubConnMap.Set(testAddrs[2], &subConn{addr: "c"})
+	testSubConnMap.Set(testAddrs[0], &subConn{addr: "a", weight: 3})
+	testSubConnMap.Set(testAddrs[1], &subConn{addr: "b", weight: 3})
+	testSubConnMap.Set(testAddrs[2], &subConn{addr: "c", weight: 4})
 }
 
 func testAddr(addr string, weight uint32) resolver.Address {
