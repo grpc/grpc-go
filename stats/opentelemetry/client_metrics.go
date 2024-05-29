@@ -32,7 +32,7 @@ import (
 )
 
 type clientStatsHandler struct {
-	o Options
+	options Options
 
 	clientMetrics clientMetrics
 }
@@ -40,22 +40,25 @@ type clientStatsHandler struct {
 func (h *clientStatsHandler) initializeMetrics() {
 	// Will set no metrics to record, logically making this stats handler a
 	// no-op.
-	if h.o.MetricsOptions.MeterProvider == nil {
+	if h.options.MetricsOptions.MeterProvider == nil {
 		return
 	}
 
-	meter := h.o.MetricsOptions.MeterProvider.Meter("grpc-go " + grpc.Version)
+	meter := h.options.MetricsOptions.MeterProvider.Meter("grpc-go", otelmetric.WithInstrumentationVersion(grpc.Version))
 	if meter == nil {
 		return
 	}
 
-	setOfMetrics := h.o.MetricsOptions.Metrics.metrics
+	metrics := h.options.MetricsOptions.Metrics
+	if metrics == nil {
+		metrics = DefaultMetrics
+	}
 
-	h.clientMetrics.attemptStarted = createInt64Counter(setOfMetrics, "grpc.client.attempt.started", meter, otelmetric.WithUnit("attempt"), otelmetric.WithDescription("Number of client call attempts started."))
-	h.clientMetrics.attemptDuration = createFloat64Histogram(setOfMetrics, "grpc.client.attempt.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
-	h.clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.client.attempt.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	h.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.client.attempt.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	h.clientMetrics.callDuration = createFloat64Histogram(setOfMetrics, "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	h.clientMetrics.attemptStarted = createInt64Counter(metrics.metrics, "grpc.client.attempt.started", meter, otelmetric.WithUnit("attempt"), otelmetric.WithDescription("Number of client call attempts started."))
+	h.clientMetrics.attemptDuration = createFloat64Histogram(metrics.metrics, "grpc.client.attempt.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	h.clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(metrics.metrics, "grpc.client.attempt.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	h.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.metrics, "grpc.client.attempt.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	h.clientMetrics.callDuration = createFloat64Histogram(metrics.metrics, "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 }
 
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
@@ -65,8 +68,8 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 	}
 	ctx = setCallInfo(ctx, ci)
 
-	if h.o.MetricsOptions.pluginOption != nil {
-		md := h.o.MetricsOptions.pluginOption.GetMetadata()
+	if h.options.MetricsOptions.pluginOption != nil {
+		md := h.options.MetricsOptions.pluginOption.GetMetadata()
 		for k, vs := range md {
 			for _, v := range vs {
 				ctx = metadata.AppendToOutgoingContext(ctx, k, v)
@@ -85,7 +88,7 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 // otherwise.
 func (h *clientStatsHandler) determineTarget(cc *grpc.ClientConn) string {
 	target := cc.CanonicalTarget()
-	if f := h.o.MetricsOptions.TargetAttributeFilter; f != nil && !f(target) {
+	if f := h.options.MetricsOptions.TargetAttributeFilter; f != nil && !f(target) {
 		target = "other"
 	}
 	return target
@@ -110,8 +113,8 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 	}
 	ctx = setCallInfo(ctx, ci)
 
-	if h.o.MetricsOptions.pluginOption != nil {
-		md := h.o.MetricsOptions.pluginOption.GetMetadata()
+	if h.options.MetricsOptions.pluginOption != nil {
+		md := h.options.MetricsOptions.pluginOption.GetMetadata()
 		for k, vs := range md {
 			for _, v := range vs {
 				ctx = metadata.AppendToOutgoingContext(ctx, k, v)
@@ -200,8 +203,8 @@ func (h *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCSta
 }
 
 func (h *clientStatsHandler) setLabelsFromPluginOption(ai *attemptInfo, incomingMetadata metadata.MD) {
-	if ai.pluginOptionLabels == nil && h.o.MetricsOptions.pluginOption != nil {
-		labels := h.o.MetricsOptions.pluginOption.GetLabels(incomingMetadata)
+	if ai.pluginOptionLabels == nil && h.options.MetricsOptions.pluginOption != nil {
+		labels := h.options.MetricsOptions.pluginOption.GetLabels(incomingMetadata)
 		if labels == nil {
 			labels = map[string]string{} // Shouldn't return a nil map. Make it empty if so to ignore future Get Calls for this Attempt.
 		}
@@ -232,7 +235,7 @@ func (h *clientStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo,
 		attributes = append(attributes, otelattribute.String(k, v))
 	}
 
-	for _, o := range h.o.MetricsOptions.OptionalLabels {
+	for _, o := range h.options.MetricsOptions.OptionalLabels {
 		if val, ok := ai.xdsLabels[o]; ok {
 			attributes = append(attributes, otelattribute.String(o, val))
 		}
