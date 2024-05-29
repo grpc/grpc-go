@@ -37,23 +37,23 @@ type serverStatsHandler struct {
 	serverMetrics serverMetrics
 }
 
-func (ssh *serverStatsHandler) initializeMetrics() {
+func (h *serverStatsHandler) initializeMetrics() {
 	// Will set no metrics to record, logically making this stats handler a
 	// no-op.
-	if ssh.o.MetricsOptions.MeterProvider == nil {
+	if h.o.MetricsOptions.MeterProvider == nil {
 		return
 	}
 
-	meter := ssh.o.MetricsOptions.MeterProvider.Meter("grpc-go " + grpc.Version)
+	meter := h.o.MetricsOptions.MeterProvider.Meter("grpc-go " + grpc.Version)
 	if meter == nil {
 		return
 	}
-	setOfMetrics := ssh.o.MetricsOptions.Metrics.metrics
+	setOfMetrics := h.o.MetricsOptions.Metrics.metrics
 
-	ssh.serverMetrics.callStarted = createInt64Counter(setOfMetrics, "grpc.server.call.started", meter, otelmetric.WithUnit("call"), otelmetric.WithDescription("Number of server calls started."))
-	ssh.serverMetrics.callSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	ssh.serverMetrics.callRcvdTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	ssh.serverMetrics.callDuration = createFloat64Histogram(setOfMetrics, "grpc.server.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a call from server transport's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	h.serverMetrics.callStarted = createInt64Counter(setOfMetrics, "grpc.server.call.started", meter, otelmetric.WithUnit("call"), otelmetric.WithDescription("Number of server calls started."))
+	h.serverMetrics.callSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	h.serverMetrics.callRcvdTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	h.serverMetrics.callDuration = createFloat64Histogram(setOfMetrics, "grpc.server.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a call from server transport's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 }
 
 // attachLabelsTransportStream intercepts SetHeader and SendHeader calls of the
@@ -80,10 +80,10 @@ func (s *attachLabelsTransportStream) SendHeader(md metadata.MD) error {
 	return s.ServerTransportStream.SendHeader(md)
 }
 
-func (ssh *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+func (h *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	var metadataExchangeLabels metadata.MD
-	if ssh.o.MetricsOptions.pluginOption != nil {
-		metadataExchangeLabels = ssh.o.MetricsOptions.pluginOption.GetMetadata()
+	if h.o.MetricsOptions.pluginOption != nil {
+		metadataExchangeLabels = h.o.MetricsOptions.pluginOption.GetMetadata()
 	}
 
 	sts := grpc.ServerTransportStreamFromContext(ctx)
@@ -141,10 +141,10 @@ func (s *attachLabelsStream) SendMsg(m any) error {
 	return s.ServerStream.SendMsg(m)
 }
 
-func (ssh *serverStatsHandler) streamInterceptor(srv any, ss grpc.ServerStream, ssi *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func (h *serverStatsHandler) streamInterceptor(srv any, ss grpc.ServerStream, ssi *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	var metadataExchangeLabels metadata.MD
-	if ssh.o.MetricsOptions.pluginOption != nil {
-		metadataExchangeLabels = ssh.o.MetricsOptions.pluginOption.GetMetadata()
+	if h.o.MetricsOptions.pluginOption != nil {
+		metadataExchangeLabels = h.o.MetricsOptions.pluginOption.GetMetadata()
 	}
 	als := &attachLabelsStream{
 		ServerStream:           ss,
@@ -161,18 +161,18 @@ func (ssh *serverStatsHandler) streamInterceptor(srv any, ss grpc.ServerStream, 
 }
 
 // TagConn exists to satisfy stats.Handler.
-func (ssh *serverStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+func (h *serverStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
 	return ctx
 }
 
 // HandleConn exists to satisfy stats.Handler.
-func (ssh *serverStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
+func (h *serverStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC context management.
-func (ssh *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	method := info.FullMethodName
-	if ssh.o.MetricsOptions.MethodAttributeFilter != nil {
-		if !ssh.o.MetricsOptions.MethodAttributeFilter(method) {
+	if h.o.MetricsOptions.MethodAttributeFilter != nil {
+		if !h.o.MetricsOptions.MethodAttributeFilter(method) {
 			method = "other"
 		}
 	}
@@ -198,37 +198,37 @@ func (ssh *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 }
 
 // HandleRPC implements per RPC tracing and stats implementation.
-func (ssh *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
+func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
 		return
 	}
-	ssh.processRPCData(ctx, rs, ri.ai)
+	h.processRPCData(ctx, rs, ri.ai)
 }
 
-func (ssh *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
+func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
 	switch st := s.(type) {
 	case *stats.InHeader:
-		if ai.pluginOptionLabels == nil && ssh.o.MetricsOptions.pluginOption != nil {
-			labels := ssh.o.MetricsOptions.pluginOption.GetLabels(st.Header)
+		if ai.pluginOptionLabels == nil && h.o.MetricsOptions.pluginOption != nil {
+			labels := h.o.MetricsOptions.pluginOption.GetLabels(st.Header)
 			if labels == nil {
 				labels = map[string]string{} // Shouldn't return a nil map. Make it empty if so to ignore future Get Calls for this Attempt.
 			}
 			ai.pluginOptionLabels = labels
 		}
-		ssh.serverMetrics.callStarted.Add(ctx, 1, otelmetric.WithAttributes(otelattribute.String("grpc.method", ai.method)))
+		h.serverMetrics.callStarted.Add(ctx, 1, otelmetric.WithAttributes(otelattribute.String("grpc.method", ai.method)))
 	case *stats.OutPayload:
 		atomic.AddInt64(&ai.sentCompressedBytes, int64(st.CompressedLength))
 	case *stats.InPayload:
 		atomic.AddInt64(&ai.recvCompressedBytes, int64(st.CompressedLength))
 	case *stats.End:
-		ssh.processRPCEnd(ctx, ai, st)
+		h.processRPCEnd(ctx, ai, st)
 	default:
 	}
 }
 
-func (ssh *serverStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo, e *stats.End) {
+func (h *serverStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo, e *stats.End) {
 	latency := float64(time.Since(ai.startTime)) / float64(time.Second)
 	st := "OK"
 	if e.Error != nil {
@@ -244,9 +244,9 @@ func (ssh *serverStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInf
 	}
 
 	serverAttributeOption := otelmetric.WithAttributes(attributes...)
-	ssh.serverMetrics.callDuration.Record(ctx, latency, serverAttributeOption)
-	ssh.serverMetrics.callSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.sentCompressedBytes), serverAttributeOption)
-	ssh.serverMetrics.callRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.recvCompressedBytes), serverAttributeOption)
+	h.serverMetrics.callDuration.Record(ctx, latency, serverAttributeOption)
+	h.serverMetrics.callSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.sentCompressedBytes), serverAttributeOption)
+	h.serverMetrics.callRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.recvCompressedBytes), serverAttributeOption)
 }
 
 const (
