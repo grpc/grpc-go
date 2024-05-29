@@ -1107,7 +1107,7 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 			}
 			pointFormatUncompressed := uint8(0)
 			clientHello := &tls.ClientHelloInfo{
-				CipherSuites:      []uint16{tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA},
+				CipherSuites:      []uint16{tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA},
 				ServerName:        test.serverName,
 				SupportedCurves:   []tls.CurveID{tls.CurveP256},
 				SupportedPoints:   []uint8{pointFormatUncompressed},
