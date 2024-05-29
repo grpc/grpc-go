@@ -120,12 +120,6 @@ type MetricsOptions struct {
 	// will be recorded.
 	Metrics *Metrics
 
-	// TargetAttributeFilter is a callback that takes the target string of the
-	// channel and returns a bool representing whether to use target as a label
-	// value or use the string "other". If unset, will use the target string as
-	// is. This only applies for client side metrics.
-	TargetAttributeFilter func(string) bool
-
 	// MethodAttributeFilter is to record the method name of RPCs handled by
 	// grpc.UnknownServiceHandler, but take care to limit the values allowed, as
 	// allowing too many will increase cardinality and could cause severe memory
