@@ -29,6 +29,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	lru "github.com/hashicorp/golang-lru"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
@@ -172,6 +173,7 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 		RootOptions            RootCertificateOptions
 		MinVersion             uint16
 		MaxVersion             uint16
+		cipherSuites           []uint16
 	}{
 		{
 			desc:                   "Use system default if no fields in RootCertificateOptions is specified",
@@ -196,6 +198,15 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 				RootCACerts: x509.NewCertPool(),
 			},
 		},
+		{
+			desc: "Ciphersuite plumbing through client options",
+			cipherSuites: []uint16{
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
@@ -206,6 +217,7 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 				RootOptions:      test.RootOptions,
 				MinTLSVersion:    test.MinVersion,
 				MaxTLSVersion:    test.MaxVersion,
+				CipherSuites:     test.cipherSuites,
 			}
 			clientConfig, err := clientOptions.clientConfig()
 			if err != nil {
@@ -236,6 +248,9 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 				if clientConfig.MaxVersion != tls.VersionTLS13 {
 					t.Fatalf("Default max tls version not set correctly")
 				}
+			}
+			if diff := cmp.Diff(clientConfig.CipherSuites, test.cipherSuites); diff != "" {
+				t.Errorf("cipherSuites diff (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -335,6 +350,7 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 		RootOptions            RootCertificateOptions
 		MinVersion             uint16
 		MaxVersion             uint16
+		cipherSuites           []uint16
 	}{
 		{
 			desc:                   "Use system default if no fields in RootCertificateOptions is specified",
@@ -368,6 +384,21 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 				RootCACerts: x509.NewCertPool(),
 			},
 		},
+		{
+			desc: "Ciphersuite plumbing through server options",
+			IdentityOptions: IdentityCertificateOptions{
+				Certificates: []tls.Certificate{},
+			},
+			RootOptions: RootCertificateOptions{
+				RootCACerts: x509.NewCertPool(),
+			},
+			cipherSuites: []uint16{
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
@@ -379,6 +410,7 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 				RootOptions:       test.RootOptions,
 				MinTLSVersion:     test.MinVersion,
 				MaxTLSVersion:     test.MaxVersion,
+				CipherSuites:      test.cipherSuites,
 			}
 			serverConfig, err := serverOptions.serverConfig()
 			if err != nil {
@@ -391,6 +423,9 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 				if serverConfig.ClientCAs == nil {
 					t.Fatalf("Failed to assign system-provided certificates on the server side.")
 				}
+			}
+			if diff := cmp.Diff(serverConfig.CipherSuites, test.cipherSuites); diff != "" {
+				t.Errorf("cipherSuites diff (-want +got):\n%s", diff)
 			}
 		})
 	}

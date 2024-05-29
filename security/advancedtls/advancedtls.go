@@ -284,6 +284,10 @@ type Options struct {
 	// which is currently TLS 1.3.  This default may be changed over time
 	// affecting backwards compatibility.
 	MaxTLSVersion uint16
+	// CipherSuites is an unordered list of supported TLS 1.0–1.2
+	// ciphersuites. TLS 1.3 ciphersuites are not configurable. If nil, a
+	// safe default list is used.
+	CipherSuites []uint16
 	// serverNameOverride is for testing only and only relevant on the client
 	// side. If set to a non-empty string, it will override the virtual host
 	// name of authority (e.g. :authority header field) in requests and the
@@ -353,6 +357,7 @@ func (o *Options) clientConfig() (*tls.Config, error) {
 		InsecureSkipVerify: true,
 		MinVersion:         o.MinTLSVersion,
 		MaxVersion:         o.MaxTLSVersion,
+		CipherSuites:       o.CipherSuites,
 	}
 	// Propagate root-certificate-related fields in tls.Config.
 	switch {
@@ -467,9 +472,10 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 		o.MaxTLSVersion = tls.VersionTLS13
 	}
 	config := &tls.Config{
-		ClientAuth: clientAuth,
-		MinVersion: o.MinTLSVersion,
-		MaxVersion: o.MaxTLSVersion,
+		ClientAuth:   clientAuth,
+		MinVersion:   o.MinTLSVersion,
+		MaxVersion:   o.MaxTLSVersion,
+		CipherSuites: o.CipherSuites,
 	}
 	// Propagate root-certificate-related fields in tls.Config.
 	switch {
