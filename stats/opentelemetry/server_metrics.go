@@ -151,9 +151,6 @@ func (ssh *serverStatsHandler) streamInterceptor(srv any, ss grpc.ServerStream, 
 		metadataExchangeLabels: metadataExchangeLabels,
 	}
 	err := handler(srv, als)
-	if err != nil {
-		logger.Infof("RPC failed with error: %v", err)
-	}
 
 	// Add metadata exchange labels to trailers if never sent in headers,
 	// irrespective of whether or not RPC failed.
