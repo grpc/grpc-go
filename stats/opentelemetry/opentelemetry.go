@@ -33,6 +33,13 @@ import (
 	"go.opentelemetry.io/otel/metric/noop"
 )
 
+func init() {
+	otelinternal.SetPluginOption = func(o *Options, po otelinternal.PluginOption) {
+		o.MetricsOptions.pluginOption = po
+	}
+}
+
+
 var logger = grpclog.Component("otel-plugin")
 
 var canonicalString = internal.CanonicalString.(func(codes.Code) string)
