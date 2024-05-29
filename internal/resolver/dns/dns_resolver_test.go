@@ -1326,9 +1326,19 @@ func (s) TestMinResolutionInterval_NoExtraDelay(t *testing.T) {
 	// test duration. This number is sufficiently large to validate the
 	// behavior across multiple resolution attempts, while also reducing
 	// the likelihood of flakiness due to timing issues.
-	for i := 0; i < 4; i++ {
+	for i := 1; i <= 4; i++ {
 		verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
-		time.Sleep(1 * time.Second) // respect resolution rate of 1 second for re-resolve
+
+		// Wait for 1 second to respect [MinResolutionInterval]
+		// before sending another resolution request
+		select {
+		case <-dnsinternal.TimeAfterFunc(1 * time.Second):
+			// Waited for 1 second
+		case <-ctx.Done():
+			// If the context is done, exit the loop
+			t.Fatal("Timeout when waiting for a state update from the resolver")
+		}
+
 		r.ResolveNow(resolver.ResolveNowOptions{})
 	}
 }
