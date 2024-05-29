@@ -28,19 +28,7 @@ import (
 	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
 )
 
-var clientSideOTelWithCSM grpc.DialOption
-var clientSideOTel grpc.DialOption
-
-// Observability sets up CSM Observability for the binary globally. It sets up
-// two client side OpenTelemetry instrumentation components configured with the
-// provided options, one with a CSM Plugin Option configured, one without.
-// Created channels will pick up one of these dependent on whether channels are
-// CSM Channels or not, which is derived from the Channel's parsed target after
-// dialing.
-//
-// It sets up a server side OpenTelemetry instrumentation component configured
-// with options provided alongside a CSM Plugin Option to be registered globally
-// and picked up for every server.
+// EnableObservability sets up CSM EnableObservability for the binary globally.
 //
 // The CSM Plugin Option is instantiated with local labels and metadata exchange
 // labels pulled from the environment, and emits metadata exchange labels from
@@ -50,37 +38,34 @@ var clientSideOTel grpc.DialOption
 // This function is not thread safe, and should only be invoked once in main
 // before any channels or servers are created. Returns a cleanup function to be
 // deferred in main.
-func Observability(ctx context.Context, options opentelemetry.Options) func() {
+func EnableObservability(ctx context.Context, options opentelemetry.Options) func() {
 	csmPluginOption := newPluginOption(ctx)
-	clientSideOTelWithCSM = dialOptionWithCSMPluginOption(options, csmPluginOption)
-	clientSideOTel = opentelemetry.DialOption(options)
+	clientSideOTelWithCSM := dialOptionWithCSMPluginOption(options, csmPluginOption)
+	clientSideOTel := opentelemetry.DialOption(options)
+	internal.AddGlobalPerTargetDialOptions.(func(opt any))(perTargetDialOption{
+		clientSideOTelWithCSM: clientSideOTelWithCSM,
+		clientSideOTel:        clientSideOTel,
+	})
 
 	serverSideOTelWithCSM := serverOptionWithCSMPluginOption(options, csmPluginOption)
-
-	internal.AddGlobalPerTargetDialOptions.(func(opt any))(perTargetDialOption{})
-
 	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(serverSideOTelWithCSM)
 
 	return func() {
 		internal.ClearGlobalServerOptions()
 		internal.ClearGlobalPerTargetDialOptions()
 	}
-} // fail, can run it locally and on cloudtop, replace to point to this stats/opentelemetry (replace grpc or something else)?
+}
 
-// make it's own go mod
-// go get a random version using hash
-// then replace
-// try and build docker image using that docker run thing, this is the hook into interop scripts...
+type perTargetDialOption struct {
+	clientSideOTelWithCSM grpc.DialOption
+	clientSideOTel        grpc.DialOption
+}
 
-// replace grpc module and otel module I guess
-
-type perTargetDialOption struct{}
-
-func (perTargetDialOption) DialOptionForTarget(parsedTarget url.URL) grpc.DialOption {
+func (o *perTargetDialOption) DialOptionForTarget(parsedTarget url.URL) grpc.DialOption {
 	if determineTargetCSM(&parsedTarget) {
-		return clientSideOTelWithCSM
+		return o.clientSideOTelWithCSM
 	}
-	return clientSideOTel
+	return o.clientSideOTel
 }
 
 func dialOptionWithCSMPluginOption(options opentelemetry.Options, po otelinternal.PluginOption) grpc.DialOption {
