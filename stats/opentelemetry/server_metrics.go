@@ -32,7 +32,7 @@ import (
 )
 
 type serverStatsHandler struct {
-	o Options
+	options Options
 
 	serverMetrics serverMetrics
 }
@@ -40,23 +40,23 @@ type serverStatsHandler struct {
 func (h *serverStatsHandler) initializeMetrics() {
 	// Will set no metrics to record, logically making this stats handler a
 	// no-op.
-	if h.o.MetricsOptions.MeterProvider == nil {
+	if h.options.MetricsOptions.MeterProvider == nil {
 		return
 	}
 
-	meter := h.o.MetricsOptions.MeterProvider.Meter("grpc-go ", otelmetric.WithInstrumentationVersion(grpc.Version))
+	meter := h.options.MetricsOptions.MeterProvider.Meter("grpc-go", otelmetric.WithInstrumentationVersion(grpc.Version))
 	if meter == nil {
 		return
 	}
-	setOfMetrics := DefaultMetrics.metrics
-	if h.o.MetricsOptions.Metrics != nil {
-		setOfMetrics = h.o.MetricsOptions.Metrics.metrics
+	metrics := h.options.MetricsOptions.Metrics
+	if metrics == nil {
+		metrics = DefaultMetrics
 	}
 
-	h.serverMetrics.callStarted = createInt64Counter(setOfMetrics, "grpc.server.call.started", meter, otelmetric.WithUnit("call"), otelmetric.WithDescription("Number of server calls started."))
-	h.serverMetrics.callSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	h.serverMetrics.callRcvdTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	h.serverMetrics.callDuration = createFloat64Histogram(setOfMetrics, "grpc.server.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a call from server transport's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	h.serverMetrics.callStarted = createInt64Counter(metrics.metrics, "grpc.server.call.started", meter, otelmetric.WithUnit("call"), otelmetric.WithDescription("Number of server calls started."))
+	h.serverMetrics.callSentTotalCompressedMessageSize = createInt64Histogram(metrics.metrics, "grpc.server.call.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	h.serverMetrics.callRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.metrics, "grpc.server.call.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	h.serverMetrics.callDuration = createFloat64Histogram(metrics.metrics, "grpc.server.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a call from server transport's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 }
 
 // attachLabelsTransportStream intercepts SetHeader and SendHeader calls of the
@@ -85,8 +85,8 @@ func (s *attachLabelsTransportStream) SendHeader(md metadata.MD) error {
 
 func (h *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	var metadataExchangeLabels metadata.MD
-	if h.o.MetricsOptions.pluginOption != nil {
-		metadataExchangeLabels = h.o.MetricsOptions.pluginOption.GetMetadata()
+	if h.options.MetricsOptions.pluginOption != nil {
+		metadataExchangeLabels = h.options.MetricsOptions.pluginOption.GetMetadata()
 	}
 
 	sts := grpc.ServerTransportStreamFromContext(ctx)
@@ -146,8 +146,8 @@ func (s *attachLabelsStream) SendMsg(m any) error {
 
 func (h *serverStatsHandler) streamInterceptor(srv any, ss grpc.ServerStream, ssi *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	var metadataExchangeLabels metadata.MD
-	if h.o.MetricsOptions.pluginOption != nil {
-		metadataExchangeLabels = h.o.MetricsOptions.pluginOption.GetMetadata()
+	if h.options.MetricsOptions.pluginOption != nil {
+		metadataExchangeLabels = h.options.MetricsOptions.pluginOption.GetMetadata()
 	}
 	als := &attachLabelsStream{
 		ServerStream:           ss,
@@ -174,8 +174,8 @@ func (h *serverStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 // TagRPC implements per RPC context management.
 func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	method := info.FullMethodName
-	if h.o.MetricsOptions.MethodAttributeFilter != nil {
-		if !h.o.MetricsOptions.MethodAttributeFilter(method) {
+	if h.options.MetricsOptions.MethodAttributeFilter != nil {
+		if !h.options.MetricsOptions.MethodAttributeFilter(method) {
 			method = "other"
 		}
 	}
@@ -213,8 +213,8 @@ func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
 	switch st := s.(type) {
 	case *stats.InHeader:
-		if ai.pluginOptionLabels == nil && h.o.MetricsOptions.pluginOption != nil {
-			labels := h.o.MetricsOptions.pluginOption.GetLabels(st.Header)
+		if ai.pluginOptionLabels == nil && h.options.MetricsOptions.pluginOption != nil {
+			labels := h.options.MetricsOptions.pluginOption.GetLabels(st.Header)
 			if labels == nil {
 				labels = map[string]string{} // Shouldn't return a nil map. Make it empty if so to ignore future Get Calls for this Attempt.
 			}

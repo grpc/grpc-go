@@ -1218,8 +1218,8 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				FilterMetadata: map[string]*structpb.Struct{
 					"com.google.csm.telemetry_labels": {
 						Fields: map[string]*structpb.Value{
-							"service_name":           structpb.NewStringValue("grpc-service"),
-							"service_namespace_name": structpb.NewStringValue("grpc-service-namespace"),
+							"service_name":      structpb.NewStringValue("grpc-service"),
+							"service_namespace": structpb.NewStringValue("grpc-service-namespace"),
 						},
 					},
 				},
@@ -1363,8 +1363,8 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				LRSServerConfig: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
 				Raw:             v3ClusterAnyWithTelemetryLabels,
 				TelemetryLabels: map[string]string{
-					"csm.service_name":      "grpc-service",
-					"csm.service_namespace": "grpc-service-namespace",
+					"csm.service_name":           "grpc-service",
+					"csm.service_namespace_name": "grpc-service-namespace",
 				},
 			},
 		},
