@@ -44,11 +44,14 @@ func (h *serverStatsHandler) initializeMetrics() {
 		return
 	}
 
-	meter := h.o.MetricsOptions.MeterProvider.Meter("grpc-go " + grpc.Version)
+	meter := h.o.MetricsOptions.MeterProvider.Meter("grpc-go ", otelmetric.WithInstrumentationVersion(grpc.Version))
 	if meter == nil {
 		return
 	}
-	setOfMetrics := h.o.MetricsOptions.Metrics.metrics
+	setOfMetrics := DefaultMetrics.metrics
+	if h.o.MetricsOptions.Metrics != nil {
+		setOfMetrics = h.o.MetricsOptions.Metrics.metrics
+	}
 
 	h.serverMetrics.callStarted = createInt64Counter(setOfMetrics, "grpc.server.call.started", meter, otelmetric.WithUnit("call"), otelmetric.WithDescription("Number of server calls started."))
 	h.serverMetrics.callSentTotalCompressedMessageSize = createInt64Histogram(setOfMetrics, "grpc.server.call.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))

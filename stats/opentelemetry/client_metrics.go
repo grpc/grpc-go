@@ -44,12 +44,15 @@ func (h *clientStatsHandler) initializeMetrics() {
 		return
 	}
 
-	meter := h.o.MetricsOptions.MeterProvider.Meter("grpc-go " + grpc.Version)
+	meter := h.o.MetricsOptions.MeterProvider.Meter("grpc-go ", otelmetric.WithInstrumentationVersion(grpc.Version))
 	if meter == nil {
 		return
 	}
 
-	setOfMetrics := h.o.MetricsOptions.Metrics.metrics
+	setOfMetrics := DefaultMetrics.metrics
+	if h.o.MetricsOptions.Metrics != nil {
+		setOfMetrics = h.o.MetricsOptions.Metrics.metrics
+	}
 
 	h.clientMetrics.attemptStarted = createInt64Counter(setOfMetrics, "grpc.client.attempt.started", meter, otelmetric.WithUnit("attempt"), otelmetric.WithDescription("Number of client call attempts started."))
 	h.clientMetrics.attemptDuration = createFloat64Histogram(setOfMetrics, "grpc.client.attempt.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))

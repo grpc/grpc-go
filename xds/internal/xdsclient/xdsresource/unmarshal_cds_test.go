@@ -1218,8 +1218,8 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				FilterMetadata: map[string]*structpb.Struct{
 					"com.google.csm.telemetry_labels": {
 						Fields: map[string]*structpb.Value{
-							"service_name":      structpb.NewStringValue("grpc-service"),
-							"service_namespace": structpb.NewStringValue("grpc-service-namespace"),
+							"service_name":           structpb.NewStringValue("grpc-service"),
+							"service_namespace_name": structpb.NewStringValue("grpc-service-namespace"),
 						},
 					},
 				},
