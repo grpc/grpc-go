@@ -28,9 +28,9 @@ import (
 	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
 )
 
-// EnableObservability sets up CSM EnableObservability for the binary globally.
+// EnableObservability sets up CSM Observability for the binary globally.
 //
-// The CSM Plugin Option is instantiated with local labels and metadata exchange
+// The CSM Stats Plugin is instantiated with local labels and metadata exchange
 // labels pulled from the environment, and emits metadata exchange labels from
 // the peer and local labels. Context timeouts do not trigger an error, but set
 // certain labels to "unknown".
