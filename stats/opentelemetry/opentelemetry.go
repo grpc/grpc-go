@@ -39,7 +39,6 @@ func init() {
 	}
 }
 
-
 var logger = grpclog.Component("otel-plugin")
 
 var canonicalString = internal.CanonicalString.(func(codes.Code) string)

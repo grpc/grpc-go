@@ -74,7 +74,7 @@ func Observability(ctx context.Context, options opentelemetry.Options) func() {
 
 // replace grpc module and otel module I guess
 
-type perTargetDialOption struct {}
+type perTargetDialOption struct{}
 
 func (perTargetDialOption) DialOptionForTarget(parsedTarget url.URL) grpc.DialOption {
 	if determineTargetCSM(&parsedTarget) {
