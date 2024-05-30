@@ -512,7 +512,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	defer cancel()
 	wg.Add(1)
 	go func() {
-		_, err = client.EmptyCall(ctx, &testpb.Empty{})
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
 		if err != nil {
 			t.Errorf("First rpc UnaryCall() failed: %v", err)
 		}
@@ -534,7 +534,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 		// Note that sending only the first RPC does not catch this case,
 		// because if the priority policy fails to update the picker, then the
 		// pick for the first RPC will not be retried.
-		_, err = client.EmptyCall(ctx, &testpb.Empty{})
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
 		if err != nil {
 			t.Errorf("Second UnaryCall() failed: %v", err)
 		}
