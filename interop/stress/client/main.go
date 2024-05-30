@@ -118,6 +118,7 @@ func parseTestCases(testCaseString string) []testCaseWithWeight {
 type weightedRandomTestSelector struct {
 	tests       []testCaseWithWeight
 	totalWeight int
+	rand        *rand.Rand
 }
 
 // newWeightedRandomTestSelector constructs a weightedRandomTestSelector with the given list of testCaseWithWeight.
@@ -126,12 +127,11 @@ func newWeightedRandomTestSelector(tests []testCaseWithWeight) *weightedRandomTe
 	for _, t := range tests {
 		totalWeight += t.weight
 	}
-	rand.Seed(time.Now().UnixNano())
-	return &weightedRandomTestSelector{tests, totalWeight}
+	return &weightedRandomTestSelector{tests, totalWeight, rand.New(rand.NewSource(time.Now().UnixNano()))}
 }
 
 func (selector weightedRandomTestSelector) getNextTest() string {
-	random := rand.Intn(selector.totalWeight)
+	random := selector.rand.Intn(selector.totalWeight)
 	var weightSofar int
 	for _, test := range selector.tests {
 		weightSofar += test.weight
