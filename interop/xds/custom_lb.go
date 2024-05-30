@@ -26,6 +26,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -93,7 +94,7 @@ type rpcBehaviorLB struct {
 func (b *rpcBehaviorLB) UpdateClientConnState(s balancer.ClientConnState) error {
 	lbCfg, ok := s.BalancerConfig.(*lbConfig)
 	if !ok {
-		return fmt.Errorf("test.RpcBehaviorLoadBalancer:received config with unexpected type %T: %s", s.BalancerConfig, s.BalancerConfig)
+		return fmt.Errorf("test.RpcBehaviorLoadBalancer:received config with unexpected type %T: %s", s.BalancerConfig, pretty.ToJSON(s.BalancerConfig))
 	}
 	b.mu.Lock()
 	b.cfg = lbCfg

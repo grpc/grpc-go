@@ -1,6 +1,8 @@
-module google.golang.org/interop/xds
+module google.golang.org/grpc/interop/xds
 
 go 1.21.0
+
+replace google.golang.org/grpc => ../..
 
 replace google.golang.org/grpc/stats/opentelemetry => ../../stats/opentelemetry
 
@@ -8,7 +10,7 @@ require (
 	github.com/prometheus/client_golang v1.19.1
 	go.opentelemetry.io/otel/exporters/prometheus v0.49.0
 	go.opentelemetry.io/otel/sdk/metric v1.27.0
-	google.golang.org/grpc v1.65.0-dev.0.20240521165117-aea78bdf9d13
+	google.golang.org/grpc v1.64.0
 	google.golang.org/grpc/stats/opentelemetry v0.0.0-20240523232201-f7d3d3eecbee
 )
 
