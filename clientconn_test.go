@@ -692,12 +692,16 @@ func (s) TestResolverEmptyUpdateNotPanic(t *testing.T) {
 }
 
 func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
-	grpctest.TLogger.ExpectError("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"")
-
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen. Err: %v", err)
 	}
+
+	addr := lis.Addr().String()
+	grpctest.TLogger.ExpectError(fmt.Sprintf(
+		"Client received GoAway from address %s with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"",
+		addr))
+
 	defer lis.Close()
 	connected := grpcsync.NewEvent()
 	defer connected.Fire()
@@ -728,7 +732,6 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 			return
 		}
 	}()
-	addr := lis.Addr().String()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	cc, err := DialContext(ctx, addr, WithBlock(), WithTransportCredentials(insecure.NewCredentials()), WithKeepaliveParams(keepalive.ClientParameters{

@@ -1302,7 +1302,9 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		// data equal to ASCII "too_many_pings", it should log the occurrence at a log level that is
 		// enabled by default and double the configure KEEPALIVE_TIME used for new connections
 		// on that channel.
-		logger.Errorf("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\".")
+		logger.Errorf(
+			"Client received GoAway from address %s with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\".",
+			t.address.Addr)
 	}
 	id := f.LastStreamID
 	if id > 0 && id%2 == 0 {
