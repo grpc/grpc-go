@@ -2,8 +2,6 @@ module google.golang.org/grpc/security/advancedtls/examples
 
 go 1.21
 
-toolchain go1.22.1
-
 require (
 	google.golang.org/grpc v1.64.0
 	google.golang.org/grpc/examples v0.0.0-20240528152018-6e59dd1d7f86

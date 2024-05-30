@@ -2,8 +2,6 @@ module google.golang.org/grpc/gcp/observability
 
 go 1.21
 
-toolchain go1.22.1
-
 require (
 	cloud.google.com/go/logging v1.10.0
 	contrib.go.opencensus.io/exporter/stackdriver v0.13.15-0.20230702191903-2de6d2748484

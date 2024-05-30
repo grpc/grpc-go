@@ -2,8 +2,6 @@ module google.golang.org/grpc/examples
 
 go 1.21
 
-toolchain go1.22.1
-
 require (
 	github.com/cncf/xds/go v0.0.0-20240423153145-555b57ec207b
 	golang.org/x/oauth2 v0.20.0

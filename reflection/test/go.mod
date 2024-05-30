@@ -1,6 +1,6 @@
 module google.golang.org/grpc/reflection/test
 
-go 1.19
+go 1.21
 
 replace google.golang.org/grpc => ../../
 

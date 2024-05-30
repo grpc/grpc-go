@@ -2,8 +2,6 @@ module google.golang.org/grpc/interop/observability
 
 go 1.21
 
-toolchain go1.22.1
-
 require (
 	google.golang.org/grpc v1.64.0
 	google.golang.org/grpc/gcp/observability v1.0.1
