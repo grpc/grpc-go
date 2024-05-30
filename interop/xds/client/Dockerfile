@@ -19,7 +19,7 @@
 FROM golang:1.21-alpine as build
 
 # Make a grpc-go directory and copy the repo into it.
-WORKDIR /go/src/grpc-go/
+WORKDIR /go/src/grpc-go
 COPY . .
 
 # Build a static binary without cgo so that we can copy just the binary in the

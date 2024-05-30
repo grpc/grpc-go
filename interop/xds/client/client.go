@@ -36,7 +36,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/grpclog"
-	_ "google.golang.org/grpc/interop/xds"
+	_ "google.golang.org/grpc/interop/xds" // to register Custom LB.
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/reflection"
