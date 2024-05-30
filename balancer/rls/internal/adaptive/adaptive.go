@@ -20,16 +20,15 @@
 package adaptive
 
 import (
+	"math/rand"
 	"sync"
 	"time"
-
-	"google.golang.org/grpc/internal/grpcrand"
 )
 
 // For overriding in unittests.
 var (
 	timeNowFunc = func() time.Time { return time.Now() }
-	randFunc    = func() float64 { return grpcrand.Float64() }
+	randFunc    = func() float64 { return rand.Float64() }
 )
 
 const (

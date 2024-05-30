@@ -24,6 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"strconv"
@@ -35,7 +36,6 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/resolver/dns/internal"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -423,7 +423,7 @@ func chosenByPercentage(a *int) bool {
 	if a == nil {
 		return true
 	}
-	return grpcrand.Intn(100)+1 <= *a
+	return rand.Intn(100)+1 <= *a
 }
 
 func canaryingSC(js string) string {
