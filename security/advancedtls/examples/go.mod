@@ -4,8 +4,8 @@ go 1.21
 
 require (
 	google.golang.org/grpc v1.64.0
-	google.golang.org/grpc/examples v0.0.0-20240528152018-6e59dd1d7f86
-	google.golang.org/grpc/security/advancedtls v0.0.0-20240528152018-6e59dd1d7f86
+	google.golang.org/grpc/examples v0.0.0-20240529235625-24e902437554
+	google.golang.org/grpc/security/advancedtls v0.0.0-20240529235625-24e902437554
 )
 
 require (
@@ -13,7 +13,7 @@ require (
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sys v0.20.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240528155852-a33235495d66 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240528184218-531527333157 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 )
 

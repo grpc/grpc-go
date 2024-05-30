@@ -11,7 +11,7 @@ require (
 
 require (
 	github.com/BurntSushi/toml v1.4.0 // indirect
-	golang.org/x/exp/typeparams v0.0.0-20240525044651-4c93da0ed11d // indirect
+	golang.org/x/exp/typeparams v0.0.0-20240529005216-23cca8864a10 // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
 )
