@@ -783,7 +783,7 @@ func computeIdealNumberOfRPCs(p, errorTolerance float64) int {
 	if p < 0 || p > 1 {
 		panic("p must be in (0, 1)")
 	}
-	numRPCs := math.Ceil(p*(1-p)) * 5. * 5. / errorTolerance / errorTolerance
+	numRPCs := math.Ceil(p * (1 - p) * 5. * 5. / errorTolerance / errorTolerance)
 	return int(numRPCs + 1000.) // add 1k as a buffer to avoid flakyness.
 }
 
