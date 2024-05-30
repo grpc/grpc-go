@@ -33,6 +33,12 @@ import (
 	"go.opentelemetry.io/otel/metric/noop"
 )
 
+func init() {
+	otelinternal.SetPluginOption = func(o *Options, po otelinternal.PluginOption) {
+		o.MetricsOptions.pluginOption = po
+	}
+}
+
 var logger = grpclog.Component("otel-plugin")
 
 var canonicalString = internal.CanonicalString.(func(codes.Code) string)
@@ -149,10 +155,12 @@ type MetricsOptions struct {
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 func DialOption(o Options) grpc.DialOption {
-	csh := &clientStatsHandler{o: o}
+	csh := &clientStatsHandler{options: o}
 	csh.initializeMetrics()
 	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
 }
+
+var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
 
 // ServerOption returns a server option which enables OpenTelemetry
 // instrumentation code for a grpc.Server.
@@ -167,9 +175,9 @@ func DialOption(o Options) grpc.DialOption {
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 func ServerOption(o Options) grpc.ServerOption {
-	ssh := &serverStatsHandler{o: o}
+	ssh := &serverStatsHandler{options: o}
 	ssh.initializeMetrics()
-	return grpc.StatsHandler(ssh)
+	return joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
 }
 
 // callInfo is information pertaining to the lifespan of the RPC client side.

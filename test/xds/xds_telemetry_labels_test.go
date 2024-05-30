@@ -39,7 +39,7 @@ import (
 const serviceNameKey = "service_name"
 const serviceNameKeyCSM = "csm.service_name"
 const serviceNamespaceKey = "service_namespace"
-const serviceNamespaceKeyCSM = "csm.service_namespace"
+const serviceNamespaceKeyCSM = "csm.service_namespace_name"
 const serviceNameValue = "grpc-service"
 const serviceNamespaceValue = "grpc-service-namespace"
 

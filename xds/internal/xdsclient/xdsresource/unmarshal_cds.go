@@ -94,7 +94,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serv
 				}
 				if val, ok := fields["service_namespace"]; ok {
 					if _, ok := val.GetKind().(*structpb.Value_StringValue); ok {
-						telemetryLabels["csm.service_namespace"] = val.GetStringValue()
+						telemetryLabels["csm.service_namespace_name"] = val.GetStringValue()
 					}
 				}
 			}

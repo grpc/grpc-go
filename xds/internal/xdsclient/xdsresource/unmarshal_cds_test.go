@@ -1363,8 +1363,8 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				LRSServerConfig: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
 				Raw:             v3ClusterAnyWithTelemetryLabels,
 				TelemetryLabels: map[string]string{
-					"csm.service_name":      "grpc-service",
-					"csm.service_namespace": "grpc-service-namespace",
+					"csm.service_name":           "grpc-service",
+					"csm.service_namespace_name": "grpc-service-namespace",
 				},
 			},
 		},
