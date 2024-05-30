@@ -360,7 +360,7 @@ func checkCertRevocation(c *x509.Certificate, crl *CRL) (revocationStatus, error
 	rawEntryIssuer := crl.rawIssuer
 
 	// Loop through all the revoked certificates.
-	for _, revCert := range crl.certList.RevokedCertificates {
+	for _, revCert := range crl.certList.RevokedCertificateEntries {
 		// 5.3 Loop through CRL entry extensions for needed information.
 		for _, ext := range revCert.Extensions {
 			if oidCertificateIssuer.Equal(ext.Id) {
