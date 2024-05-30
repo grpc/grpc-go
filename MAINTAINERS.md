@@ -9,7 +9,6 @@ for general contribution guidelines.
 
 ## Maintainers (in alphabetical order)
 
-- [erm-g](https://github.com/erm-g), Google LLC
 - [aranjans](https://github.com/aranjans), Google LLC
 - [arjan-bal](https://github.com/arjan-bal), Google LLC
 - [arvindbr8](https://github.com/arvindbr8), Google LLC
@@ -17,6 +16,7 @@ for general contribution guidelines.
 - [cesarghali](https://github.com/cesarghali), Google LLC
 - [dfawley](https://github.com/dfawley), Google LLC
 - [easwars](https://github.com/easwars), Google LLC
+- [erm-g](https://github.com/erm-g), Google LLC
 - [gtcooke94](https://github.com/gtcooke94), Google LLC
 - [menghanl](https://github.com/menghanl), Google LLC
 - [purnesh42h](https://github.com/purnesh42h), Google LLC
