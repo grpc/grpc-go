@@ -232,7 +232,7 @@ func main() {
 		if err != nil {
 			logger.Fatalf("Failed to start prometheus exporter: %v", err)
 		}
-		go http.ListenAndServe("0.0.0.0:9464", promhttp.Handler())
+		go http.ListenAndServe(":9464", promhttp.Handler())
 
 		provider := metric.NewMeterProvider(
 			metric.WithReader(exporter),

@@ -386,7 +386,7 @@ func main() {
 		provider := metric.NewMeterProvider(
 			metric.WithReader(exporter),
 		)
-		go http.ListenAndServe("0.0.0.0:9464", promhttp.Handler())
+		go http.ListenAndServe(":9464", promhttp.Handler())
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
