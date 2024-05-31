@@ -27,6 +27,7 @@ package googledirectpath
 
 import (
 	"fmt"
+	"math/rand"
 	"net/url"
 	"time"
 
@@ -34,7 +35,6 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/googlecloud"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -159,7 +159,7 @@ func (r *c2pResolver) Close() {
 	r.clientCloseFunc()
 }
 
-var id = fmt.Sprintf("C2P-%d", grpcrand.Int())
+var id = fmt.Sprintf("C2P-%d", rand.Int())
 
 func newNodeConfig(zone string, ipv6Capable bool) string {
 	metadata := ""

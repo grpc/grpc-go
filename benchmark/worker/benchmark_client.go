@@ -22,6 +22,7 @@ import (
 	"context"
 	"flag"
 	"math"
+	"math/rand"
 	"runtime"
 	"sync"
 	"time"
@@ -32,7 +33,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
@@ -298,7 +298,7 @@ func (bc *benchmarkClient) unaryLoop(conns []*grpc.ClientConn, rpcCountPerConn i
 						}
 					}
 				} else { // Open loop.
-					timeBetweenRPCs := time.Duration((grpcrand.ExpFloat64() / *poissonLambda) * float64(time.Second))
+					timeBetweenRPCs := time.Duration((rand.ExpFloat64() / *poissonLambda) * float64(time.Second))
 					time.AfterFunc(timeBetweenRPCs, func() {
 						bc.poissonUnary(client, idx, reqSize, respSize, *poissonLambda)
 					})
@@ -348,7 +348,7 @@ func (bc *benchmarkClient) streamingLoop(conns []*grpc.ClientConn, rpcCountPerCo
 					}
 				}(idx)
 			} else { // Open loop.
-				timeBetweenRPCs := time.Duration((grpcrand.ExpFloat64() / *poissonLambda) * float64(time.Second))
+				timeBetweenRPCs := time.Duration((rand.ExpFloat64() / *poissonLambda) * float64(time.Second))
 				time.AfterFunc(timeBetweenRPCs, func() {
 					bc.poissonStreaming(stream, idx, reqSize, respSize, *poissonLambda, doRPC)
 				})
@@ -366,7 +366,7 @@ func (bc *benchmarkClient) poissonUnary(client testgrpc.BenchmarkServiceClient, 
 		elapse := time.Since(start)
 		bc.lockingHistograms[idx].add(int64(elapse))
 	}()
-	timeBetweenRPCs := time.Duration((grpcrand.ExpFloat64() / lambda) * float64(time.Second))
+	timeBetweenRPCs := time.Duration((rand.ExpFloat64() / lambda) * float64(time.Second))
 	time.AfterFunc(timeBetweenRPCs, func() {
 		bc.poissonUnary(client, idx, reqSize, respSize, lambda)
 	})
@@ -381,7 +381,7 @@ func (bc *benchmarkClient) poissonStreaming(stream testgrpc.BenchmarkService_Str
 		elapse := time.Since(start)
 		bc.lockingHistograms[idx].add(int64(elapse))
 	}()
-	timeBetweenRPCs := time.Duration((grpcrand.ExpFloat64() / lambda) * float64(time.Second))
+	timeBetweenRPCs := time.Duration((rand.ExpFloat64() / lambda) * float64(time.Second))
 	time.AfterFunc(timeBetweenRPCs, func() {
 		bc.poissonStreaming(stream, idx, reqSize, respSize, lambda, doRPC)
 	})

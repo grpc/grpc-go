@@ -26,6 +26,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"reflect"
 	"testing"
@@ -35,7 +36,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
@@ -483,7 +483,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 
 	for tcNum, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			defer func() { randIntn = grpcrand.Intn; newTimer = time.NewTimer }()
+			defer func() { randIntn = rand.Intn; newTimer = time.NewTimer }()
 			var intnCalls []int
 			var newTimerCalls []time.Duration
 			randOut := 0
