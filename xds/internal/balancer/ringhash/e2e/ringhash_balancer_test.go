@@ -850,10 +850,10 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 	// Send a large number of RPCs and check that they are distributed randomly.
 	gotPerBackend := checkRPCSendOK(t, ctx, client, numRPCs)
 	for _, backend := range backends {
-		got := float64(gotPerBackend[backend.Address])
-		want := float64(numRPCs) * .5
-		if !cmp.Equal(got, want, cmpopts.EquateApprox(errorTolerance, 0)) {
-			t.Errorf("backend %s RPC count: got %v, want %v (margin: +-%v)", backend.Address, got, want, errorTolerance)
+		got := float64(gotPerBackend[backend.Address]) / float64(numRPCs)
+		want := .5
+		if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
+			t.Errorf("fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[2].Address, got, want, errorTolerance)
 		}
 	}
 }
@@ -926,22 +926,21 @@ func (s) TestRingHash_EndpointWeights(t *testing.T) {
 	defer cancel()
 
 	// Send a large number of RPCs and check that they are distributed randomly.
-	numRPCs := computeIdealNumberOfRPCs(.5, errorTolerance)
+	numRPCs := computeIdealNumberOfRPCs(.25, errorTolerance)
 	gotPerBackend := checkRPCSendOK(t, ctx, client, numRPCs)
 
-	got := float64(gotPerBackend[backends[0].Address])
-	want := float64(numRPCs) * .25
-	if !cmp.Equal(got, want, cmpopts.EquateApprox(errorTolerance, 0)) {
+	got := float64(gotPerBackend[backends[0].Address]) / float64(numRPCs)
+	want := .25
+	if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
 		t.Errorf("backend %s RPC count: got %v, want %v (margin: +-%v)", backends[0].Address, got, want, errorTolerance)
 	}
-	got = float64(gotPerBackend[backends[1].Address])
-	want = float64(numRPCs) * .25
-	if !cmp.Equal(got, want, cmpopts.EquateApprox(errorTolerance, 0)) {
+	got = float64(gotPerBackend[backends[1].Address]) / float64(numRPCs)
+	if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
 		t.Errorf("backend %s RPC count: got %v, want %v (margin: +-%v)", backends[1].Address, got, want, errorTolerance)
 	}
-	got = float64(gotPerBackend[backends[2].Address])
-	want = float64(numRPCs) * .50
-	if !cmp.Equal(got, want, cmpopts.EquateApprox(errorTolerance, 0)) {
-		t.Errorf("backend %s RPC count: got %v, want %v (margin: +-%v)", backends[2].Address, got, want, errorTolerance)
+	got = float64(gotPerBackend[backends[2].Address]) / float64(numRPCs)
+	want = .50
+	if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
+		t.Errorf("fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[2].Address, got, want, errorTolerance)
 	}
 }
