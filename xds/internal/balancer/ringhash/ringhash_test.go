@@ -344,17 +344,26 @@ func (s) TestThreeSubConnsAffinityMultiple(t *testing.T) {
 	}
 }
 
+// TestAddrWeightChange covers the following scenarios after setting up the
+// balancer with 3 addresses [A, B, C]:
+//   - updates balancer with [A, B, C], a new Picker should not be sent.
+//   - updates balancer with [A, B] (C removed), a new Picker is sent and the
+//     ring is updated.
+//   - updates balancer with [A, B], but B has a weight of 2, a new Picker is
+//     sent.  And the new ring should contain the correct number of entries
+//     and weights.
 func (s) TestAddrWeightChange(t *testing.T) {
-	wantAddrs := []resolver.Address{
+	addrs := []resolver.Address{
 		{Addr: testBackendAddrStrs[0]},
 		{Addr: testBackendAddrStrs[1]},
 		{Addr: testBackendAddrStrs[2]},
 	}
-	cc, b, p0 := setupTest(t, wantAddrs)
+	cc, b, p0 := setupTest(t, addrs)
 	ring0 := p0.(*picker).ring
 
+	// Update with the same addresses, should not send a new Picker.
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  resolver.State{Addresses: wantAddrs},
+		ResolverState:  resolver.State{Addresses: addrs},
 		BalancerConfig: testConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState returned err: %v", err)
@@ -406,6 +415,27 @@ func (s) TestAddrWeightChange(t *testing.T) {
 	}
 	if p2.(*picker).ring == ring1 {
 		t.Fatalf("new picker after changing address weight has the same ring as before, want different")
+	}
+	// With the new update, the ring must look like this:
+	//   [
+	//     {idx:0 sc: {addr: testBackendAddrStrs[0], weight: 1}},
+	//     {idx:1 sc: {addr: testBackendAddrStrs[1], weight: 2}},
+	//     {idx:2 sc: {addr: testBackendAddrStrs[2], weight: 2}},
+	//   ].
+	if len(p2.(*picker).ring.items) != 3 {
+		t.Fatalf("new picker after changing address weight has %d entries, want 3", len(p2.(*picker).ring.items))
+	}
+	for _, i := range p2.(*picker).ring.items {
+		if i.sc.addr == testBackendAddrStrs[0] {
+			if i.sc.weight != 1 {
+				t.Fatalf("new picker after changing address weight has weight %d for %v, want 1", i.sc.weight, i.sc.addr)
+			}
+		}
+		if i.sc.addr == testBackendAddrStrs[1] {
+			if i.sc.weight != 2 {
+				t.Fatalf("new picker after changing address weight has weight %d for %v, want 2", i.sc.weight, i.sc.addr)
+			}
+		}
 	}
 }
 

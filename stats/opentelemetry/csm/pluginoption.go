@@ -179,10 +179,15 @@ var (
 	getAttrSetFromResourceDetector = func(ctx context.Context) *attribute.Set {
 		r, err := resource.New(ctx, resource.WithDetectors(gcp.NewDetector()))
 		if err != nil {
-			logger.Errorf("error reading OpenTelemetry resource: %v", err)
-			return nil
+			logger.Warningf("error reading OpenTelemetry resource: %v", err)
 		}
-		return r.Set()
+		if r != nil {
+			// It's possible for resource.New to return partial data alongside
+			// an error. In this case, use partial data and set "unknown" for
+			// labels missing.
+			return r.Set()
+		}
+		return nil
 	}
 )
 

@@ -1,0 +1,30 @@
+{
+  "name": "authz",
+  "allow_rules": [
+    {
+      "name": "allow_UnaryEcho",
+      "request": {
+        "paths": ["/grpc.examples.echo.Echo/UnaryEcho"],
+        "headers": [
+          {
+            "key": "UNARY_ECHO:RW",
+            "values": ["true"]
+          }
+        ]
+      }
+    },
+    {
+      "name": "allow_BidirectionalStreamingEcho",
+      "request": {
+        "paths": ["/grpc.examples.echo.Echo/BidirectionalStreamingEcho"],
+        "headers": [
+          {
+            "key": "STREAM_ECHO:RW",
+            "values": ["true"]
+          }
+        ]
+      }
+    }
+  ],
+  "deny_rules": []
+}
