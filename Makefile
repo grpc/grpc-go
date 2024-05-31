@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 all: vet test testrace
 
 build:
@@ -20,8 +22,11 @@ test:
 	go test -cpu 1,4 -timeout 7m google.golang.org/grpc/...
 
 testsubmodule:
-	cd security/advancedtls && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/advancedtls/...
-	cd security/authorization && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/authorization/...
+	@for module in $(shell find . -name go.mod | xargs dirname); do \
+		pushd "$$module" > /dev/null; \
+		go test ./...; \
+		popd > /dev/null; \
+	done
 
 testrace:
 	go test -race -cpu 1,4 -timeout 7m google.golang.org/grpc/...
