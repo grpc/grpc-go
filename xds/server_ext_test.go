@@ -66,7 +66,7 @@ const (
 )
 
 type testService struct {
-	testgrpc.TestServiceServer
+	testgrpc.UnimplementedTestServiceServer
 }
 
 func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
