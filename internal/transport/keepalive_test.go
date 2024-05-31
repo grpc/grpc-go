@@ -447,7 +447,7 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
 
 	grpctest.TLogger.ExpectError(fmt.Sprintf(
-		"Client received GoAway from address %v with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"",
+		"Client received GoAway from address %s with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"",
 		client.address.Addr))
 
 	defer func() {
