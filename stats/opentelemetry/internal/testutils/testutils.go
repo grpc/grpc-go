@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// Package testingutils contains helpers for OpenTelemetry tests.
+// Package testutils contains helpers for OpenTelemetry tests.
 package testutils
 
 import (
