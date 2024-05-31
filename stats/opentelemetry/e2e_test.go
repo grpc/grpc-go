@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-	"google.golang.org/grpc/stats/opentelemetry/internal/testingutils"
+	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -154,12 +154,12 @@ func (s) TestMethodTargetAttributeFilter(t *testing.T) {
 					{ // Method should go to "other" due to the method attribute filter.
 						Attributes: attribute.NewSet(attribute.String("grpc.method", "other"), attribute.String("grpc.status", "OK")),
 						Count:      1,
-						Bounds:     testingutils.DefaultLatencyBounds,
+						Bounds:     testutils.DefaultLatencyBounds,
 					},
 					{
 						Attributes: attribute.NewSet(attribute.String("grpc.method", "grpc.testing.TestService/FullDuplexCall"), attribute.String("grpc.status", "OK")),
 						Count:      1,
-						Bounds:     testingutils.DefaultLatencyBounds,
+						Bounds:     testutils.DefaultLatencyBounds,
 					},
 				},
 				Temporality: metricdata.CumulativeTemporality,
@@ -167,7 +167,7 @@ func (s) TestMethodTargetAttributeFilter(t *testing.T) {
 		},
 	}
 
-	testingutils.CompareGotWantMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+	testutils.CompareGotWantMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 }
 
 // TestAllMetricsOneFunction tests emitted metrics from OpenTelemetry
@@ -212,12 +212,12 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		}
 	}
 
-	wantMetrics := testingutils.MetricData(testingutils.MetricDataOptions{
+	wantMetrics := testutils.MetricData(testutils.MetricDataOptions{
 		Target:               ss.Target,
 		UnaryMessageSent:     true,
 		StreamingMessageSent: false,
 	})
-	testingutils.CompareGotWantMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+	testutils.CompareGotWantMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 
 	stream, err = ss.Client.FullDuplexCall(ctx)
 	if err != nil {

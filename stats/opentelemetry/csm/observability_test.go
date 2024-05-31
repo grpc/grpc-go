@@ -37,7 +37,7 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats/opentelemetry"
-	"google.golang.org/grpc/stats/opentelemetry/internal/testingutils"
+	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 )
 
 // setupEnv configures the environment for CSM Observability Testing. It returns
@@ -126,7 +126,7 @@ func (s) TestCSMPluginOption(t *testing.T) {
 		// the interceptor level that can plumb metadata exchange header in.
 		unaryCallFunc     func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
 		streamingCallFunc func(stream testgrpc.TestService_FullDuplexCallServer) error
-		opts              testingutils.MetricDataOptions
+		opts              testutils.MetricDataOptions
 	}{
 		// Different permutations of operations that should all trigger csm md
 		// exchange labels to be written on the wire.
@@ -145,7 +145,7 @@ func (s) TestCSMPluginOption(t *testing.T) {
 					}
 				}
 			},
-			opts: testingutils.MetricDataOptions{
+			opts: testutils.MetricDataOptions{
 				CSMLabels:            csmLabels,
 				UnaryMessageSent:     true,
 				StreamingMessageSent: false,
@@ -164,7 +164,7 @@ func (s) TestCSMPluginOption(t *testing.T) {
 					}
 				}
 			},
-			opts: testingutils.MetricDataOptions{
+			opts: testutils.MetricDataOptions{
 				CSMLabels:            csmLabels,
 				UnaryMessageSent:     false,
 				StreamingMessageSent: false,
@@ -189,7 +189,7 @@ func (s) TestCSMPluginOption(t *testing.T) {
 					}
 				}
 			},
-			opts: testingutils.MetricDataOptions{
+			opts: testutils.MetricDataOptions{
 				CSMLabels:            csmLabels,
 				UnaryMessageSent:     true,
 				StreamingMessageSent: false,
@@ -213,7 +213,7 @@ func (s) TestCSMPluginOption(t *testing.T) {
 					}
 				}
 			},
-			opts: testingutils.MetricDataOptions{
+			opts: testutils.MetricDataOptions{
 				CSMLabels:            csmLabels,
 				UnaryMessageSent:     true,
 				StreamingMessageSent: false,
@@ -237,7 +237,7 @@ func (s) TestCSMPluginOption(t *testing.T) {
 					}
 				}
 			},
-			opts: testingutils.MetricDataOptions{
+			opts: testutils.MetricDataOptions{
 				CSMLabels:            csmLabels,
 				UnaryMessageSent:     true,
 				StreamingMessageSent: true,
@@ -294,8 +294,8 @@ func (s) TestCSMPluginOption(t *testing.T) {
 
 			opts := test.opts
 			opts.Target = ss.Target
-			wantMetrics := testingutils.MetricData(opts)
-			testingutils.CompareGotWantMetrics(ctx, t, mr, gotMetrics, wantMetrics)
+			wantMetrics := testutils.MetricData(opts)
+			testutils.CompareGotWantMetrics(ctx, t, mr, gotMetrics, wantMetrics)
 		})
 	}
 }
@@ -435,7 +435,7 @@ func (s) TestxDSLabels(t *testing.T) {
 					{
 						Attributes: attribute.NewSet(unaryMethodClientSideEnd...),
 						Count:      1,
-						Bounds:     testingutils.DefaultLatencyBounds,
+						Bounds:     testutils.DefaultLatencyBounds,
 					},
 				},
 				Temporality: metricdata.CumulativeTemporality,
@@ -450,7 +450,7 @@ func (s) TestxDSLabels(t *testing.T) {
 					{
 						Attributes:   attribute.NewSet(unaryMethodClientSideEnd...),
 						Count:        1,
-						Bounds:       testingutils.DefaultSizeBounds,
+						Bounds:       testutils.DefaultSizeBounds,
 						BucketCounts: unaryBucketCounts,
 						Min:          unaryExtrema,
 						Max:          unaryExtrema,
@@ -469,7 +469,7 @@ func (s) TestxDSLabels(t *testing.T) {
 					{
 						Attributes:   attribute.NewSet(unaryMethodClientSideEnd...),
 						Count:        1,
-						Bounds:       testingutils.DefaultSizeBounds,
+						Bounds:       testutils.DefaultSizeBounds,
 						BucketCounts: unaryBucketCounts,
 						Min:          unaryExtrema,
 						Max:          unaryExtrema,
@@ -488,7 +488,7 @@ func (s) TestxDSLabels(t *testing.T) {
 					{
 						Attributes: attribute.NewSet(unaryMethodAttr, targetAttr, unaryStatusAttr),
 						Count:      1,
-						Bounds:     testingutils.DefaultLatencyBounds,
+						Bounds:     testutils.DefaultLatencyBounds,
 					},
 				},
 				Temporality: metricdata.CumulativeTemporality,
@@ -496,7 +496,7 @@ func (s) TestxDSLabels(t *testing.T) {
 		},
 	}
 
-	testingutils.CompareGotWantMetrics(ctx, t, mr, gotMetrics, wantMetrics)
+	testutils.CompareGotWantMetrics(ctx, t, mr, gotMetrics, wantMetrics)
 }
 
 // TestObservability tests that Observability global function compiles and runs

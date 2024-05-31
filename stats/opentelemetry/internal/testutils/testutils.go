@@ -15,7 +15,7 @@
  */
 
 // Package testingutils contains helpers for OpenTelemetry tests.
-package testingutils
+package testutils
 
 import (
 	"context"
@@ -31,7 +31,7 @@ import (
 
 var (
 	// DefaultLatencyBounds are the default bounds for latency metrics.
-	DefaultLatencyBounds = []float64{0, 0.00001, 0.00005, 0.0001, 0.0003, 0.0006, 0.0008, 0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.008, 0.01, 0.013, 0.016, 0.02, 0.025, 0.03, 0.04, 0.05, 0.065, 0.08, 0.1, 0.13, 0.16, 0.2, 0.25, 0.3, 0.4, 0.5, 0.65, 0.8, 1, 2, 5, 10, 20, 50, 100} // provide "advice" through API, SDK should set this too
+	DefaultLatencyBounds = []float64{0, 0.00001, 0.00005, 0.0001, 0.0003, 0.0006, 0.0008, 0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.008, 0.01, 0.013, 0.016, 0.02, 0.025, 0.03, 0.04, 0.05, 0.065, 0.08, 0.1, 0.13, 0.16, 0.2, 0.25, 0.3, 0.4, 0.5, 0.65, 0.8, 1, 2, 5, 10, 20, 50, 100}
 	// DefaultSizeBounds are the default bounds for metrics which record size.
 	DefaultSizeBounds = []float64{0, 1024, 2048, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864, 268435456, 1073741824, 4294967296}
 )
@@ -39,7 +39,10 @@ var (
 // waitForServerCompletedRPCs waits until the unary and streaming stats.End
 // calls are finished processing. It does this by waiting for the expected
 // metric triggered by stats.End to appear through the passed in metrics reader.
-func waitForServerCompletedRPCs(ctx context.Context, reader metric.Reader, wantMetric metricdata.Metrics, t *testing.T) (map[string]metricdata.Metrics, error) {
+//
+// Returns a new gotMetrics map containing the metric data being polled for, or
+// an error if failed to wait for metric.
+func waitForServerCompletedRPCs(ctx context.Context, t *testing.T, reader metric.Reader, wantMetric metricdata.Metrics) (map[string]metricdata.Metrics, error) {
 	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
 		rm := &metricdata.ResourceMetrics{}
 		reader.Collect(ctx, rm)
@@ -61,9 +64,10 @@ func waitForServerCompletedRPCs(ctx context.Context, reader metric.Reader, wantM
 	return nil, fmt.Errorf("error waiting for metric %v: %v", wantMetric, ctx.Err())
 }
 
-// assertDataPointWithinFiveSeconds asserts the metric passed in contains
-// a histogram with dataPoints that fall within buckets that are <=5.
-func assertDataPointWithinFiveSeconds(metric metricdata.Metrics) error {
+// checkDataPointWithinFiveSeconds checks if the metric passed in contains a
+// histogram with dataPoints that fall within buckets that are <=5. Returns an
+// error if check fails.
+func checkDataPointWithinFiveSeconds(metric metricdata.Metrics) error {
 	histo, ok := metric.Data.(metricdata.Histogram[float64])
 	if !ok {
 		return fmt.Errorf("metric data is not histogram")
@@ -93,8 +97,7 @@ func assertDataPointWithinFiveSeconds(metric metricdata.Metrics) error {
 }
 
 // MetricDataOptions are the options used to configure the metricData emissions
-// of expected metrics data from NewMetricData. (rename function? this feels
-// like the different config state spaces for xDS haha).
+// of expected metrics data from NewMetricData.
 type MetricDataOptions struct {
 	// CSMLabels are the csm labels to attach to metrics which receive csm
 	// labels (all A66 expect client call and started RPC's client and server
@@ -393,14 +396,14 @@ func MetricData(options MetricDataOptions) []metricdata.Metrics {
 // eventual server metrics (not emitted synchronously with client side rpc
 // returning), and for duration metrics makes sure the data point is within
 // possible testing time (five seconds from context timeout).
-func CompareGotWantMetrics(ctx context.Context, t *testing.T, mr *metric.ManualReader, gotMetrics map[string]metricdata.Metrics, wantMetrics []metricdata.Metrics) { // return an error instead of t...
+func CompareGotWantMetrics(ctx context.Context, t *testing.T, mr *metric.ManualReader, gotMetrics map[string]metricdata.Metrics, wantMetrics []metricdata.Metrics) {
 	for _, metric := range wantMetrics {
 		if metric.Name == "grpc.server.call.sent_total_compressed_message_size" || metric.Name == "grpc.server.call.rcvd_total_compressed_message_size" {
 			// Sync the metric reader to see the event because stats.End is
 			// handled async server side. Thus, poll until metrics created from
 			// stats.End show up.
 			var err error
-			if gotMetrics, err = waitForServerCompletedRPCs(ctx, mr, metric, t); err != nil { // move to shared helper
+			if gotMetrics, err = waitForServerCompletedRPCs(ctx, t, mr, metric); err != nil { // move to shared helper
 				t.Fatalf("error waiting for sent total compressed message size for metric %v: %v", metric.Name, err)
 			}
 			continue
@@ -417,7 +420,7 @@ func CompareGotWantMetrics(ctx context.Context, t *testing.T, mr *metric.ManualR
 			if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars(), metricdatatest.IgnoreValue()) {
 				t.Fatalf("metrics data type not equal for metric: %v", metric.Name)
 			}
-			if err := assertDataPointWithinFiveSeconds(val); err != nil {
+			if err := checkDataPointWithinFiveSeconds(val); err != nil {
 				t.Fatalf("Data point not within five seconds for metric %v: %v", metric.Name, err)
 			}
 			continue
