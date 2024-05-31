@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -42,7 +43,7 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
-	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -787,6 +788,31 @@ func computeIdealNumberOfRPCs(p, errorTolerance float64) int {
 	return int(numRPCs + 1000.) // add 1k as a buffer to avoid flakyness.
 }
 
+// setRingHashLBPolicyWithHighMinRingSize sets the ring hash policy with a high
+// minimum ring size to ensure that the ring is large enough to distribute
+// requests more uniformly across endpoints when a random hash is used.
+func setRingHashLBPolicyWithHighMinRingSize(t *testing.T, cluster *v3clusterpb.Cluster) {
+	minRingSize := uint64(100000)
+	oldVal := envconfig.RingHashCap
+	envconfig.RingHashCap = minRingSize
+	t.Cleanup(func() {
+		envconfig.RingHashCap = oldVal
+	})
+	// Increasing min ring size for random distribution.
+	config := testutils.MarshalAny(t, &v3ringhashpb.RingHash{
+		HashFunction:    v3ringhashpb.RingHash_XX_HASH,
+		MinimumRingSize: &wrapperspb.UInt64Value{Value: minRingSize},
+	})
+	cluster.LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
+		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{{
+			TypedExtensionConfig: &v3core.TypedExtensionConfig{
+				Name:        "envoy.load_balancing_policies.ring_hash",
+				TypedConfig: config,
+			},
+		}},
+	}
+}
+
 // TestRingHash_NoHashPolicy tests that ring hash policy that hashes using a
 // random value.
 func (s) TestRingHash_NoHashPolicy(t *testing.T) {
@@ -810,19 +836,7 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 		ClusterName: clusterName,
 		ServiceName: clusterName,
 	})
-	// Increasing min ring size for random distribution.
-	config := testutils.MarshalAny(t, &v3ringhashpb.RingHash{
-		HashFunction:    v3ringhashpb.RingHash_XX_HASH,
-		MinimumRingSize: &wrapperspb.UInt64Value{Value: 100000},
-	})
-	cluster.LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
-		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{{
-			TypedExtensionConfig: &corev3.TypedExtensionConfig{
-				Name:        "envoy.load_balancing_policies.ring_hash",
-				TypedConfig: config,
-			},
-		}},
-	}
+	setRingHashLBPolicyWithHighMinRingSize(t, cluster)
 	route := e2e.DefaultRouteConfig("new_route", "test.server", clusterName)
 	listener := e2e.DefaultClientListener("test.server", route.Name)
 
@@ -860,7 +874,6 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 
 // TestRingHash_EndpointWeights tests that we observe endpoint weights.
 func (s) TestRingHash_EndpointWeights(t *testing.T) {
-	// https://github.com/grpc/grpc/blob/083bbee4805c14ce62e6c9535fe936f68b854c4f/test/cpp/end2end/xds/xds_ring_hash_end2end_test.cc#L488
 	backends, stop := startTestServiceBackends(t, 3)
 	defer stop()
 	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
@@ -889,18 +902,7 @@ func (s) TestRingHash_EndpointWeights(t *testing.T) {
 		ServiceName: clusterName,
 	})
 	// Increasing min ring size for random distribution.
-	config := testutils.MarshalAny(t, &v3ringhashpb.RingHash{
-		HashFunction:    v3ringhashpb.RingHash_XX_HASH,
-		MinimumRingSize: &wrapperspb.UInt64Value{Value: 100000},
-	})
-	cluster.LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
-		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{{
-			TypedExtensionConfig: &corev3.TypedExtensionConfig{
-				Name:        "envoy.load_balancing_policies.ring_hash",
-				TypedConfig: config,
-			},
-		}},
-	}
+	setRingHashLBPolicyWithHighMinRingSize(t, cluster)
 	route := e2e.DefaultRouteConfig("new_route", "test.server", clusterName)
 	listener := e2e.DefaultClientListener("test.server", route.Name)
 
@@ -932,11 +934,11 @@ func (s) TestRingHash_EndpointWeights(t *testing.T) {
 	got := float64(gotPerBackend[backends[0].Address]) / float64(numRPCs)
 	want := .25
 	if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
-		t.Errorf("backend %s RPC count: got %v, want %v (margin: +-%v)", backends[0].Address, got, want, errorTolerance)
+		t.Errorf("fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[0].Address, got, want, errorTolerance)
 	}
 	got = float64(gotPerBackend[backends[1].Address]) / float64(numRPCs)
 	if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
-		t.Errorf("backend %s RPC count: got %v, want %v (margin: +-%v)", backends[1].Address, got, want, errorTolerance)
+		t.Errorf("fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[1].Address, got, want, errorTolerance)
 	}
 	got = float64(gotPerBackend[backends[2].Address]) / float64(numRPCs)
 	want = .50
