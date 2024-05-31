@@ -21,16 +21,16 @@ for general contribution guidelines.
 - [zasweq](https://github.com/zasweq), Google LLC
 
 ## Emeritus Maintainers (in alphabetical order)
-- [adelez](https://github.com/adelez),
-- [canguler](https://github.com/canguler),
-- [cesarghali](https://github.com/cesarghali),
-- [iamqizhao](https://github.com/iamqizhao),
-- [jadekler](https://github.com/jadekler),
-- [jtattermusch](https://github.com/jtattermusch),
-- [lyuxuan](https://github.com/lyuxuan),
-- [makmukhi](https://github.com/makmukhi),
-- [matt-kwong](https://github.com/matt-kwong),
-- [menghanl](https://github.com/menghanl),
-- [nicolasnoble](https://github.com/nicolasnoble),
-- [yongni](https://github.com/yongni),
-- [srini100](https://github.com/srini100),
+- [adelez](https://github.com/adelez)
+- [canguler](https://github.com/canguler)
+- [cesarghali](https://github.com/cesarghali)
+- [iamqizhao](https://github.com/iamqizhao)
+- [jeanbza](https://github.com/jeanbza)
+- [jtattermusch](https://github.com/jtattermusch)
+- [lyuxuan](https://github.com/lyuxuan)
+- [makmukhi](https://github.com/makmukhi)
+- [matt-kwong](https://github.com/matt-kwong)
+- [menghanl](https://github.com/menghanl)
+- [nicolasnoble](https://github.com/nicolasnoble)
+- [srini100](https://github.com/srini100)
+- [yongni](https://github.com/yongni)
