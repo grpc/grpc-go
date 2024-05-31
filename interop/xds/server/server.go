@@ -232,7 +232,16 @@ func main() {
 		if err != nil {
 			logger.Fatalf("Failed to start prometheus exporter: %v", err)
 		}
-		go http.ListenAndServe(":9464", promhttp.Handler())
+		var port string
+		var ok bool
+		if port, ok = os.LookupEnv("OTEL_EXPORTER_PROMETHEUS_PORT"); !ok {
+			port = "9464"
+		}
+		go func() {
+			if err := http.ListenAndServe(":"+port, promhttp.Handler()); err != nil {
+				logger.Fatalf("error listening: %v", err)
+			}
+		}()
 
 		provider := metric.NewMeterProvider(
 			metric.WithReader(exporter),

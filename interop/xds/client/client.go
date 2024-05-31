@@ -26,6 +26,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -386,7 +387,16 @@ func main() {
 		provider := metric.NewMeterProvider(
 			metric.WithReader(exporter),
 		)
-		go http.ListenAndServe(":9464", promhttp.Handler())
+		var port string
+		var ok bool
+		if port, ok = os.LookupEnv("OTEL_EXPORTER_PROMETHEUS_PORT"); !ok {
+			port = "9464"
+		}
+		go func() {
+			if err := http.ListenAndServe(":"+port, promhttp.Handler()); err != nil {
+				logger.Fatalf("error listening: %v", err)
+			}
+		}()
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
