@@ -21,11 +21,10 @@ package serviceconfig
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"strings"
 	"testing"
 	"time"
-
-	"google.golang.org/grpc/internal/grpcrand"
 )
 
 // Tests both marshalling and unmarshalling of Durations.
@@ -69,7 +68,7 @@ func TestDuration_MarshalUnmarshal(t *testing.T) {
 	for _, tc := range testCases {
 		// Seed `got` with a random value to ensure we properly reset it in all
 		// non-error cases.
-		got := Duration(grpcrand.Uint64())
+		got := Duration(rand.Uint64())
 		err := got.UnmarshalJSON([]byte(tc.json))
 		if (err == nil && time.Duration(got) != tc.td) ||
 			(err != nil) != (tc.unmarshalErr != nil) || !strings.Contains(fmt.Sprint(err), fmt.Sprint(tc.unmarshalErr)) {
