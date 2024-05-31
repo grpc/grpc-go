@@ -387,13 +387,17 @@ func main() {
 		provider := metric.NewMeterProvider(
 			metric.WithReader(exporter),
 		)
-		var port string
+		var addr string
 		var ok bool
+		if addr, ok = os.LookupEnv("OTEL_EXPORTER_PROMETHEUS_HOST"); !ok {
+			addr = ""
+		}
+		var port string
 		if port, ok = os.LookupEnv("OTEL_EXPORTER_PROMETHEUS_PORT"); !ok {
 			port = "9464"
 		}
 		go func() {
-			if err := http.ListenAndServe(":"+port, promhttp.Handler()); err != nil {
+			if err := http.ListenAndServe(addr+":"+port, promhttp.Handler()); err != nil {
 				logger.Fatalf("error listening: %v", err)
 			}
 		}()
