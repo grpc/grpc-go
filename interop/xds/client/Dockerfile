@@ -24,7 +24,7 @@ COPY . .
 
 # Build a static binary without cgo so that we can copy just the binary in the
 # final image, and can get rid of Go compiler and gRPC-Go dependencies.
-RUN cd interop/xds/client && go build -tags osusergo,netgo client.go
+RUN cd interop/xds/client && go build -tags osusergo,netgo .
 
 # Second stage of the build which copies over only the client binary and skips
 # the Go compiler and gRPC repo from the earlier stage. This significantly
