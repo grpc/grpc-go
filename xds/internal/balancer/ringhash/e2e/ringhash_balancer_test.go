@@ -212,8 +212,8 @@ func channelIDHashRoute(clusterName string) *v3routepb.RouteConfiguration {
 }
 
 // checkRPCSendOK sends num RPCs to the client. It returns a map of backend
-// addresses to the number of RPCs sent to each backend. Abort the test if any
-// RPC fails.
+// addresses as keys and number of RPCs sent to this address as value. Abort the
+// test if any RPC fails.
 func checkRPCSendOK(t *testing.T, ctx context.Context, client testpb.TestServiceClient, num int) map[string]int {
 	t.Helper()
 
@@ -780,6 +780,9 @@ func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 // computeIdealNumberOfRPCs computes the ideal number of RPCs to send so that
 // we can observe an event happening with probability p, and the result will
 // have value p with the given error tolerance.
+//
+// See https://github.com/grpc/grpc/blob/4f6e13bdda9e8c26d6027af97db4b368ca2b3069/test/cpp/end2end/xds/xds_end2end_test_lib.h#L941
+// for an explanation of the formula.
 func computeIdealNumberOfRPCs(p, errorTolerance float64) int {
 	if p < 0 || p > 1 {
 		panic("p must be in (0, 1)")

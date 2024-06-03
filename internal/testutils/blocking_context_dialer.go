@@ -30,8 +30,8 @@ type BlockingDialer struct {
 	blockCh chan struct{}
 }
 
-// NewBlockingDialer wraps a net.Dialer and waits for Resume() to be called
-// before dialing. Useful to simulate connection delays.
+// NewBlockingDialer returns a dialer that waits for Resume() to be called
+// before dialing.
 func NewBlockingDialer() *BlockingDialer {
 	return &BlockingDialer{
 		dialer:  &net.Dialer{},
@@ -40,7 +40,7 @@ func NewBlockingDialer() *BlockingDialer {
 }
 
 // DialContext implements a context dialer for use with grpc.WithContextDialer
-// dial option.
+// dial option for a BlockingDialer.
 func (d *BlockingDialer) DialContext(ctx context.Context, addr string) (net.Conn, error) {
 	select {
 	case <-d.blockCh:
