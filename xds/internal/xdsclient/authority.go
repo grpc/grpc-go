@@ -370,7 +370,9 @@ func (a *authority) startWatchTimersLocked(rType xdsresource.Type, resourceNames
 				continue
 			}
 			state.wTimer = time.AfterFunc(a.watchExpiryTimeout, func() {
-				a.handleWatchTimerExpiry(rType, resourceName, state)
+				a.resourcesMu.Lock()
+				a.handleWatchTimerExpiryLocked(rType, resourceName, state)
+				a.resourcesMu.Unlock()
 			})
 			state.wState = watchStateRequested
 		}
@@ -514,10 +516,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 	}
 }
 
-func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName string, state *resourceState) {
-	a.resourcesMu.Lock()
-	defer a.resourcesMu.Unlock()
-
+func (a *authority) handleWatchTimerExpiryLocked(rType xdsresource.Type, resourceName string, state *resourceState) {
 	if a.closed {
 		return
 	}

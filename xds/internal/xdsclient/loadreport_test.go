@@ -21,24 +21,19 @@ package xdsclient
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
-	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/status"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
 	"google.golang.org/protobuf/types/known/durationpb"
-)
-
-const (
-	defaultClientWatchExpiryTimeout = 15 * time.Second
 )
 
 func (s) TestLRSClient(t *testing.T) {
@@ -48,13 +43,15 @@ func (s) TestLRSClient(t *testing.T) {
 	}
 	defer sCleanup()
 
+	nodeID := uuid.New().String()
 	serverCfg1 := xdstestutils.ServerConfigForAddress(t, fs1.Address)
-	xdsC, close, err := NewWithConfigForTesting(&bootstrap.Config{
-		XDSServer: serverCfg1,
-		NodeProto: &v3corepb.Node{},
-	}, defaultClientWatchExpiryTimeout, time.Duration(0))
+	bc, err := e2e.DefaultBootstrapContents(nodeID, fs1.Address)
 	if err != nil {
-		t.Fatalf("failed to create xds client: %v", err)
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+	xdsC, close, err := NewForTesting(OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
 	defer close()
 

@@ -292,6 +292,9 @@ func (a *Authority) UnmarshalJSON(data []byte) error {
 // Config provides the xDS client with several key bits of information that it
 // requires in its interaction with the management server. The Config is
 // initialized from the bootstrap file.
+//
+// Users must use one of the NewConfigXxx() functions to create a Config
+// instance, and not initialize it manually.
 type Config struct {
 	// XDSServer is the management server to connect to.
 	//

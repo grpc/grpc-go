@@ -120,11 +120,17 @@ func Contents(opts Options) ([]byte, error) {
 	// resources with empty authority.
 	auths := map[string]authority{"": {}}
 	for n, auURI := range opts.Authorities {
-		auths[n] = authority{XdsServers: []server{{
-			ServerURI:      auURI,
-			ChannelCreds:   []creds{{Type: "insecure"}},
-			ServerFeatures: cfg.XdsServers[0].ServerFeatures,
-		}}}
+		// If the authority server URI is empty, set it to an empty authority
+		// config, resulting in it using the top-level xds server config.
+		a := authority{}
+		if auURI != "" {
+			a = authority{XdsServers: []server{{
+				ServerURI:      auURI,
+				ChannelCreds:   []creds{{Type: "insecure"}},
+				ServerFeatures: cfg.XdsServers[0].ServerFeatures,
+			}}}
+		}
+		auths[n] = a
 	}
 	cfg.Authorities = auths
 

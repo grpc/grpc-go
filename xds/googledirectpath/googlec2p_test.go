@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
@@ -232,14 +231,9 @@ func TestBuildXDS(t *testing.T) {
 			if tt.tdURI != "" {
 				wantConfig.XDSServer.ServerURI = tt.tdURI
 			}
-			cmpOpts := cmp.Options{
-				cmpopts.IgnoreFields(bootstrap.ServerConfig{}, "Creds"),
-				cmp.AllowUnexported(bootstrap.ServerConfig{}),
-				protocmp.Transform(),
-			}
 			select {
 			case gotConfig := <-configCh:
-				if diff := cmp.Diff(wantConfig, gotConfig, cmpOpts); diff != "" {
+				if diff := cmp.Diff(wantConfig, gotConfig, protocmp.Transform()); diff != "" {
 					t.Fatalf("Unexpected diff in bootstrap config (-want +got):\n%s", diff)
 				}
 			case <-time.After(time.Second):

@@ -50,7 +50,7 @@ const Scheme = "xds"
 func newBuilderForTesting(config []byte) (resolver.Builder, error) {
 	return &xdsResolverBuilder{
 		newXDSClient: func() (xdsclient.XDSClient, func(), error) {
-			return xdsclient.NewWithBootstrapContentsForTesting(config)
+			return xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: config})
 		},
 	}, nil
 }
