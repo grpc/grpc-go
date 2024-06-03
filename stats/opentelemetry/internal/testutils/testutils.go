@@ -29,6 +29,9 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata/metricdatatest"
 )
 
+// Redefine default bounds here to avoid a cyclic dependency with top level
+// opentelemetry package. Could define once through internal, but would make
+// external opentelemetry godoc less readable.
 var (
 	// DefaultLatencyBounds are the default bounds for latency metrics.
 	DefaultLatencyBounds = []float64{0, 0.00001, 0.00005, 0.0001, 0.0003, 0.0006, 0.0008, 0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.008, 0.01, 0.013, 0.016, 0.02, 0.025, 0.03, 0.04, 0.05, 0.065, 0.08, 0.1, 0.13, 0.16, 0.2, 0.25, 0.3, 0.4, 0.5, 0.65, 0.8, 1, 2, 5, 10, 20, 50, 100}
@@ -392,11 +395,11 @@ func MetricData(options MetricDataOptions) []metricdata.Metrics {
 	}
 }
 
-// CompareGotWantMetrics asserts wantMetrics are what we expect. It polls for
-// eventual server metrics (not emitted synchronously with client side rpc
-// returning), and for duration metrics makes sure the data point is within
-// possible testing time (five seconds from context timeout).
-func CompareGotWantMetrics(ctx context.Context, t *testing.T, mr *metric.ManualReader, gotMetrics map[string]metricdata.Metrics, wantMetrics []metricdata.Metrics) {
+// CompareMetrics asserts wantMetrics are what we expect. It polls for eventual
+// server metrics (not emitted synchronously with client side rpc returning),
+// and for duration metrics makes sure the data point is within possible testing
+// time (five seconds from context timeout).
+func CompareMetrics(ctx context.Context, t *testing.T, mr *metric.ManualReader, gotMetrics map[string]metricdata.Metrics, wantMetrics []metricdata.Metrics) {
 	for _, metric := range wantMetrics {
 		if metric.Name == "grpc.server.call.sent_total_compressed_message_size" || metric.Name == "grpc.server.call.rcvd_total_compressed_message_size" {
 			// Sync the metric reader to see the event because stats.End is

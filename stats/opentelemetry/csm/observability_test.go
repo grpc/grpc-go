@@ -295,7 +295,7 @@ func (s) TestCSMPluginOption(t *testing.T) {
 			opts := test.opts
 			opts.Target = ss.Target
 			wantMetrics := testutils.MetricData(opts)
-			testutils.CompareGotWantMetrics(ctx, t, mr, gotMetrics, wantMetrics)
+			testutils.CompareMetrics(ctx, t, mr, gotMetrics, wantMetrics)
 		})
 	}
 }
@@ -496,7 +496,7 @@ func (s) TestxDSLabels(t *testing.T) {
 		},
 	}
 
-	testutils.CompareGotWantMetrics(ctx, t, mr, gotMetrics, wantMetrics)
+	testutils.CompareMetrics(ctx, t, mr, gotMetrics, wantMetrics)
 }
 
 // TestObservability tests that Observability global function compiles and runs

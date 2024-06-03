@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package opentelemetry
+package opentelemetry_test
 
 import (
 	"context"
@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -49,7 +50,7 @@ func Test(t *testing.T) {
 // setup creates a stub server with OpenTelemetry component configured on client
 // and server side. It returns a reader for metrics emitted from OpenTelemetry
 // component and the server.
-func setup(t *testing.T, maf func(string) bool) (*metric.ManualReader, *stubserver.StubServer) {
+func setup(t *testing.T, methodAttributeFilter func(string) bool) (*metric.ManualReader, *stubserver.StubServer) {
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(
 		metric.WithReader(reader),
@@ -70,16 +71,15 @@ func setup(t *testing.T, maf func(string) bool) (*metric.ManualReader, *stubserv
 		},
 	}
 
-	if err := ss.Start([]grpc.ServerOption{ServerOption(Options{
-		MetricsOptions: MetricsOptions{
+	if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(opentelemetry.Options{
+		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider:         provider,
-			Metrics:               DefaultMetrics,
-			MethodAttributeFilter: maf,
-		}})}, DialOption(Options{
-		MetricsOptions: MetricsOptions{
-			MeterProvider:         provider,
-			Metrics:               DefaultMetrics,
-			MethodAttributeFilter: maf,
+			Metrics:               opentelemetry.DefaultMetrics,
+			MethodAttributeFilter: methodAttributeFilter,
+		}})}, opentelemetry.DialOption(opentelemetry.Options{
+		MetricsOptions: opentelemetry.MetricsOptions{
+			MeterProvider: provider,
+			Metrics:       opentelemetry.DefaultMetrics,
 		},
 	})); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
@@ -87,19 +87,19 @@ func setup(t *testing.T, maf func(string) bool) (*metric.ManualReader, *stubserv
 	return reader, ss
 }
 
-// TestMethodTargetAttributeFilter tests the method and target attribute filter.
-// The method and target filter set should bucket the grpc.method/grpc.target
-// attribute into "other" if filter specifies.
-func (s) TestMethodTargetAttributeFilter(t *testing.T) {
+// TestMethodAttributeFilter tests the method attribute filter. The method and
+// target filter set should bucket the grpc.method attribute into "other" if the
+// method attribute filter specifies.
+func (s) TestMethodAttributeFilter(t *testing.T) {
 	maf := func(str string) bool {
 		// Will allow duplex/any other type of RPC.
-		return str != "/grpc.testing.TestService/UnaryCall"
+		return str != testpb.TestService_UnaryCall_FullMethodName
 	}
 	reader, ss := setup(t, maf)
 	defer ss.Stop()
 
-	// make a single RPC (unary rpc), and filter out the method that would
-	// correspond.
+	// Make a Unary and Streaming RPC. The Unary RPC should be filtered by the
+	// method attribute filter, and the Full Duplex (Streaming) RPC should not.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
@@ -167,7 +167,7 @@ func (s) TestMethodTargetAttributeFilter(t *testing.T) {
 		},
 	}
 
-	testutils.CompareGotWantMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+	testutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 }
 
 // TestAllMetricsOneFunction tests emitted metrics from OpenTelemetry
@@ -217,7 +217,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		UnaryMessageSent:     true,
 		StreamingMessageSent: false,
 	})
-	testutils.CompareGotWantMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+	testutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 
 	stream, err = ss.Client.FullDuplexCall(ctx)
 	if err != nil {
