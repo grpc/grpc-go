@@ -23,7 +23,7 @@ if [[ "$1" = "-install" ]]; then
     if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
       source ./scripts/install_protoc.sh "/home/runner/go"
     else
-      die "run protoc installer https://github.com/grpc/grpc-go/scripts/install_protoc.sh."
+      die "run protoc installer https://github.com/grpc/grpc-go/blob/master/scripts/install_protoc.sh"
     fi
   echo SUCCESS
   exit 0

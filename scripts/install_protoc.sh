@@ -21,17 +21,16 @@ source "$(dirname $0)/vet-common.sh"
 PROTOC_VERSION="25.2"
 
 # Function to download pre-built binaries for Linux with
-# ARCH as $1, OS as $2, and WORKDIR as $3 arguments.
+# ARCH as $1, OS as $2, and INSTALL_PATH as $3 arguments.
 download_binary() {
-  # Check if protoc is already available
+  # Check if protoc is already available.
   if command -v protoc &> /dev/null; then
-      if installed_version=$(protoc --version | cut -d' ' -f2 2>/dev/null); then
-        if [ "$installed_version" = "$PROTOC_VERSION" ]; then
+      if INSTALL_VERSION=$(protoc --version | cut -d' ' -f2 2>/dev/null); then
+        if [ "$INSTALL_VERSION" = "$PROTOC_VERSION" ]; then
           echo "protoc version $PROTOC_VERSION is already installed."
           return
         else
-          echo "Existing protoc version ($installed_version) differs. Kindly make sure you have $PROTOC_VERSION installed."
-          exit 1
+          die "Existing protoc version ($INSTALL_VERSION) differs. Kindly make sure you have $PROTOC_VERSION installed."
         fi
       else
         echo "Unable to determine installed protoc version. Starting the installation."
