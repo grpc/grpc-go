@@ -93,8 +93,6 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration, i
 type OptionsForTesting struct {
 	// Contents contain a JSON representation of the bootstrap configuration to
 	// be used when creating the xDS client.
-	//
-	// Config field takes precedence over the Contents field.
 	Contents []byte
 
 	// WatchExpiryTimeout is the timeout for xDS resource watch expiry. If
