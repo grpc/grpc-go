@@ -121,7 +121,8 @@ func NewForTesting(opts OptionsForTesting) (XDSClient, func(), error) {
 		opts.AuthorityIdleTimeout = defaultIdleAuthorityDeleteTimeout
 	}
 
-	// Normalize the contents
+	// Normalize the input configuration, as this is used as the key in the map
+	// of xDS clients created for testing.
 	buf := bytes.Buffer{}
 	err := json.Indent(&buf, opts.Contents, "", "")
 	if err != nil {
@@ -159,11 +160,10 @@ func NewForTesting(opts OptionsForTesting) (XDSClient, func(), error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating xDS client: %v", err)
 	}
-	c := &clientRefCounted{clientImpl: cImpl, refCount: 1}
-	clients[string(opts.Contents)] = c
-	client = c
+	client = &clientRefCounted{clientImpl: cImpl, refCount: 1}
+	clients[string(opts.Contents)] = client
 
-	return c, closeFunc, nil
+	return client, closeFunc, nil
 }
 
 func init() {
