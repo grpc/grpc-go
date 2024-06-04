@@ -63,6 +63,7 @@ var (
 func init() {
 	resolver.Register(NewBuilder())
 	internal.TimeAfterFunc = time.After
+	internal.TimeUntilFunc = time.Until
 	internal.NewNetResolver = newNetResolver
 	internal.AddressDialer = addressDialer
 }
@@ -229,7 +230,7 @@ func (d *dnsResolver) watcher() {
 		select {
 		case <-d.ctx.Done():
 			return
-		case <-internal.TimeAfterFunc(time.Until(nextResolutionTime)):
+		case <-internal.TimeAfterFunc(internal.TimeUntilFunc(nextResolutionTime)):
 		}
 	}
 }
