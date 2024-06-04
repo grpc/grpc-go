@@ -49,10 +49,22 @@ func unaryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, 
 		return nil, errMissingMetadata
 	}
 
+	// Create and set metadata from interceptor to server.
 	md.Append("key1", "value1")
 	ctx = metadata.NewIncomingContext(ctx, md)
 
-	return handler(ctx, req)
+	// Call the handler to complete the normal execution of the RPC.
+	resp, err := handler(ctx, req)
+
+	// Create and set header metadata from interceptor to client.
+	header := metadata.Pairs("header-key", "val")
+	grpc.SetHeader(ctx, header)
+
+	// Create and set trailer metadata from interceptor to client.
+	trailer := metadata.Pairs("trailer-key", "val")
+	grpc.SetTrailer(ctx, trailer)
+
+	return resp, err
 }
 
 func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
@@ -89,10 +101,22 @@ func streamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInf
 		return errMissingMetadata
 	}
 
+	// Create and set metadata from interceptor to server.
 	md.Append("key1", "value1")
 	ctx := metadata.NewIncomingContext(ss.Context(), md)
 
-	return handler(srv, &wrappedStream{ss, ctx})
+	// Call the handler to complete the normal execution of the RPC.
+	err := handler(srv, &wrappedStream{ss, ctx})
+
+	// Create and set header metadata from interceptor to client.
+	header := metadata.Pairs("header-key", "val")
+	ss.SetHeader(header)
+
+	// Create and set trailer metadata from interceptor to client.
+	trailer := metadata.Pairs("trailer-key", "val")
+	ss.SetTrailer(trailer)
+
+	return err
 }
 
 func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
