@@ -65,24 +65,16 @@ func Test(t *testing.T) {
 }
 
 const (
-	defaultTestTimeout      = 10 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
+	defaultTestTimeout = 10 * time.Second
 
 	errorTolerance = .05 // For tests that rely on statistical significance.
+
+	virtualHostName = "test.server"
 )
 
-type testService struct {
-	testgrpc.TestServiceServer
-}
-
-func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-	return &testpb.Empty{}, nil
-}
-
-// TestRingHash_ReconnectToMoveOutOfTransientFailure tests the case where the
-// ring contains a single subConn, and verifies that when the server goes down,
-// the LB policy on the client automatically reconnects until the subChannel
-// moves out of TRANSIENT_FAILURE.
+// Tests the case where the ring contains a single subConn, and verifies that
+// when the server goes down, the LB policy on the client automatically
+// reconnects until the subChannel moves out of TRANSIENT_FAILURE.
 func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	// Create a restartable listener to simulate server being down.
 	l, err := testutils.LocalTCPListener()
@@ -90,16 +82,11 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 	lis := testutils.NewRestartableListener(l)
-
-	// Start a server backend exposing the test service.
-	server := grpc.NewServer()
-	defer server.Stop()
-	testgrpc.RegisterTestServiceServer(server, &testService{})
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
+	srv := stubserver.StartTestService(t, &stubserver.StubServer{
+		Listener:   lis,
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+	})
+	defer srv.Stop()
 
 	// Create a clientConn with a manual resolver (which is used to push the
 	// address of the test backend), and a default service config pointing to
@@ -113,7 +100,7 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("Failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -149,16 +136,9 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	// attempt to reconnect on its own and come out of TRANSIENT_FAILURE, even
 	// without an RPC attempt.
 	lis.Restart()
-	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		if cc.GetState() == connectivity.Ready {
-			break
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		t.Fatalf("Timeout waiting for channel to reach READY after server restart: %v", err)
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
-	// An RPC at this point is expected to fail.
+	// An RPC at this point is expected to succeed.
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
@@ -195,10 +175,10 @@ func backendOptions(t *testing.T, servers []*stubserver.StubServer) []e2e.Backen
 	return backendOpts
 }
 
-// channelIDHashRoute returns a RouteConfiguration with a hash policy that hashes using
-// the provided key.
-func channelIDHashRoute(clusterName string) *v3routepb.RouteConfiguration {
-	route := e2e.DefaultRouteConfig("new_route", "test.server", clusterName)
+// channelIDHashRoute returns a RouteConfiguration with a hash policy that
+// hashes based on the channel ID.
+func channelIDHashRoute(routeName, virtualHostDomain, clusterName string) *v3routepb.RouteConfiguration {
+	route := e2e.DefaultRouteConfig(routeName, virtualHostDomain, clusterName)
 	hashPolicy := v3routepb.RouteAction_HashPolicy{
 		PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{
 			FilterState: &v3routepb.RouteAction_HashPolicy_FilterState{
@@ -220,23 +200,19 @@ func checkRPCSendOK(t *testing.T, ctx context.Context, client testpb.TestService
 	backendCount := make(map[string]int)
 	for i := 0; i < num; i++ {
 		var remote peer.Peer
-		_, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&remote))
-		if err != nil {
-			t.Fatalf("rpc UnaryCall() failed: %v", err)
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&remote)); err != nil {
+			t.Fatalf("rpc EmptyCall() failed: %v", err)
 		}
 		backendCount[remote.Addr.String()]++
 	}
 	return backendCount
 }
 
-// TestRingHash_AggregateClusterFallBackFromRingHashAtStartup tests that when
-// an aggregate cluster is configured with ring hash policy, and the first
-// cluster is in transient failure, all RPCs are sent to the second cluster
-// using the ring hash policy.
+// Tests that when an aggregate cluster is configured with ring hash policy, and
+// the first cluster is in transient failure, all RPCs are sent to the second
+// cluster using the ring hash policy.
 func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T) {
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
-		AllowResourceSubset: true,
-	})
+	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer stop()
 
 	nonExistantServers, stopNonExistant := startTestServiceBackends(t, 2)
@@ -246,14 +222,14 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T
 	// Stop the servers that we want to be unreachable.
 	stopNonExistant()
 
-	newCluster1Name := "new_cluster_1"
-	newEdsService1Name := "new_eds_service_1"
-	newCluster2Name := "new_cluster_2"
-	newEdsService2Name := "new_eds_service_2"
+	primaryClusterName := "new_cluster_1"
+	primaryServiceName := "new_eds_service_1"
+	secondaryClusterName := "new_cluster_2"
+	secondaryServiceName := "new_eds_service_2"
 	clusterName := "aggregate_cluster"
 
 	ep1 := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
-		ClusterName: newEdsService1Name,
+		ClusterName: primaryServiceName,
 		Localities: []e2e.LocalityOptions{{
 			Name:     "locality0",
 			Weight:   1,
@@ -261,46 +237,46 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T
 		}},
 	})
 	ep2 := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
-		ClusterName: newEdsService2Name,
+		ClusterName: secondaryServiceName,
 		Localities: []e2e.LocalityOptions{{
 			Name:     "locality0",
 			Weight:   1,
 			Backends: backendOptions(t, servers),
 		}},
 	})
-	cluster1 := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
-		ClusterName: newCluster1Name,
-		ServiceName: newEdsService1Name,
+	primaryCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: primaryClusterName,
+		ServiceName: primaryServiceName,
 	})
-	cluster2 := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
-		ClusterName: newCluster2Name,
-		ServiceName: newEdsService2Name,
+	secundaryCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: secondaryClusterName,
+		ServiceName: secondaryServiceName,
 	})
 	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
 		Type:        e2e.ClusterTypeAggregate,
-		// TODO: when "A75: xDS Aggregate Cluster Behavior Fixes" is merged, the
+		// TODO: when "A75: xDS Aggregate Cluster Behavior Fixes" is implemented, the
 		// policy will have to be set on the child clusters.
 		Policy:     e2e.LoadBalancingPolicyRingHash,
-		ChildNames: []string{newCluster1Name, newCluster2Name},
+		ChildNames: []string{primaryClusterName, secondaryClusterName},
 	})
-	route := channelIDHashRoute(clusterName)
-	listener := e2e.DefaultClientListener("test.server", route.Name)
+	route := channelIDHashRoute("new_route", virtualHostName, clusterName)
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
 	err := xdsServer.Update(context.Background(), e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{ep1, ep2},
-		Clusters:  []*v3clusterpb.Cluster{cluster, cluster1, cluster2},
+		Clusters:  []*v3clusterpb.Cluster{cluster, primaryCluster, secundaryCluster},
 		Routes:    []*v3routepb.RouteConfiguration{route},
 		Listeners: []*v3listenerpb.Listener{listener},
 	})
 	if err != nil {
-		t.Fatalf("failed to update xDS resources: %v", err)
+		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to create client: %s", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -309,25 +285,35 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T
 	defer cancel()
 
 	gotPerBackend := checkRPCSendOK(t, ctx, client, 100)
+
+	// Since this is using ring hash with the channel ID as the key, all RPCs
+	// are routed to the same backend of the secondary locality.
 	if len(gotPerBackend) != 1 {
 		t.Errorf("Got RPCs routed to %v backends, want %v", len(gotPerBackend), 1)
 	}
-	for _, count := range gotPerBackend {
-		if count != 100 {
-			t.Errorf("Got %v RPCs routed to a backend, want %v", count, 100)
+	for backend, got := range gotPerBackend {
+		found := false
+		for _, server := range servers {
+			if backend == server.Address {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Got RPCs routed to an unexpected backend: %v, want one of %v", backend, servers)
+		}
+		if got != 100 {
+			t.Errorf("Got %v RPCs routed to a backend, want %v", got, 100)
 		}
 	}
 }
 
-// TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup tests
-// that when an aggregate cluster is configured with ring hash policy, and the
-// first is an EDS cluster in transient failure, and the fallback is a logical
-// DNS cluster, all RPCs are sent to the second cluster using the ring hash
-// policy.
+// Tests that when an aggregate cluster is configured with ring hash policy, and
+// the first is an EDS cluster in transient failure, and the fallback is a
+// logical DNS cluster, all RPCs are sent to the second cluster using the ring
+// hash policy.
 func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(t *testing.T) {
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
-		AllowResourceSubset: true,
-	})
+	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer stop()
 
 	edsClusterName := "eds_cluster"
@@ -375,8 +361,8 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 		Policy:     e2e.LoadBalancingPolicyRingHash,
 		ChildNames: []string{edsClusterName, logicalDNSClusterName},
 	})
-	route := channelIDHashRoute(clusterName)
-	listener := e2e.DefaultClientListener("test.server", route.Name)
+	route := channelIDHashRoute("new_route", virtualHostName, clusterName)
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
 	err := xdsServer.Update(context.Background(), e2e.UpdateOptions{
 		NodeID:    nodeID,
@@ -386,16 +372,15 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 		Listeners: []*v3listenerpb.Listener{listener},
 	})
 	if err != nil {
-		t.Fatalf("failed to update xDS resources: %v", err)
+		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
-	_, _, _, dnsR, cleanup1 := e2e.SetupDNS()
-	defer cleanup1()
+	_, _, _, dnsR := e2e.SetupDNS(t)
 	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0].Address}}})
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to create client: %s", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -405,36 +390,26 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, err = client.EmptyCall(ctx, &testpb.Empty{})
-	if err != nil {
+
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Errorf("rpc UnaryCall() failed: %v", err)
 	}
 }
 
-// TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupNoFailedRpcs
-// tests that when an aggregate cluster is configured with ring hash policy, and
+// Tests that when an aggregate cluster is configured with ring hash policy, and
 // it's first child is in transient failure, and the fallback is a logical DNS,
 // the later recovers from transient failure when its backend becomes available.
 func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupNoFailedRPCs(t *testing.T) {
 	// https://github.com/grpc/grpc/blob/083bbee4805c14ce62e6c9535fe936f68b854c4f/test/cpp/end2end/xds/xds_ring_hash_end2end_test.cc#L225
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
-		AllowResourceSubset: true,
-	})
+	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer stop()
 
 	edsClusterName := "eds_cluster"
 	logicalDNSClusterName := "logical_dns_cluster"
 	clusterName := "aggregate_cluster"
 
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("net.Listen() failed: %v", err)
-	}
-	restartableListener := testutils.NewRestartableListener(lis)
-	srv := grpc.NewServer()
-	testgrpc.RegisterTestServiceServer(srv, &testService{})
-	go srv.Serve(restartableListener)
-	defer srv.Stop()
+	backends, stop := startTestServiceBackends(t, 1)
+	defer stop()
 
 	nonExistingBackend1, stop1 := startTestServiceBackends(t, 2)
 	nonExistingBackend2, stop2 := startTestServiceBackends(t, 2)
@@ -474,10 +449,10 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 		Policy:     e2e.LoadBalancingPolicyRingHash,
 		ChildNames: []string{edsClusterName, logicalDNSClusterName},
 	})
-	route := channelIDHashRoute(clusterName)
-	listener := e2e.DefaultClientListener("test.server", route.Name)
+	route := channelIDHashRoute("new_route", virtualHostName, clusterName)
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
-	err = xdsServer.Update(context.Background(), e2e.UpdateOptions{
+	err := xdsServer.Update(context.Background(), e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster, edsCluster, logicalDNSCluster},
@@ -485,12 +460,11 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 		Listeners: []*v3listenerpb.Listener{listener},
 	})
 	if err != nil {
-		t.Fatalf("failed to update xDS resources: %v", err)
+		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
-	_, _, _, dnsR, cleanup1 := e2e.SetupDNS()
-	defer cleanup1()
-	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
+	_, _, _, dnsR := e2e.SetupDNS(t)
+	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0].Address}}})
 
 	dialer := testutils.NewBlockingDialer()
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(dialer.DialContext), grpc.WithConnectParams(
@@ -503,7 +477,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 			MinConnectTimeout: 0,
 		}))
 	if err != nil {
-		t.Fatalf("failed to create client: %s", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -513,16 +487,13 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	defer cancel()
 	wg.Add(1)
 	go func() {
-		_, err := client.EmptyCall(ctx, &testpb.Empty{})
-		if err != nil {
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			t.Errorf("First rpc UnaryCall() failed: %v", err)
 		}
 		wg.Done()
 	}()
 
-	if !conn.WaitForStateChange(ctx, connectivity.Connecting) {
-		t.Errorf("Expected channel to be in Connecting state")
-	}
+	testutils.AwaitState(ctx, t, conn, connectivity.Connecting)
 
 	wg.Add(1)
 	go func() {
@@ -535,8 +506,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 		// Note that sending only the first RPC does not catch this case,
 		// because if the priority policy fails to update the picker, then the
 		// pick for the first RPC will not be retried.
-		_, err := client.EmptyCall(ctx, &testpb.Empty{})
-		if err != nil {
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			t.Errorf("Second UnaryCall() failed: %v", err)
 		}
 		wg.Done()
@@ -549,15 +519,13 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	wg.Wait()
 }
 
-// TestRingHash_ChannelIdHashing tests that ring hash policy that hashes using
-// channel id ensures all RPCs to go 1 particular backend.
+// Tests that ring hash policy that hashes using channel id ensures all RPCs to
+// go 1 particular backend.
 func (s) TestRingHash_ChannelIdHashing(t *testing.T) {
 	backends, stop := startTestServiceBackends(t, 4)
 	defer stop()
 
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
-		AllowResourceSubset: true,
-	})
+	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer stop()
 	clusterName := "cluster"
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
@@ -572,8 +540,8 @@ func (s) TestRingHash_ChannelIdHashing(t *testing.T) {
 		ServiceName: clusterName,
 		Policy:      e2e.LoadBalancingPolicyRingHash,
 	})
-	route := channelIDHashRoute(clusterName)
-	listener := e2e.DefaultClientListener("test.server", route.Name)
+	route := channelIDHashRoute("new_route", virtualHostName, clusterName)
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
 	err := xdsServer.Update(context.Background(), e2e.UpdateOptions{
 		NodeID:    nodeID,
@@ -583,12 +551,12 @@ func (s) TestRingHash_ChannelIdHashing(t *testing.T) {
 		Listeners: []*v3listenerpb.Listener{listener},
 	})
 	if err != nil {
-		t.Fatalf("failed to update xDS resources: %v", err)
+		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to create client: %s", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -598,11 +566,11 @@ func (s) TestRingHash_ChannelIdHashing(t *testing.T) {
 
 	received := checkRPCSendOK(t, ctx, client, 100)
 	if len(received) != 1 {
-		t.Errorf("got RPCs routed to %v backends, want %v", len(received), 1)
+		t.Errorf("Got RPCs routed to %v backends, want %v", len(received), 1)
 	}
 	for _, count := range received {
 		if count != 100 {
-			t.Errorf("got %v RPCs routed to a backend, want %v", count, 100)
+			t.Errorf("Got %v RPCs routed to a backend, want %v", count, 100)
 		}
 	}
 }
@@ -610,7 +578,7 @@ func (s) TestRingHash_ChannelIdHashing(t *testing.T) {
 // headerHashRoute creates a RouteConfiguration with a hash policy that uses the
 // provided header.
 func headerHashRoute(clusterName, header string) *v3routepb.RouteConfiguration {
-	route := e2e.DefaultRouteConfig("new_route", "test.server", clusterName)
+	route := e2e.DefaultRouteConfig("new_route", virtualHostName, clusterName)
 	hashPolicy := v3routepb.RouteAction_HashPolicy{
 		PolicySpecifier: &v3routepb.RouteAction_HashPolicy_Header_{
 			Header: &v3routepb.RouteAction_HashPolicy_Header{
@@ -623,8 +591,8 @@ func headerHashRoute(clusterName, header string) *v3routepb.RouteConfiguration {
 	return route
 }
 
-// TestRingHash_HeaderHashing tests that ring hash policy that hashes using a
-// header value can spread RPCs across all the backends.
+// Tests that ring hash policy that hashes using a header value can spread RPCs
+// across all the backends.
 func (s) TestRingHash_HeaderHashing(t *testing.T) {
 	backends, stop := startTestServiceBackends(t, 4)
 	defer stop()
@@ -633,12 +601,10 @@ func (s) TestRingHash_HeaderHashing(t *testing.T) {
 	// uses it to construct the ring.
 	host, _, err := net.SplitHostPort(backends[0].Address)
 	if err != nil {
-		t.Fatalf("failed to split host and port from stubserver: %v", err)
+		t.Fatalf("Failed to split host and port from stubserver: %v", err)
 	}
 
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
-		AllowResourceSubset: true,
-	})
+	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer stop()
 	clusterName := "cluster"
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
@@ -655,7 +621,7 @@ func (s) TestRingHash_HeaderHashing(t *testing.T) {
 		Policy:      e2e.LoadBalancingPolicyRingHash,
 	})
 	route := headerHashRoute(clusterName, "address_hash")
-	listener := e2e.DefaultClientListener("test.server", route.Name)
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
 	err = xdsServer.Update(context.Background(), e2e.UpdateOptions{
 		NodeID:    nodeID,
@@ -665,12 +631,12 @@ func (s) TestRingHash_HeaderHashing(t *testing.T) {
 		Listeners: []*v3listenerpb.Listener{listener},
 	})
 	if err != nil {
-		t.Fatalf("failed to update xDS resources: %v", err)
+		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to create client: %s", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -690,8 +656,8 @@ func (s) TestRingHash_HeaderHashing(t *testing.T) {
 	}
 }
 
-// TestRingHash_HeaderHashingWithRegexRewrite tests that ring hash policy that
-// hashes using a header value and regex rewrite to aggregate RPCs to 1 backend.
+// Tests that ring hash policy that hashes using a header value and regex
+// rewrite to aggregate RPCs to 1 backend.
 func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 	backends, stop := startTestServiceBackends(t, 4)
 	defer stop()
@@ -700,12 +666,10 @@ func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 	// uses it to construct the ring.
 	host, _, err := net.SplitHostPort(backends[0].Address)
 	if err != nil {
-		t.Fatalf("failed to split host and port from stubserver: %v", err)
+		t.Fatalf("Failed to split host and port from stubserver: %v", err)
 	}
 
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
-		AllowResourceSubset: true,
-	})
+	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer stop()
 	clusterName := "cluster"
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
@@ -730,7 +694,7 @@ func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 		},
 		Substitution: "foo",
 	}
-	listener := e2e.DefaultClientListener("test.server", route.Name)
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
 	err = xdsServer.Update(context.Background(), e2e.UpdateOptions{
 		NodeID:    nodeID,
@@ -740,12 +704,12 @@ func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 		Listeners: []*v3listenerpb.Listener{listener},
 	})
 	if err != nil {
-		t.Fatalf("failed to update xDS resources: %v", err)
+		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to create client: %s", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -816,16 +780,13 @@ func setRingHashLBPolicyWithHighMinRingSize(t *testing.T, cluster *v3clusterpb.C
 	}
 }
 
-// TestRingHash_NoHashPolicy tests that ring hash policy that hashes using a
-// random value.
+// Tests that ring hash policy that hashes using a random value.
 func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 	backends, stop := startTestServiceBackends(t, 2)
 	defer stop()
 	numRPCs := computeIdealNumberOfRPCs(.5, errorTolerance)
 
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
-		AllowResourceSubset: true,
-	})
+	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer stop()
 	clusterName := "cluster"
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
@@ -840,8 +801,8 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 		ServiceName: clusterName,
 	})
 	setRingHashLBPolicyWithHighMinRingSize(t, cluster)
-	route := e2e.DefaultRouteConfig("new_route", "test.server", clusterName)
-	listener := e2e.DefaultClientListener("test.server", route.Name)
+	route := e2e.DefaultRouteConfig("new_route", virtualHostName, clusterName)
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
 	err := xdsServer.Update(context.Background(), e2e.UpdateOptions{
 		NodeID:    nodeID,
@@ -851,12 +812,12 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 		Listeners: []*v3listenerpb.Listener{listener},
 	})
 	if err != nil {
-		t.Fatalf("failed to update xDS resources: %v", err)
+		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to create client: %s", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -870,18 +831,16 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 		got := float64(gotPerBackend[backend.Address]) / float64(numRPCs)
 		want := .5
 		if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
-			t.Errorf("fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[2].Address, got, want, errorTolerance)
+			t.Errorf("Fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[2].Address, got, want, errorTolerance)
 		}
 	}
 }
 
-// TestRingHash_EndpointWeights tests that we observe endpoint weights.
+// Tests that we observe endpoint weights.
 func (s) TestRingHash_EndpointWeights(t *testing.T) {
 	backends, stop := startTestServiceBackends(t, 3)
 	defer stop()
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
-		AllowResourceSubset: true,
-	})
+	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer stop()
 	clusterName := "cluster"
 	backendOpts := []e2e.BackendOptions{
@@ -906,8 +865,8 @@ func (s) TestRingHash_EndpointWeights(t *testing.T) {
 	})
 	// Increasing min ring size for random distribution.
 	setRingHashLBPolicyWithHighMinRingSize(t, cluster)
-	route := e2e.DefaultRouteConfig("new_route", "test.server", clusterName)
-	listener := e2e.DefaultClientListener("test.server", route.Name)
+	route := e2e.DefaultRouteConfig("new_route", virtualHostName, clusterName)
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
 	err := xdsServer.Update(context.Background(), e2e.UpdateOptions{
 		NodeID:    nodeID,
@@ -917,12 +876,12 @@ func (s) TestRingHash_EndpointWeights(t *testing.T) {
 		Listeners: []*v3listenerpb.Listener{listener},
 	})
 	if err != nil {
-		t.Fatalf("failed to update xDS resources: %v", err)
+		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to create client: %s", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -937,15 +896,15 @@ func (s) TestRingHash_EndpointWeights(t *testing.T) {
 	got := float64(gotPerBackend[backends[0].Address]) / float64(numRPCs)
 	want := .25
 	if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
-		t.Errorf("fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[0].Address, got, want, errorTolerance)
+		t.Errorf("Fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[0].Address, got, want, errorTolerance)
 	}
 	got = float64(gotPerBackend[backends[1].Address]) / float64(numRPCs)
 	if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
-		t.Errorf("fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[1].Address, got, want, errorTolerance)
+		t.Errorf("Fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[1].Address, got, want, errorTolerance)
 	}
 	got = float64(gotPerBackend[backends[2].Address]) / float64(numRPCs)
 	want = .50
 	if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
-		t.Errorf("fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[2].Address, got, want, errorTolerance)
+		t.Errorf("Fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[2].Address, got, want, errorTolerance)
 	}
 }

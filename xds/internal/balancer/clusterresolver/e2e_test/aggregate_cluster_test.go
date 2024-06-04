@@ -445,8 +445,7 @@ func (s) TestAggregateCluster_WithOneDNSCluster_HostnameChange(t *testing.T) {
 // cluster. The test verifies that RPCs fail until both clusters are resolved to
 // endpoints, and RPCs are routed to the higher priority EDS cluster.
 func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
-	dnsTargetCh, _, _, dnsR, cleanup1 := e2e.SetupDNS()
-	defer cleanup1()
+	dnsTargetCh, _, _, dnsR := e2e.SetupDNS(t)
 
 	// Start an xDS management server that pushes the name of the requested EDS
 	// resource onto a channel.
@@ -635,8 +634,7 @@ func (s) TestAggregateCluster_SwitchEDSAndDNS(t *testing.T) {
 // still successful. This is the expected behavior because the cluster resolver
 // policy eats errors from DNS Resolver after it has returned an error.
 func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
-	dnsTargetCh, _, _, dnsR, cleanup1 := e2e.SetupDNS()
-	defer cleanup1()
+	dnsTargetCh, _, _, dnsR := e2e.SetupDNS(t)
 
 	// Start an xDS management server.
 	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})

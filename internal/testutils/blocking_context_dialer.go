@@ -50,7 +50,7 @@ func (d *BlockingDialer) DialContext(ctx context.Context, addr string) (net.Conn
 	return d.dialer.DialContext(ctx, "tcp", addr)
 }
 
-// Resume unblocks the dialer. Resume can only be called once.
+// Resume unblocks the dialer. It panics if called more than once.
 func (d *BlockingDialer) Resume() {
 	close(d.blockCh)
 }

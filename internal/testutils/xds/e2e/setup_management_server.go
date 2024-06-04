@@ -122,8 +122,7 @@ func DefaultBootstrapContents(nodeID, serverURI string) ([]byte, error) {
 //   - a channel to notify close of the DNS resolver
 //   - a channel to notify re-resolution requests to the DNS resolver
 //   - a manual resolver which is used to mock the actual DNS resolution
-//   - a cleanup function which re-registers the original DNS resolver
-func SetupDNS() (chan resolver.Target, chan struct{}, chan resolver.ResolveNowOptions, *manual.Resolver, func()) {
+func SetupDNS(t *testing.T) (chan resolver.Target, chan struct{}, chan resolver.ResolveNowOptions, *manual.Resolver) {
 	targetCh := make(chan resolver.Target, 1)
 	closeCh := make(chan struct{}, 1)
 	resolveNowCh := make(chan resolver.ResolveNowOptions, 1)
@@ -136,5 +135,6 @@ func SetupDNS() (chan resolver.Target, chan struct{}, chan resolver.ResolveNowOp
 	dnsResolverBuilder := resolver.Get("dns")
 	resolver.Register(mr)
 
-	return targetCh, closeCh, resolveNowCh, mr, func() { resolver.Register(dnsResolverBuilder) }
+	t.Cleanup(func() { resolver.Register(dnsResolverBuilder) })
+	return targetCh, closeCh, resolveNowCh, mr
 }
