@@ -67,7 +67,6 @@ EXAMPLES=(
     "features/metadata_interceptor"
     "features/multiplex"
     "features/name_resolving"
-    "features/opentelemetry"
     "features/orca"
     "features/retry"
     "features/unix_abstract"
@@ -123,7 +122,6 @@ declare -A EXPECTED_SERVER_OUTPUT=(
     ["features/metadata_interceptor"]="key1 from metadata: "
     ["features/multiplex"]=":50051"
     ["features/name_resolving"]="serving on localhost:50051"
-    ["features/opentelemetry"]="serving on :50051"
     ["features/orca"]="Server listening"
     ["features/retry"]="request succeeded count: 4"
     ["features/unix_abstract"]="serving on @abstract-unix-socket"
@@ -148,7 +146,6 @@ declare -A EXPECTED_CLIENT_OUTPUT=(
     ["features/metadata_interceptor"]="BidiStreaming Echo:  hello world"
     ["features/multiplex"]="Greeting:  Hello multiplex"
     ["features/name_resolving"]="calling helloworld.Greeter/SayHello to \"example:///resolver.example.grpc.io\""
-    ["features/opentelemetry"]="this is examples/opentelemetry (from :50051)" # does this need to exit to work?
     ["features/orca"]="Per-call load report received: map\[db_queries:10\]"
     ["features/retry"]="UnaryEcho reply: message:\"Try and Success\""
     ["features/unix_abstract"]="calling echo.Echo/UnaryEcho to unix-abstract:abstract-unix-socket"

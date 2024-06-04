@@ -53,7 +53,7 @@ func main() {
 	mr.InitialState(resolver.State{
 		Endpoints: []resolver.Endpoint{
 			{Addresses: []resolver.Address{{Addr: addr1}}},
-			{Addresses: []resolver.Address{{Addr: addr2}}}, // Do I need the addresses for this one?
+			{Addresses: []resolver.Address{{Addr: addr2}}},
 		},
 		ServiceConfig: sc,
 	})

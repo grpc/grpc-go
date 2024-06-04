@@ -49,14 +49,9 @@ func main() {
 	provider := metric.NewMeterProvider(
 		metric.WithReader(exporter),
 	)
-	// why 64 for interop 65 for example?
 	go http.ListenAndServe(*promAddr, promhttp.Handler())
 
-	/*ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()*/
-	// play around to see if examples pass with this - unbounded
 	ctx := context.Background()
-
 	do := opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
 
 	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), do)
@@ -69,11 +64,11 @@ func main() {
 	// Make a RPC every second. This should trigger telemetry to be emitted from
 	// the client and the server.
 	for {
-		r, err := c.UnaryEcho(ctx, &echo.EchoRequest{Message: "this is examples/opentelemetry"}) // do I need to rename, any call options? echopb etc. Requires 1.21, but not unstable exporter not in g3
+		r, err := c.UnaryEcho(ctx, &echo.EchoRequest{Message: "this is examples/opentelemetry"})
 		if err != nil {
 			log.Fatalf("UnaryEcho failed: %v", err)
 		}
-		fmt.Println(r) // Does this need to exit to pass examples test? I think I just run bash script to run examples test. Does example test need determinstic output from this? Does the read me need to be deterministic output?
+		fmt.Println(r)
 		time.Sleep(time.Second)
 	}
 }
