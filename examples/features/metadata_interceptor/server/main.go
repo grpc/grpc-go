@@ -49,18 +49,18 @@ func unaryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, 
 		return nil, errMissingMetadata
 	}
 
-	// create and set metadata from interceptor to server
+	// Create and set metadata from interceptor to server.
 	md.Append("key1", "value1")
 	ctx = metadata.NewIncomingContext(ctx, md)
 
-	// call the handler to complete the normal execution of the RPC
+	// Call the handler to complete the normal execution of the RPC.
 	resp, err := handler(ctx, req)
 
-	// create and set header metadata from interceptor to client
+	// Create and set header metadata from interceptor to client.
 	header := metadata.Pairs("header-key", "val")
 	grpc.SetHeader(ctx, header)
 
-	// create and set trailer metadata from interceptor to client
+	// Create and set trailer metadata from interceptor to client.
 	trailer := metadata.Pairs("trailer-key", "val")
 	grpc.SetTrailer(ctx, trailer)
 
@@ -101,18 +101,18 @@ func streamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInf
 		return errMissingMetadata
 	}
 
-	// create and set metadata from interceptor to server
+	// Create and set metadata from interceptor to server.
 	md.Append("key1", "value1")
 	ctx := metadata.NewIncomingContext(ss.Context(), md)
 
-	// call the handler to complete the normal execution of the RPC
+	// Call the handler to complete the normal execution of the RPC.
 	err := handler(srv, &wrappedStream{ss, ctx})
 
-	// create and set header metadata from interceptor to client
+	// Create and set header metadata from interceptor to client.
 	header := metadata.Pairs("header-key", "val")
 	ss.SetHeader(header)
 
-	// create and set trailer metadata from interceptor to client
+	// Create and set trailer metadata from interceptor to client.
 	trailer := metadata.Pairs("trailer-key", "val")
 	ss.SetTrailer(trailer)
 

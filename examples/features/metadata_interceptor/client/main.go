@@ -38,12 +38,7 @@ var addr = flag.String("addr", "localhost:50051", "the address to connect to")
 
 func callUnaryEcho(ctx context.Context, client pb.EchoClient) {
 	var header, trailer metadata.MD
-	resp, err := client.UnaryEcho(
-		ctx,
-		&pb.EchoRequest{Message: "hello world"},
-		grpc.Header(&header),
-		grpc.Trailer(&trailer))
-
+	resp, err := client.UnaryEcho(ctx, &pb.EchoRequest{Message: "hello world"}, grpc.Header(&header), grpc.Trailer(&trailer))
 	if err != nil {
 		log.Fatalf("UnaryEcho: %v", err)
 	}
@@ -85,11 +80,10 @@ func callBidiStreamingEcho(ctx context.Context, client pb.EchoClient) {
 	header, err := c.Header()
 	if err != nil {
 		log.Fatalf("Receiving headers: %v", err)
-	} else {
-		fmt.Println("Received headers:")
-		for k, v := range header {
-			fmt.Printf("%s: %v\n", k, v)
-		}
+	}
+	fmt.Println("Received headers:")
+	for k, v := range header {
+		fmt.Printf("%s: %v\n", k, v)
 	}
 
 	trailer := c.Trailer()
