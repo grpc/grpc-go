@@ -12,6 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# This script ensures the installation of protobuf on client machine.
+# In case of manual run of this script, make sure you pass the args
+# expected at
+# https://github.com/grpc/grpc-go/blob/master/scripts/install_protoc.sh#L60
 
 set -eu -o pipefail
 

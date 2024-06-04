@@ -21,7 +21,6 @@ function finish {
   rm -rf "$WORKDIR"
   # Revert back the PATH to client's original value
   export PATH=$ORIGINAL_PATH
-  echo "Restored PATH variable to original value."
 }
 trap finish EXIT
 
