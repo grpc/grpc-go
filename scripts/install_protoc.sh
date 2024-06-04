@@ -54,9 +54,10 @@ case "$(uname -m)" in
 esac
 
 # Detect the Operating System
+INSTALL_PATH=${1:+"$1"}
 case "$(uname -s)" in
-  "Darwin") download_binary $ARCH "osx" "$1";;
-  "Linux") download_binary $ARCH "linux" "$1";;
+  "Darwin") download_binary $ARCH "osx" "$INSTALL_PATH";;
+  "Linux") download_binary $ARCH "linux" "$INSTALL_PATH";;
 *) die "Unsupported OS. Please consider manual installation from \
    https://github.com/protocolbuffers/protobuf/releases/ and add to PATH" ;;
 esac
