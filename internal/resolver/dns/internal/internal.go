@@ -56,10 +56,15 @@ var (
 	// blocked waiting for the duration to elapse.
 	TimeAfterFunc func(time.Duration) <-chan time.Time
 
-	// TimeUntilFunc is used by the DNS resolver to get the time remaining
-	// to allow next resolution. In non-test code, this is implemented by
+	// TimeNowFunc is used by the DNS resolver to get the current time.
+	// In non-test code, this is implemented by time.Now. In test code,
+	// this can be used to control the current time for the resolver.
+	TimeNowFunc func() time.Time
+
+	// TimeUntilFunc is used by the DNS resolver to calculate the remaining
+	// wait time for re-resolution. In non-test code, this is implemented by
 	// time.Until. In test code, this can be used to control the remaining
-	// time for resolver to allow next resolution.
+	// time for resolver to wait for re-resolution.
 	TimeUntilFunc func(time.Time) time.Duration
 
 	// NewNetResolver returns the net.Resolver instance for the given target.

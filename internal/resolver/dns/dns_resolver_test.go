@@ -102,13 +102,25 @@ func overrideTimeAfterFuncWithChannel(t *testing.T) (durChan chan time.Duration,
 	return durChan, timeChan
 }
 
-// Override the remaining time used by the DNS resolver to allow resolution
-func overrideTimeUntilFunc(t *testing.T, now time.Time) {
+// Override the current time used by the DNS resolver.
+func overrideTimeNowFunc(t *testing.T, now time.Time) {
+	origTimeNowFunc := dnsinternal.TimeNowFunc
+	dnsinternal.TimeNowFunc = func() time.Time { return now }
+	t.Cleanup(func() { dnsinternal.TimeNowFunc = origTimeNowFunc })
+}
+
+// Override the remaining wait time to allow re-resolution by DNS resolver.
+// Use the timeChan to read the time until resolver needs to wait for
+// and return 0 wait time.
+func overrideTimeUntilFuncWithChannel(t *testing.T) (timeChan chan time.Time) {
+	timeCh := make(chan time.Time, 1)
 	origTimeUntil := dnsinternal.TimeUntilFunc
-	dnsinternal.TimeUntilFunc = func(tm time.Time) time.Duration {
-		return now.Sub(tm)
+	dnsinternal.TimeUntilFunc = func(t time.Time) time.Duration {
+		timeCh <- t
+		return 0
 	}
 	t.Cleanup(func() { dnsinternal.TimeUntilFunc = origTimeUntil })
+	return timeCh
 }
 
 func enableSRVLookups(t *testing.T) {
@@ -1301,12 +1313,8 @@ func (s) TestMinResolutionInterval(t *testing.T) {
 }
 
 // TestMinResolutionInterval_NoExtraDelay verifies that there is no extra delay
-// between two resolution requests apart from [minResolutionInterval].
-// It sets the minResolutionInterval 1s and overrides timeUntilFunc to
-// calculate remaining time to allow resolution after 1s and verifies that
-// remaining time to allow resolution is very small
+// between two resolution requests apart from [MinResolutionInterval].
 func (s) TestMinResolutionInterval_NoExtraDelay(t *testing.T) {
-	durChan, timeChan := overrideTimeAfterFuncWithChannel(t)
 	tr := &testNetResolver{
 		hostLookupTable: map[string][]string{
 			"foo.bar.com": {"1.2.3.4", "5.6.7.8"},
@@ -1316,13 +1324,20 @@ func (s) TestMinResolutionInterval_NoExtraDelay(t *testing.T) {
 		},
 	}
 	overrideNetResolver(t, tr)
-	var minResolutionInterval = 1 * time.Second
-	overrideResolutionInterval(t, minResolutionInterval)
+	// Override time.Now() to return a zero value for time. This will allow us
+	// to verify that the call to time.Until is made with the exact
+	// [MinResolutionInterval] that we expect.
+	overrideTimeNowFunc(t, time.Time{})
+	// Override time.Until() to read the time passed to it
+	// and return immediately without any delay
+	timeCh := overrideTimeUntilFuncWithChannel(t)
 
 	r, stateCh, errorCh := buildResolverWithTestClientConn(t, "foo.bar.com")
 
-	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Ensure that the first resolution happens.
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for DNS resolver")
@@ -1331,25 +1346,20 @@ func (s) TestMinResolutionInterval_NoExtraDelay(t *testing.T) {
 	case <-stateCh:
 	}
 
-	// Make next resolution request after 1s.
-	var now = time.Now().Add(minResolutionInterval)
-	overrideTimeUntilFunc(t, now)
+	// Request re-resolution and verify that the resolver waits for
+	// [MinResolutionInterval].
 	r.ResolveNow(resolver.ResolveNowOptions{})
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for DNS resolver")
-	case dur := <-durChan:
-		if dur > 1*time.Millisecond {
-			t.Fatalf("Remaining time duration to allow next resolution is higher than expected")
+	case gotTime := <-timeCh:
+		wantTime := time.Time{}.Add(dns.MinResolutionInterval)
+		if !gotTime.Equal(wantTime) {
+			t.Fatalf("DNS resolver waits for %v time before re-resolution, want %v", gotTime, wantTime)
 		}
 	}
 
-	// Unblock the DNS resolver's backoff by pushing the current time.
-	timeChan <- time.Now()
-
+	// Ensure that the re-resolution request actually happens.
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for an error from the resolver")

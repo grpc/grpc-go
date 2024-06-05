@@ -63,6 +63,7 @@ var (
 func init() {
 	resolver.Register(NewBuilder())
 	internal.TimeAfterFunc = time.After
+	internal.TimeNowFunc = time.Now
 	internal.TimeUntilFunc = time.Until
 	internal.NewNetResolver = newNetResolver
 	internal.AddressDialer = addressDialer
@@ -215,7 +216,7 @@ func (d *dnsResolver) watcher() {
 			// Success resolving, wait for the next ResolveNow. However, also wait 30
 			// seconds at the very least to prevent constantly re-resolving.
 			backoffIndex = 1
-			nextResolutionTime = time.Now().Add(MinResolutionInterval)
+			nextResolutionTime = internal.TimeNowFunc().Add(MinResolutionInterval)
 			select {
 			case <-d.ctx.Done():
 				return
@@ -224,7 +225,7 @@ func (d *dnsResolver) watcher() {
 		} else {
 			// Poll on an error found in DNS Resolver or an error received from
 			// ClientConn.
-			nextResolutionTime = time.Now().Add(backoff.DefaultExponential.Backoff(backoffIndex))
+			nextResolutionTime = internal.TimeNowFunc().Add(backoff.DefaultExponential.Backoff(backoffIndex))
 			backoffIndex++
 		}
 		select {
