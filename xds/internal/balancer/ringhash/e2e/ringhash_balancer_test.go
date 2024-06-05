@@ -263,7 +263,10 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T
 	route := channelIDHashRoute("new_route", virtualHostName, clusterName)
 	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
-	err := xdsServer.Update(context.Background(), e2e.UpdateOptions{
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	err := xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{ep1, ep2},
 		Clusters:  []*v3clusterpb.Cluster{cluster, primaryCluster, secundaryCluster},
@@ -281,9 +284,6 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
 	gotPerBackend := checkRPCSendOK(t, ctx, client, 100)
 
 	// Since this is using ring hash with the channel ID as the key, all RPCs
@@ -291,21 +291,34 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T
 	if len(gotPerBackend) != 1 {
 		t.Errorf("Got RPCs routed to %v backends, want %v", len(gotPerBackend), 1)
 	}
-	for backend, got := range gotPerBackend {
-		found := false
-		for _, server := range servers {
-			if backend == server.Address {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Got RPCs routed to an unexpected backend: %v, want one of %v", backend, servers)
-		}
-		if got != 100 {
-			t.Errorf("Got %v RPCs routed to a backend, want %v", got, 100)
+
+	var backend string
+	var got int
+	for backend, got = range gotPerBackend {
+	}
+	found := false
+	for _, server := range servers {
+		if backend == server.Address {
+			found = true
+			break
 		}
 	}
+	if !found {
+		t.Errorf("Got RPCs routed to an unexpected backend: %v, want one of %v", backend, servers)
+	}
+	if got != 100 {
+		t.Errorf("Got %v RPCs routed to a backend, want %v", got, 100)
+	}
+}
+
+func replaceDNSResolver(t *testing.T) *manual.Resolver {
+	mr := manual.NewBuilderWithScheme("dns")
+
+	dnsResolverBuilder := resolver.Get("dns")
+	resolver.Register(mr)
+
+	t.Cleanup(func() { resolver.Register(dnsResolverBuilder) })
+	return mr
 }
 
 // Tests that when an aggregate cluster is configured with ring hash policy, and
@@ -350,6 +363,8 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 	logicalDNSCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		Type:        e2e.ClusterTypeLogicalDNS,
 		ClusterName: logicalDNSClusterName,
+		// The DNS values are not used because we fake DNS later on, but they
+		// are required to be present for the resource to be valid.
 		DNSHostName: "server.example.com",
 		DNSPort:     443,
 	})
@@ -364,7 +379,10 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 	route := channelIDHashRoute("new_route", virtualHostName, clusterName)
 	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
-	err := xdsServer.Update(context.Background(), e2e.UpdateOptions{
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	err := xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster, edsCluster, logicalDNSCluster},
@@ -375,7 +393,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
-	_, _, _, dnsR := e2e.SetupDNS(t)
+	dnsR := replaceDNSResolver(t)
 	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0].Address}}})
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -388,11 +406,12 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 	// TODO: c-core injects a 500ms RPC delay here: https://github.com/grpc/grpc/blob/master/test/cpp/end2end/xds/xds_ring_hash_end2end_test.cc#L220
 	// Should we try to do the same? do we have a way to do that in Go? Perhaps using something like https://github.com/grpc/grpc-go/blob/04ea82009cdb9ecdefc6289f4c93ec919a10b3b6/benchmark/latency/latency.go#L76-L75?
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Errorf("rpc UnaryCall() failed: %v", err)
+	gotPerBackend := checkRPCSendOK(t, ctx, client, 1)
+	var got string
+	for got = range gotPerBackend {
+	}
+	if want := backends[0].Address; got != want {
+		t.Errorf("Got RPCs routed to an unexpected got: %v, want %v", got, want)
 	}
 }
 
@@ -452,7 +471,10 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	route := channelIDHashRoute("new_route", virtualHostName, clusterName)
 	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
-	err := xdsServer.Update(context.Background(), e2e.UpdateOptions{
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	err := xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster, edsCluster, logicalDNSCluster},
@@ -463,7 +485,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
-	_, _, _, dnsR := e2e.SetupDNS(t)
+	dnsR := replaceDNSResolver(t)
 	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0].Address}}})
 
 	dialer := testutils.NewBlockingDialer()
@@ -483,8 +505,6 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	client := testgrpc.NewTestServiceClient(conn)
 
 	wg := sync.WaitGroup{}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	wg.Add(1)
 	go func() {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -543,7 +563,10 @@ func (s) TestRingHash_ChannelIdHashing(t *testing.T) {
 	route := channelIDHashRoute("new_route", virtualHostName, clusterName)
 	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
-	err := xdsServer.Update(context.Background(), e2e.UpdateOptions{
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	err := xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
@@ -561,17 +584,15 @@ func (s) TestRingHash_ChannelIdHashing(t *testing.T) {
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
 	received := checkRPCSendOK(t, ctx, client, 100)
 	if len(received) != 1 {
 		t.Errorf("Got RPCs routed to %v backends, want %v", len(received), 1)
 	}
-	for _, count := range received {
-		if count != 100 {
-			t.Errorf("Got %v RPCs routed to a backend, want %v", count, 100)
-		}
+	var count int
+	for _, count = range received {
+	}
+	if count != 100 {
+		t.Errorf("Got %v RPCs routed to a backend, want %v", count, 100)
 	}
 }
 
@@ -623,7 +644,10 @@ func (s) TestRingHash_HeaderHashing(t *testing.T) {
 	route := headerHashRoute(clusterName, "address_hash")
 	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
-	err = xdsServer.Update(context.Background(), e2e.UpdateOptions{
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	err = xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
@@ -640,9 +664,6 @@ func (s) TestRingHash_HeaderHashing(t *testing.T) {
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 
 	// Note each type of RPC contains a header value that will always be hashed
 	// to a specific backend as the header value matches the value used to
@@ -696,7 +717,10 @@ func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 	}
 	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
-	err = xdsServer.Update(context.Background(), e2e.UpdateOptions{
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	err = xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
@@ -714,9 +738,6 @@ func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
 	// Note each type of RPC contains a header value that would always be hashed
 	// to a specific backend as the header value matches the value used to
 	// create the entry in the ring. However, the regex rewrites all numbers to
@@ -733,10 +754,11 @@ func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 	if want := 1; len(gotPerBackend) != want {
 		t.Errorf("Got RPCs routed to %v backends, want %v", len(gotPerBackend), want)
 	}
-	for _, got := range gotPerBackend {
-		if want := 400; got != want {
-			t.Errorf("Got %v RPCs routed to a backend, want %v", got, want)
-		}
+	var got int
+	for _, got = range gotPerBackend {
+	}
+	if want := 400; got != want {
+		t.Errorf("Got %v RPCs routed to a backend, want %v", got, want)
 	}
 
 }
@@ -804,7 +826,10 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 	route := e2e.DefaultRouteConfig("new_route", virtualHostName, clusterName)
 	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
-	err := xdsServer.Update(context.Background(), e2e.UpdateOptions{
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	err := xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
@@ -821,9 +846,6 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 
 	// Send a large number of RPCs and check that they are distributed randomly.
 	gotPerBackend := checkRPCSendOK(t, ctx, client, numRPCs)
@@ -868,7 +890,10 @@ func (s) TestRingHash_EndpointWeights(t *testing.T) {
 	route := e2e.DefaultRouteConfig("new_route", virtualHostName, clusterName)
 	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
-	err := xdsServer.Update(context.Background(), e2e.UpdateOptions{
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	err := xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
@@ -885,9 +910,6 @@ func (s) TestRingHash_EndpointWeights(t *testing.T) {
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 
 	// Send a large number of RPCs and check that they are distributed randomly.
 	numRPCs := computeIdealNumberOfRPCs(.25, errorTolerance)
