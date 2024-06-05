@@ -411,7 +411,9 @@ func extractCRLIssuer(crlBytes []byte) ([]byte, error) {
 	}
 	der := cryptobyte.String(crlBytes)
 	var issuer cryptobyte.String
+	// This doubled der.ReadASN1 is intentional, it modifies the input buffer
 	if !der.ReadASN1(&der, cbasn1.SEQUENCE) ||
+		!der.ReadASN1(&der, cbasn1.SEQUENCE) ||
 		!der.SkipOptionalASN1(cbasn1.INTEGER) ||
 		!der.SkipASN1(cbasn1.SEQUENCE) ||
 		!der.ReadASN1Element(&issuer, cbasn1.SEQUENCE) {
