@@ -170,20 +170,20 @@ func checkChain(chain []*x509.Certificate, cfg RevocationOptions) revocationStat
 }
 
 func fetchCRL(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationOptions) (*CRL, error) {
-	if cfg.CRLProvider != nil {
-		crl, err := cfg.CRLProvider.CRL(c)
-		if err != nil {
-			return nil, fmt.Errorf("CrlProvider failed err = %v", err)
-		}
-		if crl == nil {
-			return nil, fmt.Errorf("no CRL found for certificate's issuer")
-		}
-		if err := verifyCRL(crl, crlVerifyCrt); err != nil {
-			return nil, fmt.Errorf("verifyCRL() failed: %v", err)
-		}
-		return crl, nil
+	if cfg.CRLProvider == nil {
+		return nil, fmt.Errorf("trying to fetch CRL but CRLProvider is nil")
 	}
-	return nil, fmt.Errorf("trying to fetch CRL but CRLProvider is nil")
+	crl, err := cfg.CRLProvider.CRL(c)
+	if err != nil {
+		return nil, fmt.Errorf("CrlProvider failed err = %v", err)
+	}
+	if crl == nil {
+		return nil, fmt.Errorf("no CRL found for certificate's issuer")
+	}
+	if err := verifyCRL(crl, crlVerifyCrt); err != nil {
+		return nil, fmt.Errorf("verifyCRL() failed: %v", err)
+	}
+	return crl, nil
 }
 
 // checkCert checks a single certificate against the CRL defined in the
