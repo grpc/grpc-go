@@ -44,86 +44,6 @@ import (
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
-func TestX509NameHash(t *testing.T) {
-	nameTests := []struct {
-		in  pkix.Name
-		out string
-	}{
-		{
-			in: pkix.Name{
-				Country:      []string{"US"},
-				Organization: []string{"Example"},
-			},
-			out: "9cdd41ff",
-		},
-		{
-			in: pkix.Name{
-				Country:      []string{"us"},
-				Organization: []string{"example"},
-			},
-			out: "9cdd41ff",
-		},
-		{
-			in: pkix.Name{
-				Country:      []string{"      us"},
-				Organization: []string{"example"},
-			},
-			out: "9cdd41ff",
-		},
-		{
-			in: pkix.Name{
-				Country:      []string{"US"},
-				Province:     []string{"California"},
-				Locality:     []string{"Mountain View"},
-				Organization: []string{"BoringSSL"},
-			},
-			out: "c24414d9",
-		},
-		{
-			in: pkix.Name{
-				Country:      []string{"US"},
-				Province:     []string{"California"},
-				Locality:     []string{"Mountain           View"},
-				Organization: []string{"BoringSSL"},
-			},
-			out: "c24414d9",
-		},
-		{
-			in: pkix.Name{
-				SerialNumber: "87f4514475ba0a2b",
-			},
-			out: "9dc713cd",
-		},
-		{
-			in: pkix.Name{
-				Country:            []string{"US"},
-				Province:           []string{"California"},
-				Locality:           []string{"Mountain View"},
-				Organization:       []string{"Google LLC"},
-				OrganizationalUnit: []string{"Production", "campus-sln"},
-				CommonName:         "Root CA (2021-02-02T07:30:36-08:00)",
-			},
-			out: "0b35a562",
-		},
-		{
-			in: pkix.Name{
-				ExtraNames: []pkix.AttributeTypeAndValue{
-					{Type: asn1.ObjectIdentifier{5, 5, 5, 5}, Value: "aaaa"},
-				},
-			},
-			out: "eea339da",
-		},
-	}
-	for _, tt := range nameTests {
-		t.Run(tt.in.String(), func(t *testing.T) {
-			h := x509NameHash(tt.in.ToRDNSequence())
-			if h != tt.out {
-				t.Errorf("x509NameHash(%v): Got %v wanted %v", tt.in, h, tt.out)
-			}
-		})
-	}
-}
-
 func TestUnsupportedCRLs(t *testing.T) {
 	crlBytesSomeReasons := []byte(`-----BEGIN X509 CRL-----
 MIIEeDCCA2ACAQEwDQYJKoZIhvcNAQELBQAwQjELMAkGA1UEBhMCVVMxHjAcBgNV
@@ -714,16 +634,5 @@ func TestVerifyConnection(t *testing.T) {
 				conn.Close()
 			}
 		})
-	}
-}
-
-func TestIssuerNonPrintableString(t *testing.T) {
-	rawIssuer, err := hex.DecodeString("300c310a300806022a030c023a29")
-	if err != nil {
-		t.Fatalf("failed to decode issuer: %s", err)
-	}
-	_, err = fetchCRLOpenSSLHashDir(rawIssuer, RevocationOptions{RootDir: testdata.Path("crl")})
-	if err != nil {
-		t.Fatalf("fetchCRL failed: %s", err)
 	}
 }

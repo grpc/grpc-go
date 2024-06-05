@@ -226,35 +226,6 @@ type Options struct {
 }
 
 func (o *Options) clientConfig() (*tls.Config, error) {
-	// TODO(gtcooke94) Remove this block when o.VerifyPeer is remoed.
-	// VerifyPeer is deprecated, but do this to aid the transitory migration time.
-	if o.AdditionalPeerVerification == nil {
-		o.AdditionalPeerVerification = o.VerifyPeer
-	}
-	// TODO(gtcooke94). VType is deprecated, eventually remove this block. This
-	// will ensure that users still explicitly setting `VType` will get the
-	// setting to the right place.
-	if o.VType != CertAndHostVerification {
-		o.VerificationType = o.VType
-	}
-	// TODO(gtcooke94) MinVersion and MaxVersion are deprected, eventually
-	// remove this block. This is a temporary fallback to ensure that if the
-	// refactored names aren't set we use the old names.
-	if o.MinTLSVersion == 0 {
-		o.MinTLSVersion = o.MinVersion
-	}
-	if o.MaxTLSVersion == 0 {
-		o.MaxTLSVersion = o.MaxVersion
-	}
-	// TODO(gtcooke94) RootCACerts is deprecated, eventually remove this block.
-	// This will ensure that users still explicitly setting RootCACerts will get
-	// the setting int the right place.
-	if o.RootOptions.RootCACerts != nil {
-		o.RootOptions.RootCertificates = o.RootOptions.RootCACerts
-		// There are additional checks that only 1 field of `RootOptions` is
-		// non-nil, so set the deprecated field to nil
-		o.RootOptions.RootCACerts = nil
-	}
 	if o.VerificationType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("client needs to provide custom verification mechanism if choose to skip default verification")
 	}
@@ -340,35 +311,6 @@ func (o *Options) clientConfig() (*tls.Config, error) {
 }
 
 func (o *Options) serverConfig() (*tls.Config, error) {
-	// TODO(gtcooke94) Remove this block when o.VerifyPeer is remoed.
-	// VerifyPeer is deprecated, but do this to aid the transitory migration time.
-	if o.AdditionalPeerVerification == nil {
-		o.AdditionalPeerVerification = o.VerifyPeer
-	}
-	// TODO(gtcooke94). VType is deprecated, eventually remove this block. This
-	// will ensure that users still explicitly setting `VType` will get the
-	// setting to the right place.
-	if o.VType != CertAndHostVerification {
-		o.VerificationType = o.VType
-	}
-	// TODO(gtcooke94) MinVersion and MaxVersion are deprected, eventually
-	// remove this block. This is a temporary fallback to ensure that if the
-	// refactored names aren't set we use the old names.
-	if o.MinTLSVersion == 0 {
-		o.MinTLSVersion = o.MinVersion
-	}
-	if o.MaxTLSVersion == 0 {
-		o.MaxTLSVersion = o.MaxVersion
-	}
-	// TODO(gtcooke94) RootCACerts is deprecated, eventually remove this block.
-	// This will ensure that users still explicitly setting RootCACerts will get
-	// the setting int the right place.
-	if o.RootOptions.RootCACerts != nil {
-		o.RootOptions.RootCertificates = o.RootOptions.RootCACerts
-		// There are additional checks that only 1 field of `RootOptions` is
-		// non-nil, so set the deprecated field to nil
-		o.RootOptions.RootCACerts = nil
-	}
 	if o.RequireClientCert && o.VerificationType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
@@ -658,12 +600,6 @@ func buildVerifyFunc(c *advancedTLSCreds,
 // NewClientCreds uses ClientOptions to construct a TransportCredentials based
 // on TLS.
 func NewClientCreds(o *Options) (credentials.TransportCredentials, error) {
-	// TODO(gtcooke94) RevocationConfig is deprecated, eventually remove this block.
-	// This will ensure that users still explicitly setting RevocationConfig will get
-	// the setting in the right place.
-	if o.RevocationConfig != nil {
-		o.RevocationOptions = o.RevocationConfig
-	}
 	conf, err := o.clientConfig()
 	if err != nil {
 		return nil, err
@@ -683,12 +619,6 @@ func NewClientCreds(o *Options) (credentials.TransportCredentials, error) {
 // NewServerCreds uses ServerOptions to construct a TransportCredentials based
 // on TLS.
 func NewServerCreds(o *Options) (credentials.TransportCredentials, error) {
-	// TODO(gtcooke94) RevocationConfig is deprecated, eventually remove this block.
-	// This will ensure that users still explicitly setting RevocationConfig will get
-	// the setting in the right place.
-	if o.RevocationConfig != nil {
-		o.RevocationOptions = o.RevocationConfig
-	}
 	conf, err := o.serverConfig()
 	if err != nil {
 		return nil, err
