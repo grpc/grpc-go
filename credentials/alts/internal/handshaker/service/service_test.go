@@ -30,14 +30,12 @@ const (
 )
 
 func TestDial(t *testing.T) {
-	defer func() func() {
-		temp := hsDialer
-		hsDialer = func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-			return &grpc.ClientConn{}, nil
-		}
-		return func() {
-			hsDialer = temp
-		}
+	temp := hsDialer
+	hsDialer = func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+		return &grpc.ClientConn{}, nil
+	}
+	defer func() {
+		hsDialer = temp
 	}()
 
 	// First call to Dial, it should create a connection to the server running
