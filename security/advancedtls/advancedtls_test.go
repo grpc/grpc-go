@@ -761,7 +761,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			clientGetRoot:           getRootCertificatesForClientCRL,
 			clientVerifyFunc:        clientVerifyFuncGood,
 			clientVerificationType:  CertVerification,
-			clientRevocationOptions: makeStaticCRLRevocationOptions(testdata.Path("crl/provider_crl_empty.pem"), true),
+			clientRevocationOptions: makeStaticCRLRevocationOptions(testdata.Path("crl/provider_crl_empty.pem"), false),
 			serverMutualTLS:         true,
 			serverCert:              []tls.Certificate{cs.ServerCertForCRL},
 			serverGetRoot:           getRootCertificatesForServerCRL,

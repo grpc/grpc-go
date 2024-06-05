@@ -29,7 +29,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
-	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"math/big"
@@ -40,7 +39,6 @@ import (
 	"testing"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
@@ -265,55 +263,8 @@ func loadCRL(t *testing.T, path string) *CRL {
 	return crl
 }
 
-func TestCachedCRL(t *testing.T) {
-	cache, err := lru.New(5)
-	if err != nil {
-		t.Fatalf("lru.New: err = %v", err)
-	}
-
-	tests := []struct {
-		desc string
-		val  any
-		ok   bool
-	}{
-		{
-			desc: "Valid",
-			val: &CRL{
-				certList: &x509.RevocationList{
-					NextUpdate: time.Now().Add(time.Hour),
-				}},
-			ok: true,
-		},
-		{
-			desc: "Expired",
-			val: &CRL{
-				certList: &x509.RevocationList{
-					NextUpdate: time.Now().Add(-time.Hour),
-				}},
-			ok: false,
-		},
-		{
-			desc: "Wrong Type",
-			val:  "string",
-			ok:   false,
-		},
-		{
-			desc: "Empty",
-			val:  nil,
-			ok:   false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.desc, func(t *testing.T) {
-			if tt.val != nil {
-				cache.Add(hex.EncodeToString([]byte(tt.desc)), tt.val)
-			}
-			_, ok := cachedCrl([]byte(tt.desc), cache)
-			if tt.ok != ok {
-				t.Errorf("Cache ok error expected %v vs %v", tt.ok, ok)
-			}
-		})
-	}
+func checkRevocation(conn tls.ConnectionState, cfg RevocationOptions) error {
+	return checkChainRevocation(conn.VerifiedChains, cfg)
 }
 
 func TestVerifyCrl(t *testing.T) {
@@ -604,7 +555,7 @@ func TestVerifyConnection(t *testing.T) {
 				t.Fatalf("templ.CreateRevocationList failed err = %v", err)
 			}
 
-			err = os.WriteFile(path.Join(dir, fmt.Sprintf("%s.r0", x509NameHash(cert.Subject.ToRDNSequence()))), crl, 0777)
+			err = os.WriteFile(path.Join(dir, fmt.Sprintf("%s.r0", cert.Subject.ToRDNSequence())), crl, 0777)
 			if err != nil {
 				t.Fatalf("os.WriteFile failed err = %v", err)
 			}
