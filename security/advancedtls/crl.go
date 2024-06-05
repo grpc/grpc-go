@@ -45,45 +45,17 @@ import (
 
 var grpclogLogger = grpclog.Component("advancedtls")
 
-// Cache is an interface to cache CRL files.
-// The cache implementation must be concurrency safe.
-// A fixed size lru cache from golang-lru is recommended.
-type Cache interface {
-	// Add adds a value to the cache.
-	Add(key, value any) bool
-	// Get looks up a key's value from the cache.
-	Get(key any) (value any, ok bool)
-}
-
 // RevocationOptions allows a user to configure certificate revocation behavior.
 type RevocationOptions struct {
-	// RootDir is the directory to search for CRL files.
-	// Directory format must match OpenSSL X509_LOOKUP_hash_dir(3).
-	// Deprecated: use CRLProvider instead.
-	RootDir string
 	// DenyUndetermined controls if certificate chains with RevocationUndetermined
 	// revocation status are allowed to complete.
 	DenyUndetermined bool
-	// AllowUndetermined controls if certificate chains with RevocationUndetermined
-	// revocation status are allowed to complete.
-	//
-	// Deprecated: use DenyUndetermined instead
-	AllowUndetermined bool
-	// Cache will store CRL files if not nil, otherwise files are reloaded for every lookup.
-	// Only used for caching CRLs when using the RootDir setting.
-	// Deprecated: use CRLProvider instead.
-	Cache Cache
 	// CRLProvider is an alternative to using RootDir directly for the
 	// X509_LOOKUP_hash_dir approach to CRL files. If set, the CRLProvider's CRL
 	// function will be called when looking up and fetching CRLs during the
 	// handshake.
 	CRLProvider CRLProvider
 }
-
-// RevocationConfig contains options for CRL lookup.
-//
-// Deprecated: use RevocationOptions instead.
-type RevocationConfig = RevocationOptions
 
 // revocationStatus is the revocation status for a certificate or chain.
 type revocationStatus int
