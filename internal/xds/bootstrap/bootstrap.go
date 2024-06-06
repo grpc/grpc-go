@@ -36,10 +36,10 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/bootstrap"
-
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
 const (
@@ -154,15 +154,15 @@ func (sc *ServerConfig) ServerFeatures() []string {
 	return sc.serverFeatures
 }
 
-// IgnoreResourceDeletion returns true if this server supports a feature where
-// the xDS client can ignore resource deletions from this server, as described
-// in gRFC A53.
+// ServerFeaturesIgnoreResourceDeletion returns true if this server supports a
+// feature where the xDS client can ignore resource deletions from this server,
+// as described in gRFC A53.
 //
 // This feature controls the behavior of the xDS client when the server deletes
 // a previously sent Listener or Cluster resource. If set, the xDS client will
 // not invoke the watchers' OnResourceDoesNotExist() method when a resource is
 // deleted, nor will it remove the existing resource value from its cache.
-func (sc *ServerConfig) IgnoreResourceDeletion() bool {
+func (sc *ServerConfig) ServerFeaturesIgnoreResourceDeletion() bool {
 	for _, sf := range sc.serverFeatures {
 		if sf == serverFeaturesIgnoreResourceDeletion {
 			return true
@@ -238,7 +238,7 @@ func (sc *ServerConfig) MarshalJSON() ([]byte, error) {
 func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 	server := serverConfigJSON{}
 	if err := json.Unmarshal(data, &server); err != nil {
-		return fmt.Errorf("xds: json.Unmarshal(%s) for server configuration failed during bootstrap: %v", string(data), err)
+		return fmt.Errorf("xds: failed to JSON unmarshal server configuration during bootstrap: %v, config:\n%s", err, string(data))
 	}
 
 	sc.serverURI = server.ServerURI

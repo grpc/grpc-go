@@ -46,18 +46,13 @@ const (
 	c2pScheme    = "google-c2p"
 	c2pAuthority = "traffic-director-c2p.xds.googleapis.com"
 
-	tdURL          = "dns:///directpath-pa.googleapis.com"
-	httpReqTimeout = 10 * time.Second
-	zoneURL        = "http://metadata.google.internal/computeMetadata/v1/instance/zone"
-	ipv6URL        = "http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ipv6s"
+	tdURL                   = "dns:///directpath-pa.googleapis.com"
+	zoneURL                 = "http://metadata.google.internal/computeMetadata/v1/instance/zone"
+	ipv6URL                 = "http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ipv6s"
+	ipv6CapableMetadataName = "TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE"
+	httpReqTimeout          = 10 * time.Second
 
-	gRPCUserAgentName               = "gRPC Go"
-	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
-	clientFeatureResourceWrapper    = "xds.config.resource-in-sotw"
-	ipv6CapableMetadataName         = "TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE"
-
-	logPrefix = "[google-c2p-resolver]"
-
+	logPrefix        = "[google-c2p-resolver]"
 	dnsName, xdsName = "dns", "xds"
 )
 
