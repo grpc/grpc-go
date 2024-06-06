@@ -372,6 +372,7 @@ func TestRevokedCert(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileWatcherCRLProvider: err = %v", err)
 	}
+	defer directoryCRLProvider.Close()
 
 	var revocationTests = []struct {
 		desc             string
@@ -565,8 +566,8 @@ func TestVerifyConnection(t *testing.T) {
 			provider, err := NewFileWatcherCRLProvider(FileWatcherOptions{CRLDirectory: dir})
 			if err != nil {
 				t.Errorf("NewFileWatcherCRLProvider: err = %v", err)
-
 			}
+			defer provider.Close()
 			cliCfg := tls.Config{
 				RootCAs: cp,
 				VerifyConnection: func(cs tls.ConnectionState) error {
