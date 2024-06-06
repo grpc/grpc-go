@@ -30,7 +30,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	lru "github.com/hashicorp/golang-lru"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/grpctest"
@@ -151,20 +150,6 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 	}
 }
 
-// TODO(gtcooke94) Remove when deprecated `VType` is removed. This doesn't fit nicely into other table tests since it is setting a deprecated option.
-// Set VerificationType via the deprecated VType. Make sure it cascades to
-// VerificationType. This should error because one cannot skip default
-// verification and provide no root credentials",
-func (s) TestClientOptionsWithDeprecatedVType(t *testing.T) {
-	clientOptions := &Options{
-		VType: SkipVerification,
-	}
-	_, err := clientOptions.clientConfig()
-	if err == nil {
-		t.Fatalf("ClientOptions{%v}.config() returns no err, wantErr != nil", clientOptions)
-	}
-}
-
 func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 	tests := []struct {
 		desc                   string
@@ -190,13 +175,6 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 			},
 			MinVersion: tls.VersionTLS12,
 			MaxVersion: tls.VersionTLS13,
-		},
-		{
-			desc:                   "Deprecated option is set and forwarded",
-			clientVerificationType: CertVerification,
-			RootOptions: RootCertificateOptions{
-				RootCACerts: x509.NewCertPool(),
-			},
 		},
 		{
 			desc: "Ciphersuite plumbing through client options",
@@ -327,20 +305,6 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 	}
 }
 
-// TODO(gtcooke94) Remove when deprecated `VType` is removed. This doesn't fit nicely into other table tests since it is setting a deprecated option.
-// Set VerificationType via the deprecated VType. Make sure it cascades to
-// VerificationType. This should error because one cannot skip default
-// verification and provide no root credentials",
-func (s) TestServerOptionsWithDeprecatedVType(t *testing.T) {
-	serverOptions := &Options{
-		VType: SkipVerification,
-	}
-	_, err := serverOptions.serverConfig()
-	if err == nil {
-		t.Fatalf("ClientOptions{%v}.config() returns no err, wantErr != nil", serverOptions)
-	}
-}
-
 func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 	tests := []struct {
 		desc                   string
@@ -376,21 +340,12 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 			MaxVersion: tls.VersionTLS13,
 		},
 		{
-			desc: "Deprecated option is set and forwarded",
-			IdentityOptions: IdentityCertificateOptions{
-				Certificates: []tls.Certificate{},
-			},
-			RootOptions: RootCertificateOptions{
-				RootCACerts: x509.NewCertPool(),
-			},
-		},
-		{
 			desc: "Ciphersuite plumbing through server options",
 			IdentityOptions: IdentityCertificateOptions{
 				Certificates: []tls.Certificate{},
 			},
 			RootOptions: RootCertificateOptions{
-				RootCACerts: x509.NewCertPool(),
+				RootCertificates: x509.NewCertPool(),
 			},
 			cipherSuites: []uint16{
 				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
@@ -438,10 +393,6 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	}
 	getRootCertificatesForClient := func(params *ConnectionInfo) (*RootCertificates, error) {
 		return &RootCertificates{TrustCerts: cs.ClientTrust1}, nil
-	}
-
-	getRootCertificatesForClientDeprecatedTypes := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
-		return &GetRootCAsResults{TrustCerts: cs.ClientTrust1}, nil
 	}
 
 	clientVerifyFuncGood := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
@@ -496,10 +447,6 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		}
 	}
 
-	cache, err := lru.New(5)
-	if err != nil {
-		t.Fatalf("lru.New: err = %v", err)
-	}
 	for _, test := range []struct {
 		desc                       string
 		clientCert                 []tls.Certificate
@@ -560,20 +507,6 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverCert:                 []tls.Certificate{cs.ServerCert1},
 			serverVerificationType:     CertVerification,
 			serverExpectError:          true,
-		},
-		// Client: set clientGetRoot with deprecated types, clientVerifyFunc and
-		// clientCert Server: set serverRoot and serverCert with mutual TLS on
-		// Expected Behavior: success
-		{
-			desc:                   "Client sets peer cert, reload root function with deprecatd types with verifyFuncGood; server sets peer cert and root cert; mutualTLS",
-			clientCert:             []tls.Certificate{cs.ClientCert1},
-			clientGetRoot:          getRootCertificatesForClientDeprecatedTypes,
-			clientVerifyFunc:       clientVerifyFuncGood,
-			clientVerificationType: CertVerification,
-			serverMutualTLS:        true,
-			serverCert:             []tls.Certificate{cs.ServerCert1},
-			serverRoot:             cs.ServerTrust1,
-			serverVerificationType: CertVerification,
 		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
 		// Server: set serverRoot and serverCert with mutual TLS on
@@ -823,36 +756,12 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// Server: set valid credentials with the revocation config
 		// Expected Behavior: success, because none of the certificate chains sent in the connection are revoked
 		{
-			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; mutualTLS",
-			clientCert:             []tls.Certificate{cs.ClientCert1},
-			clientGetRoot:          getRootCertificatesForClient,
-			clientVerifyFunc:       clientVerifyFuncGood,
-			clientVerificationType: CertVerification,
-			clientRevocationOptions: &RevocationOptions{
-				RootDir:          testdata.Path("crl"),
-				DenyUndetermined: false,
-				Cache:            cache,
-			},
-			serverMutualTLS:        true,
-			serverCert:             []tls.Certificate{cs.ServerCert1},
-			serverGetRoot:          getRootCertificatesForServer,
-			serverVerificationType: CertVerification,
-			serverRevocationOptions: &RevocationOptions{
-				RootDir:          testdata.Path("crl"),
-				DenyUndetermined: false,
-				Cache:            cache,
-			},
-		},
-		// Client: set valid credentials with the revocation config
-		// Server: set valid credentials with the revocation config
-		// Expected Behavior: success, because none of the certificate chains sent in the connection are revoked
-		{
 			desc:                    "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; Client uses CRL; mutualTLS",
 			clientCert:              []tls.Certificate{cs.ClientCertForCRL},
 			clientGetRoot:           getRootCertificatesForClientCRL,
 			clientVerifyFunc:        clientVerifyFuncGood,
 			clientVerificationType:  CertVerification,
-			clientRevocationOptions: makeStaticCRLRevocationOptions(testdata.Path("crl/provider_crl_empty.pem"), true),
+			clientRevocationOptions: makeStaticCRLRevocationOptions(testdata.Path("crl/provider_crl_empty.pem"), false),
 			serverMutualTLS:         true,
 			serverCert:              []tls.Certificate{cs.ServerCertForCRL},
 			serverGetRoot:           getRootCertificatesForServerCRL,
@@ -1008,7 +917,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				if test.serverRoot != nil {
 					serverRoot = test.serverRoot
 				} else if test.serverGetRoot != nil {
-					result, _ := test.serverGetRoot(&GetRootCAsParams{})
+					result, _ := test.serverGetRoot(&ConnectionInfo{})
 					serverRoot = result.TrustCerts
 				} else if test.serverRootProvider != nil {
 					km, _ := test.serverRootProvider.KeyMaterial(context.TODO())
@@ -1043,7 +952,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				if test.clientRoot != nil {
 					clientRoot = test.clientRoot
 				} else if test.clientGetRoot != nil {
-					result, _ := test.clientGetRoot(&GetRootCAsParams{})
+					result, _ := test.clientGetRoot(&ConnectionInfo{})
 					clientRoot = result.TrustCerts
 				} else if test.clientRootProvider != nil {
 					km, _ := test.clientRootProvider.KeyMaterial(context.TODO())
