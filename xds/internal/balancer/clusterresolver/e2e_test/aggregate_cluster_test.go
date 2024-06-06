@@ -89,7 +89,9 @@ func setupDNS() (chan resolver.Target, chan struct{}, chan resolver.ResolveNowOp
 	resolveNowCh := make(chan resolver.ResolveNowOptions, 1)
 
 	mr := manual.NewBuilderWithScheme("dns")
-	mr.BuildCallback = func(target resolver.Target, _ resolver.ClientConn, _ resolver.BuildOptions) { targetCh <- target }
+	mr.BuildCallback = func(target resolver.Target, _ resolver.ClientConn, _ resolver.BuildOptions) {
+		targetCh <- target
+	}
 	mr.CloseCallback = func() { closeCh <- struct{}{} }
 	mr.ResolveNowCallback = func(opts resolver.ResolveNowOptions) { resolveNowCh <- opts }
 

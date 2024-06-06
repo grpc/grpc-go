@@ -46,24 +46,21 @@ const (
 	c2pScheme    = "google-c2p"
 	c2pAuthority = "traffic-director-c2p.xds.googleapis.com"
 
-	tdURL          = "dns:///directpath-pa.googleapis.com"
-	httpReqTimeout = 10 * time.Second
-	zoneURL        = "http://metadata.google.internal/computeMetadata/v1/instance/zone"
-	ipv6URL        = "http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ipv6s"
+	tdURL                   = "dns:///directpath-pa.googleapis.com"
+	zoneURL                 = "http://metadata.google.internal/computeMetadata/v1/instance/zone"
+	ipv6URL                 = "http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ipv6s"
+	ipv6CapableMetadataName = "TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE"
+	httpReqTimeout          = 10 * time.Second
 
-	gRPCUserAgentName               = "gRPC Go"
-	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
-	clientFeatureResourceWrapper    = "xds.config.resource-in-sotw"
-	ipv6CapableMetadataName         = "TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE"
-
-	logPrefix = "[google-c2p-resolver]"
-
+	logPrefix        = "[google-c2p-resolver]"
 	dnsName, xdsName = "dns", "xds"
 )
 
 // For overriding in unittests.
 var (
 	onGCE = googlecloud.OnGCE
+
+	randInt = rand.Int
 
 	newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
 		return xdsclient.NewWithConfig(config)
@@ -159,8 +156,6 @@ func (r *c2pResolver) Close() {
 	r.clientCloseFunc()
 }
 
-var id = fmt.Sprintf("C2P-%d", rand.Int())
-
 func newNodeConfig(zone string, ipv6Capable bool) string {
 	metadata := ""
 	if ipv6Capable {
@@ -174,7 +169,7 @@ func newNodeConfig(zone string, ipv6Capable bool) string {
 			"zone": "%s"
 		}
 		%s
-	}`, id, zone, metadata)
+	}`, fmt.Sprintf("C2P-%d", randInt()), zone, metadata)
 }
 
 func newAuthoritiesConfig(xdsServer string) string {
@@ -192,7 +187,7 @@ func newXdsServerConfig(xdsServerURI string) string {
 	{
 		"server_uri": "%s",
 		"channel_creds": [{"type": "google_default"}],
-		"server_features": ["xds_v3", "ignore_resource_deletion", "xds.config.resource-in-sotw"]
+		"server_features": ["ignore_resource_deletion"]
 	}`, xdsServerURI)
 }
 

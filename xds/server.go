@@ -108,7 +108,7 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 
 	// Listener resource name template is mandatory on the server side.
 	cfg := xdsClient.BootstrapConfig()
-	if cfg.ServerListenerResourceNameTemplate == "" {
+	if cfg.ServerListenerResourceNameTemplate() == "" {
 		xdsClientClose()
 		return nil, errors.New("missing server_listener_resource_name_template in the bootstrap configuration")
 	}
@@ -191,7 +191,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 	// string, it will be replaced with the server's listening "IP:port" (e.g.,
 	// "0.0.0.0:8080", "[::]:8080").
 	cfg := s.xdsC.BootstrapConfig()
-	name := bootstrap.PopulateResourceTemplate(cfg.ServerListenerResourceNameTemplate, lis.Addr().String())
+	name := bootstrap.PopulateResourceTemplate(cfg.ServerListenerResourceNameTemplate(), lis.Addr().String())
 
 	// Create a listenerWrapper which handles all functionality required by
 	// this particular instance of Serve().

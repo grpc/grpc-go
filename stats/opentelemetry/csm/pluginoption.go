@@ -294,10 +294,10 @@ func getNodeID() string {
 	if err != nil {
 		return "" // will become "unknown"
 	}
-	if cfg.NodeProto == nil {
+	if cfg.Node() == nil {
 		return ""
 	}
-	return cfg.NodeProto.GetId()
+	return cfg.Node().GetId()
 }
 
 // metadataExchangeKey is the key for HTTP metadata exchange.

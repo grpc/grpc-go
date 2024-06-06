@@ -111,7 +111,6 @@ func Contents(opts Options) ([]byte, error) {
 		ClientDefaultListenerResourceNameTemplate: opts.ClientDefaultListenerResourceNameTemplate,
 		ServerListenerResourceNameTemplate:        opts.ServerListenerResourceNameTemplate,
 	}
-	cfg.XdsServers[0].ServerFeatures = append(cfg.XdsServers[0].ServerFeatures, "xds_v3")
 	if opts.IgnoreResourceDeletion {
 		cfg.XdsServers[0].ServerFeatures = append(cfg.XdsServers[0].ServerFeatures, "ignore_resource_deletion")
 	}

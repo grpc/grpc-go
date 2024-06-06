@@ -99,6 +99,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			return customLBConfig{}, nil
 		},
 	})
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: "test-server"})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
 
 	defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
 	envconfig.LeastRequestLB = true
@@ -214,11 +218,11 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				ServiceName: serviceName,
 				EnableLRS:   true,
 			}),
-			serverCfg: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
+			serverCfg: serverCfg,
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName:     clusterName,
 				EDSServiceName:  serviceName,
-				LRSServerConfig: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
+				LRSServerConfig: serverCfg,
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
@@ -251,11 +255,11 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				}
 				return c
 			}(),
-			serverCfg: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
+			serverCfg: serverCfg,
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName:     clusterName,
 				EDSServiceName:  serviceName,
-				LRSServerConfig: &bootstrap.ServerConfig{ServerURI: "test-server-uri"},
+				LRSServerConfig: serverCfg,
 				MaxRequests:     func() *uint32 { i := uint32(512); return &i }(),
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{

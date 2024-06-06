@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -96,11 +96,16 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 		return 0
 	}
 
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
+
 	// Create a new transport. Since we are only testing backoff behavior here,
 	// we can pass a no-op data model layer implementation.
 	nodeID := uuid.New().String()
 	tr, err := transport.New(transport.Options{
-		ServerCfg:     *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
+		ServerCfg:     serverCfg,
 		OnRecvHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
 		OnErrorHandler: func(err error) {
 			select {
@@ -258,10 +263,15 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 		SkipValidation: true,
 	})
 
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
+
 	// Create a new transport. Since we are only testing backoff behavior here,
 	// we can pass a no-op data model layer implementation.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:     *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
+		ServerCfg:     serverCfg,
 		OnRecvHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
 		OnErrorHandler: func(err error) {
 			select {
@@ -389,11 +399,16 @@ func (s) TestTransport_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	// stream to the management server.
 	lis.Stop()
 
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
+
 	// Create a new transport. Since we are only testing backoff behavior here,
 	// we can pass a no-op data model layer implementation.
 	nodeID := uuid.New().String()
 	tr, err := transport.New(transport.Options{
-		ServerCfg:      *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
+		ServerCfg:      serverCfg,
 		OnRecvHandler:  func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
 		OnErrorHandler: func(error) {},                                      // No stream error handling.
 		OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No on send handler

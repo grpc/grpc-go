@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/internal/hierarchy"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
@@ -132,6 +133,14 @@ func init() {
 // TestBuildPriorityConfigJSON is a sanity check that the built balancer config
 // can be parsed. The behavior test is covered by TestBuildPriorityConfig.
 func TestBuildPriorityConfigJSON(t *testing.T) {
+	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:          "trafficdirector.googleapis.com:443",
+		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
+
 	gotConfig, _, err := buildPriorityConfigJSON([]priorityConfig{
 		{
 			mechanism: DiscoveryMechanism{
@@ -317,6 +326,14 @@ func TestBuildClusterImplConfigForDNS(t *testing.T) {
 }
 
 func TestBuildClusterImplConfigForEDS(t *testing.T) {
+	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:          "trafficdirector.googleapis.com:443",
+		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
+
 	gotNames, gotConfigs, gotAddrs, _ := buildClusterImplConfigForEDS(
 		newNameGenerator(2),
 		xdsresource.EndpointsUpdate{

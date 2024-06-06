@@ -32,8 +32,8 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
@@ -867,7 +867,11 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			// server at that point, hence we do it here before verifying the
 			// received update.
 			if test.wantErr == "" {
-				test.wantUpdate.LRSServerConfig = xdstestutils.ServerConfigForAddress(t, mgmtServer.Address)
+				serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
+				if err != nil {
+					t.Fatalf("Failed to create server config for testing: %v", err)
+				}
+				test.wantUpdate.LRSServerConfig = serverCfg
 			}
 			cmpOpts := []cmp.Option{
 				cmpopts.EquateEmpty(),

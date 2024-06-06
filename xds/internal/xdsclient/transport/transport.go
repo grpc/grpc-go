@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
+	"google.golang.org/grpc/xds/internal/xdsclient/transport/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -135,7 +136,7 @@ type ResourceUpdate struct {
 type Options struct {
 	// ServerCfg contains all the configuration required to connect to the xDS
 	// management server.
-	ServerCfg bootstrap.ServerConfig
+	ServerCfg *bootstrap.ServerConfig
 	// OnRecvHandler is the component which makes ACK/NACK decisions based on
 	// the received resources.
 	//
@@ -169,16 +170,13 @@ type Options struct {
 	NodeProto *v3corepb.Node
 }
 
-// For overriding in unit tests.
-var grpcDial = grpc.Dial
+func init() {
+	internal.GRPCNewClient = grpc.NewClient
+}
 
 // New creates a new Transport.
 func New(opts Options) (*Transport, error) {
 	switch {
-	case opts.ServerCfg.ServerURI == "":
-		return nil, errors.New("missing server URI when creating a new transport")
-	case opts.ServerCfg.CredsDialOption() == nil:
-		return nil, errors.New("missing credentials when creating a new transport")
 	case opts.OnRecvHandler == nil:
 		return nil, errors.New("missing OnRecv callback handler when creating a new transport")
 	case opts.OnErrorHandler == nil:
@@ -197,11 +195,13 @@ func New(opts Options) (*Transport, error) {
 			Timeout: 20 * time.Second,
 		}),
 	}
-	cc, err := grpcDial(opts.ServerCfg.ServerURI, dopts...)
+	grpcNewClient := internal.GRPCNewClient.(func(string, ...grpc.DialOption) (*grpc.ClientConn, error))
+	cc, err := grpcNewClient(opts.ServerCfg.ServerURI(), dopts...)
 	if err != nil {
 		// An error from a non-blocking dial indicates something serious.
-		return nil, fmt.Errorf("failed to create a transport to the management server %q: %v", opts.ServerCfg.ServerURI, err)
+		return nil, fmt.Errorf("failed to create a transport to the management server %q: %v", opts.ServerCfg.ServerURI(), err)
 	}
+	cc.Connect()
 
 	boff := opts.Backoff
 	if boff == nil {
@@ -209,7 +209,7 @@ func New(opts Options) (*Transport, error) {
 	}
 	ret := &Transport{
 		cc:             cc,
-		serverURI:      opts.ServerCfg.ServerURI,
+		serverURI:      opts.ServerCfg.ServerURI(),
 		onRecvHandler:  opts.OnRecvHandler,
 		onErrorHandler: opts.OnErrorHandler,
 		onSendHandler:  opts.OnSendHandler,

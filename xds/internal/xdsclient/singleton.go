@@ -94,7 +94,7 @@ func newRefCountedWithConfig(fallbackConfig *bootstrap.Config) (XDSClient, func(
 	singletonClient = &clientRefCounted{clientImpl: c, refCount: 1}
 	singletonClientImplCreateHook()
 
-	logger.Infof("xDS node ID: %s", config.NodeProto.GetId())
+	logger.Infof("xDS node ID: %s", config.Node().GetId())
 	return singletonClient, grpcsync.OnceFunc(clientRefCountedClose), nil
 }
 
