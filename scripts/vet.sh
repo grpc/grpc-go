@@ -43,31 +43,31 @@ fi
 (grep -L "DO NOT EDIT" $(git grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)" -- '*.go') || true) | fail_on_output
 
 # - Make sure all tests in grpc and grpc/test use leakcheck via Teardown.
-not grep 'func Test[^(]' *_test.go
-not grep 'func Test[^(]' test/*.go
+not grep 'func Test[^(]' -- *_test.go
+not grep 'func Test[^(]' -- test/*.go
 
 # - Check for typos in test function names
-git grep --quiet 'func (s) ' -- "*_test.go" | not grep -v 'func (s) Test'
-git grep --quiet 'func [A-Z]' -- "*_test.go" | not grep -v 'func Test\|Benchmark\|Example'
+git grep 'func (s) ' -- "*_test.go" | not grep -v 'func (s) Test'
+git grep 'func [A-Z]' -- "*_test.go" | not grep -v 'func Test\|Benchmark\|Example'
 
 # - Do not use time.After except in tests.  It has the potential to leak the
 #   timer since there is no way to stop it early.
-git grep --quiet -l 'time.After(' -- "*.go" | not grep -v '_test.go\|test_utils\|testutils'
+git grep -l 'time.After(' -- "*.go" | not grep -v '_test.go\|test_utils\|testutils'
 
 # - Do not use "interface{}"; use "any" instead.
-git grep --quiet -l 'interface{}' -- "*.go" 2>&1 | not grep -v '\.pb\.go\|protoc-gen-go-grpc\|grpc_testing_not_regenerate'
+git grep -l 'interface{}' -- "*.go" 2>&1 | not grep -v '\.pb\.go\|protoc-gen-go-grpc\|grpc_testing_not_regenerate'
 
 # - Do not call grpclog directly. Use grpclog.Component instead.
-git grep --quiet -l -e 'grpclog.I' --or -e 'grpclog.W' --or -e 'grpclog.E' --or -e 'grpclog.F' --or -e 'grpclog.V' -- "*.go" | not grep -v '^grpclog/component.go\|^internal/grpctest/tlogger_test.go'
+git grep -l -e 'grpclog.I' --or -e 'grpclog.W' --or -e 'grpclog.E' --or -e 'grpclog.F' --or -e 'grpclog.V' -- "*.go" | not grep -v '^grpclog/component.go\|^internal/grpctest/tlogger_test.go'
 
 # - Ensure that the deprecated protobuf dependency is not used.
-not git grep --quiet "\"github.com/golang/protobuf/*" -- "*.go" ':(exclude)reflection/test/grpc_testing_not_regenerate/*'
+not git grep "\"github.com/golang/protobuf/*" -- "*.go" ':(exclude)reflection/test/grpc_testing_not_regenerate/*'
 
 # - Ensure all usages of grpc_testing package are renamed when importing.
-not git grep --quiet "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" -- "*.go"
+not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" -- "*.go"
 
 # - Ensure all xds proto imports are renamed to *pb or *grpc.
-git grep --quiet '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.pb.go' | not grep -v 'pb "\|grpc "'
+git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.pb.go' | not grep -v 'pb "\|grpc "'
 
 misspell -error .
 
