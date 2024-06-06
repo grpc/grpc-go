@@ -29,6 +29,13 @@ const (
 	testAddress2 = "some_address_2"
 )
 
+// TestDial verifies the behavior of the Dial function in managing gRPC connections
+// and checks the below scenarios:
+//   - First call to Dial with an address creates a new connection and stores it.
+//   - Second call to Dial with the same address returns the existing connection
+//     and expects the returned connection matching with ƒirst connection.
+//   - Third call to Dial with a different address creates a separate new connection
+//     and expects a different connection from connnection1 and connection2.
 func TestDial(t *testing.T) {
 	temp := hsDialer
 	hsDialer = func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
