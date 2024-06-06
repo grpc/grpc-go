@@ -75,6 +75,27 @@ func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clus
 	})
 }
 
+// setupDNS unregisters the DNS resolver and registers a manual resolver for the
+// same scheme. This allows the test to mock the DNS resolution by supplying the
+// addresses of the test backends.
+//
+// Returns the following:
+//   - a channel onto which the DNS target being resolved is written to by the
+//     mock DNS resolver
+//   - a manual resolver which is used to mock the actual DNS resolution
+func setupDNS(t *testing.T) (chan resolver.Target, *manual.Resolver) {
+	targetCh := make(chan resolver.Target, 1)
+
+	mr := manual.NewBuilderWithScheme("dns")
+	mr.BuildCallback = func(target resolver.Target, _ resolver.ClientConn, _ resolver.BuildOptions) { targetCh <- target }
+
+	dnsResolverBuilder := resolver.Get("dns")
+	resolver.Register(mr)
+
+	t.Cleanup(func() { resolver.Register(dnsResolverBuilder) })
+	return targetCh, mr
+}
+
 // TestAggregateCluster_WithTwoEDSClusters tests the case where the top-level
 // cluster resource is an aggregate cluster. It verifies that RPCs fail when the
 // management server has not responded to all requested EDS resources, and also
@@ -1121,25 +1142,4 @@ func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 	if peer.Addr.String() != server.Address {
 		t.Fatalf("EmptyCall() routed to backend %q, want %q", peer.Addr, server.Address)
 	}
-}
-
-// SetupDNS unregisters the DNS resolver and registers a manual resolver for the
-// same scheme. This allows the test to mock the DNS resolution by supplying the
-// addresses of the test backends.
-//
-// Returns the following:
-//   - a channel onto which the DNS target being resolved is written to by the
-//     mock DNS resolver
-//   - a manual resolver which is used to mock the actual DNS resolution
-func setupDNS(t *testing.T) (chan resolver.Target, *manual.Resolver) {
-	targetCh := make(chan resolver.Target, 1)
-
-	mr := manual.NewBuilderWithScheme("dns")
-	mr.BuildCallback = func(target resolver.Target, _ resolver.ClientConn, _ resolver.BuildOptions) { targetCh <- target }
-
-	dnsResolverBuilder := resolver.Get("dns")
-	resolver.Register(mr)
-
-	t.Cleanup(func() { resolver.Register(dnsResolverBuilder) })
-	return targetCh, mr
 }

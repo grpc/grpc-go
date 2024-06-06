@@ -20,9 +20,9 @@ package ringhash_test
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"net"
-	"sync"
 	"testing"
 	"time"
 
@@ -336,23 +336,16 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 	backends, stop := startTestServiceBackends(t, 1)
 	defer stop()
 
-	nonExistingBackend1, stop1 := startTestServiceBackends(t, 2)
-	nonExistingBackend2, stop2 := startTestServiceBackends(t, 2)
+	nonExistingBackend, stop1 := startTestServiceBackends(t, 2)
 	stop1()
-	stop2()
 
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 		ClusterName: edsClusterName,
 		Localities: []e2e.LocalityOptions{{
 			Name:     "locality0",
 			Weight:   1,
-			Backends: backendOptions(t, nonExistingBackend1),
+			Backends: backendOptions(t, nonExistingBackend),
 			Priority: 0,
-		}, {
-			Name:     "locality1",
-			Weight:   1,
-			Backends: backendOptions(t, nonExistingBackend2),
-			Priority: 1,
 		}},
 	})
 	edsCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
@@ -402,9 +395,6 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
-
-	// TODO: c-core injects a 500ms RPC delay here: https://github.com/grpc/grpc/blob/master/test/cpp/end2end/xds/xds_ring_hash_end2end_test.cc#L220
-	// Should we try to do the same? do we have a way to do that in Go? Perhaps using something like https://github.com/grpc/grpc-go/blob/04ea82009cdb9ecdefc6289f4c93ec919a10b3b6/benchmark/latency/latency.go#L76-L75?
 
 	gotPerBackend := checkRPCSendOK(t, ctx, client, 1)
 	var got string
@@ -489,33 +479,37 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0].Address}}})
 
 	dialer := testutils.NewBlockingDialer()
-	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(dialer.DialContext), grpc.WithConnectParams(
-		grpc.ConnectParams{
-			// Increase backoff time, so that subconns stay in TRANSIENT_FAILURE
-			// for long enough to trigger potential problems.
-			Backoff: backoff.Config{
-				BaseDelay: defaultTestTimeout,
-			},
-			MinConnectTimeout: 0,
-		}))
+	cp := grpc.ConnectParams{
+		// Increase backoff time, so that subconns stay in TRANSIENT_FAILURE
+		// for long enough to trigger potential problems.
+		Backoff: backoff.Config{
+			BaseDelay: defaultTestTimeout,
+		},
+		MinConnectTimeout: 0,
+	}
+	opts := []grpc.DialOption{
+		grpc.WithResolvers(xdsResolver),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(dialer.DialContext),
+		grpc.WithConnectParams(cp)}
+	conn, err := grpc.NewClient("xds:///test.server", opts...)
 	if err != nil {
 		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
+	errCh := make(chan error, 2)
 	go func() {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-			t.Errorf("First rpc UnaryCall() failed: %v", err)
+			errCh <- fmt.Errorf("first rpc UnaryCall() failed: %v", err)
+			return
 		}
-		wg.Done()
+		errCh <- nil
 	}()
 
 	testutils.AwaitState(ctx, t, conn, connectivity.Connecting)
 
-	wg.Add(1)
 	go func() {
 		// Start a second RPC at this point, which should be queued as well.
 		// This will fail if the priority policy fails to update the picker to
@@ -527,16 +521,26 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 		// because if the priority policy fails to update the picker, then the
 		// pick for the first RPC will not be retried.
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-			t.Errorf("Second UnaryCall() failed: %v", err)
+			errCh <- fmt.Errorf("second UnaryCall() failed: %v", err)
+			return
 		}
-		wg.Done()
+		errCh <- nil
 	}()
 
 	// Allow the connection attempts to complete.
 	dialer.Resume()
 
 	// RPCs should complete successfully.
-	wg.Wait()
+	for range []int{0, 1} {
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Errorf("Expected 2 rpc to succeed, but failed: %v", err)
+			}
+		case <-ctx.Done():
+			t.Fatalf("Timed out waiting for RPCs to complete")
+		}
+	}
 }
 
 // Tests that ring hash policy that hashes using channel id ensures all RPCs to
