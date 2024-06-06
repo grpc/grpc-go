@@ -77,17 +77,17 @@ func checkDataPointWithinFiveSeconds(metric metricdata.Metrics) error {
 	}
 	for _, dataPoint := range histo.DataPoints {
 		var boundWithFive int
-		for i, bucket := range dataPoint.Bounds {
-			if bucket >= 5 {
+		for i, bound := range dataPoint.Bounds {
+			if bound >= 5 {
 				boundWithFive = i
 			}
 		}
 		foundPoint := false
-		for i, bucket := range dataPoint.BucketCounts {
+		for i, count := range dataPoint.BucketCounts {
 			if i >= boundWithFive {
 				return fmt.Errorf("data point not found in bucket <=5 seconds")
 			}
-			if bucket == 1 {
+			if count == 1 {
 				foundPoint = true
 				break
 			}
@@ -108,19 +108,395 @@ type MetricDataOptions struct {
 	CSMLabels []attribute.KeyValue
 	// Target is the target of the client and server.
 	Target string
-	// UnaryMessageSent is whether a message was sent for the unary RPC or not.
-	// This unary message is assumed to be 10000 bytes and the RPC is assumed to
-	// have a gzip compressor call option set. This assumes both client and peer
-	// sent a message.
-	UnaryMessageSent bool
-	// StreamingMessageSent is whether a message was sent for the streaming RPC
-	// or not. This unary message is assumed to be 10000 bytes and the RPC is
-	// assumed to have a gzip compressor call option set. This assumes both
-	// client and peer sent a message.
-	StreamingMessageSent bool
 	// UnaryCallFailed is whether the Unary Call failed, which would trigger
 	// trailers only.
 	UnaryCallFailed bool
+	// UnaryCompressedMessageSize is the compressed message size of the Unary
+	// RPC. This assumes both client and server sent the same message size.
+	UnaryCompressedMessageSize float64
+	// StreamingCompressedMessageSize is the compressed message size of the
+	// Streaming RPC. This assumes both client and server sent the same message
+	// size.
+	StreamingCompressedMessageSize float64
+}
+
+// createBucketCounts creates a list of bucket counts based off the
+// recordingPoints and bounds. Both recordingPoints and bounds are assumed to be
+// in order.
+func createBucketCounts(recordingPoints []float64, bounds []float64) []uint64 {
+	var bucketCounts []uint64
+	var recordingPointIndex int
+	for _, bound := range bounds {
+		var bucketCount uint64
+		if recordingPointIndex >= len(recordingPoints) {
+			bucketCounts = append(bucketCounts, bucketCount)
+			continue
+		}
+		for recordingPoints[recordingPointIndex] <= bound {
+			bucketCount += 1
+			recordingPointIndex += 1
+			if recordingPointIndex >= len(recordingPoints) {
+				break
+			}
+		}
+		bucketCounts = append(bucketCounts, bucketCount)
+	}
+	// The rest of the recording points are last bound -> infinity.
+	bucketCounts = append(bucketCounts, uint64(len(recordingPoints)-recordingPointIndex))
+	return bucketCounts
+}
+
+// MetricDataUnary returns a list of expected metrics defined in A66 for a
+// client and server for one unary RPC.
+func MetricDataUnary(options MetricDataOptions) []metricdata.Metrics {
+	methodAttr := attribute.String("grpc.method", "grpc.testing.TestService/UnaryCall")
+	targetAttr := attribute.String("grpc.target", options.Target)
+	statusAttr := attribute.String("grpc.status", "OK")
+	if options.UnaryCallFailed {
+		statusAttr = attribute.String("grpc.status", "UNKNOWN")
+	}
+	clientSideEnd := []attribute.KeyValue{
+		methodAttr,
+		targetAttr,
+		statusAttr,
+	}
+	serverSideEnd := []attribute.KeyValue{
+		methodAttr,
+		statusAttr,
+	}
+	clientSideEnd = append(clientSideEnd, options.CSMLabels...)
+	serverSideEnd = append(serverSideEnd, options.CSMLabels...)
+	compressedBytesSentRecv := int64(options.UnaryCompressedMessageSize)
+	bucketCounts := createBucketCounts([]float64{options.UnaryCompressedMessageSize}, DefaultSizeBounds)
+	extrema := metricdata.NewExtrema(int64(options.UnaryCompressedMessageSize))
+	return []metricdata.Metrics{
+		{
+			Name:        "grpc.client.attempt.started",
+			Description: "Number of client call attempts started.",
+			Unit:        "attempt",
+			Data: metricdata.Sum[int64]{
+				DataPoints: []metricdata.DataPoint[int64]{
+					{
+						Attributes: attribute.NewSet(methodAttr, targetAttr),
+						Value:      1,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+				IsMonotonic: true,
+			},
+		},
+		{
+			Name:        "grpc.client.attempt.duration",
+			Description: "End-to-end time taken to complete a client call attempt.",
+			Unit:        "s",
+			Data: metricdata.Histogram[float64]{
+				DataPoints: []metricdata.HistogramDataPoint[float64]{
+					{
+						Attributes: attribute.NewSet(clientSideEnd...),
+						Count:      1,
+						Bounds:     DefaultLatencyBounds,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+			},
+		},
+		{
+			Name:        "grpc.client.attempt.sent_total_compressed_message_size",
+			Description: "Compressed message bytes sent per client call attempt.",
+			Unit:        "By",
+			Data: metricdata.Histogram[int64]{
+				DataPoints: []metricdata.HistogramDataPoint[int64]{
+					{
+						Attributes:   attribute.NewSet(clientSideEnd...),
+						Count:        1,
+						Bounds:       DefaultSizeBounds,
+						BucketCounts: bucketCounts,
+						Min:          extrema,
+						Max:          extrema,
+						Sum:          compressedBytesSentRecv,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+			},
+		},
+		{
+			Name:        "grpc.client.attempt.rcvd_total_compressed_message_size",
+			Description: "Compressed message bytes received per call attempt.",
+			Unit:        "By",
+			Data: metricdata.Histogram[int64]{
+				DataPoints: []metricdata.HistogramDataPoint[int64]{
+					{
+						Attributes:   attribute.NewSet(clientSideEnd...),
+						Count:        1,
+						Bounds:       DefaultSizeBounds,
+						BucketCounts: bucketCounts,
+						Min:          extrema,
+						Max:          extrema,
+						Sum:          compressedBytesSentRecv,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+			},
+		},
+		{
+			Name:        "grpc.client.call.duration",
+			Description: "Time taken by gRPC to complete an RPC from application's perspective.",
+			Unit:        "s",
+			Data: metricdata.Histogram[float64]{
+				DataPoints: []metricdata.HistogramDataPoint[float64]{
+					{
+						Attributes: attribute.NewSet(methodAttr, targetAttr, statusAttr),
+						Count:      1,
+						Bounds:     DefaultLatencyBounds,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+			},
+		},
+		{
+			Name:        "grpc.server.call.started",
+			Description: "Number of server calls started.",
+			Unit:        "call",
+			Data: metricdata.Sum[int64]{
+				DataPoints: []metricdata.DataPoint[int64]{
+					{
+						Attributes: attribute.NewSet(methodAttr),
+						Value:      1,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+				IsMonotonic: true,
+			},
+		},
+		{
+			Name:        "grpc.server.call.sent_total_compressed_message_size",
+			Unit:        "By",
+			Description: "Compressed message bytes sent per server call.",
+			Data: metricdata.Histogram[int64]{
+				DataPoints: []metricdata.HistogramDataPoint[int64]{
+					{
+						Attributes:   attribute.NewSet(serverSideEnd...),
+						Count:        1,
+						Bounds:       DefaultSizeBounds,
+						BucketCounts: bucketCounts,
+						Min:          extrema,
+						Max:          extrema,
+						Sum:          compressedBytesSentRecv,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+			},
+		},
+		{
+			Name:        "grpc.server.call.rcvd_total_compressed_message_size",
+			Unit:        "By",
+			Description: "Compressed message bytes received per server call.",
+			Data: metricdata.Histogram[int64]{
+				DataPoints: []metricdata.HistogramDataPoint[int64]{
+					{
+						Attributes:   attribute.NewSet(serverSideEnd...),
+						Count:        1,
+						Bounds:       DefaultSizeBounds,
+						BucketCounts: bucketCounts,
+						Min:          extrema,
+						Max:          extrema,
+						Sum:          compressedBytesSentRecv,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+			},
+		},
+		{
+			Name:        "grpc.server.call.duration",
+			Description: "End-to-end time taken to complete a call from server transport's perspective.",
+			Unit:        "s",
+			Data: metricdata.Histogram[float64]{
+				DataPoints: []metricdata.HistogramDataPoint[float64]{
+					{
+						Attributes: attribute.NewSet(serverSideEnd...),
+						Count:      1,
+						Bounds:     DefaultLatencyBounds,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+			},
+		},
+	}
+}
+
+// MetricDataStreaming returns a list of expected metrics defined in A66 for a
+// client and server for one streaming RPC.
+func MetricDataStreaming(options MetricDataOptions) []metricdata.Metrics {
+	methodAttr := attribute.String("grpc.method", "grpc.testing.TestService/FullDuplexCall")
+	targetAttr := attribute.String("grpc.target", options.Target)
+	statusAttr := attribute.String("grpc.status", "OK")
+	clientSideEnd := []attribute.KeyValue{
+		methodAttr,
+		targetAttr,
+		statusAttr,
+	}
+	serverSideEnd := []attribute.KeyValue{
+		methodAttr,
+		statusAttr,
+	}
+	clientSideEnd = append(clientSideEnd, options.CSMLabels...)
+	serverSideEnd = append(serverSideEnd, options.CSMLabels...)
+	compressedBytesSentRecv := int64(options.StreamingCompressedMessageSize)
+	bucketCounts := createBucketCounts([]float64{options.StreamingCompressedMessageSize}, DefaultSizeBounds)
+	extrema := metricdata.NewExtrema(int64(options.StreamingCompressedMessageSize))
+	return []metricdata.Metrics{
+		{
+			Name:        "grpc.client.attempt.started",
+			Description: "Number of client call attempts started.",
+			Unit:        "attempt",
+			Data: metricdata.Sum[int64]{
+				DataPoints: []metricdata.DataPoint[int64]{
+					{
+						Attributes: attribute.NewSet(methodAttr, targetAttr),
+						Value:      1,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+				IsMonotonic: true,
+			},
+		},
+		{
+			Name:        "grpc.client.attempt.duration",
+			Description: "End-to-end time taken to complete a client call attempt.",
+			Unit:        "s",
+			Data: metricdata.Histogram[float64]{
+				DataPoints: []metricdata.HistogramDataPoint[float64]{
+					{
+						Attributes: attribute.NewSet(clientSideEnd...),
+						Count:      1,
+						Bounds:     DefaultLatencyBounds,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+			},
+		},
+		{
+			Name:        "grpc.client.attempt.sent_total_compressed_message_size",
+			Description: "Compressed message bytes sent per client call attempt.",
+			Unit:        "By",
+			Data: metricdata.Histogram[int64]{
+				DataPoints: []metricdata.HistogramDataPoint[int64]{
+					{
+						Attributes:   attribute.NewSet(clientSideEnd...),
+						Count:        1,
+						Bounds:       DefaultSizeBounds,
+						BucketCounts: bucketCounts,
+						Min:          extrema,
+						Max:          extrema,
+						Sum:          compressedBytesSentRecv,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+			},
+		},
+		{
+			Name:        "grpc.client.attempt.rcvd_total_compressed_message_size",
+			Description: "Compressed message bytes received per call attempt.",
+			Unit:        "By",
+			Data: metricdata.Histogram[int64]{
+				DataPoints: []metricdata.HistogramDataPoint[int64]{
+					{
+						Attributes:   attribute.NewSet(clientSideEnd...),
+						Count:        1,
+						Bounds:       DefaultSizeBounds,
+						BucketCounts: bucketCounts,
+						Min:          extrema,
+						Max:          extrema,
+						Sum:          compressedBytesSentRecv,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+			},
+		},
+		{
+			Name:        "grpc.client.call.duration",
+			Description: "Time taken by gRPC to complete an RPC from application's perspective.",
+			Unit:        "s",
+			Data: metricdata.Histogram[float64]{
+				DataPoints: []metricdata.HistogramDataPoint[float64]{
+					{
+						Attributes: attribute.NewSet(methodAttr, targetAttr, statusAttr),
+						Count:      1,
+						Bounds:     DefaultLatencyBounds,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+			},
+		},
+		{
+			Name:        "grpc.server.call.started",
+			Description: "Number of server calls started.",
+			Unit:        "call",
+			Data: metricdata.Sum[int64]{
+				DataPoints: []metricdata.DataPoint[int64]{
+					{
+						Attributes: attribute.NewSet(methodAttr),
+						Value:      1,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+				IsMonotonic: true,
+			},
+		},
+		{
+			Name:        "grpc.server.call.sent_total_compressed_message_size",
+			Unit:        "By",
+			Description: "Compressed message bytes sent per server call.",
+			Data: metricdata.Histogram[int64]{
+				DataPoints: []metricdata.HistogramDataPoint[int64]{
+					{
+						Attributes:   attribute.NewSet(serverSideEnd...),
+						Count:        1,
+						Bounds:       DefaultSizeBounds,
+						BucketCounts: bucketCounts,
+						Min:          extrema,
+						Max:          extrema,
+						Sum:          compressedBytesSentRecv,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+			},
+		},
+		{
+			Name:        "grpc.server.call.rcvd_total_compressed_message_size",
+			Unit:        "By",
+			Description: "Compressed message bytes received per server call.",
+			Data: metricdata.Histogram[int64]{
+				DataPoints: []metricdata.HistogramDataPoint[int64]{
+					{
+						Attributes:   attribute.NewSet(serverSideEnd...),
+						Count:        1,
+						Bounds:       DefaultSizeBounds,
+						BucketCounts: bucketCounts,
+						Min:          extrema,
+						Max:          extrema,
+						Sum:          compressedBytesSentRecv,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+			},
+		},
+		{
+			Name:        "grpc.server.call.duration",
+			Description: "End-to-end time taken to complete a call from server transport's perspective.",
+			Unit:        "s",
+			Data: metricdata.Histogram[float64]{
+				DataPoints: []metricdata.HistogramDataPoint[float64]{
+					{
+						Attributes: attribute.NewSet(serverSideEnd...),
+						Count:      1,
+						Bounds:     DefaultLatencyBounds,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+			},
+		},
+	}
 }
 
 // MetricData returns a metricsDataSlice for A66 metrics for client and server
@@ -130,15 +506,12 @@ type MetricDataOptions struct {
 func MetricData(options MetricDataOptions) []metricdata.Metrics {
 	unaryMethodAttr := attribute.String("grpc.method", "grpc.testing.TestService/UnaryCall")
 	duplexMethodAttr := attribute.String("grpc.method", "grpc.testing.TestService/FullDuplexCall")
-
 	targetAttr := attribute.String("grpc.target", options.Target)
-
 	unaryStatusAttr := attribute.String("grpc.status", "OK")
 	streamingStatusAttr := attribute.String("grpc.status", "OK")
 	if options.UnaryCallFailed {
 		unaryStatusAttr = attribute.String("grpc.status", "UNKNOWN")
 	}
-
 	unaryMethodClientSideEnd := []attribute.KeyValue{
 		unaryMethodAttr,
 		targetAttr,
@@ -153,7 +526,6 @@ func MetricData(options MetricDataOptions) []metricdata.Metrics {
 		unaryMethodAttr,
 		unaryStatusAttr,
 	}
-
 	streamingMethodServerSideEnd := []attribute.KeyValue{
 		duplexMethodAttr,
 		streamingStatusAttr,
@@ -163,23 +535,13 @@ func MetricData(options MetricDataOptions) []metricdata.Metrics {
 	streamingMethodClientSideEnd = append(streamingMethodClientSideEnd, options.CSMLabels...)
 	unaryMethodServerSideEnd = append(unaryMethodServerSideEnd, options.CSMLabels...)
 	streamingMethodServerSideEnd = append(streamingMethodServerSideEnd, options.CSMLabels...)
-	unaryCompressedBytesSentRecv := int64(0)
-	unaryBucketCounts := []uint64{0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
-	unaryExtrema := metricdata.NewExtrema(int64(0))
-	if options.UnaryMessageSent {
-		unaryCompressedBytesSentRecv = 57 // Fixed 10000 bytes with gzip assumption.
-		unaryBucketCounts = []uint64{0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
-		unaryExtrema = metricdata.NewExtrema(int64(57))
-	}
+	unaryCompressedBytesSentRecv := int64(options.UnaryCompressedMessageSize)
+	unaryBucketCounts := createBucketCounts([]float64{options.UnaryCompressedMessageSize}, DefaultSizeBounds)
+	unaryExtrema := metricdata.NewExtrema(int64(options.UnaryCompressedMessageSize))
 
-	var streamingCompressedBytesSentRecv int64
-	streamingBucketCounts := []uint64{0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
-	streamingExtrema := metricdata.NewExtrema(int64(0))
-	if options.StreamingMessageSent {
-		streamingCompressedBytesSentRecv = 57 // Fixed 10000 bytes with gzip assumption.
-		streamingBucketCounts = []uint64{0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
-		streamingExtrema = metricdata.NewExtrema(int64(57))
-	}
+	streamingCompressedBytesSentRecv := int64(options.StreamingCompressedMessageSize)
+	streamingBucketCounts := createBucketCounts([]float64{options.StreamingCompressedMessageSize}, DefaultSizeBounds)
+	streamingExtrema := metricdata.NewExtrema(int64(options.StreamingCompressedMessageSize))
 
 	return []metricdata.Metrics{
 		{

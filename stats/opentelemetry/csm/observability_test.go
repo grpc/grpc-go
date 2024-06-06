@@ -40,9 +40,12 @@ import (
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 )
 
-// setupEnv configures the environment for CSM Observability Testing. It returns
-// a cleanup function to be invoked to clear the environment.
-func setupEnv(t *testing.T, resourceDetectorEmissions map[string]string, nodeID string, csmCanonicalServiceName string, csmWorkloadName string) func() {
+// setupEnv configures the environment for CSM Observability Testing. It sets
+// the bootstrap env var to a bootstrap file with a nodeID provided. It sets CSM
+// Env Vars as well, and mocks the resource detector's returned attribute set to
+// simulate the environment. It registers a cleanup function on the provided t
+// to restore the environment to it's original state.
+func setupEnv(t *testing.T, resourceDetectorEmissions map[string]string, nodeID string, csmCanonicalServiceName string, csmWorkloadName string) {
 	clearEnv()
 
 	cleanup, err := bootstrap.CreateFile(bootstrap.Options{
@@ -50,8 +53,10 @@ func setupEnv(t *testing.T, resourceDetectorEmissions map[string]string, nodeID 
 		ServerURI: "xds_server_uri",
 	})
 	if err != nil {
-		t.Fatalf("failed to create bootstrap: %v", err)
+		t.Fatalf("Failed to create bootstrap: %v", err)
 	}
+	oldCSMCanonicalServiceName, csmCanonicalServiceNamePresent := os.LookupEnv("CSM_CANONICAL_SERVICE_NAME")
+	oldCSMWorkloadName, csmWorkloadNamePresent := os.LookupEnv("CSM_WORKLOAD_NAME")
 	os.Setenv("CSM_CANONICAL_SERVICE_NAME", csmCanonicalServiceName)
 	os.Setenv("CSM_WORKLOAD_NAME", csmWorkloadName)
 
@@ -66,26 +71,33 @@ func setupEnv(t *testing.T, resourceDetectorEmissions map[string]string, nodeID 
 	getAttrSetFromResourceDetector = func(context.Context) *attribute.Set {
 		return &attrSet
 	}
-
-	return func() {
+	t.Cleanup(func() {
 		cleanup()
-		os.Unsetenv("CSM_CANONICAL_SERVICE_NAME")
-		os.Unsetenv("CSM_WORKLOAD_NAME")
+		if csmCanonicalServiceNamePresent {
+			os.Setenv("CSM_CANONICAL_SERVICE_NAME", oldCSMCanonicalServiceName)
+		} else {
+			os.Unsetenv("CSM_CANONICAL_SERVICE_NAME")
+		}
+		if csmWorkloadNamePresent {
+			os.Setenv("CSM_WORKLOAD_NAME", oldCSMWorkloadName)
+		} else {
+			os.Unsetenv("CSM_WORKLOAD_NAME")
+		}
+
 		getAttrSetFromResourceDetector = origGetAttrSet
-	}
+	})
 }
 
-// TestCSMPluginOption tests the CSM Plugin Option and labels. It configures the
-// environment for the CSM Plugin Option to read from. It then configures a
-// system with a gRPC Client and gRPC server with the OpenTelemetry Dial and
-// Server Option configured with a CSM Plugin Option with certain unary and
-// streaming handlers set to induce different ways of setting metadata exchange
-// labels, and makes a Unary RPC and a Streaming RPC. These two RPCs should
-// cause certain recording for each registered metric observed through a Manual
-// Metrics Reader on the provided OpenTelemetry SDK's Meter Provider. The CSM
-// Labels emitted from the plugin option should be attached to the relevant
-// metrics.
-func (s) TestCSMPluginOption(t *testing.T) {
+// TestCSMPluginOptionUnary tests the CSM Plugin Option and labels. It
+// configures the environment for the CSM Plugin Option to read from. It then
+// configures a system with a gRPC Client and gRPC server with the OpenTelemetry
+// Dial and Server Option configured with a CSM Plugin Option with a certain
+// unary handler set to induce different ways of setting metadata exchange
+// labels, and makes a Unary RPC. This RPC should cause certain recording for
+// each registered metric observed through a Manual Metrics Reader on the
+// provided OpenTelemetry SDK's Meter Provider. The CSM Labels emitted from the
+// plugin option should be attached to the relevant metrics.
+func (s) TestCSMPluginOptionUnary(t *testing.T) {
 	resourceDetectorEmissions := map[string]string{
 		"cloud.platform":     "gcp_kubernetes_engine",
 		"cloud.region":       "cloud_region_val", // availability_zone isn't present, so this should become location
@@ -96,8 +108,7 @@ func (s) TestCSMPluginOption(t *testing.T) {
 	nodeID := "projects/12345/networks/mesh:mesh_id/nodes/aaaa-aaaa-aaaa-aaaa"
 	csmCanonicalServiceName := "csm_canonical_service_name"
 	csmWorkloadName := "csm_workload_name"
-	cleanup := setupEnv(t, resourceDetectorEmissions, nodeID, csmCanonicalServiceName, csmWorkloadName)
-	defer cleanup()
+	setupEnv(t, resourceDetectorEmissions, nodeID, csmCanonicalServiceName, csmWorkloadName)
 
 	attributesWant := map[string]string{
 		"csm.workload_canonical_service": csmCanonicalServiceName, // from env
@@ -122,14 +133,11 @@ func (s) TestCSMPluginOption(t *testing.T) {
 	defer cancel()
 	tests := []struct {
 		name string
-		// To test the different operations for Unary and Streaming RPC's from
-		// the interceptor level that can plumb metadata exchange header in.
-		unaryCallFunc     func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
-		streamingCallFunc func(stream testgrpc.TestService_FullDuplexCallServer) error
-		opts              testutils.MetricDataOptions
+		// To test the different operations for Unary RPC's from the interceptor
+		// level that can plumb metadata exchange header in.
+		unaryCallFunc func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
+		opts          testutils.MetricDataOptions
 	}{
-		// Different permutations of operations that should all trigger csm md
-		// exchange labels to be written on the wire.
 		{
 			name: "normal-flow",
 			unaryCallFunc: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -137,25 +145,168 @@ func (s) TestCSMPluginOption(t *testing.T) {
 					Body: make([]byte, 10000),
 				}}, nil
 			},
-			streamingCallFunc: func(stream testgrpc.TestService_FullDuplexCallServer) error { // this is trailers only - no messages or headers sent
-				for {
-					_, err := stream.Recv()
-					if err == io.EOF {
-						return nil
-					}
-				}
-			},
 			opts: testutils.MetricDataOptions{
-				CSMLabels:            csmLabels,
-				UnaryMessageSent:     true,
-				StreamingMessageSent: false,
+				CSMLabels:                  csmLabels,
+				UnaryCompressedMessageSize: float64(57),
 			},
 		},
 		{
-			name: "trailers-only-unary-streaming",
+			name: "trailers-only",
 			unaryCallFunc: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return nil, errors.New("some error") // return an error and no message - this triggers trailers only - no messages or headers sent
 			},
+			opts: testutils.MetricDataOptions{
+				CSMLabels:       csmLabels,
+				UnaryCallFailed: true,
+			},
+		},
+		{
+			name: "set-header",
+			unaryCallFunc: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				grpc.SetHeader(ctx, metadata.New(map[string]string{"some-metadata": "some-metadata-val"}))
+
+				return &testpb.SimpleResponse{Payload: &testpb.Payload{
+					Body: make([]byte, 10000),
+				}}, nil
+			},
+			opts: testutils.MetricDataOptions{
+				CSMLabels:                  csmLabels,
+				UnaryCompressedMessageSize: float64(57),
+			},
+		},
+		{
+			name: "send-header",
+			unaryCallFunc: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				grpc.SendHeader(ctx, metadata.New(map[string]string{"some-metadata": "some-metadata-val"}))
+
+				return &testpb.SimpleResponse{Payload: &testpb.Payload{
+					Body: make([]byte, 10000),
+				}}, nil
+			},
+			opts: testutils.MetricDataOptions{
+				CSMLabels:                  csmLabels,
+				UnaryCompressedMessageSize: float64(57),
+			},
+		},
+		{
+			name: "send-msg",
+			unaryCallFunc: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				return &testpb.SimpleResponse{Payload: &testpb.Payload{
+					Body: make([]byte, 10000),
+				}}, nil
+			},
+			opts: testutils.MetricDataOptions{
+				CSMLabels:                  csmLabels,
+				UnaryCompressedMessageSize: float64(57),
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			reader := metric.NewManualReader()
+			provider := metric.NewMeterProvider(metric.WithReader(reader))
+			ss := &stubserver.StubServer{UnaryCallF: test.unaryCallFunc}
+			po := newPluginOption(ctx)
+			sopts := []grpc.ServerOption{
+				serverOptionWithCSMPluginOption(opentelemetry.Options{
+					MetricsOptions: opentelemetry.MetricsOptions{
+						MeterProvider: provider,
+						Metrics:       opentelemetry.DefaultMetrics,
+					}}, po),
+			}
+			dopts := []grpc.DialOption{dialOptionWithCSMPluginOption(opentelemetry.Options{
+				MetricsOptions: opentelemetry.MetricsOptions{
+					MeterProvider:  provider,
+					Metrics:        opentelemetry.DefaultMetrics,
+					OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name"}, // should be a no-op unless receive labels through optional labels mechanism
+				},
+			}, po)}
+			if err := ss.Start(sopts, dopts...); err != nil {
+				t.Fatalf("Error starting endpoint server: %v", err)
+			}
+			defer ss.Stop()
+
+			var request *testpb.SimpleRequest
+			if test.opts.UnaryCompressedMessageSize != 0 {
+				request = &testpb.SimpleRequest{Payload: &testpb.Payload{
+					Body: make([]byte, 10000),
+				}}
+			}
+			// Make two RPC's, a unary RPC and a streaming RPC. These should cause
+			// certain metrics to be emitted, which should be able to be observed
+			// through the Metric Reader.
+			ss.Client.UnaryCall(ctx, request, grpc.UseCompressor(gzip.Name))
+			rm := &metricdata.ResourceMetrics{}
+			reader.Collect(ctx, rm)
+
+			gotMetrics := map[string]metricdata.Metrics{}
+			for _, sm := range rm.ScopeMetrics {
+				for _, m := range sm.Metrics {
+					gotMetrics[m.Name] = m
+				}
+			}
+
+			opts := test.opts
+			opts.Target = ss.Target
+			wantMetrics := testutils.MetricDataUnary(opts)
+			testutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+		})
+	}
+}
+
+// TestCSMPluginOptionStreaming tests the CSM Plugin Option and labels. It
+// configures the environment for the CSM Plugin Option to read from. It then
+// configures a system with a gRPC Client and gRPC server with the OpenTelemetry
+// Dial and Server Option configured with a CSM Plugin Option with a certain
+// streaming handler set to induce different ways of setting metadata exchange
+// labels, and makes a Streaming RPC. This RPC should cause certain recording
+// for each registered metric observed through a Manual Metrics Reader on the
+// provided OpenTelemetry SDK's Meter Provider. The CSM Labels emitted from the
+// plugin option should be attached to the relevant metrics.
+func (s) TestCSMPluginOptionStreaming(t *testing.T) {
+	resourceDetectorEmissions := map[string]string{
+		"cloud.platform":     "gcp_kubernetes_engine",
+		"cloud.region":       "cloud_region_val", // availability_zone isn't present, so this should become location
+		"cloud.account.id":   "cloud_account_id_val",
+		"k8s.namespace.name": "k8s_namespace_name_val",
+		"k8s.cluster.name":   "k8s_cluster_name_val",
+	}
+	nodeID := "projects/12345/networks/mesh:mesh_id/nodes/aaaa-aaaa-aaaa-aaaa"
+	csmCanonicalServiceName := "csm_canonical_service_name"
+	csmWorkloadName := "csm_workload_name"
+	setupEnv(t, resourceDetectorEmissions, nodeID, csmCanonicalServiceName, csmWorkloadName)
+
+	attributesWant := map[string]string{
+		"csm.workload_canonical_service": csmCanonicalServiceName, // from env
+		"csm.mesh_id":                    "mesh_id",               // from bootstrap env var
+
+		// No xDS Labels - this happens in a test below.
+
+		"csm.remote_workload_type":              "gcp_kubernetes_engine",
+		"csm.remote_workload_canonical_service": csmCanonicalServiceName,
+		"csm.remote_workload_project_id":        "cloud_account_id_val",
+		"csm.remote_workload_cluster_name":      "k8s_cluster_name_val",
+		"csm.remote_workload_namespace_name":    "k8s_namespace_name_val",
+		"csm.remote_workload_location":          "cloud_region_val",
+		"csm.remote_workload_name":              csmWorkloadName,
+	}
+
+	var csmLabels []attribute.KeyValue
+	for k, v := range attributesWant {
+		csmLabels = append(csmLabels, attribute.String(k, v))
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	tests := []struct {
+		name string
+		// To test the different operations for Streaming RPC's from the
+		// interceptor level that can plumb metadata exchange header in.
+		streamingCallFunc func(stream testgrpc.TestService_FullDuplexCallServer) error
+		opts              testutils.MetricDataOptions
+	}{
+		{
+			name: "trailers-only",
 			streamingCallFunc: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 				for {
 					_, err := stream.Recv()
@@ -165,21 +316,11 @@ func (s) TestCSMPluginOption(t *testing.T) {
 				}
 			},
 			opts: testutils.MetricDataOptions{
-				CSMLabels:            csmLabels,
-				UnaryMessageSent:     false,
-				StreamingMessageSent: false,
-				UnaryCallFailed:      true,
+				CSMLabels: csmLabels,
 			},
 		},
 		{
-			name: "set-header-client-server-side",
-			unaryCallFunc: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-				grpc.SetHeader(ctx, metadata.New(map[string]string{"some-metadata": "some-metadata-val"}))
-
-				return &testpb.SimpleResponse{Payload: &testpb.Payload{
-					Body: make([]byte, 10000),
-				}}, nil
-			},
+			name: "set-header",
 			streamingCallFunc: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 				stream.SetHeader(metadata.New(map[string]string{"some-metadata": "some-metadata-val"}))
 				for {
@@ -190,20 +331,11 @@ func (s) TestCSMPluginOption(t *testing.T) {
 				}
 			},
 			opts: testutils.MetricDataOptions{
-				CSMLabels:            csmLabels,
-				UnaryMessageSent:     true,
-				StreamingMessageSent: false,
+				CSMLabels: csmLabels,
 			},
 		},
 		{
-			name: "send-header-client-server-side",
-			unaryCallFunc: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-				grpc.SendHeader(ctx, metadata.New(map[string]string{"some-metadata": "some-metadata-val"}))
-
-				return &testpb.SimpleResponse{Payload: &testpb.Payload{
-					Body: make([]byte, 10000),
-				}}, nil
-			},
+			name: "send-header",
 			streamingCallFunc: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 				stream.SendHeader(metadata.New(map[string]string{"some-metadata": "some-metadata-val"}))
 				for {
@@ -214,18 +346,11 @@ func (s) TestCSMPluginOption(t *testing.T) {
 				}
 			},
 			opts: testutils.MetricDataOptions{
-				CSMLabels:            csmLabels,
-				UnaryMessageSent:     true,
-				StreamingMessageSent: false,
+				CSMLabels: csmLabels,
 			},
 		},
 		{
-			name: "send-msg-client-server-side",
-			unaryCallFunc: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-				return &testpb.SimpleResponse{Payload: &testpb.Payload{
-					Body: make([]byte, 10000),
-				}}, nil
-			},
+			name: "send-msg",
 			streamingCallFunc: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 				stream.Send(&testpb.StreamingOutputCallResponse{Payload: &testpb.Payload{
 					Body: make([]byte, 10000),
@@ -238,35 +363,42 @@ func (s) TestCSMPluginOption(t *testing.T) {
 				}
 			},
 			opts: testutils.MetricDataOptions{
-				CSMLabels:            csmLabels,
-				UnaryMessageSent:     true,
-				StreamingMessageSent: true,
+				CSMLabels:                      csmLabels,
+				StreamingCompressedMessageSize: float64(57),
 			},
 		},
 	}
-
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			mr, ss := setup(ctx, t, test.unaryCallFunc, test.streamingCallFunc, true, nil)
+			reader := metric.NewManualReader()
+			provider := metric.NewMeterProvider(metric.WithReader(reader))
+			ss := &stubserver.StubServer{FullDuplexCallF: test.streamingCallFunc}
+			po := newPluginOption(ctx)
+			sopts := []grpc.ServerOption{
+				serverOptionWithCSMPluginOption(opentelemetry.Options{
+					MetricsOptions: opentelemetry.MetricsOptions{
+						MeterProvider: provider,
+						Metrics:       opentelemetry.DefaultMetrics,
+					}}, po),
+			}
+			dopts := []grpc.DialOption{dialOptionWithCSMPluginOption(opentelemetry.Options{
+				MetricsOptions: opentelemetry.MetricsOptions{
+					MeterProvider:  provider,
+					Metrics:        opentelemetry.DefaultMetrics,
+					OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name"}, // should be a no-op unless receive labels through optional labels mechanism
+				},
+			}, po)}
+			if err := ss.Start(sopts, dopts...); err != nil {
+				t.Fatalf("Error starting endpoint server: %v", err)
+			}
 			defer ss.Stop()
 
-			var request *testpb.SimpleRequest
-			if test.opts.UnaryMessageSent {
-				request = &testpb.SimpleRequest{Payload: &testpb.Payload{
-					Body: make([]byte, 10000),
-				}}
-			}
-
-			// Make two RPC's, a unary RPC and a streaming RPC. These should cause
-			// certain metrics to be emitted, which should be able to be observed
-			// through the Metric Reader.
-			ss.Client.UnaryCall(ctx, request, grpc.UseCompressor(gzip.Name))
 			stream, err := ss.Client.FullDuplexCall(ctx, grpc.UseCompressor(gzip.Name))
 			if err != nil {
 				t.Fatalf("ss.Client.FullDuplexCall failed: %f", err)
 			}
 
-			if test.opts.StreamingMessageSent {
+			if test.opts.StreamingCompressedMessageSize != 0 {
 				if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{
 					Body: make([]byte, 10000),
 				}}); err != nil {
@@ -283,7 +415,7 @@ func (s) TestCSMPluginOption(t *testing.T) {
 			}
 
 			rm := &metricdata.ResourceMetrics{}
-			mr.Collect(ctx, rm)
+			reader.Collect(ctx, rm)
 
 			gotMetrics := map[string]metricdata.Metrics{}
 			for _, sm := range rm.ScopeMetrics {
@@ -294,50 +426,10 @@ func (s) TestCSMPluginOption(t *testing.T) {
 
 			opts := test.opts
 			opts.Target = ss.Target
-			wantMetrics := testutils.MetricData(opts)
-			testutils.CompareMetrics(ctx, t, mr, gotMetrics, wantMetrics)
+			wantMetrics := testutils.MetricDataStreaming(opts)
+			testutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 		})
 	}
-}
-
-// setup creates a stub server with the provided unary call and full duplex call
-// handlers, alongside with OpenTelemetry component with a CSM Plugin Option
-// configured on client and server side based off bool. It also takes in a unary
-// interceptor to configure. It returns a reader for metrics emitted from the
-// OpenTelemetry component and the stub server.
-func setup(ctx context.Context, t *testing.T, unaryCallFunc func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error), streamingCallFunc func(stream testgrpc.TestService_FullDuplexCallServer) error, serverOTelConfigured bool, clientUnaryInterceptor grpc.UnaryClientInterceptor) (*metric.ManualReader, *stubserver.StubServer) { // specific for plugin option
-	reader := metric.NewManualReader()
-	provider := metric.NewMeterProvider(
-		metric.WithReader(reader),
-	)
-	ss := &stubserver.StubServer{
-		UnaryCallF:      unaryCallFunc,
-		FullDuplexCallF: streamingCallFunc,
-	}
-
-	po := newPluginOption(ctx)
-	var sopts []grpc.ServerOption
-	if serverOTelConfigured {
-		sopts = append(sopts, serverOptionWithCSMPluginOption(opentelemetry.Options{
-			MetricsOptions: opentelemetry.MetricsOptions{
-				MeterProvider: provider,
-				Metrics:       opentelemetry.DefaultMetrics,
-			}}, po))
-	}
-	dopts := []grpc.DialOption{dialOptionWithCSMPluginOption(opentelemetry.Options{
-		MetricsOptions: opentelemetry.MetricsOptions{
-			MeterProvider:  provider,
-			Metrics:        opentelemetry.DefaultMetrics,
-			OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name"}, // should be a no-op unless receive labels through optional labels mechanism
-		},
-	}, po)}
-	if clientUnaryInterceptor != nil {
-		dopts = append(dopts, grpc.WithUnaryInterceptor(clientUnaryInterceptor))
-	}
-	if err := ss.Start(sopts, dopts...); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
-	}
-	return reader, ss
 }
 
 func unaryInterceptorAttachxDSLabels(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
@@ -364,18 +456,35 @@ func unaryInterceptorAttachxDSLabels(ctx context.Context, method string, req, re
 func (s) TestxDSLabels(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	mr, ss := setup(ctx, t, func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-		return &testpb.SimpleResponse{Payload: &testpb.Payload{
-			Body: make([]byte, 10000),
-		}}, nil
-	}, nil, false, unaryInterceptorAttachxDSLabels)
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(metric.WithReader(reader))
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Payload: &testpb.Payload{
+				Body: make([]byte, 10000),
+			}}, nil
+		},
+	}
+
+	po := newPluginOption(ctx)
+	dopts := []grpc.DialOption{dialOptionWithCSMPluginOption(opentelemetry.Options{
+		MetricsOptions: opentelemetry.MetricsOptions{
+			MeterProvider:  provider,
+			Metrics:        opentelemetry.DefaultMetrics,
+			OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name"}, // should be a no-op unless receive labels through optional labels mechanism
+		},
+	}, po), grpc.WithUnaryInterceptor(unaryInterceptorAttachxDSLabels)}
+	if err := ss.Start(nil, dopts...); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+
 	defer ss.Stop()
 	ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
 		Body: make([]byte, 10000),
 	}}, grpc.UseCompressor(gzip.Name))
 
 	rm := &metricdata.ResourceMetrics{}
-	mr.Collect(ctx, rm)
+	reader.Collect(ctx, rm)
 
 	gotMetrics := map[string]metricdata.Metrics{}
 	for _, sm := range rm.ScopeMetrics {
@@ -496,7 +605,7 @@ func (s) TestxDSLabels(t *testing.T) {
 		},
 	}
 
-	testutils.CompareMetrics(ctx, t, mr, gotMetrics, wantMetrics)
+	testutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 }
 
 // TestObservability tests that Observability global function compiles and runs
@@ -504,5 +613,5 @@ func (s) TestxDSLabels(t *testing.T) {
 // interop tests.
 func (s) TestObservability(t *testing.T) {
 	cleanup := EnableObservability(context.Background(), opentelemetry.Options{})
-	defer cleanup()
+	cleanup()
 }

@@ -87,9 +87,9 @@ func setup(t *testing.T, methodAttributeFilter func(string) bool) (*metric.Manua
 	return reader, ss
 }
 
-// TestMethodAttributeFilter tests the method attribute filter. The method and
-// target filter set should bucket the grpc.method attribute into "other" if the
-// method attribute filter specifies.
+// TestMethodAttributeFilter tests the method attribute filter. The method
+// filter set should bucket the grpc.method attribute into "other" if the method
+// attribute filter specifies.
 func (s) TestMethodAttributeFilter(t *testing.T) {
 	maf := func(str string) bool {
 		// Will allow duplex/any other type of RPC.
@@ -213,9 +213,8 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	}
 
 	wantMetrics := testutils.MetricData(testutils.MetricDataOptions{
-		Target:               ss.Target,
-		UnaryMessageSent:     true,
-		StreamingMessageSent: false,
+		Target:                     ss.Target,
+		UnaryCompressedMessageSize: float64(57),
 	})
 	testutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 
