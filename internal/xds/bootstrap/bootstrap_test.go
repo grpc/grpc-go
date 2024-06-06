@@ -1029,7 +1029,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func newStructProtoFromMap(t *testing.T, input map[string]interface{}) *structpb.Struct {
+func newStructProtoFromMap(t *testing.T, input map[string]any) *structpb.Struct {
 	t.Helper()
 
 	ret, err := structpb.NewStruct(input)
@@ -1069,7 +1069,7 @@ func (s) TestNode_MarshalAndUnmarshal(t *testing.T) {
 					Zone:    "zone",
 					SubZone: "sub_zone",
 				},
-				Metadata: newStructProtoFromMap(t, map[string]interface{}{
+				Metadata: newStructProtoFromMap(t, map[string]any{
 					"k1": "v1",
 					"k2": 101,
 					"k3": 280.0,
@@ -1147,7 +1147,7 @@ func (s) TestNode_ToProto(t *testing.T) {
 					Zone:    "zone",
 					SubZone: "sub_zone",
 				}
-				n.Metadata = newStructProtoFromMap(t, map[string]interface{}{
+				n.Metadata = newStructProtoFromMap(t, map[string]any{
 					"k1": "v1",
 					"k2": 101,
 					"k3": 280.0,
@@ -1162,7 +1162,7 @@ func (s) TestNode_ToProto(t *testing.T) {
 					Zone:    "zone",
 					SubZone: "sub_zone",
 				},
-				Metadata: newStructProtoFromMap(t, map[string]interface{}{
+				Metadata: newStructProtoFromMap(t, map[string]any{
 					"k1": "v1",
 					"k2": 101,
 					"k3": 280.0,
