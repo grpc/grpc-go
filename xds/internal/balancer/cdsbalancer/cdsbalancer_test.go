@@ -456,6 +456,10 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 					EDSServiceName:        serviceName,
 					MaxConcurrentRequests: newUint32(512),
 					OutlierDetection:      json.RawMessage(`{}`),
+					TelemetryLabels: map[string]string{
+						"csm.service_name":           "unknown",
+						"csm.service_namespace_name": "unknown",
+					},
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 			},
@@ -483,6 +487,10 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 					Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 					EDSServiceName:   serviceName,
 					OutlierDetection: json.RawMessage(`{}`),
+					TelemetryLabels: map[string]string{
+						"csm.service_name":           "unknown",
+						"csm.service_namespace_name": "unknown",
+					},
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":100, "maxRingSize":1000}}]`),
 			},
@@ -505,6 +513,10 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 					Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 					EDSServiceName:   serviceName,
 					OutlierDetection: json.RawMessage(`{"successRateEjection":{}}`),
+					TelemetryLabels: map[string]string{
+						"csm.service_name":           "unknown",
+						"csm.service_namespace_name": "unknown",
+					},
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":1024, "maxRingSize":8388608}}]`),
 			},
@@ -557,6 +569,10 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 							"requestVolume": 50
 						}
 					}`),
+					TelemetryLabels: map[string]string{
+						"csm.service_name":           "unknown",
+						"csm.service_namespace_name": "unknown",
+					},
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":1024, "maxRingSize":8388608}}]`),
 			},
@@ -609,6 +625,10 @@ func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 			EDSServiceName:      serviceName,
 			LoadReportingServer: lrsServerCfg,
 			OutlierDetection:    json.RawMessage(`{}`),
+			TelemetryLabels: map[string]string{
+				"csm.service_name":           "unknown",
+				"csm.service_namespace_name": "unknown",
+			},
 		}},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 	}

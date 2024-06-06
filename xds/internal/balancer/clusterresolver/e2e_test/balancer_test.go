@@ -402,6 +402,10 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 							Config: &clusterimpl.LBConfig{
 								Cluster:        clusterName,
 								EDSServiceName: edsServiceName,
+								TelemetryLabels: map[string]string{
+									"csm.service_name":           "unknown",
+									"csm.service_namespace_name": "unknown",
+								},
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{

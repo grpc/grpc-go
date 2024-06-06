@@ -873,6 +873,10 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 					RootInstanceName: rootPluginInstance,
 					RootCertName:     rootCertName,
 				},
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 		},
 		{
@@ -913,6 +917,10 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName: rootPluginInstance,
 					RootCertName:     rootCertName,
+				},
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
 				},
 			},
 		},
@@ -958,6 +966,10 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 					RootCertName:         rootCertName,
 					IdentityInstanceName: identityPluginInstance,
 					IdentityCertName:     identityCertName,
+				},
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
 				},
 			},
 		},
@@ -1005,6 +1017,10 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 					RootCertName:         rootCertName,
 					IdentityInstanceName: identityPluginInstance,
 					IdentityCertName:     identityCertName,
+				},
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
 				},
 			},
 		},
@@ -1072,6 +1088,10 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 						matcher.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
 					},
 				},
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 		},
 		{
@@ -1137,6 +1157,10 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 						matcher.StringMatcherForTesting(nil, nil, nil, nil, sanRE, false),
 						matcher.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
 					},
+				},
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
 				},
 			},
 		},
@@ -1331,6 +1355,10 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				EDSServiceName:  v3Service,
 				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAny,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 		},
 		{
@@ -1343,6 +1371,10 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				EDSServiceName:  v3Service,
 				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAny,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 		},
 		{
@@ -1355,6 +1387,10 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				EDSServiceName:  v3Service,
 				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAnyWithEDSConfigSourceSelf,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 		},
 		{
@@ -1384,7 +1420,8 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAnyWithTelemetryLabelsIgnoreSome,
 				TelemetryLabels: map[string]string{
-					"csm.service_name": "grpc-service",
+					"csm.service_name":           "grpc-service",
+					"csm.service_namespace_name": "unknown",
 				},
 			},
 		},

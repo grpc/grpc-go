@@ -144,6 +144,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				ClusterName: clusterName,
 				ClusterType: xdsresource.ClusterTypeLogicalDNS,
 				DNSHostName: "dns_host:8080",
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
@@ -172,6 +176,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				ClusterName:             clusterName,
 				ClusterType:             xdsresource.ClusterTypeAggregate,
 				PrioritizedClusterNames: []string{"a", "b", "c"},
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
@@ -183,9 +191,15 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 		},
 		{
-			name:       "happy-case-no-service-name-no-lrs",
-			cluster:    e2e.DefaultCluster(clusterName, "", e2e.SecurityLevelNone),
-			wantUpdate: xdsresource.ClusterUpdate{ClusterName: clusterName},
+			name:    "happy-case-no-service-name-no-lrs",
+			cluster: e2e.DefaultCluster(clusterName, "", e2e.SecurityLevelNone),
+			wantUpdate: xdsresource.ClusterUpdate{
+				ClusterName: clusterName,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
+			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
 				Config: &wrrlocality.LBConfig{
@@ -201,6 +215,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName:    clusterName,
 				EDSServiceName: serviceName,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
@@ -223,6 +241,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				ClusterName:     clusterName,
 				EDSServiceName:  serviceName,
 				LRSServerConfig: serverCfg,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
@@ -261,6 +283,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				EDSServiceName:  serviceName,
 				LRSServerConfig: serverCfg,
 				MaxRequests:     func() *uint32 { i := uint32(512); return &i }(),
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
@@ -281,6 +307,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName:    clusterName,
 				EDSServiceName: serviceName,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
@@ -308,6 +338,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName:    clusterName,
 				EDSServiceName: serviceName,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "least_request_experimental",
@@ -332,6 +366,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName:    clusterName,
 				EDSServiceName: serviceName,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
@@ -364,6 +402,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName:    clusterName,
 				EDSServiceName: serviceName,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "least_request_experimental",
@@ -402,6 +444,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName:    clusterName,
 				EDSServiceName: serviceName,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
@@ -437,6 +483,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName:    clusterName,
 				EDSServiceName: serviceName,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
@@ -476,6 +526,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName:    clusterName,
 				EDSServiceName: serviceName,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: wrrlocality.Name,
@@ -524,6 +578,10 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: xdsresource.ClusterUpdate{
 				ClusterName:    clusterName,
 				EDSServiceName: serviceName,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "unknown",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
