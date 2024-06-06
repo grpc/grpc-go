@@ -20,8 +20,6 @@ package service
 
 import (
 	"testing"
-
-	grpc "google.golang.org/grpc"
 )
 
 const (
@@ -37,14 +35,6 @@ const (
 //   - Third call to Dial with a different address creates a separate new connection
 //     and expects a different connection from connnection1 and connection2.
 func TestDial(t *testing.T) {
-	temp := hsDialer
-	hsDialer = func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-		return &grpc.ClientConn{}, nil
-	}
-	defer func() {
-		hsDialer = temp
-	}()
-
 	// First call to Dial, it should create a connection to the server running
 	// at the given address.
 	conn1, err := Dial(testAddress1)
