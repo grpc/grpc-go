@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/matcher"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -874,7 +874,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 					RootInstanceName: rootPluginInstance,
 					RootCertName:     rootCertName,
 				},
-				TelemetryLabels: xdstestutils.UnknownCSMLabels,
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{
@@ -916,7 +916,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 					RootInstanceName: rootPluginInstance,
 					RootCertName:     rootCertName,
 				},
-				TelemetryLabels: xdstestutils.UnknownCSMLabels,
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{
@@ -962,7 +962,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 					IdentityInstanceName: identityPluginInstance,
 					IdentityCertName:     identityCertName,
 				},
-				TelemetryLabels: xdstestutils.UnknownCSMLabels,
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{
@@ -1010,7 +1010,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 					IdentityInstanceName: identityPluginInstance,
 					IdentityCertName:     identityCertName,
 				},
-				TelemetryLabels: xdstestutils.UnknownCSMLabels,
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{
@@ -1077,7 +1077,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 						matcher.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
 					},
 				},
-				TelemetryLabels: xdstestutils.UnknownCSMLabels,
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{
@@ -1144,7 +1144,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 						matcher.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
 					},
 				},
-				TelemetryLabels: xdstestutils.UnknownCSMLabels,
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 	}
@@ -1338,7 +1338,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				EDSServiceName:  v3Service,
 				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAny,
-				TelemetryLabels: xdstestutils.UnknownCSMLabels,
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{
@@ -1351,7 +1351,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				EDSServiceName:  v3Service,
 				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAny,
-				TelemetryLabels: xdstestutils.UnknownCSMLabels,
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{
@@ -1364,7 +1364,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				EDSServiceName:  v3Service,
 				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAnyWithEDSConfigSourceSelf,
-				TelemetryLabels: xdstestutils.UnknownCSMLabels,
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{

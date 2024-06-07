@@ -42,8 +42,8 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
+	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
@@ -457,7 +457,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 					EDSServiceName:        serviceName,
 					MaxConcurrentRequests: newUint32(512),
 					OutlierDetection:      json.RawMessage(`{}`),
-					TelemetryLabels:       xdstestutils.UnknownCSMLabels,
+					TelemetryLabels:       xdsinternal.UnknownCSMLabels,
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 			},
@@ -485,7 +485,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 					Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 					EDSServiceName:   serviceName,
 					OutlierDetection: json.RawMessage(`{}`),
-					TelemetryLabels:  xdstestutils.UnknownCSMLabels,
+					TelemetryLabels:  xdsinternal.UnknownCSMLabels,
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":100, "maxRingSize":1000}}]`),
 			},
@@ -508,7 +508,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 					Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 					EDSServiceName:   serviceName,
 					OutlierDetection: json.RawMessage(`{"successRateEjection":{}}`),
-					TelemetryLabels:  xdstestutils.UnknownCSMLabels,
+					TelemetryLabels:  xdsinternal.UnknownCSMLabels,
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":1024, "maxRingSize":8388608}}]`),
 			},
@@ -561,7 +561,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 							"requestVolume": 50
 						}
 					}`),
-					TelemetryLabels: xdstestutils.UnknownCSMLabels,
+					TelemetryLabels: xdsinternal.UnknownCSMLabels,
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":1024, "maxRingSize":8388608}}]`),
 			},
@@ -614,7 +614,7 @@ func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 			EDSServiceName:      serviceName,
 			LoadReportingServer: lrsServerCfg,
 			OutlierDetection:    json.RawMessage(`{}`),
-			TelemetryLabels:     xdstestutils.UnknownCSMLabels,
+			TelemetryLabels:     xdsinternal.UnknownCSMLabels,
 		}},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 	}
