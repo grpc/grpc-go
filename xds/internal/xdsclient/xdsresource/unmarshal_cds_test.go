@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/matcher"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -873,10 +874,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 					RootInstanceName: rootPluginInstance,
 					RootCertName:     rootCertName,
 				},
-				TelemetryLabels: map[string]string{
-					"csm.service_name":           "unknown",
-					"csm.service_namespace_name": "unknown",
-				},
+				TelemetryLabels: xdstestutils.UnknownCSMLabels,
 			},
 		},
 		{
@@ -918,10 +916,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 					RootInstanceName: rootPluginInstance,
 					RootCertName:     rootCertName,
 				},
-				TelemetryLabels: map[string]string{
-					"csm.service_name":           "unknown",
-					"csm.service_namespace_name": "unknown",
-				},
+				TelemetryLabels: xdstestutils.UnknownCSMLabels,
 			},
 		},
 		{
@@ -967,10 +962,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 					IdentityInstanceName: identityPluginInstance,
 					IdentityCertName:     identityCertName,
 				},
-				TelemetryLabels: map[string]string{
-					"csm.service_name":           "unknown",
-					"csm.service_namespace_name": "unknown",
-				},
+				TelemetryLabels: xdstestutils.UnknownCSMLabels,
 			},
 		},
 		{
@@ -1018,10 +1010,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 					IdentityInstanceName: identityPluginInstance,
 					IdentityCertName:     identityCertName,
 				},
-				TelemetryLabels: map[string]string{
-					"csm.service_name":           "unknown",
-					"csm.service_namespace_name": "unknown",
-				},
+				TelemetryLabels: xdstestutils.UnknownCSMLabels,
 			},
 		},
 		{
@@ -1088,10 +1077,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 						matcher.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
 					},
 				},
-				TelemetryLabels: map[string]string{
-					"csm.service_name":           "unknown",
-					"csm.service_namespace_name": "unknown",
-				},
+				TelemetryLabels: xdstestutils.UnknownCSMLabels,
 			},
 		},
 		{
@@ -1158,10 +1144,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 						matcher.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
 					},
 				},
-				TelemetryLabels: map[string]string{
-					"csm.service_name":           "unknown",
-					"csm.service_namespace_name": "unknown",
-				},
+				TelemetryLabels: xdstestutils.UnknownCSMLabels,
 			},
 		},
 	}
@@ -1355,10 +1338,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				EDSServiceName:  v3Service,
 				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAny,
-				TelemetryLabels: map[string]string{
-					"csm.service_name":           "unknown",
-					"csm.service_namespace_name": "unknown",
-				},
+				TelemetryLabels: xdstestutils.UnknownCSMLabels,
 			},
 		},
 		{
@@ -1371,10 +1351,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				EDSServiceName:  v3Service,
 				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAny,
-				TelemetryLabels: map[string]string{
-					"csm.service_name":           "unknown",
-					"csm.service_namespace_name": "unknown",
-				},
+				TelemetryLabels: xdstestutils.UnknownCSMLabels,
 			},
 		},
 		{
@@ -1387,10 +1364,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				EDSServiceName:  v3Service,
 				LRSServerConfig: serverCfg,
 				Raw:             v3ClusterAnyWithEDSConfigSourceSelf,
-				TelemetryLabels: map[string]string{
-					"csm.service_name":           "unknown",
-					"csm.service_namespace_name": "unknown",
-				},
+				TelemetryLabels: xdstestutils.UnknownCSMLabels,
 			},
 		},
 		{

@@ -45,6 +45,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -400,12 +401,9 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:        clusterName,
-								EDSServiceName: edsServiceName,
-								TelemetryLabels: map[string]string{
-									"csm.service_name":           "unknown",
-									"csm.service_namespace_name": "unknown",
-								},
+								Cluster:         clusterName,
+								EDSServiceName:  edsServiceName,
+								TelemetryLabels: xdstestutils.UnknownCSMLabels,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{
