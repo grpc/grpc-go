@@ -45,11 +45,9 @@ download_binary() {
   # Download and unzip
   curl -LO "$DOWNLOAD_URL"
   INSTALL_DIR="${3:-${GOBIN:-${GOPATH:-$HOME/go}}}"
-  echo "INSTALL DIR: ${INSTALL_DIR}"
   unzip "protoc-${PROTOC_VERSION}-$2-$1.zip" -d $INSTALL_DIR
   rm "protoc-${PROTOC_VERSION}-$2-$1.zip"
   rm "${INSTALL_DIR}/readme.txt"
-  ls "${INSTALL_DIR}"
 }
 
 # Detect the architecture
