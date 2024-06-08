@@ -23,7 +23,7 @@ import (
 	"errors"
 	"io"
 	"math"
-	"math/rand"
+	rand "math/rand/v2"
 	"strconv"
 	"sync"
 	"time"
@@ -699,7 +699,7 @@ func (a *csAttempt) shouldRetry(err error) (bool, error) {
 		if max := float64(rp.MaxBackoff); cur > max {
 			cur = max
 		}
-		dur = time.Duration(rand.Int63n(int64(cur)))
+		dur = time.Duration(rand.Int64N(int64(cur)))
 		cs.numRetriesSincePushback++
 	}
 

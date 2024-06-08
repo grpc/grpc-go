@@ -24,7 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	rand "math/rand/v2"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -162,7 +162,7 @@ func (i *interceptor) NewStream(ctx context.Context, ri iresolver.RPCInfo, done 
 }
 
 // For overriding in tests
-var randIntn = rand.Intn
+var randIntN = rand.IntN
 var newTimer = time.NewTimer
 
 func injectDelay(ctx context.Context, delayCfg *cpb.FaultDelay) error {
@@ -190,7 +190,7 @@ func injectDelay(ctx context.Context, delayCfg *cpb.FaultDelay) error {
 			}
 		}
 	}
-	if delay == 0 || randIntn(denominator) >= numerator {
+	if delay == 0 || randIntN(denominator) >= numerator {
 		return nil
 	}
 	t := newTimer(delay)
@@ -230,7 +230,7 @@ func injectAbort(ctx context.Context, abortCfg *fpb.FaultAbort) error {
 			}
 		}
 	}
-	if !okCode || randIntn(denominator) >= numerator {
+	if !okCode || randIntN(denominator) >= numerator {
 		return nil
 	}
 	if code == codes.OK {

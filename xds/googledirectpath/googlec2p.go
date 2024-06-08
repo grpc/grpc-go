@@ -27,7 +27,7 @@ package googledirectpath
 
 import (
 	"fmt"
-	"math/rand"
+	rand "math/rand/v2"
 	"net/url"
 	"time"
 
