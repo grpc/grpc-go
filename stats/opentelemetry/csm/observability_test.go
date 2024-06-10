@@ -440,14 +440,14 @@ func unaryInterceptorAttachXDSLabels(ctx context.Context, method string, req, re
 	return invoker(ctx, method, req, reply, cc, opts...)
 }
 
-// TestxDSLabels tests that xDS Labels get emitted from OpenTelemetry metrics.
+// TestXDSLabels tests that xDS Labels get emitted from OpenTelemetry metrics.
 // This test configures OpenTelemetry with the CSM Plugin Option, and xDS
 // Optional Labels turned on. It then configures an interceptor to attach
 // labels, representing the cluster_impl picker. It then makes a unary RPC, and
 // expects xDS Labels labels to be attached to emitted relevant metrics. Full
 // xDS System alongside OpenTelemetry will be tested with interop. (there is
 // a test for xDS -> Stats handler and this tests -> OTel -> emission).
-func (s) TestxDSLabels(t *testing.T) {
+func (s) TestXDSLabels(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	reader := metric.NewManualReader()
