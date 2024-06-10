@@ -59,9 +59,7 @@ func waitForServerCompletedRPCs(ctx context.Context, t *testing.T, reader metric
 		if !ok {
 			continue
 		}
-		if !metricdatatest.AssertEqual(t, wantMetric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
-			continue
-		}
+		metricdatatest.AssertEqual(t, wantMetric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars())
 		return gotMetrics, nil
 	}
 	return nil, fmt.Errorf("error waiting for metric %v: %v", wantMetric, ctx.Err())
@@ -769,7 +767,7 @@ func CompareMetrics(ctx context.Context, t *testing.T, mr *metric.ManualReader, 
 			// stats.End show up.
 			var err error
 			if gotMetrics, err = waitForServerCompletedRPCs(ctx, t, mr, metric); err != nil { // move to shared helper
-				t.Fatalf("error waiting for sent total compressed message size for metric %v: %v", metric.Name, err)
+				t.Fatal(err)
 			}
 			continue
 		}
@@ -779,11 +777,11 @@ func CompareMetrics(ctx context.Context, t *testing.T, mr *metric.ManualReader, 
 		// test due to context).
 		val, ok := gotMetrics[metric.Name]
 		if !ok {
-			t.Fatalf("metric %v not present in recorded metrics", metric.Name)
+			t.Fatalf("Metric %v not present in recorded metrics", metric.Name)
 		}
 		if metric.Name == "grpc.client.attempt.duration" || metric.Name == "grpc.client.call.duration" || metric.Name == "grpc.server.call.duration" {
 			if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars(), metricdatatest.IgnoreValue()) {
-				t.Fatalf("metrics data type not equal for metric: %v", metric.Name)
+				t.Fatalf("Metrics data type not equal for metric: %v", metric.Name)
 			}
 			if err := checkDataPointWithinFiveSeconds(val); err != nil {
 				t.Fatalf("Data point not within five seconds for metric %v: %v", metric.Name, err)
@@ -792,7 +790,7 @@ func CompareMetrics(ctx context.Context, t *testing.T, mr *metric.ManualReader, 
 		}
 
 		if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
-			t.Fatalf("metrics data type not equal for metric: %v", metric.Name)
+			t.Fatalf("Metrics data type not equal for metric: %v", metric.Name)
 		}
 	}
 }

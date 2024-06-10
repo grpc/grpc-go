@@ -58,7 +58,7 @@ func setup(t *testing.T, methodAttributeFilter func(string) bool) (*metric.Manua
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Payload: &testpb.Payload{
-				Body: make([]byte, 10000),
+				Body: make([]byte, len(in.GetPayload().GetBody())),
 			}}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -114,7 +114,7 @@ func (s) TestMethodAttributeFilter(t *testing.T) {
 
 	stream.CloseSend()
 	if _, err = stream.Recv(); err != io.EOF {
-		t.Fatalf("unexpected error: %v, expected an EOF error", err)
+		t.Fatalf("stream.Recv received an unexpected error: %v, expected an EOF error", err)
 	}
 	rm := &metricdata.ResourceMetrics{}
 	reader.Collect(ctx, rm)
@@ -199,7 +199,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 
 	stream.CloseSend()
 	if _, err = stream.Recv(); err != io.EOF {
-		t.Fatalf("unexpected error: %v, expected an EOF error", err)
+		t.Fatalf("stream.Recv received an unexpected error: %v, expected an EOF error", err)
 	}
 
 	rm := &metricdata.ResourceMetrics{}
@@ -225,7 +225,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 
 	stream.CloseSend()
 	if _, err = stream.Recv(); err != io.EOF {
-		t.Fatalf("unexpected error: %v, expected an EOF error", err)
+		t.Fatalf("stream.Recv received an unexpected error: %v, expected an EOF error", err)
 	}
 	// This Invoke doesn't pass the StaticMethodCallOption. Thus, the method
 	// attribute should become "other" on client side metrics. Since it is also
@@ -299,10 +299,10 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	for _, metric := range wantMetrics {
 		val, ok := gotMetrics[metric.Name]
 		if !ok {
-			t.Fatalf("metric %v not present in recorded metrics", metric.Name)
+			t.Fatalf("Metric %v not present in recorded metrics", metric.Name)
 		}
 		if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
-			t.Fatalf("metrics data type not equal for metric: %v", metric.Name)
+			t.Fatalf("Metrics data type not equal for metric: %v", metric.Name)
 		}
 	}
 }

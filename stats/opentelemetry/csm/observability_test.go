@@ -45,9 +45,7 @@ import (
 // Env Vars as well, and mocks the resource detector's returned attribute set to
 // simulate the environment. It registers a cleanup function on the provided t
 // to restore the environment to it's original state.
-func setupEnv(t *testing.T, resourceDetectorEmissions map[string]string, nodeID string, csmCanonicalServiceName string, csmWorkloadName string) {
-	clearEnv()
-
+func setupEnv(t *testing.T, resourceDetectorEmissions map[string]string, nodeID, csmCanonicalServiceName, csmWorkloadName string) {
 	cleanup, err := bootstrap.CreateFile(bootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: "xds_server_uri",
@@ -105,9 +103,9 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 		"k8s.namespace.name": "k8s_namespace_name_val",
 		"k8s.cluster.name":   "k8s_cluster_name_val",
 	}
-	nodeID := "projects/12345/networks/mesh:mesh_id/nodes/aaaa-aaaa-aaaa-aaaa"
-	csmCanonicalServiceName := "csm_canonical_service_name"
-	csmWorkloadName := "csm_workload_name"
+	const nodeID = "projects/12345/networks/mesh:mesh_id/nodes/aaaa-aaaa-aaaa-aaaa"
+	const csmCanonicalServiceName = "csm_canonical_service_name"
+	const csmWorkloadName = "csm_workload_name"
 	setupEnv(t, resourceDetectorEmissions, nodeID, csmCanonicalServiceName, csmWorkloadName)
 
 	attributesWant := map[string]string{
@@ -142,7 +140,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 			name: "normal-flow",
 			unaryCallFunc: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return &testpb.SimpleResponse{Payload: &testpb.Payload{
-					Body: make([]byte, 10000),
+					Body: make([]byte, len(in.GetPayload().GetBody())),
 				}}, nil
 			},
 			opts: testutils.MetricDataOptions{
@@ -166,7 +164,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 				grpc.SetHeader(ctx, metadata.New(map[string]string{"some-metadata": "some-metadata-val"}))
 
 				return &testpb.SimpleResponse{Payload: &testpb.Payload{
-					Body: make([]byte, 10000),
+					Body: make([]byte, len(in.GetPayload().GetBody())),
 				}}, nil
 			},
 			opts: testutils.MetricDataOptions{
@@ -180,7 +178,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 				grpc.SendHeader(ctx, metadata.New(map[string]string{"some-metadata": "some-metadata-val"}))
 
 				return &testpb.SimpleResponse{Payload: &testpb.Payload{
-					Body: make([]byte, 10000),
+					Body: make([]byte, len(in.GetPayload().GetBody())),
 				}}, nil
 			},
 			opts: testutils.MetricDataOptions{
@@ -192,7 +190,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 			name: "send-msg",
 			unaryCallFunc: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return &testpb.SimpleResponse{Payload: &testpb.Payload{
-					Body: make([]byte, 10000),
+					Body: make([]byte, len(in.GetPayload().GetBody())),
 				}}, nil
 			},
 			opts: testutils.MetricDataOptions{
@@ -219,7 +217,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 				MetricsOptions: opentelemetry.MetricsOptions{
 					MeterProvider:  provider,
 					Metrics:        opentelemetry.DefaultMetrics,
-					OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name"}, // should be a no-op unless receive labels through optional labels mechanism
+					OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name"},
 				},
 			}, po)}
 			if err := ss.Start(sopts, dopts...); err != nil {
@@ -233,9 +231,9 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 					Body: make([]byte, 10000),
 				}}
 			}
-			// Make two RPC's, a unary RPC and a streaming RPC. These should cause
-			// certain metrics to be emitted, which should be able to be observed
-			// through the Metric Reader.
+			// Make a Unary RPC. These should cause certain metrics to be
+			// emitted, which should be able to be observed through the Metric
+			// Reader.
 			ss.Client.UnaryCall(ctx, request, grpc.UseCompressor(gzip.Name))
 			rm := &metricdata.ResourceMetrics{}
 			reader.Collect(ctx, rm)
@@ -272,9 +270,9 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 		"k8s.namespace.name": "k8s_namespace_name_val",
 		"k8s.cluster.name":   "k8s_cluster_name_val",
 	}
-	nodeID := "projects/12345/networks/mesh:mesh_id/nodes/aaaa-aaaa-aaaa-aaaa"
-	csmCanonicalServiceName := "csm_canonical_service_name"
-	csmWorkloadName := "csm_workload_name"
+	const nodeID = "projects/12345/networks/mesh:mesh_id/nodes/aaaa-aaaa-aaaa-aaaa"
+	const csmCanonicalServiceName = "csm_canonical_service_name"
+	const csmWorkloadName = "csm_workload_name"
 	setupEnv(t, resourceDetectorEmissions, nodeID, csmCanonicalServiceName, csmWorkloadName)
 
 	attributesWant := map[string]string{
@@ -309,8 +307,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 			name: "trailers-only",
 			streamingCallFunc: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 				for {
-					_, err := stream.Recv()
-					if err == io.EOF {
+					if _, err := stream.Recv(); err == io.EOF {
 						return nil
 					}
 				}
@@ -324,8 +321,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 			streamingCallFunc: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 				stream.SetHeader(metadata.New(map[string]string{"some-metadata": "some-metadata-val"}))
 				for {
-					_, err := stream.Recv()
-					if err == io.EOF {
+					if _, err := stream.Recv(); err == io.EOF {
 						return nil
 					}
 				}
@@ -339,8 +335,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 			streamingCallFunc: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 				stream.SendHeader(metadata.New(map[string]string{"some-metadata": "some-metadata-val"}))
 				for {
-					_, err := stream.Recv()
-					if err == io.EOF {
+					if _, err := stream.Recv(); err == io.EOF {
 						return nil
 					}
 				}
@@ -356,8 +351,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 					Body: make([]byte, 10000),
 				}})
 				for {
-					_, err := stream.Recv()
-					if err == io.EOF {
+					if _, err := stream.Recv(); err == io.EOF {
 						return nil
 					}
 				}
@@ -385,7 +379,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 				MetricsOptions: opentelemetry.MetricsOptions{
 					MeterProvider:  provider,
 					Metrics:        opentelemetry.DefaultMetrics,
-					OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name"}, // should be a no-op unless receive labels through optional labels mechanism
+					OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name"},
 				},
 			}, po)}
 			if err := ss.Start(sopts, dopts...); err != nil {
@@ -411,7 +405,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 
 			stream.CloseSend()
 			if _, err = stream.Recv(); err != io.EOF {
-				t.Fatalf("unexpected error: %v, expected an EOF error", err)
+				t.Fatalf("stream.Recv received an unexpected error: %v, expected an EOF error", err)
 			}
 
 			rm := &metricdata.ResourceMetrics{}
@@ -432,7 +426,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 	}
 }
 
-func unaryInterceptorAttachxDSLabels(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+func unaryInterceptorAttachXDSLabels(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ctx = istats.SetLabels(ctx, &istats.Labels{
 		TelemetryLabels: map[string]string{
 			// mock what the cluster impl would write here ("csm." xDS Labels)
@@ -461,7 +455,7 @@ func (s) TestxDSLabels(t *testing.T) {
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Payload: &testpb.Payload{
-				Body: make([]byte, 10000),
+				Body: make([]byte, len(in.GetPayload().GetBody())),
 			}}, nil
 		},
 	}
@@ -471,9 +465,9 @@ func (s) TestxDSLabels(t *testing.T) {
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider:  provider,
 			Metrics:        opentelemetry.DefaultMetrics,
-			OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name"}, // should be a no-op unless receive labels through optional labels mechanism
+			OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name"},
 		},
-	}, po), grpc.WithUnaryInterceptor(unaryInterceptorAttachxDSLabels)}
+	}, po), grpc.WithUnaryInterceptor(unaryInterceptorAttachXDSLabels)}
 	if err := ss.Start(nil, dopts...); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
