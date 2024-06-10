@@ -63,7 +63,7 @@ func (h *clientStatsHandler) initializeMetrics() {
 
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := &callInfo{
-		target: h.determineTarget(cc),
+		target: cc.CanonicalTarget(),
 		method: h.determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
@@ -83,17 +83,6 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 	return err
 }
 
-// determineTarget determines the target to record attributes with. This will be
-// "other" if target filter is set and specifies, the target name as is
-// otherwise.
-func (h *clientStatsHandler) determineTarget(cc *grpc.ClientConn) string {
-	target := cc.CanonicalTarget()
-	if f := h.options.MetricsOptions.TargetAttributeFilter; f != nil && !f(target) {
-		target = "other"
-	}
-	return target
-}
-
 // determineMethod determines the method to record attributes with. This will be
 // "other" if StaticMethod isn't specified or if method filter is set and
 // specifies, the method name as is otherwise.
@@ -108,7 +97,7 @@ func (h *clientStatsHandler) determineMethod(method string, opts ...grpc.CallOpt
 
 func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := &callInfo{
-		target: h.determineTarget(cc),
+		target: cc.CanonicalTarget(),
 		method: h.determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
