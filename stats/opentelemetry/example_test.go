@@ -17,8 +17,6 @@
 package opentelemetry_test
 
 import (
-	"strings"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/stats/opentelemetry"
@@ -55,9 +53,6 @@ func Example_dialOption() {
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider: provider,
 			Metrics:       opentelemetry.DefaultMetrics, // equivalent to unset - distinct from empty
-			TargetAttributeFilter: func(str string) bool {
-				return !strings.HasPrefix(str, "dns") // Filter out DNS targets.
-			},
 		},
 	}
 	do := opentelemetry.DialOption(opts)
