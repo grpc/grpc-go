@@ -420,23 +420,16 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	backends, stop := startTestServiceBackends(t, 1)
 	defer stop()
 
-	nonExistingBackend1, stop1 := startTestServiceBackends(t, 2)
-	nonExistingBackend2, stop2 := startTestServiceBackends(t, 2)
+	nonExistingBackend, stop1 := startTestServiceBackends(t, 2)
 	stop1()
-	stop2()
 
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 		ClusterName: edsClusterName,
 		Localities: []e2e.LocalityOptions{{
 			Name:     "locality0",
 			Weight:   1,
-			Backends: backendOptions(t, nonExistingBackend1),
+			Backends: backendOptions(t, nonExistingBackend),
 			Priority: 0,
-		}, {
-			Name:     "locality1",
-			Weight:   1,
-			Backends: backendOptions(t, nonExistingBackend2),
-			Priority: 1,
 		}},
 	})
 	edsCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
@@ -447,6 +440,8 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	logicalDNSCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		Type:        e2e.ClusterTypeLogicalDNS,
 		ClusterName: logicalDNSClusterName,
+		// The DNS values are not used because we fake DNS later on, but they
+		// are required to be present for the resource to be valid.
 		DNSHostName: "server.example.com",
 		DNSPort:     443,
 	})
@@ -602,8 +597,8 @@ func (s) TestRingHash_ChannelIdHashing(t *testing.T) {
 
 // headerHashRoute creates a RouteConfiguration with a hash policy that uses the
 // provided header.
-func headerHashRoute(clusterName, header string) *v3routepb.RouteConfiguration {
-	route := e2e.DefaultRouteConfig("new_route", virtualHostName, clusterName)
+func headerHashRoute(routeName, virtualHostName, clusterName, header string) *v3routepb.RouteConfiguration {
+	route := e2e.DefaultRouteConfig(routeName, virtualHostName, clusterName)
 	hashPolicy := v3routepb.RouteAction_HashPolicy{
 		PolicySpecifier: &v3routepb.RouteAction_HashPolicy_Header_{
 			Header: &v3routepb.RouteAction_HashPolicy_Header{
@@ -645,7 +640,7 @@ func (s) TestRingHash_HeaderHashing(t *testing.T) {
 		ServiceName: clusterName,
 		Policy:      e2e.LoadBalancingPolicyRingHash,
 	})
-	route := headerHashRoute(clusterName, "address_hash")
+	route := headerHashRoute("new_route", virtualHostName, clusterName, "address_hash")
 	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -710,7 +705,7 @@ func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 		ServiceName: clusterName,
 		Policy:      e2e.LoadBalancingPolicyRingHash,
 	})
-	route := headerHashRoute(clusterName, "address_hash")
+	route := headerHashRoute("new_route", virtualHostName, clusterName, "address_hash")
 	action := route.VirtualHosts[0].Routes[0].Action.(*v3routepb.Route_Route)
 	action.Route.HashPolicy[0].GetHeader().RegexRewrite = &v3matcherpb.RegexMatchAndSubstitute{
 		Pattern: &v3matcherpb.RegexMatcher{
@@ -764,7 +759,6 @@ func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 	if want := 400; got != want {
 		t.Errorf("Got %v RPCs routed to a backend, want %v", got, want)
 	}
-
 }
 
 // computeIdealNumberOfRPCs computes the ideal number of RPCs to send so that
