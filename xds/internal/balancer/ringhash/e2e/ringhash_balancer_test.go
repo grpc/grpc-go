@@ -43,7 +43,7 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
-	v3core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -792,7 +792,7 @@ func setRingHashLBPolicyWithHighMinRingSize(t *testing.T, cluster *v3clusterpb.C
 	})
 	cluster.LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
 		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{{
-			TypedExtensionConfig: &v3core.TypedExtensionConfig{
+			TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
 				Name:        "envoy.load_balancing_policies.ring_hash",
 				TypedConfig: config,
 			},
