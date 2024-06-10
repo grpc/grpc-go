@@ -22,12 +22,12 @@ package main
 import (
 	"context"
 	"log"
+	"math/rand"
 	"net"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/channelz/service"
-	"google.golang.org/grpc/internal/grpcrand"
 
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
@@ -54,7 +54,7 @@ type slowServer struct {
 // SayHello implements helloworld.GreeterServer
 func (s *slowServer) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	// Delay 100ms ~ 200ms before replying
-	time.Sleep(time.Duration(100+grpcrand.Intn(100)) * time.Millisecond)
+	time.Sleep(time.Duration(100+rand.Intn(100)) * time.Millisecond)
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 

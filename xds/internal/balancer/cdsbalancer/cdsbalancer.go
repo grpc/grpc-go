@@ -207,7 +207,7 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsresource.SecurityConfig) e
 	}
 
 	// A root provider is required whether we are using TLS or mTLS.
-	cpc := b.xdsClient.BootstrapConfig().CertProviderConfigs
+	cpc := b.xdsClient.BootstrapConfig().CertProviderConfigs()
 	rootProvider, err := buildProvider(cpc, config.RootInstanceName, config.RootCertName, false, true)
 	if err != nil {
 		return err

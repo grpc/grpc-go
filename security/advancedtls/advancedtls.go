@@ -62,23 +62,11 @@ type HandshakeVerificationInfo struct {
 	Leaf *x509.Certificate
 }
 
-// VerificationFuncParams contains parameters available to users when
-// implementing CustomVerificationFunc.
-// The fields in this struct are read-only.
-//
-// Deprecated: use HandshakeVerificationInfo instead.
-type VerificationFuncParams = HandshakeVerificationInfo
-
 // PostHandshakeVerificationResults contains the information about results of
 // PostHandshakeVerificationFunc.
 // PostHandshakeVerificationResults is an empty struct for now. It may be extended in the
 // future to include more information.
 type PostHandshakeVerificationResults struct{}
-
-// VerificationResults contains the information about results of
-// PostHandshakeVerificationFunc.
-// Deprecated: use PostHandshakeVerificationResults instead.
-type VerificationResults = PostHandshakeVerificationResults
 
 // PostHandshakeVerificationFunc is the function defined by users to perform
 // custom verification checks after chain building and regular handshake
@@ -86,14 +74,6 @@ type VerificationResults = PostHandshakeVerificationResults
 // PostHandshakeVerificationFunc should return (nil, error) if the authorization
 // should fail, with the error containing information on why it failed.
 type PostHandshakeVerificationFunc func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error)
-
-// CustomVerificationFunc is the function defined by users to perform custom
-// verification check.
-// CustomVerificationFunc returns nil if the authorization fails; otherwise
-// returns an empty struct.
-//
-// Deprecated: use PostHandshakeVerificationFunc instead.
-type CustomVerificationFunc = PostHandshakeVerificationFunc
 
 // ConnectionInfo contains the parameters available to users when
 // implementing GetRootCertificates.
@@ -104,12 +84,6 @@ type ConnectionInfo struct {
 	RawCerts [][]byte
 }
 
-// GetRootCAsParams contains the parameters available to users when
-// implementing GetRootCAs.
-//
-// Deprecated: use ConnectionInfo instead.
-type GetRootCAsParams = ConnectionInfo
-
 // RootCertificates is the result of GetRootCertificates.
 // If users want to reload the root trust certificate, it is required to return
 // the proper TrustCerts in GetRootCAs.
@@ -117,13 +91,6 @@ type RootCertificates struct {
 	// TrustCerts is the pool of trusted certificates.
 	TrustCerts *x509.CertPool
 }
-
-// GetRootCAsResults contains the results of GetRootCAs.
-// If users want to reload the root trust certificate, it is required to return
-// the proper TrustCerts in GetRootCAs.
-//
-// Deprecated: use RootCertificates instead.
-type GetRootCAsResults = RootCertificates
 
 // RootCertificateOptions contains options to obtain root trust certificates
 // for both the client and the server.
@@ -134,11 +101,6 @@ type RootCertificateOptions struct {
 	// If RootCertificates is set, it will be used every time when verifying
 	// the peer certificates, without performing root certificate reloading.
 	RootCertificates *x509.CertPool
-	// If RootCACerts is set, it will be used every time when verifying
-	// the peer certificates, without performing root certificate reloading.
-	//
-	// Deprecated: use RootCertificates instead.
-	RootCACerts *x509.CertPool
 	// If GetRootCertificates is set, it will be invoked to obtain root certs for
 	// every new connection.
 	GetRootCertificates func(params *ConnectionInfo) (*RootCertificates, error)
@@ -213,14 +175,6 @@ const (
 	SkipVerification
 )
 
-// ClientOptions contains the fields needed to be filled by the client.
-// Deprecated: use Options instead.
-type ClientOptions = Options
-
-// ServerOptions contains the fields needed to be filled by the server.
-// Deprecated: use Options instead.
-type ServerOptions = Options
-
 // Options contains the fields a user can configure when setting up TLS clients
 // and servers
 type Options struct {
@@ -233,13 +187,6 @@ type Options struct {
 	// If this is set, we will perform this customized check after doing the
 	// normal check(s) indicated by setting VerificationType.
 	AdditionalPeerVerification PostHandshakeVerificationFunc
-	// VerifyPeer is a custom verification check after certificate signature
-	// check.
-	// If this is set, we will perform this customized check after doing the
-	// normal check(s) indicated by setting VerificationType.
-	//
-	// Deprecated: use AdditionalPeerVerification instead.
-	VerifyPeer PostHandshakeVerificationFunc
 	// RootOptions is OPTIONAL on server side. This field only needs to be set if
 	// mutual authentication is required(RequireClientCert is true).
 	RootOptions RootCertificateOptions
@@ -251,26 +198,9 @@ type Options struct {
 	// the `VerificationType` enum for the different options.
 	// Default: CertAndHostVerification
 	VerificationType VerificationType
-	// VType is the verification type on the server side.
-	//
-	// Deprecated: use VerificationType instead.
-	VType VerificationType
 	// RevocationOptions is the configurations for certificate revocation checks.
 	// It could be nil if such checks are not needed.
 	RevocationOptions *RevocationOptions
-	// RevocationConfig is the configurations for certificate revocation checks.
-	// It could be nil if such checks are not needed.
-	//
-	// Deprecated: use RevocationOptions instead.
-	RevocationConfig *RevocationConfig
-	// MinVersion contains the minimum TLS version that is acceptable.
-	//
-	// Deprecated: use MinTLSVersion instead.
-	MinVersion uint16
-	// MaxVersion contains the maximum TLS version that is acceptable.
-	//
-	// Deprecated: use MaxTLSVersion instead.
-	MaxVersion uint16
 	// MinTLSVersion contains the minimum TLS version that is acceptable.
 	// The value should be set using tls.VersionTLSxx from https://pkg.go.dev/crypto/tls
 	// By default, TLS 1.2 is currently used as the minimum when acting as a
@@ -296,35 +226,6 @@ type Options struct {
 }
 
 func (o *Options) clientConfig() (*tls.Config, error) {
-	// TODO(gtcooke94) Remove this block when o.VerifyPeer is remoed.
-	// VerifyPeer is deprecated, but do this to aid the transitory migration time.
-	if o.AdditionalPeerVerification == nil {
-		o.AdditionalPeerVerification = o.VerifyPeer
-	}
-	// TODO(gtcooke94). VType is deprecated, eventually remove this block. This
-	// will ensure that users still explicitly setting `VType` will get the
-	// setting to the right place.
-	if o.VType != CertAndHostVerification {
-		o.VerificationType = o.VType
-	}
-	// TODO(gtcooke94) MinVersion and MaxVersion are deprected, eventually
-	// remove this block. This is a temporary fallback to ensure that if the
-	// refactored names aren't set we use the old names.
-	if o.MinTLSVersion == 0 {
-		o.MinTLSVersion = o.MinVersion
-	}
-	if o.MaxTLSVersion == 0 {
-		o.MaxTLSVersion = o.MaxVersion
-	}
-	// TODO(gtcooke94) RootCACerts is deprecated, eventually remove this block.
-	// This will ensure that users still explicitly setting RootCACerts will get
-	// the setting int the right place.
-	if o.RootOptions.RootCACerts != nil {
-		o.RootOptions.RootCertificates = o.RootOptions.RootCACerts
-		// There are additional checks that only 1 field of `RootOptions` is
-		// non-nil, so set the deprecated field to nil
-		o.RootOptions.RootCACerts = nil
-	}
 	if o.VerificationType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("client needs to provide custom verification mechanism if choose to skip default verification")
 	}
@@ -410,35 +311,6 @@ func (o *Options) clientConfig() (*tls.Config, error) {
 }
 
 func (o *Options) serverConfig() (*tls.Config, error) {
-	// TODO(gtcooke94) Remove this block when o.VerifyPeer is remoed.
-	// VerifyPeer is deprecated, but do this to aid the transitory migration time.
-	if o.AdditionalPeerVerification == nil {
-		o.AdditionalPeerVerification = o.VerifyPeer
-	}
-	// TODO(gtcooke94). VType is deprecated, eventually remove this block. This
-	// will ensure that users still explicitly setting `VType` will get the
-	// setting to the right place.
-	if o.VType != CertAndHostVerification {
-		o.VerificationType = o.VType
-	}
-	// TODO(gtcooke94) MinVersion and MaxVersion are deprected, eventually
-	// remove this block. This is a temporary fallback to ensure that if the
-	// refactored names aren't set we use the old names.
-	if o.MinTLSVersion == 0 {
-		o.MinTLSVersion = o.MinVersion
-	}
-	if o.MaxTLSVersion == 0 {
-		o.MaxTLSVersion = o.MaxVersion
-	}
-	// TODO(gtcooke94) RootCACerts is deprecated, eventually remove this block.
-	// This will ensure that users still explicitly setting RootCACerts will get
-	// the setting int the right place.
-	if o.RootOptions.RootCACerts != nil {
-		o.RootOptions.RootCertificates = o.RootOptions.RootCACerts
-		// There are additional checks that only 1 field of `RootOptions` is
-		// non-nil, so set the deprecated field to nil
-		o.RootOptions.RootCACerts = nil
-	}
 	if o.RequireClientCert && o.VerificationType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
@@ -728,12 +600,6 @@ func buildVerifyFunc(c *advancedTLSCreds,
 // NewClientCreds uses ClientOptions to construct a TransportCredentials based
 // on TLS.
 func NewClientCreds(o *Options) (credentials.TransportCredentials, error) {
-	// TODO(gtcooke94) RevocationConfig is deprecated, eventually remove this block.
-	// This will ensure that users still explicitly setting RevocationConfig will get
-	// the setting in the right place.
-	if o.RevocationConfig != nil {
-		o.RevocationOptions = o.RevocationConfig
-	}
 	conf, err := o.clientConfig()
 	if err != nil {
 		return nil, err
@@ -753,12 +619,6 @@ func NewClientCreds(o *Options) (credentials.TransportCredentials, error) {
 // NewServerCreds uses ServerOptions to construct a TransportCredentials based
 // on TLS.
 func NewServerCreds(o *Options) (credentials.TransportCredentials, error) {
-	// TODO(gtcooke94) RevocationConfig is deprecated, eventually remove this block.
-	// This will ensure that users still explicitly setting RevocationConfig will get
-	// the setting in the right place.
-	if o.RevocationConfig != nil {
-		o.RevocationOptions = o.RevocationConfig
-	}
 	conf, err := o.serverConfig()
 	if err != nil {
 		return nil, err

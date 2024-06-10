@@ -177,7 +177,7 @@ func getEnv(name string) string {
 var (
 	// This function will be overridden in unit tests.
 	getAttrSetFromResourceDetector = func(ctx context.Context) *attribute.Set {
-		r, err := resource.New(ctx, resource.WithDetectors(gcp.NewDetector()))
+		r, err := resource.New(ctx, resource.WithFromEnv(), resource.WithDetectors(gcp.NewDetector()))
 		if err != nil {
 			logger.Warningf("error reading OpenTelemetry resource: %v", err)
 		}
@@ -294,10 +294,10 @@ func getNodeID() string {
 	if err != nil {
 		return "" // will become "unknown"
 	}
-	if cfg.NodeProto == nil {
+	if cfg.Node() == nil {
 		return ""
 	}
-	return cfg.NodeProto.GetId()
+	return cfg.Node().GetId()
 }
 
 // metadataExchangeKey is the key for HTTP metadata exchange.

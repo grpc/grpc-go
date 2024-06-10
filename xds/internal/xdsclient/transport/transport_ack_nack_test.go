@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
@@ -133,9 +133,14 @@ func (s) TestSimpleAckAndNack(t *testing.T) {
 		SkipValidation: true,
 	})
 
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
+
 	// Create a new transport.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:      *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
+		ServerCfg:      serverCfg,
 		OnRecvHandler:  dataModelValidator,
 		OnErrorHandler: func(err error) {},
 		OnSendHandler:  func(*transport.ResourceSendInfo) {},
@@ -313,9 +318,14 @@ func (s) TestInvalidFirstResponse(t *testing.T) {
 		SkipValidation: true,
 	})
 
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
+
 	// Create a new transport.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:      *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
+		ServerCfg:      serverCfg,
 		NodeProto:      &v3corepb.Node{Id: nodeID},
 		OnRecvHandler:  dataModelValidator,
 		OnErrorHandler: func(err error) {},
@@ -435,9 +445,14 @@ func (s) TestResourceIsNotRequestedAnymore(t *testing.T) {
 		SkipValidation: true,
 	})
 
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
+
 	// Create a new transport.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:      *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
+		ServerCfg:      serverCfg,
 		NodeProto:      &v3corepb.Node{Id: nodeID},
 		OnRecvHandler:  dataModelValidator,
 		OnErrorHandler: func(err error) {},

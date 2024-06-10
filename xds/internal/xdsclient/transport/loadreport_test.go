@@ -27,7 +27,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
-	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -58,10 +58,15 @@ func (s) TestReportLoad(t *testing.T) {
 	defer cleanup()
 	t.Logf("Started xDS management server on %s", mgmtServer.Address)
 
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
+
 	// Create a transport to the fake management server.
 	nodeProto := &v3corepb.Node{Id: uuid.New().String()}
 	tr, err := transport.New(transport.Options{
-		ServerCfg:      *testutils.ServerConfigForAddress(t, mgmtServer.Address),
+		ServerCfg:      serverCfg,
 		NodeProto:      nodeProto,
 		OnRecvHandler:  func(transport.ResourceUpdate) error { return nil }, // No ADS validation.
 		OnErrorHandler: func(error) {},                                      // No ADS stream error handling.

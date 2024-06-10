@@ -76,7 +76,7 @@ func main() {
 	defer rootProvider.Close()
 
 	// Start a server and create a client using advancedtls API with Provider.
-	options := &advancedtls.ServerOptions{
+	options := &advancedtls.Options{
 		IdentityOptions: advancedtls.IdentityCertificateOptions{
 			IdentityProvider: identityProvider,
 		},

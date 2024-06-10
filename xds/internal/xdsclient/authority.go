@@ -118,12 +118,12 @@ func newAuthority(args authorityArgs) (*authority, error) {
 	}
 
 	tr, err := transport.New(transport.Options{
-		ServerCfg:      *args.serverCfg,
+		ServerCfg:      args.serverCfg,
 		OnRecvHandler:  ret.handleResourceUpdate,
 		OnErrorHandler: ret.newConnectionError,
 		OnSendHandler:  ret.transportOnSendHandler,
 		Logger:         args.logger,
-		NodeProto:      args.bootstrapCfg.NodeProto,
+		NodeProto:      args.bootstrapCfg.Node(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating new transport to %q: %v", args.serverCfg, err)
@@ -283,7 +283,7 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 			// resource deletion is to be ignored, the resource is not removed from
 			// the cache and the corresponding OnResourceDoesNotExist() callback is
 			// not invoked on the watchers.
-			if a.serverCfg.IgnoreResourceDeletion {
+			if a.serverCfg.ServerFeaturesIgnoreResourceDeletion() {
 				if !state.deletionIgnored {
 					state.deletionIgnored = true
 					a.logger.Warningf("Ignoring resource deletion for resource %q of type %q", name, rType.TypeName())
@@ -370,7 +370,9 @@ func (a *authority) startWatchTimersLocked(rType xdsresource.Type, resourceNames
 				continue
 			}
 			state.wTimer = time.AfterFunc(a.watchExpiryTimeout, func() {
-				a.handleWatchTimerExpiry(rType, resourceName, state)
+				a.resourcesMu.Lock()
+				a.handleWatchTimerExpiryLocked(rType, resourceName, state)
+				a.resourcesMu.Unlock()
 			})
 			state.wState = watchStateRequested
 		}
@@ -514,10 +516,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 	}
 }
 
-func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName string, state *resourceState) {
-	a.resourcesMu.Lock()
-	defer a.resourcesMu.Unlock()
-
+func (a *authority) handleWatchTimerExpiryLocked(rType xdsresource.Type, resourceName string, state *resourceState) {
 	if a.closed {
 		return
 	}

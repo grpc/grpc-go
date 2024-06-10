@@ -40,7 +40,7 @@ func (c *clientImpl) DumpResources() (*v3statuspb.ClientStatusResponse, error) {
 		Config: []*v3statuspb.ClientConfig{
 			{
 				// TODO: Populate ClientScope. Need to update go-control-plane dependency.
-				Node:              c.config.NodeProto,
+				Node:              c.config.Node(),
 				GenericXdsConfigs: retCfg,
 			},
 		},

@@ -25,14 +25,13 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
+	testbootstrap "google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
 const (
@@ -89,17 +88,21 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	// have empty server configs, and therefore end up using the default server
 	// config, which points to the above management server.
 	nodeID := uuid.New().String()
-	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		XDSServer: xdstestutils.ServerConfigForAddress(t, defaultAuthorityServer.Address),
-		NodeProto: &v3corepb.Node{Id: nodeID},
-		Authorities: map[string]*bootstrap.Authority{
-			testAuthority1: {},
-			testAuthority2: {},
-			testAuthority3: {XDSServer: xdstestutils.ServerConfigForAddress(t, nonDefaultAuthorityServer.Address)},
+	bootstrapContents, err := testbootstrap.Contents(testbootstrap.Options{
+		NodeID:    nodeID,
+		ServerURI: defaultAuthorityServer.Address,
+		Authorities: map[string]string{
+			testAuthority1: "",
+			testAuthority2: "",
+			testAuthority3: nonDefaultAuthorityServer.Address,
 		},
-	}, defaultTestWatchExpiryTimeout, idleTimeout)
+	})
 	if err != nil {
-		t.Fatalf("failed to create xds client: %v", err)
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents, WatchExpiryTimeout: defaultTestWatchExpiryTimeout, AuthorityIdleTimeout: idleTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
 
 	resources := e2e.UpdateOptions{

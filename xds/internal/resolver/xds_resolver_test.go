@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	xdsbootstrap "google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -46,7 +45,6 @@ import (
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	xdsresolver "google.golang.org/grpc/xds/internal/resolver"
 	rinternal "google.golang.org/grpc/xds/internal/resolver/internal"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
@@ -257,17 +255,17 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 
 // Tests that the xDS resolver's Close method closes the xDS client.
 func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
-	bootstrapCfg := &bootstrap.Config{
-		XDSServer: xdstestutils.ServerConfigForAddress(t, "dummy-management-server-address"),
-	}
-
 	// Override xDS client creation to use bootstrap configuration pointing to a
 	// dummy management server. Also close a channel when the returned xDS
 	// client is closed.
 	origNewClient := rinternal.NewXDSClient
 	closeCh := make(chan struct{})
 	rinternal.NewXDSClient = func() (xdsclient.XDSClient, func(), error) {
-		c, cancel, err := xdsclient.NewWithConfigForTesting(bootstrapCfg, defaultTestTimeout, defaultTestTimeout)
+		bc, err := e2e.DefaultBootstrapContents(uuid.New().String(), "dummy-management-server-address")
+		if err != nil {
+			t.Fatalf("Failed to create bootstrap configuration: %v", err)
+		}
+		c, cancel, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestTimeout})
 		return c, grpcsync.OnceFunc(func() {
 			close(closeCh)
 			cancel()

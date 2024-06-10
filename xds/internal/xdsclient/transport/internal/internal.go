@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2024 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,13 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package grpc
+// Package internal contains functionality internal to the transport package.
+package internal
 
-// Version is the current grpc version.
-const Version = "1.66.0-dev"
+// The following vars can be overridden by tests.
+var (
+	// GRPCNewClient creates a new gRPC Client.
+	GRPCNewClient any // func(string, ...grpc.DialOption) (*grpc.ClientConn, error)
+)

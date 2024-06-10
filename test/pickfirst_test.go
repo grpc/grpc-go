@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
@@ -378,9 +377,9 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 	const serviceConfig = `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": true }}]}`
 
 	// Install a shuffler that always reverses two entries.
-	origShuf := grpcrand.Shuffle
-	defer func() { grpcrand.Shuffle = origShuf }()
-	grpcrand.Shuffle = func(n int, f func(int, int)) {
+	origShuf := internal.ShuffleAddressListForTesting
+	defer func() { internal.ShuffleAddressListForTesting = origShuf }()
+	internal.ShuffleAddressListForTesting = func(n int, f func(int, int)) {
 		if n != 2 {
 			t.Errorf("Shuffle called with n=%v; want 2", n)
 			return
@@ -435,9 +434,9 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 // Test config parsing with the env var turned on and off for various scenarios.
 func (s) TestPickFirst_ParseConfig_Success(t *testing.T) {
 	// Install a shuffler that always reverses two entries.
-	origShuf := grpcrand.Shuffle
-	defer func() { grpcrand.Shuffle = origShuf }()
-	grpcrand.Shuffle = func(n int, f func(int, int)) {
+	origShuf := internal.ShuffleAddressListForTesting
+	defer func() { internal.ShuffleAddressListForTesting = origShuf }()
+	internal.ShuffleAddressListForTesting = func(n int, f func(int, int)) {
 		if n != 2 {
 			t.Errorf("Shuffle called with n=%v; want 2", n)
 			return

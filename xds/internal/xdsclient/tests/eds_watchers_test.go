@@ -31,14 +31,11 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
@@ -212,7 +209,7 @@ func (s) TestEDSWatch(t *testing.T) {
 			defer cleanup()
 
 			// Create an xDS client with the above bootstrap contents.
-			client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
 			}
@@ -379,7 +376,7 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			defer cleanup()
 
 			// Create an xDS client with the above bootstrap contents.
-			client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
 			}
@@ -460,7 +457,7 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -555,7 +552,7 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -636,12 +633,13 @@ func (s) TestEDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	}
 	defer mgmtServer.Stop()
 
-	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
-		NodeProto: &v3corepb.Node{},
-	}, defaultTestWatchExpiryTimeout, time.Duration(0))
+	bc, err := e2e.DefaultBootstrapContents("", mgmtServer.Address)
 	if err != nil {
-		t.Fatalf("failed to create xds client: %v", err)
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
 	defer close()
 
@@ -676,12 +674,13 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 
 	// Create an xDS client talking to the above management server.
 	nodeID := uuid.New().String()
-	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
-		NodeProto: &v3corepb.Node{Id: nodeID},
-	}, defaultTestWatchExpiryTimeout, time.Duration(0))
+	bc, err := e2e.DefaultBootstrapContents(nodeID, mgmtServer.Address)
 	if err != nil {
-		t.Fatalf("failed to create xds client: %v", err)
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
 	defer close()
 
@@ -741,7 +740,7 @@ func (s) TestEDSWatch_NACKError(t *testing.T) {
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -787,7 +786,7 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}

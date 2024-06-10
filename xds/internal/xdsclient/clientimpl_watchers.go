@@ -96,7 +96,6 @@ func (r *resourceTypeRegistry) maybeRegister(rType xdsresource.Type) error {
 }
 
 func (c *clientImpl) triggerResourceNotFoundForTesting(rType xdsresource.Type, resourceName string) error {
-	// Return early if the client is already closed.
 	if c == nil || c.done.HasFired() {
 		return fmt.Errorf("attempt to trigger resource-not-found-error for resource %q of type %q, but client is closed", rType.TypeName(), resourceName)
 	}

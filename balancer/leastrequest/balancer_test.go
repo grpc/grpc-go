@@ -194,13 +194,13 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 // deterministic, allowing the test to make assertions on the distribution.
 func (s) TestLeastRequestE2E(t *testing.T) {
 	defer func(u func() uint32) {
-		grpcranduint32 = u
-	}(grpcranduint32)
+		randuint32 = u
+	}(randuint32)
 	var index int
 	indexes := []uint32{
 		0, 0, 1, 1, 2, 2, // Triggers a round robin distribution.
 	}
-	grpcranduint32 = func() uint32 {
+	randuint32 = func() uint32 {
 		ret := indexes[index%len(indexes)]
 		index++
 		return ret
@@ -310,13 +310,13 @@ func (s) TestLeastRequestE2E(t *testing.T) {
 // previous. Any created streams should then be started on the new backend.
 func (s) TestLeastRequestPersistsCounts(t *testing.T) {
 	defer func(u func() uint32) {
-		grpcranduint32 = u
-	}(grpcranduint32)
+		randuint32 = u
+	}(randuint32)
 	var index int
 	indexes := []uint32{
 		0, 0, 1, 1,
 	}
-	grpcranduint32 = func() uint32 {
+	randuint32 = func() uint32 {
 		ret := indexes[index%len(indexes)]
 		index++
 		return ret

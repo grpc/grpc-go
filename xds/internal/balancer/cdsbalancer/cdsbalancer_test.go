@@ -228,7 +228,7 @@ func setupWithManagementServer(t *testing.T) (*e2e.ManagementServer, string, *gr
 	})
 	t.Cleanup(cleanup)
 
-	xdsC, xdsClose, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	xdsC, xdsClose, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -344,7 +344,7 @@ func (s) TestConfigurationUpdate_EmptyCluster(t *testing.T) {
 	// Setup a management server and an xDS client to talk to it.
 	_, _, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	t.Cleanup(cleanup)
-	xdsClient, xdsClose, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	xdsClient, xdsClose, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -597,16 +597,18 @@ func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 		ServiceName: serviceName,
 		EnableLRS:   true,
 	})
+	lrsServerCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fmt.Sprintf("passthrough:///%s", mgmtServer.Address)})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
+
 	wantChildCfg := &clusterresolver.LBConfig{
 		DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
-			Cluster:        clusterName,
-			Type:           clusterresolver.DiscoveryMechanismTypeEDS,
-			EDSServiceName: serviceName,
-			LoadReportingServer: &bootstrap.ServerConfig{
-				ServerURI: mgmtServer.Address,
-				Creds:     bootstrap.ChannelCreds{Type: "insecure"},
-			},
-			OutlierDetection: json.RawMessage(`{}`),
+			Cluster:             clusterName,
+			Type:                clusterresolver.DiscoveryMechanismTypeEDS,
+			EDSServiceName:      serviceName,
+			LoadReportingServer: lrsServerCfg,
+			OutlierDetection:    json.RawMessage(`{}`),
 		}},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 	}
