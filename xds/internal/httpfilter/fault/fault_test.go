@@ -24,6 +24,7 @@ package fault
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -38,8 +39,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -107,14 +108,18 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	}
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
-		NodeID:                             nodeID,
-		ServerURI:                          fs.Address,
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, fs.Address))},
 		ServerListenerResourceNameTemplate: "grpc/server",
+		NodeID:                             nodeID,
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
+	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 
 	// Initialize a gRPC server and register the stubServer on it.
 	server := grpc.NewServer()
@@ -134,7 +139,6 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 
 	return fs, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), func() {
 		fs.Stop()
-		bootstrapCleanup()
 		server.Stop()
 	}
 }

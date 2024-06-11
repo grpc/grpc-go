@@ -40,8 +40,8 @@ import (
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
@@ -198,15 +198,18 @@ func (s) TestNewServer_Failure(t *testing.T) {
 			serverOpts: []grpc.ServerOption{
 				grpc.Creds(xdsCreds),
 				func() grpc.ServerOption {
-					bs, err := bootstrap.Contents(bootstrap.Options{
-						NodeID:    uuid.New().String(),
-						ServerURI: nonExistentManagementServer,
+					bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+						Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+							"server_uri": %q,
+							"channel_creds": [{"type": "insecure"}]
+						}`, nonExistentManagementServer))},
+						NodeID: uuid.New().String(),
 						CertificateProviders: map[string]json.RawMessage{
 							"cert-provider-instance": json.RawMessage("{}"),
 						},
 					})
 					if err != nil {
-						t.Errorf("Failed to create bootstrap configuration: %v", err)
+						t.Fatalf("Failed to create bootstrap configuration: %v", err)
 					}
 					return BootstrapContentsForTesting(bs)
 				}(),
@@ -498,9 +501,12 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 	// with certificate provider configuration pointing to fake certificate
 	// providers.
 	nodeID := uuid.NewString()
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: mgmtServer.Address,
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, mgmtServer.Address))},
+		NodeID: nodeID,
 		CertificateProviders: map[string]json.RawMessage{
 			e2e.ServerSideCertProviderInstance: fakeProvider1Config,
 			e2e.ClientSideCertProviderInstance: fakeProvider2Config,
@@ -587,9 +593,12 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	// Generate bootstrap configuration pointing to the above management server
 	// with certificate provider configuration pointing to fake certificate
 	// providers.
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: mgmtServer.Address,
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, mgmtServer.Address))},
+		NodeID: nodeID,
 		CertificateProviders: map[string]json.RawMessage{
 			e2e.ServerSideCertProviderInstance: fakeProvider1Config,
 			e2e.ClientSideCertProviderInstance: fakeProvider2Config,

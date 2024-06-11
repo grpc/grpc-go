@@ -20,6 +20,7 @@ package xds_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -31,8 +32,8 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 
@@ -70,12 +71,24 @@ func (s) TestClientSideFederation(t *testing.T) {
 
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, serverDefaultAuth.Address))},
 		NodeID:                             nodeID,
-		ServerURI:                          serverDefaultAuth.Address,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 		// Specify the address of the non-default authority.
-		Authorities: map[string]string{nonDefaultAuth: serverAnotherAuth.Address},
+		Authorities: map[string]json.RawMessage{
+			nonDefaultAuth: []byte(fmt.Sprintf(`{
+				"xds_servers": [
+					{
+						"server_uri": %q,
+						"channel_creds": [{"type": "insecure"}]
+					}
+				]
+			}`, serverAnotherAuth.Address)),
+		},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
@@ -156,11 +169,24 @@ func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: mgmtServer.Address,
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, mgmtServer.Address))},
+		NodeID: nodeID,
 		ClientDefaultListenerResourceNameTemplate: fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%%s", authority),
-		Authorities: map[string]string{authority: mgmtServer.Address},
+		// Specify the address of the non-default authority.
+		Authorities: map[string]json.RawMessage{
+			authority: []byte(fmt.Sprintf(`{
+				"xds_servers": [
+					{
+						"server_uri": %q,
+						"channel_creds": [{"type": "insecure"}]
+					}
+				]
+			}`, mgmtServer.Address)),
+		},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
@@ -292,10 +318,13 @@ func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
 	defer mgmtServer.Stop()
 
 	nodeID := uuid.New().String()
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		NodeID:                             nodeID,
-		ServerURI:                          mgmtServer.Address,
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, mgmtServer.Address))},
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
+		NodeID:                             nodeID,
 	})
 	if err != nil {
 		t.Fatal(err)

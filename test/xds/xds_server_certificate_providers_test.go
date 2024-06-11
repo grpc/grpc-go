@@ -20,6 +20,7 @@ package xds_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -32,8 +33,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -64,9 +65,12 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Success(t *test
 
 	// Create bootstrap configuration with no certificate providers.
 	nodeID := uuid.New().String()
-	bs, err := bootstrap.Contents(bootstrap.Options{
+	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, mgmtServer.Address))},
 		NodeID:                             nodeID,
-		ServerURI:                          mgmtServer.Address,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
 	if err != nil {
@@ -147,9 +151,12 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 
 	// Create bootstrap configuration with no certificate providers.
 	nodeID := uuid.New().String()
-	bs, err := bootstrap.Contents(bootstrap.Options{
+	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, mgmtServer.Address))},
 		NodeID:                             nodeID,
-		ServerURI:                          mgmtServer.Address,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
 	if err != nil {
@@ -442,7 +449,7 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	}
 
 	// Create a client that uses TLS creds and verify RPCs to listener1.
-	clientCreds := e2e.CreateClientTLSCredentials(t)
+	clientCreds := testutils.CreateClientTLSCredentials(t)
 	cc1, err := grpc.NewClient(lis1.Addr().String(), grpc.WithTransportCredentials(clientCreds))
 	if err != nil {
 		t.Fatalf("Failed to dial local test server: %v", err)

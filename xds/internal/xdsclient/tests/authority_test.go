@@ -20,13 +20,15 @@ package xdsclient_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
-	testbootstrap "google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -88,13 +90,20 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	// have empty server configs, and therefore end up using the default server
 	// config, which points to the above management server.
 	nodeID := uuid.New().String()
-	bootstrapContents, err := testbootstrap.Contents(testbootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: defaultAuthorityServer.Address,
-		Authorities: map[string]string{
-			testAuthority1: "",
-			testAuthority2: "",
-			testAuthority3: nonDefaultAuthorityServer.Address,
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, defaultAuthorityServer.Address))},
+		NodeID: nodeID,
+		Authorities: map[string]json.RawMessage{
+			testAuthority1: []byte(`{}`),
+			testAuthority2: []byte(`{}`),
+			testAuthority3: []byte(fmt.Sprintf(`{
+				"xds_servers": [{
+					"server_uri": %q,
+					"channel_creds": [{"type": "insecure"}]
+				}]}`, nonDefaultAuthorityServer.Address)),
 		},
 	})
 	if err != nil {

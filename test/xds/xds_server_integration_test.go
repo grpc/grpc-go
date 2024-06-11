@@ -350,7 +350,7 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 
 	// Create a ClientConn with TLS creds. This should fail since the server is
 	// using fallback credentials which in this case in insecure creds.
-	tlsCreds := e2e.CreateClientTLSCredentials(t)
+	tlsCreds := testutils.CreateClientTLSCredentials(t)
 	tlsCC, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithTransportCredentials(tlsCreds))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)

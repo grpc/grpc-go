@@ -19,12 +19,13 @@ package xdsclient_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -58,15 +59,22 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 	t.Cleanup(serverNonDefaultAuthority.Stop)
 
 	nodeID := uuid.New().String()
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		NodeID:                             nodeID,
-		ServerURI:                          serverDefaultAuthority.Address,
-		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
-		// Specify the address of the non-default authority.
-		Authorities: map[string]string{testNonDefaultAuthority: serverNonDefaultAuthority.Address},
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, serverDefaultAuthority.Address))},
+		NodeID: nodeID,
+		Authorities: map[string]json.RawMessage{
+			testNonDefaultAuthority: []byte(fmt.Sprintf(`{
+				"xds_servers": [{
+					"server_uri": %q,
+					"channel_creds": [{"type": "insecure"}]
+				}]}`, serverNonDefaultAuthority.Address)),
+		},
 	})
 	if err != nil {
-		t.Fatalf("Failed to create bootstrap file: %v", err)
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
 	// Create an xDS client with the above bootstrap contents.
 	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})

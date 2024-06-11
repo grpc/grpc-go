@@ -21,13 +21,15 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path"
 	"testing"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/testdata"
 )
 
 // SetupManagementServer performs the following:
@@ -99,14 +101,69 @@ func DefaultBootstrapContents(nodeID, serverURI string) ([]byte, error) {
 	}
 
 	// Create the bootstrap configuration.
-	bs, err := bootstrap.Contents(bootstrap.Options{
+	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, serverURI))},
 		NodeID:                             nodeID,
-		ServerURI:                          serverURI,
 		CertificateProviders:               cpc,
 		ServerListenerResourceNameTemplate: ServerListenerResourceNameTemplate,
+		Authorities: map[string]json.RawMessage{
+			// Most tests that use new style xdstp resource names do not specify
+			// an authority. These end up looking up an entry with the empty key
+			// in the authorities map. Having an entry with an empty key and
+			// empty configuration, results in these resources also using the
+			// top-level configuration, which is what we want mostly for our
+			// tests, unless explicitly specified by tests that use multiple
+			// authorities etc.
+			"": []byte(`{}`),
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bootstrap configuration: %v", err)
 	}
 	return bs, nil
+}
+
+const (
+	// Names of files inside tempdir, for certprovider plugin to watch.
+	certFile = "cert.pem"
+	keyFile  = "key.pem"
+	rootFile = "ca.pem"
+)
+
+func createTmpFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return fmt.Errorf("os.ReadFile(%q) failed: %v", src, err)
+	}
+	if err := os.WriteFile(dst, data, os.ModePerm); err != nil {
+		return fmt.Errorf("os.WriteFile(%q) failed: %v", dst, err)
+	}
+	return nil
+}
+
+// createTempDirWithFiles creates a temporary directory under the system default
+// tempDir with the given dirSuffix. It also reads from certSrc, keySrc and
+// rootSrc files are creates appropriate files under the newly create tempDir.
+// Returns the name of the created tempDir.
+func createTmpDirWithFiles(dirSuffix, certSrc, keySrc, rootSrc string) (string, error) {
+	// Create a temp directory. Passing an empty string for the first argument
+	// uses the system temp directory.
+	dir, err := os.MkdirTemp("", dirSuffix)
+	if err != nil {
+		return "", fmt.Errorf("os.MkdirTemp() failed: %v", err)
+	}
+
+	if err := createTmpFile(testdata.Path(certSrc), path.Join(dir, certFile)); err != nil {
+		return "", err
+	}
+	if err := createTmpFile(testdata.Path(keySrc), path.Join(dir, keyFile)); err != nil {
+		return "", err
+	}
+	if err := createTmpFile(testdata.Path(rootSrc), path.Join(dir, rootFile)); err != nil {
+		return "", err
+	}
+	return dir, nil
 }

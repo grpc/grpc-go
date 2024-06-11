@@ -21,6 +21,7 @@ package xds_test
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -34,8 +35,8 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
@@ -67,9 +68,12 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Success(t *test
 
 	// Create bootstrap configuration with no certificate providers.
 	nodeID := uuid.New().String()
-	bs, err := bootstrap.Contents(bootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: mgmtServer.Address,
+	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, mgmtServer.Address))},
+		NodeID: nodeID,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
@@ -143,9 +147,12 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 
 	// Create bootstrap configuration with no certificate providers.
 	nodeID := uuid.New().String()
-	bs, err := bootstrap.Contents(bootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: mgmtServer.Address,
+	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, mgmtServer.Address))},
+		NodeID: nodeID,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
@@ -227,7 +234,7 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	// backend1 configured with TLS creds, represents cluster1
 	// backend2 configured with insecure creds, represents cluster2
 	// backend3 configured with insecure creds, represents cluster3
-	creds := e2e.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)
+	creds := testutils.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)
 	server1 := stubserver.StartTestService(t, nil, grpc.Creds(creds))
 	defer server1.Stop()
 	server2 := stubserver.StartTestService(t, nil)

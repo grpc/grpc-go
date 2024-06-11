@@ -20,6 +20,7 @@ package resolver_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -32,8 +33,8 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
-	xdsbootstrap "google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	xdsresolver "google.golang.org/grpc/xds/internal/resolver"
@@ -228,14 +229,17 @@ func setupManagementServerForTest(ctx context.Context, t *testing.T, nodeID stri
 	t.Cleanup(mgmtServer.Stop)
 
 	// Create a bootstrap configuration specifying the above management server.
-	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: mgmtServer.Address,
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, mgmtServer.Address))},
+		NodeID: nodeID,
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	t.Cleanup(cleanup)
+	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 	return mgmtServer, listenerResourceNamesCh, routeConfigResourceNamesCh
 }
 

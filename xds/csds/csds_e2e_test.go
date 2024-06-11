@@ -20,6 +20,7 @@ package csds_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
@@ -33,8 +34,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/csds"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -124,14 +125,17 @@ func (s) TestCSDS(t *testing.T) {
 	defer mgmtServer.Stop()
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: mgmtServer.Address,
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, mgmtServer.Address))},
+		NodeID: nodeID,
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	defer bootstrapCleanup()
+	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 
 	// Create an xDS client. This will end up using the same singleton as used
 	// by the CSDS service.
@@ -403,14 +407,10 @@ func checkClientStatusResponse(stream v3statuspbgrpc.ClientStatusDiscoveryServic
 }
 
 func (s) TestCSDSNoXDSClient(t *testing.T) {
-	// Create a bootstrap file in a temporary directory. Since we pass empty
-	// options, it would end up creating a bootstrap file with an empty
-	// serverURI which will fail xDS client creation.
-	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { bootstrapCleanup() })
+	// Create a bootstrap file in a temporary directory. Since we pass an empty
+	// bootstrap configuration, it will fail xDS client creation because the
+	// `server_uri` field is unset.
+	testutils.CreateBootstrapFileForTesting(t, []byte(``))
 
 	// Initialize an gRPC server and register CSDS on it.
 	server := grpc.NewServer()

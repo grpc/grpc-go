@@ -18,11 +18,12 @@
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 )
 
 type controlPlane struct {
@@ -39,9 +40,12 @@ func newControlPlane() (*controlPlane, error) {
 	}
 
 	nodeID := uuid.New().String()
-	bootstrapContentBytes, err := bootstrap.Contents(bootstrap.Options{
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, server.Address))},
 		NodeID:                             nodeID,
-		ServerURI:                          server.Address,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
 	if err != nil {
@@ -52,7 +56,7 @@ func newControlPlane() (*controlPlane, error) {
 	return &controlPlane{
 		server:           server,
 		nodeID:           nodeID,
-		bootstrapContent: string(bootstrapContentBytes),
+		bootstrapContent: string(bootstrapContents),
 	}, nil
 }
 

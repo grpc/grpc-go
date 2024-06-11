@@ -20,6 +20,7 @@ package xds_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"sync"
@@ -33,8 +34,8 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds"
 
@@ -270,11 +271,24 @@ func startManagementServer(t *testing.T) *e2e.ManagementServer {
 // This helper generates a custom bootstrap config for the test.
 func generateBootstrapContents(t *testing.T, serverURI string, ignoreResourceDeletion bool, nodeID string) []byte {
 	t.Helper()
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
+	var serverCfg json.RawMessage
+	if ignoreResourceDeletion {
+		serverCfg = []byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}],
+			"server_features": ["ignore_resource_deletion"]
+		}`, serverURI))
+	} else {
+		serverCfg = []byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, serverURI))
+
+	}
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers:                            []json.RawMessage{serverCfg},
 		NodeID:                             nodeID,
-		ServerURI:                          serverURI,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
-		IgnoreResourceDeletion:             ignoreResourceDeletion,
 	})
 	if err != nil {
 		t.Fatal(err)

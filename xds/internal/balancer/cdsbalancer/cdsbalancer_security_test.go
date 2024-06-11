@@ -41,8 +41,8 @@ import (
 	xdscredsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	xdsbootstrap "google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -365,9 +365,12 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 	// Ignore the bootstrap configuration returned by the above call to
 	// e2e.SetupManagementServer and create a new one that does not have
 	// ceritificate providers configuration.
-	bootstrapContents, err := xdsbootstrap.Contents(xdsbootstrap.Options{
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, mgmtServer.Address))},
 		NodeID:                             nodeID,
-		ServerURI:                          mgmtServer.Address,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
 	if err != nil {
@@ -428,11 +431,14 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 		"plugin_name": "%s",
 		"config": {}
 	}`, errCertProviderName))
-	bootstrapContents, err := xdsbootstrap.Contents(xdsbootstrap.Options{
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, mgmtServer.Address))},
 		NodeID:                             nodeID,
-		ServerURI:                          mgmtServer.Address,
-		CertificateProviders:               map[string]json.RawMessage{e2e.ClientSideCertProviderInstance: providerCfg},
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
+		CertificateProviders:               map[string]json.RawMessage{e2e.ClientSideCertProviderInstance: providerCfg},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
