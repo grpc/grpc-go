@@ -244,11 +244,11 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T
 	servers, stop := startTestServiceBackends(t, 2)
 	defer stop()
 
-	primaryClusterName := "new_cluster_1"
-	primaryServiceName := "new_eds_service_1"
-	secondaryClusterName := "new_cluster_2"
-	secondaryServiceName := "new_eds_service_2"
-	clusterName := "aggregate_cluster"
+	const primaryClusterName = "new_cluster_1"
+	const primaryServiceName = "new_eds_service_1"
+	const secondaryClusterName = "new_cluster_2"
+	const secondaryServiceName = "new_eds_service_2"
+	const clusterName = "aggregate_cluster"
 
 	ep1 := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 		ClusterName: primaryServiceName,
@@ -351,9 +351,9 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer stop()
 
-	edsClusterName := "eds_cluster"
-	logicalDNSClusterName := "logical_dns_cluster"
-	clusterName := "aggregate_cluster"
+	const edsClusterName = "eds_cluster"
+	const logicalDNSClusterName = "logical_dns_cluster"
+	const clusterName = "aggregate_cluster"
 
 	backends, stop := startTestServiceBackends(t, 1)
 	defer stop()
@@ -432,9 +432,9 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer stop()
 
-	edsClusterName := "eds_cluster"
-	logicalDNSClusterName := "logical_dns_cluster"
-	clusterName := "aggregate_cluster"
+	const edsClusterName = "eds_cluster"
+	const logicalDNSClusterName = "logical_dns_cluster"
+	const clusterName = "aggregate_cluster"
 
 	backends, stop := startTestServiceBackends(t, 1)
 	defer stop()
@@ -562,7 +562,7 @@ func (s) TestRingHash_ChannelIdHashing(t *testing.T) {
 
 	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer stop()
-	clusterName := "cluster"
+	const clusterName = "cluster"
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 		ClusterName: clusterName,
 		Localities: []e2e.LocalityOptions{{
@@ -642,7 +642,7 @@ func (s) TestRingHash_HeaderHashing(t *testing.T) {
 
 	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer stop()
-	clusterName := "cluster"
+	const clusterName = "cluster"
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 		ClusterName: clusterName,
 		Host:        host,
@@ -824,7 +824,7 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 
 	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer stop()
-	clusterName := "cluster"
+	const clusterName = "cluster"
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 		ClusterName: clusterName,
 		Localities: []e2e.LocalityOptions{{
@@ -878,7 +878,7 @@ func (s) TestRingHash_EndpointWeights(t *testing.T) {
 	defer stop()
 	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer stop()
-	clusterName := "cluster"
+	const clusterName = "cluster"
 	backendOpts := []e2e.BackendOptions{
 		{Port: testutils.ParsePort(t, backends[0].Address)},
 		{Port: testutils.ParsePort(t, backends[1].Address)},
