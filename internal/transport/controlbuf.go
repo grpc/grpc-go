@@ -327,8 +327,7 @@ func newControlBuffer(done <-chan struct{}) *controlBuffer {
 // represent the response of an action initiated by the peer, like
 // incomingSettings cleanupStreams etc.
 func (c *controlBuffer) throttle() {
-	ch := c.trfChan.Load()
-	if ch != nil {
+	if ch := c.trfChan.Load(); ch != nil {
 		select {
 		case <-(*ch):
 		case <-c.done:
@@ -346,9 +345,9 @@ func (c *controlBuffer) put(it cbItem) error {
 // the controlbuf. The item could be nil, in which case, this method simply
 // executes f and does not add the item to the controlbuf.
 //
-// The first return value indicates the return value from running f, and the
-// second return value indicates if there was an error adding the item to the
-// controlbuf.
+// The first return value indicates whether the item was successfully added to
+// the control buffer. A non-nil error, specifically ErrConnClosing, is returned
+// if the control buffer is already closed.
 func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
