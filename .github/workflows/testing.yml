@@ -85,7 +85,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.goversion }}
-          cache-dependency-path: "**/go.sum"
+          cache-dependency-path: "**/*go.sum"
 
       - name: Checkout repo
         uses: actions/checkout@v4
