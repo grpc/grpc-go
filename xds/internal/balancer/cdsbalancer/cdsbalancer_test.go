@@ -196,7 +196,7 @@ func registerWrappedCDSPolicy(t *testing.T) chan balancer.Balancer {
 //   - the nodeID expected by the management server
 //   - the grpc channel to the test backend service
 //   - the manual resolver configured on the channel
-//   - the xDS cient used the grpc channel
+//   - the xDS client used the grpc channel
 //   - a channel on which requested cluster resource names are sent
 //   - a channel used to signal that previously requested cluster resources are
 //     no longer requested

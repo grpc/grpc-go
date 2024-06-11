@@ -79,26 +79,18 @@ func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clus
 // Returns the following:
 //   - a channel onto which the DNS target being resolved is written to by the
 //     mock DNS resolver
-//   - a channel to notify close of the DNS resolver
-//   - a channel to notify re-resolution requests to the DNS resolver
 //   - a manual resolver which is used to mock the actual DNS resolution
-//   - a cleanup function which re-registers the original DNS resolver
-func setupDNS() (chan resolver.Target, chan struct{}, chan resolver.ResolveNowOptions, *manual.Resolver, func()) {
+func setupDNS(t *testing.T) (chan resolver.Target, *manual.Resolver) {
 	targetCh := make(chan resolver.Target, 1)
-	closeCh := make(chan struct{}, 1)
-	resolveNowCh := make(chan resolver.ResolveNowOptions, 1)
 
 	mr := manual.NewBuilderWithScheme("dns")
-	mr.BuildCallback = func(target resolver.Target, _ resolver.ClientConn, _ resolver.BuildOptions) {
-		targetCh <- target
-	}
-	mr.CloseCallback = func() { closeCh <- struct{}{} }
-	mr.ResolveNowCallback = func(opts resolver.ResolveNowOptions) { resolveNowCh <- opts }
+	mr.BuildCallback = func(target resolver.Target, _ resolver.ClientConn, _ resolver.BuildOptions) { targetCh <- target }
 
 	dnsResolverBuilder := resolver.Get("dns")
 	resolver.Register(mr)
 
-	return targetCh, closeCh, resolveNowCh, mr, func() { resolver.Register(dnsResolverBuilder) }
+	t.Cleanup(func() { resolver.Register(dnsResolverBuilder) })
+	return targetCh, mr
 }
 
 // TestAggregateCluster_WithTwoEDSClusters tests the case where the top-level
@@ -471,8 +463,7 @@ func (s) TestAggregateCluster_WithOneDNSCluster_HostnameChange(t *testing.T) {
 // cluster. The test verifies that RPCs fail until both clusters are resolved to
 // endpoints, and RPCs are routed to the higher priority EDS cluster.
 func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
-	dnsTargetCh, _, _, dnsR, cleanup1 := setupDNS()
-	defer cleanup1()
+	dnsTargetCh, dnsR := setupDNS(t)
 
 	// Start an xDS management server that pushes the name of the requested EDS
 	// resource onto a channel.
@@ -661,8 +652,7 @@ func (s) TestAggregateCluster_SwitchEDSAndDNS(t *testing.T) {
 // still successful. This is the expected behavior because the cluster resolver
 // policy eats errors from DNS Resolver after it has returned an error.
 func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
-	dnsTargetCh, _, _, dnsR, cleanup1 := setupDNS()
-	defer cleanup1()
+	dnsTargetCh, dnsR := setupDNS(t)
 
 	// Start an xDS management server.
 	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})

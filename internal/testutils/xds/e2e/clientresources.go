@@ -675,6 +675,8 @@ type LocalityOptions struct {
 	Weight uint32
 	// Backends is a set of backends belonging to this locality.
 	Backends []BackendOptions
+	// Priority is the priority of the locality. Defaults to 0.
+	Priority uint32
 }
 
 // BackendOptions contains options to configure individual backends in a
@@ -686,6 +688,8 @@ type BackendOptions struct {
 	// Health status of the backend. Default is UNKNOWN which is treated the
 	// same as HEALTHY.
 	HealthStatus v3corepb.HealthStatus
+	// Weight sets the backend weight. Defaults to 1.
+	Weight uint32
 }
 
 // EndpointOptions contains options to configure an Endpoint (or
@@ -708,7 +712,7 @@ type EndpointOptions struct {
 func DefaultEndpoint(clusterName string, host string, ports []uint32) *v3endpointpb.ClusterLoadAssignment {
 	var bOpts []BackendOptions
 	for _, p := range ports {
-		bOpts = append(bOpts, BackendOptions{Port: p})
+		bOpts = append(bOpts, BackendOptions{Port: p, Weight: 1})
 	}
 	return EndpointResourceWithOptions(EndpointOptions{
 		ClusterName: clusterName,
@@ -729,6 +733,10 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 	for i, locality := range opts.Localities {
 		var lbEndpoints []*v3endpointpb.LbEndpoint
 		for _, b := range locality.Backends {
+			// Weight defaults to 1.
+			if b.Weight == 0 {
+				b.Weight = 1
+			}
 			lbEndpoints = append(lbEndpoints, &v3endpointpb.LbEndpoint{
 				HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{Endpoint: &v3endpointpb.Endpoint{
 					Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
@@ -740,7 +748,7 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 					}},
 				}},
 				HealthStatus:        b.HealthStatus,
-				LoadBalancingWeight: &wrapperspb.UInt32Value{Value: 1},
+				LoadBalancingWeight: &wrapperspb.UInt32Value{Value: b.Weight},
 			})
 		}
 
@@ -752,7 +760,7 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 			},
 			LbEndpoints:         lbEndpoints,
 			LoadBalancingWeight: &wrapperspb.UInt32Value{Value: locality.Weight},
-			Priority:            0,
+			Priority:            locality.Priority,
 		})
 	}
 
