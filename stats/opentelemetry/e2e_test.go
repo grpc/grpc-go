@@ -93,7 +93,7 @@ func setup(t *testing.T, methodAttributeFilter func(string) bool) (*metric.Manua
 func (s) TestMethodAttributeFilter(t *testing.T) {
 	maf := func(str string) bool {
 		// Will allow duplex/any other type of RPC.
-		return str != testpb.TestService_UnaryCall_FullMethodName
+		return str != testgrpc.TestService_UnaryCall_FullMethodName
 	}
 	reader, ss := setup(t, maf)
 	defer ss.Stop()
