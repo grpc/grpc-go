@@ -20,13 +20,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       # Setup the environment.
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-      - name: Checkout repo
-        uses: actions/checkout@v4
+          cache-dependency-path: "**/go.sum"
 
       # Run the vet-proto checks.
       - name: vet-proto
@@ -79,14 +81,15 @@ jobs:
       - name: Setup GRPC environment
         if: matrix.grpcenv != ''
         run: echo "${{ matrix.grpcenv }}" >> $GITHUB_ENV
+        
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.goversion }}
-
-      - name: Checkout repo
-        uses: actions/checkout@v4
+          cache-dependency-path: "**/*go.sum"
 
       # Only run vet for 'vet' runs.
       - name: Run vet.sh
