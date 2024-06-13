@@ -194,7 +194,7 @@ func channelIDHashRoute(routeName, virtualHostDomain, clusterName string) *v3rou
 // checkRPCSendOK sends num RPCs to the client. It returns a map of backend
 // addresses as keys and number of RPCs sent to this address as value. Abort the
 // test if any RPC fails.
-func checkRPCSendOK(t *testing.T, ctx context.Context, client testpb.TestServiceClient, num int) map[string]int {
+func checkRPCSendOK(t *testing.T, ctx context.Context, client testgrpc.TestServiceClient, num int) map[string]int {
 	t.Helper()
 
 	backendCount := make(map[string]int)
