@@ -589,7 +589,7 @@ func (a *authority) reportLoad() (*load.Store, func()) {
 	return a.transport.ReportLoad()
 }
 
-func (a *authority) dumpResources() ([]*v3statuspb.ClientConfig_GenericXdsConfig, error) {
+func (a *authority) dumpResources() []*v3statuspb.ClientConfig_GenericXdsConfig {
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 
@@ -619,7 +619,7 @@ func (a *authority) dumpResources() ([]*v3statuspb.ClientConfig_GenericXdsConfig
 			ret = append(ret, config)
 		}
 	}
-	return ret, nil
+	return ret
 }
 
 func serviceStatusToProto(serviceStatus xdsresource.ServiceStatus) v3adminpb.ClientResourceStatus {

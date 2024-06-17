@@ -252,9 +252,13 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 	// client is closed.
 	origNewClient := rinternal.NewXDSClient
 	closeCh := make(chan struct{})
-	rinternal.NewXDSClient = func() (xdsclient.XDSClient, func(), error) {
+	rinternal.NewXDSClient = func(string) (xdsclient.XDSClient, func(), error) {
 		bc := e2e.DefaultBootstrapContents(t, uuid.New().String(), "dummy-management-server-address")
-		c, cancel, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestTimeout})
+		c, cancel, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+			Name:               t.Name(),
+			Contents:           bc,
+			WatchExpiryTimeout: defaultTestTimeout,
+		})
 		return c, grpcsync.OnceFunc(func() {
 			close(closeCh)
 			cancel()

@@ -37,30 +37,30 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, contents)
 
 	// Override the singleton creation hook to get notified.
-	origSingletonClientImplCreateHook := singletonClientImplCreateHook
-	singletonCreationCh := testutils.NewChannel()
-	singletonClientImplCreateHook = func() {
-		singletonCreationCh.Replace(nil)
+	origClientImplCreateHook := xdsClientImplCreateHook
+	clientImplCreateCh := testutils.NewChannel()
+	xdsClientImplCreateHook = func(name string) {
+		clientImplCreateCh.Replace(name)
 	}
-	defer func() { singletonClientImplCreateHook = origSingletonClientImplCreateHook }()
+	defer func() { xdsClientImplCreateHook = origClientImplCreateHook }()
 
 	// Override the singleton close hook to get notified.
-	origSingletonClientImplCloseHook := singletonClientImplCloseHook
-	singletonCloseCh := testutils.NewChannel()
-	singletonClientImplCloseHook = func() {
-		singletonCloseCh.Replace(nil)
+	origClientImplCloseHook := xdsClientImplCloseHook
+	clientImplCloseCh := testutils.NewChannel()
+	xdsClientImplCloseHook = func(name string) {
+		clientImplCloseCh.Replace(name)
 	}
-	defer func() { singletonClientImplCloseHook = origSingletonClientImplCloseHook }()
+	defer func() { xdsClientImplCloseHook = origClientImplCloseHook }()
 
 	// The first call to New() should create a new singleton client.
-	_, closeFunc, err := New()
+	_, closeFunc, err := New("singleton") // TODO(easwars): fix this
 	if err != nil {
 		t.Fatalf("failed to create xDS client: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := singletonCreationCh.Receive(ctx); err != nil {
+	if _, err := clientImplCreateCh.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when waiting for singleton xDS client to be created: %v", err)
 	}
 
@@ -69,14 +69,14 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	closeFuncs := make([]func(), 9)
 	for i := 0; i < count; i++ {
 		func() {
-			_, closeFuncs[i], err = New()
+			_, closeFuncs[i], err = New("singleton") // TODO(easwars): fix this
 			if err != nil {
 				t.Fatalf("%d-th call to New() failed with error: %v", i, err)
 			}
 
 			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 			defer sCancel()
-			if _, err := singletonCreationCh.Receive(sCtx); err == nil {
+			if _, err := clientImplCreateCh.Receive(sCtx); err == nil {
 				t.Fatalf("%d-th call to New() created a new singleton client", i)
 			}
 		}()
@@ -93,7 +93,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 
 			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 			defer sCancel()
-			if _, err := singletonCloseCh.Receive(sCtx); err == nil {
+			if _, err := clientImplCloseCh.Receive(sCtx); err == nil {
 				t.Fatal("singleton client implementation closed before all references are released")
 			}
 		}()
@@ -101,18 +101,18 @@ func (s) TestClientNewSingleton(t *testing.T) {
 
 	// Call the last Close(). The underlying implementation should be closed.
 	closeFunc()
-	if _, err := singletonCloseCh.Receive(ctx); err != nil {
+	if _, err := clientImplCloseCh.Receive(ctx); err != nil {
 		t.Fatalf("Timeout waiting for singleton client implementation to be closed: %v", err)
 	}
 
 	// Calling New() again, after the previous Client was actually closed, should
 	// create a new one.
-	_, closeFunc, err = New()
+	_, closeFunc, err = New("singleton") // TODO(easwars): fix this
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	defer closeFunc()
-	if _, err := singletonCreationCh.Receive(ctx); err != nil {
+	if _, err := clientImplCreateCh.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when waiting for singleton xDS client to be created: %v", err)
 	}
 }

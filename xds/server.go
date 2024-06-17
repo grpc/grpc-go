@@ -39,12 +39,18 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
-const serverPrefix = "[xds-server %p] "
+const (
+	serverPrefix = "[xds-server %p] "
+
+	// This is the dedicated well-known key value used during xDS client
+	// creation from the server side. This value is defined in gRFC A71.
+	xdsClientKey = "#server"
+)
 
 var (
 	// These new functions will be overridden in unit tests.
-	newXDSClient = func() (xdsclient.XDSClient, func(), error) {
-		return xdsclient.New()
+	newXDSClient = func(name string) (xdsclient.XDSClient, func(), error) {
+		return xdsclient.New(name)
 	}
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer {
 		return grpc.NewServer(opts...)
@@ -95,11 +101,14 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 	newXDSClient := newXDSClient
 	if s.opts.bootstrapContentsForTesting != nil {
 		// Bootstrap file contents may be specified as a server option for tests.
-		newXDSClient = func() (xdsclient.XDSClient, func(), error) {
-			return xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: s.opts.bootstrapContentsForTesting})
+		newXDSClient = func(name string) (xdsclient.XDSClient, func(), error) {
+			return xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:     name,
+				Contents: s.opts.bootstrapContentsForTesting,
+			})
 		}
 	}
-	xdsClient, xdsClientClose, err := newXDSClient()
+	xdsClient, xdsClientClose, err := newXDSClient(xdsClientKey)
 	if err != nil {
 		return nil, fmt.Errorf("xDS client creation failed: %v", err)
 	}
