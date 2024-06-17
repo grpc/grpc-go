@@ -1089,7 +1089,9 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		onWrite:   t.setResetPingStrikes,
 	}
 
-	success, err := t.controlBuf.execute(t.checkForHeaderListSize, trailingHeader)
+	success, err := t.controlBuf.executeAndPut(func() bool {
+		return t.checkForHeaderListSize(trailingHeader)
+	}, nil)
 	if !success {
 		if err != nil {
 			return err

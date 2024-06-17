@@ -2495,11 +2495,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			activeStreams: map[uint32]*Stream{
 				0: ts,
 			},
-			controlBuf: &controlBuffer{
-				ch:   make(chan struct{}),
-				done: make(chan struct{}),
-				list: &itemList{},
-			},
+			controlBuf: newControlBuffer(make(<-chan struct{})),
 		}
 	}
 
