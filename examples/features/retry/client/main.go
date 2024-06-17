@@ -47,7 +47,9 @@ var (
 		}]}`
 )
 
-// use grpc.WithDefaultServiceConfig() to set service config
+// use grpc.WithDefaultServiceConfig() to set service config. However,
+// better way to manage retry configuration is to retrieve it directly
+// from the name resolver instead of setting it up on the client side.
 func retryDial() (*grpc.ClientConn, error) {
 	return grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(retryPolicy))
 }
