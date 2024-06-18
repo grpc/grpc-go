@@ -20,7 +20,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -30,7 +29,6 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
@@ -111,17 +109,7 @@ func xdsSetupForTests(t *testing.T) (*e2e.ManagementServer, string, chan []strin
 
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
-	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-					"server_uri": "passthrough:///%s",
-					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
-		NodeID:                             nodeID,
-		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
-	}
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	xdsC, cancel, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
 	if err != nil {

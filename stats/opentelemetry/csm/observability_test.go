@@ -20,7 +20,6 @@ package csm
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -34,7 +33,7 @@ import (
 	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/metadata"
@@ -48,16 +47,7 @@ import (
 // simulate the environment. It registers a cleanup function on the provided t
 // to restore the environment to it's original state.
 func setupEnv(t *testing.T, resourceDetectorEmissions map[string]string, nodeID, csmCanonicalServiceName, csmWorkloadName string) {
-	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(`{
-			"server_uri": "xds_server_uri",
-			"channel_creds": [{"type": "insecure"}]
-		}`)},
-		NodeID: nodeID,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
-	}
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, "xds_server_uri")
 	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 
 	oldCSMCanonicalServiceName, csmCanonicalServiceNamePresent := os.LookupEnv("CSM_CANONICAL_SERVICE_NAME")

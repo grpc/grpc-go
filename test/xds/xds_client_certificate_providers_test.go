@@ -114,7 +114,8 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	// Start an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 
-	// Create bootstrap configuration pointing to the above management server.
+	// Create bootstrap configuration pointing to the above management server,
+	// with no certificate providers.
 	nodeID := uuid.New().String()
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
