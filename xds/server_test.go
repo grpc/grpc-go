@@ -102,12 +102,7 @@ func newFakeGRPCServer() *fakeGRPCServer {
 }
 
 func generateBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
-	t.Helper()
-
-	bs, err := e2e.DefaultBootstrapContents(nodeID, serverURI)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bs := e2e.DefaultBootstrapContents(t, nodeID, serverURI)
 	return bs
 }
 
@@ -359,7 +354,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	// Setup an xDS management server that pushes on a channel when an LDS
 	// request is received by it.
 	ldsRequestCh := make(chan []string, 1)
-	mgmtServer, nodeID, bootstrapContents, _, cancel := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3ListenerURL {
 				select {
@@ -370,7 +365,10 @@ func (s) TestServeSuccess(t *testing.T) {
 			return nil
 		},
 	})
-	defer cancel()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Override the function to create the underlying grpc.Server to allow the
 	// test to verify that Serve() is called on the underlying server.
@@ -491,11 +489,7 @@ func (s) TestNewServer_ClientCreationFailure(t *testing.T) {
 // server is not configured with xDS credentials. Verifies that the security
 // config received as part of a Listener update is not acted upon.
 func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to start xDS management server: %v", err)
-	}
-	defer mgmtServer.Stop()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Generate bootstrap configuration pointing to the above management server
 	// with certificate provider configuration pointing to fake certificate
@@ -577,7 +571,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	// Setup an xDS management server that pushes on a channel when an LDS
 	// request is received by it.
 	ldsRequestCh := make(chan []string, 1)
-	mgmtServer, nodeID, _, _, cancel := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3ListenerURL {
 				select {
@@ -588,11 +582,11 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 			return nil
 		},
 	})
-	defer cancel()
 
 	// Generate bootstrap configuration pointing to the above management server
 	// with certificate provider configuration pointing to fake certificate
 	// providers.
+	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 			"server_uri": %q,

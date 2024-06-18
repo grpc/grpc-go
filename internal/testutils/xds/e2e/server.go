@@ -25,6 +25,7 @@ import (
 	"net"
 	"reflect"
 	"strconv"
+	"testing"
 
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	"google.golang.org/grpc"
@@ -120,10 +121,10 @@ type ManagementServerOptions struct {
 // StartManagementServer initializes a management server which implements the
 // AggregatedDiscoveryService endpoint. The management server is initialized
 // with no resources. Tests should call the Update() method to change the
-// resource snapshot held by the management server, as required by the test
-// logic. When the test is done, it should call the Stop() method to cleanup
-// resources allocated by the management server.
-func StartManagementServer(opts ManagementServerOptions) (*ManagementServer, error) {
+// resource snapshot held by the management server, as per by the test logic.
+//
+// Registers a cleanup function on t to stop the management server.
+func StartManagementServer(t *testing.T, opts ManagementServerOptions) *ManagementServer {
 	// Create a snapshot cache. The first parameter to NewSnapshotCache()
 	// controls whether the server should wait for all resources to be
 	// explicitly named in the request before responding to any of them.
@@ -136,7 +137,7 @@ func StartManagementServer(opts ManagementServerOptions) (*ManagementServer, err
 		var err error
 		lis, err = net.Listen("tcp", "localhost:0")
 		if err != nil {
-			return nil, fmt.Errorf("listening on local host and port: %v", err)
+			t.Fatalf("Failed to listen on localhost:0: %v", err)
 		}
 	}
 
@@ -175,8 +176,8 @@ func StartManagementServer(opts ManagementServerOptions) (*ManagementServer, err
 	// Start serving.
 	go gs.Serve(lis)
 	logger.Infof("xDS management server serving at: %v...", lis.Addr().String())
-
-	return mgmtServer, nil
+	t.Cleanup(mgmtServer.Stop)
+	return mgmtServer
 }
 
 // UpdateOptions wraps parameters to be passed to the Update() method.

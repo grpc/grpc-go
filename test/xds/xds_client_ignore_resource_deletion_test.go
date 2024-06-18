@@ -148,7 +148,7 @@ func (s) TestIgnoreResourceDeletionOnClient(t *testing.T) {
 func testResourceDeletionIgnored(t *testing.T, initialResource func(string) e2e.UpdateOptions, updateResource func(r *e2e.UpdateOptions)) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	t.Cleanup(cancel)
-	mgmtServer := startManagementServer(t)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	nodeID := uuid.New().String()
 	bs := generateBootstrapContents(t, mgmtServer.Address, true, nodeID)
 	xdsR := xdsResolverBuilder(t, bs)
@@ -203,7 +203,7 @@ func testResourceDeletionIgnored(t *testing.T, initialResource func(string) e2e.
 func testResourceDeletionNotIgnored(t *testing.T, initialResource func(string) e2e.UpdateOptions, updateResource func(r *e2e.UpdateOptions)) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*1000)
 	t.Cleanup(cancel)
-	mgmtServer := startManagementServer(t)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	nodeID := uuid.New().String()
 	bs := generateBootstrapContents(t, mgmtServer.Address, false, nodeID)
 	xdsR := xdsResolverBuilder(t, bs)
@@ -255,17 +255,6 @@ func testResourceDeletionNotIgnored(t *testing.T, initialResource func(string) e
 	if ctx.Err() != nil {
 		t.Fatal("Context expired before RPCs failed.")
 	}
-}
-
-// This helper creates a management server for the test.
-func startManagementServer(t *testing.T) *e2e.ManagementServer {
-	t.Helper()
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to start management server: %v", err)
-	}
-	t.Cleanup(mgmtServer.Stop)
-	return mgmtServer
 }
 
 // This helper generates a custom bootstrap config for the test.
@@ -365,7 +354,7 @@ func resourceWithListenerForGRPCServer(t *testing.T, nodeID string) (e2e.UpdateO
 // case, when the listener resource is deleted on the management server, the gRPC
 // server should continue to serve RPCs.
 func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
-	mgmtServer := startManagementServer(t)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	nodeID := uuid.New().String()
 	bs := generateBootstrapContents(t, mgmtServer.Address, true, nodeID)
 	xdsR := xdsResolverBuilder(t, bs)
@@ -432,7 +421,7 @@ func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
 // which case, when the listener resource is deleted on the management server, the
 // gRPC server should stop serving RPCs and switch mode to ServingModeNotServing.
 func (s) TestListenerResourceDeletionOnServerNotIgnored(t *testing.T) {
-	mgmtServer := startManagementServer(t)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	nodeID := uuid.New().String()
 	bs := generateBootstrapContents(t, mgmtServer.Address, false, nodeID)
 	xdsR := xdsResolverBuilder(t, bs)

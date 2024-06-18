@@ -60,34 +60,7 @@ import (
 // used on the client.
 func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Success(t *testing.T) {
 	// Spin up an xDS management server.
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to start management server: %v", err)
-	}
-	defer mgmtServer.Stop()
-
-	// Create bootstrap configuration with no certificate providers.
-	nodeID := uuid.New().String()
-	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}`, mgmtServer.Address))},
-		NodeID: nodeID,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
-	}
-
-	// Create an xDS resolver with the above bootstrap configuration.
-	newResolver := internal.NewXDSResolverWithConfigForTesting
-	if newResolver == nil {
-		t.Fatal("internal.NewXDSResolverWithConfigForTesting is unset")
-	}
-	resolverBuilder, err := newResolver.(func([]byte) (resolver.Builder, error))(bs)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
+	mgmtServer, nodeID, _, resolverBuilder := setupManagementServerAndResolver(t)
 
 	// Spin up a test backend.
 	server := stubserver.StartTestService(t, nil)
@@ -138,20 +111,16 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Success(t *test
 // channel creation does not fail, but it moves to TRANSIENT_FAILURE and
 // subsequent rpcs fail.
 func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *testing.T) {
-	// Spin up an xDS management server.
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to start management server: %v", err)
-	}
-	defer mgmtServer.Stop()
+	// Start an xDS management server.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 
-	// Create bootstrap configuration with no certificate providers.
+	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
-	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}`, mgmtServer.Address))},
+					"server_uri": %q,
+					"channel_creds": [{"type": "insecure"}]
+				}`, mgmtServer.Address))},
 		NodeID: nodeID,
 	})
 	if err != nil {
@@ -159,13 +128,12 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	}
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	newResolver := internal.NewXDSResolverWithConfigForTesting
-	if newResolver == nil {
-		t.Fatal("internal.NewXDSResolverWithConfigForTesting is unset")
-	}
-	resolverBuilder, err := newResolver.(func([]byte) (resolver.Builder, error))(bs)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	var resolverBuilder resolver.Builder
+	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
+		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
+		if err != nil {
+			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		}
 	}
 
 	// Spin up a test backend.
@@ -225,17 +193,29 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 // The test verifies that RPCs to the first two clusters succeed, while RPCs to
 // the third cluster fails with an appropriate code and error message.
 func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T) {
-	// Spin up an xDS management server. This uses a bootstrap config with a
-	// certificate provider instance name e2e.ClientSideCertProviderInstance.
-	mgmtServer, nodeID, _, resolver, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer cleanup()
+	// Spin up an xDS management server.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	var xdsResolver resolver.Builder
+	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
+		var err error
+		xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
+		if err != nil {
+			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		}
+	}
 
 	// Create test backends for all three clusters
 	// backend1 configured with TLS creds, represents cluster1
 	// backend2 configured with insecure creds, represents cluster2
 	// backend3 configured with insecure creds, represents cluster3
-	creds := testutils.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)
-	server1 := stubserver.StartTestService(t, nil, grpc.Creds(creds))
+	serverCreds := testutils.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)
+	server1 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
 	defer server1.Stop()
 	server2 := stubserver.StartTestService(t, nil)
 	defer server2.Stop()
@@ -331,13 +311,13 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	}
 
 	// Create client-side xDS credentials with an insecure fallback.
-	creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
+	clientCreds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a ClientConn.
-	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(resolver))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}

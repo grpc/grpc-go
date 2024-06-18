@@ -48,10 +48,7 @@ func (s) TestLRSClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create server config for testing: %v", err)
 	}
-	bc, err := e2e.DefaultBootstrapContents(nodeID, fs1.Address)
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
-	}
+	bc := e2e.DefaultBootstrapContents(t, nodeID, fs1.Address)
 	xdsC, close, err := NewForTesting(OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)

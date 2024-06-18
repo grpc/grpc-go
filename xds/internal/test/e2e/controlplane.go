@@ -18,12 +18,10 @@
 package e2e
 
 import (
-	"encoding/json"
-	"fmt"
+	"testing"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
 )
 
 type controlPlane struct {
@@ -32,26 +30,13 @@ type controlPlane struct {
 	bootstrapContent string
 }
 
-func newControlPlane() (*controlPlane, error) {
+func newControlPlane(t *testing.T) (*controlPlane, error) {
 	// Spin up an xDS management server on a local port.
-	server, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to spin up the xDS management server: %v", err)
-	}
+	server := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	t.Cleanup(server.Stop)
 
 	nodeID := uuid.New().String()
-	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}`, server.Address))},
-		NodeID:                             nodeID,
-		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
-	})
-	if err != nil {
-		server.Stop()
-		return nil, fmt.Errorf("failed to create bootstrap file: %v", err)
-	}
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, server.Address)
 
 	return &controlPlane{
 		server:           server,

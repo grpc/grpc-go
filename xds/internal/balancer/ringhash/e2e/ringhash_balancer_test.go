@@ -28,10 +28,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -234,12 +236,39 @@ func makeNonExistentBackends(t *testing.T, num int) []e2e.BackendOptions {
 	return backendOptions
 }
 
+// setupManagementServerAndResolver sets up an xDS management server, creates
+// bootstrap configuration pointing to that server and creates an xDS resolver
+// using that configuration.
+//
+// Registers a cleanup function on t to stop the management server.
+//
+// Returns the management server, node ID and the xDS resolver builder.
+func setupManagementServerAndResolver(t *testing.T) (*e2e.ManagementServer, string, resolver.Builder) {
+	// Start an xDS management server.
+	xdsServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, xdsServer.Address)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	var r resolver.Builder
+	var err error
+	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
+		r, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
+		if err != nil {
+			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		}
+	}
+
+	return xdsServer, nodeID, r
+}
+
 // Tests that when an aggregate cluster is configured with ring hash policy, and
 // the first cluster is in transient failure, all RPCs are sent to the second
 // cluster using the ring hash policy.
 func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T) {
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer stop()
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
 
 	servers, stop := startTestServiceBackends(t, 2)
 	defer stop()
@@ -288,14 +317,13 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	err := xdsServer.Update(ctx, e2e.UpdateOptions{
+	if err := xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{ep1, ep2},
 		Clusters:  []*v3clusterpb.Cluster{cluster, primaryCluster, secundaryCluster},
 		Routes:    []*v3routepb.RouteConfiguration{route},
 		Listeners: []*v3listenerpb.Listener{listener},
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
@@ -348,8 +376,7 @@ func replaceDNSResolver(t *testing.T) *manual.Resolver {
 // logical DNS cluster, all RPCs are sent to the second cluster using the ring
 // hash policy.
 func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(t *testing.T) {
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer stop()
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
 
 	const edsClusterName = "eds_cluster"
 	const logicalDNSClusterName = "logical_dns_cluster"
@@ -394,14 +421,13 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	err := xdsServer.Update(ctx, e2e.UpdateOptions{
+	if err := xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster, edsCluster, logicalDNSCluster},
 		Routes:    []*v3routepb.RouteConfiguration{route},
 		Listeners: []*v3listenerpb.Listener{listener},
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
@@ -429,8 +455,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 // the later recovers from transient failure when its backend becomes available.
 func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupNoFailedRPCs(t *testing.T) {
 	// https://github.com/grpc/grpc/blob/083bbee4805c14ce62e6c9535fe936f68b854c4f/test/cpp/end2end/xds/xds_ring_hash_end2end_test.cc#L225
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer stop()
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
 
 	const edsClusterName = "eds_cluster"
 	const logicalDNSClusterName = "logical_dns_cluster"
@@ -475,14 +500,13 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	err := xdsServer.Update(ctx, e2e.UpdateOptions{
+	if err := xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster, edsCluster, logicalDNSCluster},
 		Routes:    []*v3routepb.RouteConfiguration{route},
 		Listeners: []*v3listenerpb.Listener{listener},
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
@@ -560,8 +584,8 @@ func (s) TestRingHash_ChannelIdHashing(t *testing.T) {
 	backends, stop := startTestServiceBackends(t, 4)
 	defer stop()
 
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer stop()
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
+
 	const clusterName = "cluster"
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 		ClusterName: clusterName,
@@ -581,14 +605,13 @@ func (s) TestRingHash_ChannelIdHashing(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	err := xdsServer.Update(ctx, e2e.UpdateOptions{
+	if err := xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
 		Routes:    []*v3routepb.RouteConfiguration{route},
 		Listeners: []*v3listenerpb.Listener{listener},
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
@@ -640,8 +663,8 @@ func (s) TestRingHash_HeaderHashing(t *testing.T) {
 		t.Fatalf("Failed to split host and port from stubserver: %v", err)
 	}
 
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer stop()
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
+
 	const clusterName = "cluster"
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 		ClusterName: clusterName,
@@ -662,14 +685,13 @@ func (s) TestRingHash_HeaderHashing(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	err = xdsServer.Update(ctx, e2e.UpdateOptions{
+	if err := xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
 		Routes:    []*v3routepb.RouteConfiguration{route},
 		Listeners: []*v3listenerpb.Listener{listener},
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
@@ -705,8 +727,8 @@ func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 		t.Fatalf("Failed to split host and port from stubserver: %v", err)
 	}
 
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer stop()
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
+
 	clusterName := "cluster"
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 		ClusterName: clusterName,
@@ -735,14 +757,13 @@ func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	err = xdsServer.Update(ctx, e2e.UpdateOptions{
+	if err := xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
 		Routes:    []*v3routepb.RouteConfiguration{route},
 		Listeners: []*v3listenerpb.Listener{listener},
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
@@ -822,8 +843,8 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 	defer stop()
 	numRPCs := computeIdealNumberOfRPCs(t, .5, errorTolerance)
 
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer stop()
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
+
 	const clusterName = "cluster"
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 		ClusterName: clusterName,
@@ -843,14 +864,13 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	err := xdsServer.Update(ctx, e2e.UpdateOptions{
+	if err := xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
 		Routes:    []*v3routepb.RouteConfiguration{route},
 		Listeners: []*v3listenerpb.Listener{listener},
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
@@ -876,8 +896,9 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 func (s) TestRingHash_EndpointWeights(t *testing.T) {
 	backends, stop := startTestServiceBackends(t, 3)
 	defer stop()
-	xdsServer, nodeID, _, xdsResolver, stop := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer stop()
+
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
+
 	const clusterName = "cluster"
 	backendOpts := []e2e.BackendOptions{
 		{Port: testutils.ParsePort(t, backends[0].Address)},
@@ -907,14 +928,13 @@ func (s) TestRingHash_EndpointWeights(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	err := xdsServer.Update(ctx, e2e.UpdateOptions{
+	if err := xdsServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoints},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
 		Routes:    []*v3routepb.RouteConfiguration{route},
 		Listeners: []*v3listenerpb.Listener{listener},
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 

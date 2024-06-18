@@ -20,7 +20,6 @@ package resolver_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -34,7 +33,6 @@ import (
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	xdsresolver "google.golang.org/grpc/xds/internal/resolver"
@@ -197,7 +195,7 @@ func setupManagementServerForTest(ctx context.Context, t *testing.T, nodeID stri
 	// Setup the management server to push the requested listener and route
 	// configuration resource names on to separate channels for the test to
 	// inspect.
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			switch req.GetTypeUrl() {
 			case version.V3ListenerURL:
@@ -223,22 +221,9 @@ func setupManagementServerForTest(ctx context.Context, t *testing.T, nodeID stri
 		},
 		AllowResourceSubset: true,
 	})
-	if err != nil {
-		t.Fatalf("Failed to start xDS management server: %v", err)
-	}
-	t.Cleanup(mgmtServer.Stop)
 
 	// Create a bootstrap configuration specifying the above management server.
-	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}`, mgmtServer.Address))},
-		NodeID: nodeID,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
-	}
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 	return mgmtServer, listenerResourceNamesCh, routeConfigResourceNamesCh
 }

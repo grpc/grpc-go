@@ -57,29 +57,11 @@ import (
 // credentials are getting used on the server.
 func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Success(t *testing.T) {
 	// Spin up an xDS management server.
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{AllowResourceSubset: true})
-	if err != nil {
-		t.Fatalf("Failed to start management server: %v", err)
-	}
-	defer mgmtServer.Stop()
-
-	// Create bootstrap configuration with no certificate providers.
-	nodeID := uuid.New().String()
-	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}`, mgmtServer.Address))},
-		NodeID:                             nodeID,
-		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
-	}
+	mgmtServer, nodeID, bootstrapContents, _ := setupManagementServerAndResolver(t)
 
 	// Spin up an xDS-enabled gRPC server that uses xDS credentials with
 	// insecure fallback, and the above bootstrap configuration.
-	lis, cleanup := setupGRPCServer(t, bs)
+	lis, cleanup := setupGRPCServer(t, bootstrapContents)
 	defer cleanup()
 
 	// Create an inbound xDS listener resource for the server side that does not
@@ -128,7 +110,7 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	// Spin up an xDS management server that pushes on a channel when it
 	// receives a NACK for an LDS response.
 	nackCh := make(chan struct{}, 1)
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() != "type.googleapis.com/envoy.config.listener.v3.Listener" {
 				return nil
@@ -144,10 +126,6 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 		},
 		AllowResourceSubset: true,
 	})
-	if err != nil {
-		t.Fatalf("Failed to start management server: %v", err)
-	}
-	defer mgmtServer.Stop()
 
 	// Create bootstrap configuration with no certificate providers.
 	nodeID := uuid.New().String()
@@ -259,7 +237,7 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	// Spin up an xDS management server that pushes on a channel when it
 	// receives a NACK for an LDS response.
 	nackCh := make(chan struct{}, 1)
-	mgmtServer, nodeID, bs, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() != "type.googleapis.com/envoy.config.listener.v3.Listener" {
 				return nil
@@ -275,7 +253,10 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 		},
 		AllowResourceSubset: true,
 	})
-	defer cleanup()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Create two local listeners.
 	lis1, err := testutils.LocalTCPListener()
@@ -302,7 +283,7 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 			}
 		}
 	})
-	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bs))
+	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
@@ -444,7 +425,7 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 		Listeners:      []*v3listenerpb.Listener{resource1, resource2},
 		SkipValidation: true,
 	}
-	if err := mgmtServer.Update(ctx, resources); err != nil {
+	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 

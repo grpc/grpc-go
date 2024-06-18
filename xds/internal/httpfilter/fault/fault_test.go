@@ -24,7 +24,6 @@ package fault
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -40,7 +39,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -102,23 +100,10 @@ func (*testService) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallSer
 func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
-	fs, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}`, fs.Address))},
-		ServerListenerResourceNameTemplate: "grpc/server",
-		NodeID:                             nodeID,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
-	}
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 
 	// Initialize a gRPC server and register the stubServer on it.
@@ -137,8 +122,8 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 		}
 	}()
 
-	return fs, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), func() {
-		fs.Stop()
+	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), func() {
+		managementServer.Stop()
 		server.Stop()
 	}
 }

@@ -283,10 +283,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			bc, err := e2e.DefaultBootstrapContents(nodeID, mgmtServer.Address)
-			if err != nil {
-				t.Fatalf("Failed to create bootstrap configuration: %v", err)
-			}
+			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
@@ -561,10 +558,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			bc, err := e2e.DefaultBootstrapContents(nodeID, mgmtServer.Address)
-			if err != nil {
-				t.Fatalf("Failed to create bootstrap configuration: %v", err)
-			}
+			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
@@ -800,10 +794,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			bc, err := e2e.DefaultBootstrapContents(nodeID, mgmtServer.Address)
-			if err != nil {
-				t.Fatalf("Failed to create bootstrap configuration: %v", err)
-			}
+			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
@@ -867,7 +858,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			// server at that point, hence we do it here before verifying the
 			// received update.
 			if test.wantErr == "" {
-				serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
+				serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fmt.Sprintf("passthrough:///%s", mgmtServer.Address)})
 				if err != nil {
 					t.Fatalf("Failed to create server config for testing: %v", err)
 				}
@@ -1151,10 +1142,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			bc, err := e2e.DefaultBootstrapContents(nodeID, mgmtServer.Address)
-			if err != nil {
-				t.Fatalf("Failed to create bootstrap configuration: %v", err)
-			}
+			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)

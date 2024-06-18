@@ -20,12 +20,11 @@ package xdsclient
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
 )
 
 // Test that multiple New() returns the same Client. And only when the last
@@ -34,16 +33,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	// Create a bootstrap configuration, place it in a file in the temp
 	// directory, and set the bootstrap env vars to point to it.
 	nodeID := uuid.New().String()
-	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(`{
-			"server_uri": "non-existent-server-address",
-			"channel_creds": [{"type": "insecure"}]
-		}`)},
-		NodeID: nodeID,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	contents := e2e.DefaultBootstrapContents(t, nodeID, "non-existent-server-address")
 	testutils.CreateBootstrapFileForTesting(t, contents)
 
 	// Override the singleton creation hook to get notified.

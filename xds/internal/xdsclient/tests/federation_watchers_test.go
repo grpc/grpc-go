@@ -45,18 +45,10 @@ const testNonDefaultAuthority = "non-default-authority"
 // nodeID to use, and the xDS client.
 func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string, xdsclient.XDSClient) {
 	// Start a management server as the default authority.
-	serverDefaultAuthority, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to spin up the xDS management server: %v", err)
-	}
-	t.Cleanup(serverDefaultAuthority.Stop)
+	serverDefaultAuthority := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Start another management server as the other authority.
-	serverNonDefaultAuthority, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to spin up the xDS management server: %v", err)
-	}
-	t.Cleanup(serverNonDefaultAuthority.Stop)
+	serverNonDefaultAuthority := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{

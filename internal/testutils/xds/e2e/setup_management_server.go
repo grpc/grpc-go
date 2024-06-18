@@ -25,72 +25,27 @@ import (
 	"path"
 	"testing"
 
-	"github.com/google/uuid"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
 )
-
-// SetupManagementServer performs the following:
-// - spin up an xDS management server on a local port
-// - set up certificates for consumption by the file_watcher plugin
-// - creates a bootstrap file in a temporary location
-// - creates an xDS resolver using the above bootstrap contents
-//
-// Returns the following:
-// - management server
-// - nodeID to be used by the client when connecting to the management server
-// - bootstrap contents to be used by the client
-// - xDS resolver builder to be used by the client
-// - a cleanup function to be invoked at the end of the test
-func SetupManagementServer(t *testing.T, opts ManagementServerOptions) (*ManagementServer, string, []byte, resolver.Builder, func()) {
-	t.Helper()
-
-	// Spin up an xDS management server on a local port.
-	server, err := StartManagementServer(opts)
-	if err != nil {
-		t.Fatalf("Failed to spin up the xDS management server: %v", err)
-	}
-	defer func() {
-		if err != nil {
-			server.Stop()
-		}
-	}()
-
-	nodeID := uuid.New().String()
-	bootstrapContents, err := DefaultBootstrapContents(nodeID, fmt.Sprintf("passthrough:///%s", server.Address))
-	if err != nil {
-		server.Stop()
-		t.Fatal(err)
-	}
-	var rb resolver.Builder
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		rb, err = newResolver.(func([]byte) (resolver.Builder, error))(bootstrapContents)
-		if err != nil {
-			server.Stop()
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
-	}
-
-	return server, nodeID, bootstrapContents, rb, func() { server.Stop() }
-}
 
 // DefaultBootstrapContents creates a default bootstrap configuration with the
 // given node ID and server URI. It also creates certificate provider
 // configuration and sets the listener resource name template to be used on the
 // server side.
-func DefaultBootstrapContents(nodeID, serverURI string) ([]byte, error) {
+func DefaultBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
+	t.Helper()
+
 	// Create a directory to hold certs and key files used on the server side.
-	serverDir, err := createTmpDirWithFiles("testServerSideXDS*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
+	serverDir, err := CreateTmpDirWithFiles("testServerSideXDS*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create bootstrap configuration: %v", err)
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
 
 	// Create a directory to hold certs and key files used on the client side.
-	clientDir, err := createTmpDirWithFiles("testClientSideXDS*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/server_ca_cert.pem")
+	clientDir, err := CreateTmpDirWithFiles("testClientSideXDS*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/server_ca_cert.pem")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create bootstrap configuration: %v", err)
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
 
 	// Create certificate providers section of the bootstrap config with entries
@@ -103,27 +58,17 @@ func DefaultBootstrapContents(nodeID, serverURI string) ([]byte, error) {
 	// Create the bootstrap configuration.
 	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-			"server_uri": %q,
+			"server_uri": "passthrough:///%s",
 			"channel_creds": [{"type": "insecure"}]
 		}`, serverURI))},
 		NodeID:                             nodeID,
 		CertificateProviders:               cpc,
 		ServerListenerResourceNameTemplate: ServerListenerResourceNameTemplate,
-		Authorities: map[string]json.RawMessage{
-			// Most tests that use new style xdstp resource names do not specify
-			// an authority. These end up looking up an entry with the empty key
-			// in the authorities map. Having an entry with an empty key and
-			// empty configuration, results in these resources also using the
-			// top-level configuration, which is what we want mostly for our
-			// tests, unless explicitly specified by tests that use multiple
-			// authorities etc.
-			"": []byte(`{}`),
-		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create bootstrap configuration: %v", err)
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	return bs, nil
+	return bs
 }
 
 const (
@@ -144,11 +89,11 @@ func createTmpFile(src, dst string) error {
 	return nil
 }
 
-// createTempDirWithFiles creates a temporary directory under the system default
+// CreateTmpDirWithFiles creates a temporary directory under the system default
 // tempDir with the given dirSuffix. It also reads from certSrc, keySrc and
 // rootSrc files are creates appropriate files under the newly create tempDir.
 // Returns the name of the created tempDir.
-func createTmpDirWithFiles(dirSuffix, certSrc, keySrc, rootSrc string) (string, error) {
+func CreateTmpDirWithFiles(dirSuffix, certSrc, keySrc, rootSrc string) (string, error) {
 	// Create a temp directory. Passing an empty string for the first argument
 	// uses the system temp directory.
 	dir, err := os.MkdirTemp("", dirSuffix)

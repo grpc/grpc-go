@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -105,7 +106,7 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	// Start an xDS management server that pushes the EDS resource names onto a
 	// channel when requested.
 	edsResourceNameCh := make(chan []string, 1)
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() != version.V3EndpointsURL {
 				return nil
@@ -122,7 +123,10 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 		},
 		AllowResourceSubset: true,
 	})
-	defer cleanup()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Start two test backends and extract their host and port. The first
 	// backend belongs to EDS cluster "cluster-1", while the second backend
@@ -208,8 +212,11 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 // are routed to the highest priority EDS cluster.
 func (s) TestAggregateCluster_WithTwoEDSClusters_PrioritiesChange(t *testing.T) {
 	// Start an xDS management server.
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer cleanup()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Start two test backends and extract their host and port. The first
 	// backend belongs to EDS cluster "cluster-1", while the second backend
@@ -302,8 +309,11 @@ func hostAndPortFromAddress(t *testing.T, addr string) (string, uint32) {
 // make up the LOGICAL_DNS cluster.
 func (s) TestAggregateCluster_WithOneDNSCluster(t *testing.T) {
 	// Start an xDS management server.
-	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer cleanup2()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
@@ -349,8 +359,11 @@ func (s) TestAggregateCluster_WithOneDNSCluster(t *testing.T) {
 // TRANSIENT_FAILURE.
 func (s) TestAggregateCluster_WithOneDNSCluster_ParseFailure(t *testing.T) {
 	// Start an xDS management server.
-	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer cleanup2()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Configure an aggregate cluster pointing to a single LOGICAL_DNS cluster.
 	const dnsClusterName = clusterName + "-dns"
@@ -388,8 +401,11 @@ func (s) TestAggregateCluster_WithOneDNSCluster_ParseFailure(t *testing.T) {
 // made to backends that the new hostname resolves to.
 func (s) TestAggregateCluster_WithOneDNSCluster_HostnameChange(t *testing.T) {
 	// Start an xDS management server.
-	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer cleanup1()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Start two test backends and extract their host and port. The first
 	// backend is used initially for the LOGICAL_DNS cluster and an update
@@ -468,7 +484,7 @@ func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 	// Start an xDS management server that pushes the name of the requested EDS
 	// resource onto a channel.
 	edsResourceCh := make(chan string, 1)
-	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() != version.V3EndpointsURL {
 				return nil
@@ -483,7 +499,10 @@ func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 		},
 		AllowResourceSubset: true,
 	})
-	defer cleanup2()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Start two test backends and extract their host and port. The first
 	// backend is used for the EDS cluster and the second backend is used for
@@ -573,8 +592,11 @@ func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 // the DNS cluster.
 func (s) TestAggregateCluster_SwitchEDSAndDNS(t *testing.T) {
 	// Start an xDS management server.
-	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer cleanup2()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Start two test backends and extract their host and port. The first
 	// backend is used for the EDS cluster and the second backend is used for
@@ -655,8 +677,11 @@ func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 	dnsTargetCh, dnsR := setupDNS(t)
 
 	// Start an xDS management server.
-	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer cleanup2()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Start two test backends.
 	servers, cleanup3 := startTestServiceBackends(t, 2)
@@ -757,8 +782,11 @@ func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 // DNS cluster and can make a successful RPC.
 func (s) TestAggregateCluster_BadEDSFromError_GoodToBadDNS(t *testing.T) {
 	// Start an xDS management server.
-	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer cleanup2()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
@@ -813,8 +841,11 @@ func (s) TestAggregateCluster_BadEDSFromError_GoodToBadDNS(t *testing.T) {
 // back from the LOGICAL_DNS cluster to the EDS cluster.
 func (s) TestAggregateCluster_BadDNS_GoodEDS(t *testing.T) {
 	// Start an xDS management server.
-	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer cleanup2()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
@@ -868,8 +899,11 @@ func (s) TestAggregateCluster_BadDNS_GoodEDS(t *testing.T) {
 // Discovery Mechanism (from sending an empty address list down).
 func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 	// Start an xDS management server.
-	managementServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer cleanup2()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Configure an aggregate cluster pointing to an EDS and LOGICAL_DNS
 	// cluster. Also configure an empty endpoints resource for the EDS cluster
@@ -927,8 +961,11 @@ func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 // cluster.
 func (s) TestAggregateCluster_NoFallback_EDSNackedWithPreviousGoodUpdate(t *testing.T) {
 	// Start an xDS management server.
-	mgmtServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer cleanup2()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Start two test backends and extract their host and port. The first
 	// backend is used for the EDS cluster and the second backend is used for
@@ -956,7 +993,7 @@ func (s) TestAggregateCluster_NoFallback_EDSNackedWithPreviousGoodUpdate(t *test
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := mgmtServer.Update(ctx, resources); err != nil {
+	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -980,7 +1017,7 @@ func (s) TestAggregateCluster_NoFallback_EDSNackedWithPreviousGoodUpdate(t *test
 	// NACKed by the xDS client. Since the cluster_resolver LB policy has a
 	// previously received good EDS resource, it will continue to use that.
 	resources.Endpoints[0].Endpoints[0].LbEndpoints[0].LoadBalancingWeight = &wrapperspb.UInt32Value{Value: 0}
-	if err := mgmtServer.Update(ctx, resources); err != nil {
+	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1004,8 +1041,11 @@ func (s) TestAggregateCluster_NoFallback_EDSNackedWithPreviousGoodUpdate(t *test
 // as though it received an update with no endpoints.
 func (s) TestAggregateCluster_Fallback_EDSNackedWithoutPreviousGoodUpdate(t *testing.T) {
 	// Start an xDS management server.
-	mgmtServer, nodeID, bootstrapContents, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer cleanup2()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Start two test backends and extract their host and port. The first
 	// backend is used for the EDS cluster and the second backend is used for
@@ -1038,7 +1078,7 @@ func (s) TestAggregateCluster_Fallback_EDSNackedWithoutPreviousGoodUpdate(t *tes
 	resources.Endpoints[0].Endpoints[0].LbEndpoints[0].LoadBalancingWeight = &wrapperspb.UInt32Value{Value: 0}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := mgmtServer.Update(ctx, resources); err != nil {
+	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1065,8 +1105,11 @@ func (s) TestAggregateCluster_Fallback_EDSNackedWithoutPreviousGoodUpdate(t *tes
 // the LOGICAL_DNS cluster in this case.
 func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 	// Start an xDS management server.
-	mgmtServer, nodeID, _, _, cleanup2 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer cleanup2()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Start a test backend for the LOGICAL_DNS cluster.
 	server := stubserver.StartTestService(t, nil)
@@ -1090,17 +1133,13 @@ func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := mgmtServer.Update(ctx, resources); err != nil {
+	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create an xDS client talking to the above management server, configured
 	// with a short watch expiry timeout.
-	bc, err := e2e.DefaultBootstrapContents(nodeID, mgmtServer.Address)
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
-	}
-	xdsClient, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
+	xdsClient, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
 	}

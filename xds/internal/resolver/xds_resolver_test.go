@@ -86,16 +86,7 @@ func (s) TestResolverBuilder_ClientCreationFails_NoBootstrap(t *testing.T) {
 // not specified in the bootstrap file. Verifies that the resolver.Build method
 // fails with the expected error string.
 func (s) TestResolverBuilder_AuthorityNotDefinedInBootstrap(t *testing.T) {
-	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(`{
-			"server_uri": "dummy-management-server",
-			"channel_creds": [{"type": "insecure"}]
-		}`)},
-		NodeID: "node-id",
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
-	}
+	contents := e2e.DefaultBootstrapContents(t, "node-id", "dummy-management-server")
 	testutils.CreateBootstrapFileForTesting(t, contents)
 
 	builder := resolver.Get(xdsresolver.Scheme)
@@ -211,7 +202,7 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 	// closed.
 	routeConfigResourceNamesCh := make(chan []string, 1)
 	waitForResolverCloseCh := make(chan struct{})
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3RouteConfigURL {
 				select {
@@ -227,23 +218,10 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 			return nil
 		},
 	})
-	if err != nil {
-		t.Fatalf("Failed to start xDS management server: %v", err)
-	}
-	defer mgmtServer.Stop()
 
 	// Create a bootstrap configuration specifying the above management server.
 	nodeID := uuid.New().String()
-	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
-		NodeID: nodeID,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
-	}
+	contents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	testutils.CreateBootstrapFileForTesting(t, contents)
 
 	// Configure resources on the management server.
@@ -275,10 +253,7 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 	origNewClient := rinternal.NewXDSClient
 	closeCh := make(chan struct{})
 	rinternal.NewXDSClient = func() (xdsclient.XDSClient, func(), error) {
-		bc, err := e2e.DefaultBootstrapContents(uuid.New().String(), "dummy-management-server-address")
-		if err != nil {
-			t.Fatalf("Failed to create bootstrap configuration: %v", err)
-		}
+		bc := e2e.DefaultBootstrapContents(t, uuid.New().String(), "dummy-management-server-address")
 		c, cancel, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestTimeout})
 		return c, grpcsync.OnceFunc(func() {
 			close(closeCh)
