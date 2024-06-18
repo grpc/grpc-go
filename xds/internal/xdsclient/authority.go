@@ -229,7 +229,9 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 				}
 			}
 			// Sync cache.
-			a.logger.Debugf("Resource type %q with name %q added to cache", rType.TypeName(), name)
+			if a.logger.V(2) {
+				a.logger.Infof("Resource type %q with name %q added to cache", rType.TypeName(), name)
+			}
 			state.cache = uErr.resource
 			// Set status to ACK, and clear error state. The metadata might be a
 			// NACK metadata because some other resources in the same response
@@ -454,7 +456,9 @@ func (a *authority) close() {
 }
 
 func (a *authority) watchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) func() {
-	a.logger.Debugf("New watch for type %q, resource name %q", rType.TypeName(), resourceName)
+	if a.logger.V(2) {
+		a.logger.Infof("New watch for type %q, resource name %q", rType.TypeName(), resourceName)
+	}
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 
@@ -471,7 +475,9 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 	// instruct the transport layer to send a DiscoveryRequest for the same.
 	state := resources[resourceName]
 	if state == nil {
-		a.logger.Debugf("First watch for type %q, resource name %q", rType.TypeName(), resourceName)
+		if a.logger.V(2) {
+			a.logger.Infof("First watch for type %q, resource name %q", rType.TypeName(), resourceName)
+		}
 		state = &resourceState{
 			watchers: make(map[xdsresource.ResourceWatcher]bool),
 			md:       xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested},
@@ -510,7 +516,9 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 		// There are no more watchers for this resource, delete the state
 		// associated with it, and instruct the transport to send a request
 		// which does not include this resource name.
-		a.logger.Debugf("Removing last watch for type %q, resource name %q", rType.TypeName(), resourceName)
+		if a.logger.V(2) {
+			a.logger.Infof("Removing last watch for type %q, resource name %q", rType.TypeName(), resourceName)
+		}
 		delete(resources, resourceName)
 		a.sendDiscoveryRequestLocked(rType, resources)
 	}
