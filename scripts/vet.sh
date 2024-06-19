@@ -50,6 +50,9 @@ not grep 'func Test[^(]' -- test/*.go
 git grep 'func (s) ' -- "*_test.go" | not grep -v 'func (s) Test'
 git grep 'func [A-Z]' -- "*_test.go" | not grep -v 'func Test\|Benchmark\|Example'
 
+# - Make sure not context usage are done without timeout.
+git grep 'context.Background()' -- "*_test.go" | not grep -v 'context.WithTimeout(context.Background()'
+
 # - Do not use time.After except in tests.  It has the potential to leak the
 #   timer since there is no way to stop it early.
 git grep -l 'time.After(' -- "*.go" | not grep -v '_test.go\|test_utils\|testutils'
