@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"reflect"
 	"testing"
+	"time"
 
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
@@ -47,6 +48,8 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
+
+const defaultTestTimeout = 10 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -1748,8 +1751,8 @@ func (s) TestChainEngine(t *testing.T) {
 					// information to represent incoming RPC's. This will be how a
 					// user uses this API. A user will have to put MD, PeerInfo, and
 					// the connection the RPC is sent on in the context.
-					ctx := metadata.NewIncomingContext(context.Background(), data.rpcData.md)
-
+					ctx, cancel := context.WithTimeout(metadata.NewIncomingContext(context.Background(), data.rpcData.md), defaultTestTimeout)
+					defer cancel()
 					// Make a TCP connection with a certain destination port. The
 					// address/port of this connection will be used to populate the
 					// destination ip/port in RPCData struct. This represents what
