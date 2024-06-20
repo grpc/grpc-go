@@ -606,6 +606,9 @@ func (s) TestXDSLabels(t *testing.T) {
 // without error. The actual functionality of this function will be verified in
 // interop tests.
 func (s) TestObservability(t *testing.T) {
-	cleanup := EnableObservability(context.Background(), opentelemetry.Options{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	cleanup := EnableObservability(ctx, opentelemetry.Options{})
 	cleanup()
 }
