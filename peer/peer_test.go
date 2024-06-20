@@ -22,9 +22,12 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/credentials"
 )
+
+const defaultTestTimeout = 10 * time.Second
 
 // A struct that implements AuthInfo interface and implements CommonAuthInfo() method.
 type testAuthInfo struct {
@@ -82,7 +85,9 @@ func TestPeerStringer(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := NewContext(context.Background(), tc.peer)
+			ctx, cancel := context.WithTimeout(NewContext(context.Background(), tc.peer), defaultTestTimeout)
+			defer cancel()
+
 			p, ok := FromContext(ctx)
 			if !ok {
 				t.Fatalf("Unable to get peer from context")
