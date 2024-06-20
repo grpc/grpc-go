@@ -54,6 +54,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const httpWriteDeadline = 20 * time.Second
+
 // clientConnectionCounter counts the number of connections a client has
 // initiated (equal to the number of http2Clients created). Must be accessed
 // atomically.
@@ -1006,6 +1008,7 @@ func (t *http2Client) Close(err error) {
 		t.kpDormancyCond.Signal()
 	}
 	t.mu.Unlock()
+	t.conn.SetWriteDeadline(time.Now().Add(httpWriteDeadline))
 	// Per HTTP/2 spec, a GOAWAY frame must be sent before closing the
 	// connection. See https://httpwg.org/specs/rfc7540.html#GOAWAY.
 	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte("client transport shutdown"), closeConn: err})
