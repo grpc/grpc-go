@@ -76,7 +76,7 @@ jobs:
         if: matrix.goarch == 'arm64'
         # setup qemu-user-static emulator and register it with binfmt_misc so that aarch64 binaries
         # are automatically executed using qemu.
-        run: docker run --rm --privileged multiarch/qemu-user-static:5.2.0-2 --reset --credential yes --persistent yes
+        run: docker run --rm --privileged multiarch/qemu-user-static:7.2.0-1 --reset --credential yes --persistent yes
 
       - name: Setup GRPC environment
         if: matrix.grpcenv != ''
