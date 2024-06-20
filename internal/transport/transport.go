@@ -80,6 +80,11 @@ func newRecvBuffer() *recvBuffer {
 func (b *recvBuffer) put(r recvMsg) {
 	b.mu.Lock()
 	if b.err != nil {
+		if r.buffer != nil {
+			// drop the buffer on the floor. Since b.err is not nil, any subsequent reads
+			// will always return an error, making this buffer inaccessible.
+			r.buffer.Free()
+		}
 		b.mu.Unlock()
 		// An error had occurred earlier, don't accept more
 		// data or errors.

@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"net"
 	"net/http"
@@ -1205,9 +1204,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			if pool == nil {
 				pool = mem.DefaultBufferPool()
 			}
-			b := mem.Copy(f.Data(), pool)
-			log.Printf("Buffer %p put into stream %p (len %d)", b.ReadOnlyData(), s, len(b.ReadOnlyData()))
-			s.write(recvMsg{buffer: b})
+			s.write(recvMsg{buffer: mem.Copy(f.Data(), pool)})
 		}
 	}
 	// The server has closed the stream without sending trailers.  Record that

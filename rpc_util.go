@@ -620,6 +620,7 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (payloadFormat, mem.BufferSl
 		return 0, nil, err
 	}
 	header.CopyTo(p.header[:])
+	header.Free()
 
 	pf := payloadFormat(p.header[0])
 	length := binary.BigEndian.Uint32(p.header[1:])

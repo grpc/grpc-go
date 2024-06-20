@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log/slog"
 	"math"
 	"strconv"
 	"sync"
@@ -1182,7 +1181,6 @@ func (a *csAttempt) finish(err error) {
 	}
 	var tr metadata.MD
 	if a.s != nil {
-		slog.Info("finish called")
 		a.t.CloseStream(a.s, err)
 		// After closing the stream, this should immediately return whatever is currently
 		// buffered, without actually blocking. The returned buffers can then be freed.
