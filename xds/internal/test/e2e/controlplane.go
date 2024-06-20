@@ -33,7 +33,6 @@ type controlPlane struct {
 func newControlPlane(t *testing.T) (*controlPlane, error) {
 	// Spin up an xDS management server on a local port.
 	server := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
-	t.Cleanup(server.Stop)
 
 	nodeID := uuid.New().String()
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, server.Address)
@@ -43,8 +42,4 @@ func newControlPlane(t *testing.T) (*controlPlane, error) {
 		nodeID:           nodeID,
 		bootstrapContent: string(bootstrapContents),
 	}, nil
-}
-
-func (cp *controlPlane) stop() {
-	cp.server.Stop()
 }

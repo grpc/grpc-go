@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -501,6 +500,7 @@ func (s) TestRDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 					"server_uri": %q,
@@ -508,11 +508,11 @@ func (s) TestRDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 				}`, mgmtServer.Address))},
 		NodeID: nodeID,
 		Authorities: map[string]json.RawMessage{
-			// Xdstp style resource names used in this test use a url escaped
+			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
 			// results in the top-level xds server configuration being used for
 			// this authority.
-			url.PathEscape(t.Name()): []byte(`{}`),
+			authority: []byte(`{}`),
 		},
 	})
 	if err != nil {
@@ -537,7 +537,7 @@ func (s) TestRDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	defer rdsCancel2()
 
 	// Register the third watch for a different route configuration resource.
-	rdsNameNewStyle := makeNewStyleRDSName(t.Name())
+	rdsNameNewStyle := makeNewStyleRDSName(authority)
 	rw3 := newRouteConfigWatcher()
 	rdsCancel3 := xdsresource.WatchRouteConfig(client, rdsNameNewStyle, rw3)
 	defer rdsCancel3()
@@ -847,6 +847,7 @@ func (s) TestRDSWatch_PartialValid(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 					"server_uri": %q,
@@ -854,11 +855,11 @@ func (s) TestRDSWatch_PartialValid(t *testing.T) {
 				}`, mgmtServer.Address))},
 		NodeID: nodeID,
 		Authorities: map[string]json.RawMessage{
-			// Xdstp style resource names used in this test use a url escaped
+			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
 			// results in the top-level xds server configuration being used for
 			// this authority.
-			url.PathEscape(t.Name()): []byte(`{}`),
+			authority: []byte(`{}`),
 		},
 	})
 	if err != nil {
@@ -882,7 +883,7 @@ func (s) TestRDSWatch_PartialValid(t *testing.T) {
 	rw1 := newRouteConfigWatcher()
 	rdsCancel1 := xdsresource.WatchRouteConfig(client, badResourceName, rw1)
 	defer rdsCancel1()
-	goodResourceName := makeNewStyleRDSName(t.Name())
+	goodResourceName := makeNewStyleRDSName(authority)
 	rw2 := newRouteConfigWatcher()
 	rdsCancel2 := xdsresource.WatchRouteConfig(client, goodResourceName, rw2)
 	defer rdsCancel2()

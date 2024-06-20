@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -427,6 +426,7 @@ func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 					"server_uri": %q,
@@ -434,11 +434,11 @@ func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 				}`, mgmtServer.Address))},
 		NodeID: nodeID,
 		Authorities: map[string]json.RawMessage{
-			// Xdstp style resource names used in this test use a url escaped
+			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
 			// results in the top-level xds server configuration being used for
 			// this authority.
-			url.PathEscape(t.Name()): []byte(`{}`),
+			authority: []byte(`{}`),
 		},
 	})
 	if err != nil {
@@ -464,7 +464,7 @@ func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 
 	// Register the third watch for a different cluster resource, and push the
 	// received updates onto a channel.
-	cdsNameNewStyle := makeNewStyleCDSName(t.Name())
+	cdsNameNewStyle := makeNewStyleCDSName(authority)
 	cw3 := newClusterWatcher()
 	cdsCancel3 := xdsresource.WatchCluster(client, cdsNameNewStyle, cw3)
 	defer cdsCancel3()
@@ -705,6 +705,7 @@ func (s) TestCDSWatch_ResourceRemoved(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 					"server_uri": %q,
@@ -712,11 +713,11 @@ func (s) TestCDSWatch_ResourceRemoved(t *testing.T) {
 				}`, mgmtServer.Address))},
 		NodeID: nodeID,
 		Authorities: map[string]json.RawMessage{
-			// Xdstp style resource names used in this test use a url escaped
+			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
 			// results in the top-level xds server configuration being used for
 			// this authority.
-			url.PathEscape(t.Name()): []byte(`{}`),
+			authority: []byte(`{}`),
 		},
 	})
 	if err != nil {
@@ -738,14 +739,14 @@ func (s) TestCDSWatch_ResourceRemoved(t *testing.T) {
 	cdsCancel1 := xdsresource.WatchCluster(client, resourceName1, cw1)
 	defer cdsCancel1()
 
-	resourceName2 := makeNewStyleCDSName(t.Name())
+	resourceName2 := makeNewStyleCDSName(authority)
 	cw2 := newClusterWatcher()
 	cdsCancel2 := xdsresource.WatchCluster(client, resourceName2, cw2)
 	defer cdsCancel2()
 
 	// Configure the management server to return two cluster resources,
 	// corresponding to the registered watches.
-	edsNameNewStyle := makeNewStyleEDSName(t.Name())
+	edsNameNewStyle := makeNewStyleEDSName(authority)
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Clusters: []*v3clusterpb.Cluster{
@@ -879,6 +880,7 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 					"server_uri": %q,
@@ -886,11 +888,11 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 				}`, mgmtServer.Address))},
 		NodeID: nodeID,
 		Authorities: map[string]json.RawMessage{
-			// Xdstp style resource names used in this test use a url escaped
+			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
 			// results in the top-level xds server configuration being used for
 			// this authority.
-			url.PathEscape(t.Name()): []byte(`{}`),
+			authority: []byte(`{}`),
 		},
 	})
 	if err != nil {
@@ -912,7 +914,7 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 	cw1 := newClusterWatcher()
 	cdsCancel1 := xdsresource.WatchCluster(client, badResourceName, cw1)
 	defer cdsCancel1()
-	goodResourceName := makeNewStyleCDSName(t.Name())
+	goodResourceName := makeNewStyleCDSName(authority)
 	cw2 := newClusterWatcher()
 	cdsCancel2 := xdsresource.WatchCluster(client, goodResourceName, cw2)
 	defer cdsCancel2()
@@ -967,6 +969,7 @@ func (s) TestCDSWatch_PartialResponse(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 					"server_uri": %q,
@@ -974,11 +977,11 @@ func (s) TestCDSWatch_PartialResponse(t *testing.T) {
 				}`, mgmtServer.Address))},
 		NodeID: nodeID,
 		Authorities: map[string]json.RawMessage{
-			// Xdstp style resource names used in this test use a url escaped
+			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
 			// results in the top-level xds server configuration being used for
 			// this authority.
-			url.PathEscape(t.Name()): []byte(`{}`),
+			authority: []byte(`{}`),
 		},
 	})
 	if err != nil {
@@ -999,7 +1002,7 @@ func (s) TestCDSWatch_PartialResponse(t *testing.T) {
 	cw1 := newClusterWatcher()
 	cdsCancel1 := xdsresource.WatchCluster(client, resourceName1, cw1)
 	defer cdsCancel1()
-	resourceName2 := makeNewStyleCDSName(t.Name())
+	resourceName2 := makeNewStyleCDSName(authority)
 	cw2 := newClusterWatcher()
 	cdsCancel2 := xdsresource.WatchCluster(client, resourceName2, cw2)
 	defer cdsCancel2()

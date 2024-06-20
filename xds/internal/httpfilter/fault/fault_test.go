@@ -123,7 +123,6 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	}()
 
 	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), func() {
-		managementServer.Stop()
 		server.Stop()
 	}
 }

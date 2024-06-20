@@ -52,13 +52,13 @@ func DefaultBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
 	t.Helper()
 
 	// Create a directory to hold certs and key files used on the server side.
-	serverDir, err := createTmpDirWithFiles("testServerSideXDS*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
+	serverDir, err := createTmpDirWithCerts("testServerSideXDS*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
 
 	// Create a directory to hold certs and key files used on the client side.
-	clientDir, err := createTmpDirWithFiles("testClientSideXDS*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/server_ca_cert.pem")
+	clientDir, err := createTmpDirWithCerts("testClientSideXDS*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/server_ca_cert.pem")
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
@@ -104,14 +104,15 @@ func createTmpFile(src, dst string) error {
 	return nil
 }
 
-// createTmpDirWithFiles creates a temporary directory under the system default
-// tempDir with the given dirSuffix. It also reads from certSrc, keySrc and
-// rootSrc files are creates appropriate files under the newly create tempDir.
-// Returns the name of the created tempDir.
-func createTmpDirWithFiles(dirSuffix, certSrc, keySrc, rootSrc string) (string, error) {
+// createTmpDirWithCerts creates a temporary directory under the system default
+// tempDir with the given dirPattern. It also reads from certSrc, keySrc and
+// rootSrc files and creates appropriate files under the newly create tempDir.
+// Returns the path of the created tempDir if successful, and an error
+// otherwise.
+func createTmpDirWithCerts(dirPattern, certSrc, keySrc, rootSrc string) (string, error) {
 	// Create a temp directory. Passing an empty string for the first argument
 	// uses the system temp directory.
-	dir, err := os.MkdirTemp("", dirSuffix)
+	dir, err := os.MkdirTemp("", dirPattern)
 	if err != nil {
 		return "", fmt.Errorf("os.MkdirTemp() failed: %v", err)
 	}

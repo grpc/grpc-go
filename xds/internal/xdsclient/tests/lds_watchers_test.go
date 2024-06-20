@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -448,6 +447,7 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 					"server_uri": %q,
@@ -455,11 +455,11 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 				}`, mgmtServer.Address))},
 		NodeID: nodeID,
 		Authorities: map[string]json.RawMessage{
-			// Xdstp style resource names used in this test use a url escaped
+			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
 			// results in the top-level xds server configuration being used for
 			// this authority.
-			url.PathEscape(t.Name()): []byte(`{}`),
+			authority: []byte(`{}`),
 		},
 	})
 	if err != nil {
@@ -484,7 +484,7 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	defer ldsCancel2()
 
 	// Register the third watch for a different listener resource.
-	ldsNameNewStyle := makeNewStyleLDSName(t.Name())
+	ldsNameNewStyle := makeNewStyleLDSName(authority)
 	lw3 := newListenerWatcher()
 	ldsCancel3 := xdsresource.WatchListener(client, ldsNameNewStyle, lw3)
 	defer ldsCancel3()
@@ -722,6 +722,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 					"server_uri": %q,
@@ -729,11 +730,11 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 				}`, mgmtServer.Address))},
 		NodeID: nodeID,
 		Authorities: map[string]json.RawMessage{
-			// Xdstp style resource names used in this test use a url escaped
+			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
 			// results in the top-level xds server configuration being used for
 			// this authority.
-			url.PathEscape(t.Name()): []byte(`{}`),
+			authority: []byte(`{}`),
 		},
 	})
 	if err != nil {
@@ -755,7 +756,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	ldsCancel1 := xdsresource.WatchListener(client, resourceName1, lw1)
 	defer ldsCancel1()
 
-	resourceName2 := makeNewStyleLDSName(t.Name())
+	resourceName2 := makeNewStyleLDSName(authority)
 	lw2 := newListenerWatcher()
 	ldsCancel2 := xdsresource.WatchListener(client, resourceName2, lw2)
 	defer ldsCancel2()
@@ -893,6 +894,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 					"server_uri": %q,
@@ -900,11 +902,11 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 				}`, mgmtServer.Address))},
 		NodeID: nodeID,
 		Authorities: map[string]json.RawMessage{
-			// Xdstp style resource names used in this test use a url escaped
+			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
 			// results in the top-level xds server configuration being used for
 			// this authority.
-			url.PathEscape(t.Name()): []byte(`{}`),
+			authority: []byte(`{}`),
 		},
 	})
 	if err != nil {
@@ -928,7 +930,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	lw1 := newListenerWatcher()
 	ldsCancel1 := xdsresource.WatchListener(client, badResourceName, lw1)
 	defer ldsCancel1()
-	goodResourceName := makeNewStyleLDSName(t.Name())
+	goodResourceName := makeNewStyleLDSName(authority)
 	lw2 := newListenerWatcher()
 	ldsCancel2 := xdsresource.WatchListener(client, goodResourceName, lw2)
 	defer ldsCancel2()
@@ -982,6 +984,7 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 					"server_uri": %q,
@@ -989,11 +992,11 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 				}`, mgmtServer.Address))},
 		NodeID: nodeID,
 		Authorities: map[string]json.RawMessage{
-			// Xdstp style resource names used in this test use a url escaped
+			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
 			// results in the top-level xds server configuration being used for
 			// this authority.
-			url.PathEscape(t.Name()): []byte(`{}`),
+			authority: []byte(`{}`),
 		},
 	})
 	if err != nil {
@@ -1015,7 +1018,7 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	ldsCancel1 := xdsresource.WatchListener(client, resourceName1, lw1)
 	defer ldsCancel1()
 
-	resourceName2 := makeNewStyleLDSName(t.Name())
+	resourceName2 := makeNewStyleLDSName(authority)
 	lw2 := newListenerWatcher()
 	ldsCancel2 := xdsresource.WatchListener(client, resourceName2, lw2)
 	defer ldsCancel2()

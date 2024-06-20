@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -499,6 +498,7 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 					"server_uri": %q,
@@ -506,11 +506,11 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 				}`, mgmtServer.Address))},
 		NodeID: nodeID,
 		Authorities: map[string]json.RawMessage{
-			// Xdstp style resource names used in this test use a url escaped
+			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
 			// results in the top-level xds server configuration being used for
 			// this authority.
-			url.PathEscape(t.Name()): []byte(`{}`),
+			authority: []byte(`{}`),
 		},
 	})
 	if err != nil {
@@ -535,7 +535,7 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	defer edsCancel2()
 
 	// Register the third watch for a different endpoint resource.
-	edsNameNewStyle := makeNewStyleEDSName(t.Name())
+	edsNameNewStyle := makeNewStyleEDSName(authority)
 	ew3 := newEndpointsWatcher()
 	edsCancel3 := xdsresource.WatchEndpoints(client, edsNameNewStyle, ew3)
 	defer edsCancel3()
@@ -846,6 +846,7 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 					"server_uri": %q,
@@ -853,11 +854,11 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 				}`, mgmtServer.Address))},
 		NodeID: nodeID,
 		Authorities: map[string]json.RawMessage{
-			// Xdstp style resource names used in this test use a url escaped
+			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
 			// results in the top-level xds server configuration being used for
 			// this authority.
-			url.PathEscape(t.Name()): []byte(`{}`),
+			authority: []byte(`{}`),
 		},
 	})
 	if err != nil {
@@ -879,7 +880,7 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 	ew1 := newEndpointsWatcher()
 	edsCancel1 := xdsresource.WatchEndpoints(client, badResourceName, ew1)
 	defer edsCancel1()
-	goodResourceName := makeNewStyleEDSName(t.Name())
+	goodResourceName := makeNewStyleEDSName(authority)
 	ew2 := newEndpointsWatcher()
 	edsCancel2 := xdsresource.WatchEndpoints(client, goodResourceName, ew2)
 	defer edsCancel2()

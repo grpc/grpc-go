@@ -61,6 +61,11 @@ type ManagementServer struct {
 	gs      *grpc.Server          // gRPC server which exports the ADS service.
 	cache   v3cache.SnapshotCache // Resource snapshot.
 	version int                   // Version of resource snapshot.
+
+	// A logging interface, usually supplied from *testing.T.
+	logger interface {
+		Logf(format string, args ...any)
+	}
 }
 
 // ManagementServerOptions contains options to be passed to the management
@@ -125,12 +130,14 @@ type ManagementServerOptions struct {
 //
 // Registers a cleanup function on t to stop the management server.
 func StartManagementServer(t *testing.T, opts ManagementServerOptions) *ManagementServer {
+	t.Helper()
+
 	// Create a snapshot cache. The first parameter to NewSnapshotCache()
 	// controls whether the server should wait for all resources to be
 	// explicitly named in the request before responding to any of them.
 	wait := !opts.AllowResourceSubset
-	cache := v3cache.NewSnapshotCache(wait, v3cache.IDHash{}, serverLogger{})
-	logger.Infof("Created new snapshot cache...")
+	cache := v3cache.NewSnapshotCache(wait, v3cache.IDHash{}, serverLogger{t})
+	t.Logf("Created new snapshot cache...")
 
 	lis := opts.Listener
 	if lis == nil {
@@ -156,7 +163,7 @@ func StartManagementServer(t *testing.T, opts ManagementServerOptions) *Manageme
 	xs := v3server.NewServer(ctx, cache, callbacks)
 	gs := grpc.NewServer()
 	v3discoverygrpc.RegisterAggregatedDiscoveryServiceServer(gs, xs)
-	logger.Infof("Registered Aggregated Discovery Service (ADS)...")
+	t.Logf("Registered Aggregated Discovery Service (ADS)...")
 
 	mgmtServer := &ManagementServer{
 		Address: lis.Addr().String(),
@@ -165,17 +172,18 @@ func StartManagementServer(t *testing.T, opts ManagementServerOptions) *Manageme
 		gs:      gs,
 		xs:      xs,
 		cache:   cache,
+		logger:  t,
 	}
 	if opts.SupportLoadReportingService {
 		lrs := fakeserver.NewServer(lis.Addr().String())
 		v3lrsgrpc.RegisterLoadReportingServiceServer(gs, lrs)
 		mgmtServer.LRSServer = lrs
-		logger.Infof("Registered Load Reporting Service (LRS)...")
+		t.Logf("Registered Load Reporting Service (LRS)...")
 	}
 
 	// Start serving.
 	go gs.Serve(lis)
-	logger.Infof("xDS management server serving at: %v...", lis.Addr().String())
+	t.Logf("xDS management server serving at: %v...", lis.Addr().String())
 	t.Cleanup(mgmtServer.Stop)
 	return mgmtServer
 }
@@ -218,13 +226,13 @@ func (s *ManagementServer) Update(ctx context.Context, opts UpdateOptions) error
 			return fmt.Errorf("failed to create new resource snapshot: %v", err)
 		}
 	}
-	logger.Infof("Created new resource snapshot...")
+	s.logger.Logf("Created new resource snapshot...")
 
 	// Update the cache with the new resource snapshot.
 	if err := s.cache.SetSnapshot(ctx, opts.NodeID, snapshot); err != nil {
 		return fmt.Errorf("failed to update resource snapshot in management server: %v", err)
 	}
-	logger.Infof("Updated snapshot cache with resource snapshot...")
+	s.logger.Logf("Updated snapshot cache with resource snapshot...")
 	return nil
 }
 

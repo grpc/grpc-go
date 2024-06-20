@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"testing"
 
 	"github.com/google/uuid"
@@ -103,6 +102,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 
 	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
 	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 					"server_uri": %q,
@@ -110,11 +110,11 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 				}`, mgmtServer.Address))},
 		NodeID: nodeID,
 		Authorities: map[string]json.RawMessage{
-			// Xdstp style resource names used in this test use a url escaped
+			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
 			// results in the top-level xds server configuration being used for
 			// this authority.
-			url.PathEscape(t.Name()): []byte(`{}`),
+			authority: []byte(`{}`),
 		},
 	})
 	if err != nil {
@@ -130,8 +130,8 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	defer close()
 
 	// Configure the management server to respond with route config resources.
-	ldsNameNewStyle := makeNewStyleLDSName(t.Name())
-	rdsNameNewStyle := makeNewStyleRDSName(t.Name())
+	ldsNameNewStyle := makeNewStyleLDSName(authority)
+	rdsNameNewStyle := makeNewStyleRDSName(authority)
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Routes: []*v3routepb.RouteConfiguration{

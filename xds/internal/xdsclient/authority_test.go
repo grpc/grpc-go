@@ -91,7 +91,6 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	a, ms, nodeID := setupTest(ctx, t, emptyServerOpts, defaultTestTimeout)
-	defer ms.Stop()
 	defer a.close()
 
 	rn := "xdsclient-test-lds-resource"
@@ -199,7 +198,6 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	}
 
 	a, ms, nodeID := setupTest(ctx, t, serverOpt, defaultTestTimeout)
-	defer ms.Stop()
 	defer a.close()
 
 	nameA := "xdsclient-test-lds-resourceA"

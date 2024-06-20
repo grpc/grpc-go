@@ -20,7 +20,7 @@ package xdsclient_test
 
 import (
 	"fmt"
-	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,18 +51,23 @@ const (
 	edsNameNewStyle = "xdstp:///envoy.config.endpoint.v3.ClusterLoadAssignment/xdsclient-test-eds-resource"
 )
 
+func makeAuthorityName(name string) string {
+	segs := strings.Split(name, "/")
+	return strings.Join(segs, "")
+}
+
 func makeNewStyleLDSName(authority string) string {
-	return fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/xdsclient-test-lds-resource", url.PathEscape(authority))
+	return fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/xdsclient-test-lds-resource", authority)
 }
 
 func makeNewStyleRDSName(authority string) string {
-	return fmt.Sprintf("xdstp://%s/envoy.config.route.v3.RouteConfiguration/xdsclient-test-rds-resource", url.PathEscape(authority))
+	return fmt.Sprintf("xdstp://%s/envoy.config.route.v3.RouteConfiguration/xdsclient-test-rds-resource", authority)
 }
 
 func makeNewStyleCDSName(authority string) string {
-	return fmt.Sprintf("xdstp://%s/envoy.config.cluster.v3.Cluster/xdsclient-test-cds-resource", url.PathEscape(authority))
+	return fmt.Sprintf("xdstp://%s/envoy.config.cluster.v3.Cluster/xdsclient-test-cds-resource", authority)
 }
 
 func makeNewStyleEDSName(authority string) string {
-	return fmt.Sprintf("xdstp://%s/envoy.config.endpoint.v3.ClusterLoadAssignment/xdsclient-test-eds-resource", url.PathEscape(authority))
+	return fmt.Sprintf("xdstp://%s/envoy.config.endpoint.v3.ClusterLoadAssignment/xdsclient-test-eds-resource", authority)
 }

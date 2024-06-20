@@ -224,21 +224,7 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-
-			// Create bootstrap configuration pointing to the above management server.
-			nodeID := uuid.New().String()
-			bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
-
-			// Create an xDS resolver with the above bootstrap configuration.
-			var xdsResolver resolver.Builder
-			if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-				var err error
-				xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(bootstrapContents)
-				if err != nil {
-					t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-				}
-			}
+			managementServer, nodeID, bootstrapContents, xdsResolver := setupManagementServerAndResolver(t)
 			lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
 			defer cleanup2()
 
