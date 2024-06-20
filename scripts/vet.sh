@@ -69,6 +69,10 @@ not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" --
 # - Ensure all xds proto imports are renamed to *pb or *grpc.
 git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.pb.go' | not grep -v 'pb "\|grpc "'
 
+# - Ensure all context usages are done with timeout.
+git grep -e 'context.Background()' --or -e 'context.TODO()' -- "*_test.go" | grep -v "benchmark/primitives/context_test.go" | grep -v "credentials/google" | grep -v "internal/transport/" | grep -v "xds/internal/" | grep -v "security/advancedtls" | not grep -v 'context.WithTimeout(' | not grep -v 'context.WithCancel('
+
+
 misspell -error .
 
 # - gofmt, goimports, go vet, go mod tidy.
