@@ -31,6 +31,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
@@ -72,6 +73,8 @@ var (
 	// invalidDefaultServiceConfigErrPrefix is used to prefix the json parsing error for the default
 	// service config.
 	invalidDefaultServiceConfigErrPrefix = "grpc: the provided default service config is invalid"
+	// PickFirstBalancerName is the name of the pick_first balancer.
+	PickFirstBalancerName = pickfirst.Name
 )
 
 // The following errors are returned from Dial and DialContext
