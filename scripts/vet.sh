@@ -70,7 +70,7 @@ not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" --
 git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.pb.go' | not grep -v 'pb "\|grpc "'
 
 # - Ensure all context usages are done with timeout.
-git grep -e 'context.Background()' --or -e 'context.TODO()' -- "*_test.go" | grep -v "benchmark/primitives/context_test.go" | grep -v "credentials/google" | grep -v "internal/transport/" | grep -v "xds/internal/" | grep -v "security/advancedtls" | not grep -v 'context.WithTimeout(' | not grep -v 'context.WithCancel('
+git grep -e 'context.Background()' --or -e 'context.TODO()' -- "*_test.go" | not grep -v "benchmark/primitives/context_test.go" | not grep -v "credentials/google" | not grep -v "internal/transport/" | not grep -v "xds/internal/" | not grep -v "security/advancedtls" | not grep -v 'context.WithTimeout(' | not grep -v 'context.WithCancel('
 
 
 misspell -error .
