@@ -36,7 +36,7 @@ import (
 // the application's workload, this could result in reduced memory allocation.
 //
 // If you are unsure about how to implement a memory pool but want to utilize
-// one, begin with mem.NewBufferPool.
+// one, begin with mem.DefaultBufferPool().
 //
 // Note: The shared buffer pool feature will not be active if any of the
 // following options are used: WithStatsHandler, EnableTracing, or binary

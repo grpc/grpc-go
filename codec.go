@@ -33,6 +33,11 @@ type baseCodec interface {
 	Unmarshal(data mem.BufferSlice, v any) error
 }
 
+// getCodec returns an encoding.CodecV2 for the codec of the given name (if
+// registered). Initially checks the V2 registry with encoding.GetCodecV2 and
+// returns the V2 codec if it is registered. Otherwise, it checks the V1 registry
+// with encoding.GetCodec and if it is registered wraps it with newCodecV1Bridge
+// to turn it into an encoding.CodecV2. Returns nil otherwise.
 func getCodec(name string) encoding.CodecV2 {
 	codecV2 := encoding.GetCodecV2(name)
 	if codecV2 != nil {

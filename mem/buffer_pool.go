@@ -25,8 +25,7 @@ import (
 )
 
 // BufferPool is a pool of buffers that can be shared, resulting in
-// decreased memory allocation. Currently, in gRPC-go, it is only utilized
-// for parsing incoming messages.
+// decreased memory allocation.
 //
 // # Experimental
 //
@@ -34,8 +33,6 @@ import (
 // later release.
 type BufferPool interface {
 	// Get returns a buffer with specified length from the pool.
-	//
-	// The returned byte slice may be not zero initialized.
 	Get(length int) []byte
 
 	// Put returns a buffer to the pool.
@@ -44,10 +41,11 @@ type BufferPool interface {
 
 var defaultBufferPoolSizes = []int{
 	256,
-	4 << 10,  // 4KB
+	4 << 10,  // 4KB (go page size)
 	16 << 10, // 16KB (max HTTP/2 frame size used by gRPC)
-	64 << 10, // 64KB
-	1 << 20,  // 1MB
+	32 << 10, // 32KB (default buffer size for io.Copy)
+	// TODO: Report the buffer sizes requested with Get to tune this properly.
+	1 << 20, // 1MB
 }
 
 var defaultBufferPool = func() *atomic.Pointer[BufferPool] {
@@ -123,11 +121,7 @@ func (p *sizedBufferPool) Get(size int) []byte {
 
 func (p *sizedBufferPool) Put(buf []byte) {
 	buf = buf[:cap(buf)]
-	// TODO: replace this loop with `clear`, though the compiler should be smart
-	// enough to optimize this.
-	for i := range buf {
-		buf[i] = 0
-	}
+	clear(buf)
 	p.pool.Put(&buf)
 }
 

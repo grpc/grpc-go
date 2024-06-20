@@ -348,10 +348,10 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 	}
 	switch bf.RecvBufferPool {
 	case recvBufferPoolNil:
-		// Do nothing.
+		opts = append(opts, experimental.WithRecvBufferPool(mem.NopBufferPool{}))
+		sopts = append(sopts, experimental.RecvBufferPool(mem.NopBufferPool{}))
 	case recvBufferPoolSimple:
-		opts = append(opts, experimental.WithRecvBufferPool(mem.DefaultBufferPool()))
-		sopts = append(sopts, experimental.RecvBufferPool(mem.DefaultBufferPool()))
+		// Do nothing as buffering is enabled by default.
 	default:
 		logger.Fatalf("Unknown shared recv buffer pool type: %v", bf.RecvBufferPool)
 	}

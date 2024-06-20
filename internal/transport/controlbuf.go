@@ -926,7 +926,7 @@ func (l *loopyWriter) processData() (bool, error) {
 	// As an optimization to keep wire traffic low, data from d is copied to h to make as big as the
 	// maximum possible HTTP2 frame size.
 
-	if len(dataItem.h) == 0 && dataItem.r.Len() == 0 { // Empty data frame
+	if len(dataItem.h) == 0 && dataItem.r.Remaining() == 0 { // Empty data frame
 		// Client sends out empty data frame with endStream = true
 		if err := l.framer.fr.WriteData(dataItem.streamID, dataItem.endStream, nil); err != nil {
 			return false, err
@@ -961,8 +961,8 @@ func (l *loopyWriter) processData() (bool, error) {
 	}
 	// Compute how much of the header and data we can send within quota and max frame length
 	hSize := min(maxSize, len(dataItem.h))
-	dSize := min(maxSize-hSize, dataItem.r.Len())
-	remainingBytes := len(dataItem.h) + dataItem.r.Len() - hSize - dSize
+	dSize := min(maxSize-hSize, dataItem.r.Remaining())
+	remainingBytes := len(dataItem.h) + dataItem.r.Remaining() - hSize - dSize
 	size := hSize + dSize
 
 	var buf []byte

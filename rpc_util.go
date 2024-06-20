@@ -581,12 +581,16 @@ const (
 	compressionMade payloadFormat = 1 // compressed
 )
 
+type streamReader interface {
+	Read(n int) (mem.BufferSlice, error)
+}
+
 // parser reads complete gRPC messages from the underlying reader.
 type parser struct {
 	// r is the underlying reader.
 	// See the comment on recvMsg for the permissible
 	// error types.
-	r transport.Reader
+	r streamReader
 
 	// The header of a gRPC message. Find more detail at
 	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md
@@ -608,16 +612,14 @@ type parser struct {
 //   - an error from the status package
 //
 // No other error values or types must be returned, which also means
-// that the underlying io.Reader must not return an incompatible
+// that the underlying streamReader must not return an incompatible
 // error.
 func (p *parser) recvMsg(maxReceiveMessageSize int) (payloadFormat, mem.BufferSlice, error) {
-	if header, err := p.r.Read(5); err == nil {
-		header.WriteTo(p.header[:])
-		header.Free()
-	} else {
-		header.Free()
+	header, err := p.r.Read(5)
+	if err != nil {
 		return 0, nil, err
 	}
+	header.CopyTo(p.header[:])
 
 	pf := payloadFormat(p.header[0])
 	length := binary.BigEndian.Uint32(p.header[1:])
@@ -634,7 +636,6 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (payloadFormat, mem.BufferSl
 
 	data, err := p.r.Read(int(length))
 	if err != nil {
-		data.Free()
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
@@ -654,7 +655,7 @@ func encode(c baseCodec, msg any) (mem.BufferSlice, error) {
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
 	}
-	if uint(b.Len()) > math.MaxUint32 {
+	if b.Len() > math.MaxUint32 {
 		b.Free()
 		return nil, status.Errorf(codes.ResourceExhausted, "grpc: message too large (%d bytes)", len(b))
 	}
@@ -827,7 +828,9 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 		return nil, 0, err
 	}
 
-	// TODO: Can/should this still be preserved with the new BufferSlice API?
+	// TODO: Can/should this still be preserved with the new BufferSlice API? Are
+	//  there any actual benefits to allocating a single large buffer instead of
+	//  multiple smaller ones?
 	//if sizer, ok := compressor.(interface {
 	//	DecompressedSize(compressedBytes []byte) int
 	//}); ok {

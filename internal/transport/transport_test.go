@@ -93,7 +93,7 @@ func (s *Stream) readTo(p []byte) (int, error) {
 		return 0, err
 	}
 
-	data.WriteTo(p)
+	data.CopyTo(p)
 	return len(p), nil
 }
 
@@ -820,6 +820,7 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 // proceed until they complete naturally, while not allowing creation of new
 // streams during this window.
 func (s) TestGracefulClose(t *testing.T) {
+	leakcheck.SetTrackingBufferPool(t)
 	server, ct, cancel := setUp(t, 0, pingpong)
 	defer cancel()
 	defer func() {
@@ -828,7 +829,8 @@ func (s) TestGracefulClose(t *testing.T) {
 		server.lis.Close()
 		// Check for goroutine leaks (i.e. GracefulClose with an active stream
 		// doesn't eventually close the connection when that stream completes).
-		leakcheck.Check(t)
+		leakcheck.CheckGoroutines(t, 10*time.Second)
+		leakcheck.CheckTrackingBufferPool()
 		// Correctly clean up the server
 		server.stop()
 	}()

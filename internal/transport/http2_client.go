@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net"
 	"net/http"
@@ -1036,6 +1037,7 @@ func (t *http2Client) Close(err error) {
 		}
 		sh.HandleConn(t.ctx, connEnd)
 	}
+	<-t.readerDone
 }
 
 // GracefulClose sets the state to draining, which prevents new streams from
@@ -1084,8 +1086,8 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *O
 		d:         data,
 		r:         data.Reader(),
 	}
-	if hdr != nil || df.r.Len() != 0 { // If it's not an empty data frame, check quota.
-		if err := s.wq.get(int32(len(hdr) + df.r.Len())); err != nil {
+	if hdr != nil || df.r.Remaining() != 0 { // If it's not an empty data frame, check quota.
+		if err := s.wq.get(int32(len(hdr) + df.r.Remaining())); err != nil {
 			data.Free()
 			return err
 		}
@@ -1203,7 +1205,9 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			if pool == nil {
 				pool = mem.DefaultBufferPool()
 			}
-			s.write(recvMsg{buffer: mem.Copy(f.Data(), pool)})
+			b := mem.Copy(f.Data(), pool)
+			log.Printf("Buffer %p put into stream %p (len %d)", b.ReadOnlyData(), s, len(b.ReadOnlyData()))
+			s.write(recvMsg{buffer: b})
 		}
 	}
 	// The server has closed the stream without sending trailers.  Record that

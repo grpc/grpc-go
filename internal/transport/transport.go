@@ -47,10 +47,6 @@ import (
 
 const logLevel = 2
 
-type Reader interface {
-	Read(n int) (mem.BufferSlice, error)
-}
-
 // recvMsg represents the received msg from the transport. All transport
 // protocol specific info has been removed.
 type recvMsg struct {
@@ -134,9 +130,10 @@ type recvBufferReader struct {
 	err         error
 }
 
-// Read reads the next len(p) bytes from last. If last is drained, it tries to
-// read additional data from recv. It blocks if there no additional data available
-// in recv. If Read returns any non-nil error, it will continue to return that error.
+// Read reads the next n bytes from last. If last is drained, it tries to read
+// additional data from recv. It blocks if there no additional data available in
+// recv. If Read returns any non-nil error, it will continue to return that
+// error.
 func (r *recvBufferReader) Read(n int) (buf *mem.Buffer, err error) {
 	if r.err != nil {
 		return nil, r.err
@@ -483,7 +480,7 @@ func (s *Stream) write(m recvMsg) {
 	s.buf.put(m)
 }
 
-// Read reads all p bytes from the wire for this stream.
+// Read reads n bytes from the wire for this stream.
 func (s *Stream) Read(n int) (data mem.BufferSlice, err error) {
 	// Don't request a read if there was an error earlier
 	if er := s.trReader.er; er != nil {
@@ -501,6 +498,9 @@ func (s *Stream) Read(n int) (data mem.BufferSlice, err error) {
 				err = io.ErrUnexpectedEOF
 			}
 			data.Free()
+			if buf != nil {
+				buf.Free()
+			}
 			return nil, err
 		}
 		data = append(data, buf)

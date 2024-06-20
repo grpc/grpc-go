@@ -28,7 +28,9 @@ import (
 // that implementations of this interface must be thread safe; a CodecV2's
 // methods can be called from concurrent goroutines.
 type CodecV2 interface {
+	// Marshal returns the wire format of v.
 	Marshal(v any) (out mem.BufferSlice, err error)
+	// Unmarshal parses the wire format into v.
 	Unmarshal(data mem.BufferSlice, v any) error
 	// Name returns the name of the Codec implementation. The returned string
 	// will be used as part of content type in transmission.  The result must be

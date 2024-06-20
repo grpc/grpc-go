@@ -954,9 +954,6 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 	if !s.addConn(lisAddr, st) {
 		return
 	}
-	if s.opts.bufferPool == nil {
-		panic("?!")
-	}
 	go func() {
 		s.serveStreams(context.Background(), st, rawConn)
 		s.removeConn(lisAddr, st)

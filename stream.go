@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"math"
 	"strconv"
 	"sync"
@@ -567,10 +568,10 @@ type clientStream struct {
 	// place where we need to check if the attempt is nil.
 	attempt *csAttempt
 	// TODO(hedging): hedging will have multiple attempts simultaneously.
-	committed  bool // active attempt committed for retry?
-	onCommit   func()
-	buffer     []replayOp // operations to replay on retry
-	bufferSize int        // current size of buffer
+	committed        bool // active attempt committed for retry?
+	onCommit         func()
+	replayBuffer     []replayOp // operations to replay on retry
+	replayBufferSize int        // current size of replayBuffer
 }
 
 type replayOp struct {
@@ -613,12 +614,12 @@ func (cs *clientStream) commitAttemptLocked() {
 		cs.onCommit()
 	}
 	cs.committed = true
-	for _, op := range cs.buffer {
+	for _, op := range cs.replayBuffer {
 		if op.cleanup != nil {
 			op.cleanup()
 		}
 	}
-	cs.buffer = nil
+	cs.replayBuffer = nil
 }
 
 func (cs *clientStream) commitAttempt() {
@@ -743,7 +744,7 @@ func (cs *clientStream) retryLocked(attempt *csAttempt, lastErr error) error {
 			// the stream is canceled.
 			return err
 		}
-		// Note that the first op in the replay buffer always sets cs.attempt
+		// Note that the first op in replayBuffer always sets cs.attempt
 		// if it is able to pick a transport and create a stream.
 		if lastErr = cs.replayBufferLocked(attempt); lastErr == nil {
 			return nil
@@ -772,7 +773,7 @@ func (cs *clientStream) withRetry(op func(a *csAttempt) error, onSuccess func())
 			// already be status errors.
 			return toRPCErr(op(cs.attempt))
 		}
-		if len(cs.buffer) == 0 {
+		if len(cs.replayBuffer) == 0 {
 			// For the first op, which controls creation of the stream and
 			// assigns cs.attempt, we need to create a new attempt inline
 			// before executing the first op.  On subsequent ops, the attempt
@@ -862,7 +863,7 @@ func (cs *clientStream) Trailer() metadata.MD {
 }
 
 func (cs *clientStream) replayBufferLocked(attempt *csAttempt) error {
-	for _, f := range cs.buffer {
+	for _, f := range cs.replayBuffer {
 		if err := f.op(attempt); err != nil {
 			return err
 		}
@@ -875,12 +876,12 @@ func (cs *clientStream) bufferForRetryLocked(sz int, op func(a *csAttempt) error
 	if cs.committed {
 		return
 	}
-	cs.bufferSize += sz
-	if cs.bufferSize > cs.callInfo.maxRetryRPCBufferSize {
+	cs.replayBufferSize += sz
+	if cs.replayBufferSize > cs.callInfo.maxRetryRPCBufferSize {
 		cs.commitAttemptLocked()
 		return
 	}
-	cs.buffer = append(cs.buffer, replayOp{op: op, cleanup: cleanup})
+	cs.replayBuffer = append(cs.replayBuffer, replayOp{op: op, cleanup: cleanup})
 }
 
 func (cs *clientStream) SendMsg(m any) (err error) {
@@ -1181,7 +1182,13 @@ func (a *csAttempt) finish(err error) {
 	}
 	var tr metadata.MD
 	if a.s != nil {
+		slog.Info("finish called")
 		a.t.CloseStream(a.s, err)
+		// After closing the stream, this should immediately return whatever is currently
+		// buffered, without actually blocking. The returned buffers can then be freed.
+		// The returned error is the one passed into CloseStream and can be ignored.
+		// TODO: ^^^^ get this validated by someone that knows the code better :)
+		_, _ = a.s.Read(math.MaxInt)
 		tr = a.s.Trailer()
 	}
 

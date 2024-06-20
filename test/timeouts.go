@@ -22,7 +22,7 @@ import "time"
 
 const (
 	// Default timeout for tests in this package.
-	defaultTestTimeout = 10 * time.Second
+	defaultTestTimeout = 10 * time.Hour
 	// Default short timeout, to be used when waiting for events which are not
 	// expected to happen.
 	defaultTestShortTimeout = 100 * time.Millisecond

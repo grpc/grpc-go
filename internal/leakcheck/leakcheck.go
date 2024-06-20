@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"google.golang.org/grpc/mem"
 )
@@ -59,11 +60,6 @@ type trackingBufferPool struct {
 	allocatedBuffers map[*byte]string
 }
 
-// TODO: replace with unsafe.SliceData once supported
-func sliceData(b []byte) *byte {
-	return &b[:1][0]
-}
-
 func (p *trackingBufferPool) Get(length int) []byte {
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -73,7 +69,7 @@ func (p *trackingBufferPool) Get(length int) []byte {
 
 	buf := p.pool.Get(length)
 
-	p.allocatedBuffers[sliceData(buf)] = string(debug.Stack())
+	p.allocatedBuffers[unsafe.SliceData(buf)] = string(debug.Stack())
 
 	return buf
 }
@@ -86,7 +82,7 @@ func (p *trackingBufferPool) Put(buf []byte) {
 		return
 	}
 
-	key := sliceData(buf)
+	key := unsafe.SliceData(buf)
 	if _, ok := p.allocatedBuffers[key]; !ok {
 		p.efer.Errorf("Unknown buffer freed:\n%s", string(debug.Stack()))
 	} else {

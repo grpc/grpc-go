@@ -1135,7 +1135,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *O
 		r:           data.Reader(),
 		onEachWrite: t.setResetPingStrikes,
 	}
-	if err := s.wq.get(int32(len(hdr) + df.r.Len())); err != nil {
+	if err := s.wq.get(int32(len(hdr) + df.r.Remaining())); err != nil {
 		data.Free()
 		return t.streamContextErr(s)
 	}
