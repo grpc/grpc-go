@@ -47,19 +47,14 @@ var (
 		}]}`
 )
 
-// newClientWithRetries uses grpc.WithDefaultServiceConfig() to set
-// service config, and creates the channel. However, the recommended
-// approach is to fetch the retry configuration from the name resolver
-// rather than defining it on the client side.
-func newClientWithRetries() (*grpc.ClientConn, error) {
-	return grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(retryPolicy))
-}
-
 func main() {
 	flag.Parse()
 
-	// Set up a connection to the server.
-	conn, err := newClientWithRetries()
+	// Set up a connection to the server with service config and create the channel.
+	// However, the recommended approach is to fetch the retry configuration
+	// (which is part of the service config) from the name resolver rather than
+	// defining it on the client side.
+	conn, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(retryPolicy))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
