@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/cncf/xds/go v0.0.0-20240423153145-555b57ec207b
-	github.com/envoyproxy/go-control-plane v0.12.0
+	github.com/envoyproxy/go-control-plane v0.12.1-0.20240621013728-1eb8caab5155
 	github.com/golang/glog v1.2.1
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.6.0
