@@ -43,8 +43,7 @@ import (
 // change callback is not invoked and client connections to the server are not
 // recycled.
 func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
+	managementServer, nodeID, bootstrapContents, _ := setupManagementServerAndResolver(t)
 
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
@@ -166,8 +165,7 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 // xDS enabled gRPC servers. It verifies that appropriate mode changes happen in
 // the server, and also verifies behavior of clientConns under these modes.
 func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
+	managementServer, nodeID, bootstrapContents, _ := setupManagementServerAndResolver(t)
 
 	// Configure xDS credentials to be used on the server-side.
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{

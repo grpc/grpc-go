@@ -32,12 +32,13 @@ import (
 	"google.golang.org/grpc/encoding/gzip"
 	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
+	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats/opentelemetry"
-	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
+	itestutils "google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 )
 
 // setupEnv configures the environment for CSM Observability Testing. It sets
@@ -46,13 +47,9 @@ import (
 // simulate the environment. It registers a cleanup function on the provided t
 // to restore the environment to it's original state.
 func setupEnv(t *testing.T, resourceDetectorEmissions map[string]string, nodeID, csmCanonicalServiceName, csmWorkloadName string) {
-	cleanup, err := bootstrap.CreateFile(bootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: "xds_server_uri",
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap: %v", err)
-	}
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, "xds_server_uri")
+	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
+
 	oldCSMCanonicalServiceName, csmCanonicalServiceNamePresent := os.LookupEnv("CSM_CANONICAL_SERVICE_NAME")
 	oldCSMWorkloadName, csmWorkloadNamePresent := os.LookupEnv("CSM_WORKLOAD_NAME")
 	os.Setenv("CSM_CANONICAL_SERVICE_NAME", csmCanonicalServiceName)
@@ -70,7 +67,6 @@ func setupEnv(t *testing.T, resourceDetectorEmissions map[string]string, nodeID,
 		return &attrSet
 	}
 	t.Cleanup(func() {
-		cleanup()
 		if csmCanonicalServiceNamePresent {
 			os.Setenv("CSM_CANONICAL_SERVICE_NAME", oldCSMCanonicalServiceName)
 		} else {
@@ -134,7 +130,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 		// To test the different operations for Unary RPC's from the interceptor
 		// level that can plumb metadata exchange header in.
 		unaryCallFunc func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
-		opts          testutils.MetricDataOptions
+		opts          itestutils.MetricDataOptions
 	}{
 		{
 			name: "normal-flow",
@@ -143,7 +139,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 					Body: make([]byte, len(in.GetPayload().GetBody())),
 				}}, nil
 			},
-			opts: testutils.MetricDataOptions{
+			opts: itestutils.MetricDataOptions{
 				CSMLabels:                  csmLabels,
 				UnaryCompressedMessageSize: float64(57),
 			},
@@ -153,7 +149,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 			unaryCallFunc: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return nil, errors.New("some error") // return an error and no message - this triggers trailers only - no messages or headers sent
 			},
-			opts: testutils.MetricDataOptions{
+			opts: itestutils.MetricDataOptions{
 				CSMLabels:       csmLabels,
 				UnaryCallFailed: true,
 			},
@@ -167,7 +163,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 					Body: make([]byte, len(in.GetPayload().GetBody())),
 				}}, nil
 			},
-			opts: testutils.MetricDataOptions{
+			opts: itestutils.MetricDataOptions{
 				CSMLabels:                  csmLabels,
 				UnaryCompressedMessageSize: float64(57),
 			},
@@ -181,7 +177,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 					Body: make([]byte, len(in.GetPayload().GetBody())),
 				}}, nil
 			},
-			opts: testutils.MetricDataOptions{
+			opts: itestutils.MetricDataOptions{
 				CSMLabels:                  csmLabels,
 				UnaryCompressedMessageSize: float64(57),
 			},
@@ -193,7 +189,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 					Body: make([]byte, len(in.GetPayload().GetBody())),
 				}}, nil
 			},
-			opts: testutils.MetricDataOptions{
+			opts: itestutils.MetricDataOptions{
 				CSMLabels:                  csmLabels,
 				UnaryCompressedMessageSize: float64(57),
 			},
@@ -247,8 +243,8 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 
 			opts := test.opts
 			opts.Target = ss.Target
-			wantMetrics := testutils.MetricDataUnary(opts)
-			testutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+			wantMetrics := itestutils.MetricDataUnary(opts)
+			itestutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 		})
 	}
 }
@@ -301,7 +297,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 		// To test the different operations for Streaming RPC's from the
 		// interceptor level that can plumb metadata exchange header in.
 		streamingCallFunc func(stream testgrpc.TestService_FullDuplexCallServer) error
-		opts              testutils.MetricDataOptions
+		opts              itestutils.MetricDataOptions
 	}{
 		{
 			name: "trailers-only",
@@ -312,7 +308,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 					}
 				}
 			},
-			opts: testutils.MetricDataOptions{
+			opts: itestutils.MetricDataOptions{
 				CSMLabels: csmLabels,
 			},
 		},
@@ -326,7 +322,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 					}
 				}
 			},
-			opts: testutils.MetricDataOptions{
+			opts: itestutils.MetricDataOptions{
 				CSMLabels: csmLabels,
 			},
 		},
@@ -340,7 +336,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 					}
 				}
 			},
-			opts: testutils.MetricDataOptions{
+			opts: itestutils.MetricDataOptions{
 				CSMLabels: csmLabels,
 			},
 		},
@@ -356,7 +352,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 					}
 				}
 			},
-			opts: testutils.MetricDataOptions{
+			opts: itestutils.MetricDataOptions{
 				CSMLabels:                      csmLabels,
 				StreamingCompressedMessageSize: float64(57),
 			},
@@ -420,8 +416,8 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 
 			opts := test.opts
 			opts.Target = ss.Target
-			wantMetrics := testutils.MetricDataStreaming(opts)
-			testutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+			wantMetrics := itestutils.MetricDataStreaming(opts)
+			itestutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 		})
 	}
 }
@@ -538,7 +534,7 @@ func (s) TestXDSLabels(t *testing.T) {
 					{
 						Attributes: attribute.NewSet(unaryMethodClientSideEnd...),
 						Count:      1,
-						Bounds:     testutils.DefaultLatencyBounds,
+						Bounds:     itestutils.DefaultLatencyBounds,
 					},
 				},
 				Temporality: metricdata.CumulativeTemporality,
@@ -553,7 +549,7 @@ func (s) TestXDSLabels(t *testing.T) {
 					{
 						Attributes:   attribute.NewSet(unaryMethodClientSideEnd...),
 						Count:        1,
-						Bounds:       testutils.DefaultSizeBounds,
+						Bounds:       itestutils.DefaultSizeBounds,
 						BucketCounts: unaryBucketCounts,
 						Min:          unaryExtrema,
 						Max:          unaryExtrema,
@@ -572,7 +568,7 @@ func (s) TestXDSLabels(t *testing.T) {
 					{
 						Attributes:   attribute.NewSet(unaryMethodClientSideEnd...),
 						Count:        1,
-						Bounds:       testutils.DefaultSizeBounds,
+						Bounds:       itestutils.DefaultSizeBounds,
 						BucketCounts: unaryBucketCounts,
 						Min:          unaryExtrema,
 						Max:          unaryExtrema,
@@ -591,7 +587,7 @@ func (s) TestXDSLabels(t *testing.T) {
 					{
 						Attributes: attribute.NewSet(unaryMethodAttr, targetAttr, unaryStatusAttr),
 						Count:      1,
-						Bounds:     testutils.DefaultLatencyBounds,
+						Bounds:     itestutils.DefaultLatencyBounds,
 					},
 				},
 				Temporality: metricdata.CumulativeTemporality,
@@ -599,7 +595,7 @@ func (s) TestXDSLabels(t *testing.T) {
 		},
 	}
 
-	testutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+	itestutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 }
 
 // TestObservability tests that Observability global function compiles and runs

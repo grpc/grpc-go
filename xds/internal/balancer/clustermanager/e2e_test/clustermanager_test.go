@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -49,6 +50,7 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3pickfirstpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/pick_first/v3"
+	"github.com/google/uuid"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
@@ -92,8 +94,22 @@ func makeUnaryCallRPCAndVerifyPeer(ctx context.Context, client testgrpc.TestServ
 
 func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 	// Spin up an xDS management server.
-	mgmtServer, nodeID, _, resolver, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	var resolverBuilder resolver.Builder
+	var err error
+	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
+		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
+		if err != nil {
+			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		}
+	}
 
 	// Configure client side xDS resources on the management server.
 	const (
@@ -162,7 +178,7 @@ func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 	}
 
 	// Create a ClientConn.
-	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}

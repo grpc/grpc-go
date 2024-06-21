@@ -38,7 +38,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -101,20 +100,11 @@ func (*testService) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallSer
 func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
-	fs, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
-		NodeID:                             nodeID,
-		ServerURI:                          fs.Address,
-		ServerListenerResourceNameTemplate: "grpc/server",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 
 	// Initialize a gRPC server and register the stubServer on it.
 	server := grpc.NewServer()
@@ -132,9 +122,7 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 		}
 	}()
 
-	return fs, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), func() {
-		fs.Stop()
-		bootstrapCleanup()
+	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), func() {
 		server.Stop()
 	}
 }

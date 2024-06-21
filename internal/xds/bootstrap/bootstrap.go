@@ -219,9 +219,9 @@ func (sc *ServerConfig) String() string {
 
 // The following fields correspond 1:1 with the JSON schema for ServerConfig.
 type serverConfigJSON struct {
-	ServerURI      string         `json:"server_uri"`
-	ChannelCreds   []ChannelCreds `json:"channel_creds"`
-	ServerFeatures []string       `json:"server_features"`
+	ServerURI      string         `json:"server_uri,omitempty"`
+	ChannelCreds   []ChannelCreds `json:"channel_creds,omitempty"`
+	ServerFeatures []string       `json:"server_features,omitempty"`
 }
 
 // MarshalJSON returns marshaled JSON bytes corresponding to this server config.
@@ -569,6 +569,72 @@ func newConfigFromContents(data []byte) (*Config, error) {
 		logger.Infof("Bootstrap config for creating xds-client: %+v", config)
 	}
 	return config, nil
+}
+
+// ConfigOptionsForTesting specifies options for creating a new bootstrap
+// configuration for testing purposes.
+//
+// # Testing-Only
+type ConfigOptionsForTesting struct {
+	// Servers is the top-level xDS server configuration
+	Servers []json.RawMessage
+	// CertificateProviders is the certificate providers configuration.
+	CertificateProviders map[string]json.RawMessage
+	// ServerListenerResourceNameTemplate is the listener resource name template
+	// to be used on the gRPC server.
+	ServerListenerResourceNameTemplate string
+	// ClientDefaultListenerResourceNameTemplate is the default listener
+	// resource name template to be used on the gRPC client.
+	ClientDefaultListenerResourceNameTemplate string
+	// Authorities is a list of non-default authorities.
+	Authorities map[string]json.RawMessage
+	// NodeID is the node identifier of the gRPC client/server node in the
+	// proxyless service mesh.
+	NodeID string
+}
+
+// NewContentsForTesting creates a new bootstrap configuration from the passed in
+// options, for testing purposes.
+//
+// # Testing-Only
+func NewContentsForTesting(opts ConfigOptionsForTesting) ([]byte, error) {
+	var servers []*ServerConfig
+	for _, serverCfgJSON := range opts.Servers {
+		server := &ServerConfig{}
+		if err := server.UnmarshalJSON(serverCfgJSON); err != nil {
+			return nil, err
+		}
+		servers = append(servers, server)
+	}
+	certProviders := make(map[string]certproviderNameAndConfig)
+	for k, v := range opts.CertificateProviders {
+		cp := certproviderNameAndConfig{}
+		if err := json.Unmarshal(v, &cp); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal certificate provider configuration for %s: %s", k, string(v))
+		}
+		certProviders[k] = cp
+	}
+	authorities := make(map[string]*Authority)
+	for k, v := range opts.Authorities {
+		a := &Authority{}
+		if err := json.Unmarshal(v, a); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal authority configuration for %s: %s", k, string(v))
+		}
+		authorities[k] = a
+	}
+	cfgJSON := configJSON{
+		XDSServers:                                servers,
+		CertificateProviders:                      certProviders,
+		ServerListenerResourceNameTemplate:        opts.ServerListenerResourceNameTemplate,
+		ClientDefaultListenerResourceNameTemplate: opts.ClientDefaultListenerResourceNameTemplate,
+		Authorities:                               authorities,
+		Node:                                      node{ID: opts.NodeID},
+	}
+	contents, err := json.Marshal(cfgJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal bootstrap configuration for provided options %+v: %v", opts, err)
+	}
+	return contents, nil
 }
 
 // certproviderNameAndConfig is the internal representation of

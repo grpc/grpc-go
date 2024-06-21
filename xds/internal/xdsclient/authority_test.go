@@ -59,20 +59,14 @@ func init() {
 func setupTest(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptions, watchExpiryTimeout time.Duration) (*authority, *e2e.ManagementServer, string) {
 	t.Helper()
 	nodeID := uuid.New().String()
-	ms, err := e2e.StartManagementServer(opts)
-	if err != nil {
-		t.Fatalf("Failed to spin up the xDS management server: %q", err)
-	}
+	managementServer := e2e.StartManagementServer(t, opts)
 
-	contents, err := e2e.DefaultBootstrapContents(nodeID, ms.Address)
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
-	}
+	contents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 	config, err := bootstrap.NewConfigFromContents(contents)
 	if err != nil {
 		t.Fatalf("Failed to build bootstrap configuration: %v", err)
 	}
-	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: ms.Address})
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: managementServer.Address})
 	if err != nil {
 		t.Fatalf("Failed to create server config for testing: %v", err)
 	}
@@ -87,7 +81,7 @@ func setupTest(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptio
 	if err != nil {
 		t.Fatalf("Failed to create authority: %q", err)
 	}
-	return a, ms, nodeID
+	return a, managementServer, nodeID
 }
 
 // This tests verifies watch and timer state for the scenario where a watch for
@@ -97,7 +91,6 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	a, ms, nodeID := setupTest(ctx, t, emptyServerOpts, defaultTestTimeout)
-	defer ms.Stop()
 	defer a.close()
 
 	rn := "xdsclient-test-lds-resource"
@@ -205,7 +198,6 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	}
 
 	a, ms, nodeID := setupTest(ctx, t, serverOpt, defaultTestTimeout)
-	defer ms.Stop()
 	defer a.close()
 
 	nameA := "xdsclient-test-lds-resourceA"
