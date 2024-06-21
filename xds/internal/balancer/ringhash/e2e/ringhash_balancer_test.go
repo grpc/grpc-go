@@ -196,7 +196,7 @@ func channelIDHashRoute(routeName, virtualHostDomain, clusterName string) *v3rou
 // checkRPCSendOK sends num RPCs to the client. It returns a map of backend
 // addresses as keys and number of RPCs sent to this address as value. Abort the
 // test if any RPC fails.
-func checkRPCSendOK(t *testing.T, ctx context.Context, client testgrpc.TestServiceClient, num int) map[string]int {
+func checkRPCSendOK(ctx context.Context, t *testing.T, client testgrpc.TestServiceClient, num int) map[string]int {
 	t.Helper()
 
 	backendCount := make(map[string]int)
@@ -334,7 +334,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 
-	gotPerBackend := checkRPCSendOK(t, ctx, client, 100)
+	gotPerBackend := checkRPCSendOK(ctx, t, client, 100)
 
 	// Since this is using ring hash with the channel ID as the key, all RPCs
 	// are routed to the same backend of the secondary locality.
@@ -441,7 +441,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 
-	gotPerBackend := checkRPCSendOK(t, ctx, client, 1)
+	gotPerBackend := checkRPCSendOK(ctx, t, client, 1)
 	var got string
 	for got = range gotPerBackend {
 	}
@@ -622,7 +622,7 @@ func (s) TestRingHash_ChannelIdHashing(t *testing.T) {
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 
-	received := checkRPCSendOK(t, ctx, client, 100)
+	received := checkRPCSendOK(ctx, t, client, 100)
 	if len(received) != 1 {
 		t.Errorf("Got RPCs routed to %v backends, want %v", len(received), 1)
 	}
@@ -707,7 +707,7 @@ func (s) TestRingHash_HeaderHashing(t *testing.T) {
 	// create the entry in the ring.
 	for _, backend := range backends {
 		ctx := metadata.NewOutgoingContext(ctx, metadata.Pairs("address_hash", backend.Address+"_0"))
-		reqPerBackend := checkRPCSendOK(t, ctx, client, 1)
+		reqPerBackend := checkRPCSendOK(ctx, t, client, 1)
 		if reqPerBackend[backend.Address] != 1 {
 			t.Errorf("Got RPC routed to backend %v, want %v", reqPerBackend, backend.Address)
 		}
@@ -782,7 +782,7 @@ func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 	gotPerBackend := make(map[string]int)
 	for _, backend := range backends {
 		ctx := metadata.NewOutgoingContext(ctx, metadata.Pairs("address_hash", backend.Address+"_0"))
-		res := checkRPCSendOK(t, ctx, client, 100)
+		res := checkRPCSendOK(ctx, t, client, 100)
 		for addr, count := range res {
 			gotPerBackend[addr] += count
 		}
@@ -882,7 +882,7 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(conn)
 
 	// Send a large number of RPCs and check that they are distributed randomly.
-	gotPerBackend := checkRPCSendOK(t, ctx, client, numRPCs)
+	gotPerBackend := checkRPCSendOK(ctx, t, client, numRPCs)
 	for _, backend := range backends {
 		got := float64(gotPerBackend[backend.Address]) / float64(numRPCs)
 		want := .5
@@ -947,7 +947,7 @@ func (s) TestRingHash_EndpointWeights(t *testing.T) {
 
 	// Send a large number of RPCs and check that they are distributed randomly.
 	numRPCs := computeIdealNumberOfRPCs(t, .25, errorTolerance)
-	gotPerBackend := checkRPCSendOK(t, ctx, client, numRPCs)
+	gotPerBackend := checkRPCSendOK(ctx, t, client, numRPCs)
 
 	got := float64(gotPerBackend[backends[0].Address]) / float64(numRPCs)
 	want := .25
