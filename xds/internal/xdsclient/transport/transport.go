@@ -48,8 +48,7 @@ import (
 
 // Any per-RPC level logs which print complete request or response messages
 // should be gated at this verbosity level. Other per-RPC level logs which print
-// terse output should be at `INFO` and verbosity 2, which corresponds to using
-// the `Debugf` method on the logger.
+// terse output should be at `INFO` and verbosity 2.
 const perRPCVerbosityLevel = 9
 
 type adsStream = v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient
@@ -298,7 +297,9 @@ func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, send
 	if t.logger.V(perRPCVerbosityLevel) {
 		t.logger.Infof("ADS request sent: %v", pretty.ToJSON(req))
 	} else {
-		t.logger.Debugf("ADS request sent for type %q, resources: %v, version %q, nonce %q", resourceURL, resourceNames, version, nonce)
+		if t.logger.V(2) {
+			t.logger.Infof("ADS request sent for type %q, resources: %v, version %q, nonce %q", resourceURL, resourceNames, version, nonce)
+		}
 	}
 	t.onSendHandler(&ResourceSendInfo{URL: resourceURL, ResourceNames: resourceNames})
 	return nil
@@ -311,8 +312,8 @@ func (t *Transport) recvAggregatedDiscoveryServiceResponse(stream adsStream) (re
 	}
 	if t.logger.V(perRPCVerbosityLevel) {
 		t.logger.Infof("ADS response received: %v", pretty.ToJSON(resp))
-	} else {
-		t.logger.Debugf("ADS response received for type %q, version %q, nonce %q", resp.GetTypeUrl(), resp.GetVersionInfo(), resp.GetNonce())
+	} else if t.logger.V(2) {
+		t.logger.Infof("ADS response received for type %q, version %q, nonce %q", resp.GetTypeUrl(), resp.GetVersionInfo(), resp.GetNonce())
 	}
 	return resp.GetResources(), resp.GetTypeUrl(), resp.GetVersionInfo(), resp.GetNonce(), nil
 }
@@ -512,7 +513,9 @@ func (t *Transport) recv(stream adsStream) bool {
 			stream:  stream,
 			version: rVersion,
 		})
-		t.logger.Debugf("Sending ACK for resource type: %q, version: %q, nonce: %q", url, rVersion, nonce)
+		if t.logger.V(2) {
+			t.logger.Infof("Sending ACK for resource type: %q, version: %q, nonce: %q", url, rVersion, nonce)
+		}
 	}
 }
 

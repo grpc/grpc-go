@@ -509,7 +509,9 @@ func bootstrapConfigFromEnvVariable() ([]byte, error) {
 	fContent := envconfig.XDSBootstrapFileContent
 
 	if fName != "" {
-		logger.Debugf("Using bootstrap file with name %q", fName)
+		if logger.V(2) {
+			logger.Infof("Using bootstrap file with name %q", fName)
+		}
 		return bootstrapFileReadFunc(fName)
 	}
 
