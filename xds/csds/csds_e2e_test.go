@@ -20,8 +20,9 @@ package csds_test
 
 import (
 	"context"
+	"fmt"
 	"io"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/csds"
@@ -185,7 +187,9 @@ func (s) TestCSDS(t *testing.T) {
 			},
 		},
 	}
-	checkClientStatusResponse(ctx, t, stream, wantResp)
+	if err := checkClientStatusResponse(ctx, stream, wantResp); err != nil {
+		t.Fatal(err)
+	}
 
 	// Initialize the xDS resources to be used in this test.
 	ldsTargets := []string{"lds.target.good:0000", "lds.target.good:1111"}
@@ -238,14 +242,14 @@ func (s) TestCSDS(t *testing.T) {
 	// Verify that the xDS client reports the resources as being in "Requested"
 	// state, and in version "0".
 	wantConfigs := []*v3statuspb.ClientConfig_GenericXdsConfig{
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[0], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[1], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[0], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[1], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[0], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[1], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[0], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[1], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
+		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[0], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
+		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[1], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
+		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[0], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
+		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[1], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
 	}
 	wantResp = &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
@@ -261,7 +265,9 @@ func (s) TestCSDS(t *testing.T) {
 			},
 		},
 	}
-	checkClientStatusResponse(ctx, t, stream, wantResp)
+	if err := checkClientStatusResponse(ctx, stream, wantResp); err != nil {
+		t.Fatal(err)
+	}
 
 	// Configure the management server with two resources of each type,
 	// corresponding to the watches registered above.
@@ -278,14 +284,14 @@ func (s) TestCSDS(t *testing.T) {
 	// Verify that the xDS client reports the resources as being in "ACKed"
 	// state, and in version "1".
 	wantConfigs = []*v3statuspb.ClientConfig_GenericXdsConfig{
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[0], "1", v3adminpb.ClientResourceStatus_ACKED, listenerAnys[0], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[1], "1", v3adminpb.ClientResourceStatus_ACKED, listenerAnys[1], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[0], "1", v3adminpb.ClientResourceStatus_ACKED, routeAnys[0], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[1], "1", v3adminpb.ClientResourceStatus_ACKED, routeAnys[1], nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[0], "1", v3adminpb.ClientResourceStatus_ACKED, clusterAnys[0], nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[1], "1", v3adminpb.ClientResourceStatus_ACKED, clusterAnys[1], nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[0], "1", v3adminpb.ClientResourceStatus_ACKED, endpointAnys[0], nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[1], "1", v3adminpb.ClientResourceStatus_ACKED, endpointAnys[1], nil),
+		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[0], "1", v3adminpb.ClientResourceStatus_ACKED, listenerAnys[0], nil),
+		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[1], "1", v3adminpb.ClientResourceStatus_ACKED, listenerAnys[1], nil),
+		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[0], "1", v3adminpb.ClientResourceStatus_ACKED, routeAnys[0], nil),
+		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[1], "1", v3adminpb.ClientResourceStatus_ACKED, routeAnys[1], nil),
 	}
 	wantResp = &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
@@ -301,7 +307,9 @@ func (s) TestCSDS(t *testing.T) {
 			},
 		},
 	}
-	checkClientStatusResponse(ctx, t, stream, wantResp)
+	if err := checkClientStatusResponse(ctx, stream, wantResp); err != nil {
+		t.Fatal(err)
+	}
 
 	// Update the first resource of each type in the management server to a
 	// value which is expected to be NACK'ed by the xDS client.
@@ -326,14 +334,14 @@ func (s) TestCSDS(t *testing.T) {
 	// that for the NACKed resource would be "1". In the NACKed resource, the
 	// version which is NACKed is stored in the ErrorState field.
 	wantConfigs = []*v3statuspb.ClientConfig_GenericXdsConfig{
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[0], "1", v3adminpb.ClientResourceStatus_NACKED, listenerAnys[0], &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[1], "2", v3adminpb.ClientResourceStatus_ACKED, listenerAnys[1], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[0], "1", v3adminpb.ClientResourceStatus_NACKED, routeAnys[0], &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[1], "2", v3adminpb.ClientResourceStatus_ACKED, routeAnys[1], nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[0], "1", v3adminpb.ClientResourceStatus_NACKED, clusterAnys[0], &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[1], "2", v3adminpb.ClientResourceStatus_ACKED, clusterAnys[1], nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[0], "1", v3adminpb.ClientResourceStatus_NACKED, endpointAnys[0], &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[1], "2", v3adminpb.ClientResourceStatus_ACKED, endpointAnys[1], nil),
+		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[0], "1", v3adminpb.ClientResourceStatus_NACKED, listenerAnys[0], &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
+		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[1], "2", v3adminpb.ClientResourceStatus_ACKED, listenerAnys[1], nil),
+		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[0], "1", v3adminpb.ClientResourceStatus_NACKED, routeAnys[0], &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
+		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[1], "2", v3adminpb.ClientResourceStatus_ACKED, routeAnys[1], nil),
 	}
 	wantResp = &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
@@ -349,7 +357,9 @@ func (s) TestCSDS(t *testing.T) {
 			},
 		},
 	}
-	checkClientStatusResponse(ctx, t, stream, wantResp)
+	if err := checkClientStatusResponse(ctx, stream, wantResp); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func makeGenericXdsConfig(typeURL, name, version string, status v3adminpb.ClientResourceStatus, config *anypb.Any, failure *v3adminpb.UpdateFailureState) *v3statuspb.ClientConfig_GenericXdsConfig {
@@ -363,69 +373,51 @@ func makeGenericXdsConfig(typeURL, name, version string, status v3adminpb.Client
 	}
 }
 
-func checkClientStatusResponse(ctx context.Context, t *testing.T, stream v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient, want *v3statuspb.ClientStatusResponse) {
+func checkClientStatusResponse(ctx context.Context, stream v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient, want *v3statuspb.ClientStatusResponse) error {
 	var cmpOpts = cmp.Options{
-		// Sort the client configs based on the `client_scope` field.
-		cmp.Transformer("sort", func(in []*v3statuspb.ClientConfig) []*v3statuspb.ClientConfig {
-			out := append([]*v3statuspb.ClientConfig(nil), in...)
-			sort.Slice(out, func(i, j int) bool {
-				a, b := out[i], out[j]
-				if a == nil {
-					return true
-				}
-				if b == nil {
-					return false
-				}
-				return strings.Compare(a.ClientScope, b.ClientScope) < 0
-			})
-			return out
-		}),
-		// Sort the resource configs based on the type_url and name fields.
-		cmp.Transformer("sort", func(in []*v3statuspb.ClientConfig_GenericXdsConfig) []*v3statuspb.ClientConfig_GenericXdsConfig {
-			out := append([]*v3statuspb.ClientConfig_GenericXdsConfig(nil), in...)
-			sort.Slice(out, func(i, j int) bool {
-				a, b := out[i], out[j]
-				if a == nil {
-					return true
-				}
-				if b == nil {
-					return false
-				}
-				if strings.Compare(a.TypeUrl, b.TypeUrl) == 0 {
-					return strings.Compare(a.Name, b.Name) < 0
-				}
-				return strings.Compare(a.TypeUrl, b.TypeUrl) < 0
-			})
-			return out
-		}),
 		protocmp.Transform(),
 		protocmp.IgnoreFields((*v3statuspb.ClientConfig_GenericXdsConfig)(nil), "last_updated"),
 		protocmp.IgnoreFields((*v3adminpb.UpdateFailureState)(nil), "last_update_attempt", "details"),
 	}
+
+	var lastErr error
 	for ; ctx.Err() == nil; <-time.After(100 * time.Millisecond) {
 		if err := stream.Send(&v3statuspb.ClientStatusRequest{Node: nil}); err != nil {
 			if err != io.EOF {
-				t.Fatalf("Failed to send ClientStatusRequest: %v", err)
+				return fmt.Errorf("failed to send ClientStatusRequest: %v", err)
 			}
 			// If the stream has closed, we call Recv() until it returns a non-nil
 			// error to get the actual error on the stream.
 			for {
 				if _, err := stream.Recv(); err != nil {
-					t.Fatalf("Failed to recv ClientStatusResponse: %v", err)
+					return fmt.Errorf("failed to recv ClientStatusResponse: %v", err)
 				}
 			}
 		}
 		got, err := stream.Recv()
 		if err != nil {
-			t.Fatalf("Failed to recv ClientStatusResponse: %v", err)
+			return fmt.Errorf("failed to recv ClientStatusResponse: %v", err)
 		}
-		diff := cmp.Diff(got, want, cmpOpts)
-		if diff != "" {
-			return
+		// Sort the client configs based on the `client_scope` field.
+		slices.SortFunc(got.GetConfig(), func(a, b *v3statuspb.ClientConfig) int {
+			return strings.Compare(a.ClientScope, b.ClientScope)
+		})
+		// Sort the resource configs based on the type_url and name fields.
+		for _, cc := range got.GetConfig() {
+			slices.SortFunc(cc.GetGenericXdsConfigs(), func(a, b *v3statuspb.ClientConfig_GenericXdsConfig) int {
+				if strings.Compare(a.TypeUrl, b.TypeUrl) == 0 {
+					return strings.Compare(a.Name, b.Name)
+				}
+				return strings.Compare(a.TypeUrl, b.TypeUrl)
+			})
 		}
-		t.Logf("Received unexpected ClientStatusResponse, diff (-got, +want):\n%s", diff)
+		diff := cmp.Diff(want, got, cmpOpts)
+		if diff == "" {
+			return nil
+		}
+		lastErr = fmt.Errorf("received unexpected resource dump, diff (-got, +want):\n%s, got: %s\n want:%s", diff, pretty.ToJSON(got), pretty.ToJSON(want))
 	}
-	t.Fatalf("Timeout when waiting for resources to reach expected state: %+v", want)
+	return fmt.Errorf("timeout when waiting for resource dump to reach expected state: %v", lastErr)
 }
 
 func (s) TestCSDSNoXDSClient(t *testing.T) {
