@@ -65,4 +65,4 @@ exit status 1
 [details]:      https://godoc.org/google.golang.org/grpc/internal/status#Status.Details
 [status-err]:   https://godoc.org/google.golang.org/grpc/internal/status#Status.Err
 [status-error]: https://godoc.org/google.golang.org/grpc/status#Error
-[example]:      https://github.com/grpc/grpc-go/tree/master/examples/features/errors
+[example]:      https://github.com/grpc/grpc-go/tree/master/examples/features/error_details
