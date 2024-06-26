@@ -232,7 +232,7 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)},
 		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
-			&v3clusterpb.Cluster{
+			{
 				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
