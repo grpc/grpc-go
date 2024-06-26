@@ -347,3 +347,6 @@ func OutgoingTrace(ctx context.Context) []byte {
 	b, _ := ctx.Value(outgoingTraceKey{}).([]byte)
 	return b
 }
+
+// Metric is an identifier for a metric.
+type Metric string

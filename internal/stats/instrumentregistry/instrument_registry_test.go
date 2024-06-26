@@ -22,6 +22,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/experimental/stats"
+	"google.golang.org/grpc/experimental/stats/instrumentregistry"
 	"google.golang.org/grpc/internal/grpctest"
 )
 
@@ -129,7 +131,7 @@ func (s) TestInstrumentRegistry(t *testing.T) {
 	intGaugeHandle1 := RegisterInt64Gauge("simple gauge", "the most recent int emitted by test", "int", []string{"int gauge label"}, []string{"int gauge optional label"}, false)
 
 	fmr := newFakeMetricsRecorder(t)
-	fmr.RecordIntCount(intCountHandle1, []Label{{Key: "int counter label", Value: "some value"}}, []Label{{Key: "int counter optional label", Value: "some value"}}, 1)
+	fmr.RecordIntCount(intCountHandle1, []stats.Label{{Key: "int counter label", Value: "some value"}}, []stats.Label{{Key: "int counter optional label", Value: "some value"}}, 1)
 
 	intWithLabelsWant := []int64WithLabels{
 		{
@@ -147,7 +149,7 @@ func (s) TestInstrumentRegistry(t *testing.T) {
 		t.Fatalf("fmr.int64counts (-got, +want): %v", diff)
 	}
 
-	fmr.RecordFloatCount(floatCountHandle1, []Label{{Key: "float counter label", Value: "some value"}}, []Label{{Key: "float counter optional label", Value: "some value"}}, 1.2)
+	fmr.RecordFloatCount(floatCountHandle1, []stats.Label{{Key: "float counter label", Value: "some value"}}, []stats.Label{{Key: "float counter optional label", Value: "some value"}}, 1.2)
 	floatWithLabelsWant := []float64WithLabels{
 		{
 			value:          1.2,
@@ -159,7 +161,7 @@ func (s) TestInstrumentRegistry(t *testing.T) {
 		t.Fatalf("fmr.float64counts (-got, +want): %v", diff)
 	}
 
-	fmr.RecordIntHisto(intHistoHandle1, []Label{{Key: "int histo label", Value: "some value"}}, []Label{{Key: "int histo optional label", Value: "some value"}}, 3)
+	fmr.RecordIntHisto(intHistoHandle1, []stats.Label{{Key: "int histo label", Value: "some value"}}, []stats.Label{{Key: "int histo optional label", Value: "some value"}}, 3)
 	intHistoWithLabelsWant := []int64WithLabels{
 		{
 			value:          3,
@@ -171,7 +173,7 @@ func (s) TestInstrumentRegistry(t *testing.T) {
 		t.Fatalf("fmr.int64histos (-got, +want): %v", diff)
 	}
 
-	fmr.RecordFloatHisto(floatHistoHandle1, []Label{{Key: "float histo label", Value: "some value"}}, []Label{{Key: "float histo optional label", Value: "some value"}}, 4)
+	fmr.RecordFloatHisto(floatHistoHandle1, []stats.Label{{Key: "float histo label", Value: "some value"}}, []stats.Label{{Key: "float histo optional label", Value: "some value"}}, 4)
 	floatHistoWithLabelsWant := []float64WithLabels{
 		{
 			value:          4,
@@ -183,7 +185,7 @@ func (s) TestInstrumentRegistry(t *testing.T) {
 		t.Fatalf("fmr.float64histos (-got, +want): %v", diff)
 	}
 
-	fmr.RecordIntGauge(intGaugeHandle1, []Label{{Key: "int gauge label", Value: "some value"}}, []Label{{Key: "int gauge optional label", Value: "some value"}}, 7)
+	fmr.RecordIntGauge(intGaugeHandle1, []stats.Label{{Key: "int gauge label", Value: "some value"}}, []stats.Label{{Key: "int gauge optional label", Value: "some value"}}, 7)
 	intGaugeWithLabelsWant := []int64WithLabels{
 		{
 			value:          7,
@@ -206,7 +208,7 @@ func (s) TestNumerousIntCounts(t *testing.T) {
 	intCountHandle3 := RegisterInt64Count("int counter 3", "number of times recorded on tests", "calls", []string{"int counter 3 label"}, []string{"int counter 3 optional label"}, false)
 	fmr := newFakeMetricsRecorder(t)
 
-	fmr.RecordIntCount(intCountHandle1, []Label{{Key: "int counter label", Value: "some value"}}, []Label{{Key: "int counter optional label", Value: "some value"}}, 1)
+	fmr.RecordIntCount(intCountHandle1, []stats.Label{{Key: "int counter label", Value: "some value"}}, []stats.Label{{Key: "int counter optional label", Value: "some value"}}, 1)
 	intWithLabelsWant := []int64WithLabels{
 		{
 			value:          1,
@@ -228,7 +230,7 @@ func (s) TestNumerousIntCounts(t *testing.T) {
 		t.Fatalf("fmr.int64counts (-got, +want): %v", diff)
 	}
 
-	fmr.RecordIntCount(intCountHandle2, []Label{{Key: "int counter 2 label", Value: "some value"}}, []Label{{Key: "int counter 2 optional label", Value: "some value"}}, 1)
+	fmr.RecordIntCount(intCountHandle2, []stats.Label{{Key: "int counter 2 label", Value: "some value"}}, []stats.Label{{Key: "int counter 2 optional label", Value: "some value"}}, 1)
 	intWithLabelsWant = []int64WithLabels{
 		{
 			value:          1,
@@ -250,7 +252,7 @@ func (s) TestNumerousIntCounts(t *testing.T) {
 		t.Fatalf("fmr.int64counts (-got, +want): %v", diff)
 	}
 
-	fmr.RecordIntCount(intCountHandle3, []Label{{Key: "int counter 3 label", Value: "some value"}}, []Label{{Key: "int counter 3 optional label", Value: "some value"}}, 1)
+	fmr.RecordIntCount(intCountHandle3, []stats.Label{{Key: "int counter 3 label", Value: "some value"}}, []stats.Label{{Key: "int counter 3 optional label", Value: "some value"}}, 1)
 	intWithLabelsWant = []int64WithLabels{
 		{
 			value:          1,
@@ -272,7 +274,7 @@ func (s) TestNumerousIntCounts(t *testing.T) {
 		t.Fatalf("fmr.int64counts (-got, +want): %v", diff)
 	}
 
-	fmr.RecordIntCount(intCountHandle3, []Label{{Key: "int counter 3 label", Value: "some value"}}, []Label{{Key: "int counter 3 optional label", Value: "some value"}}, 1)
+	fmr.RecordIntCount(intCountHandle3, []stats.Label{{Key: "int counter 3 label", Value: "some value"}}, []stats.Label{{Key: "int counter 3 optional label", Value: "some value"}}, 1)
 	intWithLabelsWant = []int64WithLabels{
 		{
 			value:          1,
@@ -297,7 +299,7 @@ func (s) TestNumerousIntCounts(t *testing.T) {
 
 // verifyLabels verifies that all of the labels keys expected are present in the
 // labels received.
-func verifyLabels(t *testing.T, labelsWant []string, optionalLabelsWant []string, labelsGot []Label, optionalLabelsGot []Label) {
+func verifyLabels(t *testing.T, labelsWant []string, optionalLabelsWant []string, labelsGot []stats.Label, optionalLabelsGot []stats.Label) {
 	for i, label := range labelsWant {
 		if labelsGot[i].Key != label {
 			t.Fatalf("label key at position %v got %v, want %v", i, labelsGot[i].Key, label)
@@ -317,31 +319,31 @@ func verifyLabels(t *testing.T, labelsWant []string, optionalLabelsWant []string
 	}
 }
 
-func (r *fakeMetricsRecorder) RecordIntCount(handle Int64CountHandle, labels []Label, optionalLabels []Label, incr int64) {
+func (r *fakeMetricsRecorder) RecordIntCount(handle instrumentregistry.Int64CountHandle, labels []stats.Label, optionalLabels []stats.Label, incr int64) {
 	ic := r.int64counts[handle.Index]
 	verifyLabels(r.t, ic.labels, ic.optionalLabels, labels, optionalLabels)
 	r.int64counts[handle.Index].value += incr
 }
 
-func (r *fakeMetricsRecorder) RecordFloatCount(handle Float64CountHandle, labels []Label, optionalLabels []Label, incr float64) {
+func (r *fakeMetricsRecorder) RecordFloatCount(handle instrumentregistry.Float64CountHandle, labels []stats.Label, optionalLabels []stats.Label, incr float64) {
 	fc := r.float64counts[handle.Index]
 	verifyLabels(r.t, fc.labels, fc.optionalLabels, labels, optionalLabels)
 	r.float64counts[handle.Index].value += incr
 }
 
-func (r *fakeMetricsRecorder) RecordIntHisto(handle Int64HistoHandle, labels []Label, optionalLabels []Label, incr int64) {
+func (r *fakeMetricsRecorder) RecordIntHisto(handle instrumentregistry.Int64HistoHandle, labels []stats.Label, optionalLabels []stats.Label, incr int64) {
 	ih := r.int64histos[handle.Index]
 	verifyLabels(r.t, ih.labels, ih.optionalLabels, labels, optionalLabels)
 	r.int64histos[handle.Index].value = incr
 }
 
-func (r *fakeMetricsRecorder) RecordFloatHisto(handle Float64HistoHandle, labels []Label, optionalLabels []Label, incr float64) {
+func (r *fakeMetricsRecorder) RecordFloatHisto(handle instrumentregistry.Float64HistoHandle, labels []stats.Label, optionalLabels []stats.Label, incr float64) {
 	fh := r.float64histos[handle.Index]
 	verifyLabels(r.t, fh.labels, fh.optionalLabels, labels, optionalLabels)
 	r.float64histos[handle.Index].value = incr
 }
 
-func (r *fakeMetricsRecorder) RecordIntGauge(handle Int64GaugeHandle, labels []Label, optionalLabels []Label, incr int64) {
+func (r *fakeMetricsRecorder) RecordIntGauge(handle instrumentregistry.Int64GaugeHandle, labels []stats.Label, optionalLabels []stats.Label, incr int64) {
 	ig := r.int64gauges[handle.Index]
 	verifyLabels(r.t, ig.labels, ig.optionalLabels, labels, optionalLabels)
 	r.int64gauges[handle.Index].value = incr

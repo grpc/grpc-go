@@ -20,7 +20,12 @@
 // use to register instruments (metrics).
 package instrumentregistry
 
-import "log"
+import (
+	"log"
+
+	"google.golang.org/grpc/experimental/stats/instrumentregistry"
+	"google.golang.org/grpc/stats"
+)
 
 // InstrumentDescriptor is a data of a registered instrument (metric).
 type InstrumentDescriptor struct {
@@ -65,10 +70,6 @@ var Int64GaugeInsts []InstrumentDescriptor
 // registeredInsts are the registered instrument descriptor names.
 var registeredInsts = make(map[string]bool)
 
-// DefaultNonPerCallMetrics are the instruments registered that are on by
-// default.
-var DefaultNonPerCallMetrics = make(map[string]bool)
-
 // ClearInstrumentRegistryForTesting clears the instrument registry for testing
 // purposes only.
 func ClearInstrumentRegistryForTesting() {
@@ -78,15 +79,7 @@ func ClearInstrumentRegistryForTesting() {
 	Float64HistoInsts = nil
 	Int64GaugeInsts = nil
 	registeredInsts = make(map[string]bool)
-	DefaultNonPerCallMetrics = make(map[string]bool)
-}
-
-// Label represents a string attribute/label to attach to metrics.
-type Label struct {
-	// Key is the key of the label.
-	Key string
-	// Value is the value of the label.
-	Value string
+	instrumentregistry.DefaultMetrics = make(map[stats.Metric]bool)
 }
 
 func registerInst(name string, def bool) {
@@ -95,14 +88,8 @@ func registerInst(name string, def bool) {
 	}
 	registeredInsts[name] = true
 	if def {
-		DefaultNonPerCallMetrics[name] = true
+		instrumentregistry.DefaultMetrics[stats.Metric(name)] = true
 	}
-}
-
-// Int64CountHandle is a typed handle for a int count instrument. This handle is
-// passed at the recording point in order to know which instrument to record on.
-type Int64CountHandle struct {
-	Index int
 }
 
 // RegisterInt64Count registers the int count instrument description onto the
@@ -111,7 +98,7 @@ type Int64CountHandle struct {
 // NOTE: this function must only be called during initialization time (i.e. in
 // an init() function), and is not thread-safe. If multiple instruments are
 // registered with the same name, this function will panic.
-func RegisterInt64Count(name string, desc string, unit string, labels []string, optionalLabels []string, def bool) Int64CountHandle {
+func RegisterInt64Count(name string, desc string, unit string, labels []string, optionalLabels []string, def bool) instrumentregistry.Int64CountHandle {
 	registerInst(name, def)
 	Int64CountInsts = append(Int64CountInsts, InstrumentDescriptor{
 		Name:           name,
@@ -121,16 +108,9 @@ func RegisterInt64Count(name string, desc string, unit string, labels []string, 
 		OptionalLabels: optionalLabels,
 		Default:        def,
 	})
-	return Int64CountHandle{
+	return instrumentregistry.Int64CountHandle{
 		Index: len(Int64CountInsts) - 1,
 	}
-}
-
-// Float64CountHandle is a typed handle for a float count instrument. This handle
-// is passed at the recording point in order to know which instrument to record
-// on.
-type Float64CountHandle struct {
-	Index int
 }
 
 // RegisterFloat64Count registers the float count instrument description onto the
@@ -139,7 +119,7 @@ type Float64CountHandle struct {
 // NOTE: this function must only be called during initialization time (i.e. in
 // an init() function), and is not thread-safe. If multiple instruments are
 // registered with the same name, this function will panic.
-func RegisterFloat64Count(name string, desc string, unit string, labels []string, optionalLabels []string, def bool) Float64CountHandle {
+func RegisterFloat64Count(name string, desc string, unit string, labels []string, optionalLabels []string, def bool) instrumentregistry.Float64CountHandle {
 	registerInst(name, def)
 	Float64CountInsts = append(Float64CountInsts, InstrumentDescriptor{
 		Name:           name,
@@ -149,16 +129,9 @@ func RegisterFloat64Count(name string, desc string, unit string, labels []string
 		OptionalLabels: optionalLabels,
 		Default:        def,
 	})
-	return Float64CountHandle{
+	return instrumentregistry.Float64CountHandle{
 		Index: len(Float64CountInsts) - 1,
 	}
-}
-
-// Int64HistoHandle is a typed handle for a int histogram instrument. This handle
-// is passed at the recording point in order to know which instrument to record
-// on.
-type Int64HistoHandle struct {
-	Index int
 }
 
 // RegisterInt64Histo registers the int histogram instrument description onto the
@@ -167,7 +140,7 @@ type Int64HistoHandle struct {
 // NOTE: this function must only be called during initialization time (i.e. in
 // an init() function), and is not thread-safe. If multiple instruments are
 // registered with the same name, this function will panic.
-func RegisterInt64Histo(name string, desc string, unit string, labels []string, optionalLabels []string, def bool) Int64HistoHandle {
+func RegisterInt64Histo(name string, desc string, unit string, labels []string, optionalLabels []string, def bool) instrumentregistry.Int64HistoHandle {
 	registerInst(name, def)
 	Int64HistoInsts = append(Int64HistoInsts, InstrumentDescriptor{
 		Name:           name,
@@ -177,16 +150,9 @@ func RegisterInt64Histo(name string, desc string, unit string, labels []string, 
 		OptionalLabels: optionalLabels,
 		Default:        def,
 	})
-	return Int64HistoHandle{
+	return instrumentregistry.Int64HistoHandle{
 		Index: len(Int64HistoInsts) - 1,
 	}
-}
-
-// Float64HistoHandle is a typed handle for a float histogram instrument. This
-// handle is passed at the recording point in order to know which instrument to
-// record on.
-type Float64HistoHandle struct {
-	Index int
 }
 
 // RegisterFloat64Histo registers the float histogram instrument description
@@ -196,7 +162,7 @@ type Float64HistoHandle struct {
 // NOTE: this function must only be called during initialization time (i.e. in
 // an init() function), and is not thread-safe. If multiple instruments are
 // registered with the same name, this function will panic.
-func RegisterFloat64Histo(name string, desc string, unit string, labels []string, optionalLabels []string, def bool) Float64HistoHandle {
+func RegisterFloat64Histo(name string, desc string, unit string, labels []string, optionalLabels []string, def bool) instrumentregistry.Float64HistoHandle {
 	registerInst(name, def)
 	Float64HistoInsts = append(Float64HistoInsts, InstrumentDescriptor{
 		Name:           name,
@@ -206,15 +172,9 @@ func RegisterFloat64Histo(name string, desc string, unit string, labels []string
 		OptionalLabels: optionalLabels,
 		Default:        def,
 	})
-	return Float64HistoHandle{
+	return instrumentregistry.Float64HistoHandle{
 		Index: len(Float64HistoInsts) - 1,
 	}
-}
-
-// Int64GaugeHandle is a typed handle for a int gauge instrument. This handle is
-// passed at the recording point in order to know which instrument to record on.
-type Int64GaugeHandle struct {
-	Index int
 }
 
 // RegisterInt64Gauge registers the int gauge instrument description onto the
@@ -223,7 +183,7 @@ type Int64GaugeHandle struct {
 // NOTE: this function must only be called during initialization time (i.e. in
 // an init() function), and is not thread-safe. If multiple instruments are
 // registered with the same name, this function will panic.
-func RegisterInt64Gauge(name string, desc string, unit string, labels []string, optionalLabels []string, def bool) Int64GaugeHandle {
+func RegisterInt64Gauge(name string, desc string, unit string, labels []string, optionalLabels []string, def bool) instrumentregistry.Int64GaugeHandle {
 	registerInst(name, def)
 	Int64GaugeInsts = append(Int64GaugeInsts, InstrumentDescriptor{
 		Name:           name,
@@ -233,7 +193,7 @@ func RegisterInt64Gauge(name string, desc string, unit string, labels []string, 
 		OptionalLabels: optionalLabels,
 		Default:        def,
 	})
-	return Int64GaugeHandle{
+	return instrumentregistry.Int64GaugeHandle{
 		Index: len(Int64GaugeInsts) - 1,
 	}
 }

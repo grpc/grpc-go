@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/stats"
 	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
 
 	"go.opentelemetry.io/otel/metric"
@@ -45,20 +46,17 @@ var canonicalString = internal.CanonicalString.(func(codes.Code) string)
 
 var joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.DialOption)
 
-// Metric is an identifier for a metric provided by this package.
-type Metric string
-
 // Metrics is a set of metrics to record. Once created, Metrics is immutable,
 // however Add and Remove can make copies with specific metrics added or
 // removed, respectively.
 type Metrics struct {
 	// metrics are the set of metrics to initialize.
-	metrics map[Metric]bool
+	metrics map[stats.Metric]bool
 }
 
 // NewMetrics returns a Metrics containing Metrics.
-func NewMetrics(metrics ...Metric) *Metrics {
-	newMetrics := make(map[Metric]bool)
+func NewMetrics(metrics ...stats.Metric) *Metrics {
+	newMetrics := make(map[stats.Metric]bool)
 	for _, metric := range metrics {
 		newMetrics[metric] = true
 	}
@@ -69,8 +67,8 @@ func NewMetrics(metrics ...Metric) *Metrics {
 
 // Add adds the metrics to the metrics set and returns a new copy with the
 // additional metrics.
-func (m *Metrics) Add(metrics ...Metric) *Metrics {
-	newMetrics := make(map[Metric]bool)
+func (m *Metrics) Add(metrics ...stats.Metric) *Metrics {
+	newMetrics := make(map[stats.Metric]bool)
 	for metric := range m.metrics {
 		newMetrics[metric] = true
 	}
@@ -85,8 +83,8 @@ func (m *Metrics) Add(metrics ...Metric) *Metrics {
 
 // Remove removes the metrics from the metrics set and returns a new copy with
 // the metrics removed.
-func (m *Metrics) Remove(metrics ...Metric) *Metrics {
-	newMetrics := make(map[Metric]bool)
+func (m *Metrics) Remove(metrics ...stats.Metric) *Metrics {
+	newMetrics := make(map[stats.Metric]bool)
 	for metric := range m.metrics {
 		newMetrics[metric] = true
 	}
@@ -260,7 +258,7 @@ type serverMetrics struct {
 	callDuration metric.Float64Histogram
 }
 
-func createInt64Counter(setOfMetrics map[Metric]bool, metricName Metric, meter metric.Meter, options ...metric.Int64CounterOption) metric.Int64Counter {
+func createInt64Counter(setOfMetrics map[stats.Metric]bool, metricName stats.Metric, meter metric.Meter, options ...metric.Int64CounterOption) metric.Int64Counter {
 	if _, ok := setOfMetrics[metricName]; !ok {
 		return noop.Int64Counter{}
 	}
@@ -272,7 +270,7 @@ func createInt64Counter(setOfMetrics map[Metric]bool, metricName Metric, meter m
 	return ret
 }
 
-func createInt64Histogram(setOfMetrics map[Metric]bool, metricName Metric, meter metric.Meter, options ...metric.Int64HistogramOption) metric.Int64Histogram {
+func createInt64Histogram(setOfMetrics map[stats.Metric]bool, metricName stats.Metric, meter metric.Meter, options ...metric.Int64HistogramOption) metric.Int64Histogram {
 	if _, ok := setOfMetrics[metricName]; !ok {
 		return noop.Int64Histogram{}
 	}
@@ -284,7 +282,7 @@ func createInt64Histogram(setOfMetrics map[Metric]bool, metricName Metric, meter
 	return ret
 }
 
-func createFloat64Histogram(setOfMetrics map[Metric]bool, metricName Metric, meter metric.Meter, options ...metric.Float64HistogramOption) metric.Float64Histogram {
+func createFloat64Histogram(setOfMetrics map[stats.Metric]bool, metricName stats.Metric, meter metric.Meter, options ...metric.Float64HistogramOption) metric.Float64Histogram {
 	if _, ok := setOfMetrics[metricName]; !ok {
 		return noop.Float64Histogram{}
 	}

@@ -254,14 +254,14 @@ func (h *serverStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo,
 
 const (
 	// ServerCallStarted is the number of server calls started.
-	ServerCallStarted Metric = "grpc.server.call.started"
+	ServerCallStarted stats.Metric = "grpc.server.call.started"
 	// ServerCallSentCompressedTotalMessageSize is the compressed message bytes
 	// sent per server call.
-	ServerCallSentCompressedTotalMessageSize Metric = "grpc.server.call.sent_total_compressed_message_size"
+	ServerCallSentCompressedTotalMessageSize stats.Metric = "grpc.server.call.sent_total_compressed_message_size"
 	// ServerCallRcvdCompressedTotalMessageSize is the compressed message bytes
 	// received per server call.
-	ServerCallRcvdCompressedTotalMessageSize Metric = "grpc.server.call.rcvd_total_compressed_message_size"
+	ServerCallRcvdCompressedTotalMessageSize stats.Metric = "grpc.server.call.rcvd_total_compressed_message_size"
 	// ServerCallDuration is the end-to-end time taken to complete a call from
 	// server transport's perspective.
-	ServerCallDuration Metric = "grpc.server.call.duration"
+	ServerCallDuration stats.Metric = "grpc.server.call.duration"
 )
