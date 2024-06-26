@@ -182,6 +182,8 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 // TestLoadReportingPickFirstMultiLocality tests whether load is reported correctly
 // when using pickfirst with endpoints in multiple localities.
 func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
+	// TODO(#7339): Enable this test once pickfirst has one address per subconn.
+	t.Skip("Skipping due to issue #7339.")
 	originalTickerFactory := transport.TickerFactory
 	tickChan := make(chan time.Time)
 	transport.TickerFactory = func(freq time.Duration) (<-chan time.Time, func()) {
