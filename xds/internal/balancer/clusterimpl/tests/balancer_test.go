@@ -33,16 +33,24 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 
+	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3pickfirstpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/pick_first/v3"
+	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
 	"github.com/google/uuid"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
 	_ "google.golang.org/grpc/xds"
+	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 )
 
 const (
@@ -168,5 +176,207 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 	defer sCancel()
 	if _, err := mgmtServer.LRSServer.LRSStreamOpenChan.Receive(sCtx); err == nil {
 		t.Fatal("New LRS stream created when expected not to")
+	}
+}
+
+// TestLoadReportingPickFirstMultiLocality tests whether load is reported correctly
+// when using pickfirst with endpoints in multiple localities.
+func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
+	originalTickerFactory := transport.TickerFactory
+	tickChan := make(chan time.Time)
+	transport.TickerFactory = func(freq time.Duration) (<-chan time.Time, func()) {
+		return tickChan, func() {}
+	}
+	defer func() {
+		transport.TickerFactory = originalTickerFactory
+	}()
+
+	// Create an xDS management server that serves ADS and LRS requests.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	var resolverBuilder resolver.Builder
+	var err error
+	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
+		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
+		if err != nil {
+			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		}
+	}
+
+	// Start two server backends exposing the test service.
+	server1 := stubserver.StartTestService(t, nil)
+	defer server1.Stop()
+
+	server2 := stubserver.StartTestService(t, nil)
+	defer server2.Stop()
+
+	port1 := testutils.ParsePort(t, server1.Address)
+	port2 := testutils.ParsePort(t, server2.Address)
+
+	// Configure the xDS management server with default resources. Override the
+	// default cluster to include an LRS server config pointing to self.
+	const serviceName = "my-test-xds-service"
+	routeConfigName := "route-" + serviceName
+	clusterName := "cluster-" + serviceName
+	endpointsName := "endpoints-" + serviceName
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName)},
+		Clusters: []*v3clusterpb.Cluster{
+			&v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: endpointsName,
+				},
+				LoadBalancingPolicy: &v3clusterpb.LoadBalancingPolicy{
+					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+						{
+							TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+								TypedConfig: testutils.MarshalAny(t, &v3pickfirstpb.PickFirst{}),
+							},
+						},
+					},
+				},
+			},
+		},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
+			ClusterName: endpointsName,
+			Host:        "localhost",
+			Localities: []e2e.LocalityOptions{
+				{
+					Backends: []e2e.BackendOptions{{Port: port1}},
+					Weight:   1,
+				},
+				{
+					Backends: []e2e.BackendOptions{{Port: port2}},
+					Weight:   2,
+				},
+			},
+		})},
+	}
+
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
+		ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+			Self: &v3corepb.SelfConfigSource{},
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+
+	// Ensure that an LRS stream is created.
+	_, err = mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Failure when waiting for an LRS stream to be opened: %v", err)
+	}
+
+	// Handle the initial LRS request from the xDS client.
+	_, err = mgmtServer.LRSServer.LRSRequestChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Failure waiting for initial LRS request: %v", err)
+	}
+
+	resp := fakeserver.Response{
+		Resp: &v3lrspb.LoadStatsResponse{
+			SendAllClusters:       true,
+			LoadReportingInterval: durationpb.New(1 * time.Second),
+		},
+	}
+	mgmtServer.LRSServer.LRSResponseChan <- &resp
+
+	for i := 0; i < 10; i++ {
+		client.EmptyCall(ctx, &testpb.Empty{})
+	}
+
+	// Trigger load to be reported.
+	tickChan <- time.Now()
+
+	req, err := mgmtServer.LRSServer.LRSRequestChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Failure while waiting for load to be reported: %v", err)
+	}
+
+	loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
+
+	// As pickfirst is configured, only one server should receive all the requests.
+	// Take down the server which received all the requests initially.
+	var initialRegion string
+	for _, load := range loadStats.ClusterStats {
+		for _, locality := range load.UpstreamLocalityStats {
+			if locality.TotalSuccessfulRequests != 11 {
+				continue
+			}
+			initialRegion = locality.Locality.Region
+		}
+	}
+
+	if initialRegion == "" {
+		t.Fatalf("None of the servers received all the requests based on load stats: %v", loadStats)
+	}
+
+	if initialRegion == "region-1" {
+		server1.Stop()
+	} else {
+		server2.Stop()
+	}
+
+	// Send 10 more RPCs, now pickfirst will send them to a different server.
+	for i := 0; i < 10; i++ {
+		client.EmptyCall(ctx, &testpb.Empty{})
+	}
+
+	// Trigger load reporting.
+	tickChan <- time.Now()
+
+	req, err = mgmtServer.LRSServer.LRSRequestChan.Receive(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+
+	loadStats = req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
+	var finalRegion string
+	for _, load := range loadStats.ClusterStats {
+		for _, locality := range load.UpstreamLocalityStats {
+			if locality.TotalSuccessfulRequests != 10 {
+				continue
+			}
+			finalRegion = locality.Locality.Region
+		}
+	}
+
+	if finalRegion == "" {
+		t.Fatalf("None of the servers received all the requests based on load stats: %v", loadStats)
+	}
+
+	if finalRegion == initialRegion {
+		t.Errorf("Unexpected region received traffic: %q", finalRegion)
 	}
 }
