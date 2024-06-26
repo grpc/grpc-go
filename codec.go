@@ -76,9 +76,8 @@ func (c codecV0Bridge) Marshal(v any) (mem.BufferSlice, error) {
 	data, err := c.codec.Marshal(v)
 	if err != nil {
 		return nil, err
-	} else {
-		return mem.BufferSlice{mem.NewBuffer(data, nil)}, nil
 	}
+	return mem.BufferSlice{mem.NewBuffer(data, nil)}, nil
 }
 
 func (c codecV0Bridge) Unmarshal(data mem.BufferSlice, v any) (err error) {

@@ -1364,16 +1364,14 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
 
-		if len(shs) != 0 {
-			for _, sh := range shs {
-				sh.HandleRPC(ctx, &stats.InPayload{
-					RecvTime:         time.Now(),
-					Payload:          v,
-					Length:           d.Len(),
-					WireLength:       payInfo.compressedLength + headerLen,
-					CompressedLength: payInfo.compressedLength,
-				})
-			}
+		for _, sh := range shs {
+			sh.HandleRPC(ctx, &stats.InPayload{
+				RecvTime:         time.Now(),
+				Payload:          v,
+				Length:           d.Len(),
+				WireLength:       payInfo.compressedLength + headerLen,
+				CompressedLength: payInfo.compressedLength,
+			})
 		}
 		if len(binlogs) != 0 {
 			cm := &binarylog.ClientMessage{

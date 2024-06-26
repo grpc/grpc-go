@@ -1137,17 +1137,15 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 		}
 		a.mu.Unlock()
 	}
-	if len(a.statsHandlers) != 0 {
-		for _, sh := range a.statsHandlers {
-			sh.HandleRPC(a.ctx, &stats.InPayload{
-				Client:           true,
-				RecvTime:         time.Now(),
-				Payload:          m,
-				WireLength:       payInfo.compressedLength + headerLen,
-				CompressedLength: payInfo.compressedLength,
-				Length:           payInfo.uncompressedBytes.Len(),
-			})
-		}
+	for _, sh := range a.statsHandlers {
+		sh.HandleRPC(a.ctx, &stats.InPayload{
+			Client:           true,
+			RecvTime:         time.Now(),
+			Payload:          m,
+			WireLength:       payInfo.compressedLength + headerLen,
+			CompressedLength: payInfo.compressedLength,
+			Length:           payInfo.uncompressedBytes.Len(),
+		})
 	}
 	if channelz.IsOn() {
 		a.t.IncrMsgRecv()
