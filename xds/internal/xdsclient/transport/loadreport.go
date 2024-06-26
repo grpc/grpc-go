@@ -195,6 +195,7 @@ func (t *Transport) recvFirstLoadStatsResponse(stream lrsStream) ([]string, time
 
 	return clusters, interval, nil
 }
+
 func (t *Transport) sendLoadStatsRequest(stream lrsStream, loads []*load.Data) error {
 	clusterStats := make([]*v3endpointpb.ClusterStats, 0, len(loads))
 	for _, sd := range loads {
