@@ -503,9 +503,6 @@ func (s *Stream) Read(n int) (data mem.BufferSlice, err error) {
 				err = io.ErrUnexpectedEOF
 			}
 			data.Free()
-			if buf != nil {
-				buf.Free()
-			}
 			return nil, err
 		}
 		data = append(data, buf)

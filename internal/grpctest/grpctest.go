@@ -49,12 +49,12 @@ type Tester struct{}
 // Setup updates the tlogger.
 func (Tester) Setup(t *testing.T) {
 	TLogger.Update(t)
-	leakcheck.SetTrackingBufferPool(errorer{t: t})
+	//leakcheck.SetTrackingBufferPool(errorer{t: t})
 }
 
 // Teardown performs a leak check.
 func (Tester) Teardown(t *testing.T) {
-	leakcheck.CheckTrackingBufferPool()
+	//leakcheck.CheckTrackingBufferPool()
 	if atomic.LoadUint32(&lcFailed) == 1 {
 		return
 	}

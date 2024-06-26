@@ -1036,7 +1036,6 @@ func (t *http2Client) Close(err error) {
 		}
 		sh.HandleConn(t.ctx, connEnd)
 	}
-	<-t.readerDone
 }
 
 // GracefulClose sets the state to draining, which prevents new streams from

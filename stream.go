@@ -1182,11 +1182,6 @@ func (a *csAttempt) finish(err error) {
 	var tr metadata.MD
 	if a.s != nil {
 		a.t.CloseStream(a.s, err)
-		// After closing the stream, this should immediately return whatever is currently
-		// buffered, without actually blocking. The returned buffers can then be freed.
-		// The returned error is the one passed into CloseStream and can be ignored.
-		// TODO: ^^^^ get this validated by someone that knows the code better :)
-		_, _ = a.s.Read(math.MaxInt)
 		tr = a.s.Trailer()
 	}
 

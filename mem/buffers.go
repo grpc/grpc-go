@@ -92,9 +92,9 @@ func (b *Buffer) Ref() *Buffer {
 // Free decrements this Buffer's reference counter. It then frees the underlying
 // buffer if the counter reaches 0 as a result of this call, does nothing
 // otherwise, or if Free has already been called. All subsequent calls to
-// ReadOnlyData will panic.
+// ReadOnlyData will panic. Noop if receiver is nil.
 func (b *Buffer) Free() {
-	if b.freed {
+	if b == nil || b.freed {
 		return
 	}
 
