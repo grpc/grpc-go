@@ -76,7 +76,7 @@ func DefaultBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
 			"server_uri": "passthrough:///%s",
 			"channel_creds": [{"type": "insecure"}]
 		}`, serverURI))},
-		NodeID:                             nodeID,
+		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		CertificateProviders:               cpc,
 		ServerListenerResourceNameTemplate: ServerListenerResourceNameTemplate,
 	})

@@ -393,7 +393,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
 				}`, mgmtServer1.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			authority: []byte(fmt.Sprintf(`{
 				"xds_servers": [{

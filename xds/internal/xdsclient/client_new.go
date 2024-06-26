@@ -36,8 +36,11 @@ import (
 // value, and is defined in gRFC A71.
 const NameForServer = "#server"
 
-// New returns a new xDS client configured by the bootstrap file specified in env
-// variable GRPC_XDS_BOOTSTRAP or GRPC_XDS_BOOTSTRAP_CONFIG.
+// New returns an xDS client configured with bootstrap configuration specified
+// by the ordered list:
+// - file name containing the configuration specified by GRPC_XDS_BOOTSTRAP
+// - actual configuration specified by GRPC_XDS_BOOTSTRAP_CONFIG
+// - fallback configuration set using bootstrap.SetFallbackBootstrapConfig
 //
 // gRPC client implementations are expected to pass the channel's target URI for
 // the name field, while server implementations are expected to pass a dedicated
@@ -50,19 +53,7 @@ const NameForServer = "#server"
 // only when all references are released, and it is safe for the caller to
 // invoke this close function multiple times.
 func New(name string) (XDSClient, func(), error) {
-	return NewWithConfig(name, nil)
-}
-
-// NewWithConfig is similar to New, except that it uses the provided bootstrap
-// configuration to create the xDS client if and only if the bootstrap
-// environment variables are not defined.
-//
-// # Internal Only
-//
-// This function should ONLY be used by the internal google-c2p resolver.
-// DO NOT use this elsewhere. Use New() instead.
-func NewWithConfig(name string, config *bootstrap.Config) (XDSClient, func(), error) {
-	return newRefCountedWithConfig(name, config, defaultWatchExpiryTimeout, defaultIdleAuthorityDeleteTimeout)
+	return newRefCounted(name, defaultWatchExpiryTimeout, defaultIdleAuthorityDeleteTimeout)
 }
 
 // newClientImpl returns a new xdsClient with the given config.
@@ -121,11 +112,11 @@ func NewForTesting(opts OptionsForTesting) (XDSClient, func(), error) {
 		opts.AuthorityIdleTimeout = defaultIdleAuthorityDeleteTimeout
 	}
 
-	cfg, err := bootstrap.NewConfigFromContents(opts.Contents)
-	if err != nil {
+	if err := bootstrap.SetFallbackBootstrapConfig(opts.Contents); err != nil {
 		return nil, nil, err
 	}
-	return newRefCountedWithConfig(opts.Name, cfg, opts.WatchExpiryTimeout, opts.AuthorityIdleTimeout)
+	client, cancel, err := newRefCounted(opts.Name, opts.WatchExpiryTimeout, opts.AuthorityIdleTimeout)
+	return client, func() { bootstrap.UnSetFallbackBootstrapConfigForTesting(); cancel() }, err
 }
 
 // GetForTesting returns an xDS client created earlier using the given name.
