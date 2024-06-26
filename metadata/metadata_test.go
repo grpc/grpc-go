@@ -22,7 +22,6 @@ import (
 	"context"
 	"reflect"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -342,19 +341,19 @@ func (s) TestAppendToOutgoingContext_FromKVSlice(t *testing.T) {
 func TestStringerMD(t *testing.T) {
 	for _, test := range []struct {
 		md   MD
-		want []string
+		want string
 	}{
-		{MD{}, []string{"MD{}"}},
-		{MD{"k1": []string{}}, []string{"MD{k1=[]}"}},
-		{MD{"k1": []string{"v1", "v2"}}, []string{"MD{k1=[v1, v2]}"}},
-		{MD{"k1": []string{"v1"}}, []string{"MD{k1=[v1]}"}},
-		{MD{"k1": []string{"v1", "v2"}, "k2": []string{}, "k3": []string{"1", "2", "3"}}, []string{"MD{", "k1=[v1, v2]", "k2=[]", "k3=[1, 2, 3]", "}"}},
+		{MD{}, "map[]"},
+		{MD{"k1": []string{}}, "map[k1:[]]"},
+		{MD{"k1": []string{"v1", "v2"}}, "map[k1:[v1 v2]]"},
+		{MD{"k1": []string{"v1"}}, "map[k1:[v1]]"},
+		{MD{"k1": []string{"v1", "v2"}, "k2": []string{}, "k3": []string{"1", "2", "3"}}, "map[k1:[v1 v2] k2:[] k3:[1 2 3]]"},
+		{MD{"k2": []string{}, "k3": []string{"1", "2", "3"}, "k1": []string{"v1", "v2"}}, "map[k1:[v1 v2] k2:[] k3:[1 2 3]]"},
+		{MD{"k3": []string{"1", "2", "3"}, "k2": []string{}, "k1": []string{"v1", "v2"}}, "map[k1:[v1 v2] k2:[] k3:[1 2 3]]"},
 	} {
 		got := test.md.String()
-		for _, want := range test.want {
-			if !strings.Contains(got, want) {
-				t.Fatalf("Metadata string %q is missing %q", got, want)
-			}
+		if got != test.want {
+			t.Fatalf("Metadata string %q should be %q", got, test.want)
 		}
 	}
 }
