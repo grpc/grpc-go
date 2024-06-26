@@ -391,7 +391,6 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		buf:              buf,
 		fc:               &inFlow{limit: uint32(t.initialWindowSize)},
 		headerWireLength: int(frame.Header().Length),
-		bufferPool:       t.bufferPool,
 	}
 	var (
 		// if false, content-type was missing or invalid
@@ -814,7 +813,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		// guarantee f.Data() is consumed before the arrival of next frame.
 		// Can this copy be eliminated?
 		if len(f.Data()) > 0 {
-			pool := s.bufferPool
+			pool := s.st.BufferPool()
 			if pool == nil {
 				pool = mem.DefaultBufferPool()
 			}
@@ -1419,6 +1418,10 @@ func (t *http2Server) IncrMsgSent() {
 func (t *http2Server) IncrMsgRecv() {
 	t.channelz.SocketMetrics.MessagesReceived.Add(1)
 	t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Add(1)
+}
+
+func (t *http2Server) BufferPool() mem.BufferPool {
+	return t.bufferPool
 }
 
 func (t *http2Server) getOutFlowWindow() int64 {

@@ -280,8 +280,6 @@ type Stream struct {
 	// contentSubtype is the content-subtype for requests.
 	// this must be lowercase or the behavior is undefined.
 	contentSubtype string
-
-	bufferPool mem.BufferPool
 }
 
 // isHeaderSent is only valid on the server-side.
@@ -751,6 +749,10 @@ type ServerTransport interface {
 
 	// IncrMsgRecv increments the number of message received through this transport.
 	IncrMsgRecv()
+
+	// BufferPool returns the underlying [mem.BufferPool] this transport is
+	// configured with (can return nil).
+	BufferPool() mem.BufferPool
 }
 
 // connectionErrorf creates an ConnectionError with the specified error description.

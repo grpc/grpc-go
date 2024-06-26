@@ -86,8 +86,8 @@ func (s) TestRecvBufferPoolStream(t *testing.T) {
 			}
 
 			pool := &checkBufferPool{}
-			sopts := []grpc.ServerOption{experimental.RecvBufferPool(pool)}
-			dopts := []grpc.DialOption{experimental.WithRecvBufferPool(pool)}
+			sopts := []grpc.ServerOption{experimental.BufferPool(pool)}
+			dopts := []grpc.DialOption{experimental.WithBufferPool(pool)}
 			if err := ss.Start(sopts, dopts...); err != nil {
 				t.Fatalf("Error starting endpoint server: %v", err)
 			}
@@ -164,8 +164,8 @@ func (s) TestRecvBufferPoolUnary(t *testing.T) {
 			}
 
 			pool := &checkBufferPool{}
-			sopts := []grpc.ServerOption{experimental.RecvBufferPool(pool)}
-			dopts := []grpc.DialOption{experimental.WithRecvBufferPool(pool)}
+			sopts := []grpc.ServerOption{experimental.BufferPool(pool)}
+			dopts := []grpc.DialOption{experimental.WithBufferPool(pool)}
 			if err := ss.Start(sopts, dopts...); err != nil {
 				t.Fatalf("Error starting endpoint server: %v", err)
 			}

@@ -415,7 +415,6 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		recvCompress:     req.Header.Get("grpc-encoding"),
 		contentSubtype:   ht.contentSubtype,
 		headerWireLength: 0, // won't have access to header wire length until golang/go#18997.
-		bufferPool:       ht.bufferPool,
 	}
 	s.trReader = &transportReader{
 		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf},
@@ -468,6 +467,10 @@ func (ht *serverHandlerTransport) runStream() {
 func (ht *serverHandlerTransport) IncrMsgSent() {}
 
 func (ht *serverHandlerTransport) IncrMsgRecv() {}
+
+func (ht *serverHandlerTransport) BufferPool() mem.BufferPool {
+	return ht.bufferPool
+}
 
 func (ht *serverHandlerTransport) Drain(debugData string) {
 	panic("Drain() is not implemented")

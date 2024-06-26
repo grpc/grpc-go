@@ -488,7 +488,6 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		headerChan:     make(chan struct{}),
 		contentSubtype: callHdr.ContentSubtype,
 		doneFunc:       callHdr.DoneFunc,
-		bufferPool:     t.bufferPool,
 	}
 	s.wq = newWriteQuota(defaultWriteQuota, s.done)
 	s.requestRead = func(n int) {
@@ -1199,7 +1198,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		// guarantee f.Data() is consumed before the arrival of next frame.
 		// Can this copy be eliminated?
 		if len(f.Data()) > 0 {
-			pool := s.bufferPool
+			pool := s.ct.bufferPool
 			if pool == nil {
 				pool = mem.DefaultBufferPool()
 			}

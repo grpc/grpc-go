@@ -348,8 +348,8 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 	}
 	switch bf.RecvBufferPool {
 	case recvBufferPoolNil:
-		opts = append(opts, experimental.WithRecvBufferPool(mem.NopBufferPool{}))
-		sopts = append(sopts, experimental.RecvBufferPool(mem.NopBufferPool{}))
+		opts = append(opts, experimental.WithBufferPool(mem.NopBufferPool{}))
+		sopts = append(sopts, experimental.BufferPool(mem.NopBufferPool{}))
 	case recvBufferPoolSimple:
 		// Do nothing as buffering is enabled by default.
 	default:

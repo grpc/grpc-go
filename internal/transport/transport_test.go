@@ -1788,7 +1788,6 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 		ctx:         context.Background(),
 		buf:         testRecvBuffer,
 		requestRead: func(int) {},
-		bufferPool:  mem.DefaultBufferPool(),
 	}
 	s.trReader = &transportReader{
 		reader: &recvBufferReader{

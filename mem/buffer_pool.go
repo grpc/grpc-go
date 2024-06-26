@@ -71,7 +71,7 @@ func NewBufferPool(poolSizes ...int) BufferPool {
 	}
 	return &tieredBufferPool{
 		sizedPools:   pools,
-		fallbackPool: newBufferPool(0),
+		fallbackPool: new(simpleBufferPool),
 	}
 }
 
@@ -79,7 +79,7 @@ func NewBufferPool(poolSizes ...int) BufferPool {
 // buffer pools for different sizes of buffers.
 type tieredBufferPool struct {
 	sizedPools   []*sizedBufferPool
-	fallbackPool *sizedBufferPool
+	fallbackPool *simpleBufferPool
 }
 
 func (p *tieredBufferPool) Get(size int) []byte {
@@ -90,7 +90,7 @@ func (p *tieredBufferPool) Put(buf []byte) {
 	p.getPool(len(buf)).Put(buf)
 }
 
-func (p *tieredBufferPool) getPool(size int) *sizedBufferPool {
+func (p *tieredBufferPool) getPool(size int) BufferPool {
 	poolIdx := sort.Search(len(p.sizedPools), func(i int) bool {
 		return p.sizedPools[i].defaultSize >= size
 	})
@@ -102,6 +102,11 @@ func (p *tieredBufferPool) getPool(size int) *sizedBufferPool {
 	return p.sizedPools[poolIdx]
 }
 
+// sizedBufferPool is a BufferPool implementation that is optimized for specific
+// buffer sizes. For example, HTTP/2 frames within grpc are always 16kb and a
+// sizedBufferPool can be configured to only return buffers with a capacity of
+// 16kb. Note that however it does not support returning larger buffers and in
+// fact panics if such a buffer is requested.
 type sizedBufferPool struct {
 	pool        sync.Pool
 	defaultSize int
@@ -109,13 +114,6 @@ type sizedBufferPool struct {
 
 func (p *sizedBufferPool) Get(size int) []byte {
 	bs := *p.pool.Get().(*[]byte)
-
-	if cap(bs) < size {
-		p.pool.Put(&bs)
-
-		return make([]byte, size)
-	}
-
 	return bs[:size]
 }
 
@@ -135,6 +133,35 @@ func newBufferPool(size int) *sizedBufferPool {
 		},
 		defaultSize: size,
 	}
+}
+
+var _ BufferPool = (*simpleBufferPool)(nil)
+
+// simpleBufferPool is an implementation of the BufferPool interface that
+// attempts to pool buffers with a sync.Pool. When Get is invoked, it tries to
+// acquire a buffer from the pool but if that buffer is too small, it returns it
+// to the pool and creates a new one.
+type simpleBufferPool struct {
+	pool sync.Pool
+}
+
+func (p *simpleBufferPool) Get(size int) []byte {
+	bs, ok := p.pool.Get().(*[]byte)
+	if ok && cap(*bs) >= size {
+		return (*bs)[:size]
+	}
+
+	if ok {
+		p.pool.Put(bs)
+	}
+
+	return make([]byte, size)
+}
+
+func (p *simpleBufferPool) Put(buf []byte) {
+	buf = buf[:cap(buf)]
+	clear(buf)
+	p.pool.Put(&buf)
 }
 
 var _ BufferPool = NopBufferPool{}
