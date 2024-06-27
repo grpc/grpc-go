@@ -1747,12 +1747,13 @@ func (s) TestChainEngine(t *testing.T) {
 			// if the chain of RBAC Engines configured as such works as intended.
 			for _, data := range test.rbacQueries {
 				func() {
+					ctxWithTimeout, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+					defer cancel()
 					// Construct the context with three data points that have enough
 					// information to represent incoming RPC's. This will be how a
 					// user uses this API. A user will have to put MD, PeerInfo, and
 					// the connection the RPC is sent on in the context.
-					ctx, cancel := context.WithTimeout(metadata.NewIncomingContext(context.Background(), data.rpcData.md), defaultTestTimeout)
-					defer cancel()
+					ctx := metadata.NewIncomingContext(ctxWithTimeout, data.rpcData.md)
 					// Make a TCP connection with a certain destination port. The
 					// address/port of this connection will be used to populate the
 					// destination ip/port in RPCData struct. This represents what
