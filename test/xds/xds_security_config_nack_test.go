@@ -26,12 +26,15 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/resolver"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	"github.com/google/uuid"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -144,8 +147,7 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-			defer cleanup1()
+			managementServer, nodeID, bootstrapContents, xdsResolver := setupManagementServerAndResolver(t)
 
 			lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
 			defer cleanup2()
@@ -188,7 +190,7 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 			}
 
 			// Create a ClientConn with the xds scheme and make an RPC.
-			cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(resolver))
+			cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolver))
 			if err != nil {
 				t.Fatalf("failed to dial local test server: %v", err)
 			}
@@ -318,11 +320,22 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// SetupManagementServer() sets up a bootstrap file with certificate
-			// provider instance names: `e2e.ServerSideCertProviderInstance` and
-			// `e2e.ClientSideCertProviderInstance`.
-			managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-			defer cleanup1()
+			managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+			// Create bootstrap configuration pointing to the above management
+			// server with certificate provider configuration.
+			nodeID := uuid.New().String()
+			bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
+
+			// Create an xDS resolver with the above bootstrap configuration.
+			var xdsResolver resolver.Builder
+			if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
+				var err error
+				xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+				if err != nil {
+					t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+				}
+			}
 
 			server := stubserver.StartTestService(t, nil)
 			defer server.Stop()
@@ -344,7 +357,7 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+			cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 			if err != nil {
 				t.Fatalf("failed to dial local test server: %v", err)
 			}

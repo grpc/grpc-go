@@ -304,7 +304,7 @@ func (s) TestPickFirst_NewAddressWhileBlocking(t *testing.T) {
 // pick_first LB policy is constantly trying to reconnect to the backend.
 func (s) TestPickFirst_StickyTransientFailure(t *testing.T) {
 	// Spin up a local server which closes the connection as soon as it receives
-	// one. It also sends a signal on a channel whenver it received a connection.
+	// one. It also sends a signal on a channel whenever it received a connection.
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)

@@ -60,7 +60,7 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 
 	// Create an xDS management server listening on a local port.
 	streamErr := errors.New("ADS stream error")
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		// Push on a channel whenever the stream is closed.
 		OnStreamClosed: func(int64, *v3corepb.Node) {
 			select {
@@ -80,11 +80,6 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 			return streamErr
 		},
 	})
-	if err != nil {
-		t.Fatalf("Failed to start xDS management server: %v", err)
-	}
-	defer mgmtServer.Stop()
-	t.Logf("Started xDS management server on %s", mgmtServer.Address)
 
 	// Override the backoff implementation to push on a channel that is read by
 	// the test goroutine.
@@ -202,7 +197,7 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 		t.Fatalf("Failed to create a local listener for the xDS management server: %v", err)
 	}
 	lis := testutils.NewRestartableListener(l)
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener: lis,
 		// Push the received request on to a channel for the test goroutine to
 		// verify that it matches expectations.
@@ -223,11 +218,6 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 			}
 		},
 	})
-	if err != nil {
-		t.Fatalf("Failed to start xDS management server: %v", err)
-	}
-	defer mgmtServer.Stop()
-	t.Logf("Started xDS management server on %s", lis.Addr().String())
 
 	// Configure the management server with appropriate resources.
 	apiListener := &v3listenerpb.ApiListener{
@@ -374,7 +364,7 @@ func (s) TestTransport_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	lis := testutils.NewRestartableListener(l)
 	streamErr := errors.New("ADS stream error")
 
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener: lis,
 
 		// Return an error everytime a request is sent on the stream. This
@@ -388,11 +378,6 @@ func (s) TestTransport_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 			return streamErr
 		},
 	})
-	if err != nil {
-		t.Fatalf("Failed to start xDS management server: %v", err)
-	}
-	defer mgmtServer.Stop()
-	t.Logf("Started xDS management server on %s", lis.Addr().String())
 
 	// Bring down the management server before creating the transport. This
 	// allows us to test the case where SendRequest() is called when there is no

@@ -49,8 +49,7 @@ const serviceNamespaceValue = "grpc-service-namespace"
 // handler asserts that subsequent HandleRPC calls from the RPC lifecycle
 // contain telemetry labels that it can see.
 func (s) TestTelemetryLabels(t *testing.T) {
-	managementServer, nodeID, _, resolver, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
+	managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
@@ -85,7 +84,7 @@ func (s) TestTelemetryLabels(t *testing.T) {
 		t: t,
 	}
 
-	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", xdsServiceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver), grpc.WithStatsHandler(fsh))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", xdsServiceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver), grpc.WithStatsHandler(fsh))
 	if err != nil {
 		t.Fatalf("failed to create a new client to local test server: %v", err)
 	}

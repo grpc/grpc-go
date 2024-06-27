@@ -20,6 +20,7 @@ package xds_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"sync"
@@ -33,8 +34,8 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds"
 
@@ -147,7 +148,7 @@ func (s) TestIgnoreResourceDeletionOnClient(t *testing.T) {
 func testResourceDeletionIgnored(t *testing.T, initialResource func(string) e2e.UpdateOptions, updateResource func(r *e2e.UpdateOptions)) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	t.Cleanup(cancel)
-	mgmtServer := startManagementServer(t)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	nodeID := uuid.New().String()
 	bs := generateBootstrapContents(t, mgmtServer.Address, true, nodeID)
 	xdsR := xdsResolverBuilder(t, bs)
@@ -202,7 +203,7 @@ func testResourceDeletionIgnored(t *testing.T, initialResource func(string) e2e.
 func testResourceDeletionNotIgnored(t *testing.T, initialResource func(string) e2e.UpdateOptions, updateResource func(r *e2e.UpdateOptions)) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*1000)
 	t.Cleanup(cancel)
-	mgmtServer := startManagementServer(t)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	nodeID := uuid.New().String()
 	bs := generateBootstrapContents(t, mgmtServer.Address, false, nodeID)
 	xdsR := xdsResolverBuilder(t, bs)
@@ -256,25 +257,27 @@ func testResourceDeletionNotIgnored(t *testing.T, initialResource func(string) e
 	}
 }
 
-// This helper creates a management server for the test.
-func startManagementServer(t *testing.T) *e2e.ManagementServer {
-	t.Helper()
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to start management server: %v", err)
-	}
-	t.Cleanup(mgmtServer.Stop)
-	return mgmtServer
-}
-
 // This helper generates a custom bootstrap config for the test.
 func generateBootstrapContents(t *testing.T, serverURI string, ignoreResourceDeletion bool, nodeID string) []byte {
 	t.Helper()
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
+	var serverCfg json.RawMessage
+	if ignoreResourceDeletion {
+		serverCfg = []byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}],
+			"server_features": ["ignore_resource_deletion"]
+		}`, serverURI))
+	} else {
+		serverCfg = []byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, serverURI))
+
+	}
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers:                            []json.RawMessage{serverCfg},
 		NodeID:                             nodeID,
-		ServerURI:                          serverURI,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
-		IgnoreResourceDeletion:             ignoreResourceDeletion,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -351,7 +354,7 @@ func resourceWithListenerForGRPCServer(t *testing.T, nodeID string) (e2e.UpdateO
 // case, when the listener resource is deleted on the management server, the gRPC
 // server should continue to serve RPCs.
 func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
-	mgmtServer := startManagementServer(t)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	nodeID := uuid.New().String()
 	bs := generateBootstrapContents(t, mgmtServer.Address, true, nodeID)
 	xdsR := xdsResolverBuilder(t, bs)
@@ -418,7 +421,7 @@ func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
 // which case, when the listener resource is deleted on the management server, the
 // gRPC server should stop serving RPCs and switch mode to ServingModeNotServing.
 func (s) TestListenerResourceDeletionOnServerNotIgnored(t *testing.T) {
-	mgmtServer := startManagementServer(t)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	nodeID := uuid.New().String()
 	bs := generateBootstrapContents(t, mgmtServer.Address, false, nodeID)
 	xdsR := xdsResolverBuilder(t, bs)

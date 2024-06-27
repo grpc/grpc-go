@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/csds"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -116,22 +115,12 @@ func (unimplementedEndpointsWatcher) OnResourceDoesNotExist()                   
 
 func (s) TestCSDS(t *testing.T) {
 	// Spin up a xDS management server on a local port.
-	nodeID := uuid.New().String()
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer mgmtServer.Stop()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: mgmtServer.Address,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bootstrapCleanup()
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 
 	// Create an xDS client. This will end up using the same singleton as used
 	// by the CSDS service.
@@ -403,14 +392,10 @@ func checkClientStatusResponse(stream v3statuspbgrpc.ClientStatusDiscoveryServic
 }
 
 func (s) TestCSDSNoXDSClient(t *testing.T) {
-	// Create a bootstrap file in a temporary directory. Since we pass empty
-	// options, it would end up creating a bootstrap file with an empty
-	// serverURI which will fail xDS client creation.
-	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { bootstrapCleanup() })
+	// Create a bootstrap file in a temporary directory. Since we pass an empty
+	// bootstrap configuration, it will fail xDS client creation because the
+	// `server_uri` field is unset.
+	testutils.CreateBootstrapFileForTesting(t, []byte(``))
 
 	// Initialize an gRPC server and register CSDS on it.
 	server := grpc.NewServer()

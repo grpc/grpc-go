@@ -23,7 +23,7 @@ set -eu -o pipefail
 source "$(dirname $0)/vet-common.sh"
 
 # The version of protoc that will be installed.
-PROTOC_VERSION="25.2"
+PROTOC_VERSION="27.1"
 
 # Function to download pre-built binaries for Linux with
 # ARCH as $1, OS as $2, and INSTALL_PATH as $3 arguments.

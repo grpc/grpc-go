@@ -221,8 +221,9 @@ func (s) TestWrrLocality(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			managementServer, nodeID, _, r, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-			defer cleanup()
+			// Start an xDS management server.
+			managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+
 			routeConfigName := "route-" + serviceName
 			clusterName := "cluster-" + serviceName
 			endpointsName := "endpoints-" + serviceName
@@ -253,7 +254,7 @@ func (s) TestWrrLocality(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+			cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 			if err != nil {
 				t.Fatalf("Failed to dial local test server: %v", err)
 			}
