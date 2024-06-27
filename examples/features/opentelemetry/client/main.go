@@ -37,8 +37,8 @@ import (
 )
 
 var (
-	addr     = flag.String("addr", ":50051", "the server address to connect to")
-	promAddr = flag.String("promAddr", ":9465", "the Prometheus exporter endpoint")
+	addr               = flag.String("addr", ":50051", "the server address to connect to")
+	prometheusEndpoint = flag.String("prometheus_endpoint", ":9465", "the Prometheus exporter endpoint")
 )
 
 func main() {
@@ -46,10 +46,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to start prometheus exporter: %v", err)
 	}
-	provider := metric.NewMeterProvider(
-		metric.WithReader(exporter),
-	)
-	go http.ListenAndServe(*promAddr, promhttp.Handler())
+	provider := metric.NewMeterProvider(metric.WithReader(exporter))
+	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
 	ctx := context.Background()
 	do := opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
