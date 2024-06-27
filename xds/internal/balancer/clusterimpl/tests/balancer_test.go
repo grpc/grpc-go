@@ -216,7 +216,7 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	clusterName := "cluster-" + serviceName
 	endpointsName := "endpoints-" + serviceName
 	routePolicy := e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName)
-    // Configure retries as we will shut down server 1 and switch to server 2 later.
+	// Configure retries as we will shut down server 1 and switch to server 2 later.
 	routePolicy.VirtualHosts[0].RetryPolicy = &v3routepb.RetryPolicy{
 		RetryOn:    "unavailable",
 		NumRetries: &wrapperspb.UInt32Value{Value: 1},
