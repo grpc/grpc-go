@@ -306,14 +306,14 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	}
 	mgmtServer.LRSServer.LRSResponseChan <- &resp
 
-	// Wait for load to be reported for locality of server 1.
-	if err := waitForSuccessfulLoadReport(ctx, mgmtServer.LRSServer, "region-1"); err != nil {
-		// TODO(#7339): Enable this test once pickfirst has one address per subconn.
-		// This assertion fails because pickfirst always reports load for the locality
-		// of the last address in the subconn. This will be fixed by ensuring
-		// there is only one address per subconn.
-		t.Skip("Skipping due to issue #7339.")
-		t.Fatalf("server 1 did not receive load due to error: %v", err)
+	// Wait for load to be reported for locality of server 2.
+	// We (incorrectly) wait for load report for region-2 because presently
+	// pickfirst always reports load for the locality of the last address in the
+	// subconn. This will be fixed by ensuring there is only one address per
+	// subconn.
+	// TODO(#7339): Change region to region-1 once fixed.
+	if err := waitForSuccessfulLoadReport(ctx, mgmtServer.LRSServer, "region-2"); err != nil {
+		t.Fatalf("region-2 did not receive load due to error: %v", err)
 	}
 
 	// Stop server 1 and send one more rpc. Now the request should go to server 2.
