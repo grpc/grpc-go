@@ -92,6 +92,58 @@ const (
 	pingpong
 )
 
+type hangingConn struct {
+	net.Conn
+}
+
+func (hc *hangingConn) Read(b []byte) (n int, err error) {
+	n, err = hc.Conn.Read(b)
+	fmt.Printf("hangingConn Read %v\n", n)
+	if n == 0 {
+		time.Sleep(time.Hour)
+	}
+	//time.Sleep(time.Hour)
+	// time.Sleep(time.Hour) if n is a goaway frame
+	return n, err
+}
+
+func (hc *hangingConn) Write(b []byte) (n int, err error) {
+	n, err = hc.Conn.Write(b)
+	return n, err
+}
+
+func (hc *hangingConn) Close() error {
+	return hc.Conn.Close()
+}
+
+func (hc *hangingConn) LocalAddr() net.Addr {
+	return hc.Conn.LocalAddr()
+}
+
+func (hc *hangingConn) RemoteAddr() net.Addr {
+	return hc.Conn.RemoteAddr()
+}
+
+func (hc *hangingConn) SetDeadline(t time.Time) error {
+	return hc.Conn.SetDeadline(t)
+}
+
+func (hc *hangingConn) SetReadDeadline(t time.Time) error {
+	return hc.Conn.SetReadDeadline(t)
+}
+
+func (hc *hangingConn) SetWriteDeadline(t time.Time) error {
+	return hc.Conn.SetWriteDeadline(t)
+}
+
+func hangingDialer(_ context.Context, addr string) (net.Conn, error) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	return &hangingConn{Conn: conn}, nil
+}
+
 func (h *testStreamHandler) handleStreamAndNotify(s *Stream) {
 	if h.notify == nil {
 		return
@@ -2670,7 +2722,7 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 	greetDone := make(chan struct{})
 	// errorCh verifies that desired GOAWAY not received by server
 	errorCh := make(chan error)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 	defer cancel()
 	// Launch the server.
 	go func() {
@@ -2725,7 +2777,7 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 		}
 	}()
 
-	ct, err := NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{}, func(GoAwayReason) {})
+	ct, err := NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: hangingDialer}, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
