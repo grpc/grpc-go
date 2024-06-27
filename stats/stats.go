@@ -23,6 +23,7 @@ package stats // import "google.golang.org/grpc/stats"
 
 import (
 	"context"
+	"maps"
 	"net"
 	"time"
 
@@ -350,3 +351,67 @@ func OutgoingTrace(ctx context.Context) []byte {
 
 // Metric is an identifier for a metric.
 type Metric string
+
+// Metrics is a set of metrics to record. Once created, Metrics is immutable,
+// however Add and Remove can make copies with specific metrics added or
+// removed, respectively.
+//
+// Do not construct directly; use NewMetrics instead.
+type Metrics struct {
+	// Metrics are the set of Metrics to initialize.
+	Metrics map[Metric]bool
+}
+
+// NewMetrics returns a Metrics containing Metrics.
+func NewMetrics(metrics ...Metric) *Metrics {
+	newMetrics := make(map[Metric]bool)
+	for _, metric := range metrics {
+		newMetrics[metric] = true
+	}
+	return &Metrics{
+		Metrics: newMetrics,
+	}
+}
+
+// Add adds the metrics to the metrics set and returns a new copy with the
+// additional metrics.
+func (m *Metrics) Add(metrics ...Metric) *Metrics {
+	newMetrics := make(map[Metric]bool)
+	for metric := range m.Metrics {
+		newMetrics[metric] = true
+	}
+
+	for _, metric := range metrics {
+		newMetrics[metric] = true
+	}
+	return &Metrics{
+		Metrics: newMetrics,
+	}
+}
+
+// Join joins the metrics passed in with the metrics set, and returns a new copy
+// with the merged metrics.
+func (m *Metrics) Join(metrics *Metrics) *Metrics {
+	newMetrics := make(map[Metric]bool)
+	maps.Copy(newMetrics, m.Metrics)
+	maps.Copy(newMetrics, metrics.Metrics)
+	return &Metrics{
+		Metrics: newMetrics,
+	}
+}
+
+// Remove removes the metrics from the metrics set and returns a new copy with
+// the metrics removed.
+func (m *Metrics) Remove(metrics ...Metric) *Metrics {
+	newMetrics := make(map[Metric]bool)
+	for metric := range m.Metrics {
+		newMetrics[metric] = true
+	}
+
+	for _, metric := range metrics {
+		delete(newMetrics, metric)
+	}
+	return &Metrics{
+		Metrics: newMetrics,
+	}
+}

@@ -46,57 +46,6 @@ var canonicalString = internal.CanonicalString.(func(codes.Code) string)
 
 var joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.DialOption)
 
-// Metrics is a set of metrics to record. Once created, Metrics is immutable,
-// however Add and Remove can make copies with specific metrics added or
-// removed, respectively.
-type Metrics struct {
-	// metrics are the set of metrics to initialize.
-	metrics map[stats.Metric]bool
-}
-
-// NewMetrics returns a Metrics containing Metrics.
-func NewMetrics(metrics ...stats.Metric) *Metrics {
-	newMetrics := make(map[stats.Metric]bool)
-	for _, metric := range metrics {
-		newMetrics[metric] = true
-	}
-	return &Metrics{
-		metrics: newMetrics,
-	}
-}
-
-// Add adds the metrics to the metrics set and returns a new copy with the
-// additional metrics.
-func (m *Metrics) Add(metrics ...stats.Metric) *Metrics {
-	newMetrics := make(map[stats.Metric]bool)
-	for metric := range m.metrics {
-		newMetrics[metric] = true
-	}
-
-	for _, metric := range metrics {
-		newMetrics[metric] = true
-	}
-	return &Metrics{
-		metrics: newMetrics,
-	}
-}
-
-// Remove removes the metrics from the metrics set and returns a new copy with
-// the metrics removed.
-func (m *Metrics) Remove(metrics ...stats.Metric) *Metrics {
-	newMetrics := make(map[stats.Metric]bool)
-	for metric := range m.metrics {
-		newMetrics[metric] = true
-	}
-
-	for _, metric := range metrics {
-		delete(newMetrics, metric)
-	}
-	return &Metrics{
-		metrics: newMetrics,
-	}
-}
-
 // Options are the options for OpenTelemetry instrumentation.
 type Options struct {
 	// MetricsOptions are the metrics options for OpenTelemetry instrumentation.
@@ -116,7 +65,7 @@ type MetricsOptions struct {
 	// for corresponding metric supported by the client and server
 	// instrumentation components if applicable. If not set, the default metrics
 	// will be recorded.
-	Metrics *Metrics
+	Metrics *stats.Metrics
 
 	// MethodAttributeFilter is to record the method name of RPCs handled by
 	// grpc.UnknownServiceHandler, but take care to limit the values allowed, as
@@ -305,5 +254,5 @@ var (
 	// DefaultSizeBounds are the default bounds for metrics which record size.
 	DefaultSizeBounds = []float64{0, 1024, 2048, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864, 268435456, 1073741824, 4294967296}
 	// DefaultMetrics are the default metrics provided by this module.
-	DefaultMetrics = NewMetrics(ClientAttemptStarted, ClientAttemptDuration, ClientAttemptSentCompressedTotalMessageSize, ClientAttemptRcvdCompressedTotalMessageSize, ClientCallDuration, ServerCallStarted, ServerCallSentCompressedTotalMessageSize, ServerCallRcvdCompressedTotalMessageSize, ServerCallDuration)
+	DefaultMetrics = stats.NewMetrics(ClientAttemptStarted, ClientAttemptDuration, ClientAttemptSentCompressedTotalMessageSize, ClientAttemptRcvdCompressedTotalMessageSize, ClientCallDuration, ServerCallStarted, ServerCallSentCompressedTotalMessageSize, ServerCallRcvdCompressedTotalMessageSize, ServerCallDuration)
 )
