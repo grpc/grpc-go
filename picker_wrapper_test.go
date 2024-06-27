@@ -32,9 +32,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const (
-	goroutineCount = 5
-)
+const goroutineCount = 5
 
 var (
 	testT  = &testTransport{}
