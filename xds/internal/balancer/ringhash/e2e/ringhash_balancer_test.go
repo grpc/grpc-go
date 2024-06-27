@@ -722,6 +722,9 @@ func (s) TestRingHash_HeaderHashing(t *testing.T) {
 // rewrite to aggregate RPCs to 1 backend.
 func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 	backends := startTestServiceBackends(t, 4)
+
+	// We must set the host name socket address in EDS, as the ring hash policy
+	// uses it to construct the ring.
 	host, _, err := net.SplitHostPort(backends[0])
 	if err != nil {
 		t.Fatalf("Failed to split host and port from stubserver: %v", err)
@@ -1465,14 +1468,14 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicks(t *testing.T) {
 	// Now cancel the RPC while we are still connecting.
 	rpcCancel()
 
-	// This allows the connection attempts to continue. The RPC was cancelled,
-	// and one of the backends is up. The conn becomes Ready due to the
-	// connection attempt to the existing backend succeeding.
+	// This allows the connection attempts to continue. The RPC was cancelled
+	// before the backend was connected, but the backends is up. The conn
+	// becomes Ready due to the connection attempt to the existing backend
+	// succeeding, despite no new RPC being sent.
 	hold.Resume()
 
 	for state := conn.GetState(); state != connectivity.Ready; state = conn.GetState() {
-		changed := conn.WaitForStateChange(ctx, state)
-		if !changed {
+		if !conn.WaitForStateChange(ctx, state) {
 			t.Errorf("Timeout waiting for the conn to become ready.")
 			break
 		}
@@ -1525,7 +1528,8 @@ func (s) TestRingHash_TransientFailureCheckNextOne(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(conn)
 
 	// Note each type of RPC contains a header value that will always be hashed
-	// the value that was used to place the non existent endpoint on the ring.
+	// the value that was used to place the non-existent endpoint on the ring,
+	// but it still gets routed to the backend that is up.
 	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("address_hash", nonExistentBackends[0]+"_0"))
 	reqPerBackend := checkRPCSendOK(ctx, t, client, 1)
 	var got string

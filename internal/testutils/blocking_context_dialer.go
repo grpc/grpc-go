@@ -52,11 +52,11 @@ func (d *BlockingDialer) DialContext(ctx context.Context, addr string) (net.Conn
 	d.mu.Lock()
 	holds := d.holds[addr]
 	if len(holds) > 0 {
-		logger.Info("Intercepted connection attempt to addr %s", addr)
 		hold := holds[0]
 		d.holds[addr] = holds[1:]
 		d.mu.Unlock()
 
+		logger.Infof("Hold %p: Intercepted connection attempt to addr %q", hold, addr)
 		close(hold.waitCh)
 		select {
 		case <-hold.blockCh:
@@ -65,6 +65,7 @@ func (d *BlockingDialer) DialContext(ctx context.Context, addr string) (net.Conn
 			}
 			return d.dialer.DialContext(ctx, "tcp", addr)
 		case <-ctx.Done():
+			logger.Infof("Hold %p: Connection attempt to addr %q cancelled", hold, addr)
 			return nil, ctx.Err()
 		}
 	}
@@ -73,8 +74,8 @@ func (d *BlockingDialer) DialContext(ctx context.Context, addr string) (net.Conn
 	return d.dialer.DialContext(ctx, "tcp", addr)
 }
 
-// Hold is a connection hold that blocks the dialer when a connection attempt is
-// made to the given addr.
+// Hold is a handle to a single connection attempt. It can be used to block,
+// fail and succeed connection attempts.
 type Hold struct {
 	dialer  *BlockingDialer
 	blockCh chan error
@@ -85,7 +86,7 @@ type Hold struct {
 
 // Hold blocks the dialer when a connection attempt is made to the given addr.
 // A hold is valid for exactly one connection attempt. Multiple holds for an
-// addr can be added, and they will apply in the order that the connection are
+// addr can be added, and they will apply in the order that the connections are
 // attempted.
 func (d *BlockingDialer) Hold(addr string) *Hold {
 	d.mu.Lock()
@@ -96,30 +97,29 @@ func (d *BlockingDialer) Hold(addr string) *Hold {
 	return &h
 }
 
-// Wait returns a channel that blocks until there is a connection attempt on
-// this Hold. Return false if the context has expired, true otherwise.
+// Wait blocks until there is a connection attempt on this Hold, or the context
+// expires. Return false if the context has expired, true otherwise.
 func (h *Hold) Wait(ctx context.Context) bool {
-	logger.Infof("Waiting for a connection attempt to addr %s", h.addr)
+	logger.Infof("Hold %p: Waiting for a connection attempt to addr %q", h, h.addr)
 	select {
 	case <-ctx.Done():
 		return false
 	case <-h.waitCh:
 	}
-	logger.Infof("Connection attempt started to addr %s", h.addr)
 	return true
 }
 
 // Resume unblocks the dialer for the given addr. If called multiple times on
 // the same hold, Resume panics.
 func (h *Hold) Resume() {
-	logger.Infof("Resuming connection attempt to addr %s", h.addr)
+	logger.Infof("Hold %p: Resuming connection attempt to addr %q", h, h.addr)
 	close(h.blockCh)
 }
 
 // Fail fails the connection attempt. If called multiple times on the same hold,
 // Fail panics.
 func (h *Hold) Fail(err error) {
-	logger.Infof("Failing connection attempt to addr %s", h.addr)
-	h.err = err
+	logger.Infof("Hold %p: Failing connection attempt to addr %q", h, h.addr)
+	h.err = err // synchronized via blockCh.
 	close(h.blockCh)
 }

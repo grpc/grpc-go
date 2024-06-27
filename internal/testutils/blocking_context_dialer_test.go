@@ -41,7 +41,7 @@ func (s) TestBlockingDialer_NoHold(t *testing.T) {
 	defer cancel()
 	conn, err := d.DialContext(ctx, lis.Addr().String())
 	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	conn.Close()
 }
@@ -49,7 +49,7 @@ func (s) TestBlockingDialer_NoHold(t *testing.T) {
 func (s) TestBlockingDialer_HoldWaitResume(t *testing.T) {
 	lis, err := LocalTCPListener()
 	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
+		t.Fatalf("Failed to listen: %v", err)
 	}
 	defer lis.Close()
 
@@ -70,7 +70,7 @@ func (s) TestBlockingDialer_HoldWaitResume(t *testing.T) {
 
 	// This should block until the goroutine above is scheduled.
 	if !h.Wait(ctx) {
-		t.Fatalf("Timeout while waiting for a connection attempt to " + h.addr)
+		t.Fatalf("Timeout while waiting for a connection attempt to %q", h.addr)
 	}
 	select {
 	case <-done:
@@ -151,9 +151,10 @@ func (s) TestBlockingDialer_ContextCanceled(t *testing.T) {
 		}
 		done <- struct{}{}
 	}()
-	if !h.Wait(ctx) {
-		t.Fatalf("Timeout while waiting for a connection attempt to " + h.addr)
+	if !h.Wait(testCtx) {
+		t.Errorf("Timeout while waiting for a connection attempt to %q", h.addr)
 	}
+
 	cancel()
 
 	select {
@@ -161,6 +162,8 @@ func (s) TestBlockingDialer_ContextCanceled(t *testing.T) {
 	case <-testCtx.Done():
 		t.Errorf("Timeout while waiting for Wait to return.")
 	}
+
+	h.Resume() // noop, just make sure nothing bad happen.
 }
 
 func (s) TestBlockingDialer_CancelWait(t *testing.T) {
@@ -176,8 +179,8 @@ func (s) TestBlockingDialer_CancelWait(t *testing.T) {
 	testCtx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	ctx, cancel := context.WithTimeout(testCtx, 0)
-	defer cancel()
+	ctx, cancel := context.WithCancel(testCtx)
+	cancel()
 	done := make(chan struct{})
 	go func() {
 		if h.Wait(ctx) {
