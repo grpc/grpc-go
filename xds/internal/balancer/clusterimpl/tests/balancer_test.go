@@ -321,7 +321,6 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	}
 
 	// Stop server 1 and send one more rpc. Now the request should go to server 2.
-
 	server1.Stop()
 
 	// Wait for the balancer to pick up the server state change.
