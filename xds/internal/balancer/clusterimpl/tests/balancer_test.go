@@ -49,6 +49,7 @@ import (
 	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	_ "google.golang.org/grpc/xds"
 )
@@ -214,10 +215,16 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	routeConfigName := "route-" + serviceName
 	clusterName := "cluster-" + serviceName
 	endpointsName := "endpoints-" + serviceName
+	routePolicy := e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName)
+    // Configure retries as we will shut down server 1 and switch to server 2 later.
+	routePolicy.VirtualHosts[0].RetryPolicy = &v3routepb.RetryPolicy{
+		RetryOn:    "unavailable",
+		NumRetries: &wrapperspb.UInt32Value{Value: 1},
+	}
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)},
-		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName)},
+		Routes:    []*v3routepb.RouteConfiguration{routePolicy},
 		Clusters: []*v3clusterpb.Cluster{
 			{
 				Name:                 clusterName,
@@ -319,12 +326,8 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	}
 
 	// Stop server 1 and send one more rpc. Now the request should go to server 2.
-	server1.Stop()
-	// The first call may go to server 1 and fail, so we send two requests.
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
-		t.Logf("First rpc EmptyCall() failed: %v", err)
-	}
 
+	server1.Stop()
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
