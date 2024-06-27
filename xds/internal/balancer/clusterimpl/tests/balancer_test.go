@@ -189,7 +189,6 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	var resolverBuilder resolver.Builder
@@ -204,11 +203,9 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	// Start two server backends exposing the test service.
 	server1 := stubserver.StartTestService(t, nil)
 	defer server1.Stop()
-	port1 := testutils.ParsePort(t, server1.Address)
 
 	server2 := stubserver.StartTestService(t, nil)
 	defer server2.Stop()
-	port2 := testutils.ParsePort(t, server2.Address)
 
 	// Configure the xDS management server.
 	const serviceName = "my-test-xds-service"
@@ -260,12 +257,16 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 			Host:        "localhost",
 			Localities: []e2e.LocalityOptions{
 				{
-					Backends: []e2e.BackendOptions{{Port: port1}},
-					Weight:   1,
+					Backends: []e2e.BackendOptions{
+						{Port: testutils.ParsePort(t, server1.Address)},
+					},
+					Weight: 1,
 				},
 				{
-					Backends: []e2e.BackendOptions{{Port: port2}},
-					Weight:   2,
+					Backends: []e2e.BackendOptions{
+						{Port: testutils.ParsePort(t, server2.Address)},
+					},
+					Weight: 2,
 				},
 			},
 		})},
@@ -282,7 +283,7 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(resolverBuilder))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("Failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -293,8 +294,8 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	}
 
 	// Verify that the request was sent to server 1.
-	if got, want := testutils.ParsePort(t, peer.Addr.String()), port1; got != want {
-		t.Errorf("peer.Addr.Port = %d, want = %d", got, want)
+	if got, want := peer.Addr.String(), server1.Address; got != want {
+		t.Errorf("peer.Addr = %q, want = %q", got, want)
 	}
 
 	// Ensure that an LRS stream is created.
@@ -333,13 +334,13 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	}
 
 	// Verify that the request was sent to server 2.
-	if got, want := testutils.ParsePort(t, peer.Addr.String()), port2; got != want {
-		t.Errorf("peer.Addr.Port = %d, want = %d", got, want)
+	if got, want := peer.Addr.String(), server2.Address; got != want {
+		t.Errorf("peer.Addr = %q, want = %q", got, want)
 	}
 
 	// Wait for load to be reported for locality of server 2.
 	if err := waitForSuccessfulLoadReport(ctx, mgmtServer.LRSServer, "region-2"); err != nil {
-		t.Fatalf("server 2 did not receive load due to error: %v", err)
+		t.Fatalf("Server 2 did not receive load due to error: %v", err)
 	}
 }
 
