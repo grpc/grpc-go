@@ -271,7 +271,9 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	}
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(resolverBuilder))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -318,7 +320,14 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 
 	// Stop server 1 and send one more rpc. Now the request should go to server 2.
 	server1.Stop()
-	client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer))
+	// The first call may go to server 1 and fail, so we send two requests.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
+		t.Logf("First rpc EmptyCall() failed: %v", err)
+	}
+
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
 
 	// Verify that the request was sent to server 2.
 	if got, want := testutils.ParsePort(t, peer.Addr.String()), port2; got != want {
