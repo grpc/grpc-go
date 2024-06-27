@@ -39,13 +39,7 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
-const (
-	serverPrefix = "[xds-server %p] "
-
-	// This is the dedicated well-known key value used during xDS client
-	// creation from the server side. This value is defined in gRFC A71.
-	xdsClientKey = "#server"
-)
+const serverPrefix = "[xds-server %p] "
 
 var (
 	// These new functions will be overridden in unit tests.
@@ -108,7 +102,7 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 			})
 		}
 	}
-	xdsClient, xdsClientClose, err := newXDSClient(xdsClientKey)
+	xdsClient, xdsClientClose, err := newXDSClient(xdsclient.NameForServer)
 	if err != nil {
 		return nil, fmt.Errorf("xDS client creation failed: %v", err)
 	}

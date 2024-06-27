@@ -138,25 +138,43 @@ func startCSDSClientStream(ctx context.Context, t *testing.T, serverAddr string)
 	return stream
 }
 
+// Tests CSDS functionality. The test performs the following:
+//   - Spins up a management server and creates two xDS clients talking to it.
+//   - Registers a set of watches on the xDS clients, and verifies that the CSDS
+//     response reports resources in REQUESTED state.
+//   - Configures resources on the management server corresponding to the ones
+//     being watched by the clients, and verifies that the CSDS response reports
+//     resources in ACKED state.
+//   - Modifies resources on the management server such that some of them are
+//     expected to be NACKed by the client. Verifies that the CSDS response
+//     contains some resources in ACKED state and some in NACKED state.
+//
+// For all of the above operations, the test also verifies that the client_scope
+// field in the CSDS response is populated appropriately.
 func (s) TestCSDS(t *testing.T) {
 	// Spin up a xDS management server on a local port.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
-	// Create a bootstrap file in a temporary directory.
+	// Create a bootstrap contents pointing to the above management server.
 	nodeID := uuid.New().String()
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 
 	// Create two xDS clients, with different names. These should end up
 	// creating two different xDS clients.
 	const xdsClient1Name = "xds-csds-client-1"
-	xdsClient1, xdsClose1, err := xdsclient.New(xdsClient1Name)
+	xdsClient1, xdsClose1, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     xdsClient1Name,
+		Contents: bootstrapContents,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
 	defer xdsClose1()
 	const xdsClient2Name = "xds-csds-client-2"
-	xdsClient2, xdsClose2, err := xdsclient.New(xdsClient2Name)
+	xdsClient2, xdsClose2, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     xdsClient2Name,
+		Contents: bootstrapContents,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -373,6 +391,13 @@ func makeGenericXdsConfig(typeURL, name, version string, status v3adminpb.Client
 	}
 }
 
+// Repeatedly sends CSDS requests and receives CSDS responses on the provided
+// stream and verifies that the response matches `want`. Returns an error if
+// sending or receiving on the stream fails, or if the context expires before a
+// response matching `want` is received.
+//
+// Expects client configs in `want` to be sorted on `client_scope` and the
+// resource dump to be sorted on type_url and resource name.
 func checkClientStatusResponse(ctx context.Context, stream v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient, want *v3statuspb.ClientStatusResponse) error {
 	var cmpOpts = cmp.Options{
 		protocmp.Transform(),

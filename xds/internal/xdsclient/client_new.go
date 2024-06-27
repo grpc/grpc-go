@@ -31,14 +31,18 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
+// NameForServer represents the value to be passed as name when creating an xDS
+// client from xDS-enabled gRPC servers. This is a well-known dedicated key
+// value, and is defined in gRFC A71.
+const NameForServer = "#server"
+
 // New returns a new xDS client configured by the bootstrap file specified in env
 // variable GRPC_XDS_BOOTSTRAP or GRPC_XDS_BOOTSTRAP_CONFIG.
 //
 // gRPC client implementations are expected to pass the channel's target URI for
 // the name field, while server implementations are expected to pass a dedicated
-// well-known value. The returned client is a reference counted xDS client
-// implementation shared across callers using the same name and bootstrap
-// configuration.
+// well-known value "#server", as specified in gRFC A71. The returned client is
+// a reference counted implementation shared among callers using the same name.
 //
 // The second return value represents a close function which releases the
 // caller's reference on the returned client.  The caller is expected to invoke
@@ -82,10 +86,7 @@ func newClientImpl(config *bootstrap.Config, watchExpiryTimeout time.Duration, i
 // OptionsForTesting contains options to configure xDS client creation for
 // testing purposes only.
 type OptionsForTesting struct {
-	// Name is a unique name for this xDS client. For client channels, this
-	// should be the user's dial target, and for servers, this should be a
-	// dedicated well-known value. TODO(easwars): Point to where this is
-	// defined.
+	// Name is a unique name for this xDS client.
 	Name string
 	// Contents contain a JSON representation of the bootstrap configuration to
 	// be used when creating the xDS client.

@@ -58,9 +58,17 @@ func clientRefCountedClose(name string) {
 
 }
 
+// newRefCountedWithConfig creates a new reference counted xDS client
+// implementation for name, if one does not exist already. The passed in
+// fallback config is used when bootstrap environment variables are not defined.
 func newRefCountedWithConfig(name string, fallbackConfig *bootstrap.Config, watchExpiryTimeout, idleAuthorityTimeout time.Duration) (XDSClient, func(), error) {
 	clientsMu.Lock()
 	defer clientsMu.Unlock()
+
+	if c := clients[name]; c != nil {
+		c.incrRef()
+		return c, grpcsync.OnceFunc(func() { clientRefCountedClose(name) }), nil
+	}
 
 	// Use fallbackConfig only if bootstrap env vars are unspecified.
 	var config *bootstrap.Config
@@ -75,11 +83,6 @@ func newRefCountedWithConfig(name string, fallbackConfig *bootstrap.Config, watc
 		if err != nil {
 			return nil, nil, fmt.Errorf("xds: failed to read bootstrap file: %v", err)
 		}
-	}
-
-	if c := clients[name]; c != nil {
-		c.incrRef()
-		return c, grpcsync.OnceFunc(func() { clientRefCountedClose(name) }), nil
 	}
 
 	// Create the new client implementation.

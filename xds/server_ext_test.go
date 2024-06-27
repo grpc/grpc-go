@@ -196,7 +196,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 
 	// Lookup the xDS client in use based on the dedicated well-known key, as
 	// defined in A71, used by the xDS enabled gRPC server.
-	xdsC, close, err := xdsclient.GetForTesting("#server")
+	xdsC, close, err := xdsclient.GetForTesting(xdsclient.NameForServer)
 	if err != nil {
 		t.Fatalf("Failed to find xDS client for configuration: %v", string(bootstrapContents))
 	}
@@ -293,7 +293,7 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 
 	// Lookup the xDS client in use based on the dedicated well-known key, as
 	// defined in A71, used by the xDS enabled gRPC server.
-	xdsC, close, err := xdsclient.GetForTesting("#server")
+	xdsC, close, err := xdsclient.GetForTesting(xdsclient.NameForServer)
 	if err != nil {
 		t.Fatalf("Failed to find xDS client for configuration: %v", string(bootstrapContents))
 	}
