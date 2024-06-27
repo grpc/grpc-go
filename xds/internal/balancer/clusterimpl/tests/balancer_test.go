@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -34,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -45,12 +47,10 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3pickfirstpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/pick_first/v3"
 	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
-	"github.com/google/uuid"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
 	_ "google.golang.org/grpc/xds"
-	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 )
 
 const (
@@ -179,18 +179,9 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 	}
 }
 
-// TestLoadReportingPickFirstMultiLocality tests whether load is reported correctly
-// when using pickfirst with endpoints in multiple localities.
+// Tests whether load is reported correctly when using pickfirst with endpoints
+// in multiple localities.
 func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
-	originalTickerFactory := transport.TickerFactory
-	tickChan := make(chan time.Time)
-	transport.TickerFactory = func(freq time.Duration) (<-chan time.Time, func()) {
-		return tickChan, func() {}
-	}
-	defer func() {
-		transport.TickerFactory = originalTickerFactory
-	}()
-
 	// Create an xDS management server that serves ADS and LRS requests.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
 
@@ -212,15 +203,13 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	// Start two server backends exposing the test service.
 	server1 := stubserver.StartTestService(t, nil)
 	defer server1.Stop()
+	port1 := testutils.ParsePort(t, server1.Address)
 
 	server2 := stubserver.StartTestService(t, nil)
 	defer server2.Stop()
-
-	port1 := testutils.ParsePort(t, server1.Address)
 	port2 := testutils.ParsePort(t, server2.Address)
 
-	// Configure the xDS management server with default resources. Override the
-	// default cluster to include an LRS server config pointing to self.
+	// Configure the xDS management server.
 	const serviceName = "my-test-xds-service"
 	routeConfigName := "route-" + serviceName
 	clusterName := "cluster-" + serviceName
@@ -241,6 +230,7 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 					},
 					ServiceName: endpointsName,
 				},
+				// Specify a custom load balancing policy to use pickfirst.
 				LoadBalancingPolicy: &v3clusterpb.LoadBalancingPolicy{
 					Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 						{
@@ -248,6 +238,12 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 								TypedConfig: testutils.MarshalAny(t, &v3pickfirstpb.PickFirst{}),
 							},
 						},
+					},
+				},
+				// Include a fake LRS server config pointing to self.
+				LrsServer: &v3corepb.ConfigSource{
+					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+						Self: &v3corepb.SelfConfigSource{},
 					},
 				},
 			},
@@ -268,12 +264,6 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 		})},
 	}
 
-	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
-		ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
-			Self: &v3corepb.SelfConfigSource{},
-		},
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -288,97 +278,75 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	defer cc.Close()
 
 	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+	var peer peer.Peer
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
 
+	// Verify that the request was sent to server 1.
+	if got, want := testutils.ParsePort(t, peer.Addr.String()), port1; got != want {
+		t.Errorf("peer.Addr.Port = %d, want = %d", got, want)
+	}
+
 	// Ensure that an LRS stream is created.
-	_, err = mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx)
-	if err != nil {
+	if _, err = mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
 		t.Fatalf("Failure when waiting for an LRS stream to be opened: %v", err)
 	}
 
 	// Handle the initial LRS request from the xDS client.
-	_, err = mgmtServer.LRSServer.LRSRequestChan.Receive(ctx)
-	if err != nil {
+	if _, err = mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Failure waiting for initial LRS request: %v", err)
 	}
 
 	resp := fakeserver.Response{
 		Resp: &v3lrspb.LoadStatsResponse{
 			SendAllClusters:       true,
-			LoadReportingInterval: durationpb.New(1 * time.Second),
+			LoadReportingInterval: durationpb.New(10 * time.Millisecond),
 		},
 	}
 	mgmtServer.LRSServer.LRSResponseChan <- &resp
 
-	for i := 0; i < 10; i++ {
-		client.EmptyCall(ctx, &testpb.Empty{})
-	}
-
-	// Trigger load to be reported.
-	tickChan <- time.Now()
-
-	req, err := mgmtServer.LRSServer.LRSRequestChan.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Failure while waiting for load to be reported: %v", err)
-	}
-
-	loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
-
-	// As pickfirst is configured, only one server should receive all the requests.
-	// Take down the server which received all the requests initially.
-	var initialRegion string
-	for _, load := range loadStats.ClusterStats {
-		for _, locality := range load.UpstreamLocalityStats {
-			if locality.TotalSuccessfulRequests != 11 {
-				continue
-			}
-			initialRegion = locality.Locality.Region
-		}
-	}
-
-	if initialRegion == "" {
-		t.Fatalf("None of the servers received all the requests based on load stats: %v", loadStats)
-	}
-
-	if initialRegion == "region-1" {
-		server1.Stop()
-	} else {
-		server2.Stop()
-	}
-
-	// Send 10 more RPCs, now pickfirst will send them to a different server.
-	for i := 0; i < 10; i++ {
-		client.EmptyCall(ctx, &testpb.Empty{})
-	}
-
-	// Trigger load reporting.
-	tickChan <- time.Now()
-
-	req, err = mgmtServer.LRSServer.LRSRequestChan.Receive(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-
-	loadStats = req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
-	var finalRegion string
-	for _, load := range loadStats.ClusterStats {
-		for _, locality := range load.UpstreamLocalityStats {
-			if locality.TotalSuccessfulRequests != 10 {
-				continue
-			}
-			finalRegion = locality.Locality.Region
-		}
-	}
-
-	if finalRegion == "" {
-		t.Fatalf("None of the servers received all the requests based on load stats: %v", loadStats)
-	}
-
-	if finalRegion == initialRegion {
+	// Wait for load to be reported for locality of server 1.
+	if err := waitForSuccessfulLoadReport(ctx, mgmtServer.LRSServer, "region-1"); err != nil {
 		// TODO(#7339): Enable this test once pickfirst has one address per subconn.
+		// This assertion fails because pickfirst always reports load for the locality
+		// of the last address in the subconn. This will be fixed by ensuring
+		// there is only one address per subconn.
 		t.Skip("Skipping due to issue #7339.")
-		t.Errorf("Unexpected region received traffic: %q", finalRegion)
+		t.Fatalf("server 1 did not receive load due to error: %v", err)
+	}
+
+	// Stop server 1 and send one more rpc. Now the request should go to server 2.
+	server1.Stop()
+	client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer))
+
+	// Verify that the request was sent to server 2.
+	if got, want := testutils.ParsePort(t, peer.Addr.String()), port2; got != want {
+		t.Errorf("peer.Addr.Port = %d, want = %d", got, want)
+	}
+
+	// Wait for load to be reported for locality of server 2.
+	if err := waitForSuccessfulLoadReport(ctx, mgmtServer.LRSServer, "region-2"); err != nil {
+		t.Fatalf("server 2 did not receive load due to error: %v", err)
+	}
+}
+
+// waitForSuccessfulLoadReport waits for a successful request to be reported for
+// the specified locality region.
+func waitForSuccessfulLoadReport(ctx context.Context, lrsServer *fakeserver.Server, region string) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case req := <-lrsServer.LRSRequestChan.C:
+			loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
+			for _, load := range loadStats.ClusterStats {
+				for _, locality := range load.UpstreamLocalityStats {
+					if locality.TotalSuccessfulRequests > 0 && locality.Locality.Region == region {
+						return nil
+					}
+				}
+			}
+		}
 	}
 }

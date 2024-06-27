@@ -40,12 +40,6 @@ import (
 
 type lrsStream = v3lrsgrpc.LoadReportingService_StreamLoadStatsClient
 
-// TickerFactory returns tickers. It is used to mock time based events for testing.
-var TickerFactory = func(freq time.Duration) (<-chan time.Time, func()) {
-	tick := time.NewTicker(freq)
-	return tick.C, tick.Stop
-}
-
 // ReportLoad starts reporting loads to the management server the transport is
 // configured to use.
 //
@@ -140,11 +134,11 @@ func (t *Transport) lrsRunner(ctx context.Context) {
 }
 
 func (t *Transport) sendLoads(ctx context.Context, stream lrsStream, clusterNames []string, interval time.Duration) {
-	tc, cancel := TickerFactory(interval)
-	defer cancel()
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
 	for {
 		select {
-		case <-tc:
+		case <-tick.C:
 		case <-ctx.Done():
 			return
 		}
