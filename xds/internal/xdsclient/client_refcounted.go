@@ -59,8 +59,11 @@ func clientRefCountedClose(name string) {
 }
 
 // newRefCountedWithConfig creates a new reference counted xDS client
-// implementation for name, if one does not exist already. The passed in
-// fallback config is used when bootstrap environment variables are not defined.
+// implementation for name, if one does not exist already. If an xDS client for
+// the given name exists, it gets a reference to it and returns it.
+//
+// The passed in fallback config is used when bootstrap environment variables
+// are not defined.
 func newRefCountedWithConfig(name string, fallbackConfig *bootstrap.Config, watchExpiryTimeout, idleAuthorityTimeout time.Duration) (XDSClient, func(), error) {
 	clientsMu.Lock()
 	defer clientsMu.Unlock()
@@ -90,7 +93,7 @@ func newRefCountedWithConfig(name string, fallbackConfig *bootstrap.Config, watc
 	if err != nil {
 		return nil, nil, err
 	}
-	c.logger.Infof("Created client with name %q to xDS management server: %q", name, config.XDSServers()[0])
+	c.logger.Infof("Created client with name %q to primary xDS management server: %q", name, config.XDSServers()[0])
 	client := &clientRefCounted{clientImpl: c, refCount: 1}
 	clients[name] = client
 	xdsClientImplCreateHook(name)

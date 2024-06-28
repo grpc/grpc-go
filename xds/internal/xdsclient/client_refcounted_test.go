@@ -120,8 +120,8 @@ func (s) TestClientNew_Single(t *testing.T) {
 }
 
 // Tests the scenario where there are multiple calls to New() with different
-// names. Verifies that reference counts are tracked correctly and that only
-// when all references are released, the client is closed.
+// names. Verifies that reference counts are tracked correctly for each client
+// and that only when all references are released for a client, it is closed.
 func (s) TestClientNew_Multiple(t *testing.T) {
 	// Create a bootstrap configuration, place it in a file in the temp
 	// directory, and set the bootstrap env vars to point to it.
@@ -212,13 +212,21 @@ func (s) TestClientNew_Multiple(t *testing.T) {
 		t.Fatalf("New xDS client created when expected to reuse an existing one")
 	}
 
-	// Close the first client completely.
-	closeFunc1()
+	// The close function returned by New() is idempotent and calling it
+	// multiple times should not decrement the reference count multiple times.
 	for i := 0; i < count; i++ {
 		closeFuncs1[i]()
+		closeFuncs1[i]()
+	}
+	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if _, err := clientImplCloseCh.Receive(sCtx); err == nil {
+		t.Fatal("Client implementation closed before all references are released")
 	}
 
-	// Ensure that the close hook is called for the first client.
+	// Release the last reference and verify that the client is closed
+	// completely.
+	closeFunc1()
 	name, err = clientImplCloseCh.Receive(ctx)
 	if err != nil {
 		t.Fatal("Timeout when waiting for xDS client to be closed completely")
@@ -234,13 +242,21 @@ func (s) TestClientNew_Multiple(t *testing.T) {
 		t.Fatal("Client implementation closed before all references are released")
 	}
 
-	// Close the second client completely.
-	closeFunc2()
+	// The close function returned by New() is idempotent and calling it
+	// multiple times should not decrement the reference count multiple times.
 	for i := 0; i < count; i++ {
 		closeFuncs2[i]()
+		closeFuncs2[i]()
+	}
+	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if _, err := clientImplCloseCh.Receive(sCtx); err == nil {
+		t.Fatal("Client implementation closed before all references are released")
 	}
 
-	// Ensure that the close hook is called for the second client.
+	// Release the last reference and verify that the client is closed
+	// completely.
+	closeFunc2()
 	name, err = clientImplCloseCh.Receive(ctx)
 	if err != nil {
 		t.Fatal("Timeout when waiting for xDS client to be closed completely")
