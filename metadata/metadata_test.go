@@ -31,6 +31,8 @@ import (
 
 const defaultTestTimeout = 10 * time.Second
 
+var ctxWithTimeout, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+
 type s struct {
 	grpctest.Tester
 }
@@ -205,7 +207,7 @@ func (s) TestFromIncomingContext(t *testing.T) {
 	)
 	// Verify that we lowercase if callers directly modify md
 	md["X-INCORRECT-UPPERCASE"] = []string{"foo"}
-	ctx, cancel := context.WithTimeout(NewIncomingContext(context.Background(), md), defaultTestTimeout)
+	ctx := NewIncomingContext(ctxWithTimeout, md)
 	defer cancel()
 
 	result, found := FromIncomingContext(ctx)
@@ -242,7 +244,7 @@ func (s) TestValueFromIncomingContext(t *testing.T) {
 	)
 	// Verify that we lowercase if callers directly modify md
 	md["X-INCORRECT-UPPERCASE"] = []string{"foo"}
-	ctx, cancel := context.WithTimeout(NewIncomingContext(context.Background(), md), defaultTestTimeout)
+	ctx := NewIncomingContext(ctxWithTimeout, md)
 	defer cancel()
 
 	for _, test := range []struct {
@@ -400,7 +402,7 @@ func BenchmarkFromOutgoingContext(b *testing.B) {
 
 func BenchmarkFromIncomingContext(b *testing.B) {
 	md := Pairs("X-My-Header-1", "42")
-	ctx, cancel := context.WithTimeout(NewIncomingContext(context.Background(), md), defaultTestTimeout)
+	ctx := NewIncomingContext(ctxWithTimeout, md)
 	defer cancel()
 
 	b.ResetTimer()
@@ -411,7 +413,7 @@ func BenchmarkFromIncomingContext(b *testing.B) {
 
 func BenchmarkValueFromIncomingContext(b *testing.B) {
 	md := Pairs("X-My-Header-1", "42")
-	ctx, cancel := context.WithTimeout(NewIncomingContext(context.Background(), md), defaultTestTimeout)
+	ctx := NewIncomingContext(ctxWithTimeout, md)
 	defer cancel()
 
 	b.Run("key-found", func(b *testing.B) {
