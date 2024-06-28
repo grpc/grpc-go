@@ -165,8 +165,9 @@ func (s) TestRetryChainedInterceptor(t *testing.T) {
 
 func (s) TestStreamContext(t *testing.T) {
 	expectedStream := &transport.Stream{}
-	ctx, cancel := context.WithTimeout(NewContextWithServerTransportStream(context.Background(), expectedStream), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	ctx = NewContextWithServerTransportStream(ctx, expectedStream)
 
 	s := ServerTransportStreamFromContext(ctx)
 	stream, ok := s.(*transport.Stream)
