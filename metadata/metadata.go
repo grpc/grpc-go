@@ -219,11 +219,6 @@ func FromIncomingContext(ctx context.Context) (MD, bool) {
 // ValueFromIncomingContext returns the metadata value corresponding to the metadata
 // key from the incoming metadata if it exists. Keys are matched in a case insensitive
 // manner.
-//
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
 func ValueFromIncomingContext(ctx context.Context, key string) []string {
 	md, ok := ctx.Value(mdIncomingKey{}).(MD)
 	if !ok {
