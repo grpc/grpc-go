@@ -90,12 +90,6 @@ func Pairs(kv ...string) MD {
 	return md
 }
 
-// String implements fmt.Stringer to allow metadata to be printed when stored
-// in a context.  It returns the metadata map as formatted by Go's fmt package.
-func (md MD) String() string {
-	return fmt.Sprint(map[string][]string(md))
-}
-
 // Len returns the number of items in md.
 func (md MD) Len() int {
 	return len(md)
