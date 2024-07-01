@@ -567,10 +567,6 @@ func newConfigFromContents(data []byte) (*Config, error) {
 	if err := config.UnmarshalJSON(data); err != nil {
 		return nil, err
 	}
-
-	if logger.V(2) {
-		logger.Infof("Bootstrap config for creating xds-client: %s", config)
-	}
 	return config, nil
 }
 
