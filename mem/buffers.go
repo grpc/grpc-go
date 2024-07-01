@@ -30,6 +30,7 @@ if the error is non-nil, unless explicitly listed in the API's documentation.
 package mem
 
 import (
+	"fmt"
 	"io"
 	"sync/atomic"
 )
@@ -144,6 +145,10 @@ func (b *Buffer) Split(n int) *Buffer {
 		refs: b.refs,
 		free: free,
 	}
+}
+
+func (b *Buffer) String() string {
+	return fmt.Sprintf("mem.Buffer(%p, data: %p)", b, b.ReadOnlyData())
 }
 
 // BufferSlice offers a means to represent data that spans one or more Buffer
