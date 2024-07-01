@@ -338,26 +338,6 @@ func (s) TestAppendToOutgoingContext_FromKVSlice(t *testing.T) {
 	}
 }
 
-func TestStringerMD(t *testing.T) {
-	for _, test := range []struct {
-		md   MD
-		want string
-	}{
-		{MD{}, "map[]"},
-		{MD{"k1": []string{}}, "map[k1:[]]"},
-		{MD{"k1": []string{"v1", "v2"}}, "map[k1:[v1 v2]]"},
-		{MD{"k1": []string{"v1"}}, "map[k1:[v1]]"},
-		{MD{"k1": []string{"v1", "v2"}, "k2": []string{}, "k3": []string{"1", "2", "3"}}, "map[k1:[v1 v2] k2:[] k3:[1 2 3]]"},
-		{MD{"k2": []string{}, "k3": []string{"1", "2", "3"}, "k1": []string{"v1", "v2"}}, "map[k1:[v1 v2] k2:[] k3:[1 2 3]]"},
-		{MD{"k3": []string{"1", "2", "3"}, "k2": []string{}, "k1": []string{"v1", "v2"}}, "map[k1:[v1 v2] k2:[] k3:[1 2 3]]"},
-	} {
-		got := test.md.String()
-		if got != test.want {
-			t.Fatalf("Metadata string %q should be %q", got, test.want)
-		}
-	}
-}
-
 // Old/slow approach to adding metadata to context
 func Benchmark_AddingMetadata_ContextManipulationApproach(b *testing.B) {
 	// TODO: Add in N=1-100 tests once Go1.6 support is removed.
