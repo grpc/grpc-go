@@ -31,9 +31,11 @@ var logger = grpclog.Component("testutils")
 // BlockingDialer is a dialer that waits for Resume() to be called before
 // dialing.
 type BlockingDialer struct {
-	mu    sync.Mutex // protects holds
+	// mu protects holds.
+	mu sync.Mutex
+	// holds maps network addresses to a list of holds for that address.
 	holds map[string][]*Hold
-
+	// dialer dials connections when they are not blocked.
 	dialer *net.Dialer
 }
 
@@ -77,11 +79,16 @@ func (d *BlockingDialer) DialContext(ctx context.Context, addr string) (net.Conn
 // Hold is a handle to a single connection attempt. It can be used to block,
 // fail and succeed connection attempts.
 type Hold struct {
-	dialer  *BlockingDialer
+	// dialer is the dialer that created this hold.
+	dialer *BlockingDialer
+	// waitCh is closed when a connection attempt is received.
+	waitCh chan struct{}
+	// blockCh is closed when the connection attempt should resume.
 	blockCh chan error
-	waitCh  chan struct{}
-	err     error
-	addr    string
+	// err is the error to return when the connection attempt is failed.
+	err error
+	// addr is the address that this hold is for.
+	addr string
 }
 
 // Hold blocks the dialer when a connection attempt is made to the given addr.

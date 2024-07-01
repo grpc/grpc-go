@@ -25,12 +25,15 @@ import (
 	"time"
 )
 
-const testTimeout = 5 * time.Second
+const (
+	testTimeout      = 5 * time.Second
+	testShortTimeout = 10 * time.Millisecond
+)
 
 func (s) TestBlockingDialer_NoHold(t *testing.T) {
 	lis, err := LocalTCPListener()
 	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
+		t.Fatalf("Failed to listen: %v", err)
 	}
 	defer lis.Close()
 
@@ -74,8 +77,8 @@ func (s) TestBlockingDialer_HoldWaitResume(t *testing.T) {
 	}
 	select {
 	case <-done:
-		t.Errorf("Expected dialer to be blocked.")
-	default:
+		t.Fatalf("Expected dialer to be blocked.")
+	case <-time.After(testShortTimeout):
 	}
 
 	h.Resume() // Unblock the above goroutine.
@@ -90,7 +93,7 @@ func (s) TestBlockingDialer_HoldWaitResume(t *testing.T) {
 func (s) TestBlockingDialer_HoldWaitFail(t *testing.T) {
 	lis, err := LocalTCPListener()
 	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
+		t.Fatalf("Failed to listen: %v", err)
 	}
 	defer lis.Close()
 
@@ -99,30 +102,30 @@ func (s) TestBlockingDialer_HoldWaitFail(t *testing.T) {
 
 	wantErr := errors.New("test error")
 
-	done := make(chan struct{})
+	dialError := make(chan error)
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 	go func() {
 		_, err := d.DialContext(ctx, lis.Addr().String())
-		if !errors.Is(err, wantErr) {
-			t.Errorf("BlockingDialer.DialContext() after Fail(): got error %v, want %v", err, wantErr)
-		}
-		done <- struct{}{}
+		dialError <- err
 	}()
 
 	if !h.Wait(ctx) {
 		t.Fatalf("Timeout while waiting for a connection attempt to " + h.addr)
 	}
 	select {
-	case <-done:
-		t.Errorf("Expected dialer to still be blocked after Wait()")
-	default:
+	case err = <-dialError:
+		t.Errorf("DialContext got unblocked with err %v. Want DialContext to still be blocked after Wait()", err)
+	case <-time.After(testShortTimeout):
 	}
 
 	h.Fail(wantErr)
 
 	select {
-	case <-done:
+	case err = <-dialError:
+		if !errors.Is(err, wantErr) {
+			t.Errorf("BlockingDialer.DialContext() after Fail(): got error %v, want %v", err, wantErr)
+		}
 	case <-ctx.Done():
 		t.Errorf("Timeout waiting for connection attempt to fail.")
 	}
@@ -131,14 +134,14 @@ func (s) TestBlockingDialer_HoldWaitFail(t *testing.T) {
 func (s) TestBlockingDialer_ContextCanceled(t *testing.T) {
 	lis, err := LocalTCPListener()
 	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
+		t.Fatalf("Failed to listen: %v", err)
 	}
 	defer lis.Close()
 
 	d := NewBlockingDialer()
 	h := d.Hold(lis.Addr().String())
 
-	done := make(chan struct{})
+	dialErr := make(chan error)
 	testCtx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
@@ -146,10 +149,7 @@ func (s) TestBlockingDialer_ContextCanceled(t *testing.T) {
 	defer cancel()
 	go func() {
 		_, err := d.DialContext(ctx, lis.Addr().String())
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("BlockingDialer.DialContext() after context cancel: got error %v, want %v", err, context.Canceled)
-		}
-		done <- struct{}{}
+		dialErr <- err
 	}()
 	if !h.Wait(testCtx) {
 		t.Errorf("Timeout while waiting for a connection attempt to %q", h.addr)
@@ -158,7 +158,10 @@ func (s) TestBlockingDialer_ContextCanceled(t *testing.T) {
 	cancel()
 
 	select {
-	case <-done:
+	case err = <-dialErr:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("BlockingDialer.DialContext() after context cancel: got error %v, want %v", err, context.Canceled)
+		}
 	case <-testCtx.Done():
 		t.Errorf("Timeout while waiting for Wait to return.")
 	}
@@ -169,7 +172,7 @@ func (s) TestBlockingDialer_ContextCanceled(t *testing.T) {
 func (s) TestBlockingDialer_CancelWait(t *testing.T) {
 	lis, err := LocalTCPListener()
 	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
+		t.Fatalf("Failed to listen: %v", err)
 	}
 	defer lis.Close()
 
