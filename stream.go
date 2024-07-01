@@ -878,6 +878,7 @@ func (cs *clientStream) bufferForRetryLocked(sz int, op func(a *csAttempt) error
 	cs.replayBufferSize += sz
 	if cs.replayBufferSize > cs.callInfo.maxRetryRPCBufferSize {
 		cs.commitAttemptLocked()
+		cleanup()
 		return
 	}
 	cs.replayBuffer = append(cs.replayBuffer, replayOp{op: op, cleanup: cleanup})
