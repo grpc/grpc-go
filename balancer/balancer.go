@@ -72,8 +72,20 @@ func unregisterForTesting(name string) {
 	delete(m, name)
 }
 
+// getConnectedAddress returns the connected address for a SubConnState.
+func getConnectedAddress(scs SubConnState) (resolver.Address, bool) {
+	return scs.connectedAddress, scs.ConnectivityState == connectivity.Ready
+}
+
+// setConnectedAddress sets the connected address for a SubConnState.
+func setConnectedAddress(scs *SubConnState, addr resolver.Address) {
+	scs.connectedAddress = addr
+}
+
 func init() {
 	internal.BalancerUnregister = unregisterForTesting
+	internal.GetConnectedAddress = getConnectedAddress
+	internal.SetConnectedAddress = setConnectedAddress
 }
 
 // Get returns the resolver builder registered with the given name.
@@ -410,6 +422,9 @@ type SubConnState struct {
 	// ConnectionError is set if the ConnectivityState is TransientFailure,
 	// describing the reason the SubConn failed.  Otherwise, it is nil.
 	ConnectionError error
+	// connectedAddr contains the connected address when ConnectivityState is Ready. Otherwise, it is
+	// indeterminate.
+	connectedAddress resolver.Address
 }
 
 // ClientConnState describes the state of a ClientConn relevant to the

@@ -31,6 +31,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	grpcinternal "google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
@@ -366,14 +367,27 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 		lID = xdsinternal.GetLocalityID(newAddrs[i])
 	}
 	var sc balancer.SubConn
+	ret := &scWrapper{}
 	oldListener := opts.StateListener
-	opts.StateListener = func(state balancer.SubConnState) { b.updateSubConnState(sc, state, oldListener) }
+	opts.StateListener = func(state balancer.SubConnState) {
+		b.updateSubConnState(sc, state, oldListener)
+		// Read connected address and call updateLocalityID() based on the connected address's locality.
+		// https://github.com/grpc/grpc-go/issues/7339
+		if GetConnectedAddress, ok := grpcinternal.GetConnectedAddress.(func(state balancer.SubConnState) (resolver.Address, bool)); ok {
+			if addr, ok := GetConnectedAddress(state); ok {
+				// TODO: Why is lID empty when running the test? The locality info is being lost somehow.
+				lID := xdsinternal.GetLocalityID(addr)
+				if !lID.Equal(xdsinternal.LocalityID{}) {
+					ret.updateLocalityID(lID)
+				}
+			}
+		}
+	}
 	sc, err := b.ClientConn.NewSubConn(newAddrs, opts)
 	if err != nil {
 		return nil, err
 	}
-	// Wrap this SubConn in a wrapper, and add it to the map.
-	ret := &scWrapper{SubConn: sc}
+	ret.SubConn = sc
 	ret.updateLocalityID(lID)
 	return ret, nil
 }
