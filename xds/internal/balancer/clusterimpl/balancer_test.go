@@ -637,7 +637,7 @@ func (s) TestLoadReporting(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateStateAndConnectedAddress(balancer.SubConnState{ConnectivityState: connectivity.Ready}, addrs[0])
 	// Test pick with one backend.
 	const successCount = 5
 	const errorCount = 5

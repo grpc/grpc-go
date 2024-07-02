@@ -361,11 +361,8 @@ func (scw *scWrapper) localityID() xdsinternal.LocalityID {
 func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	clusterName := b.getClusterName()
 	newAddrs := make([]resolver.Address, len(addrs))
-	// TODO: Don't set the locality here. Let the StateListener handle it all.
-	var lID xdsinternal.LocalityID
 	for i, addr := range addrs {
 		newAddrs[i] = xds.SetXDSHandshakeClusterName(addr, clusterName)
-		lID = xdsinternal.GetLocalityID(newAddrs[i])
 	}
 	var sc balancer.SubConn
 	scw := &scWrapper{}
@@ -390,7 +387,6 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 		return nil, err
 	}
 	scw.SubConn = sc
-	scw.updateLocalityID(lID)
 	return scw, nil
 }
 

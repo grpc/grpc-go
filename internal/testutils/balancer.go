@@ -26,6 +26,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 )
@@ -70,6 +71,21 @@ func (tsc *TestSubConn) GetOrBuildProducer(balancer.ProducerBuilder) (balancer.P
 // UpdateState pushes the state to the listener, if one is registered.
 func (tsc *TestSubConn) UpdateState(state balancer.SubConnState) {
 	<-tsc.connectCalled.Done()
+	if tsc.stateListener != nil {
+		tsc.stateListener(state)
+		return
+	}
+}
+
+// UpdateStateAndConnectedAddress saves the connected address to state if the
+// connectivity state is Ready and pushes the state to the listener if one is
+// registered.
+func (tsc *TestSubConn) UpdateStateAndConnectedAddress(state balancer.SubConnState, addr resolver.Address) {
+	<-tsc.connectCalled.Done()
+	if state.ConnectivityState == connectivity.Ready {
+		sca := internal.SetConnectedAddress.(func(*balancer.SubConnState, resolver.Address))
+		sca(&state, addr)
+	}
 	if tsc.stateListener != nil {
 		tsc.stateListener(state)
 		return
