@@ -208,6 +208,13 @@ var (
 	// ShuffleAddressListForTesting pseudo-randomizes the order of addresses.  n
 	// is the number of elements.  swap swaps the elements with indexes i and j.
 	ShuffleAddressListForTesting any // func(n int, swap func(i, j int))
+
+	// GetConnectedAddress returns the connected address for a SubConnState and
+	// whether the address is valid based on the state.
+	GetConnectedAddress any // func (scs SubConnState) (resolver.Address, bool)
+
+	// SetConnectedAddress sets the connected address for a SubConnState.
+	SetConnectedAddress any // func(scs *SubConnState, addr resolver.Address)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health

@@ -53,7 +53,9 @@ import (
 
 const (
 	// minimum time to give a connection to complete
-	minConnectTimeout = 20 * time.Second
+	minConnectTimeout         = 20 * time.Second
+	withBalancerAttributes    = true
+	withoutBalancerAttributes = false
 )
 
 var (
@@ -812,16 +814,26 @@ func (cc *ClientConn) applyFailingLBLocked(sc *serviceconfig.ParseResult) {
 	cc.csMgr.updateState(connectivity.TransientFailure)
 }
 
-// Makes a copy of the input addresses slice and clears out the balancer
-// attributes field. Addresses are passed during subconn creation and address
-// update operations. In both cases, we will clear the balancer attributes by
-// calling this function, and therefore we will be able to use the Equal method
-// provided by the resolver.Address type for comparison.
-func copyAddressesWithoutBalancerAttributes(in []resolver.Address) []resolver.Address {
+// addressWithoutBalancerAttributes returns a copy of the input address with
+// the BalancerAttributes field cleared.
+func addressWithoutBalancerAttributes(a resolver.Address) resolver.Address {
+	a.BalancerAttributes = nil
+	return a
+}
+
+// Makes a copy of the input addresses slice and optionally clears out the
+// balancer attributes field. Addresses are passed during subconn creation and
+// address update operations. In both cases, we may clear the balancer
+// attributes by calling this function, which would therefore allow us to use
+// the Equal method provided by the resolver.Address type for comparison.
+func copyAddresses(in []resolver.Address, includeBalancerAttributes bool) []resolver.Address {
 	out := make([]resolver.Address, len(in))
 	for i := range in {
-		out[i] = in[i]
-		out[i].BalancerAttributes = nil
+		if includeBalancerAttributes {
+			out[i] = in[i]
+		} else {
+			out[i] = addressWithoutBalancerAttributes(in[i])
+		}
 	}
 	return out
 }
@@ -837,7 +849,7 @@ func (cc *ClientConn) newAddrConnLocked(addrs []resolver.Address, opts balancer.
 	ac := &addrConn{
 		state:        connectivity.Idle,
 		cc:           cc,
-		addrs:        copyAddressesWithoutBalancerAttributes(addrs),
+		addrs:        copyAddresses(addrs, withBalancerAttributes),
 		scopts:       opts,
 		dopts:        cc.dopts,
 		channelz:     channelz.RegisterSubChannel(cc.channelz, ""),
@@ -924,12 +936,18 @@ func (ac *addrConn) connect() error {
 	return nil
 }
 
-func equalAddresses(a, b []resolver.Address) bool {
+func equalAddressIgnoreBalancerAttributes(a, b resolver.Address) bool {
+	return a.Addr == b.Addr && a.ServerName == b.ServerName &&
+		a.Attributes.Equal(b.Attributes) &&
+		a.Metadata == b.Metadata
+}
+
+func equalAddressesIgnoreBalancerAttributes(a, b []resolver.Address) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i, v := range a {
-		if !v.Equal(b[i]) {
+		if !equalAddressIgnoreBalancerAttributes(v, b[i]) {
 			return false
 		}
 	}
@@ -939,15 +957,15 @@ func equalAddresses(a, b []resolver.Address) bool {
 // updateAddrs updates ac.addrs with the new addresses list and handles active
 // connections or connection attempts.
 func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
-	addrs = copyAddressesWithoutBalancerAttributes(addrs)
+	addrs = copyAddresses(addrs, withBalancerAttributes)
 	limit := len(addrs)
 	if limit > 5 {
 		limit = 5
 	}
-	channelz.Infof(logger, ac.channelz, "addrConn: updateAddrs addrs (%d of %d): %v", limit, len(addrs), addrs[:limit])
+	channelz.Infof(logger, ac.channelz, "addrConn: updateAddrs addrs (%d of %d): %v", limit, len(addrs), copyAddresses(addrs[:limit], withoutBalancerAttributes))
 
 	ac.mu.Lock()
-	if equalAddresses(ac.addrs, addrs) {
+	if equalAddressesIgnoreBalancerAttributes(ac.addrs, addrs) {
 		ac.mu.Unlock()
 		return
 	}
@@ -966,7 +984,7 @@ func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 		// Try to find the connected address.
 		for _, a := range addrs {
 			a.ServerName = ac.cc.getServerName(a)
-			if a.Equal(ac.curAddr) {
+			if equalAddressIgnoreBalancerAttributes(a, ac.curAddr) {
 				// We are connected to a valid address, so do nothing but
 				// update the addresses.
 				ac.mu.Unlock()
@@ -1214,7 +1232,7 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	} else {
 		channelz.Infof(logger, ac.channelz, "Subchannel Connectivity change to %v, last error: %s", s, lastErr)
 	}
-	ac.acbw.updateState(s, lastErr)
+	ac.acbw.updateState(s, ac.curAddr, lastErr)
 }
 
 // adjustParams updates parameters used to create transports upon
@@ -1347,6 +1365,7 @@ func (ac *addrConn) tryAllAddrs(ctx context.Context, addrs []resolver.Address, c
 // new transport.
 func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) error {
 	addr.ServerName = ac.cc.getServerName(addr)
+	addrWithoutBalancerAttributes := addressWithoutBalancerAttributes(addr)
 	hctx, hcancel := context.WithCancel(ctx)
 
 	onClose := func(r transport.GoAwayReason) {
@@ -1381,14 +1400,14 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 	defer cancel()
 	copts.ChannelzParent = ac.channelz
 
-	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, addr, copts, onClose)
+	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, addrWithoutBalancerAttributes, copts, onClose)
 	if err != nil {
 		if logger.V(2) {
-			logger.Infof("Creating new client transport to %q: %v", addr, err)
+			logger.Infof("Creating new client transport to %q: %v", addrWithoutBalancerAttributes, err)
 		}
 		// newTr is either nil, or closed.
 		hcancel()
-		channelz.Warningf(logger, ac.channelz, "grpc: addrConn.createTransport failed to connect to %s. Err: %v", addr, err)
+		channelz.Warningf(logger, ac.channelz, "grpc: addrConn.createTransport failed to connect to %s. Err: %v", addrWithoutBalancerAttributes, err)
 		return err
 	}
 
