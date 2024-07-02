@@ -372,8 +372,8 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 	oldListener := opts.StateListener
 	opts.StateListener = func(state balancer.SubConnState) {
 		b.updateSubConnState(sc, state, oldListener)
-		// Read connected address and call updateLocalityID() based on the connected address's locality.
-		// https://github.com/grpc/grpc-go/issues/7339
+		// Read connected address and call updateLocalityID() based on the connected
+		// address's locality. https://github.com/grpc/grpc-go/issues/7339
 		if gca, ok := internal.GetConnectedAddress.(func(balancer.SubConnState) (resolver.Address, bool)); ok {
 			if addr, ok := gca(state); ok {
 				lID := xdsinternal.GetLocalityID(addr)
