@@ -54,11 +54,11 @@ func (h *clientStatsHandler) initializeMetrics() {
 		metrics = DefaultMetrics
 	}
 
-	h.clientMetrics.attemptStarted = createInt64Counter(metrics.metrics, "grpc.client.attempt.started", meter, otelmetric.WithUnit("attempt"), otelmetric.WithDescription("Number of client call attempts started."))
-	h.clientMetrics.attemptDuration = createFloat64Histogram(metrics.metrics, "grpc.client.attempt.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
-	h.clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(metrics.metrics, "grpc.client.attempt.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	h.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.metrics, "grpc.client.attempt.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	h.clientMetrics.callDuration = createFloat64Histogram(metrics.metrics, "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	h.clientMetrics.attemptStarted = createInt64Counter(metrics.Metrics, "grpc.client.attempt.started", meter, otelmetric.WithUnit("attempt"), otelmetric.WithDescription("Number of client call attempts started."))
+	h.clientMetrics.attemptDuration = createFloat64Histogram(metrics.Metrics, "grpc.client.attempt.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	h.clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics, "grpc.client.attempt.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	h.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics, "grpc.client.attempt.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	h.clientMetrics.callDuration = createFloat64Histogram(metrics.Metrics, "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 }
 
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
@@ -238,17 +238,17 @@ func (h *clientStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo,
 
 const (
 	// ClientAttemptStarted is the number of client call attempts started.
-	ClientAttemptStarted Metric = "grpc.client.attempt.started"
+	ClientAttemptStarted stats.Metric = "grpc.client.attempt.started"
 	// ClientAttemptDuration is the end-to-end time taken to complete a client
 	// call attempt.
-	ClientAttemptDuration Metric = "grpc.client.attempt.duration"
+	ClientAttemptDuration stats.Metric = "grpc.client.attempt.duration"
 	// ClientAttemptSentCompressedTotalMessageSize is the compressed message
 	// bytes sent per client call attempt.
-	ClientAttemptSentCompressedTotalMessageSize Metric = "grpc.client.attempt.sent_total_compressed_message_size"
+	ClientAttemptSentCompressedTotalMessageSize stats.Metric = "grpc.client.attempt.sent_total_compressed_message_size"
 	// ClientAttemptRcvdCompressedTotalMessageSize is the compressed message
 	// bytes received per call attempt.
-	ClientAttemptRcvdCompressedTotalMessageSize Metric = "grpc.client.attempt.rcvd_total_compressed_message_size"
+	ClientAttemptRcvdCompressedTotalMessageSize stats.Metric = "grpc.client.attempt.rcvd_total_compressed_message_size"
 	// ClientCallDuration is the time taken by gRPC to complete an RPC from
 	// application's perspective.
-	ClientCallDuration Metric = "grpc.client.call.duration"
+	ClientCallDuration stats.Metric = "grpc.client.call.duration"
 )
