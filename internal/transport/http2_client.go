@@ -59,6 +59,8 @@ import (
 // atomically.
 var clientConnectionCounter uint64
 
+var GoAwayLoopyWriterTimeout = time.Second
+
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
 
 // http2Client implements the ClientTransport interface with HTTP2.
@@ -1006,29 +1008,29 @@ func (t *http2Client) Close(err error) {
 		t.kpDormancyCond.Signal()
 	}
 	t.mu.Unlock()
-	// Per HTTP/2 spec, a GOAWAY frame must be sent before closing the
-	// connection. See https://httpwg.org/specs/rfc7540.html#GOAWAY.
+	var st *status.Status
+	// Per HTTP/2 spec, a GOAWAY frame must be sent before closing the connection.
+	// See https://httpwg.org/specs/rfc7540.html#GOAWAY. It also waits for loopyWriter to
+	// be closed with a timer to avoid the indefinite blocking.
 	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte("client transport shutdown"), closeConn: err})
-	timer := time.NewTimer(5 * time.Second)
+	timer := time.NewTimer(GoAwayLoopyWriterTimeout)
 	select {
 	case <-t.writerDone:
+		// Append info about previous goaway's if there were any, since this may be important
+		// for understanding the root cause for this connection to be closed.
+		_, goAwayDebugMessage := t.GetGoAwayReason()
+		if len(goAwayDebugMessage) > 0 {
+			st = status.Newf(codes.Unavailable, "closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
+			err = st.Err()
+		} else {
+			st = status.New(codes.Unavailable, err.Error())
+		}
 	case <-timer.C:
 		t.logger.Warningf("timeout waiting for the loopy writer to be closed.")
 	}
 	t.cancel()
 	t.conn.Close()
 	channelz.RemoveEntry(t.channelz.ID)
-	// Append info about previous goaways if there were any, since this may be important
-	// for understanding the root cause for this connection to be closed.
-	_, goAwayDebugMessage := t.GetGoAwayReason()
-
-	var st *status.Status
-	if len(goAwayDebugMessage) > 0 {
-		st = status.Newf(codes.Unavailable, "closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
-		err = st.Err()
-	} else {
-		st = status.New(codes.Unavailable, err.Error())
-	}
 
 	// Notify all active streams.
 	for _, s := range streams {
