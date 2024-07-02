@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/tls/certprovider"
@@ -36,6 +37,8 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
+
+const defaultTestTimeout = 5 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -86,7 +89,9 @@ func (s) TestFailingProvider(t *testing.T) {
 	defer conn.Close()
 
 	client := testgrpc.NewTestServiceClient(conn)
-	_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err = client.EmptyCall(ctx, &testpb.Empty{})
 	if wantErr := "test error"; err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("EmptyCall() got err: %s, want err to contain: %s", err, wantErr)
 	}

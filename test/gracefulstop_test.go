@@ -241,7 +241,9 @@ func (s) TestGracefulStopBlocksUntilGRPCConnectionsTerminate(t *testing.T) {
 	grpcClientCallReturned := make(chan struct{})
 	go func() {
 		clt := ss.Client
-		_, err := clt.UnaryCall(context.Background(), &testpb.SimpleRequest{})
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		_, err := clt.UnaryCall(ctx, &testpb.SimpleRequest{})
 		if err != nil {
 			t.Errorf("rpc failed with error: %s", err)
 		}
@@ -290,7 +292,9 @@ func (s) TestStopAbortsBlockingGRPCCall(t *testing.T) {
 	grpcClientCallReturned := make(chan struct{})
 	go func() {
 		clt := ss.Client
-		_, err := clt.UnaryCall(context.Background(), &testpb.SimpleRequest{})
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		_, err := clt.UnaryCall(ctx, &testpb.SimpleRequest{})
 		if err == nil || !isConnClosedErr(err) {
 			t.Errorf("expected rpc to fail with connection closed error, got: %v", err)
 		}

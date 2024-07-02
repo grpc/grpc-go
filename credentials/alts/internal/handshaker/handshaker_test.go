@@ -309,7 +309,9 @@ func (s) TestNewClientHandshaker(t *testing.T) {
 	conn := testutil.NewTestConn(nil, nil)
 	clientConn := &grpc.ClientConn{}
 	opts := &ClientHandshakerOptions{}
-	hs, err := NewClientHandshaker(context.Background(), clientConn, conn, opts)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	hs, err := NewClientHandshaker(ctx, clientConn, conn, opts)
 	if err != nil {
 		t.Errorf("NewClientHandshaker returned unexpected error: %v", err)
 	}
@@ -341,7 +343,9 @@ func (s) TestNewServerHandshaker(t *testing.T) {
 	conn := testutil.NewTestConn(nil, nil)
 	clientConn := &grpc.ClientConn{}
 	opts := &ServerHandshakerOptions{}
-	hs, err := NewServerHandshaker(context.Background(), clientConn, conn, opts)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	hs, err := NewServerHandshaker(ctx, clientConn, conn, opts)
 	if err != nil {
 		t.Errorf("NewServerHandshaker returned unexpected error: %v", err)
 	}

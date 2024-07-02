@@ -247,7 +247,9 @@ func (s) TestMTLS(t *testing.T) {
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
-	if _, err = client.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Errorf("EmptyCall(): got error %v when expected to succeed", err)
 	}
 }
