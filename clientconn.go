@@ -812,13 +812,6 @@ func (cc *ClientConn) applyFailingLBLocked(sc *serviceconfig.ParseResult) {
 	cc.csMgr.updateState(connectivity.TransientFailure)
 }
 
-// addressWithoutBalancerAttributes returns a copy of the input address with
-// the BalancerAttributes field cleared.
-func addressWithoutBalancerAttributes(a resolver.Address) resolver.Address {
-	a.BalancerAttributes = nil
-	return a
-}
-
 // Makes a copy of the input addresses slice. Addresses are passed during
 // subconn creation and address update operations.
 func copyAddresses(in []resolver.Address) []resolver.Address {
