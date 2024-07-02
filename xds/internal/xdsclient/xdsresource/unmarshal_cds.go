@@ -100,6 +100,15 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serv
 			}
 		}
 	}
+	// "The values for the service labels csm.service_name and
+	// csm.service_namespace_name come from xDS, “unknown” if not present." -
+	// CSM Design.
+	if _, ok := telemetryLabels["csm.service_name"]; !ok {
+		telemetryLabels["csm.service_name"] = "unknown"
+	}
+	if _, ok := telemetryLabels["csm.service_namespace_name"]; !ok {
+		telemetryLabels["csm.service_namespace_name"] = "unknown"
+	}
 
 	var lbPolicy json.RawMessage
 	var err error
