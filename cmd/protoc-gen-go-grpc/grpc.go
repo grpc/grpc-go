@@ -264,7 +264,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	serverType := service.GoName + "Server"
 	g.P("// ", serverType, " is the server API for ", service.GoName, " service.")
 	g.P("// All implementations ", mustOrShould, " embed Unimplemented", serverType)
-	g.P("// for forward compatibility")
+	g.P("// for forward compatibility.")
 
 	// Copy comments from proto file.
 	genServiceComments(g, service)
