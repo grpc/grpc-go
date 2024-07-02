@@ -65,7 +65,7 @@ func startFakeManagementServer(t *testing.T) (*fakeserver.Server, func()) {
 	return fs, sCleanup
 }
 
-func compareUpdateMetadata(ctx context.Context, dumpFunc func() (*v3statuspb.ClientStatusResponse, error), want []*v3statuspb.ClientConfig_GenericXdsConfig) error {
+func compareUpdateMetadata(ctx context.Context, dumpFunc func() *v3statuspb.ClientStatusResponse, want []*v3statuspb.ClientConfig_GenericXdsConfig) error {
 	var cmpOpts = cmp.Options{
 		cmp.Transformer("sort", func(in []*v3statuspb.ClientConfig_GenericXdsConfig) []*v3statuspb.ClientConfig_GenericXdsConfig {
 			out := append([]*v3statuspb.ClientConfig_GenericXdsConfig(nil), in...)
@@ -91,11 +91,10 @@ func compareUpdateMetadata(ctx context.Context, dumpFunc func() (*v3statuspb.Cli
 
 	var lastErr error
 	for ; ctx.Err() == nil; <-time.After(100 * time.Millisecond) {
-		resp, err := dumpFunc()
-		if err != nil {
-			return err
+		var got []*v3statuspb.ClientConfig_GenericXdsConfig
+		for _, cfg := range dumpFunc().GetConfig() {
+			got = append(got, cfg.GetGenericXdsConfigs()...)
 		}
-		got := resp.GetConfig()[0].GetGenericXdsConfigs()
 		diff := cmp.Diff(want, got, cmpOpts)
 		if diff == "" {
 			return nil
@@ -284,7 +283,11 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:               t.Name(),
+				Contents:           bc,
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
@@ -347,7 +350,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, client.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -559,7 +562,11 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:               t.Name(),
+				Contents:           bc,
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
@@ -621,7 +628,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, client.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -795,7 +802,11 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:               t.Name(),
+				Contents:           bc,
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
@@ -871,7 +882,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, client.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -1143,7 +1154,11 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:               t.Name(),
+				Contents:           bc,
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
@@ -1205,7 +1220,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, client.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})

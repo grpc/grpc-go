@@ -20,7 +20,6 @@ package xdsclient
 
 import (
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -35,40 +34,43 @@ const (
 )
 
 var (
-	// This is the client returned by New(). It contains one client implementation,
-	// and maintains the refcount.
-	singletonMu     sync.Mutex
-	singletonClient *clientRefCounted
-
 	// The following functions are no-ops in the actual code, but can be
 	// overridden in tests to give them visibility into certain events.
-	singletonClientImplCreateHook = func() {}
-	singletonClientImplCloseHook  = func() {}
+	xdsClientImplCreateHook = func(name string) {}
+	xdsClientImplCloseHook  = func(name string) {}
 )
 
-// To override in tests.
-var bootstrapNewConfig = bootstrap.NewConfig
+func clientRefCountedClose(name string) {
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
 
-func clientRefCountedClose() {
-	singletonMu.Lock()
-	defer singletonMu.Unlock()
-
-	if singletonClient.decrRef() != 0 {
+	client, ok := clients[name]
+	if !ok {
+		logger.Errorf("Attempt to close a non-existent xDS client with name %s", name)
 		return
 	}
-	singletonClient.clientImpl.close()
-	singletonClientImplCloseHook()
-	singletonClient = nil
+	if client.decrRef() != 0 {
+		return
+	}
+	client.clientImpl.close()
+	xdsClientImplCloseHook(name)
+	delete(clients, name)
+
 }
 
-func newRefCountedWithConfig(fallbackConfig *bootstrap.Config) (XDSClient, func(), error) {
-	singletonMu.Lock()
-	defer singletonMu.Unlock()
+// newRefCountedWithConfig creates a new reference counted xDS client
+// implementation for name, if one does not exist already. If an xDS client for
+// the given name exists, it gets a reference to it and returns it.
+//
+// The passed in fallback config is used when bootstrap environment variables
+// are not defined.
+func newRefCountedWithConfig(name string, fallbackConfig *bootstrap.Config, watchExpiryTimeout, idleAuthorityTimeout time.Duration) (XDSClient, func(), error) {
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
 
-	if singletonClient != nil {
-		singletonClient.incrRef()
-		return singletonClient, grpcsync.OnceFunc(clientRefCountedClose), nil
-
+	if c := clients[name]; c != nil {
+		c.incrRef()
+		return c, grpcsync.OnceFunc(func() { clientRefCountedClose(name) }), nil
 	}
 
 	// Use fallbackConfig only if bootstrap env vars are unspecified.
@@ -80,22 +82,24 @@ func newRefCountedWithConfig(fallbackConfig *bootstrap.Config) (XDSClient, func(
 		config = fallbackConfig
 	} else {
 		var err error
-		config, err = bootstrapNewConfig()
+		config, err = bootstrap.NewConfig()
 		if err != nil {
 			return nil, nil, fmt.Errorf("xds: failed to read bootstrap file: %v", err)
 		}
 	}
 
 	// Create the new client implementation.
-	c, err := newWithConfig(config, defaultWatchExpiryTimeout, defaultIdleAuthorityDeleteTimeout)
+	c, err := newClientImpl(config, watchExpiryTimeout, idleAuthorityTimeout)
 	if err != nil {
 		return nil, nil, err
 	}
-	singletonClient = &clientRefCounted{clientImpl: c, refCount: 1}
-	singletonClientImplCreateHook()
+	c.logger.Infof("Created client with name %q to primary xDS management server: %q", name, config.XDSServers()[0])
+	client := &clientRefCounted{clientImpl: c, refCount: 1}
+	clients[name] = client
+	xdsClientImplCreateHook(name)
 
 	logger.Infof("xDS node ID: %s", config.Node().GetId())
-	return singletonClient, grpcsync.OnceFunc(clientRefCountedClose), nil
+	return client, grpcsync.OnceFunc(func() { clientRefCountedClose(name) }), nil
 }
 
 // clientRefCounted is ref-counted, and to be shared by the xds resolver and

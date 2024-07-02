@@ -99,7 +99,7 @@ func overrideWithTestXDSClient(t *testing.T) (*testXDSClient, chan *bootstrap.Co
 	xdsC := &testXDSClient{closed: make(chan struct{}, 1)}
 	configCh := make(chan *bootstrap.Config, 1)
 	oldNewClient := newClientWithConfig
-	newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
+	newClientWithConfig = func(name string, config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
 		configCh <- config
 		return xdsC, func() { xdsC.Close() }, nil
 	}

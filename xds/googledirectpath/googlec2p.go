@@ -62,8 +62,8 @@ var (
 
 	randInt = rand.Int
 
-	newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
-		return xdsclient.NewWithConfig(config)
+	newClientWithConfig = func(name string, config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
+		return xdsclient.NewWithConfig(name, config)
 	}
 
 	logger = internalgrpclog.NewPrefixLogger(grpclog.Component("directpath"), logPrefix)
@@ -119,7 +119,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 
 	// Create singleton xds client with this config. The xds client will be
 	// used by the xds resolver later.
-	_, close, err := newClientWithConfig(config)
+	_, close, err := newClientWithConfig(t.String(), config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start xDS client: %v", err)
 	}

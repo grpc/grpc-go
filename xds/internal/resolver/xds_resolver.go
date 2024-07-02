@@ -49,8 +49,8 @@ const Scheme = "xds"
 // ClientConns at the same time.
 func newBuilderForTesting(config []byte) (resolver.Builder, error) {
 	return &xdsResolverBuilder{
-		newXDSClient: func() (xdsclient.XDSClient, func(), error) {
-			return xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: config})
+		newXDSClient: func(name string) (xdsclient.XDSClient, func(), error) {
+			return xdsclient.NewForTesting(xdsclient.OptionsForTesting{Name: name, Contents: config})
 		},
 	}, nil
 }
@@ -64,7 +64,7 @@ func init() {
 }
 
 type xdsResolverBuilder struct {
-	newXDSClient func() (xdsclient.XDSClient, func(), error)
+	newXDSClient func(string) (xdsclient.XDSClient, func(), error)
 }
 
 // Build helps implement the resolver.Builder interface.
@@ -97,11 +97,11 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	r.serializerCancel = cancel
 
 	// Initialize the xDS client.
-	newXDSClient := rinternal.NewXDSClient.(func() (xdsclient.XDSClient, func(), error))
+	newXDSClient := rinternal.NewXDSClient.(func(string) (xdsclient.XDSClient, func(), error))
 	if b.newXDSClient != nil {
 		newXDSClient = b.newXDSClient
 	}
-	client, close, err := newXDSClient()
+	client, close, err := newXDSClient(target.String())
 	if err != nil {
 		return nil, fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}
