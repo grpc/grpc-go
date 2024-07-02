@@ -66,9 +66,15 @@ type LoggerV2 interface {
 	V(l int) bool
 }
 
+// Package-level mutex to protect SetLoggerV2
+var loggerMutex sync.Mutex
+
 // SetLoggerV2 sets logger that is used in grpc to a V2 logger.
-// Not mutex-protected, should be called before any gRPC functions.
+// Now mutex-protected. Should be called before any gRPC functions.
 func SetLoggerV2(l LoggerV2) {
+	loggerMutex.Lock()
+	defer loggerMutex.Unlock()
+
 	if _, ok := l.(*componentData); ok {
 		panic("cannot use component logger as grpclog logger")
 	}
