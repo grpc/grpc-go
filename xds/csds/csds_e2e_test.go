@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -152,6 +153,14 @@ func startCSDSClientStream(ctx context.Context, t *testing.T, serverAddr string)
 // For all of the above operations, the test also verifies that the client_scope
 // field in the CSDS response is populated appropriately.
 func (s) TestCSDS(t *testing.T) {
+	// TODO(easwars): Once https://github.com/grpc/grpc/issues/34099 is fixed
+	// for grpc-go, use resource watchers which are able to control how much we
+	// read from the management server, and thereby allowing this test to not
+	// starve in the presence of constant updates from the management server.
+	if runtime.GOARCH == "arm64" {
+		t.Skip("Skipping test on arm64 due to https://github.com/envoyproxy/go-control-plane/issues/962")
+	}
+
 	// Spin up a xDS management server on a local port.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
