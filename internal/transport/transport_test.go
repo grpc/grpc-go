@@ -90,6 +90,7 @@ const (
 	invalidHeaderField
 	delayRead
 	pingpong
+	goAwayFrameSize = 42
 )
 
 func (h *testStreamHandler) handleStreamAndNotify(s *Stream) {
@@ -2656,10 +2657,84 @@ func TestConnectionError_Unwrap(t *testing.T) {
 	}
 }
 
-// Test that in the event of a graceful client transport shutdown, i.e.,
+// TestClientSendsAGoAwayFrame verifies that in the event of a graceful client transport shutdown, i.e.,
 // clientTransport.Close(), client sends a goaway to the server with the correct
 // error code and debug data.
 func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
+	createServer(t, ConnectOptions{})
+}
+
+var writeHangSignal chan struct{}
+
+type hangingConn struct {
+	net.Conn
+}
+
+func (hc *hangingConn) Read(b []byte) (n int, err error) {
+	n, err = hc.Conn.Read(b)
+	return n, err
+}
+
+func (hc *hangingConn) Write(b []byte) (n int, err error) {
+	n, err = hc.Conn.Write(b)
+	if n == goAwayFrameSize { // GOAWAY frame
+		timer := time.NewTimer(GoAwayLoopyWriterTimeout)
+		select {
+		case <-writeHangSignal:
+		case <-timer.C:
+		}
+	}
+	return n, err
+}
+
+func (hc *hangingConn) Close() error {
+	return hc.Conn.Close()
+}
+
+func (hc *hangingConn) LocalAddr() net.Addr {
+	return hc.Conn.LocalAddr()
+}
+
+func (hc *hangingConn) RemoteAddr() net.Addr {
+	return hc.Conn.RemoteAddr()
+}
+
+func (hc *hangingConn) SetDeadline(t time.Time) error {
+	return hc.Conn.SetDeadline(t)
+}
+
+func (hc *hangingConn) SetReadDeadline(t time.Time) error {
+	return hc.Conn.SetReadDeadline(t)
+}
+
+func (hc *hangingConn) SetWriteDeadline(t time.Time) error {
+	return hc.Conn.SetWriteDeadline(t)
+}
+
+func hangingDialer(_ context.Context, addr string) (net.Conn, error) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	return &hangingConn{Conn: conn}, nil
+}
+
+// TestClientCloseTimeoutOnHang verifies that in the event of a graceful
+// client transport shutdown, i.e., clientTransport.Close(), if the conn hung
+// for LoopyWriterTimeout, client should still be close itself and should
+// not wait for long.
+func (s) TestClientCloseTimeoutOnHang(t *testing.T) {
+	writeHangSignal = make(chan struct{})
+	ctx, _, _ := createServer(t, ConnectOptions{Dialer: hangingDialer})
+	defer close(writeHangSignal)
+	select {
+	case <-writeHangSignal:
+		t.Errorf("error: channel closed too early.")
+	case <-ctx.Done():
+	}
+}
+
+func createServer(t *testing.T, connectOptions ConnectOptions) (context.Context, chan error, ClientTransport) {
 	// Create a server.
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -2725,7 +2800,7 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 		}
 	}()
 
-	ct, err := NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{}, func(GoAwayReason) {})
+	ct, err := NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, connectOptions, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
@@ -2736,7 +2811,6 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 	// Wait until server receives the headers and settings frame as part of greet.
 	<-greetDone
 	ct.Close(errors.New("manually closed by client"))
-	t.Logf("Closed the client connection")
 	select {
 	case err := <-errorCh:
 		if err != nil {
@@ -2745,4 +2819,5 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 	case <-ctx.Done():
 		t.Errorf("Context timed out")
 	}
+	return ctx, errorCh, ct
 }
