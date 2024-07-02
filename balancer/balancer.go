@@ -72,7 +72,8 @@ func unregisterForTesting(name string) {
 	delete(m, name)
 }
 
-// getConnectedAddress returns the connected address for a SubConnState.
+// getConnectedAddress returns the connected address for a SubConnState and
+// whether or not it is valid.
 func getConnectedAddress(scs SubConnState) (resolver.Address, bool) {
 	return scs.connectedAddress, scs.ConnectivityState == connectivity.Ready
 }
@@ -422,9 +423,15 @@ type SubConnState struct {
 	// ConnectionError is set if the ConnectivityState is TransientFailure,
 	// describing the reason the SubConn failed.  Otherwise, it is nil.
 	ConnectionError error
-	// connectedAddr contains the connected address when ConnectivityState is Ready. Otherwise, it is
-	// indeterminate.
+	// connectedAddr contains the connected address when ConnectivityState is
+	// Ready. Otherwise, it is indeterminate.
 	connectedAddress resolver.Address
+}
+
+func (lhs SubConnState) Equal(rhs SubConnState) bool {
+	return lhs.ConnectivityState == rhs.ConnectivityState &&
+		lhs.ConnectionError == rhs.ConnectionError &&
+		lhs.connectedAddress.Addr == rhs.connectedAddress.Addr
 }
 
 // ClientConnState describes the state of a ClientConn relevant to the

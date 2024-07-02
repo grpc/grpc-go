@@ -25,7 +25,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	grpcinternal "google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -263,8 +263,8 @@ func (acbw *acBalancerWrapper) updateState(s connectivity.State, curAddr resolve
 		// TODO: delete this comment when UpdateSubConnState is removed.
 		scs := balancer.SubConnState{ConnectivityState: s, ConnectionError: err}
 		if s == connectivity.Ready {
-			if SetConnectedAddress, ok := grpcinternal.SetConnectedAddress.(func(state *balancer.SubConnState, addr resolver.Address)); ok {
-				SetConnectedAddress(&scs, curAddr)
+			if sca, ok := internal.SetConnectedAddress.(func(*balancer.SubConnState, resolver.Address)); ok {
+				sca(&scs, curAddr)
 			}
 		}
 		acbw.stateListener(scs)

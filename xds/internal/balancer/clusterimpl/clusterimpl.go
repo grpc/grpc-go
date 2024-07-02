@@ -31,7 +31,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	grpcinternal "google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
@@ -361,24 +361,26 @@ func (scw *scWrapper) localityID() xdsinternal.LocalityID {
 func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	clusterName := b.getClusterName()
 	newAddrs := make([]resolver.Address, len(addrs))
+	// TODO: Don't set the locality here. Let the StateListener handle it all.
 	var lID xdsinternal.LocalityID
 	for i, addr := range addrs {
 		newAddrs[i] = xds.SetXDSHandshakeClusterName(addr, clusterName)
 		lID = xdsinternal.GetLocalityID(newAddrs[i])
 	}
 	var sc balancer.SubConn
-	ret := &scWrapper{}
+	scw := &scWrapper{}
 	oldListener := opts.StateListener
 	opts.StateListener = func(state balancer.SubConnState) {
 		b.updateSubConnState(sc, state, oldListener)
 		// Read connected address and call updateLocalityID() based on the connected address's locality.
 		// https://github.com/grpc/grpc-go/issues/7339
-		if GetConnectedAddress, ok := grpcinternal.GetConnectedAddress.(func(state balancer.SubConnState) (resolver.Address, bool)); ok {
-			if addr, ok := GetConnectedAddress(state); ok {
-				// TODO: Why is lID empty when running the test? The locality info is being lost somehow.
+		if gca, ok := internal.GetConnectedAddress.(func(balancer.SubConnState) (resolver.Address, bool)); ok {
+			if addr, ok := gca(state); ok {
 				lID := xdsinternal.GetLocalityID(addr)
-				if !lID.Equal(xdsinternal.LocalityID{}) {
-					ret.updateLocalityID(lID)
+				if !lID.Empty() {
+					scw.updateLocalityID(lID)
+				} else if b.logger.V(2) {
+					b.logger.Infof("Locality ID for %v unexpectedly empty", addr)
 				}
 			}
 		}
@@ -387,9 +389,9 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 	if err != nil {
 		return nil, err
 	}
-	ret.SubConn = sc
-	ret.updateLocalityID(lID)
-	return ret, nil
+	scw.SubConn = sc
+	scw.updateLocalityID(lID)
+	return scw, nil
 }
 
 func (b *clusterImplBalancer) RemoveSubConn(sc balancer.SubConn) {
