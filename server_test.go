@@ -177,6 +177,8 @@ func (s) TestStreamContext(t *testing.T) {
 }
 
 func BenchmarkChainUnaryInterceptor(b *testing.B) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for _, n := range []int{1, 3, 5, 10} {
 		n := n
 		b.Run(strconv.Itoa(n), func(b *testing.B) {
@@ -192,8 +194,6 @@ func BenchmarkChainUnaryInterceptor(b *testing.B) {
 			s := NewServer(ChainUnaryInterceptor(interceptors...))
 			b.ReportAllocs()
 			b.ResetTimer()
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
 			for i := 0; i < b.N; i++ {
 				if _, err := s.opts.unaryInt(ctx, nil, nil,
 					func(ctx context.Context, req any) (any, error) {
