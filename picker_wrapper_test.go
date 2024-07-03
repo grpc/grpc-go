@@ -78,11 +78,10 @@ func (s) TestBlockingPick(t *testing.T) {
 	bp := newPickerWrapper(nil)
 	// All goroutines should block because picker is nil in bp.
 	var finishedCount uint64
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
-
 			if tr, _, err := bp.pick(ctx, true, balancer.PickInfo{}); err != nil || tr != testT {
 				t.Errorf("bp.pick returned non-nil error: %v", err)
 			}

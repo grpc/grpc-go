@@ -83,10 +83,10 @@ func TestPeerStringer(t *testing.T) {
 			want: "Peer<nil>",
 		},
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
 			ctx = NewContext(ctx, tc.peer)
 
 			p, ok := FromContext(ctx)
