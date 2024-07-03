@@ -192,10 +192,9 @@ func BenchmarkChainUnaryInterceptor(b *testing.B) {
 			s := NewServer(ChainUnaryInterceptor(interceptors...))
 			b.ReportAllocs()
 			b.ResetTimer()
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
 			for i := 0; i < b.N; i++ {
-				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-				defer cancel()
-
 				if _, err := s.opts.unaryInt(ctx, nil, nil,
 					func(ctx context.Context, req any) (any, error) {
 						return nil, nil
