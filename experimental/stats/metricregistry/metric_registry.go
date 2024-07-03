@@ -22,8 +22,9 @@ package instrumentregistry
 
 import "google.golang.org/grpc/stats"
 
-// Int64CountHandle is a typed handle for a int count instrument. This handle is
-// passed at the recording point in order to know which instrument to record on.
+// Int64CountHandle is a typed handle for an int count instrument. This handle
+// is passed at the recording point in order to know which instrument to record
+// on.
 type Int64CountHandle struct {
 	Index int
 }
@@ -35,9 +36,9 @@ type Float64CountHandle struct {
 	Index int
 }
 
-// Int64HistoHandle is a typed handle for a int histogram instrument. This handle
-// is passed at the recording point in order to know which instrument to record
-// on.
+// Int64HistoHandle is a typed handle for an int histogram instrument. This
+// handle is passed at the recording point in order to know which instrument to
+// record on.
 type Int64HistoHandle struct {
 	Index int
 }
@@ -49,8 +50,9 @@ type Float64HistoHandle struct {
 	Index int
 }
 
-// Int64GaugeHandle is a typed handle for a int gauge instrument. This handle is
-// passed at the recording point in order to know which instrument to record on.
+// Int64GaugeHandle is a typed handle for an int gauge instrument. This handle
+// is passed at the recording point in order to know which instrument to record
+// on.
 type Int64GaugeHandle struct {
 	Index int
 }
@@ -58,4 +60,9 @@ type Int64GaugeHandle struct {
 // DefaultMetrics are the default metrics registered through global instruments
 // registry. This is written to at initialization time only, and is read
 // only after initialization.
-var DefaultMetrics = make(map[stats.Metric]bool)
+var DefaultMetrics = stats.NewMetrics() // this I think, can join at runtime...
+
+// DefaultMetrics() helper in OTel that merges with this...
+
+// And have operations on the set including Merge...
+

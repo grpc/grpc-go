@@ -19,25 +19,24 @@
 // Package stats contains experimental metrics/stats API's.
 package stats
 
-import "google.golang.org/grpc/experimental/stats/instrumentregistry"
 
 // MetricsRecorder records on metrics derived from instrument registry.
 type MetricsRecorder interface {
 	// RecordIntCount records the measurement alongside labels on the int count
 	// associated with the provided handle.
-	RecordIntCount(instrumentregistry.Int64CountHandle, []Label, []Label, int64)
+	RecordIntCount(Int64CountHandle, []Label, []Label, int64)
 	// RecordFloatCount records the measurement alongside labels on the float count
 	// associated with the provided handle.
-	RecordFloatCount(instrumentregistry.Float64CountHandle, []Label, []Label, float64)
+	RecordFloatCount(Float64CountHandle, []Label, []Label, float64)
 	// RecordIntHisto records the measurement alongside labels on the int histo
 	// associated with the provided handle.
-	RecordIntHisto(instrumentregistry.Int64HistoHandle, []Label, []Label, int64)
+	RecordIntHisto(Int64HistoHandle, []Label, []Label, int64)
 	// RecordFloatHisto records the measurement alongside labels on the float
 	// histo associated with the provided handle.
-	RecordFloatHisto(instrumentregistry.Float64CountHandle, []Label, []Label, float64)
+	RecordFloatHisto(Float64HistoHandle, []Label, []Label, float64)
 	// RecordIntGauge records the measurement alongside labels on the int gauge
 	// associated with the provided handle.
-	RecordIntGauge(instrumentregistry.Int64GaugeHandle, []Label, []Label, int64)
+	RecordIntGauge(Int64GaugeHandle, []Label, []Label, int64)
 }
 
 // Label represents a string attribute/label to attach to metrics.
