@@ -91,7 +91,7 @@ func (x *loadBalancerBalanceLoadClient) Recv() (*LoadBalanceResponse, error) {
 
 // LoadBalancerServer is the server API for LoadBalancer service.
 // All implementations should embed UnimplementedLoadBalancerServer
-// for forward compatibility
+// for forward compatibility.
 type LoadBalancerServer interface {
 	// Bidirectional rpc to get a list of servers.
 	BalanceLoad(LoadBalancer_BalanceLoadServer) error

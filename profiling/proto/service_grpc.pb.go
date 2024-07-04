@@ -81,7 +81,7 @@ func (c *profilingClient) GetStreamStats(ctx context.Context, in *GetStreamStats
 
 // ProfilingServer is the server API for Profiling service.
 // All implementations should embed UnimplementedProfilingServer
-// for forward compatibility
+// for forward compatibility.
 //
 // The Profiling service exposes functions to remotely manage the gRPC
 // profiling behaviour in a program.

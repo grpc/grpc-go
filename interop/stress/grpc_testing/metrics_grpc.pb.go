@@ -94,7 +94,7 @@ func (c *metricsServiceClient) GetGauge(ctx context.Context, in *GaugeRequest, o
 
 // MetricsServiceServer is the server API for MetricsService service.
 // All implementations must embed UnimplementedMetricsServiceServer
-// for forward compatibility
+// for forward compatibility.
 type MetricsServiceServer interface {
 	// Returns the values of all the gauges that are currently being maintained by
 	// the service
