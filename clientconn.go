@@ -173,6 +173,9 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	}
 
 	if cc.dopts.defaultServiceConfigRawJSON != nil {
+		if cc.dopts.maxCallAttempts == 0 {
+			cc.dopts.maxCallAttempts = defaultMaxCallAttempts
+		}
 		scpr := parseServiceConfig(*cc.dopts.defaultServiceConfigRawJSON, cc.dopts.maxCallAttempts)
 		if scpr.Err != nil {
 			return nil, fmt.Errorf("%s: %v", invalidDefaultServiceConfigErrPrefix, scpr.Err)
