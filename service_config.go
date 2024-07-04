@@ -165,7 +165,7 @@ type jsonSC struct {
 
 func init() {
 	internal.ParseServiceConfig = func(js string) *serviceconfig.ParseResult {
-		return parseServiceConfig(js, defaultMaxCallAttempts)
+		return parseServiceConfig(js, defaultMaxRetryAttempts)
 	}
 }
 func parseServiceConfig(js string, maxAttempts int) *serviceconfig.ParseResult {

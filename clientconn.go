@@ -173,7 +173,7 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	}
 
 	if cc.dopts.defaultServiceConfigRawJSON != nil {
-		scpr := parseServiceConfig(*cc.dopts.defaultServiceConfigRawJSON, cc.dopts.maxCallAttempts)
+		scpr := parseServiceConfig(*cc.dopts.defaultServiceConfigRawJSON, cc.dopts.maxRetryAttempts)
 		if scpr.Err != nil {
 			return nil, fmt.Errorf("%s: %v", invalidDefaultServiceConfigErrPrefix, scpr.Err)
 		}
@@ -696,7 +696,7 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 var emptyServiceConfig *ServiceConfig
 
 func init() {
-	cfg := parseServiceConfig("{}", defaultMaxCallAttempts)
+	cfg := parseServiceConfig("{}", defaultMaxRetryAttempts)
 	if cfg.Err != nil {
 		panic(fmt.Sprintf("impossible error parsing empty service config: %v", cfg.Err))
 	}
