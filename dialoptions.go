@@ -39,7 +39,7 @@ import (
 
 const (
 	// https://github.com/grpc/proposal/blob/master/A6-client-retries.md#limits-on-retries-and-hedges
-	defaultMaxCallAttempts = 5
+	defaultMaxRetryAttempts = 5
 )
 
 func init() {
@@ -94,7 +94,7 @@ type dialOptions struct {
 	idleTimeout                 time.Duration
 	recvBufferPool              SharedBufferPool
 	defaultScheme               string
-	maxCallAttempts             int
+	maxRetryAttempts            int
 }
 
 // DialOption configures how we set up the connection.
@@ -678,12 +678,12 @@ func defaultDialOptions() dialOptions {
 			UseProxy:        true,
 			UserAgent:       grpcUA,
 		},
-		bs:              internalbackoff.DefaultExponential,
-		healthCheckFunc: internal.HealthCheckFunc,
-		idleTimeout:     30 * time.Minute,
-		recvBufferPool:  nopBufferPool{},
-		defaultScheme:   "dns",
-		maxCallAttempts: defaultMaxCallAttempts,
+		bs:               internalbackoff.DefaultExponential,
+		healthCheckFunc:  internal.HealthCheckFunc,
+		idleTimeout:      30 * time.Minute,
+		recvBufferPool:   nopBufferPool{},
+		defaultScheme:    "dns",
+		maxRetryAttempts: defaultMaxRetryAttempts,
 	}
 }
 
@@ -752,9 +752,9 @@ func WithIdleTimeout(d time.Duration) DialOption {
 func WithMaxCallAttempts(n int) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		if n < 2 {
-			n = defaultMaxCallAttempts
+			n = defaultMaxRetryAttempts
 		}
-		o.maxCallAttempts = n
+		o.maxRetryAttempts = n
 	})
 }
 
