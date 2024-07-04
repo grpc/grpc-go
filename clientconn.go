@@ -918,6 +918,9 @@ func (ac *addrConn) connect() error {
 		ac.mu.Unlock()
 		return nil
 	}
+	// Update the state to ensure no concurrent requests start once the lock
+	// is released.
+	ac.updateConnectivityState(connectivity.Connecting, nil)
 	ac.mu.Unlock()
 
 	ac.resetTransport()
