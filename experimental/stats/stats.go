@@ -24,25 +24,17 @@ package stats
 type MetricsRecorder interface {
 	// RecordIntCount records the measurement alongside labels on the int count
 	// associated with the provided handle.
-	RecordIntCount(Int64CountHandle, []Label, []Label, int64)
+	RecordIntCount(Int64CountHandle, int64, ...string)
 	// RecordFloatCount records the measurement alongside labels on the float count
 	// associated with the provided handle.
-	RecordFloatCount(Float64CountHandle, []Label, []Label, float64)
+	RecordFloatCount(Float64CountHandle, float64, ...string)
 	// RecordIntHisto records the measurement alongside labels on the int histo
 	// associated with the provided handle.
-	RecordIntHisto(Int64HistoHandle, []Label, []Label, int64)
+	RecordIntHisto(Int64HistoHandle, int64, ...string)
 	// RecordFloatHisto records the measurement alongside labels on the float
 	// histo associated with the provided handle.
-	RecordFloatHisto(Float64HistoHandle, []Label, []Label, float64)
+	RecordFloatHisto(Float64HistoHandle, float64, ...string)
 	// RecordIntGauge records the measurement alongside labels on the int gauge
 	// associated with the provided handle.
-	RecordIntGauge(Int64GaugeHandle, []Label, []Label, int64)
-}
-
-// Label represents a string attribute/label to attach to metrics.
-type Label struct {
-	// Key is the key of the label.
-	Key string
-	// Value is the value of the label.
-	Value string
+	RecordIntGauge(Int64GaugeHandle, int64, ...string)
 }

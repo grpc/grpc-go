@@ -74,6 +74,9 @@ func verifyLabels(t *testing.T, labelsWant []string, optionalLabelsWant []string
 	if len(optionalLabelsWant) != len(optionalLabelsGot) {
 		t.Fatalf("length of optional labels expected did not match got %v, want %v", len(optionalLabelsGot), len(optionalLabelsWant))
 	}
+
+	// This is essentially now a check of len(labels + optional labels) vs labels provided...
+
 }
 
 // Test 2 for each? 5 different maps...?
@@ -133,3 +136,15 @@ func (r *fakeMetricsRecorder) RecordIntGauge(handle Int64GaugeHandle, labels []L
 
 // If run out of time just push implementation...otel and metrics recorder list still come after I guess...
 // just push the extra file....
+
+
+// Tests sound good to Doug get this plumbing working...
+
+// switch the labels to be variadic args based on position, length check on labels + optional labels
+
+// optional labels are always plumbed up through otel, otel decides whether it
+// wants the optional labels or not...
+
+// on handle and metrics recorder
+
+

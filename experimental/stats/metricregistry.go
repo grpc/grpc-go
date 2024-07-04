@@ -55,8 +55,8 @@ type Int64CountHandle struct {
 
 // RecordInt64Count records the int64 count value on the metrics recorder
 // provided.
-func (h *Int64CountHandle) RecordInt64Count(recorder MetricsRecorder, labels []Label, optionalLabels []Label, incr int64) {
-	recorder.RecordIntCount(*h, labels, optionalLabels, incr)
+func (h Int64CountHandle) RecordInt64Count(recorder MetricsRecorder, incr int64, labels ...string) {
+	recorder.RecordIntCount(h, incr, labels...)
 }
 
 // Float64CountHandle is a typed handle for a float count instrument. This handle
@@ -68,8 +68,8 @@ type Float64CountHandle struct {
 
 // RecordFloat64Count records the float64 count value on the metrics recorder
 // provided.
-func (h *Float64CountHandle) RecordFloat64Count(recorder MetricsRecorder, labels []Label, optionalLabels []Label, incr float64) {
-	recorder.RecordFloatCount(*h, labels, optionalLabels, incr)
+func (h Float64CountHandle) RecordFloat64Count(recorder MetricsRecorder, incr float64, labels ...string) {
+	recorder.RecordFloatCount(h, incr, labels...)
 }
 
 // Int64HistoHandle is a typed handle for an int histogram instrument. This
@@ -81,8 +81,8 @@ type Int64HistoHandle struct {
 
 // RecordInt64Histo records the int64 histo value on the metrics recorder
 // provided.
-func (h *Int64HistoHandle) RecordInt64Histo(recorder MetricsRecorder, labels []Label, optionalLabels []Label, incr int64) {
-	recorder.RecordIntHisto(*h, labels, optionalLabels, incr)
+func (h Int64HistoHandle) RecordInt64Histo(recorder MetricsRecorder, incr int64, labels ...string) {
+	recorder.RecordIntHisto(h, incr, labels...)
 }
 
 // Float64HistoHandle is a typed handle for a float histogram instrument. This
@@ -94,8 +94,8 @@ type Float64HistoHandle struct {
 
 // RecordFloat64Histo records the float64 histo value on the metrics recorder
 // provided.
-func (h *Float64HistoHandle) RecordFloat64Histo(recorder MetricsRecorder, labels []Label, optionalLabels []Label, incr float64) {
-	recorder.RecordFloatHisto(*h, labels, optionalLabels, incr)
+func (h Float64HistoHandle) RecordFloat64Histo(recorder MetricsRecorder, incr float64, labels ...string) {
+	recorder.RecordFloatHisto(h, incr, labels...)
 }
 
 // Int64GaugeHandle is a typed handle for an int gauge instrument. This handle
@@ -107,8 +107,8 @@ type Int64GaugeHandle struct {
 
 // RecordInt64Histo records the int64 histo value on the metrics recorder
 // provided.
-func (h *Int64GaugeHandle) RecordInt64Gauge(recorder MetricsRecorder, labels []Label, optionalLabels []Label, incr int64) {
-	recorder.RecordIntGauge(*h, labels, optionalLabels, incr)
+func (h Int64GaugeHandle) RecordInt64Gauge(recorder MetricsRecorder, incr int64, labels ...string) {
+	recorder.RecordIntGauge(h, incr, labels...)
 }
 
 // registeredInsts are the registered instrument descriptor names.
