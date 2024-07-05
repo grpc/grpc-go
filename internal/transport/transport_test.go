@@ -92,8 +92,6 @@ const (
 	pingpong
 )
 
-const goAwayFrameSize = 42
-
 func (h *testStreamHandler) handleStreamAndNotify(s *Stream) {
 	if h.notify == nil {
 		return
@@ -2662,62 +2660,11 @@ func TestConnectionError_Unwrap(t *testing.T) {
 // clientTransport.Close(), client sends a goaway to the server with the correct
 // error code and debug data.
 func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
-	createClientServerConn(t, ConnectOptions{})
-}
-
-// writeHangSignal is used to hang the net.Conn Write for complete test duration.
-var writeHangSignal chan struct{}
-
-// hangingConn is a net.Conn wrapper for testing, simulating hanging connections
-// after a GOAWAY frame is sent, of which Write operations pause until explicitly signaled
-// or a timeout occurs.
-type hangingConn struct {
-	net.Conn
-}
-
-func (hc *hangingConn) Read(b []byte) (n int, err error) {
-	n, err = hc.Conn.Read(b)
-	return n, err
-}
-
-func (hc *hangingConn) Write(b []byte) (n int, err error) {
-	n, err = hc.Conn.Write(b)
-	if n == goAwayFrameSize { // GOAWAY frame
-		<-writeHangSignal
-	}
-	return n, err
-}
-
-func (hc *hangingConn) Close() error {
-	return hc.Conn.Close()
-}
-
-func (hc *hangingConn) LocalAddr() net.Addr {
-	return hc.Conn.LocalAddr()
-}
-
-func (hc *hangingConn) RemoteAddr() net.Addr {
-	return hc.Conn.RemoteAddr()
-}
-
-func (hc *hangingConn) SetDeadline(t time.Time) error {
-	return hc.Conn.SetDeadline(t)
-}
-
-func (hc *hangingConn) SetReadDeadline(t time.Time) error {
-	return hc.Conn.SetReadDeadline(t)
-}
-
-func (hc *hangingConn) SetWriteDeadline(t time.Time) error {
-	return hc.Conn.SetWriteDeadline(t)
-}
-
-func hangingDialer(_ context.Context, addr string) (net.Conn, error) {
-	conn, err := net.Dial("tcp", addr)
+	errorCh := createClientServerLoggingGoAway(t)
+	err := <-errorCh
 	if err != nil {
-		return nil, err
+		t.Errorf("Error receiving the GOAWAY frame: %v", err)
 	}
-	return &hangingConn{Conn: conn}, nil
 }
 
 // TestClientCloseTimeoutOnHang verifies that in the event of a graceful
@@ -2730,17 +2677,12 @@ func (s) TestClientCloseTimeoutOnHang(t *testing.T) {
 	defer func() {
 		GoAwayLoopyWriterTimeout = origGoAwayLoopyTimeout
 	}()
-	writeHangSignal = make(chan struct{})
-	ctx, _, _ := createClientServerConn(t, ConnectOptions{Dialer: hangingDialer})
-	defer close(writeHangSignal)
-	select {
-	case <-writeHangSignal:
-		t.Errorf("error: channel closed too early.")
-	case <-ctx.Done():
-	}
+	createClientServerLoggingGoAway(t)
 }
 
-func createClientServerConn(t *testing.T, connectOptions ConnectOptions) (context.Context, chan error, ClientTransport) {
+// createClientServerLoggingGoAway sets up a server(that expects a GOAWAY frame
+// from the client.), and creates a ClientTransport .
+func createClientServerLoggingGoAway(t *testing.T) chan error {
 	// Create a server.
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -2755,6 +2697,7 @@ func createClientServerConn(t *testing.T, connectOptions ConnectOptions) (contex
 	defer cancel()
 	// Launch the server.
 	go func() {
+		defer close(errorCh)
 		sconn, err := lis.Accept()
 		if err != nil {
 			t.Errorf("Error while accepting: %v", err)
@@ -2793,20 +2736,17 @@ func createClientServerConn(t *testing.T, connectOptions ConnectOptions) (contex
 			goAwayFrame := fr
 			if goAwayFrame.ErrCode == http2.ErrCodeNo {
 				t.Logf("Received goAway frame from client")
-				close(errorCh)
 			} else {
 				errorCh <- fmt.Errorf("received unexpected goAway frame: %v", err)
-				close(errorCh)
 			}
 			return
 		default:
 			errorCh <- fmt.Errorf("server received a frame other than GOAWAY: %v", err)
-			close(errorCh)
 			return
 		}
 	}()
 
-	ct, err := NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, connectOptions, func(GoAwayReason) {})
+	ct, err := NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{}, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
@@ -2818,12 +2758,9 @@ func createClientServerConn(t *testing.T, connectOptions ConnectOptions) (contex
 	<-greetDone
 	ct.Close(errors.New("manually closed by client"))
 	select {
-	case err := <-errorCh:
-		if err != nil {
-			t.Errorf("Error receiving the GOAWAY frame: %v", err)
-		}
+	case <-errorCh:
 	case <-ctx.Done():
 		t.Errorf("Context timed out")
 	}
-	return ctx, errorCh, ct
+	return errorCh
 }
