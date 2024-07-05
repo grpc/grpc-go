@@ -36,6 +36,7 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+
 	"google.golang.org/grpc/codes"
 )
 
@@ -335,10 +336,12 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 		w.offset += nn
 		n += nn
 		if w.offset >= w.batchSize {
-			err = w.flushKeepBuffer()
+			if err = w.flushKeepBuffer(); err != nil {
+				return n, err
+			}
 		}
 	}
-	return n, err
+	return n, nil
 }
 
 func (w *bufWriter) Flush() error {

@@ -19,7 +19,10 @@
 package transport
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"reflect"
 	"testing"
 	"time"
@@ -212,6 +215,37 @@ func (s) TestParseDialTarget(t *testing.T) {
 		if gotNet != test.wantNet || gotAddr != test.wantAddr {
 			t.Errorf("parseDialTarget(%q) = %s, %s want %s, %s", test.target, gotNet, gotAddr, test.wantNet, test.wantAddr)
 		}
+	}
+}
+
+type badNetworkConn struct {
+	net.Conn
+}
+
+func (c *badNetworkConn) Write([]byte) (int, error) {
+	return 0, io.EOF
+}
+
+func TestWriteBadConnection(t *testing.T) {
+	data := []byte("test_data")
+	writeBufferSize := len(data) - 1
+	writer := newBufWriter(&badNetworkConn{}, writeBufferSize, getWriteBufferPool(writeBufferSize))
+
+	syncCh := make(chan struct{})
+	var err error
+	go func() {
+		_, err = writer.Write(data)
+		close(syncCh)
+	}()
+
+	select {
+	case <-time.After(time.Second):
+		t.Fatalf("Write() did not return in time")
+	case <-syncCh:
+	}
+
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("Write() did not return an error or returned unexpeced one: err=%v", err)
 	}
 }
 
