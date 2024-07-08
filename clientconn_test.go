@@ -417,18 +417,16 @@ func (s) TestWithTransportCredentialsTLS(t *testing.T) {
 }
 
 // When creating a transport configured with n addresses, only calculate the
-// backoff once per "round" of attempts instead of once per address (n times
-// per "round" of attempts).
-func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
+// backoff n times per "round" of attempts instead of once per.
+func (s) TestDial_NBackoffPerRetryGroup(t *testing.T) {
 	var attempts uint32
 	getMinConnectTimeout := func() time.Duration {
-		if atomic.AddUint32(&attempts, 1) == 1 {
+		if atomic.AddUint32(&attempts, 1) > 2 {
 			// Once all addresses are exhausted, hang around and wait for the
 			// client.Close to happen rather than re-starting a new round of
 			// attempts.
 			return time.Hour
 		}
-		t.Error("only one attempt backoff calculation, but got more")
 		return 0
 	}
 
@@ -498,6 +496,10 @@ func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
 	case <-timeout:
 		t.Fatal("timed out waiting for test to finish")
 	case <-server2Done:
+	}
+
+	if atomic.LoadUint32(&attempts) != 2 {
+		t.Errorf("Back-off attempts=%d, want=2", attempts)
 	}
 }
 
@@ -1061,18 +1063,28 @@ func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 		t.Fatal("timed out waiting for server2 to be contacted")
 	}
 
-	// Grab the addrConn and call tryUpdateAddrs.
+	// Grab the addrConn for server 2 and call tryUpdateAddrs.
 	var ac *addrConn
 	client.mu.Lock()
 	for clientAC := range client.conns {
-		ac = clientAC
-		break
+		if got := len(clientAC.addrs); got != 1 {
+			t.Errorf("len(AddrConn.addrs)=%d, want=1", got)
+			continue
+		}
+		if clientAC.addrs[0].Addr == lis2.Addr().String() {
+			ac = clientAC
+			break
+		}
 	}
 	client.mu.Unlock()
 
+	if ac == nil {
+		t.Fatal("Coudn't find the subConn for server 2")
+	}
+
 	// Call UpdateAddresses with the same list of addresses, it should be a noop
 	// (even when the SubConn is Connecting, and doesn't have a curAddr).
-	ac.acbw.UpdateAddresses(addrsList)
+	ac.acbw.UpdateAddresses(addrsList[1:2])
 
 	// We've called tryUpdateAddrs - now let's make server2 close the
 	// connection and check that it continues to server3.
@@ -1215,6 +1227,12 @@ func (b *stateRecordingBalancer) Close() {
 	b.Balancer.Close()
 }
 
+func (b *stateRecordingBalancer) ExitIdle() {
+	if ib, ok := b.Balancer.(balancer.ExitIdler); ok {
+		ib.ExitIdle()
+	}
+}
+
 type stateRecordingBalancerBuilder struct {
 	mu       sync.Mutex
 	notifier chan connectivity.State // The notifier used in the last Balancer.
@@ -1229,7 +1247,7 @@ func (b *stateRecordingBalancerBuilder) Name() string {
 }
 
 func (b *stateRecordingBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	stateNotifications := make(chan connectivity.State, 10)
+	stateNotifications := make(chan connectivity.State, 20)
 	b.mu.Lock()
 	b.notifier = stateNotifications
 	b.mu.Unlock()

@@ -250,6 +250,7 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 		connectivity.Connecting,
 		connectivity.Ready,
 		connectivity.Idle,
+		connectivity.Shutdown,
 		connectivity.Connecting,
 	}
 	for i := 0; i < len(want); i++ {
@@ -323,7 +324,15 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 	client, err := grpc.Dial("whatever:///this-gets-overwritten",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
-		grpc.WithResolvers(rb))
+		grpc.WithResolvers(rb),
+		grpc.WithConnectParams(grpc.ConnectParams{
+			// Set a really long back-off delay to ensure the first subConn does
+			// not enter ready before the second subConn connects.
+			Backoff: backoff.Config{
+				BaseDelay: 1 * time.Hour,
+			},
+		}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,6 +340,8 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 	want := []connectivity.State{
+		connectivity.Connecting,
+		connectivity.TransientFailure,
 		connectivity.Connecting,
 		connectivity.Ready,
 	}
@@ -423,7 +434,9 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	want := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,
+		connectivity.Shutdown, // The second subConn is closed once the first one connects.
 		connectivity.Idle,
+		connectivity.Shutdown, // The subConn will be closed and pickfirst will run on the latest address list.
 		connectivity.Connecting,
 	}
 	for i := 0; i < len(want); i++ {
@@ -452,6 +465,12 @@ type stateRecordingBalancer struct {
 
 func (b *stateRecordingBalancer) Close() {
 	b.Balancer.Close()
+}
+
+func (b *stateRecordingBalancer) ExitIdle() {
+	if ib, ok := b.Balancer.(balancer.ExitIdler); ok {
+		ib.ExitIdle()
+	}
 }
 
 type stateRecordingBalancerBuilder struct {
