@@ -918,12 +918,8 @@ func (ac *addrConn) connect() error {
 		ac.mu.Unlock()
 		return nil
 	}
-	// Update the state to ensure no concurrent requests start once the lock
-	// is released.
-	ac.updateConnectivityState(connectivity.Connecting, nil)
-	ac.mu.Unlock()
 
-	ac.resetTransport()
+	ac.resetTransportAndUnlock()
 	return nil
 }
 
@@ -995,11 +991,9 @@ func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 		ac.updateConnectivityState(connectivity.Idle, nil)
 	}
 
-	ac.mu.Unlock()
-
 	// Since we were connecting/connected, we should start a new connection
 	// attempt.
-	go ac.resetTransport()
+	go ac.resetTransportAndUnlock()
 }
 
 // getServerName determines the serverName to be used in the connection
@@ -1234,8 +1228,7 @@ func (ac *addrConn) adjustParams(r transport.GoAwayReason) {
 	}
 }
 
-func (ac *addrConn) resetTransport() {
-	ac.mu.Lock()
+func (ac *addrConn) resetTransportAndUnlock() {
 	acCtx := ac.ctx
 	if acCtx.Err() != nil {
 		ac.mu.Unlock()
