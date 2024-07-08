@@ -432,7 +432,7 @@ type SubConnState struct {
 func (lhs SubConnState) Equal(rhs SubConnState) bool {
 	return lhs.ConnectivityState == rhs.ConnectivityState &&
 		lhs.ConnectionError == rhs.ConnectionError &&
-		lhs.connectedAddress.Addr == rhs.connectedAddress.Addr
+		lhs.connectedAddress.Equal(rhs.connectedAddress)
 }
 
 // ClientConnState describes the state of a ClientConn relevant to the

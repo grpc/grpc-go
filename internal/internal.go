@@ -209,9 +209,9 @@ var (
 	// is the number of elements.  swap swaps the elements with indexes i and j.
 	ShuffleAddressListForTesting any // func(n int, swap func(i, j int))
 
-	// ConnectedAddress returns the connected address for a SubConnState.
-// The second return value is set to to false if the state is not READY, and the
-// first return value is meaningless in this case.
+	// ConnectedAddress returns the connected address for a SubConnState. The
+	// second return value is set to to false if the state is not READY, and the
+	// first return value is meaningless in this case.
 	ConnectedAddress any // func (scs SubConnState) (resolver.Address, bool)
 
 	// SetConnectedAddress sets the connected address for a SubConnState.
