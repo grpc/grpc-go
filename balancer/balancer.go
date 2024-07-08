@@ -72,9 +72,10 @@ func unregisterForTesting(name string) {
 	delete(m, name)
 }
 
-// getConnectedAddress returns the connected address for a SubConnState and
-// whether or not it is valid.
-func getConnectedAddress(scs SubConnState) (resolver.Address, bool) {
+// connectedAddress returns the connected address for a SubConnState.
+// The second return value is set to to false if the state is not READY, and the
+// first return value is meaningless in this case.
+func connectedAddress(scs SubConnState) (resolver.Address, bool) {
 	return scs.connectedAddress, scs.ConnectivityState == connectivity.Ready
 }
 
@@ -85,7 +86,7 @@ func setConnectedAddress(scs *SubConnState, addr resolver.Address) {
 
 func init() {
 	internal.BalancerUnregister = unregisterForTesting
-	internal.GetConnectedAddress = getConnectedAddress
+	internal.ConnectedAddress = connectedAddress
 	internal.SetConnectedAddress = setConnectedAddress
 }
 

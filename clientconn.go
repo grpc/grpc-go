@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -918,6 +919,10 @@ func (ac *addrConn) connect() error {
 	return nil
 }
 
+// equalAddress returns true is a and b are considered equal.
+// This is different from the Equal method on the resolver.Address type which
+// considers all fields to determine equality. Here, we only consider fields
+// that are meaningful to the subConn.
 func equalAddress(a, b resolver.Address) bool {
 	return a.Addr == b.Addr && a.ServerName == b.ServerName &&
 		a.Attributes.Equal(b.Attributes) &&
@@ -925,15 +930,7 @@ func equalAddress(a, b resolver.Address) bool {
 }
 
 func equalAddresses(a, b []resolver.Address) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, v := range a {
-		if !equalAddress(v, b[i]) {
-			return false
-		}
-	}
-	return true
+	return slices.EqualFunc(a, b, func(a, b resolver.Address) bool { return equalAddress(a, b) })
 }
 
 // updateAddrs updates ac.addrs with the new addresses list and handles active
