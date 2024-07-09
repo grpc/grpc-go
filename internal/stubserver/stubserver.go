@@ -238,6 +238,7 @@ func (ss *StubServer) Stop() {
 	for i := len(ss.cleanups) - 1; i >= 0; i-- {
 		ss.cleanups[i]()
 	}
+	ss.cleanups = nil
 }
 
 func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {

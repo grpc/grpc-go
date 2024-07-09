@@ -27,14 +27,14 @@ type serverLogger struct {
 }
 
 func (l serverLogger) Debugf(format string, args ...any) {
-	l.logger.Logf(format, args)
+	l.logger.Logf(format, args...)
 }
 func (l serverLogger) Infof(format string, args ...any) {
-	l.logger.Logf(format, args)
+	l.logger.Logf(format, args...)
 }
 func (l serverLogger) Warnf(format string, args ...any) {
-	l.logger.Logf(format, args)
+	l.logger.Logf(format, args...)
 }
 func (l serverLogger) Errorf(format string, args ...any) {
-	l.logger.Logf(format, args)
+	l.logger.Logf(format, args...)
 }

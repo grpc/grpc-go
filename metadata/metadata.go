@@ -90,12 +90,6 @@ func Pairs(kv ...string) MD {
 	return md
 }
 
-// String implements fmt.Stringer to allow metadata to be printed when stored
-// in a context.  It returns the metadata map as formatted by Go's fmt package.
-func (md MD) String() string {
-	return fmt.Sprint(map[string][]string(md))
-}
-
 // Len returns the number of items in md.
 func (md MD) Len() int {
 	return len(md)
@@ -219,11 +213,6 @@ func FromIncomingContext(ctx context.Context) (MD, bool) {
 // ValueFromIncomingContext returns the metadata value corresponding to the metadata
 // key from the incoming metadata if it exists. Keys are matched in a case insensitive
 // manner.
-//
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
 func ValueFromIncomingContext(ctx context.Context, key string) []string {
 	md, ok := ctx.Value(mdIncomingKey{}).(MD)
 	if !ok {

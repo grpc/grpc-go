@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -213,6 +212,9 @@ func (sc *ServerConfig) Equal(other *ServerConfig) bool {
 // content. It doesn't cover NodeProto because NodeProto isn't used by
 // federation.
 func (sc *ServerConfig) String() string {
+	if len(sc.serverFeatures) == 0 {
+		return fmt.Sprintf("%s-%s", sc.serverURI, sc.selectedCreds.String())
+	}
 	features := strings.Join(sc.serverFeatures, "-")
 	return strings.Join([]string{sc.serverURI, sc.selectedCreds.String(), features}, "-")
 }
@@ -418,6 +420,12 @@ func (c *Config) Equal(other *Config) bool {
 	return true
 }
 
+// String returns a string representation of the Config.
+func (c *Config) String() string {
+	s, _ := c.MarshalJSON()
+	return string(s)
+}
+
 // The following fields correspond 1:1 with the JSON schema for Config.
 type configJSON struct {
 	XDSServers                                []*ServerConfig                      `json:"xds_servers,omitempty"`
@@ -438,7 +446,7 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 		Authorities:                               c.authorities,
 		Node:                                      c.node,
 	}
-	return json.Marshal(config)
+	return json.MarshalIndent(config, " ", " ")
 }
 
 // UnmarshalJSON takes the json data (the complete bootstrap configuration) and
@@ -566,9 +574,7 @@ func newConfigFromContents(data []byte) (*Config, error) {
 	}
 
 	if logger.V(2) {
-		logger.Infof("Bootstrap config for creating xds-client: %v", pretty.ToJSON(config))
-	} else {
-		logger.Infof("Bootstrap config for creating xds-client: %+v", config)
+		logger.Infof("Bootstrap config for creating xds-client: %s", config)
 	}
 	return config, nil
 }
@@ -632,7 +638,7 @@ func NewContentsForTesting(opts ConfigOptionsForTesting) ([]byte, error) {
 		Authorities:                               authorities,
 		Node:                                      node{ID: opts.NodeID},
 	}
-	contents, err := json.Marshal(cfgJSON)
+	contents, err := json.MarshalIndent(cfgJSON, " ", " ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal bootstrap configuration for provided options %+v: %v", opts, err)
 	}

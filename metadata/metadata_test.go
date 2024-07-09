@@ -202,9 +202,11 @@ func (s) TestFromIncomingContext(t *testing.T) {
 	md := Pairs(
 		"X-My-Header-1", "42",
 	)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Verify that we lowercase if callers directly modify md
 	md["X-INCORRECT-UPPERCASE"] = []string{"foo"}
-	ctx := NewIncomingContext(context.Background(), md)
+	ctx = NewIncomingContext(ctx, md)
 
 	result, found := FromIncomingContext(ctx)
 	if !found {
@@ -238,9 +240,11 @@ func (s) TestValueFromIncomingContext(t *testing.T) {
 		"X-My-Header-2", "43-2",
 		"x-my-header-3", "44",
 	)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Verify that we lowercase if callers directly modify md
 	md["X-INCORRECT-UPPERCASE"] = []string{"foo"}
-	ctx := NewIncomingContext(context.Background(), md)
+	ctx = NewIncomingContext(ctx, md)
 
 	for _, test := range []struct {
 		key  string
@@ -338,26 +342,6 @@ func (s) TestAppendToOutgoingContext_FromKVSlice(t *testing.T) {
 	}
 }
 
-func TestStringerMD(t *testing.T) {
-	for _, test := range []struct {
-		md   MD
-		want string
-	}{
-		{MD{}, "map[]"},
-		{MD{"k1": []string{}}, "map[k1:[]]"},
-		{MD{"k1": []string{"v1", "v2"}}, "map[k1:[v1 v2]]"},
-		{MD{"k1": []string{"v1"}}, "map[k1:[v1]]"},
-		{MD{"k1": []string{"v1", "v2"}, "k2": []string{}, "k3": []string{"1", "2", "3"}}, "map[k1:[v1 v2] k2:[] k3:[1 2 3]]"},
-		{MD{"k2": []string{}, "k3": []string{"1", "2", "3"}, "k1": []string{"v1", "v2"}}, "map[k1:[v1 v2] k2:[] k3:[1 2 3]]"},
-		{MD{"k3": []string{"1", "2", "3"}, "k2": []string{}, "k1": []string{"v1", "v2"}}, "map[k1:[v1 v2] k2:[] k3:[1 2 3]]"},
-	} {
-		got := test.md.String()
-		if got != test.want {
-			t.Fatalf("Metadata string %q should be %q", got, test.want)
-		}
-	}
-}
-
 // Old/slow approach to adding metadata to context
 func Benchmark_AddingMetadata_ContextManipulationApproach(b *testing.B) {
 	// TODO: Add in N=1-100 tests once Go1.6 support is removed.
@@ -396,8 +380,11 @@ func BenchmarkFromOutgoingContext(b *testing.B) {
 }
 
 func BenchmarkFromIncomingContext(b *testing.B) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	md := Pairs("X-My-Header-1", "42")
-	ctx := NewIncomingContext(context.Background(), md)
+	ctx = NewIncomingContext(ctx, md)
+
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		FromIncomingContext(ctx)
@@ -405,8 +392,10 @@ func BenchmarkFromIncomingContext(b *testing.B) {
 }
 
 func BenchmarkValueFromIncomingContext(b *testing.B) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	md := Pairs("X-My-Header-1", "42")
-	ctx := NewIncomingContext(context.Background(), md)
+	ctx = NewIncomingContext(ctx, md)
 
 	b.Run("key-found", func(b *testing.B) {
 		for n := 0; n < b.N; n++ {

@@ -231,7 +231,10 @@ func (s) TestEDSWatch(t *testing.T) {
 			testutils.CreateBootstrapFileForTesting(t, bc)
 
 			// Create an xDS client with the above bootstrap contents.
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc})
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:     t.Name(),
+				Contents: bc,
+			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
 			}
@@ -418,7 +421,10 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			testutils.CreateBootstrapFileForTesting(t, bc)
 
 			// Create an xDS client with the above bootstrap contents.
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc})
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:     t.Name(),
+				Contents: bc,
+			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
 			}
@@ -519,7 +525,10 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -618,7 +627,10 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -699,7 +711,11 @@ func (s) TestEDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:               t.Name(),
+		Contents:           bc,
+		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
@@ -736,7 +752,11 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client talking to the above management server.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:               t.Name(),
+		Contents:           bc,
+		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
@@ -801,7 +821,10 @@ func (s) TestEDSWatch_NACKError(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -867,7 +890,10 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}

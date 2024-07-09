@@ -184,7 +184,9 @@ func (s) TestRefuseStartWithInvalidPatterns(t *testing.T) {
 		envconfig.ObservabilityConfigFile = oldObservabilityConfigFile
 	}()
 	// If there is at least one invalid pattern, which should not be silently tolerated.
-	if err := Start(context.Background()); err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := Start(ctx); err == nil {
 		t.Fatalf("Invalid patterns not triggering error")
 	}
 }
@@ -220,7 +222,9 @@ func (s) TestRefuseStartWithExcludeAndWildCardAll(t *testing.T) {
 		envconfig.ObservabilityConfigFile = oldObservabilityConfigFile
 	}()
 	// If there is at least one invalid pattern, which should not be silently tolerated.
-	if err := Start(context.Background()); err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := Start(ctx); err == nil {
 		t.Fatalf("Invalid patterns not triggering error")
 	}
 }
@@ -316,7 +320,9 @@ func (s) TestBothConfigEnvVarsSet(t *testing.T) {
 	defer func() {
 		envconfig.ObservabilityConfig = oldObservabilityConfig
 	}()
-	if err := Start(context.Background()); err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := Start(ctx); err == nil {
 		t.Fatalf("Invalid patterns not triggering error")
 	}
 }
@@ -331,7 +337,9 @@ func (s) TestErrInFileSystemEnvVar(t *testing.T) {
 	defer func() {
 		envconfig.ObservabilityConfigFile = oldObservabilityConfigFile
 	}()
-	if err := Start(context.Background()); err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := Start(ctx); err == nil {
 		t.Fatalf("Invalid file system path not triggering error")
 	}
 }
@@ -346,7 +354,9 @@ func (s) TestNoEnvSet(t *testing.T) {
 		envconfig.ObservabilityConfigFile = oldObservabilityConfigFile
 	}()
 	// If there is no observability config set at all, the Start should return an error.
-	if err := Start(context.Background()); err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := Start(ctx); err == nil {
 		t.Fatalf("Invalid patterns not triggering error")
 	}
 }
@@ -540,7 +550,9 @@ func (s) TestStartErrorsThenEnd(t *testing.T) {
 		envconfig.ObservabilityConfig = oldObservabilityConfig
 		envconfig.ObservabilityConfigFile = oldObservabilityConfigFile
 	}()
-	if err := Start(context.Background()); err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := Start(ctx); err == nil {
 		t.Fatalf("Invalid patterns not triggering error")
 	}
 	End()
