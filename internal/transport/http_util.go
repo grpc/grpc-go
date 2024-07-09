@@ -340,7 +340,7 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 			}
 		}
 	}
-	return n, err
+	return n, nil
 }
 
 func (w *bufWriter) Flush() error {
