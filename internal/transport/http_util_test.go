@@ -226,26 +226,27 @@ func (c *badNetworkConn) Write([]byte) (int, error) {
 	return 0, io.EOF
 }
 
-func TestWriteBadConnection(t *testing.T) {
+// This test ensures Write() on a broken network connection does not lead to
+// an infinite loop. More details in https://github.com/grpc/grpc-go/issues/7389.
+func (s) TestWriteBadConnection(t *testing.T) {
 	data := []byte("test_data")
-	writeBufferSize := len(data) - 1
+	writeBufferSize := (len(data) - 1) / 2
 	writer := newBufWriter(&badNetworkConn{}, writeBufferSize, getWriteBufferPool(writeBufferSize))
 
-	syncCh := make(chan struct{})
-	var err error
+	syncCh := make(chan error)
+	defer close(syncCh)
 	go func() {
-		_, err = writer.Write(data)
-		close(syncCh)
+		_, err := writer.Write(data)
+		syncCh <- err
 	}()
 
 	select {
 	case <-time.After(time.Second):
 		t.Fatalf("Write() did not return in time")
-	case <-syncCh:
-	}
-
-	if !errors.Is(err, io.EOF) {
-		t.Fatalf("Write() did not return an error or returned unexpeced one: err=%v", err)
+	case err := <-syncCh:
+		if !errors.Is(err, io.EOF) {
+			t.Fatalf("Write() = %v, want error presence = %v", err, io.EOF)
+		}
 	}
 }
 

@@ -36,7 +36,6 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-
 	"google.golang.org/grpc/codes"
 )
 
@@ -341,7 +340,7 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 			}
 		}
 	}
-	return n, nil
+	return n, err
 }
 
 func (w *bufWriter) Flush() error {
