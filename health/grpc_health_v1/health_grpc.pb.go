@@ -129,7 +129,7 @@ func (x *healthWatchClient) Recv() (*HealthCheckResponse, error) {
 
 // HealthServer is the server API for Health service.
 // All implementations should embed UnimplementedHealthServer
-// for forward compatibility
+// for forward compatibility.
 //
 // Health is gRPC's mechanism for checking whether a server is able to handle
 // RPCs. Its semantics are documented in

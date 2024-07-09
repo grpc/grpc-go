@@ -123,7 +123,7 @@ type Echo_BidirectionalStreamingEchoClient = grpc.BidiStreamingClient[EchoReques
 
 // EchoServer is the server API for Echo service.
 // All implementations must embed UnimplementedEchoServer
-// for forward compatibility
+// for forward compatibility.
 //
 // Echo is the echo service.
 type EchoServer interface {

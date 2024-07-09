@@ -75,7 +75,7 @@ type HandshakerService_DoHandshakeClient = grpc.BidiStreamingClient[HandshakerRe
 
 // HandshakerServiceServer is the server API for HandshakerService service.
 // All implementations must embed UnimplementedHandshakerServiceServer
-// for forward compatibility
+// for forward compatibility.
 type HandshakerServiceServer interface {
 	// Handshaker service accepts a stream of handshaker request, returning a
 	// stream of handshaker response. Client is expected to send exactly one
