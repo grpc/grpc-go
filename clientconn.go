@@ -1228,6 +1228,9 @@ func (ac *addrConn) adjustParams(r transport.GoAwayReason) {
 	}
 }
 
+// resetTransportAndUnlock unconditionally connects the addrConn.
+//
+// ac.mu must be held by the caller, and this function will guarantee it is released.
 func (ac *addrConn) resetTransportAndUnlock() {
 	acCtx := ac.ctx
 	if acCtx.Err() != nil {
