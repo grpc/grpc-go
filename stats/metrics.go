@@ -86,4 +86,3 @@ func (m *Metrics) Remove(metrics ...Metric) *Metrics {
 		Metrics: newMetrics,
 	}
 }
-

@@ -19,132 +19,244 @@
 package stats
 
 import (
-	"google.golang.org/grpc/experimental/stats/metricregistry"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/grpctest"
 )
 
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+// TestPanic tests that registering two metrics with the same name across any
+// type of metric triggers a panic.
+func (s) TestPanic(t *testing.T) {
+	cleanup := clearMetricsRegistryForTesting()
+	defer cleanup()
+	want := "metric simple counter already registered"
+	defer func() {
+		if r := recover(); r != "metric simple counter already registered" {
+			t.Errorf("expected panic %q, got %q", want, r)
+		}
+	}()
+	desc := MetricDescriptor{
+		// Type is not expected to be set from the registerer, but meant to be
+		// set by the metric registry.
+		Name:        "simple counter",
+		Description: "number of times recorded on tests",
+		Unit:        "calls",
+	}
+	RegisterInt64Count(desc)
+	RegisterInt64Gauge(desc)
+}
+
+// TestInstrumentRegistry tests the metric registry. It registers testing only
+// metrics using the metric registry, and creates a fake metrics recorder which
+// uses these metrics. Using the handles returned from the metric registry, this
+// test records stats using the fake metrics recorder. Then, the test verifies
+// the persisted metrics data in the metrics recorder is what is expected. Thus,
+// this tests the interactions between the metrics recorder and the metrics
+// registry.
 func (s) TestMetricRegistry(t *testing.T) {
+	cleanup := clearMetricsRegistryForTesting()
+	defer cleanup()
+	intCountHandle1 := RegisterInt64Count(MetricDescriptor{
+		Name:           "simple counter",
+		Description:    "sum of all emissions from tests",
+		Unit:           "int",
+		Labels:         []string{"int counter label"},
+		OptionalLabels: []string{"int counter optional label"},
+		Default:        false,
+	})
+	floatCountHandle1 := RegisterFloat64Count(MetricDescriptor{
+		Name:           "float counter",
+		Description:    "sum of all emissions from tests",
+		Unit:           "float",
+		Labels:         []string{"float counter label"},
+		OptionalLabels: []string{"float counter optional label"},
+		Default:        false,
+	})
+	intHistoHandle1 := RegisterInt64Histo(MetricDescriptor{
+		Name:           "int histo",
+		Description:    "sum of all emissions from tests",
+		Unit:           "int",
+		Labels:         []string{"int histo label"},
+		OptionalLabels: []string{"int histo optional label"},
+		Default:        false,
+	})
+	floatHistoHandle1 := RegisterFloat64Histo(MetricDescriptor{
+		Name:           "float histo",
+		Description:    "sum of all emissions from tests",
+		Unit:           "float",
+		Labels:         []string{"float histo label"},
+		OptionalLabels: []string{"float histo optional label"},
+		Default:        false,
+	})
+	intGaugeHandle1 := RegisterInt64Gauge(MetricDescriptor{
+		Name:           "simple gauge",
+		Description:    "the most recent int emitted by test",
+		Unit:           "int",
+		Labels:         []string{"int gauge label"},
+		OptionalLabels: []string{"int gauge optional label"},
+		Default:        false,
+	})
 
-	// Now there's an implied metrics recorder as part of record calls...
+	fmr := newFakeMetricsRecorder(t)
 
-	// Component from client conn will satisfy interface...
+	intCountHandle1.Record(fmr, 1, []string{"some label value", "some optional label value"}...)
+	// The Metric Descriptor in the handle should be able to identify the metric
+	// information. This is the key passed to metrics recorder to identify
+	// metric.
+	if got := fmr.intValues[intCountHandle1.MetricDescriptor]; got != 1 {
+		t.Fatalf("fmr.intValues[intCountHandle1.MetricDescriptor] got %v, want: %v", got, 1)
+	}
 
-	// Same thing create instruments, pass a metrics recorder, instrument is expected to call that metrics recorder
+	floatCountHandle1.Record(fmr, 1.2, []string{"some label value", "some optional label value"}...)
+	if got := fmr.floatValues[floatCountHandle1.MetricDescriptor]; got != 1.2 {
+		t.Fatalf("fmr.floatValues[floatCountHandle1.MetricDescriptor] got %v, want: %v", got, 1.2)
+	}
 
-	// Register one of each instrument, verify the metrics recorder works with it...
+	intHistoHandle1.Record(fmr, 3, []string{"some label value", "some optional label value"}...)
+	if got := fmr.intValues[intHistoHandle1.MetricDescriptor]; got != 3 {
+		t.Fatalf("fmr.intValues[intHistoHandle1.MetricDescriptor] got %v, want: %v", got, 3)
+	}
 
+	floatHistoHandle1.Record(fmr, 4.3, []string{"some label value", "some optional label value"}...)
+	if got := fmr.floatValues[floatHistoHandle1.MetricDescriptor]; got != 4.3 {
+		t.Fatalf("fmr.floatValues[floatHistoHandle1.MetricDescriptor] got %v, want: %v", got, 4.3)
+	}
+
+	intGaugeHandle1.Record(fmr, 7, []string{"some label value", "some optional label value"}...)
+	if got := fmr.intValues[intGaugeHandle1.MetricDescriptor]; got != 7 {
+		t.Fatalf("fmr.intValues[intGaugeHandle1.MetricDescriptor] got %v, want: %v", got, 7)
+	}
+}
+
+// TestNumerousIntCounts tests numerous int count metrics registered onto the
+// metric registry. A component (simulated by test) should be able to record on
+// the different registered int count metrics.
+func TestNumerousIntCounts(t *testing.T) {
+	cleanup := clearMetricsRegistryForTesting()
+	defer cleanup()
+	intCountHandle1 := RegisterInt64Count(MetricDescriptor{
+		Name:           "int counter",
+		Description:    "sum of all emissions from tests",
+		Unit:           "int",
+		Labels:         []string{"int counter label"},
+		OptionalLabels: []string{"int counter optional label"},
+		Default:        false,
+	})
+	intCountHandle2 := RegisterInt64Count(MetricDescriptor{
+		Name:           "int counter 2",
+		Description:    "sum of all emissions from tests",
+		Unit:           "int",
+		Labels:         []string{"int counter label"},
+		OptionalLabels: []string{"int counter optional label"},
+		Default:        false,
+	})
+	intCountHandle3 := RegisterInt64Count(MetricDescriptor{
+		Name:           "int counter 3",
+		Description:    "sum of all emissions from tests",
+		Unit:           "int",
+		Labels:         []string{"int counter label"},
+		OptionalLabels: []string{"int counter optional label"},
+		Default:        false,
+	})
+
+	fmr := newFakeMetricsRecorder(t)
+
+	intCountHandle1.Record(fmr, 1, []string{"some label value", "some optional label value"}...)
+	got := []int64{fmr.intValues[intCountHandle1.MetricDescriptor], fmr.intValues[intCountHandle2.MetricDescriptor], fmr.intValues[intCountHandle3.MetricDescriptor]}
+	want := []int64{1, 0, 0}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Fatalf("fmr.intValues (-got, +want): %v", diff)
+	}
+
+	intCountHandle2.Record(fmr, 1, []string{"some label value", "some optional label value"}...)
+	got = []int64{fmr.intValues[intCountHandle1.MetricDescriptor], fmr.intValues[intCountHandle2.MetricDescriptor], fmr.intValues[intCountHandle3.MetricDescriptor]}
+	want = []int64{1, 1, 0}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Fatalf("fmr.intValues (-got, +want): %v", diff)
+	}
+
+	intCountHandle3.Record(fmr, 1, []string{"some label value", "some optional label value"}...)
+	got = []int64{fmr.intValues[intCountHandle1.MetricDescriptor], fmr.intValues[intCountHandle2.MetricDescriptor], fmr.intValues[intCountHandle3.MetricDescriptor]}
+	want = []int64{1, 1, 1}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Fatalf("fmr.intValues (-got, +want): %v", diff)
+	}
+
+	intCountHandle3.Record(fmr, 1, []string{"some label value", "some optional label value"}...)
+	got = []int64{fmr.intValues[intCountHandle1.MetricDescriptor], fmr.intValues[intCountHandle2.MetricDescriptor], fmr.intValues[intCountHandle3.MetricDescriptor]}
+	want = []int64{1, 1, 2}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Fatalf("fmr.intValues (-got, +want): %v", diff)
+	}
 }
 
 type fakeMetricsRecorder struct {
 	t *testing.T
 
-	// 5 different or for one for ints/floats...?
-
-	// Test the maps built out in OTel (mention to Doug this represents it...)
-	intValues map[*MetricDescriptor]int64
+	intValues   map[*MetricDescriptor]int64
 	floatValues map[*MetricDescriptor]float64
 }
 
-// MetricsRecorderList layer just looks at labels/optional labels...
-
 // newFakeMetricsRecorder returns a fake metrics recorder based off the current
-// state of global instrument registry.
+// state of global metric registry.
 func newFakeMetricsRecorder(t *testing.T) *fakeMetricsRecorder {
-	// Access globals, build a map like OTel would
-	MetricsRegistry // map[stats.Metric]->Pointer to metrics descriptor, yeah let's test this out, make sure pointer can be used as key value...
-}
+	fmr := &fakeMetricsRecorder{
+		t:           t,
+		intValues:   make(map[*MetricDescriptor]int64),
+		floatValues: make(map[*MetricDescriptor]float64),
+	}
 
-// verifyLabels verifies that all of the labels keys expected are present in the
-// labels received.
-func verifyLabels(t *testing.T, labelsWant []string, optionalLabelsWant []string, labelsGot []stats.Label, optionalLabelsGot []stats.Label) {
-	for i, label := range labelsWant {
-		if labelsGot[i].Key != label {
-			t.Fatalf("label key at position %v got %v, want %v", i, labelsGot[i].Key, label)
+	for _, desc := range MetricsRegistry {
+		switch desc.Type {
+		case MetricTypeIntCount:
+		case MetricTypeIntHisto:
+		case MetricTypeIntGauge:
+			fmr.intValues[desc] = 0
+		case MetricTypeFloatCount:
+		case MetricTypeFloatHisto:
+			fmr.floatValues[desc] = 0
 		}
 	}
-	if len(labelsWant) != len(labelsGot) {
-		t.Fatalf("length of labels expected did not match got %v, want %v", len(labelsGot), len(optionalLabelsWant))
-	}
-
-	for i, label := range optionalLabelsWant {
-		if optionalLabelsGot[i].Key != label {
-			t.Fatalf("optional label key at position %v got %v, want %v", i, optionalLabelsGot[i].Key, label)
-		}
-	}
-	if len(optionalLabelsWant) != len(optionalLabelsGot) {
-		t.Fatalf("length of optional labels expected did not match got %v, want %v", len(optionalLabelsGot), len(optionalLabelsWant))
-	}
-
-	// This is essentially now a check of len(labels + optional labels) vs labels provided...
-
+	return fmr
 }
 
-// Test 2 for each? 5 different maps...?
-
-// All the operations will get a handle with pointer above, make sure it can use to record...
-
-// Need a clear for testing...
-
-// It still implements these methods but gets called from handle
-func (r *fakeMetricsRecorder) RecordIntCount(handle Int64CountHandle, labels []Label, optionalLabels []Label, incr int64) { // Techncialy this owuld eat labels...verifyLabels too?
-	// Rather than reading from registry/building out data structures, labels come from handle
-	handle.MetricDescriptor.Labels // []string also makes sure not nil...MetricDescriptor
-
-	handle.MetricDescriptor.OptionalLabels // []string
-
-	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels, optionalLabels)
-
-	// Overall data structure of the stats handler...
-	// map[name]->local would create a string comp
-
-	// map[*MetricDescriptor]->local would just be a pointer comp...
-
-	// record incr against data structure built out maybe map[name]->
-	// No it's a map of metricdescriptor...
-	// How to build this out?
-	r.intValues[handle.MetricDescriptor] += incr // have the handle in main use that to verify...
-
+// verifyLabels verifies that the labels received are of the expected length.
+func verifyLabels(t *testing.T, labelsWant []string, optionalLabelsWant []string, labelsGot []string) {
+	if len(labelsWant)+len(optionalLabelsWant) != len(labelsGot) {
+		t.Fatalf("length of optional labels expected did not match got %v, want %v", len(labelsGot), len(labelsWant)+len(optionalLabelsWant))
+	}
 }
 
-func (r *fakeMetricsRecorder) RecordFloatCount(handle Float64CountHandle, labels []Label, optionalLabels []Label, incr float64) {
-	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels, optionalLabels)
+func (r *fakeMetricsRecorder) RecordIntCount(handle Int64CountHandle, incr int64, labels ...string) {
+	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
+	r.intValues[handle.MetricDescriptor] += incr
+}
 
-	handle.MetricDescriptor // *MetricDescriptor - use as key to map if not found then fatalf
-
+func (r *fakeMetricsRecorder) RecordFloatCount(handle Float64CountHandle, incr float64, labels ...string) {
+	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
 	r.floatValues[handle.MetricDescriptor] += incr
 }
 
-func (r *fakeMetricsRecorder) RecordIntHisto(handle Int64HistoHandle, labels []Label, optionalLabels []Label, incr int64) {
-	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels, optionalLabels)
-
-	handle.MetricDescriptor // *MetricDescriptor - use as key to map if not found then fatalf
-
-	r.intValues[handle.MetricDescriptor] += incr // after 5 of these, makes sure they don't collide
+func (r *fakeMetricsRecorder) RecordIntHisto(handle Int64HistoHandle, incr int64, labels ...string) {
+	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
+	r.intValues[handle.MetricDescriptor] += incr
 }
 
-func (r *fakeMetricsRecorder) RecordFloatHisto(handle Float64HistoHandle, labels []Label, optionalLabels []Label, incr float64) {
-	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels, optionalLabels)
-
-	handle.MetricDescriptor // *MetricDescriptor - use as key to map if not found then fatalf
+func (r *fakeMetricsRecorder) RecordFloatHisto(handle Float64HistoHandle, incr float64, labels ...string) {
+	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
+	r.floatValues[handle.MetricDescriptor] += incr
 }
 
-func (r *fakeMetricsRecorder) RecordIntGauge(handle Int64GaugeHandle, labels []Label, optionalLabels []Label, incr int64) {
-	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels, optionalLabels)
-
-	handle.MetricDescriptor // *MetricDescriptor - use as key to map if not found then fatalf
+func (r *fakeMetricsRecorder) RecordIntGauge(handle Int64GaugeHandle, incr int64, labels ...string) {
+	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
+	r.intValues[handle.MetricDescriptor] += incr
 }
-
-// If run out of time just push implementation...otel and metrics recorder list still come after I guess...
-// just push the extra file....
-
-
-// Tests sound good to Doug get this plumbing working...
-
-// switch the labels to be variadic args based on position, length check on labels + optional labels
-
-// optional labels are always plumbed up through otel, otel decides whether it
-// wants the optional labels or not...
-
-// on handle and metrics recorder
-
-

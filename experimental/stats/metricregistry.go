@@ -24,119 +24,120 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
-// DefaultMetrics are the default metrics registered through global instruments
-// registry. This is written to at initialization time only, and is read
-// only after initialization.
+// DefaultMetrics are the default metrics registered through global metrics
+// registry. This is written to at initialization time only, and is read only
+// after initialization.
 var DefaultMetrics = stats.NewMetrics()
 
 // MetricDescriptor is the data for a registered metric.
 type MetricDescriptor struct {
-	// Name is the name of this metric.
+	// Name is the name of this metric. This name must be unique across whole
+	// binary (including any per call metrics). See
+	// https://github.com/grpc/proposal/blob/master/A79-non-per-call-metrics-architecture.md#metric-instrument-naming-conventions
+	// for metric naming conventions.
 	Name stats.Metric
 	// Description is the description of this metric.
 	Description string
-	// Unit is the unit of this metric.
+	// Unit is the unit of this metric (e.g. entries, milliseconds).
 	Unit string
-	// Labels are the required label keys for this metric.
+	// Labels are the required label keys for this metric. These are intended to
+	// metrics emitted from a stats handler.
 	Labels []string
-	// OptionalLabels are the optional label keys for this
-	// metric.
+	// OptionalLabels are the optional label keys for this metric. These are
+	// intended to attached to metrics emitted from a stats handler if
+	// configured.
 	OptionalLabels []string
 	// Default is whether this metric is on by default.
 	Default bool
+	// Type is the type of metric. This is set by the metric registry, and not
+	// intended to be set by a component registering a metric.
+	Type MetricType
 }
 
-// Int64CountHandle is a typed handle for a float count instrument. This handle
-// is passed at the recording point in order to know which instrument to record
+// Int64CountHandle is a typed handle for a float count metric. This handle
+// is passed at the recording point in order to know which metric to record
 // on.
 type Int64CountHandle struct {
 	MetricDescriptor *MetricDescriptor
 }
 
-// RecordInt64Count records the int64 count value on the metrics recorder
-// provided.
-func (h Int64CountHandle) RecordInt64Count(recorder MetricsRecorder, incr int64, labels ...string) {
+// Record records the int64 count value on the metrics recorder provided.
+func (h Int64CountHandle) Record(recorder MetricsRecorder, incr int64, labels ...string) {
 	recorder.RecordIntCount(h, incr, labels...)
 }
 
-// Float64CountHandle is a typed handle for a float count instrument. This handle
-// is passed at the recording point in order to know which instrument to record
-// on.
+// Float64CountHandle is a typed handle for a float count metric. This handle is
+// passed at the recording point in order to know which metric to record on.
 type Float64CountHandle struct {
 	MetricDescriptor *MetricDescriptor
 }
 
-// RecordFloat64Count records the float64 count value on the metrics recorder
-// provided.
-func (h Float64CountHandle) RecordFloat64Count(recorder MetricsRecorder, incr float64, labels ...string) {
+// Record records the float64 count value on the metrics recorder provided.
+func (h Float64CountHandle) Record(recorder MetricsRecorder, incr float64, labels ...string) {
 	recorder.RecordFloatCount(h, incr, labels...)
 }
 
-// Int64HistoHandle is a typed handle for an int histogram instrument. This
-// handle is passed at the recording point in order to know which instrument to
-// record on.
+// Int64HistoHandle is a typed handle for an int histogram metric. This handle
+// is passed at the recording point in order to know which metric to record on.
 type Int64HistoHandle struct {
 	MetricDescriptor *MetricDescriptor
 }
 
-// RecordInt64Histo records the int64 histo value on the metrics recorder
-// provided.
-func (h Int64HistoHandle) RecordInt64Histo(recorder MetricsRecorder, incr int64, labels ...string) {
+// Record records the int64 histo value on the metrics recorder provided.
+func (h Int64HistoHandle) Record(recorder MetricsRecorder, incr int64, labels ...string) {
 	recorder.RecordIntHisto(h, incr, labels...)
 }
 
-// Float64HistoHandle is a typed handle for a float histogram instrument. This
-// handle is passed at the recording point in order to know which instrument to
+// Float64HistoHandle is a typed handle for a float histogram metric. This
+// handle is passed at the recording point in order to know which metric to
 // record on.
 type Float64HistoHandle struct {
 	MetricDescriptor *MetricDescriptor
 }
 
-// RecordFloat64Histo records the float64 histo value on the metrics recorder
-// provided.
-func (h Float64HistoHandle) RecordFloat64Histo(recorder MetricsRecorder, incr float64, labels ...string) {
+// Record records the float64 histo value on the metrics recorder provided.
+func (h Float64HistoHandle) Record(recorder MetricsRecorder, incr float64, labels ...string) {
 	recorder.RecordFloatHisto(h, incr, labels...)
 }
 
-// Int64GaugeHandle is a typed handle for an int gauge instrument. This handle
-// is passed at the recording point in order to know which instrument to record
-// on.
+// Int64GaugeHandle is a typed handle for an int gauge metric. This handle is
+// passed at the recording point in order to know which metric to record on.
 type Int64GaugeHandle struct {
 	MetricDescriptor *MetricDescriptor
 }
 
-// RecordInt64Histo records the int64 histo value on the metrics recorder
-// provided.
-func (h Int64GaugeHandle) RecordInt64Gauge(recorder MetricsRecorder, incr int64, labels ...string) {
+// Record records the int64 histo value on the metrics recorder provided.
+func (h Int64GaugeHandle) Record(recorder MetricsRecorder, incr int64, labels ...string) {
 	recorder.RecordIntGauge(h, incr, labels...)
 }
 
-// registeredInsts are the registered instrument descriptor names.
-var registeredInsts = make(map[stats.Metric]bool)
+// registeredMetrics are the registered metric descriptor names.
+var registeredMetrics = make(map[stats.Metric]bool)
 
-// MetricsRegistry is all the registered metrics.
+// MetricsRegistry are all of the registered metrics.
 //
 // This is written to only at init time, and read only after that.
 var MetricsRegistry = make(map[stats.Metric]*MetricDescriptor)
 
-func registerInst(name stats.Metric, def bool) {
-	if registeredInsts[name] {
-		log.Panicf("instrument %v already registered", name)
+func registerMetric(name stats.Metric, def bool) {
+	if registeredMetrics[name] {
+		log.Panicf("metric %v already registered", name)
 	}
-	registeredInsts[name] = true
+	registeredMetrics[name] = true
 	if def {
 		DefaultMetrics = DefaultMetrics.Add(name)
 	}
 }
 
-// RegisterInt64Count registers the instrument description onto the global
-// registry. It returns a typed handle to use to recording data.
+// RegisterInt64Count registers the metric description onto the global registry.
+// It returns a typed handle to use to recording data.
 //
 // NOTE: this function must only be called during initialization time (i.e. in
-// an init() function), and is not thread-safe. If multiple instruments are
+// an init() function), and is not thread-safe. If multiple metrics are
 // registered with the same name, this function will panic.
-func RegisterInt64Count(descriptor MetricDescriptor)  Int64CountHandle {
-	registerInst(descriptor.Name, descriptor.Default)
+func RegisterInt64Count(descriptor MetricDescriptor) Int64CountHandle {
+	registerMetric(descriptor.Name, descriptor.Default)
+	descriptor.Type = MetricTypeIntCount
 	handle := Int64CountHandle{
 		MetricDescriptor: &descriptor,
 	}
@@ -144,14 +145,15 @@ func RegisterInt64Count(descriptor MetricDescriptor)  Int64CountHandle {
 	return handle
 }
 
-// RegisterFloat64Count registers the instrument description onto the global
+// RegisterFloat64Count registers the metric description onto the global
 // registry. It returns a typed handle to use to recording data.
 //
 // NOTE: this function must only be called during initialization time (i.e. in
-// an init() function), and is not thread-safe. If multiple instruments are
+// an init() function), and is not thread-safe. If multiple metrics are
 // registered with the same name, this function will panic.
 func RegisterFloat64Count(descriptor MetricDescriptor) Float64CountHandle {
-	registerInst(descriptor.Name, descriptor.Default)
+	registerMetric(descriptor.Name, descriptor.Default)
+	descriptor.Type = MetricTypeFloatCount
 	handle := Float64CountHandle{
 		MetricDescriptor: &descriptor,
 	}
@@ -159,14 +161,15 @@ func RegisterFloat64Count(descriptor MetricDescriptor) Float64CountHandle {
 	return handle
 }
 
-// RegisterInt64Histo registers the instrument description onto the global
-// registry. It returns a typed handle to use to recording data.
+// RegisterInt64Histo registers the metric description onto the global registry.
+// It returns a typed handle to use to recording data.
 //
 // NOTE: this function must only be called during initialization time (i.e. in
-// an init() function), and is not thread-safe. If multiple instruments are
+// an init() function), and is not thread-safe. If multiple metrics are
 // registered with the same name, this function will panic.
 func RegisterInt64Histo(descriptor MetricDescriptor) Int64HistoHandle {
-	registerInst(descriptor.Name, descriptor.Default)
+	registerMetric(descriptor.Name, descriptor.Default)
+	descriptor.Type = MetricTypeIntHisto
 	handle := Int64HistoHandle{
 		MetricDescriptor: &descriptor,
 	}
@@ -174,14 +177,15 @@ func RegisterInt64Histo(descriptor MetricDescriptor) Int64HistoHandle {
 	return handle
 }
 
-// RegisterFloat64Histo registers the instrument description onto the global
+// RegisterFloat64Histo registers the metric description onto the global
 // registry. It returns a typed handle to use to recording data.
 //
 // NOTE: this function must only be called during initialization time (i.e. in
-// an init() function), and is not thread-safe. If multiple instruments are
+// an init() function), and is not thread-safe. If multiple metrics are
 // registered with the same name, this function will panic.
 func RegisterFloat64Histo(descriptor MetricDescriptor) Float64HistoHandle {
-	registerInst(descriptor.Name, descriptor.Default)
+	registerMetric(descriptor.Name, descriptor.Default)
+	descriptor.Type = MetricTypeFloatHisto
 	handle := Float64HistoHandle{
 		MetricDescriptor: &descriptor,
 	}
@@ -189,14 +193,15 @@ func RegisterFloat64Histo(descriptor MetricDescriptor) Float64HistoHandle {
 	return handle
 }
 
-// RegisterInt64Gauge registers the instrument description onto the global
-// registry. It returns a typed handle to use to recording data.
+// RegisterInt64Gauge registers the metric description onto the global registry.
+// It returns a typed handle to use to recording data.
 //
 // NOTE: this function must only be called during initialization time (i.e. in
-// an init() function), and is not thread-safe. If multiple instruments are
+// an init() function), and is not thread-safe. If multiple metrics are
 // registered with the same name, this function will panic.
 func RegisterInt64Gauge(descriptor MetricDescriptor) Int64GaugeHandle {
-	registerInst(descriptor.Name, descriptor.Default)
+	registerMetric(descriptor.Name, descriptor.Default)
+	descriptor.Type = MetricTypeIntGauge
 	handle := Int64GaugeHandle{
 		MetricDescriptor: &descriptor,
 	}
@@ -204,7 +209,32 @@ func RegisterInt64Gauge(descriptor MetricDescriptor) Int64GaugeHandle {
 	return handle
 }
 
-// Will take a list, write comments and rewrite tests/cleanup and then I think ready to send out...
-// How do I even test this really?
-// Internal only clear...I don't think it's worth it just for default set to do it in internal...
+// MetricType is the type of metric.
+type MetricType int
 
+const (
+	MetricTypeIntCount MetricType = iota
+	MetricTypeFloatCount
+	MetricTypeIntHisto
+	MetricTypeFloatHisto
+	MetricTypeIntGauge
+)
+
+// clearMetricsRegistryForTesting clears the global data of the metrics
+// registry. It returns a closure to be invoked that sets the metrics registry
+// to its original state. Only called in testing functions.
+func clearMetricsRegistryForTesting() func() {
+	oldDefaultMetrics := DefaultMetrics
+	oldRegisteredMetrics := registeredMetrics
+	oldMetricsRegistry := MetricsRegistry
+
+	DefaultMetrics = stats.NewMetrics()
+	registeredMetrics = make(map[stats.Metric]bool)
+	MetricsRegistry = make(map[stats.Metric]*MetricDescriptor)
+
+	return func() {
+		DefaultMetrics = oldDefaultMetrics
+		registeredMetrics = oldRegisteredMetrics
+		MetricsRegistry = oldMetricsRegistry
+	}
+}

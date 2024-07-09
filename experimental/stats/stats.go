@@ -19,7 +19,6 @@
 // Package stats contains experimental metrics/stats API's.
 package stats
 
-
 // MetricsRecorder records on metrics derived from instrument registry.
 type MetricsRecorder interface {
 	// RecordIntCount records the measurement alongside labels on the int count
