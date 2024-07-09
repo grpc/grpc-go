@@ -1086,7 +1086,7 @@ func (s) TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *t
 	go func() {
 		payload := make([]byte, 16384)
 		for i := 0; i < 6; i++ {
-			dw.getRawConnWrapper().writeRawFrame(http2.FrameData, 0, tc.getCurrentStreamID(), payload)
+			dw.getRawConnWrapper().writeDataFrame(tc.getCurrentStreamID(), payload)
 		}
 	}()
 	if _, err := stream.Recv(); status.Code(err) != codes.ResourceExhausted {
