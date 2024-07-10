@@ -38,7 +38,7 @@ const (
 	FrameTypeContinuation FrameType = 0x9
 )
 
-// Flags represents the flags that can be set on every frame type.
+// Flags represents one or more flags set on an HTTP/2 Frame.
 type Flags uint8
 
 const (
@@ -135,7 +135,7 @@ func (f *HeadersFrame) Free() {
 
 type RSTStreamFrame struct {
 	hdr  FrameHeader
-	Code ErrorCode
+	Code ErrCode
 }
 
 func (f *RSTStreamFrame) Header() FrameHeader {
@@ -178,7 +178,7 @@ type GoAwayFrame struct {
 	hdr          FrameHeader
 	free         func([]byte)
 	LastStreamID uint32
-	Code         ErrorCode
+	Code         ErrCode
 	DebugData    []byte
 }
 
@@ -224,11 +224,11 @@ type Framer interface {
 	ReadFrame() (Frame, error)
 	WriteData(streamID uint32, endStream bool, data ...[]byte) error
 	WriteHeaders(streamID uint32, endStream, endHeaders bool, headerBlock ...[]byte) error
-	WriteRSTStream(streamID uint32, code ErrorCode) error
+	WriteRSTStream(streamID uint32, code ErrCode) error
 	WriteSettings(settings ...Setting) error
 	WriteSettingsAck() error
 	WritePing(ack bool, data [8]byte) error
-	WriteGoAway(maxStreamID uint32, code ErrorCode, debugData []byte) error
+	WriteGoAway(maxStreamID uint32, code ErrCode, debugData []byte) error
 	WriteWindowUpdate(streamID, inc uint32) error
 	WriteContinuation(streamID uint32, endHeaders bool, headerBlock ...[]byte) error
 }

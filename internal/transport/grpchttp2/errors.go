@@ -18,23 +18,53 @@
 
 package grpchttp2
 
-// ErrorCode represents an HTTP/2 Error Code.
-// See https://httpwg.org/specs/rfc7540.html#ErrorCodes.
-type ErrorCode uint32
+// ErrCode represents an HTTP/2 Error Code. Error codes are 32-bit fields
+// that are used in [RST_STREAM] and [GOAWAY] frames to convey the reasons for
+// the stream or connection error. See [HTTP/2 Error Code] for definitions of
+// each of the following error codes.
+//
+// [HTTP/2 Error Code]: https://httpwg.org/specs/rfc7540.html#ErrorCodes
+// [RST_STREAM]: https://httpwg.org/specs/rfc7540.html#RST_STREAM
+// [GOAWAY]: https://httpwg.org/specs/rfc7540.html#GOAWAY
+type ErrCode uint32
 
 const (
-	NoError            ErrorCode = 0x0
-	ProtocolError      ErrorCode = 0x1
-	InternalError      ErrorCode = 0x2
-	FlowControlError   ErrorCode = 0x3
-	SettingsTimeout    ErrorCode = 0x4
-	StreamClosed       ErrorCode = 0x5
-	FrameSizeError     ErrorCode = 0x6
-	RefusedStream      ErrorCode = 0x7
-	Cancel             ErrorCode = 0x8
-	CompressionError   ErrorCode = 0x9
-	ConnectError       ErrorCode = 0xa
-	EnhanceYourCalm    ErrorCode = 0xb
-	IndaequateSecurity ErrorCode = 0xc
-	HTTP11Required     ErrorCode = 0xd
+	ErrCodeNoError            ErrCode = 0x0
+	ErrCodeProtocol           ErrCode = 0x1
+	ErrCodeInternal           ErrCode = 0x2
+	ErrCodeFlowControl        ErrCode = 0x3
+	ErrCodeSettingsTimeout    ErrCode = 0x4
+	ErrCodeStreamClosed       ErrCode = 0x5
+	ErrCodeFrameSize          ErrCode = 0x6
+	ErrCodeRefusedStream      ErrCode = 0x7
+	ErrCodeCancel             ErrCode = 0x8
+	ErrCodeCompression        ErrCode = 0x9
+	ErrCodeConnect            ErrCode = 0xa
+	ErrCodeEnhanceYourCalm    ErrCode = 0xb
+	ErrCodeIndaequateSecurity ErrCode = 0xc
+	ErrCodeHTTP11Required     ErrCode = 0xd
 )
+
+var errorCodeNames = map[ErrCode]string{
+	ErrCodeNoError:            "NO_ERROR",
+	ErrCodeProtocol:           "PROTOCOL_ERROR",
+	ErrCodeInternal:           "INTERNAL_ERROR",
+	ErrCodeFlowControl:        "FLOW_CONTROL_ERROR",
+	ErrCodeSettingsTimeout:    "SETTINGS_TIMEOUT",
+	ErrCodeStreamClosed:       "STREAM_CLOSED",
+	ErrCodeFrameSize:          "FRAME_SIZE_ERROR",
+	ErrCodeRefusedStream:      "REFUSED_STREAM",
+	ErrCodeCancel:             "CANCEL",
+	ErrCodeCompression:        "COMPRESSION_ERROR",
+	ErrCodeConnect:            "CONNECT_ERROR",
+	ErrCodeEnhanceYourCalm:    "ENHANCE_YOUR_CALM",
+	ErrCodeIndaequateSecurity: "INADEQUATE_SECURITY",
+	ErrCodeHTTP11Required:     "HTTP_1_1_REQUIRED",
+}
+
+func (err ErrCode) String() string {
+	if v, ok := errorCodeNames[err]; ok {
+		return v
+	}
+	return "INTERNAL_ERROR"
+}
