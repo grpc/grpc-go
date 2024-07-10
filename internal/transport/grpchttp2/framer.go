@@ -222,7 +222,7 @@ func (f *ContinuationFrame) Free() {
 // Framer represents a Framer used in gRPC-Go.
 type Framer interface {
 	// SetMetaDecoder will set a decoder for the framer. When the decoder is
-	// set, ReadFrame will parse the header values from all Headers and
+	// set, ReadFrame will parse the header values, merging all Headers and
 	// Continuation frames.
 	SetMetaDecoder(d *hpack.Decoder)
 	// ReadFrame returns an HTTP/2 Frame. It is the caller's responsibility to
