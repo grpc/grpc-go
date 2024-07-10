@@ -72,11 +72,10 @@ func unregisterForTesting(name string) {
 	delete(m, name)
 }
 
-// connectedAddress returns the connected address for a SubConnState.
-// The second return value is set to to false if the state is not READY, and the
-// first return value is meaningless in this case.
-func connectedAddress(scs SubConnState) (resolver.Address, bool) {
-	return scs.connectedAddress, scs.ConnectivityState == connectivity.Ready
+// connectedAddress returns the connected address for a SubConnState. The
+// address is only valid if the state is READY.
+func connectedAddress(scs SubConnState) resolver.Address {
+	return scs.connectedAddress
 }
 
 // setConnectedAddress sets the connected address for a SubConnState.
@@ -427,12 +426,6 @@ type SubConnState struct {
 	// connectedAddr contains the connected address when ConnectivityState is
 	// Ready. Otherwise, it is indeterminate.
 	connectedAddress resolver.Address
-}
-
-func (lhs SubConnState) Equal(rhs SubConnState) bool {
-	return lhs.ConnectivityState == rhs.ConnectivityState &&
-		lhs.ConnectionError == rhs.ConnectionError &&
-		lhs.connectedAddress.Equal(rhs.connectedAddress)
 }
 
 // ClientConnState describes the state of a ClientConn relevant to the

@@ -210,9 +210,8 @@ var (
 	ShuffleAddressListForTesting any // func(n int, swap func(i, j int))
 
 	// ConnectedAddress returns the connected address for a SubConnState. The
-	// second return value is set to to false if the state is not READY, and the
-	// first return value is meaningless in this case.
-	ConnectedAddress any // func (scs SubConnState) (resolver.Address, bool)
+	// address is only valid if the state is READY.
+	ConnectedAddress any // func (scs SubConnState) resolver.Address
 
 	// SetConnectedAddress sets the connected address for a SubConnState.
 	SetConnectedAddress any // func(scs *SubConnState, addr resolver.Address)

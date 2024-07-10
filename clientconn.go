@@ -919,18 +919,18 @@ func (ac *addrConn) connect() error {
 	return nil
 }
 
-// equalAddress returns true is a and b are considered equal.
+// equalAddressIgnoringBalAttributes returns true is a and b are considered equal.
 // This is different from the Equal method on the resolver.Address type which
 // considers all fields to determine equality. Here, we only consider fields
 // that are meaningful to the subConn.
-func equalAddress(a, b resolver.Address) bool {
+func equalAddressIgnoringBalAttributes(a, b *resolver.Address) bool {
 	return a.Addr == b.Addr && a.ServerName == b.ServerName &&
 		a.Attributes.Equal(b.Attributes) &&
 		a.Metadata == b.Metadata
 }
 
-func equalAddresses(a, b []resolver.Address) bool {
-	return slices.EqualFunc(a, b, func(a, b resolver.Address) bool { return equalAddress(a, b) })
+func equalAddressesIgnoringBalAttributes(a, b []resolver.Address) bool {
+	return slices.EqualFunc(a, b, func(a, b resolver.Address) bool { return equalAddressIgnoringBalAttributes(&a, &b) })
 }
 
 // updateAddrs updates ac.addrs with the new addresses list and handles active
@@ -944,7 +944,7 @@ func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 	channelz.Infof(logger, ac.channelz, "addrConn: updateAddrs addrs (%d of %d): %v", limit, len(addrs), addrs[:limit])
 
 	ac.mu.Lock()
-	if equalAddresses(ac.addrs, addrs) {
+	if equalAddressesIgnoringBalAttributes(ac.addrs, addrs) {
 		ac.mu.Unlock()
 		return
 	}
@@ -963,7 +963,7 @@ func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 		// Try to find the connected address.
 		for _, a := range addrs {
 			a.ServerName = ac.cc.getServerName(a)
-			if equalAddress(a, ac.curAddr) {
+			if equalAddressIgnoringBalAttributes(&a, &ac.curAddr) {
 				// We are connected to a valid address, so do nothing but
 				// update the addresses.
 				ac.mu.Unlock()

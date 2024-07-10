@@ -53,6 +53,8 @@ const (
 	defaultRequestCountMax = 1024
 )
 
+var connectedAddress = internal.ConnectedAddress.(func(balancer.SubConnState) resolver.Address)
+
 func init() {
 	balancer.Register(bb{})
 }
@@ -369,18 +371,20 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 	oldListener := opts.StateListener
 	opts.StateListener = func(state balancer.SubConnState) {
 		b.updateSubConnState(sc, state, oldListener)
+		if state.ConnectivityState != connectivity.Ready {
+			return
+		}
 		// Read connected address and call updateLocalityID() based on the connected
 		// address's locality. https://github.com/grpc/grpc-go/issues/7339
-		if gca, ok := internal.ConnectedAddress.(func(balancer.SubConnState) (resolver.Address, bool)); ok {
-			if addr, ok := gca(state); ok {
-				lID := xdsinternal.GetLocalityID(addr)
-				if !lID.Empty() {
-					scw.updateLocalityID(lID)
-				} else if b.logger.V(2) {
-					b.logger.Infof("Locality ID for %s unexpectedly empty", addr)
-				}
+		addr := connectedAddress(state)
+		lID := xdsinternal.GetLocalityID(addr)
+		if lID.Empty() {
+			if b.logger.V(2) {
+				b.logger.Infof("Locality ID for %s unexpectedly empty", addr)
 			}
+			return
 		}
+		scw.updateLocalityID(lID)
 	}
 	sc, err := b.ClientConn.NewSubConn(newAddrs, opts)
 	if err != nil {

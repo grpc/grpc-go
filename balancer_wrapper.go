@@ -32,6 +32,8 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
+var setConnectedAddress = internal.SetConnectedAddress.(func(*balancer.SubConnState, resolver.Address))
+
 // ccBalancerWrapper sits between the ClientConn and the Balancer.
 //
 // ccBalancerWrapper implements methods corresponding to the ones on the
@@ -263,9 +265,7 @@ func (acbw *acBalancerWrapper) updateState(s connectivity.State, curAddr resolve
 		// TODO: delete this comment when UpdateSubConnState is removed.
 		scs := balancer.SubConnState{ConnectivityState: s, ConnectionError: err}
 		if s == connectivity.Ready {
-			if sca, ok := internal.SetConnectedAddress.(func(*balancer.SubConnState, resolver.Address)); ok {
-				sca(&scs, curAddr)
-			}
+			setConnectedAddress(&scs, curAddr)
 		}
 		acbw.stateListener(scs)
 	})
