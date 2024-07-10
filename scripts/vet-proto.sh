@@ -4,7 +4,7 @@ set -ex  # Exit on error; debugging enabled.
 set -o pipefail  # Fail a pipe if any sub-command fails.
 
 # - Source them sweet sweet helpers.
-source "$(dirname $0)/vet-common.sh"
+source "$(dirname $0)/common.sh"
 
 # - Check to make sure it's safe to modify the user's git repo.
 git status --porcelain | fail_on_output
@@ -21,9 +21,9 @@ trap cleanup EXIT
 # go.)
 if [[ "$1" = "-install" ]]; then
     if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
-      source ./scripts/install_protoc.sh "/home/runner/go"
+      source ./scripts/install-protoc.sh "/home/runner/go"
     else
-      die "run protoc installer https://github.com/grpc/grpc-go/blob/master/scripts/install_protoc.sh"
+      die "run protoc installer https://github.com/grpc/grpc-go/blob/master/scripts/install-protoc.sh"
     fi
   echo SUCCESS
   exit 0
