@@ -16,7 +16,7 @@
  *
  */
 
-package grpcframer
+package grpchttp2
 
 // ErrorCode represents an HTTP/2 Error Code.
 // See https://httpwg.org/specs/rfc7540.html#ErrorCodes.

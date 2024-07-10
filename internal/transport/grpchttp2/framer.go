@@ -16,66 +16,56 @@
  *
  */
 
-// Package grpcframer defines the interface for implementing an HTTP/2 framer,
-// its required types and an implementation of said framer.
-package grpcframer
+// Package grpchttp2 defines HTTP/2 types and a framer API and implementation.
+package grpchttp2
 
-import "sync"
-
-// FrameType represents the type of a Frame and its value according to the
-// HTTP/2 spec.
-// See https://httpwg.org/specs/rfc7540.html#FrameTypes.
+// FrameType represents the type of an HTTP/2 Frame.
+// See [Frame Type].
+//
+// [Frame Type]: https://httpwg.org/specs/rfc7540.html#FrameType
 type FrameType uint8
 
 const (
-	DataFrameType         FrameType = 0x0
-	HeadersFrameType      FrameType = 0x1
-	PriorityFrameType     FrameType = 0x2
-	RSTStreamFrameType    FrameType = 0x3
-	SettingsFrameType     FrameType = 0x4
-	PushPromiseFrameType  FrameType = 0x5
-	PingFrameType         FrameType = 0x6
-	GoAwayFrameType       FrameType = 0x7
-	WindowUpdateFrameType FrameType = 0x8
-	ContinuationFrameType FrameType = 0x9
+	FrameTypeData         FrameType = 0x0
+	FrameTypeHeaders      FrameType = 0x1
+	FrameTypePriority     FrameType = 0x2
+	FrameTypeRSTStream    FrameType = 0x3
+	FrameTypeSettings     FrameType = 0x4
+	FrameTypePushPromise  FrameType = 0x5
+	FrameTypePing         FrameType = 0x6
+	FrameTypeGoAway       FrameType = 0x7
+	FrameTypeWindowUpdate FrameType = 0x8
+	FrameTypeContinuation FrameType = 0x9
 )
 
 // Flags represents the flags that can be set on every frame type.
 type Flags uint8
 
 const (
-	// Data Frame
-	FlagDataEndStream Flags = 0x1
-	FlagDataPadded    Flags = 0x8
-
-	// Headers Frame
-	FlagHeadersEndStream  Flags = 0x1
-	FlagHeadersEndHeaders Flags = 0x4
-	FlagHeadersPadded     Flags = 0x8
-	FlagHeadersPriority   Flags = 0x20
-
-	// Settings Frame
-	FlagSettingsAck Flags = 0x1
-
-	// Ping Frame
-	FlagPingAck Flags = 0x1
-
-	// Continuation Frame
+	FlagDataEndStream          Flags = 0x1
+	FlagDataPadded             Flags = 0x8
+	FlagHeadersEndStream       Flags = 0x1
+	FlagHeadersEndHeaders      Flags = 0x4
+	FlagHeadersPadded          Flags = 0x8
+	FlagHeadersPriority        Flags = 0x20
+	FlagSettingsAck            Flags = 0x1
+	FlagPingAck                Flags = 0x1
 	FlagContinuationEndHeaders Flags = 0x4
-
-	FlagPushPromiseEndHeaders Flags = 0x4
-	FlagPushPromisePadded     Flags = 0x8
 )
 
-// Setting represents the id and value pair of a particular HTTP/2 setting.
-// See https://httpwg.org/specs/rfc7540.html#SettingFormat.
+// Setting represents the id and value pair of an HTTP/2 setting.
+// See [Setting Format].
+//
+// [Setting Format]: https://httpwg.org/specs/rfc7540.html#SettingFormat
 type Setting struct {
 	ID    SettingID
 	Value uint32
 }
 
-// SettingID represents the id of a specific HTTP/2 setting.
-// See https://httpwg.org/specs/rfc7540.html#SettingValues.
+// SettingID represents the id of an HTTP/2 setting.
+// See [Setting Values].
+//
+// [Setting Values]: https://httpwg.org/specs/rfc7540.html#SettingValues
 type SettingID uint16
 
 const (
@@ -88,37 +78,32 @@ const (
 )
 
 // FrameHeader is the 9 byte header of any HTTP/2 Frame.
-// See https://httpwg.org/specs/rfc7540.html#FrameHeader.
+// See [Frame Header].
+//
+// [Frame Header]: https://httpwg.org/specs/rfc7540.html#FrameHeader
 type FrameHeader struct {
 	// Size is the size of the frame's payload without the 9 header bytes.
 	// As per the HTTP/2 spec, size can be up to 3 bytes, but only frames
 	// up to 16KB can be processed without agreement.
 	Size uint32
-
-	// Type is a byte that represents the Frame Type. The HTTP/2 spec
-	// defines 10 standard types but extension frames may be written.
+	// Type is a byte that represents the Frame Type.
 	Type FrameType
-
-	// Flags is a byte representing the flags set for the specific frame
-	// type.
+	// Flags is a byte representing the flags set on this Frame.
 	Flags Flags
-
 	// StreamID is the ID for the stream which this frame is for. If the
 	// frame is connection specific instead of stream specific, the
 	// streamID is 0.
 	StreamID uint32
 }
 
-// Frame represents any kind of HTTP/2 Frame, which can be casted into
-// its corresponding type using the Header method provided.
+// Frame represents an HTTP/2 Frame.
 type Frame interface {
-	// Header returns this frame's Header.
 	Header() FrameHeader
 }
 
 type DataFrame struct {
 	hdr  FrameHeader
-	pool *sync.Pool
+	free func([]byte)
 	Data []byte
 }
 
@@ -127,17 +112,14 @@ func (f *DataFrame) Header() FrameHeader {
 }
 
 func (f *DataFrame) Free() {
-	if f.Data == nil {
-		return
+	if f.free != nil {
+		f.free(f.Data)
 	}
-
-	f.pool.Put(&f.Data)
-	f.Data = nil
 }
 
 type HeadersFrame struct {
 	hdr      FrameHeader
-	pool     *sync.Pool
+	free     func([]byte)
 	HdrBlock []byte
 }
 
@@ -146,12 +128,9 @@ func (f *HeadersFrame) Header() FrameHeader {
 }
 
 func (f *HeadersFrame) Free() {
-	if f.HdrBlock == nil {
-		return
+	if f.free != nil {
+		f.free(f.HdrBlock)
 	}
-
-	f.pool.Put(&f.HdrBlock)
-	f.HdrBlock = nil
 }
 
 type RSTStreamFrame struct {
@@ -165,7 +144,7 @@ func (f *RSTStreamFrame) Header() FrameHeader {
 
 type SettingsFrame struct {
 	hdr      FrameHeader
-	pool     *sync.Pool
+	free     func([]byte)
 	settings []byte
 }
 
@@ -174,17 +153,14 @@ func (f *SettingsFrame) Header() FrameHeader {
 }
 
 func (f *SettingsFrame) Free() {
-	if f.settings == nil {
-		return
+	if f.free != nil {
+		f.free(f.settings)
 	}
-
-	f.pool.Put(&f.settings)
-	f.settings = nil
 }
 
 type PingFrame struct {
 	hdr  FrameHeader
-	pool *sync.Pool
+	free func([]byte)
 	Data []byte
 }
 
@@ -193,17 +169,14 @@ func (f *PingFrame) Header() FrameHeader {
 }
 
 func (f *PingFrame) Free() {
-	if f.Data == nil {
-		return
+	if f.free != nil {
+		f.free(f.Data)
 	}
-
-	f.pool.Put(&f.Data)
-	f.Data = nil
 }
 
 type GoAwayFrame struct {
 	hdr          FrameHeader
-	pool         *sync.Pool
+	free         func([]byte)
 	LastStreamID uint32
 	Code         ErrorCode
 	DebugData    []byte
@@ -214,12 +187,9 @@ func (f *GoAwayFrame) Header() FrameHeader {
 }
 
 func (f *GoAwayFrame) Free() {
-	if f.DebugData == nil {
-		return
+	if f.free != nil {
+		f.free(f.DebugData)
 	}
-
-	f.pool.Put(&f.DebugData)
-	f.DebugData = nil
 }
 
 type WindowUpdateFrame struct {
@@ -233,7 +203,7 @@ func (f *WindowUpdateFrame) Header() FrameHeader {
 
 type ContinuationFrame struct {
 	hdr      FrameHeader
-	pool     *sync.Pool
+	free     func([]byte)
 	HdrBlock []byte
 }
 
@@ -242,16 +212,13 @@ func (f *ContinuationFrame) Header() FrameHeader {
 }
 
 func (f *ContinuationFrame) Free() {
-	if f.HdrBlock == nil {
-		return
+	if f.free != nil {
+		f.free(f.HdrBlock)
 	}
-
-	f.pool.Put(&f.HdrBlock)
-	f.HdrBlock = nil
 }
 
-// GRPCFramer represents the methods a framer must implement to be used in gRPC-Go.
-type GRPCFramer interface {
+// Framer represents a Framer used in gRPC-Go.
+type Framer interface {
 	// ReadFrame returns an HTTP/2 Frame. It is the caller's responsibility to
 	// free the frame once it is done using it.
 	ReadFrame() (Frame, error)
