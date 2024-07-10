@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -637,7 +638,10 @@ func (s) TestLoadReporting(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	scs := balancer.SubConnState{ConnectivityState: connectivity.Ready}
+	sca := internal.SetConnectedAddress.(func(*balancer.SubConnState, resolver.Address))
+	sca(&scs, addrs[0])
+	sc1.UpdateState(scs)
 	// Test pick with one backend.
 	const successCount = 5
 	const errorCount = 5
