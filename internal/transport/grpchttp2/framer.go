@@ -19,6 +19,8 @@
 // Package grpchttp2 defines HTTP/2 types and a framer API and implementation.
 package grpchttp2
 
+import "golang.org/x/net/http2/hpack"
+
 // FrameType represents the type of an HTTP/2 Frame.
 // See [Frame Type].
 //
@@ -219,6 +221,10 @@ func (f *ContinuationFrame) Free() {
 
 // Framer represents a Framer used in gRPC-Go.
 type Framer interface {
+	// SetMetaDecoder will set a decoder for the framer. When the decoder is
+	// set, ReadFrame will parse the header values from all Headers and
+	// Continuation frames.
+	SetMetaDecoder(d *hpack.Decoder)
 	// ReadFrame returns an HTTP/2 Frame. It is the caller's responsibility to
 	// free the frame once it is done using it.
 	ReadFrame() (Frame, error)
