@@ -108,7 +108,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
 				}`, mgmtServer.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config

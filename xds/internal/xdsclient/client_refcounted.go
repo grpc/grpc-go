@@ -23,7 +23,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 )
@@ -58,13 +57,10 @@ func clientRefCountedClose(name string) {
 
 }
 
-// newRefCountedWithConfig creates a new reference counted xDS client
-// implementation for name, if one does not exist already. If an xDS client for
-// the given name exists, it gets a reference to it and returns it.
-//
-// The passed in fallback config is used when bootstrap environment variables
-// are not defined.
-func newRefCountedWithConfig(name string, fallbackConfig *bootstrap.Config, watchExpiryTimeout, idleAuthorityTimeout time.Duration) (XDSClient, func(), error) {
+// newRefCounted creates a new reference counted xDS client implementation for
+// name, if one does not exist already. If an xDS client for the given name
+// exists, it gets a reference to it and returns it.
+func newRefCounted(name string, watchExpiryTimeout, idleAuthorityTimeout time.Duration) (XDSClient, func(), error) {
 	clientsMu.Lock()
 	defer clientsMu.Unlock()
 
@@ -73,22 +69,11 @@ func newRefCountedWithConfig(name string, fallbackConfig *bootstrap.Config, watc
 		return c, grpcsync.OnceFunc(func() { clientRefCountedClose(name) }), nil
 	}
 
-	// Use fallbackConfig only if bootstrap env vars are unspecified.
-	var config *bootstrap.Config
-	if envconfig.XDSBootstrapFileName == "" && envconfig.XDSBootstrapFileContent == "" {
-		if fallbackConfig == nil {
-			return nil, nil, fmt.Errorf("xds: bootstrap env vars are unspecified and provided fallback config is nil")
-		}
-		config = fallbackConfig
-	} else {
-		var err error
-		config, err = bootstrap.NewConfig()
-		if err != nil {
-			return nil, nil, fmt.Errorf("xds: failed to read bootstrap file: %v", err)
-		}
-	}
-
 	// Create the new client implementation.
+	config, err := bootstrap.GetConfiguration()
+	if err != nil {
+		return nil, nil, fmt.Errorf("xds: failed to get xDS bootstrap config: %v", err)
+	}
 	c, err := newClientImpl(config, watchExpiryTimeout, idleAuthorityTimeout)
 	if err != nil {
 		return nil, nil, err

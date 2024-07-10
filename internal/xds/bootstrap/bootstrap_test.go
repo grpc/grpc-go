@@ -293,19 +293,16 @@ func setupBootstrapOverride(bootstrapFileMap map[string]string) func() {
 	return func() { bootstrapFileReadFunc = oldFileReadFunc }
 }
 
-// TODO: enable leak check for this package when
-// https://github.com/googleapis/google-cloud-go/issues/2417 is fixed.
-
 // This function overrides the bootstrap file NAME env variable, to test the
 // code that reads file with the given fileName.
-func testNewConfigWithFileNameEnv(t *testing.T, fileName string, wantError bool, wantConfig *Config) {
+func testGetConfigurationWithFileNameEnv(t *testing.T, fileName string, wantError bool, wantConfig *Config) {
 	origBootstrapFileName := envconfig.XDSBootstrapFileName
 	envconfig.XDSBootstrapFileName = fileName
 	defer func() { envconfig.XDSBootstrapFileName = origBootstrapFileName }()
 
-	c, err := NewConfig()
+	c, err := GetConfiguration()
 	if (err != nil) != wantError {
-		t.Fatalf("NewConfig() returned error %v, wantError: %v", err, wantError)
+		t.Fatalf("GetConfiguration() returned error %v, wantError: %v", err, wantError)
 	}
 	if wantError {
 		return
@@ -317,7 +314,7 @@ func testNewConfigWithFileNameEnv(t *testing.T, fileName string, wantError bool,
 
 // This function overrides the bootstrap file CONTENT env variable, to test the
 // code that uses the content from env directly.
-func testNewConfigWithFileContentEnv(t *testing.T, fileName string, wantError bool, wantConfig *Config) {
+func testGetConfigurationWithFileContentEnv(t *testing.T, fileName string, wantError bool, wantConfig *Config) {
 	t.Helper()
 	b, err := bootstrapFileReadFunc(fileName)
 	if err != nil {
@@ -327,9 +324,9 @@ func testNewConfigWithFileContentEnv(t *testing.T, fileName string, wantError bo
 	envconfig.XDSBootstrapFileContent = string(b)
 	defer func() { envconfig.XDSBootstrapFileContent = origBootstrapContent }()
 
-	c, err := NewConfig()
+	c, err := GetConfiguration()
 	if (err != nil) != wantError {
-		t.Fatalf("NewConfig() returned error %v, wantError: %v", err, wantError)
+		t.Fatalf("GetConfiguration() returned error %v, wantError: %v", err, wantError)
 	}
 	if wantError {
 		return
@@ -339,8 +336,9 @@ func testNewConfigWithFileContentEnv(t *testing.T, fileName string, wantError bo
 	}
 }
 
-// Tests NewConfig with bootstrap file contents that are expected to fail.
-func (s) TestNewConfig_Failure(t *testing.T) {
+// Tests GetConfiguration with bootstrap file contents that are expected to
+// fail.
+func (s) TestGetConfiguration_Failure(t *testing.T) {
 	bootstrapFileMap := map[string]string{
 		"empty":          "",
 		"badJSON":        `["test": 123]`,
@@ -387,16 +385,16 @@ func (s) TestNewConfig_Failure(t *testing.T) {
 
 	for _, name := range []string{"nonExistentBootstrapFile", "empty", "badJSON", "noBalancerName", "emptyXdsServer"} {
 		t.Run(name, func(t *testing.T) {
-			testNewConfigWithFileNameEnv(t, name, true, nil)
-			testNewConfigWithFileContentEnv(t, name, true, nil)
+			testGetConfigurationWithFileNameEnv(t, name, true, nil)
+			testGetConfigurationWithFileContentEnv(t, name, true, nil)
 		})
 	}
 }
 
-// TestNewConfigV3ProtoSuccess exercises the functionality in NewConfig with
-// different bootstrap file contents. It overrides the fileReadFunc by returning
-// bootstrap file contents defined in this test, instead of reading from a file.
-func (s) TestNewConfig_Success(t *testing.T) {
+// Tests the functionality in GetConfiguration with different bootstrap file
+// contents. It overrides the fileReadFunc by returning bootstrap file contents
+// defined in this test, instead of reading from a file.
+func (s) TestGetConfiguration_Success(t *testing.T) {
 	cancel := setupBootstrapOverride(v3BootstrapFileMap)
 	defer cancel()
 
@@ -431,19 +429,18 @@ func (s) TestNewConfig_Success(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			testNewConfigWithFileNameEnv(t, test.name, false, test.wantConfig)
-			testNewConfigWithFileContentEnv(t, test.name, false, test.wantConfig)
+			testGetConfigurationWithFileNameEnv(t, test.name, false, test.wantConfig)
+			testGetConfigurationWithFileContentEnv(t, test.name, false, test.wantConfig)
 		})
 	}
 }
 
-// TestNewConfigBootstrapEnvPriority tests that the two env variables are read
-// in correct priority.
+// Tests that the two bootstrap env variables are read in correct priority.
 //
 // "GRPC_XDS_BOOTSTRAP" which specifies the file name containing the bootstrap
 // configuration takes precedence over "GRPC_XDS_BOOTSTRAP_CONFIG", which
 // directly specifies the bootstrap configuration in itself.
-func (s) TestNewConfigBootstrapEnvPriority(t *testing.T) {
+func (s) TestGetConfiguration_BootstrapEnvPriority(t *testing.T) {
 	oldFileReadFunc := bootstrapFileReadFunc
 	bootstrapFileReadFunc = func(filename string) ([]byte, error) {
 		return fileReadFromFileMap(v3BootstrapFileMap, filename)
@@ -465,17 +462,17 @@ func (s) TestNewConfigBootstrapEnvPriority(t *testing.T) {
 	envconfig.XDSBootstrapFileContent = ""
 	defer func() { envconfig.XDSBootstrapFileContent = origBootstrapContent }()
 
-	// When both env variables are empty, NewConfig should fail.
-	if _, err := NewConfig(); err == nil {
-		t.Errorf("NewConfig() returned nil error, expected to fail")
+	// When both env variables are empty, GetConfiguration should fail.
+	if _, err := GetConfiguration(); err == nil {
+		t.Errorf("GetConfiguration() returned nil error, expected to fail")
 	}
 
 	// When one of them is set, it should be used.
 	envconfig.XDSBootstrapFileName = goodFileName1
 	envconfig.XDSBootstrapFileContent = ""
-	c, err := NewConfig()
+	c, err := GetConfiguration()
 	if err != nil {
-		t.Errorf("NewConfig() failed: %v", err)
+		t.Errorf("GetConfiguration() failed: %v", err)
 	}
 	if diff := cmp.Diff(goodConfig1, c); diff != "" {
 		t.Errorf("Unexpected diff in bootstrap configuration (-want, +got):\n%s", diff)
@@ -483,9 +480,9 @@ func (s) TestNewConfigBootstrapEnvPriority(t *testing.T) {
 
 	envconfig.XDSBootstrapFileName = ""
 	envconfig.XDSBootstrapFileContent = goodFileContent2
-	c, err = NewConfig()
+	c, err = GetConfiguration()
 	if err != nil {
-		t.Errorf("NewConfig() failed: %v", err)
+		t.Errorf("GetConfiguration() failed: %v", err)
 	}
 	if diff := cmp.Diff(goodConfig2, c); diff != "" {
 		t.Errorf("Unexpected diff in bootstrap configuration (-want, +got):\n%s", diff)
@@ -494,9 +491,9 @@ func (s) TestNewConfigBootstrapEnvPriority(t *testing.T) {
 	// Set both, file name should be read.
 	envconfig.XDSBootstrapFileName = goodFileName1
 	envconfig.XDSBootstrapFileContent = goodFileContent2
-	c, err = NewConfig()
+	c, err = GetConfiguration()
 	if err != nil {
-		t.Errorf("NewConfig() failed: %v", err)
+		t.Errorf("GetConfiguration() failed: %v", err)
 	}
 	if diff := cmp.Diff(goodConfig1, c); diff != "" {
 		t.Errorf("Unexpected diff in bootstrap configuration (-want, +got):\n%s", diff)
@@ -554,7 +551,7 @@ type fakeCertProvider struct {
 	certprovider.Provider
 }
 
-func (s) TestNewConfigWithCertificateProviders(t *testing.T) {
+func (s) TestGetConfiguration_CertificateProviders(t *testing.T) {
 	bootstrapFileMap := map[string]string{
 		"badJSONCertProviderConfig": `
 		{
@@ -706,13 +703,13 @@ func (s) TestNewConfigWithCertificateProviders(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			testNewConfigWithFileNameEnv(t, test.name, test.wantErr, test.wantConfig)
-			testNewConfigWithFileContentEnv(t, test.name, test.wantErr, test.wantConfig)
+			testGetConfigurationWithFileNameEnv(t, test.name, test.wantErr, test.wantConfig)
+			testGetConfigurationWithFileContentEnv(t, test.name, test.wantErr, test.wantConfig)
 		})
 	}
 }
 
-func (s) TestNewConfigWithServerListenerResourceNameTemplate(t *testing.T) {
+func (s) TestGetConfiguration_ServerListenerResourceNameTemplate(t *testing.T) {
 	cancel := setupBootstrapOverride(map[string]string{
 		"badServerListenerResourceNameTemplate:": `
 		{
@@ -775,13 +772,13 @@ func (s) TestNewConfigWithServerListenerResourceNameTemplate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			testNewConfigWithFileNameEnv(t, test.name, test.wantErr, test.wantConfig)
-			testNewConfigWithFileContentEnv(t, test.name, test.wantErr, test.wantConfig)
+			testGetConfigurationWithFileNameEnv(t, test.name, test.wantErr, test.wantConfig)
+			testGetConfigurationWithFileContentEnv(t, test.name, test.wantErr, test.wantConfig)
 		})
 	}
 }
 
-func (s) TestNewConfigWithFederation(t *testing.T) {
+func (s) TestGetConfiguration_Federation(t *testing.T) {
 	cancel := setupBootstrapOverride(map[string]string{
 		"badclientListenerResourceNameTemplate": `
 		{
@@ -984,8 +981,8 @@ func (s) TestNewConfigWithFederation(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			testNewConfigWithFileNameEnv(t, test.name, test.wantErr, test.wantConfig)
-			testNewConfigWithFileContentEnv(t, test.name, test.wantErr, test.wantConfig)
+			testGetConfigurationWithFileNameEnv(t, test.name, test.wantErr, test.wantConfig)
+			testGetConfigurationWithFileContentEnv(t, test.name, test.wantErr, test.wantConfig)
 		})
 	}
 }

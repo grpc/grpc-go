@@ -215,7 +215,7 @@ func (s) TestEDSWatch(t *testing.T) {
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
 				}`, mgmtServer.Address))},
-				NodeID: nodeID,
+				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 				Authorities: map[string]json.RawMessage{
 					// Xdstp resource names used in this test do not specify an
 					// authority. These will end up looking up an entry with the
@@ -405,7 +405,7 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
 				}`, mgmtServer.Address))},
-				NodeID: nodeID,
+				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 				Authorities: map[string]json.RawMessage{
 					// Xdstp resource names used in this test do not specify an
 					// authority. These will end up looking up an entry with the
@@ -510,7 +510,7 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
 				}`, mgmtServer.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
@@ -875,7 +875,7 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
 				}`, mgmtServer.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
