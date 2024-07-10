@@ -28,7 +28,7 @@ PROTOC_VERSION="27.1"
 # Function to download pre-built binaries for Linux with
 # ARCH as $1, OS as $2, and INSTALL_PATH as $3 arguments.
 download_binary() {
-  INSTALL_PATH="https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-$2-$1.zip"
+  DOWNLOAD_URL="https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-$2-$1.zip"
   INSTALL_DIR="${3:-${GOBIN:-${GOPATH:-$HOME/go}}}"
   
   # Download and unzip.
