@@ -34,8 +34,8 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.62.0 or later.
-const _ = grpc.SupportPackageIsVersion8
+// Requires gRPC-Go v1.64.0 or later.
+const _ = grpc.SupportPackageIsVersion9
 
 const (
 	LoadBalancer_BalanceLoad_FullMethodName = "/grpc.lb.v1.LoadBalancer/BalanceLoad"
@@ -46,7 +46,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type LoadBalancerClient interface {
 	// Bidirectional rpc to get a list of servers.
-	BalanceLoad(ctx context.Context, opts ...grpc.CallOption) (LoadBalancer_BalanceLoadClient, error)
+	BalanceLoad(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[LoadBalanceRequest, LoadBalanceResponse], error)
 }
 
 type loadBalancerClient struct {
@@ -57,51 +57,32 @@ func NewLoadBalancerClient(cc grpc.ClientConnInterface) LoadBalancerClient {
 	return &loadBalancerClient{cc}
 }
 
-func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...grpc.CallOption) (LoadBalancer_BalanceLoadClient, error) {
+func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[LoadBalanceRequest, LoadBalanceResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &LoadBalancer_ServiceDesc.Streams[0], LoadBalancer_BalanceLoad_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &loadBalancerBalanceLoadClient{ClientStream: stream}
+	x := &grpc.GenericClientStream[LoadBalanceRequest, LoadBalanceResponse]{ClientStream: stream}
 	return x, nil
 }
 
-type LoadBalancer_BalanceLoadClient interface {
-	Send(*LoadBalanceRequest) error
-	Recv() (*LoadBalanceResponse, error)
-	grpc.ClientStream
-}
-
-type loadBalancerBalanceLoadClient struct {
-	grpc.ClientStream
-}
-
-func (x *loadBalancerBalanceLoadClient) Send(m *LoadBalanceRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *loadBalancerBalanceLoadClient) Recv() (*LoadBalanceResponse, error) {
-	m := new(LoadBalanceResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type LoadBalancer_BalanceLoadClient = grpc.BidiStreamingClient[LoadBalanceRequest, LoadBalanceResponse]
 
 // LoadBalancerServer is the server API for LoadBalancer service.
 // All implementations should embed UnimplementedLoadBalancerServer
 // for forward compatibility
 type LoadBalancerServer interface {
 	// Bidirectional rpc to get a list of servers.
-	BalanceLoad(LoadBalancer_BalanceLoadServer) error
+	BalanceLoad(grpc.BidiStreamingServer[LoadBalanceRequest, LoadBalanceResponse]) error
 }
 
 // UnimplementedLoadBalancerServer should be embedded to have forward compatible implementations.
 type UnimplementedLoadBalancerServer struct {
 }
 
-func (UnimplementedLoadBalancerServer) BalanceLoad(LoadBalancer_BalanceLoadServer) error {
+func (UnimplementedLoadBalancerServer) BalanceLoad(grpc.BidiStreamingServer[LoadBalanceRequest, LoadBalanceResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method BalanceLoad not implemented")
 }
 
@@ -117,30 +98,11 @@ func RegisterLoadBalancerServer(s grpc.ServiceRegistrar, srv LoadBalancerServer)
 }
 
 func _LoadBalancer_BalanceLoad_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(LoadBalancerServer).BalanceLoad(&loadBalancerBalanceLoadServer{ServerStream: stream})
+	return srv.(LoadBalancerServer).BalanceLoad(&grpc.GenericServerStream[LoadBalanceRequest, LoadBalanceResponse]{ServerStream: stream})
 }
 
-type LoadBalancer_BalanceLoadServer interface {
-	Send(*LoadBalanceResponse) error
-	Recv() (*LoadBalanceRequest, error)
-	grpc.ServerStream
-}
-
-type loadBalancerBalanceLoadServer struct {
-	grpc.ServerStream
-}
-
-func (x *loadBalancerBalanceLoadServer) Send(m *LoadBalanceResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *loadBalancerBalanceLoadServer) Recv() (*LoadBalanceRequest, error) {
-	m := new(LoadBalanceRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type LoadBalancer_BalanceLoadServer = grpc.BidiStreamingServer[LoadBalanceRequest, LoadBalanceResponse]
 
 // LoadBalancer_ServiceDesc is the grpc.ServiceDesc for LoadBalancer service.
 // It's only intended for direct use with grpc.RegisterService,
