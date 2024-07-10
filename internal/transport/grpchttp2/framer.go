@@ -100,123 +100,129 @@ type FrameHeader struct {
 
 // Frame represents an HTTP/2 Frame.
 type Frame interface {
-	Header() FrameHeader
+	Header() *FrameHeader
 }
 
 type DataFrame struct {
-	hdr  FrameHeader
-	free func([]byte)
+	hdr  *FrameHeader
+	free func()
 	Data []byte
 }
 
-func (f *DataFrame) Header() FrameHeader {
+func (f *DataFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
 func (f *DataFrame) Free() {
 	if f.free != nil {
-		f.free(f.Data)
+		f.free()
 	}
 }
 
 type HeadersFrame struct {
-	hdr      FrameHeader
-	free     func([]byte)
+	hdr      *FrameHeader
+	free     func()
 	HdrBlock []byte
 }
 
-func (f *HeadersFrame) Header() FrameHeader {
+func (f *HeadersFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
 func (f *HeadersFrame) Free() {
 	if f.free != nil {
-		f.free(f.HdrBlock)
+		f.free()
 	}
 }
 
 type RSTStreamFrame struct {
-	hdr  FrameHeader
+	hdr  *FrameHeader
 	Code ErrCode
 }
 
-func (f *RSTStreamFrame) Header() FrameHeader {
+func (f *RSTStreamFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
 type SettingsFrame struct {
-	hdr      FrameHeader
-	free     func([]byte)
-	settings []byte
+	hdr      *FrameHeader
+	free     func()
+	settings []Setting
 }
 
-func (f *SettingsFrame) Header() FrameHeader {
+func (f *SettingsFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
-func (f *SettingsFrame) Free() {
-	if f.free != nil {
-		f.free(f.settings)
-	}
-}
-
 type PingFrame struct {
-	hdr  FrameHeader
-	free func([]byte)
+	hdr  *FrameHeader
+	free func()
 	Data []byte
 }
 
-func (f *PingFrame) Header() FrameHeader {
+func (f *PingFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
 func (f *PingFrame) Free() {
 	if f.free != nil {
-		f.free(f.Data)
+		f.free()
 	}
 }
 
 type GoAwayFrame struct {
-	hdr          FrameHeader
-	free         func([]byte)
+	hdr          *FrameHeader
+	free         func()
 	LastStreamID uint32
 	Code         ErrCode
 	DebugData    []byte
 }
 
-func (f *GoAwayFrame) Header() FrameHeader {
+func (f *GoAwayFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
 func (f *GoAwayFrame) Free() {
 	if f.free != nil {
-		f.free(f.DebugData)
+		f.free()
 	}
 }
 
 type WindowUpdateFrame struct {
-	hdr FrameHeader
+	hdr *FrameHeader
 	Inc uint32
 }
 
-func (f *WindowUpdateFrame) Header() FrameHeader {
+func (f *WindowUpdateFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
 type ContinuationFrame struct {
-	hdr      FrameHeader
-	free     func([]byte)
+	hdr      *FrameHeader
+	free     func()
 	HdrBlock []byte
 }
 
-func (f *ContinuationFrame) Header() FrameHeader {
+func (f *ContinuationFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
 func (f *ContinuationFrame) Free() {
 	if f.free != nil {
-		f.free(f.HdrBlock)
+		f.free()
 	}
+}
+
+// MetaHeadersFrame is not a Frame Type that appears on the HTTP/2 Spec. It is
+// a representation of the merging and decoding of all the Headers and
+// Continuation frames on a Stream.
+type MetaHeadersFrame struct {
+	hdr    *FrameHeader
+	Fields []hpack.HeaderField
+}
+
+func (f *MetaHeadersFrame) Header() *FrameHeader {
+	return f.hdr
 }
 
 // Framer represents a Framer used in gRPC-Go.
