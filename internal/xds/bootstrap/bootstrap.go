@@ -544,7 +544,7 @@ func GetConfiguration() (*Config, error) {
 		return newConfigFromContents([]byte(fContent))
 	}
 
-	if cfg := getFallbackBootstrapConfig(); cfg != nil {
+	if cfg := fallbackBootstrapConfig(); cfg != nil {
 		if logger.V(2) {
 			logger.Infof("Using bootstrap contents from fallback config")
 		}
@@ -768,30 +768,30 @@ func SetFallbackBootstrapConfig(cfgJSON []byte) error {
 
 	configMu.Lock()
 	defer configMu.Unlock()
-	fallbackBootstrapConfig = config
+	fallbackBootstrapCfg = config
 	return nil
 }
 
-// UnSetFallbackBootstrapConfigForTesting unsets the fallback bootstrap
+// UnsetFallbackBootstrapConfigForTesting unsets the fallback bootstrap
 // configuration to be used when the bootstrap environment variables are unset.
 //
 // # Testing-Only
-func UnSetFallbackBootstrapConfigForTesting() {
+func UnsetFallbackBootstrapConfigForTesting() {
 	configMu.Lock()
 	defer configMu.Unlock()
-	fallbackBootstrapConfig = nil
+	fallbackBootstrapCfg = nil
 }
 
-// getFallbackBootstrapConfig returns the fallback bootstrap configuration
+// fallbackBootstrapConfig returns the fallback bootstrap configuration
 // that will be used by the xDS client when the bootstrap environment
 // variables are unset.
-func getFallbackBootstrapConfig() *Config {
+func fallbackBootstrapConfig() *Config {
 	configMu.Lock()
 	defer configMu.Unlock()
-	return fallbackBootstrapConfig
+	return fallbackBootstrapCfg
 }
 
 var (
-	configMu                sync.Mutex
-	fallbackBootstrapConfig *Config
+	configMu             sync.Mutex
+	fallbackBootstrapCfg *Config
 )

@@ -116,7 +116,7 @@ func NewForTesting(opts OptionsForTesting) (XDSClient, func(), error) {
 		return nil, nil, err
 	}
 	client, cancel, err := newRefCounted(opts.Name, opts.WatchExpiryTimeout, opts.AuthorityIdleTimeout)
-	return client, func() { bootstrap.UnSetFallbackBootstrapConfigForTesting(); cancel() }, err
+	return client, func() { bootstrap.UnsetFallbackBootstrapConfigForTesting(); cancel() }, err
 }
 
 // GetForTesting returns an xDS client created earlier using the given name.
