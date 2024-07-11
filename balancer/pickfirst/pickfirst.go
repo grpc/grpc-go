@@ -62,6 +62,7 @@ type pickfirstBuilder struct{}
 
 func (pickfirstBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
 	b := &pickfirstBalancer{cc: cc}
+	b.subConnList = newSubConnList([]resolver.Address{}, b)
 	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(logPrefix, b))
 	return b
 }
@@ -150,9 +151,6 @@ func newSubConnList(addrs []resolver.Address, b *pickfirstBalancer) *subConnList
 }
 
 func (sl *subConnList) startConnectingIfNeeded() {
-	if sl == nil {
-		return
-	}
 	sl.mu.Lock()
 	defer sl.mu.Unlock()
 	if sl.status != subConnListPending {
@@ -256,9 +254,6 @@ func (sl *subConnList) selectSubConn(scw *scWrapper) {
 }
 
 func (sl *subConnList) close() {
-	if sl == nil {
-		return
-	}
 	sl.mu.Lock()
 	defer sl.mu.Unlock()
 	if sl.status == subConnListClosed {
@@ -374,7 +369,7 @@ func (b *pickfirstBalancer) goIdle() {
 		return
 	}
 
-	callback := func() {
+	exitIdle := func() {
 		b.subConnList.startConnectingIfNeeded()
 	}
 
@@ -388,7 +383,7 @@ func (b *pickfirstBalancer) goIdle() {
 	b.cc.UpdateState(balancer.State{
 		ConnectivityState: nextState,
 		Picker: &idlePicker{
-			exitIdle: callback,
+			exitIdle: exitIdle,
 		},
 	})
 }
@@ -397,12 +392,10 @@ func (b *pickfirstBalancer) refreshSubConnList() {
 	subConnList := newSubConnList(b.latestAddressList, b)
 
 	// Reset the previous subConnList to release resources.
-	if b.subConnList != nil {
-		if b.logger.V(2) {
-			b.logger.Infof("Closing older subConnList")
-		}
-		b.subConnList.close()
+	if b.logger.V(2) {
+		b.logger.Infof("Closing older subConnList")
 	}
+	b.subConnList.close()
 	b.subConnList = subConnList
 }
 
