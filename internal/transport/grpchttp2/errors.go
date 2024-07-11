@@ -18,6 +18,8 @@
 
 package grpchttp2
 
+import "fmt"
+
 // ErrCode represents an HTTP/2 Error Code. Error codes are 32-bit fields
 // that are used in [RST_STREAM] and [GOAWAY] frames to convey the reasons for
 // the stream or connection error. See [HTTP/2 Error Code] for definitions of
@@ -66,5 +68,5 @@ func (err ErrCode) String() string {
 	if v, ok := errorCodeNames[err]; ok {
 		return v
 	}
-	return "INTERNAL_ERROR"
+	return fmt.Sprintf("unknown error code 0x%x", uint32(err))
 }

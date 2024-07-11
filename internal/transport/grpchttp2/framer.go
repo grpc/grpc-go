@@ -30,10 +30,8 @@ type FrameType uint8
 const (
 	FrameTypeData         FrameType = 0x0
 	FrameTypeHeaders      FrameType = 0x1
-	FrameTypePriority     FrameType = 0x2
 	FrameTypeRSTStream    FrameType = 0x3
 	FrameTypeSettings     FrameType = 0x4
-	FrameTypePushPromise  FrameType = 0x5
 	FrameTypePing         FrameType = 0x6
 	FrameTypeGoAway       FrameType = 0x7
 	FrameTypeWindowUpdate FrameType = 0x8
@@ -101,6 +99,9 @@ type FrameHeader struct {
 // Frame represents an HTTP/2 Frame.
 type Frame interface {
 	Header() *FrameHeader
+	// Free frees the underlying buffer if present so it can be reused by the
+	// framer.
+	Free()
 }
 
 type DataFrame struct {
@@ -144,15 +145,18 @@ func (f *RSTStreamFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
+func (f *RSTStreamFrame) Free() {}
+
 type SettingsFrame struct {
 	hdr      *FrameHeader
-	free     func()
 	settings []Setting
 }
 
 func (f *SettingsFrame) Header() *FrameHeader {
 	return f.hdr
 }
+
+func (f *SettingsFrame) Free() {}
 
 type PingFrame struct {
 	hdr  *FrameHeader
@@ -225,7 +229,9 @@ func (f *MetaHeadersFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
-// Framer represents a Framer used in gRPC-Go.
+func (f *MetaHeadersFrame) Free() {}
+
+// Framer encapsulates the functionality to read and write HTTP/2 frames.
 type Framer interface {
 	// SetMetaDecoder will set a decoder for the framer. When the decoder is
 	// set, ReadFrame will parse the header values, merging all Headers and
