@@ -25,9 +25,9 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/stats"
 	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
 
 	"go.opentelemetry.io/otel/metric"
@@ -65,7 +65,7 @@ type MetricsOptions struct {
 	// for corresponding metric supported by the client and server
 	// instrumentation components if applicable. If not set, the default metrics
 	// will be recorded.
-	Metrics *stats.Metrics
+	Metrics *estats.Metrics
 
 	// MethodAttributeFilter is to record the method name of RPCs handled by
 	// grpc.UnknownServiceHandler, but take care to limit the values allowed, as
@@ -207,7 +207,7 @@ type serverMetrics struct {
 	callDuration metric.Float64Histogram
 }
 
-func createInt64Counter(setOfMetrics map[stats.Metric]bool, metricName stats.Metric, meter metric.Meter, options ...metric.Int64CounterOption) metric.Int64Counter {
+func createInt64Counter(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter metric.Meter, options ...metric.Int64CounterOption) metric.Int64Counter {
 	if _, ok := setOfMetrics[metricName]; !ok {
 		return noop.Int64Counter{}
 	}
@@ -219,7 +219,7 @@ func createInt64Counter(setOfMetrics map[stats.Metric]bool, metricName stats.Met
 	return ret
 }
 
-func createInt64Histogram(setOfMetrics map[stats.Metric]bool, metricName stats.Metric, meter metric.Meter, options ...metric.Int64HistogramOption) metric.Int64Histogram {
+func createInt64Histogram(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter metric.Meter, options ...metric.Int64HistogramOption) metric.Int64Histogram {
 	if _, ok := setOfMetrics[metricName]; !ok {
 		return noop.Int64Histogram{}
 	}
@@ -231,7 +231,7 @@ func createInt64Histogram(setOfMetrics map[stats.Metric]bool, metricName stats.M
 	return ret
 }
 
-func createFloat64Histogram(setOfMetrics map[stats.Metric]bool, metricName stats.Metric, meter metric.Meter, options ...metric.Float64HistogramOption) metric.Float64Histogram {
+func createFloat64Histogram(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter metric.Meter, options ...metric.Float64HistogramOption) metric.Float64Histogram {
 	if _, ok := setOfMetrics[metricName]; !ok {
 		return noop.Float64Histogram{}
 	}
@@ -254,5 +254,5 @@ var (
 	// DefaultSizeBounds are the default bounds for metrics which record size.
 	DefaultSizeBounds = []float64{0, 1024, 2048, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864, 268435456, 1073741824, 4294967296}
 	// DefaultMetrics are the default metrics provided by this module.
-	DefaultMetrics = stats.NewMetrics(ClientAttemptStarted, ClientAttemptDuration, ClientAttemptSentCompressedTotalMessageSize, ClientAttemptRcvdCompressedTotalMessageSize, ClientCallDuration, ServerCallStarted, ServerCallSentCompressedTotalMessageSize, ServerCallRcvdCompressedTotalMessageSize, ServerCallDuration)
+	DefaultMetrics = estats.NewMetrics(ClientAttemptStarted, ClientAttemptDuration, ClientAttemptSentCompressedTotalMessageSize, ClientAttemptRcvdCompressedTotalMessageSize, ClientCallDuration, ServerCallStarted, ServerCallSentCompressedTotalMessageSize, ServerCallRcvdCompressedTotalMessageSize, ServerCallDuration)
 )

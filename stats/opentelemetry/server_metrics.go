@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
@@ -254,14 +255,14 @@ func (h *serverStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo,
 
 const (
 	// ServerCallStarted is the number of server calls started.
-	ServerCallStarted stats.Metric = "grpc.server.call.started"
+	ServerCallStarted estats.Metric = "grpc.server.call.started"
 	// ServerCallSentCompressedTotalMessageSize is the compressed message bytes
 	// sent per server call.
-	ServerCallSentCompressedTotalMessageSize stats.Metric = "grpc.server.call.sent_total_compressed_message_size"
+	ServerCallSentCompressedTotalMessageSize estats.Metric = "grpc.server.call.sent_total_compressed_message_size"
 	// ServerCallRcvdCompressedTotalMessageSize is the compressed message bytes
 	// received per server call.
-	ServerCallRcvdCompressedTotalMessageSize stats.Metric = "grpc.server.call.rcvd_total_compressed_message_size"
+	ServerCallRcvdCompressedTotalMessageSize estats.Metric = "grpc.server.call.rcvd_total_compressed_message_size"
 	// ServerCallDuration is the end-to-end time taken to complete a call from
 	// server transport's perspective.
-	ServerCallDuration stats.Metric = "grpc.server.call.duration"
+	ServerCallDuration estats.Metric = "grpc.server.call.duration"
 )

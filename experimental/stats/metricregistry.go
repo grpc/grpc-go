@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/stats"
 )
 
 var logger = grpclog.Component("metrics-registry")
@@ -30,7 +29,7 @@ var logger = grpclog.Component("metrics-registry")
 // DefaultMetrics are the default metrics registered through global metrics
 // registry. This is written to at initialization time only, and is read only
 // after initialization.
-var DefaultMetrics = stats.NewMetrics()
+var DefaultMetrics = NewMetrics()
 
 // MetricDescriptor is the data for a registered metric.
 type MetricDescriptor struct {
@@ -38,7 +37,7 @@ type MetricDescriptor struct {
 	// (including any per call metrics). See
 	// https://github.com/grpc/proposal/blob/master/A79-non-per-call-metrics-architecture.md#metric-instrument-naming-conventions
 	// for metric naming conventions.
-	Name stats.Metric
+	Name Metric
 	// The description of this metric.
 	Description string
 	// The unit (e.g. entries, seconds) of this metric.
@@ -114,21 +113,21 @@ func (h *Int64GaugeHandle) Record(recorder MetricsRecorder, incr int64, labels .
 }
 
 // registeredMetrics are the registered metric descriptor names.
-var registeredMetrics = make(map[stats.Metric]bool)
+var registeredMetrics = make(map[Metric]bool)
 
 // metricsRegistry contains all of the registered metrics.
 //
 // This is written to only at init time, and read only after that.
-var metricsRegistry = make(map[stats.Metric]*MetricDescriptor)
+var metricsRegistry = make(map[Metric]*MetricDescriptor)
 
 // DescriptorForMetric returns the MetricDescriptor from the global registry.
 //
 // Returns nil if MetricDescriptor not present.
-func DescriptorForMetric(metric stats.Metric) *MetricDescriptor {
+func DescriptorForMetric(metric Metric) *MetricDescriptor {
 	return metricsRegistry[metric]
 }
 
-func registerMetric(name stats.Metric, def bool) {
+func registerMetric(name Metric, def bool) {
 	if registeredMetrics[name] {
 		logger.Fatalf("metric %v already registered", name)
 	}

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	estats "google.golang.org/grpc/experimental/stats"
 	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
@@ -238,17 +239,17 @@ func (h *clientStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo,
 
 const (
 	// ClientAttemptStarted is the number of client call attempts started.
-	ClientAttemptStarted stats.Metric = "grpc.client.attempt.started"
+	ClientAttemptStarted estats.Metric = "grpc.client.attempt.started"
 	// ClientAttemptDuration is the end-to-end time taken to complete a client
 	// call attempt.
-	ClientAttemptDuration stats.Metric = "grpc.client.attempt.duration"
+	ClientAttemptDuration estats.Metric = "grpc.client.attempt.duration"
 	// ClientAttemptSentCompressedTotalMessageSize is the compressed message
 	// bytes sent per client call attempt.
-	ClientAttemptSentCompressedTotalMessageSize stats.Metric = "grpc.client.attempt.sent_total_compressed_message_size"
+	ClientAttemptSentCompressedTotalMessageSize estats.Metric = "grpc.client.attempt.sent_total_compressed_message_size"
 	// ClientAttemptRcvdCompressedTotalMessageSize is the compressed message
 	// bytes received per call attempt.
-	ClientAttemptRcvdCompressedTotalMessageSize stats.Metric = "grpc.client.attempt.rcvd_total_compressed_message_size"
+	ClientAttemptRcvdCompressedTotalMessageSize estats.Metric = "grpc.client.attempt.rcvd_total_compressed_message_size"
 	// ClientCallDuration is the time taken by gRPC to complete an RPC from
 	// application's perspective.
-	ClientCallDuration stats.Metric = "grpc.client.call.duration"
+	ClientCallDuration estats.Metric = "grpc.client.call.duration"
 )
