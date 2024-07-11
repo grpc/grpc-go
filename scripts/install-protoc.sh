@@ -81,8 +81,8 @@ main() {
 
   # Detect the Operating System
   case "$(uname -s)" in
-    # "Darwin") download_binary $ARCH "osx";;
-    # "Linux") download_binary $ARCH "linux";;
+    "Darwin") download_binary $ARCH "osx";;
+    "Linux") download_binary $ARCH "linux";;
   *) die "Unsupported OS. Please consider manual installation from "\
           "https://github.com/protocolbuffers/protobuf/releases/ and add to PATH" ;;
   esac
