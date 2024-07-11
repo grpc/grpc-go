@@ -111,27 +111,27 @@ func (s) TestMetricRegistry(t *testing.T) {
 	// The Metric Descriptor in the handle should be able to identify the metric
 	// information. This is the key passed to metrics recorder to identify
 	// metric.
-	if got := fmr.intValues[intCountHandle1.MetricDescriptor]; got != 1 {
+	if got := fmr.intValues[(*MetricDescriptor)(intCountHandle1)]; got != 1 {
 		t.Fatalf("fmr.intValues[intCountHandle1.MetricDescriptor] got %v, want: %v", got, 1)
 	}
 
 	floatCountHandle1.Record(fmr, 1.2, []string{"some label value", "some optional label value"}...)
-	if got := fmr.floatValues[floatCountHandle1.MetricDescriptor]; got != 1.2 {
+	if got := fmr.floatValues[(*MetricDescriptor)(floatCountHandle1)]; got != 1.2 {
 		t.Fatalf("fmr.floatValues[floatCountHandle1.MetricDescriptor] got %v, want: %v", got, 1.2)
 	}
 
 	intHistoHandle1.Record(fmr, 3, []string{"some label value", "some optional label value"}...)
-	if got := fmr.intValues[intHistoHandle1.MetricDescriptor]; got != 3 {
+	if got := fmr.intValues[(*MetricDescriptor)(intHistoHandle1)]; got != 3 {
 		t.Fatalf("fmr.intValues[intHistoHandle1.MetricDescriptor] got %v, want: %v", got, 3)
 	}
 
 	floatHistoHandle1.Record(fmr, 4.3, []string{"some label value", "some optional label value"}...)
-	if got := fmr.floatValues[floatHistoHandle1.MetricDescriptor]; got != 4.3 {
+	if got := fmr.floatValues[(*MetricDescriptor)(floatHistoHandle1)]; got != 4.3 {
 		t.Fatalf("fmr.floatValues[floatHistoHandle1.MetricDescriptor] got %v, want: %v", got, 4.3)
 	}
 
 	intGaugeHandle1.Record(fmr, 7, []string{"some label value", "some optional label value"}...)
-	if got := fmr.intValues[intGaugeHandle1.MetricDescriptor]; got != 7 {
+	if got := fmr.intValues[(*MetricDescriptor)(intGaugeHandle1)]; got != 7 {
 		t.Fatalf("fmr.intValues[intGaugeHandle1.MetricDescriptor] got %v, want: %v", got, 7)
 	}
 }
@@ -169,28 +169,28 @@ func TestNumerousIntCounts(t *testing.T) {
 	fmr := newFakeMetricsRecorder(t)
 
 	intCountHandle1.Record(fmr, 1, []string{"some label value", "some optional label value"}...)
-	got := []int64{fmr.intValues[intCountHandle1.MetricDescriptor], fmr.intValues[intCountHandle2.MetricDescriptor], fmr.intValues[intCountHandle3.MetricDescriptor]}
+	got := []int64{fmr.intValues[(*MetricDescriptor)(intCountHandle1)], fmr.intValues[(*MetricDescriptor)(intCountHandle2)], fmr.intValues[(*MetricDescriptor)(intCountHandle3)]}
 	want := []int64{1, 0, 0}
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Fatalf("fmr.intValues (-got, +want): %v", diff)
 	}
 
 	intCountHandle2.Record(fmr, 1, []string{"some label value", "some optional label value"}...)
-	got = []int64{fmr.intValues[intCountHandle1.MetricDescriptor], fmr.intValues[intCountHandle2.MetricDescriptor], fmr.intValues[intCountHandle3.MetricDescriptor]}
+	got = []int64{fmr.intValues[(*MetricDescriptor)(intCountHandle1)], fmr.intValues[(*MetricDescriptor)(intCountHandle2)], fmr.intValues[(*MetricDescriptor)(intCountHandle3)]}
 	want = []int64{1, 1, 0}
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Fatalf("fmr.intValues (-got, +want): %v", diff)
 	}
 
 	intCountHandle3.Record(fmr, 1, []string{"some label value", "some optional label value"}...)
-	got = []int64{fmr.intValues[intCountHandle1.MetricDescriptor], fmr.intValues[intCountHandle2.MetricDescriptor], fmr.intValues[intCountHandle3.MetricDescriptor]}
+	got = []int64{fmr.intValues[(*MetricDescriptor)(intCountHandle1)], fmr.intValues[(*MetricDescriptor)(intCountHandle2)], fmr.intValues[(*MetricDescriptor)(intCountHandle3)]}
 	want = []int64{1, 1, 1}
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Fatalf("fmr.intValues (-got, +want): %v", diff)
 	}
 
 	intCountHandle3.Record(fmr, 1, []string{"some label value", "some optional label value"}...)
-	got = []int64{fmr.intValues[intCountHandle1.MetricDescriptor], fmr.intValues[intCountHandle2.MetricDescriptor], fmr.intValues[intCountHandle3.MetricDescriptor]}
+	got = []int64{fmr.intValues[(*MetricDescriptor)(intCountHandle1)], fmr.intValues[(*MetricDescriptor)(intCountHandle2)], fmr.intValues[(*MetricDescriptor)(intCountHandle3)]}
 	want = []int64{1, 1, 2}
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Fatalf("fmr.intValues (-got, +want): %v", diff)
@@ -235,26 +235,26 @@ func verifyLabels(t *testing.T, labelsWant []string, optionalLabelsWant []string
 }
 
 func (r *fakeMetricsRecorder) RecordIntCount(handle *Int64CountHandle, incr int64, labels ...string) {
-	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
-	r.intValues[handle.MetricDescriptor] += incr
+	verifyLabels(r.t, (*MetricDescriptor)(handle).Labels, (*MetricDescriptor)(handle).OptionalLabels, labels)
+	r.intValues[(*MetricDescriptor)(handle)] += incr
 }
 
 func (r *fakeMetricsRecorder) RecordFloatCount(handle *Float64CountHandle, incr float64, labels ...string) {
-	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
-	r.floatValues[handle.MetricDescriptor] += incr
+	verifyLabels(r.t, (*MetricDescriptor)(handle).Labels, (*MetricDescriptor)(handle).OptionalLabels, labels)
+	r.floatValues[(*MetricDescriptor)(handle)] += incr
 }
 
 func (r *fakeMetricsRecorder) RecordIntHisto(handle *Int64HistoHandle, incr int64, labels ...string) {
-	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
-	r.intValues[handle.MetricDescriptor] += incr
+	verifyLabels(r.t, (*MetricDescriptor)(handle).Labels, (*MetricDescriptor)(handle).OptionalLabels, labels)
+	r.intValues[(*MetricDescriptor)(handle)] += incr
 }
 
 func (r *fakeMetricsRecorder) RecordFloatHisto(handle *Float64HistoHandle, incr float64, labels ...string) {
-	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
-	r.floatValues[handle.MetricDescriptor] += incr
+	verifyLabels(r.t, (*MetricDescriptor)(handle).Labels, (*MetricDescriptor)(handle).OptionalLabels, labels)
+	r.floatValues[(*MetricDescriptor)(handle)] += incr
 }
 
 func (r *fakeMetricsRecorder) RecordIntGauge(handle *Int64GaugeHandle, incr int64, labels ...string) {
-	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
-	r.intValues[handle.MetricDescriptor] += incr
+	verifyLabels(r.t, (*MetricDescriptor)(handle).Labels, (*MetricDescriptor)(handle).OptionalLabels, labels)
+	r.intValues[(*MetricDescriptor)(handle)] += incr
 }

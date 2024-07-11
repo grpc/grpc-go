@@ -19,6 +19,7 @@
 package stats
 
 import (
+	"maps"
 	"testing"
 
 	"google.golang.org/grpc/grpclog"
@@ -55,12 +56,10 @@ type MetricDescriptor struct {
 	Type MetricType
 }
 
-// Int64CountHandle is a typed handle for a float count metric. This handle
+// Int64CountHandle is a typed handle for a int count metric. This handle
 // is passed at the recording point in order to know which metric to record
 // on.
-type Int64CountHandle struct {
-	MetricDescriptor *MetricDescriptor
-}
+type Int64CountHandle MetricDescriptor
 
 // Record records the int64 count value on the metrics recorder provided.
 func (h *Int64CountHandle) Record(recorder MetricsRecorder, incr int64, labels ...string) {
@@ -69,9 +68,7 @@ func (h *Int64CountHandle) Record(recorder MetricsRecorder, incr int64, labels .
 
 // Float64CountHandle is a typed handle for a float count metric. This handle is
 // passed at the recording point in order to know which metric to record on.
-type Float64CountHandle struct {
-	MetricDescriptor *MetricDescriptor
-}
+type Float64CountHandle MetricDescriptor
 
 // Record records the float64 count value on the metrics recorder provided.
 func (h *Float64CountHandle) Record(recorder MetricsRecorder, incr float64, labels ...string) {
@@ -80,9 +77,7 @@ func (h *Float64CountHandle) Record(recorder MetricsRecorder, incr float64, labe
 
 // Int64HistoHandle is a typed handle for an int histogram metric. This handle
 // is passed at the recording point in order to know which metric to record on.
-type Int64HistoHandle struct {
-	MetricDescriptor *MetricDescriptor
-}
+type Int64HistoHandle MetricDescriptor
 
 // Record records the int64 histo value on the metrics recorder provided.
 func (h *Int64HistoHandle) Record(recorder MetricsRecorder, incr int64, labels ...string) {
@@ -92,9 +87,7 @@ func (h *Int64HistoHandle) Record(recorder MetricsRecorder, incr int64, labels .
 // Float64HistoHandle is a typed handle for a float histogram metric. This
 // handle is passed at the recording point in order to know which metric to
 // record on.
-type Float64HistoHandle struct {
-	MetricDescriptor *MetricDescriptor
-}
+type Float64HistoHandle MetricDescriptor
 
 // Record records the float64 histo value on the metrics recorder provided.
 func (h *Float64HistoHandle) Record(recorder MetricsRecorder, incr float64, labels ...string) {
@@ -103,9 +96,7 @@ func (h *Float64HistoHandle) Record(recorder MetricsRecorder, incr float64, labe
 
 // Int64GaugeHandle is a typed handle for an int gauge metric. This handle is
 // passed at the recording point in order to know which metric to record on.
-type Int64GaugeHandle struct {
-	MetricDescriptor *MetricDescriptor
-}
+type Int64GaugeHandle MetricDescriptor
 
 // Record records the int64 histo value on the metrics recorder provided.
 func (h *Int64GaugeHandle) Record(recorder MetricsRecorder, incr int64, labels ...string) {
@@ -146,8 +137,9 @@ func registerMetric(name Metric, def bool) {
 func RegisterInt64Count(descriptor MetricDescriptor) *Int64CountHandle {
 	registerMetric(descriptor.Name, descriptor.Default)
 	descriptor.Type = MetricTypeIntCount
-	metricsRegistry[descriptor.Name] = &descriptor
-	return &Int64CountHandle{MetricDescriptor: &descriptor}
+	descPtr := &descriptor
+	metricsRegistry[descriptor.Name] = descPtr
+	return (*Int64CountHandle)(descPtr)
 }
 
 // RegisterFloat64Count registers the metric description onto the global
@@ -159,8 +151,9 @@ func RegisterInt64Count(descriptor MetricDescriptor) *Int64CountHandle {
 func RegisterFloat64Count(descriptor MetricDescriptor) *Float64CountHandle {
 	registerMetric(descriptor.Name, descriptor.Default)
 	descriptor.Type = MetricTypeFloatCount
-	metricsRegistry[descriptor.Name] = &descriptor
-	return &Float64CountHandle{MetricDescriptor: &descriptor}
+	descPtr := &descriptor
+	metricsRegistry[descriptor.Name] = descPtr
+	return (*Float64CountHandle)(descPtr)
 }
 
 // RegisterInt64Histo registers the metric description onto the global registry.
@@ -172,8 +165,9 @@ func RegisterFloat64Count(descriptor MetricDescriptor) *Float64CountHandle {
 func RegisterInt64Histo(descriptor MetricDescriptor) *Int64HistoHandle {
 	registerMetric(descriptor.Name, descriptor.Default)
 	descriptor.Type = MetricTypeIntHisto
-	metricsRegistry[descriptor.Name] = &descriptor
-	return &Int64HistoHandle{MetricDescriptor: &descriptor}
+	descPtr := &descriptor
+	metricsRegistry[descriptor.Name] = descPtr
+	return (*Int64HistoHandle)(descPtr)
 }
 
 // RegisterFloat64Histo registers the metric description onto the global
@@ -185,8 +179,9 @@ func RegisterInt64Histo(descriptor MetricDescriptor) *Int64HistoHandle {
 func RegisterFloat64Histo(descriptor MetricDescriptor) *Float64HistoHandle {
 	registerMetric(descriptor.Name, descriptor.Default)
 	descriptor.Type = MetricTypeFloatHisto
-	metricsRegistry[descriptor.Name] = &descriptor
-	return &Float64HistoHandle{MetricDescriptor: &descriptor}
+	descPtr := &descriptor
+	metricsRegistry[descriptor.Name] = descPtr
+	return (*Float64HistoHandle)(descPtr)
 }
 
 // RegisterInt64Gauge registers the metric description onto the global registry.
@@ -198,8 +193,9 @@ func RegisterFloat64Histo(descriptor MetricDescriptor) *Float64HistoHandle {
 func RegisterInt64Gauge(descriptor MetricDescriptor) *Int64GaugeHandle {
 	registerMetric(descriptor.Name, descriptor.Default)
 	descriptor.Type = MetricTypeIntGauge
-	metricsRegistry[descriptor.Name] = &descriptor
-	return &Int64GaugeHandle{MetricDescriptor: &descriptor}
+	descPtr := &descriptor
+	metricsRegistry[descriptor.Name] = descPtr
+	return (*Int64GaugeHandle)(descPtr)
 }
 
 // MetricType is the type of metric.
@@ -220,6 +216,11 @@ func snapshotMetricsRegistryForTesting(t *testing.T) {
 	oldDefaultMetrics := DefaultMetrics
 	oldRegisteredMetrics := registeredMetrics
 	oldMetricsRegistry := metricsRegistry
+
+	registeredMetrics = make(map[Metric]bool)
+	metricsRegistry = make(map[Metric]*MetricDescriptor)
+	maps.Copy(registeredMetrics, registeredMetrics)
+	maps.Copy(metricsRegistry, metricsRegistry)
 
 	t.Cleanup(func() {
 		DefaultMetrics = oldDefaultMetrics
