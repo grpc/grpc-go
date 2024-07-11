@@ -282,7 +282,7 @@ func (s) TestBuildXDS(t *testing.T) {
 
 			gotConfig, err := bootstrap.GetConfiguration()
 			if err != nil {
-				t.Fatalf("Failed to get boostrap config: %v", err)
+				t.Fatalf("Failed to get bootstrap config: %v", err)
 			}
 			if diff := cmp.Diff(tt.wantBootstrapConfig, gotConfig); diff != "" {
 				t.Fatalf("Unexpected diff in bootstrap config (-want +got):\n%s", diff)
