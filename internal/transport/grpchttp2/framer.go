@@ -38,19 +38,19 @@ const (
 	FrameTypeContinuation FrameType = 0x9
 )
 
-// Flags represents one or more flags set on an HTTP/2 Frame.
-type Flags uint8
+// Flag represents one or more flags set on an HTTP/2 Frame.
+type Flag uint8
 
 const (
-	FlagDataEndStream          Flags = 0x1
-	FlagDataPadded             Flags = 0x8
-	FlagHeadersEndStream       Flags = 0x1
-	FlagHeadersEndHeaders      Flags = 0x4
-	FlagHeadersPadded          Flags = 0x8
-	FlagHeadersPriority        Flags = 0x20
-	FlagSettingsAck            Flags = 0x1
-	FlagPingAck                Flags = 0x1
-	FlagContinuationEndHeaders Flags = 0x4
+	FlagDataEndStream          Flag = 0x1
+	FlagDataPadded             Flag = 0x8
+	FlagHeadersEndStream       Flag = 0x1
+	FlagHeadersEndHeaders      Flag = 0x4
+	FlagHeadersPadded          Flag = 0x8
+	FlagHeadersPriority        Flag = 0x20
+	FlagSettingsAck            Flag = 0x1
+	FlagPingAck                Flag = 0x1
+	FlagContinuationEndHeaders Flag = 0x4
 )
 
 // Setting represents the id and value pair of an HTTP/2 setting.
@@ -89,7 +89,7 @@ type FrameHeader struct {
 	// Type is a byte that represents the Frame Type.
 	Type FrameType
 	// Flags is a byte representing the flags set on this Frame.
-	Flags Flags
+	Flags Flag
 	// StreamID is the ID for the stream which this frame is for. If the
 	// frame is connection specific instead of stream specific, the
 	// streamID is 0.
