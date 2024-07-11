@@ -29,9 +29,9 @@ type Metric string
 //
 // Do not construct directly; use NewMetrics instead.
 type Metrics struct {
-	// Metrics are the set of Metrics to initialize.
-	Metrics map[Metric]bool
-} // map[stats.Metric]bool, DefaultMetrics, this nicely wraps (can call adds and just throw away old memory) and then joins on the Metrics Set are clean...
+	// metrics are the set of metrics to initialize.
+	metrics map[Metric]bool
+}
 
 // NewMetrics returns a Metrics containing Metrics.
 func NewMetrics(metrics ...Metric) *Metrics {
@@ -40,15 +40,20 @@ func NewMetrics(metrics ...Metric) *Metrics {
 		newMetrics[metric] = true
 	}
 	return &Metrics{
-		Metrics: newMetrics,
+		metrics: newMetrics,
 	}
+}
+
+// Metrics returns the metrics set.
+func (m *Metrics) Metrics() map[Metric]bool {
+	return m.metrics
 }
 
 // Add adds the metrics to the metrics set and returns a new copy with the
 // additional metrics.
 func (m *Metrics) Add(metrics ...Metric) *Metrics {
 	newMetrics := make(map[Metric]bool)
-	for metric := range m.Metrics {
+	for metric := range m.metrics {
 		newMetrics[metric] = true
 	}
 
@@ -56,7 +61,7 @@ func (m *Metrics) Add(metrics ...Metric) *Metrics {
 		newMetrics[metric] = true
 	}
 	return &Metrics{
-		Metrics: newMetrics,
+		metrics: newMetrics,
 	}
 }
 
@@ -64,10 +69,10 @@ func (m *Metrics) Add(metrics ...Metric) *Metrics {
 // with the merged metrics.
 func (m *Metrics) Join(metrics *Metrics) *Metrics { // Use this API...
 	newMetrics := make(map[Metric]bool)
-	maps.Copy(newMetrics, m.Metrics)
-	maps.Copy(newMetrics, metrics.Metrics)
+	maps.Copy(newMetrics, m.metrics)
+	maps.Copy(newMetrics, metrics.metrics)
 	return &Metrics{
-		Metrics: newMetrics,
+		metrics: newMetrics,
 	}
 }
 
@@ -75,7 +80,7 @@ func (m *Metrics) Join(metrics *Metrics) *Metrics { // Use this API...
 // the metrics removed.
 func (m *Metrics) Remove(metrics ...Metric) *Metrics {
 	newMetrics := make(map[Metric]bool)
-	for metric := range m.Metrics {
+	for metric := range m.metrics {
 		newMetrics[metric] = true
 	}
 
@@ -83,6 +88,6 @@ func (m *Metrics) Remove(metrics ...Metric) *Metrics {
 		delete(newMetrics, metric)
 	}
 	return &Metrics{
-		Metrics: newMetrics,
+		metrics: newMetrics,
 	}
 }

@@ -19,6 +19,7 @@
 package stats
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -36,12 +37,11 @@ func Test(t *testing.T) {
 // TestPanic tests that registering two metrics with the same name across any
 // type of metric triggers a panic.
 func (s) TestPanic(t *testing.T) {
-	cleanup := clearMetricsRegistryForTesting()
-	defer cleanup()
+	snapshotMetricsRegistryForTesting(t)
 	want := "metric simple counter already registered"
 	defer func() {
-		if r := recover(); r != "metric simple counter already registered" {
-			t.Errorf("expected panic %q, got %q", want, r)
+		if r := recover(); !strings.Contains(r.(string), want) {
+			t.Errorf("expected panic contains %q, got %q", want, r)
 		}
 	}()
 	desc := MetricDescriptor{
@@ -63,8 +63,7 @@ func (s) TestPanic(t *testing.T) {
 // this tests the interactions between the metrics recorder and the metrics
 // registry.
 func (s) TestMetricRegistry(t *testing.T) {
-	cleanup := clearMetricsRegistryForTesting()
-	defer cleanup()
+	snapshotMetricsRegistryForTesting(t)
 	intCountHandle1 := RegisterInt64Count(MetricDescriptor{
 		Name:           "simple counter",
 		Description:    "sum of all emissions from tests",
@@ -141,8 +140,7 @@ func (s) TestMetricRegistry(t *testing.T) {
 // metric registry. A component (simulated by test) should be able to record on
 // the different registered int count metrics.
 func TestNumerousIntCounts(t *testing.T) {
-	cleanup := clearMetricsRegistryForTesting()
-	defer cleanup()
+	snapshotMetricsRegistryForTesting(t)
 	intCountHandle1 := RegisterInt64Count(MetricDescriptor{
 		Name:           "int counter",
 		Description:    "sum of all emissions from tests",
@@ -215,7 +213,7 @@ func newFakeMetricsRecorder(t *testing.T) *fakeMetricsRecorder {
 		floatValues: make(map[*MetricDescriptor]float64),
 	}
 
-	for _, desc := range MetricsRegistry {
+	for _, desc := range metricsRegistry {
 		switch desc.Type {
 		case MetricTypeIntCount:
 		case MetricTypeIntHisto:
@@ -236,27 +234,27 @@ func verifyLabels(t *testing.T, labelsWant []string, optionalLabelsWant []string
 	}
 }
 
-func (r *fakeMetricsRecorder) RecordIntCount(handle Int64CountHandle, incr int64, labels ...string) {
+func (r *fakeMetricsRecorder) RecordIntCount(handle *Int64CountHandle, incr int64, labels ...string) {
 	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
 	r.intValues[handle.MetricDescriptor] += incr
 }
 
-func (r *fakeMetricsRecorder) RecordFloatCount(handle Float64CountHandle, incr float64, labels ...string) {
+func (r *fakeMetricsRecorder) RecordFloatCount(handle *Float64CountHandle, incr float64, labels ...string) {
 	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
 	r.floatValues[handle.MetricDescriptor] += incr
 }
 
-func (r *fakeMetricsRecorder) RecordIntHisto(handle Int64HistoHandle, incr int64, labels ...string) {
+func (r *fakeMetricsRecorder) RecordIntHisto(handle *Int64HistoHandle, incr int64, labels ...string) {
 	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
 	r.intValues[handle.MetricDescriptor] += incr
 }
 
-func (r *fakeMetricsRecorder) RecordFloatHisto(handle Float64HistoHandle, incr float64, labels ...string) {
+func (r *fakeMetricsRecorder) RecordFloatHisto(handle *Float64HistoHandle, incr float64, labels ...string) {
 	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
 	r.floatValues[handle.MetricDescriptor] += incr
 }
 
-func (r *fakeMetricsRecorder) RecordIntGauge(handle Int64GaugeHandle, incr int64, labels ...string) {
+func (r *fakeMetricsRecorder) RecordIntGauge(handle *Int64GaugeHandle, incr int64, labels ...string) {
 	verifyLabels(r.t, handle.MetricDescriptor.Labels, handle.MetricDescriptor.OptionalLabels, labels)
 	r.intValues[handle.MetricDescriptor] += incr
 }

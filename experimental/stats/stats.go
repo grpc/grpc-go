@@ -19,21 +19,21 @@
 // Package stats contains experimental metrics/stats API's.
 package stats
 
-// MetricsRecorder records on metrics derived from instrument registry.
+// MetricsRecorder records on metrics derived from metric registry.
 type MetricsRecorder interface {
 	// RecordIntCount records the measurement alongside labels on the int count
 	// associated with the provided handle.
-	RecordIntCount(Int64CountHandle, int64, ...string)
+	RecordIntCount(handle *Int64CountHandle, incr int64, labels ...string)
 	// RecordFloatCount records the measurement alongside labels on the float count
 	// associated with the provided handle.
-	RecordFloatCount(Float64CountHandle, float64, ...string)
+	RecordFloatCount(handle *Float64CountHandle, incr float64, labels ...string)
 	// RecordIntHisto records the measurement alongside labels on the int histo
 	// associated with the provided handle.
-	RecordIntHisto(Int64HistoHandle, int64, ...string)
+	RecordIntHisto(handle *Int64HistoHandle, incr int64, labels ...string)
 	// RecordFloatHisto records the measurement alongside labels on the float
 	// histo associated with the provided handle.
-	RecordFloatHisto(Float64HistoHandle, float64, ...string)
+	RecordFloatHisto(handle *Float64HistoHandle, incr float64, labels ...string)
 	// RecordIntGauge records the measurement alongside labels on the int gauge
 	// associated with the provided handle.
-	RecordIntGauge(Int64GaugeHandle, int64, ...string)
+	RecordIntGauge(handle *Int64GaugeHandle, incr int64, labels ...string)
 }
