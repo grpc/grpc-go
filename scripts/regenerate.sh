@@ -22,7 +22,7 @@ function finish {
 }
 trap finish EXIT
 
-source ./scripts/install-protoc.sh "${WORKDIR}"
+./scripts/install-protoc.sh "${WORKDIR}"
 
 export GOBIN="${WORKDIR}"/bin
 export PATH="${GOBIN}:${PATH}"
