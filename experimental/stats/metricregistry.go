@@ -30,25 +30,24 @@ var logger = grpclog.Component("metrics-registry")
 // DefaultMetrics are the default metrics registered through global metrics
 // registry. This is written to at initialization time only, and is read only
 // after initialization.
-var DefaultMetrics = stats.NewMetrics() // loop through this set,, export metrisdescriptor passed upward for pointer and labels/optional lables...
+var DefaultMetrics = stats.NewMetrics()
 
 // MetricDescriptor is the data for a registered metric.
 type MetricDescriptor struct {
-	// The name. This name must be unique across whole binary (including any per
-	// call metrics). See
+	// The name of this metric. This name must be unique across the whole binary
+	// (including any per call metrics). See
 	// https://github.com/grpc/proposal/blob/master/A79-non-per-call-metrics-architecture.md#metric-instrument-naming-conventions
 	// for metric naming conventions.
 	Name stats.Metric
 	// The description of this metric.
 	Description string
-	// The unit (e.g. entries, seconds).
+	// The unit (e.g. entries, seconds) of this metric.
 	Unit string
 	// The required label keys for this metric. These are intended to
 	// metrics emitted from a stats handler.
 	Labels []string
 	// The optional label keys for this metric. These are intended to attached
 	// to metrics emitted from a stats handler if configured.
-
 	OptionalLabels []string
 	// Whether this metric is on by default.
 	Default bool
@@ -120,13 +119,13 @@ var registeredMetrics = make(map[stats.Metric]bool)
 // metricsRegistry contains all of the registered metrics.
 //
 // This is written to only at init time, and read only after that.
-var metricsRegistry = make(map[stats.Metric]*MetricDescriptor) // so OTel just loops through set provided by user into this thing...and calls get
+var metricsRegistry = make(map[stats.Metric]*MetricDescriptor)
 
-// GetMetric returns the MetricDescriptor from the global registry.
+// DescriptorForMetric returns the MetricDescriptor from the global registry.
 //
 // Returns nil if MetricDescriptor not present.
-func GetMetric(metric stats.Metric) *MetricDescriptor {
-	return metricsRegistry[metric] // will this be nil if not present? yes from playground becomes zero value...
+func DescriptorForMetric(metric stats.Metric) *MetricDescriptor {
+	return metricsRegistry[metric]
 }
 
 func registerMetric(name stats.Metric, def bool) {
