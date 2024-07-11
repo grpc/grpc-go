@@ -37,8 +37,10 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
+type subConnListState int
+
 const (
-	subConnListPending = iota
+	subConnListPending subConnListState = iota
 	subConnListActive
 	subConnListClosed
 )
@@ -93,25 +95,25 @@ type subConnList struct {
 	// the idlePicker. Note that only calls to change the state to active are
 	// triggered from the picker and can happen concurrently.
 	mu     sync.RWMutex
-	status int
+	status subConnListState
 }
 
 // scWrapper keeps track of the current state of the subConn.
 type scWrapper struct {
-	subConn  balancer.SubConn
-	conState connectivity.State
-	addr     resolver.Address
+	subConn balancer.SubConn
+	state   connectivity.State
+	addr    resolver.Address
 }
 
 func newScWrapper(b *pickfirstBalancer, addr resolver.Address, listener func(state balancer.SubConnState)) (*scWrapper, error) {
 	scw := &scWrapper{
-		conState: connectivity.Idle,
-		addr:     addr,
+		state: connectivity.Idle,
+		addr:  addr,
 	}
 	sc, err := b.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{
 		StateListener: func(scs balancer.SubConnState) {
 			// Store the state and delegate.
-			scw.conState = scs.ConnectivityState
+			scw.state = scs.ConnectivityState
 			listener(scs)
 		},
 	})
@@ -300,7 +302,7 @@ func (sl *subConnList) startConnectingNextSubConn() {
 	// Attempt to connect to addresses that have already completed the back-off.
 	for ; sl.attemptingIndex < len(sl.subConns); sl.attemptingIndex++ {
 		sc := sl.subConns[sl.attemptingIndex]
-		if sc.conState == connectivity.TransientFailure {
+		if sc.state == connectivity.TransientFailure {
 			continue
 		}
 		sl.subConns[sl.attemptingIndex].subConn.Connect()
@@ -359,7 +361,7 @@ func (b *pickfirstBalancer) unsetSelectedSubConn() {
 
 func (b *pickfirstBalancer) goIdle() {
 	b.unsetSelectedSubConn()
-	b.refreshSunConnList()
+	b.refreshSubConnList()
 	if len(b.subConnList.subConns) == 0 {
 		b.state = connectivity.TransientFailure
 		b.cc.UpdateState(balancer.State{
@@ -386,18 +388,12 @@ func (b *pickfirstBalancer) goIdle() {
 	b.cc.UpdateState(balancer.State{
 		ConnectivityState: nextState,
 		Picker: &idlePicker{
-			callback: callback,
+			exitIdle: callback,
 		},
 	})
 }
 
-type Shuffler interface {
-	ShuffleAddressListForTesting(n int, swap func(i, j int))
-}
-
-func ShuffleAddressListForTesting(n int, swap func(i, j int)) { rand.Shuffle(n, swap) }
-
-func (b *pickfirstBalancer) refreshSunConnList() {
+func (b *pickfirstBalancer) refreshSubConnList() {
 	subConnList := newSubConnList(b.latestAddressList, b)
 
 	// Reset the previous subConnList to release resources.
@@ -411,7 +407,7 @@ func (b *pickfirstBalancer) refreshSunConnList() {
 }
 
 func (b *pickfirstBalancer) connectUsingLatestAddrs() error {
-	b.refreshSunConnList()
+	b.refreshSubConnList()
 	if len(b.subConnList.subConns) == 0 {
 		b.state = connectivity.TransientFailure
 		b.cc.UpdateState(balancer.State{
@@ -436,13 +432,11 @@ func (b *pickfirstBalancer) connectUsingLatestAddrs() error {
 
 func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	if len(state.ResolverState.Addresses) == 0 && len(state.ResolverState.Endpoints) == 0 {
-		// The resolver reported an empty address list. Treat it like an error by
-		// calling b.ResolverError.
+		// Cleanup state pertaining to the previous resolver state.
 		b.unsetSelectedSubConn()
-		// Shut down the old subConnList. All addresses were removed, so it is
-		// no longer valid.
 		b.subConnList.close()
 		b.latestAddressList = nil
+		// Treat an empty address list like an error by calling b.ResolverError.
 		b.ResolverError(errors.New("produced zero addresses"))
 		return balancer.ErrBadResolverState
 	}
@@ -534,10 +528,10 @@ func (p *picker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 // idlePicker is used when the SubConn is IDLE and kicks the SubConn into
 // CONNECTING when Pick is called.
 type idlePicker struct {
-	callback func()
+	exitIdle func()
 }
 
 func (i *idlePicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
-	i.callback()
+	i.exitIdle()
 	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }
