@@ -1,4 +1,5 @@
 #!/bin/bash
+#
 # Copyright 2020 gRPC authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,14 +16,10 @@
 
 set -eu -o pipefail
 
-WORKDIR=$(mktemp -d)
+WORKDIR="/tmp/grpc-go-tools"
+mkdir -p "${WORKDIR}"
 
-function finish {
-  rm -rf "$WORKDIR"
-}
-trap finish EXIT
-
-./scripts/install-protoc.sh "${WORKDIR}"
+"./$(dirname "${0}")/install-protoc.sh" ${WORKDIR}
 
 export GOBIN="${WORKDIR}"/bin
 export PATH="${GOBIN}:${PATH}"
@@ -31,7 +28,7 @@ mkdir -p "${GOBIN}"
 echo "remove existing generated files"
 # grpc_testing_not_regenerate/*.pb.go is not re-generated,
 # see grpc_testing_not_regenerate/README.md for details.
-rm -f $(find . -name '*.pb.go' | grep -v 'grpc_testing_not_regenerate')
+find . -name '*.pb.go' | grep -v 'grpc_testing_not_regenerate' | xargs rm -f || true
 
 echo "go install google.golang.org/protobuf/cmd/protoc-gen-go"
 (cd test/tools && go install google.golang.org/protobuf/cmd/protoc-gen-go)
@@ -40,10 +37,18 @@ echo "go install cmd/protoc-gen-go-grpc"
 (cd cmd/protoc-gen-go-grpc && go install .)
 
 echo "git clone https://github.com/grpc/grpc-proto"
-git clone --quiet https://github.com/grpc/grpc-proto "${WORKDIR}/grpc-proto"
+if [ -d "${WORKDIR}/grpc-proto" ]; then
+  (cd "${WORKDIR}/grpc-proto" && git pull)
+else
+  git clone --quiet https://github.com/grpc/grpc-proto "${WORKDIR}/grpc-proto"
+fi
 
 echo "git clone https://github.com/protocolbuffers/protobuf"
-git clone --quiet https://github.com/protocolbuffers/protobuf "${WORKDIR}/protobuf"
+if [ -d "${WORKDIR}/protobuf" ]; then
+  (cd "${WORKDIR}/protobuf" && git pull)
+else
+  git clone --quiet https://github.com/protocolbuffers/protobuf "${WORKDIR}/protobuf"
+fi
 
 # Pull in code.proto as a proto dependency
 mkdir -p "${WORKDIR}/googleapis/google/rpc"
@@ -72,8 +77,8 @@ SOURCES=(
   "${WORKDIR}/grpc-proto/grpc/gcp/transport_security_common.proto"
   "${WORKDIR}/grpc-proto/grpc/lookup/v1/rls.proto"
   "${WORKDIR}/grpc-proto/grpc/lookup/v1/rls_config.proto"
-  "${WORKDIR}/grpc-proto/grpc/testing/*.proto"
-  "${WORKDIR}/grpc-proto/grpc/core/*.proto"
+  "${WORKDIR}"/grpc-proto/grpc/testing/*.proto
+  "${WORKDIR}"/grpc-proto/grpc/core/*.proto
 )
 
 # These options of the form 'Mfoo.proto=bar' instruct the codegen to use an
@@ -94,9 +99,9 @@ Mgrpc/testing/test.proto=google.golang.org/grpc/interop/grpc_testing,\
 Mgrpc/testing/payloads.proto=google.golang.org/grpc/interop/grpc_testing,\
 Mgrpc/testing/empty.proto=google.golang.org/grpc/interop/grpc_testing
 
-for src in ${SOURCES[@]}; do
+for src in "${SOURCES[@]}"; do
   echo "protoc ${src}"
-  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS}:${WORKDIR}/out \
+  protoc --go_out="${OPTS}:${WORKDIR}/out" --go-grpc_out="${OPTS}:${WORKDIR}/out" \
     -I"." \
     -I"${WORKDIR}/grpc-proto" \
     -I"${WORKDIR}/googleapis" \
@@ -104,9 +109,9 @@ for src in ${SOURCES[@]}; do
     "${src}"
 done
 
-for src in ${LEGACY_SOURCES[@]}; do
+for src in "${LEGACY_SOURCES[@]}"; do
   echo "protoc ${src}"
-  protoc --go_out="${OPTS}:${WORKDIR}/out" --go-grpc_out="${OPTS}",require_unimplemented_servers=false:"${WORKDIR}/out" \
+  protoc --go_out="${OPTS}:${WORKDIR}/out" --go-grpc_out="${OPTS},require_unimplemented_servers=false:${WORKDIR}/out" \
     -I"." \
     -I"${WORKDIR}/grpc-proto" \
     -I"${WORKDIR}/googleapis" \
