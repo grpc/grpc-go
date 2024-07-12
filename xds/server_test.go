@@ -178,7 +178,7 @@ func (s) TestNewServer_Failure(t *testing.T) {
 		{
 			desc:       "bootstrap env var not set",
 			serverOpts: []grpc.ServerOption{grpc.Creds(xdsCreds)},
-			wantErr:    "bootstrap env vars are unspecified",
+			wantErr:    "failed to get xDS bootstrap config",
 		},
 		{
 			desc: "empty bootstrap config",
@@ -198,7 +198,7 @@ func (s) TestNewServer_Failure(t *testing.T) {
 							"server_uri": %q,
 							"channel_creds": [{"type": "insecure"}]
 						}`, nonExistentManagementServer))},
-						NodeID: uuid.New().String(),
+						Node: []byte(fmt.Sprintf(`{"id": "%s"}`, uuid.New().String())),
 						CertificateProviders: map[string]json.RawMessage{
 							"cert-provider-instance": json.RawMessage("{}"),
 						},
@@ -500,7 +500,7 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
 		}`, mgmtServer.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		CertificateProviders: map[string]json.RawMessage{
 			e2e.ServerSideCertProviderInstance: fakeProvider1Config,
 			e2e.ClientSideCertProviderInstance: fakeProvider2Config,
@@ -592,7 +592,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
 		}`, mgmtServer.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		CertificateProviders: map[string]json.RawMessage{
 			e2e.ServerSideCertProviderInstance: fakeProvider1Config,
 			e2e.ClientSideCertProviderInstance: fakeProvider2Config,

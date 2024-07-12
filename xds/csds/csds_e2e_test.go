@@ -97,7 +97,7 @@ func (unimplementedEndpointsWatcher) OnResourceDoesNotExist()                   
 // Returns the address of the newly created gRPC server.
 //
 // Registers cleanup functions on t to stop the gRPC server and the CSDS
-// implemenation.
+// implementation.
 func startCSDSServer(t *testing.T) string {
 	t.Helper()
 

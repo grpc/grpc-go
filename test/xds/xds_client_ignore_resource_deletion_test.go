@@ -276,7 +276,7 @@ func generateBootstrapContents(t *testing.T, serverURI string, ignoreResourceDel
 	}
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers:                            []json.RawMessage{serverCfg},
-		NodeID:                             nodeID,
+		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
 	if err != nil {

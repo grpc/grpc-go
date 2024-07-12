@@ -166,7 +166,7 @@ func (s) TestResolverResourceName(t *testing.T) {
 					"channel_creds": [{"type": "insecure"}]
 				}`, mgmtServer.Address))},
 				ClientDefaultListenerResourceNameTemplate: tt.listenerResourceNameTemplate,
-				NodeID: nodeID,
+				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 			}
 			if tt.extraAuthority != "" {
 				// In this test, we really don't care about having multiple

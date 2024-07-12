@@ -87,7 +87,7 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
 		}`, defaultAuthorityServer.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			testAuthority1: []byte(`{}`),
 			testAuthority2: []byte(`{}`),

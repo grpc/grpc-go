@@ -56,7 +56,7 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
 		}`, serverDefaultAuthority.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			testNonDefaultAuthority: []byte(fmt.Sprintf(`{
 				"xds_servers": [{

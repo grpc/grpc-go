@@ -379,7 +379,7 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
 		}`, mgmtServer.Address))},
-		NodeID:                             nodeID,
+		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
 	if err != nil {
@@ -445,7 +445,7 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
 		}`, mgmtServer.Address))},
-		NodeID:                             nodeID,
+		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 		CertificateProviders:               map[string]json.RawMessage{e2e.ClientSideCertProviderInstance: providerCfg},
 	})
