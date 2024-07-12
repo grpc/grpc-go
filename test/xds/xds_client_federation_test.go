@@ -68,7 +68,7 @@ func (s) TestClientSideFederation(t *testing.T) {
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
 		}`, serverDefaultAuth.Address))},
-		NodeID:                             nodeID,
+		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 		// Specify the address of the non-default authority.
 		Authorities: map[string]json.RawMessage{
@@ -162,7 +162,7 @@ func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
 		}`, mgmtServer.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ClientDefaultListenerResourceNameTemplate: fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%%s", authority),
 		// Specify the address of the non-default authority.
 		Authorities: map[string]json.RawMessage{

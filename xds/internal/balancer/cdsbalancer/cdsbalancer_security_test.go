@@ -138,7 +138,10 @@ func registerWrappedCDSPolicyWithNewSubConnOverride(t *testing.T, ch chan *xdscr
 func setupForSecurityTests(t *testing.T, bootstrapContents []byte, clientCreds, serverCreds credentials.TransportCredentials) (*grpc.ClientConn, string) {
 	t.Helper()
 
-	xdsClient, xdsClose, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
+	xdsClient, xdsClose, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bootstrapContents,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -376,7 +379,7 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
 		}`, mgmtServer.Address))},
-		NodeID:                             nodeID,
+		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
 	if err != nil {
@@ -442,7 +445,7 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
 		}`, mgmtServer.Address))},
-		NodeID:                             nodeID,
+		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 		CertificateProviders:               map[string]json.RawMessage{e2e.ClientSideCertProviderInstance: providerCfg},
 	})

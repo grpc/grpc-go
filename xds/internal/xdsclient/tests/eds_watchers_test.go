@@ -215,7 +215,7 @@ func (s) TestEDSWatch(t *testing.T) {
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
 				}`, mgmtServer.Address))},
-				NodeID: nodeID,
+				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 				Authorities: map[string]json.RawMessage{
 					// Xdstp resource names used in this test do not specify an
 					// authority. These will end up looking up an entry with the
@@ -231,7 +231,10 @@ func (s) TestEDSWatch(t *testing.T) {
 			testutils.CreateBootstrapFileForTesting(t, bc)
 
 			// Create an xDS client with the above bootstrap contents.
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc})
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:     t.Name(),
+				Contents: bc,
+			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
 			}
@@ -402,7 +405,7 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
 				}`, mgmtServer.Address))},
-				NodeID: nodeID,
+				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 				Authorities: map[string]json.RawMessage{
 					// Xdstp resource names used in this test do not specify an
 					// authority. These will end up looking up an entry with the
@@ -418,7 +421,10 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			testutils.CreateBootstrapFileForTesting(t, bc)
 
 			// Create an xDS client with the above bootstrap contents.
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc})
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:     t.Name(),
+				Contents: bc,
+			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
 			}
@@ -504,7 +510,7 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
 				}`, mgmtServer.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
@@ -519,7 +525,10 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -618,7 +627,10 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -699,7 +711,11 @@ func (s) TestEDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:               t.Name(),
+		Contents:           bc,
+		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
@@ -736,7 +752,11 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client talking to the above management server.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc, WatchExpiryTimeout: defaultTestWatchExpiryTimeout})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:               t.Name(),
+		Contents:           bc,
+		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
@@ -801,7 +821,10 @@ func (s) TestEDSWatch_NACKError(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -852,7 +875,7 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
 				}`, mgmtServer.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
@@ -867,7 +890,10 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bc})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}

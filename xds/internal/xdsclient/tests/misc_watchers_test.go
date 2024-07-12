@@ -103,12 +103,12 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
-	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
 				}`, mgmtServer.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
 			// version of t.Name as their authority, and the empty config
@@ -120,10 +120,13 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	testutils.CreateBootstrapFileForTesting(t, bs)
+	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bs})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -227,10 +230,13 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
-	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}

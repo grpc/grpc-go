@@ -194,17 +194,15 @@ func (s) TestServingModeChanges(t *testing.T) {
 		t.Fatalf("cc.FullDuplexCall failed: %f", err)
 	}
 
-	// Invoke the lds resource not found - this should cause the server to
-	// switch to not serving. This should gracefully drain connections, and fail
-	// RPC's after. (how to assert accepted + closed) does this make it's way to
-	// application layer? (should work outside of resource not found...
-
-	// Invoke LDS Resource not found here (tests graceful close)
-	xdsC, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
+	// Lookup the xDS client in use based on the dedicated well-known key, as
+	// defined in A71, used by the xDS enabled gRPC server.
+	xdsC, close, err := xdsclient.GetForTesting(xdsclient.NameForServer)
 	if err != nil {
 		t.Fatalf("Failed to find xDS client for configuration: %v", string(bootstrapContents))
 	}
 	defer close()
+
+	// Invoke LDS Resource not found here (tests graceful close).
 	triggerResourceNotFound := internal.TriggerXDSResourceNotFoundForTesting.(func(xdsclient.XDSClient, xdsresource.Type, string) error)
 	listenerResourceType := xdsinternal.ResourceTypeMapForTesting[version.V3ListenerURL].(xdsresource.Type)
 	if err := triggerResourceNotFound(xdsC, listenerResourceType, listener.GetName()); err != nil {
@@ -293,9 +291,9 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 
 	waitForFailedRPCWithStatus(ctx, t, cc, errAcceptAndClose)
 
-	// Lookup the xDS client in use based on the bootstrap configuration. The
-	// client was created as part of creating the xDS enabled gRPC server.
-	xdsC, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
+	// Lookup the xDS client in use based on the dedicated well-known key, as
+	// defined in A71, used by the xDS enabled gRPC server.
+	xdsC, close, err := xdsclient.GetForTesting(xdsclient.NameForServer)
 	if err != nil {
 		t.Fatalf("Failed to find xDS client for configuration: %v", string(bootstrapContents))
 	}

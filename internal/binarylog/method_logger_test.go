@@ -33,6 +33,8 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
+const defaultTestTimeout = 10 * time.Second
+
 func (s) TestLog(t *testing.T) {
 	idGen.reset()
 	ml := NewTruncatingMethodLogger(10, 10)
@@ -333,10 +335,12 @@ func (s) TestLog(t *testing.T) {
 			},
 		},
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for i, tc := range testCases {
 		buf.Reset()
 		tc.want.SequenceIdWithinCall = uint64(i + 1)
-		ml.Log(context.Background(), tc.config)
+		ml.Log(ctx, tc.config)
 		inSink := new(binlogpb.GrpcLogEntry)
 		if err := proto.Unmarshal(buf.Bytes()[4:], inSink); err != nil {
 			t.Errorf("failed to unmarshal bytes in sink to proto: %v", err)

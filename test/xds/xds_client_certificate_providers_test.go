@@ -122,7 +122,7 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
 				}`, mgmtServer.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)

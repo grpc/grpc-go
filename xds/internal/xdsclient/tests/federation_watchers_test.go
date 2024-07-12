@@ -56,7 +56,7 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
 		}`, serverDefaultAuthority.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			testNonDefaultAuthority: []byte(fmt.Sprintf(`{
 				"xds_servers": [{
@@ -69,7 +69,10 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bootstrapContents,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}

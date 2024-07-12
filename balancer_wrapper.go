@@ -25,11 +25,14 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 )
+
+var setConnectedAddress = internal.SetConnectedAddress.(func(*balancer.SubConnState, resolver.Address))
 
 // ccBalancerWrapper sits between the ClientConn and the Balancer.
 //
@@ -252,7 +255,7 @@ type acBalancerWrapper struct {
 
 // updateState is invoked by grpc to push a subConn state update to the
 // underlying balancer.
-func (acbw *acBalancerWrapper) updateState(s connectivity.State, err error) {
+func (acbw *acBalancerWrapper) updateState(s connectivity.State, curAddr resolver.Address, err error) {
 	acbw.ccb.serializer.Schedule(func(ctx context.Context) {
 		if ctx.Err() != nil || acbw.ccb.balancer == nil {
 			return
@@ -260,7 +263,11 @@ func (acbw *acBalancerWrapper) updateState(s connectivity.State, err error) {
 		// Even though it is optional for balancers, gracefulswitch ensures
 		// opts.StateListener is set, so this cannot ever be nil.
 		// TODO: delete this comment when UpdateSubConnState is removed.
-		acbw.stateListener(balancer.SubConnState{ConnectivityState: s, ConnectionError: err})
+		scs := balancer.SubConnState{ConnectivityState: s, ConnectionError: err}
+		if s == connectivity.Ready {
+			setConnectedAddress(&scs, curAddr)
+		}
+		acbw.stateListener(scs)
 	})
 }
 

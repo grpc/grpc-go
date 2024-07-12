@@ -19,7 +19,7 @@
 package googledirectpath
 
 import (
-	"context"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"testing"
@@ -32,10 +32,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal/xdsclient"
 )
-
-const defaultTestTimeout = 10 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -85,28 +82,6 @@ func simulateRunningOnGCE(t *testing.T, gce bool) {
 	t.Cleanup(func() { onGCE = oldOnGCE })
 }
 
-type testXDSClient struct {
-	xdsclient.XDSClient
-	closed chan struct{}
-}
-
-func (c *testXDSClient) Close() {
-	c.closed <- struct{}{}
-}
-
-// Overrides the creation of a real xDS client with a test one.
-func overrideWithTestXDSClient(t *testing.T) (*testXDSClient, chan *bootstrap.Config) {
-	xdsC := &testXDSClient{closed: make(chan struct{}, 1)}
-	configCh := make(chan *bootstrap.Config, 1)
-	oldNewClient := newClientWithConfig
-	newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
-		configCh <- config
-		return xdsC, func() { xdsC.Close() }, nil
-	}
-	t.Cleanup(func() { newClientWithConfig = oldNewClient })
-	return xdsC, configCh
-}
-
 // Tests the scenario where the bootstrap env vars are set and we're running on
 // GCE. The test builds a google-c2p resolver and verifies that an xDS resolver
 // is built and that we don't fallback to DNS (because federation is enabled by
@@ -123,8 +98,6 @@ func (s) TestBuildWithBootstrapEnvSet(t *testing.T) {
 			*envP = "does not matter"
 			defer func() { *envP = oldEnv }()
 
-			overrideWithTestXDSClient(t)
-
 			// Build the google-c2p resolver.
 			r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
 			if err != nil {
@@ -133,9 +106,8 @@ func (s) TestBuildWithBootstrapEnvSet(t *testing.T) {
 			defer r.Close()
 
 			// Build should return xDS, not DNS.
-			rr := r.(*c2pResolver)
-			if rrr := rr.Resolver; rrr != testXDSResolver {
-				t.Fatalf("want xds resolver, got %#v", rrr)
+			if r != testXDSResolver {
+				t.Fatalf("Build() returned %#v, want xds resolver", r)
 			}
 		})
 	}
@@ -157,8 +129,22 @@ func (s) TestBuildNotOnGCE(t *testing.T) {
 
 	// Build should return DNS, not xDS.
 	if r != testDNSResolver {
-		t.Fatalf("want dns resolver, got %#v", r)
+		t.Fatalf("Build() returned %#v, want dns resolver", r)
 	}
+}
+
+func bootstrapConfig(t *testing.T, opts bootstrap.ConfigOptionsForTesting) *bootstrap.Config {
+	t.Helper()
+
+	contents, err := bootstrap.NewContentsForTesting(opts)
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap contents: %v", err)
+	}
+	cfg, err := bootstrap.NewConfigForTesting(contents)
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap config: %v", err)
+	}
+	return cfg
 }
 
 // Test that when a google-c2p resolver is built, the xDS client is built with
@@ -186,120 +172,87 @@ func (s) TestBuildXDS(t *testing.T) {
 	}{
 		{
 			desc: "ipv6 false",
-			wantBootstrapConfig: func() *bootstrap.Config {
-				cfg, err := bootstrap.NewConfigFromContents([]byte(`{
-"xds_servers": [
-  {
-    "server_uri": "dns:///directpath-pa.googleapis.com",
-    "channel_creds": [{"type": "google_default"}],
-    "server_features": ["ignore_resource_deletion"]
-  }
-],
-"client_default_listener_resource_name_template": "%s",
-"authorities": {
-  "traffic-director-c2p.xds.googleapis.com": {
-    "xds_servers": [
-      {
-        "server_uri": "dns:///directpath-pa.googleapis.com",
-        "channel_creds": [{"type": "google_default"}],
-        "server_features": ["ignore_resource_deletion"]
-      }
-	]
-  }
-},
-"node": {
-  "id": "C2P-666",
-  "locality": {
-  "zone": "test-zone"
-  }
-}
-}`))
-				if err != nil {
-					t.Fatalf("Bootstrap parsing failure: %v", err)
-				}
-				return cfg
-			}(),
+			wantBootstrapConfig: bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
+				Servers: []json.RawMessage{[]byte(`{
+						"server_uri": "dns:///directpath-pa.googleapis.com",
+					    "channel_creds": [{"type": "google_default"}],
+					    "server_features": ["ignore_resource_deletion"]
+  					}`)},
+				Authorities: map[string]json.RawMessage{
+					"traffic-director-c2p.xds.googleapis.com": []byte(`{
+							"xds_servers": [
+  								{
+								    "server_uri": "dns:///directpath-pa.googleapis.com",
+								    "channel_creds": [{"type": "google_default"}],
+								    "server_features": ["ignore_resource_deletion"]
+  								}
+							]
+						}`),
+				},
+				Node: []byte(`{
+					  "id": "C2P-666",
+					  "locality": {"zone": "test-zone"}
+					}`),
+			}),
 		},
 		{
 			desc:        "ipv6 true",
 			ipv6Capable: true,
-			wantBootstrapConfig: func() *bootstrap.Config {
-				cfg, err := bootstrap.NewConfigFromContents([]byte(`{
-"xds_servers": [
-  {
-    "server_uri": "dns:///directpath-pa.googleapis.com",
-    "channel_creds": [{"type": "google_default"}],
-    "server_features": ["ignore_resource_deletion"]
-  }
-],
-"client_default_listener_resource_name_template": "%s",
-"authorities": {
-  "traffic-director-c2p.xds.googleapis.com": {
-    "xds_servers": [
-      {
-        "server_uri": "dns:///directpath-pa.googleapis.com",
-        "channel_creds": [{"type": "google_default"}],
-        "server_features": ["ignore_resource_deletion"]
-      }
-	]
-  }
-},
-"node": {
-  "id": "C2P-666",
-  "locality": {
-  "zone": "test-zone"
-  },
-  "metadata": {
-	"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
-  }
-}
-}`))
-				if err != nil {
-					t.Fatalf("Bootstrap parsing failure: %v", err)
-				}
-				return cfg
-			}(),
+			wantBootstrapConfig: bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
+				Servers: []json.RawMessage{[]byte(`{
+						"server_uri": "dns:///directpath-pa.googleapis.com",
+					    "channel_creds": [{"type": "google_default"}],
+					    "server_features": ["ignore_resource_deletion"]
+  					}`)},
+				Authorities: map[string]json.RawMessage{
+					"traffic-director-c2p.xds.googleapis.com": []byte(`{
+							"xds_servers": [
+  								{
+								    "server_uri": "dns:///directpath-pa.googleapis.com",
+								    "channel_creds": [{"type": "google_default"}],
+								    "server_features": ["ignore_resource_deletion"]
+  								}
+							]
+						}`),
+				},
+				Node: []byte(`{
+					  "id": "C2P-666",
+					  "locality": {"zone": "test-zone"},
+			  			"metadata": {
+							"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
+			  			}
+					}`),
+			}),
 		},
 		{
 			desc:          "override TD URI",
 			ipv6Capable:   true,
 			tdURIOverride: "test-uri",
-			wantBootstrapConfig: func() *bootstrap.Config {
-				cfg, err := bootstrap.NewConfigFromContents([]byte(`{
-"xds_servers": [
-  {
-    "server_uri": "test-uri",
-    "channel_creds": [{"type": "google_default"}],
-    "server_features": ["ignore_resource_deletion"]
-  }
-],
-"client_default_listener_resource_name_template": "%s",
-"authorities": {
-  "traffic-director-c2p.xds.googleapis.com": {
-    "xds_servers": [
-      {
-        "server_uri": "test-uri",
-        "channel_creds": [{"type": "google_default"}],
-        "server_features": ["ignore_resource_deletion"]
-      }
-	]
-  }
-},
-"node": {
-  "id": "C2P-666",
-  "locality": {
-  "zone": "test-zone"
-  },
-  "metadata": {
-	"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
-  }
-}
-}`))
-				if err != nil {
-					t.Fatalf("Bootstrap parsing failure: %v", err)
-				}
-				return cfg
-			}(),
+			wantBootstrapConfig: bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
+				Servers: []json.RawMessage{[]byte(`{
+						"server_uri": "test-uri",
+					    "channel_creds": [{"type": "google_default"}],
+					    "server_features": ["ignore_resource_deletion"]
+  					}`)},
+				Authorities: map[string]json.RawMessage{
+					"traffic-director-c2p.xds.googleapis.com": []byte(`{
+							"xds_servers": [
+  								{
+								    "server_uri": "test-uri",
+								    "channel_creds": [{"type": "google_default"}],
+								    "server_features": ["ignore_resource_deletion"]
+  								}
+							]
+						}`),
+				},
+				Node: []byte(`{
+					  "id": "C2P-666",
+					  "locality": {"zone": "test-zone"},
+			  			"metadata": {
+							"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
+			  			}
+					}`),
+			}),
 		},
 	} {
 		t.Run(tt.desc, func(t *testing.T) {
@@ -315,38 +268,24 @@ func (s) TestBuildXDS(t *testing.T) {
 				defer func() { envconfig.C2PResolverTestOnlyTrafficDirectorURI = oldURI }()
 			}
 
-			tXDSClient, configCh := overrideWithTestXDSClient(t)
-
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
-
 			// Build the google-c2p resolver.
 			r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
 			if err != nil {
 				t.Fatalf("failed to build resolver: %v", err)
 			}
+			defer r.Close()
 
 			// Build should return xDS, not DNS.
-			rr := r.(*c2pResolver)
-			if rrr := rr.Resolver; rrr != testXDSResolver {
-				t.Fatalf("want xds resolver, got %#v, ", rrr)
+			if r != testXDSResolver {
+				t.Fatalf("Build() returned %#v, want xds resolver", r)
 			}
 
-			var gotConfig *bootstrap.Config
-			select {
-			case gotConfig = <-configCh:
-				if diff := cmp.Diff(tt.wantBootstrapConfig, gotConfig); diff != "" {
-					t.Fatalf("Unexpected diff in bootstrap config (-want +got):\n%s", diff)
-				}
-			case <-ctx.Done():
-				t.Fatalf("Timeout waiting for new xDS client to be built")
+			gotConfig, err := bootstrap.GetConfiguration()
+			if err != nil {
+				t.Fatalf("Failed to get bootstrap config: %v", err)
 			}
-
-			r.Close()
-			select {
-			case <-tXDSClient.closed:
-			case <-ctx.Done():
-				t.Fatalf("Timeout waiting for xDS client to be closed")
+			if diff := cmp.Diff(tt.wantBootstrapConfig, gotConfig); diff != "" {
+				t.Fatalf("Unexpected diff in bootstrap config (-want +got):\n%s", diff)
 			}
 		})
 	}

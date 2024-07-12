@@ -312,7 +312,7 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 
 	// Wait for load to be reported for locality of server 1.
 	if err := waitForSuccessfulLoadReport(ctx, mgmtServer.LRSServer, "region-1"); err != nil {
-		t.Fatalf("region-1 did not receive load due to error: %v", err)
+		t.Fatalf("Server 1 did not receive load due to error: %v", err)
 	}
 
 	// Stop server 1 and send one more rpc. Now the request should go to server 2.

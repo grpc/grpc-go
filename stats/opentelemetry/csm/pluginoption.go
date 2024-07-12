@@ -290,7 +290,7 @@ func initializeLocalAndMetadataLabels(labels map[string]string) (map[string]stri
 
 // getNodeID gets the Node ID from the bootstrap data.
 func getNodeID() string {
-	cfg, err := bootstrap.NewConfig()
+	cfg, err := bootstrap.GetConfiguration()
 	if err != nil {
 		return "" // will become "unknown"
 	}

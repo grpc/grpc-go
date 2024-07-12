@@ -26,12 +26,12 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/grpcsync"
-	util "google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal"
 
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/testutils"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
@@ -62,16 +62,13 @@ func setupTest(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptio
 	managementServer := e2e.StartManagementServer(t, opts)
 
 	contents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
-	config, err := bootstrap.NewConfigFromContents(contents)
+	testutils.CreateBootstrapFileForTesting(t, contents)
+	config, err := bootstrap.GetConfiguration()
 	if err != nil {
-		t.Fatalf("Failed to build bootstrap configuration: %v", err)
-	}
-	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: managementServer.Address})
-	if err != nil {
-		t.Fatalf("Failed to create server config for testing: %v", err)
+		t.Fatalf("Failed to read bootstrap configuration: %v", err)
 	}
 	a, err := newAuthority(authorityArgs{
-		serverCfg:          serverCfg,
+		serverCfg:          config.XDSServers()[0],
 		bootstrapCfg:       config,
 		serializer:         grpcsync.NewCallbackSerializer(ctx),
 		resourceTypeGetter: rtRegistry.get,
@@ -94,7 +91,7 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	defer a.close()
 
 	rn := "xdsclient-test-lds-resource"
-	w := testutils.NewTestResourceWatcher()
+	w := xdstestutils.NewTestResourceWatcher()
 	cancelResource := a.watchResource(listenerResourceType, rn, w)
 	defer cancelResource()
 
@@ -141,7 +138,7 @@ func (s) TestTimerAndWatchStateOnErrorCallback(t *testing.T) {
 	defer a.close()
 
 	rn := "xdsclient-test-lds-resource"
-	w := testutils.NewTestResourceWatcher()
+	w := xdstestutils.NewTestResourceWatcher()
 	cancelResource := a.watchResource(listenerResourceType, rn, w)
 	defer cancelResource()
 
@@ -183,11 +180,11 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	// Create a restartable listener which can close existing connections.
-	l, err := util.LocalTCPListener()
+	l, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
-	lis := util.NewRestartableListener(l)
+	lis := testutils.NewRestartableListener(l)
 	defer lis.Close()
 	streamRestarted := grpcsync.NewEvent()
 	serverOpt := e2e.ManagementServerOptions{
@@ -201,7 +198,7 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	defer a.close()
 
 	nameA := "xdsclient-test-lds-resourceA"
-	watcherA := testutils.NewTestResourceWatcher()
+	watcherA := xdstestutils.NewTestResourceWatcher()
 	cancelA := a.watchResource(listenerResourceType, nameA, watcherA)
 
 	if err := updateResourceInServer(ctx, ms, nameA, nodeID); err != nil {
@@ -222,7 +219,7 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	lis.Stop()
 
 	nameB := "xdsclient-test-lds-resourceB"
-	watcherB := testutils.NewTestResourceWatcher()
+	watcherB := xdstestutils.NewTestResourceWatcher()
 	cancelB := a.watchResource(listenerResourceType, nameB, watcherB)
 	defer cancelB()
 

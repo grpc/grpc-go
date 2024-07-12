@@ -239,8 +239,8 @@ func (rcw *rawConnWrapper) writeGoAway(maxStreamID uint32, code http2.ErrCode, d
 	return nil
 }
 
-func (rcw *rawConnWrapper) writeRawFrame(t http2.FrameType, flags http2.Flags, streamID uint32, payload []byte) error {
-	if err := rcw.fr.WriteRawFrame(t, flags, streamID, payload); err != nil {
+func (rcw *rawConnWrapper) writeDataFrame(streamID uint32, payload []byte) error {
+	if err := rcw.fr.WriteData(streamID, false, payload); err != nil {
 		return fmt.Errorf("error writing Raw Frame: %v", err)
 	}
 	return nil
