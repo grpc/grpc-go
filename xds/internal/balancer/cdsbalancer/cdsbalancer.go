@@ -309,8 +309,8 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 	b.lbCfg = lbCfg
 
 	// Handle the update in a blocking fashion.
-	done := make(chan struct{})
-	ok = b.serializer.Schedule(func(context.Context) {
+	errCh := make(chan error, 1)
+	callback := func(context.Context) {
 		// A config update with a changed top-level cluster name means that none
 		// of our old watchers make any sense any more.
 		b.closeAllWatchers()
@@ -319,20 +319,20 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 		// could end up creating more watchers if turns out to be an aggregate
 		// cluster.
 		b.createAndAddWatcherForCluster(lbCfg.ClusterName)
-		close(done)
-	})
-	if !ok {
+		errCh <- nil
+	}
+	onFailure := func() {
 		// The call to Schedule returns false *only* if the serializer has been
 		// closed, which happens only when we receive an update after close.
-		return errBalancerClosed
+		errCh <- errBalancerClosed
 	}
-	<-done
-	return nil
+	b.serializer.ScheduleOr(callback, onFailure)
+	return <-errCh
 }
 
 // ResolverError handles errors reported by the xdsResolver.
 func (b *cdsBalancer) ResolverError(err error) {
-	b.serializer.Schedule(func(context.Context) {
+	b.serializer.TrySchedule(func(context.Context) {
 		// Resource not found error is reported by the resolver when the
 		// top-level cluster resource is removed by the management server.
 		if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
@@ -364,7 +364,7 @@ func (b *cdsBalancer) closeAllWatchers() {
 // Close cancels the CDS watch, closes the child policy and closes the
 // cdsBalancer.
 func (b *cdsBalancer) Close() {
-	b.serializer.Schedule(func(ctx context.Context) {
+	b.serializer.TrySchedule(func(ctx context.Context) {
 		b.closeAllWatchers()
 
 		if b.childLB != nil {
@@ -384,7 +384,7 @@ func (b *cdsBalancer) Close() {
 }
 
 func (b *cdsBalancer) ExitIdle() {
-	b.serializer.Schedule(func(context.Context) {
+	b.serializer.TrySchedule(func(context.Context) {
 		if b.childLB == nil {
 			b.logger.Warningf("Received ExitIdle with no child policy")
 			return

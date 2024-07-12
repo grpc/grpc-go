@@ -210,7 +210,7 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 				for watcher := range state.watchers {
 					watcher := watcher
 					err := uErr.err
-					a.serializer.Schedule(func(context.Context) { watcher.OnError(err) })
+					a.serializer.TrySchedule(func(context.Context) { watcher.OnError(err) })
 				}
 				continue
 			}
@@ -225,7 +225,7 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 				for watcher := range state.watchers {
 					watcher := watcher
 					resource := uErr.resource
-					a.serializer.Schedule(func(context.Context) { watcher.OnUpdate(resource) })
+					a.serializer.TrySchedule(func(context.Context) { watcher.OnUpdate(resource) })
 				}
 			}
 			// Sync cache.
@@ -300,7 +300,7 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 			state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
 			for watcher := range state.watchers {
 				watcher := watcher
-				a.serializer.Schedule(func(context.Context) { watcher.OnResourceDoesNotExist() })
+				a.serializer.TrySchedule(func(context.Context) { watcher.OnResourceDoesNotExist() })
 			}
 		}
 	}
@@ -428,7 +428,7 @@ func (a *authority) newConnectionError(err error) {
 			// Propagate the connection error from the transport layer to all watchers.
 			for watcher := range state.watchers {
 				watcher := watcher
-				a.serializer.Schedule(func(context.Context) {
+				a.serializer.TrySchedule(func(context.Context) {
 					watcher.OnError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err))
 				})
 			}
@@ -495,7 +495,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			a.logger.Infof("Resource type %q with resource name %q found in cache: %s", rType.TypeName(), resourceName, state.cache.ToJSON())
 		}
 		resource := state.cache
-		a.serializer.Schedule(func(context.Context) { watcher.OnUpdate(resource) })
+		a.serializer.TrySchedule(func(context.Context) { watcher.OnUpdate(resource) })
 	}
 
 	return func() {
@@ -548,7 +548,7 @@ func (a *authority) handleWatchTimerExpiryLocked(rType xdsresource.Type, resourc
 	state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
 	for watcher := range state.watchers {
 		watcher := watcher
-		a.serializer.Schedule(func(context.Context) { watcher.OnResourceDoesNotExist() })
+		a.serializer.TrySchedule(func(context.Context) { watcher.OnResourceDoesNotExist() })
 	}
 }
 
@@ -574,7 +574,7 @@ func (a *authority) triggerResourceNotFoundForTesting(rType xdsresource.Type, re
 	state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
 	for watcher := range state.watchers {
 		watcher := watcher
-		a.serializer.Schedule(func(context.Context) { watcher.OnResourceDoesNotExist() })
+		a.serializer.TrySchedule(func(context.Context) { watcher.OnResourceDoesNotExist() })
 	}
 }
 

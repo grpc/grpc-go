@@ -33,19 +33,19 @@ type clusterWatcher struct {
 }
 
 func (cw *clusterWatcher) OnUpdate(u *xdsresource.ClusterResourceData) {
-	cw.parent.serializer.Schedule(func(context.Context) {
+	cw.parent.serializer.TrySchedule(func(context.Context) {
 		cw.parent.onClusterUpdate(cw.name, u.Resource)
 	})
 }
 
 func (cw *clusterWatcher) OnError(err error) {
-	cw.parent.serializer.Schedule(func(context.Context) {
+	cw.parent.serializer.TrySchedule(func(context.Context) {
 		cw.parent.onClusterError(cw.name, err)
 	})
 }
 
 func (cw *clusterWatcher) OnResourceDoesNotExist() {
-	cw.parent.serializer.Schedule(func(context.Context) {
+	cw.parent.serializer.TrySchedule(func(context.Context) {
 		cw.parent.onClusterResourceNotFound(cw.name)
 	})
 }

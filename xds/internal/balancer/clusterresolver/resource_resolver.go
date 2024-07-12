@@ -287,7 +287,7 @@ func (rr *resourceResolver) generateLocked() {
 }
 
 func (rr *resourceResolver) onUpdate() {
-	rr.serializer.Schedule(func(context.Context) {
+	rr.serializer.TrySchedule(func(context.Context) {
 		rr.mu.Lock()
 		rr.generateLocked()
 		rr.mu.Unlock()
