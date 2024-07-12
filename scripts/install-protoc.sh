@@ -65,9 +65,19 @@ download_binary() {
   fi
 
   DOWNLOAD_URL="https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-${OS}-${ARCH}.zip"
-  # For cURL, -L follows redirects. 
-  # For tar, --exclude excludes files, and -C specifies the directory. 
-  curl -L "${DOWNLOAD_URL}" | tar -xz --exclude="readme.txt" -C "${INSTALL_PATH}"
+  # -L follows redirects.
+  # -O writes output to a file.
+  curl -LO "${DOWNLOAD_URL}"
+  # Unzip the downloaded file and except readme.txt.
+  # The file structure should look like:
+  # INSTALL_PATH
+  # ├── bin
+  # │   └── protoc
+  # └── include
+  #     └── other files...
+  unzip "protoc-${PROTOC_VERSION}-$2-$1.zip" -d "${INSTALL_PATH}" -x "readme.txt"
+  rm "protoc-${PROTOC_VERSION}-$2-$1.zip"
+  # Make the protoc binary executable. ¯\_(ツ)_/¯  crazy, right?
   chmod +x "${INSTALL_PATH}/bin/protoc"
 }
 
