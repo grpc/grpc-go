@@ -40,7 +40,7 @@ func (s) TestPanic(t *testing.T) {
 	snapshotMetricsRegistryForTesting(t)
 	want := "metric simple counter already registered"
 	defer func() {
-		if r := recover(); !strings.Contains(r.(string), want) {
+		if r := recover(); r == nil || !strings.Contains(r.(string), want) {
 			t.Errorf("expected panic contains %q, got %q", want, r)
 		}
 	}()
