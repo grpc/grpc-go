@@ -30,6 +30,7 @@ import (
 
 	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
 )
 
 type serverStatsHandler struct {
@@ -51,13 +52,119 @@ func (h *serverStatsHandler) initializeMetrics() {
 	}
 	metrics := h.options.MetricsOptions.Metrics
 	if metrics == nil {
-		metrics = DefaultMetrics
+		metrics = DefaultMetrics()
 	}
 
 	h.serverMetrics.callStarted = createInt64Counter(metrics.Metrics(), "grpc.server.call.started", meter, otelmetric.WithUnit("call"), otelmetric.WithDescription("Number of server calls started."))
 	h.serverMetrics.callSentTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.server.call.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
 	h.serverMetrics.callRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.server.call.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
 	h.serverMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.server.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a call from server transport's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+
+	h.serverMetrics.intCounts = make(map[*estats.MetricDescriptor]otelmetric.Int64Counter)
+	h.serverMetrics.floatCounts = make(map[*estats.MetricDescriptor]otelmetric.Float64Counter)
+	h.serverMetrics.intHistos = make(map[*estats.MetricDescriptor]otelmetric.Int64Histogram)
+	h.serverMetrics.floatHistos = make(map[*estats.MetricDescriptor]otelmetric.Float64Histogram)
+	h.serverMetrics.intGauges = make(map[*estats.MetricDescriptor]otelmetric.Int64Gauge)
+
+	// Metric registry metrics:
+	for metric := range metrics.Metrics() {
+		desc := estats.DescriptorForMetric(metric)
+		// Per call or metrics not registered, when gets a handle corresponding
+		// it will be a no-op record.
+		if desc == nil {
+			continue
+		}
+		switch desc.Type {
+		case estats.MetricTypeIntCount:
+			ic := createInt64Counter(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
+			h.serverMetrics.intCounts[desc] = ic
+		case estats.MetricTypeFloatCount:
+			fc := createFloat64Counter(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
+			h.serverMetrics.floatCounts[desc] = fc
+		case estats.MetricTypeIntHisto:
+			opts := []otelmetric.Int64HistogramOption{otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description)}
+			if len(desc.Bounds) != 0 {
+				opts = append(opts, otelmetric.WithExplicitBucketBoundaries(desc.Bounds...))
+			}
+			ih := createInt64Histogram(metrics.Metrics(), desc.Name, meter, opts...)
+			h.serverMetrics.intHistos[desc] = ih
+		case estats.MetricTypeFloatHisto:
+			opts := []otelmetric.Float64HistogramOption{otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description)}
+			if len(desc.Bounds) != 0 {
+				opts = append(opts, otelmetric.WithExplicitBucketBoundaries(desc.Bounds...))
+			}
+			fh := createFloat64Histogram(metrics.Metrics(), desc.Name, meter, opts...)
+			h.serverMetrics.floatHistos[desc] = fh
+		case estats.MetricTypeIntGauge:
+			ig := createInt64Gauge(metrics.Metrics(), estats.Metric(desc.Name), meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
+			h.serverMetrics.intGauges[desc] = ig
+		}
+	}
+}
+
+func (h *serverStatsHandler) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
+	desc := (*estats.MetricDescriptor)(handle)
+	ao := createAttributeOptionFromLabels(desc.Labels, desc.OptionalLabels, h.options.MetricsOptions.OptionalLabels, labels...)
+	h.getInt64Counter(desc).Add(h.options.MetricsOptions.Context, incr, ao)
+}
+
+func (h *serverStatsHandler) getInt64Counter(desc *estats.MetricDescriptor) otelmetric.Int64Counter {
+	if ic, ok := h.serverMetrics.intCounts[desc]; ok {
+		return ic
+	}
+	return noop.Int64Counter{}
+}
+
+func (h *serverStatsHandler) RecordFloat64Count(handle *estats.Float64CountHandle, incr float64, labels ...string) {
+	desc := (*estats.MetricDescriptor)(handle)
+	ao := createAttributeOptionFromLabels(desc.Labels, desc.OptionalLabels, h.options.MetricsOptions.OptionalLabels, labels...)
+	h.getFloat64Counter(desc).Add(h.options.MetricsOptions.Context, incr, ao)
+}
+
+func (h *serverStatsHandler) getFloat64Counter(desc *estats.MetricDescriptor) otelmetric.Float64Counter {
+	if fc, ok := h.serverMetrics.floatCounts[desc]; ok {
+		return fc
+	}
+	return noop.Float64Counter{}
+}
+
+func (h *serverStatsHandler) RecordInt64Histo(handle *estats.Int64HistoHandle, incr int64, labels ...string) {
+	desc := (*estats.MetricDescriptor)(handle)
+	ao := createAttributeOptionFromLabels(desc.Labels, desc.OptionalLabels, h.options.MetricsOptions.OptionalLabels, labels...)
+	h.getInt64Histo(desc).Record(h.options.MetricsOptions.Context, incr, ao)
+}
+
+func (h *serverStatsHandler) getInt64Histo(desc *estats.MetricDescriptor) otelmetric.Int64Histogram {
+	if ih, ok := h.serverMetrics.intHistos[desc]; ok {
+		return ih
+	}
+	return noop.Int64Histogram{}
+}
+
+func (h *serverStatsHandler) RecordFloat64Histo(handle *estats.Float64HistoHandle, incr float64, labels ...string) {
+	desc := (*estats.MetricDescriptor)(handle)
+	ao := createAttributeOptionFromLabels(desc.Labels, desc.OptionalLabels, h.options.MetricsOptions.OptionalLabels, labels...)
+	h.getFloat64Histo(desc).Record(h.options.MetricsOptions.Context, incr, ao)
+}
+
+func (h *serverStatsHandler) getFloat64Histo(desc *estats.MetricDescriptor) otelmetric.Float64Histogram {
+	if fh, ok := h.serverMetrics.floatHistos[desc]; ok {
+		return fh
+	}
+	return noop.Float64Histogram{}
+}
+
+func (h *serverStatsHandler) RecordInt64Gauge(handle *estats.Int64GaugeHandle, incr int64, labels ...string) {
+	desc := (*estats.MetricDescriptor)(handle)
+	ao := createAttributeOptionFromLabels(desc.Labels, desc.OptionalLabels, h.options.MetricsOptions.OptionalLabels, labels...)
+	h.getInt64Gauge(desc).Record(h.options.MetricsOptions.Context, incr, ao)
+}
+
+func (h *serverStatsHandler) getInt64Gauge(desc *estats.MetricDescriptor) otelmetric.Int64Gauge {
+	if ig, ok := h.serverMetrics.intGauges[desc]; ok {
+		return ig
+	}
+	return noop.Int64Gauge{}
 }
 
 // attachLabelsTransportStream intercepts SetHeader and SendHeader calls of the

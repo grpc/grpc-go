@@ -30,7 +30,8 @@ import (
 	"google.golang.org/grpc/internal"
 	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
 
-	"go.opentelemetry.io/otel/metric"
+	otelattribute "go.opentelemetry.io/otel/attribute"
+	otelmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/noop"
 )
 
@@ -59,7 +60,7 @@ type MetricsOptions struct {
 	// unset, no metrics will be recorded. Any implementation knobs (i.e. views,
 	// bounds) set in the MeterProvider take precedence over the API calls from
 	// this interface. (i.e. it will create default views for unset views).
-	MeterProvider metric.MeterProvider
+	MeterProvider otelmetric.MeterProvider
 
 	// Metrics are the metrics to instrument. Will create instrument and record telemetry
 	// for corresponding metric supported by the client and server
@@ -81,6 +82,9 @@ type MetricsOptions struct {
 
 	// pluginOption is used to get labels to attach to certain metrics, if set.
 	pluginOption otelinternal.PluginOption
+	// Context is the context of the OpenTelemetry plugin. If unset, will
+	// default to a context.Background.
+	Context context.Context
 }
 
 // DialOption returns a dial option which enables OpenTelemetry instrumentation
@@ -96,6 +100,9 @@ type MetricsOptions struct {
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 func DialOption(o Options) grpc.DialOption {
+	if o.MetricsOptions.Context == nil {
+		o.MetricsOptions.Context = context.Background()
+	}
 	csh := &clientStatsHandler{options: o}
 	csh.initializeMetrics()
 	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
@@ -116,6 +123,9 @@ var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) g
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 func ServerOption(o Options) grpc.ServerOption {
+	if o.MetricsOptions.Context == nil {
+		o.MetricsOptions.Context = context.Background()
+	}
 	ssh := &serverStatsHandler{options: o}
 	ssh.initializeMetrics()
 	return joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
@@ -184,63 +194,121 @@ type attemptInfo struct {
 
 type clientMetrics struct {
 	// "grpc.client.attempt.started"
-	attemptStarted metric.Int64Counter
+	attemptStarted otelmetric.Int64Counter
 	// "grpc.client.attempt.duration"
-	attemptDuration metric.Float64Histogram
+	attemptDuration otelmetric.Float64Histogram
 	// "grpc.client.attempt.sent_total_compressed_message_size"
-	attemptSentTotalCompressedMessageSize metric.Int64Histogram
+	attemptSentTotalCompressedMessageSize otelmetric.Int64Histogram
 	// "grpc.client.attempt.rcvd_total_compressed_message_size"
-	attemptRcvdTotalCompressedMessageSize metric.Int64Histogram
+	attemptRcvdTotalCompressedMessageSize otelmetric.Int64Histogram
 
 	// "grpc.client.call.duration"
-	callDuration metric.Float64Histogram
+	callDuration otelmetric.Float64Histogram
+
+	// Metrics from metrics registry:
+	intCounts   map[*estats.MetricDescriptor]otelmetric.Int64Counter
+	floatCounts map[*estats.MetricDescriptor]otelmetric.Float64Counter
+	intHistos   map[*estats.MetricDescriptor]otelmetric.Int64Histogram
+	floatHistos map[*estats.MetricDescriptor]otelmetric.Float64Histogram
+	intGauges   map[*estats.MetricDescriptor]otelmetric.Int64Gauge
 }
 
 type serverMetrics struct {
 	// "grpc.server.call.started"
-	callStarted metric.Int64Counter
+	callStarted otelmetric.Int64Counter
 	// "grpc.server.call.sent_total_compressed_message_size"
-	callSentTotalCompressedMessageSize metric.Int64Histogram
+	callSentTotalCompressedMessageSize otelmetric.Int64Histogram
 	// "grpc.server.call.rcvd_total_compressed_message_size"
-	callRcvdTotalCompressedMessageSize metric.Int64Histogram
+	callRcvdTotalCompressedMessageSize otelmetric.Int64Histogram
 	// "grpc.server.call.duration"
-	callDuration metric.Float64Histogram
+	callDuration otelmetric.Float64Histogram
+
+	// Metrics from metrics registry:
+	intCounts   map[*estats.MetricDescriptor]otelmetric.Int64Counter
+	floatCounts map[*estats.MetricDescriptor]otelmetric.Float64Counter
+	intHistos   map[*estats.MetricDescriptor]otelmetric.Int64Histogram
+	floatHistos map[*estats.MetricDescriptor]otelmetric.Float64Histogram
+	intGauges   map[*estats.MetricDescriptor]otelmetric.Int64Gauge
 }
 
-func createInt64Counter(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter metric.Meter, options ...metric.Int64CounterOption) metric.Int64Counter {
+func createInt64Counter(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter otelmetric.Meter, options ...otelmetric.Int64CounterOption) otelmetric.Int64Counter {
 	if _, ok := setOfMetrics[metricName]; !ok {
 		return noop.Int64Counter{}
 	}
 	ret, err := meter.Int64Counter(string(metricName), options...)
 	if err != nil {
-		logger.Errorf("failed to register metric \"%v\", will not record", metricName)
+		logger.Errorf("failed to register metric \"%v\", will not record: %v", metricName, err)
 		return noop.Int64Counter{}
 	}
 	return ret
 }
 
-func createInt64Histogram(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter metric.Meter, options ...metric.Int64HistogramOption) metric.Int64Histogram {
+func createFloat64Counter(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter otelmetric.Meter, options ...otelmetric.Float64CounterOption) otelmetric.Float64Counter {
+	if _, ok := setOfMetrics[metricName]; !ok {
+		return noop.Float64Counter{}
+	}
+	ret, err := meter.Float64Counter(string(metricName), options...)
+	if err != nil {
+		logger.Errorf("failed to register metric \"%v\", will not record: %v", metricName, err)
+		return noop.Float64Counter{}
+	}
+	return ret
+}
+
+func createInt64Histogram(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter otelmetric.Meter, options ...otelmetric.Int64HistogramOption) otelmetric.Int64Histogram {
+
 	if _, ok := setOfMetrics[metricName]; !ok {
 		return noop.Int64Histogram{}
 	}
 	ret, err := meter.Int64Histogram(string(metricName), options...)
 	if err != nil {
-		logger.Errorf("failed to register metric \"%v\", will not record", metricName)
+		logger.Errorf("failed to register metric \"%v\", will not record: %v", metricName, err)
 		return noop.Int64Histogram{}
 	}
 	return ret
 }
 
-func createFloat64Histogram(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter metric.Meter, options ...metric.Float64HistogramOption) metric.Float64Histogram {
+func createFloat64Histogram(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter otelmetric.Meter, options ...otelmetric.Float64HistogramOption) otelmetric.Float64Histogram {
 	if _, ok := setOfMetrics[metricName]; !ok {
 		return noop.Float64Histogram{}
 	}
 	ret, err := meter.Float64Histogram(string(metricName), options...)
 	if err != nil {
-		logger.Errorf("failed to register metric \"%v\", will not record", metricName)
+		logger.Errorf("failed to register metric \"%v\", will not record: %v", metricName, err)
 		return noop.Float64Histogram{}
 	}
 	return ret
+}
+
+func createInt64Gauge(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter otelmetric.Meter, options ...otelmetric.Int64GaugeOption) otelmetric.Int64Gauge {
+	if _, ok := setOfMetrics[metricName]; !ok {
+		return noop.Int64Gauge{}
+	}
+	ret, err := meter.Int64Gauge(string(metricName), options...)
+	if err != nil {
+		logger.Errorf("failed to register metric \"%v\", will not record: %v", metricName, err)
+		return noop.Int64Gauge{}
+	}
+	return ret
+}
+
+func createAttributeOptionFromLabels(labelKeys []string, optionalLabelKeys []string, optionalLabels []string, labelVals ...string) otelmetric.MeasurementOption {
+	var attributes []otelattribute.KeyValue
+
+	// Once it hits here lower level has guaranteed length of labelVals matches
+	// labelKeys + optionalLabelKeys.
+	for i, label := range labelKeys {
+		attributes = append(attributes, otelattribute.String(label, labelVals[i]))
+	}
+
+	for i, label := range optionalLabelKeys {
+		for _, optLabel := range optionalLabels { // o(n) could build out a set but n is currently capped at < 5
+			if label == optLabel {
+				attributes = append(attributes, otelattribute.String(label, labelVals[i+len(labelKeys)]))
+			}
+		}
+	}
+	return otelmetric.WithAttributes(attributes...)
 }
 
 // Users of this component should use these bucket boundaries as part of their
@@ -253,6 +321,14 @@ var (
 	DefaultLatencyBounds = []float64{0, 0.00001, 0.00005, 0.0001, 0.0003, 0.0006, 0.0008, 0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.008, 0.01, 0.013, 0.016, 0.02, 0.025, 0.03, 0.04, 0.05, 0.065, 0.08, 0.1, 0.13, 0.16, 0.2, 0.25, 0.3, 0.4, 0.5, 0.65, 0.8, 1, 2, 5, 10, 20, 50, 100} // provide "advice" through API, SDK should set this too
 	// DefaultSizeBounds are the default bounds for metrics which record size.
 	DefaultSizeBounds = []float64{0, 1024, 2048, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864, 268435456, 1073741824, 4294967296}
-	// DefaultMetrics are the default metrics provided by this module.
-	DefaultMetrics = estats.NewMetrics(ClientAttemptStarted, ClientAttemptDuration, ClientAttemptSentCompressedTotalMessageSize, ClientAttemptRcvdCompressedTotalMessageSize, ClientCallDuration, ServerCallStarted, ServerCallSentCompressedTotalMessageSize, ServerCallRcvdCompressedTotalMessageSize, ServerCallDuration)
+	// defaultPerCallMetrics are the default metrics provided by this module.
+	defaultPerCallMetrics = estats.NewMetrics(ClientAttemptStarted, ClientAttemptDuration, ClientAttemptSentCompressedTotalMessageSize, ClientAttemptRcvdCompressedTotalMessageSize, ClientCallDuration, ServerCallStarted, ServerCallSentCompressedTotalMessageSize, ServerCallRcvdCompressedTotalMessageSize, ServerCallDuration)
 )
+
+// DefaultMetrics returns a set of default metrics for per call joined with any
+// default metrics registered through metrics registry.
+//
+// This should only be invoked after init time.
+func DefaultMetrics() *estats.Metrics {
+	return defaultPerCallMetrics.Join(estats.DefaultMetrics)
+}
