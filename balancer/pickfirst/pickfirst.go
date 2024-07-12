@@ -26,6 +26,7 @@ import (
 	"math/rand"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -37,10 +38,8 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-type subConnListState int
-
 const (
-	subConnListConnecting subConnListState = iota
+	subConnListConnecting uint32 = iota
 	subConnListConnected
 	subConnListClosed
 )
@@ -93,11 +92,9 @@ type subConnList struct {
 	lastFailure error
 	// Whether all the subConns have reported a transient failure once.
 	inTransientFailure bool
-	// A mutex to guard the list state during state updates. State updates
-	// are synchronized by the clientConn, but the picker may attempt to read
-	// the state in parallel.
-	stateMu sync.RWMutex
-	state   subConnListState
+	// State updates are serialized by the clientConn, but the picker may attempt
+	// to read the state in parallel, so we use an atomic.
+	state atomic.Uint32
 }
 
 // scWrapper keeps track of the current state of the subConn.
@@ -130,9 +127,9 @@ func newScWrapper(b *pickfirstBalancer, addr resolver.Address, listener func(sta
 // want to start connecting to minimize creation of subConns.
 func newSubConnList(b *pickfirstBalancer) *subConnList {
 	sl := &subConnList{
-		b:     b,
-		state: subConnListConnecting,
+		b: b,
 	}
+	sl.state.Store(subConnListConnecting)
 
 	for _, addr := range b.latestAddressList {
 		var scw *scWrapper
@@ -170,7 +167,7 @@ func (sl *subConnList) stateListener(scw *scWrapper, state balancer.SubConnState
 		return
 	}
 	// If this list is already closed, ignore the update.
-	if sl.state != subConnListConnecting {
+	if sl.state.Load() != subConnListConnecting {
 		if sl.b.logger.V(2) {
 			sl.b.logger.Infof("Ignoring state update for non active subConn %p to %v", &scw.subConn, state.ConnectivityState)
 		}
@@ -232,12 +229,9 @@ func (sl *subConnList) stateListener(scw *scWrapper, state balancer.SubConnState
 }
 
 func (sl *subConnList) selectSubConn(scw *scWrapper) {
-	sl.stateMu.Lock()
-	defer sl.stateMu.Unlock()
-	if sl.state == subConnListClosed {
+	if !sl.state.CompareAndSwap(subConnListConnecting, subConnListConnected) {
 		return
 	}
-	sl.state = subConnListConnected
 	sl.b.logger.Infof("Selected subConn %p", &scw.subConn)
 	sl.b.unsetSelectedSubConn()
 	sl.b.selectedSubConn = scw
@@ -257,12 +251,9 @@ func (sl *subConnList) selectSubConn(scw *scWrapper) {
 }
 
 func (sl *subConnList) close() {
-	sl.stateMu.Lock()
-	defer sl.stateMu.Unlock()
-	if sl.state == subConnListClosed {
+	if prevState := sl.state.Swap(subConnListClosed); prevState == subConnListClosed {
 		return
 	}
-	sl.state = subConnListClosed
 	// Close all the subConns except the selected one. The selected subConn
 	// will be closed by the balancer.
 	for _, sc := range sl.subConns {
@@ -275,7 +266,7 @@ func (sl *subConnList) close() {
 }
 
 func (sl *subConnList) startConnectingNextSubConn() {
-	if sl.state != subConnListConnecting {
+	if sl.state.Load() != subConnListConnecting {
 		return
 	}
 	if !sl.inTransientFailure && sl.attemptingIndex < len(sl.subConns) {
@@ -509,13 +500,10 @@ func (b *pickfirstBalancer) Close() {
 func (b *pickfirstBalancer) ExitIdle() {
 	b.subConnListMu.Lock()
 	defer b.subConnListMu.Unlock()
-	b.subConnList.stateMu.RLock()
-	if b.subConnList.state != subConnListClosed {
+	if b.subConnList.state.Load() != subConnListClosed {
 		// Already exited idle, nothing to do.
-		b.subConnList.stateMu.RUnlock()
 		return
 	}
-	b.subConnList.stateMu.RUnlock()
 	// The current subConnList is still closed, create a new subConnList and
 	// start connecting.
 	if err := b.refreshSubConnListLocked(); errors.Is(err, balancer.ErrBadResolverState) {
