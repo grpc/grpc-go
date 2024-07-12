@@ -56,6 +56,17 @@ type MetricDescriptor struct {
 	Type MetricType
 }
 
+// MetricType is the type of metric.
+type MetricType int
+
+const (
+	MetricTypeIntCount MetricType = iota
+	MetricTypeFloatCount
+	MetricTypeIntHisto
+	MetricTypeFloatHisto
+	MetricTypeIntGauge
+)
+
 // Int64CountHandle is a typed handle for a int count metric. This handle
 // is passed at the recording point in order to know which metric to record
 // on.
@@ -63,7 +74,7 @@ type Int64CountHandle MetricDescriptor
 
 // Record records the int64 count value on the metrics recorder provided.
 func (h *Int64CountHandle) Record(recorder MetricsRecorder, incr int64, labels ...string) {
-	recorder.RecordIntCount(h, incr, labels...)
+	recorder.RecordInt64Count(h, incr, labels...)
 }
 
 // Float64CountHandle is a typed handle for a float count metric. This handle is
@@ -72,7 +83,7 @@ type Float64CountHandle MetricDescriptor
 
 // Record records the float64 count value on the metrics recorder provided.
 func (h *Float64CountHandle) Record(recorder MetricsRecorder, incr float64, labels ...string) {
-	recorder.RecordFloatCount(h, incr, labels...)
+	recorder.RecordFloat64Count(h, incr, labels...)
 }
 
 // Int64HistoHandle is a typed handle for an int histogram metric. This handle
@@ -81,7 +92,7 @@ type Int64HistoHandle MetricDescriptor
 
 // Record records the int64 histo value on the metrics recorder provided.
 func (h *Int64HistoHandle) Record(recorder MetricsRecorder, incr int64, labels ...string) {
-	recorder.RecordIntHisto(h, incr, labels...)
+	recorder.RecordInt64Histo(h, incr, labels...)
 }
 
 // Float64HistoHandle is a typed handle for a float histogram metric. This
@@ -91,7 +102,7 @@ type Float64HistoHandle MetricDescriptor
 
 // Record records the float64 histo value on the metrics recorder provided.
 func (h *Float64HistoHandle) Record(recorder MetricsRecorder, incr float64, labels ...string) {
-	recorder.RecordFloatHisto(h, incr, labels...)
+	recorder.RecordFloat64Histo(h, incr, labels...)
 }
 
 // Int64GaugeHandle is a typed handle for an int gauge metric. This handle is
@@ -100,7 +111,7 @@ type Int64GaugeHandle MetricDescriptor
 
 // Record records the int64 histo value on the metrics recorder provided.
 func (h *Int64GaugeHandle) Record(recorder MetricsRecorder, incr int64, labels ...string) {
-	recorder.RecordIntGauge(h, incr, labels...)
+	recorder.RecordInt64Gauge(h, incr, labels...)
 }
 
 // registeredMetrics are the registered metric descriptor names.
@@ -197,17 +208,6 @@ func RegisterInt64Gauge(descriptor MetricDescriptor) *Int64GaugeHandle {
 	metricsRegistry[descriptor.Name] = descPtr
 	return (*Int64GaugeHandle)(descPtr)
 }
-
-// MetricType is the type of metric.
-type MetricType int
-
-const (
-	MetricTypeIntCount MetricType = iota
-	MetricTypeFloatCount
-	MetricTypeIntHisto
-	MetricTypeFloatHisto
-	MetricTypeIntGauge
-)
 
 // snapshotMetricsRegistryForTesting snapshots the global data of the metrics
 // registry. Registers a cleanup function on the provided testing.T that sets

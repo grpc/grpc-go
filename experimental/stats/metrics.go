@@ -23,21 +23,21 @@ import "maps"
 
 // MetricsRecorder records on metrics derived from metric registry.
 type MetricsRecorder interface {
-	// RecordIntCount records the measurement alongside labels on the int count
-	// associated with the provided handle.
-	RecordIntCount(handle *Int64CountHandle, incr int64, labels ...string)
-	// RecordFloatCount records the measurement alongside labels on the float count
-	// associated with the provided handle.
-	RecordFloatCount(handle *Float64CountHandle, incr float64, labels ...string)
-	// RecordIntHisto records the measurement alongside labels on the int histo
-	// associated with the provided handle.
-	RecordIntHisto(handle *Int64HistoHandle, incr int64, labels ...string)
-	// RecordFloatHisto records the measurement alongside labels on the float
+	// RecordInt64Count records the measurement alongside labels on the int
+	// count associated with the provided handle.
+	RecordInt64Count(handle *Int64CountHandle, incr int64, labels ...string)
+	// RecordFloat64Count records the measurement alongside labels on the float
+	// count associated with the provided handle.
+	RecordFloat64Count(handle *Float64CountHandle, incr float64, labels ...string)
+	// RecordInt64Histo records the measurement alongside labels on the int
 	// histo associated with the provided handle.
-	RecordFloatHisto(handle *Float64HistoHandle, incr float64, labels ...string)
-	// RecordIntGauge records the measurement alongside labels on the int gauge
-	// associated with the provided handle.
-	RecordIntGauge(handle *Int64GaugeHandle, incr int64, labels ...string)
+	RecordInt64Histo(handle *Int64HistoHandle, incr int64, labels ...string)
+	// RecordFloat64Histo records the measurement alongside labels on the float
+	// histo associated with the provided handle.
+	RecordFloat64Histo(handle *Float64HistoHandle, incr float64, labels ...string)
+	// RecordInt64Gauge records the measurement alongside labels on the int
+	// gauge associated with the provided handle.
+	RecordInt64Gauge(handle *Int64GaugeHandle, incr int64, labels ...string)
 }
 
 // Metric is an identifier for a metric.
@@ -64,7 +64,8 @@ func NewMetrics(metrics ...Metric) *Metrics {
 	}
 }
 
-// Metrics returns the metrics set.
+// Metrics returns the metrics set. The returned map is read-only and must not
+// be modified.
 func (m *Metrics) Metrics() map[Metric]bool {
 	return m.metrics
 }
@@ -87,7 +88,7 @@ func (m *Metrics) Add(metrics ...Metric) *Metrics {
 
 // Join joins the metrics passed in with the metrics set, and returns a new copy
 // with the merged metrics.
-func (m *Metrics) Join(metrics *Metrics) *Metrics { // Use this API...
+func (m *Metrics) Join(metrics *Metrics) *Metrics {
 	newMetrics := make(map[Metric]bool)
 	maps.Copy(newMetrics, m.metrics)
 	maps.Copy(newMetrics, metrics.metrics)

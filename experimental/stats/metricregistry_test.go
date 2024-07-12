@@ -234,27 +234,27 @@ func verifyLabels(t *testing.T, labelsWant []string, optionalLabelsWant []string
 	}
 }
 
-func (r *fakeMetricsRecorder) RecordIntCount(handle *Int64CountHandle, incr int64, labels ...string) {
+func (r *fakeMetricsRecorder) RecordInt64Count(handle *Int64CountHandle, incr int64, labels ...string) {
 	verifyLabels(r.t, (*MetricDescriptor)(handle).Labels, (*MetricDescriptor)(handle).OptionalLabels, labels)
 	r.intValues[(*MetricDescriptor)(handle)] += incr
 }
 
-func (r *fakeMetricsRecorder) RecordFloatCount(handle *Float64CountHandle, incr float64, labels ...string) {
+func (r *fakeMetricsRecorder) RecordFloat64Count(handle *Float64CountHandle, incr float64, labels ...string) {
 	verifyLabels(r.t, (*MetricDescriptor)(handle).Labels, (*MetricDescriptor)(handle).OptionalLabels, labels)
 	r.floatValues[(*MetricDescriptor)(handle)] += incr
 }
 
-func (r *fakeMetricsRecorder) RecordIntHisto(handle *Int64HistoHandle, incr int64, labels ...string) {
+func (r *fakeMetricsRecorder) RecordInt64Histo(handle *Int64HistoHandle, incr int64, labels ...string) {
 	verifyLabels(r.t, (*MetricDescriptor)(handle).Labels, (*MetricDescriptor)(handle).OptionalLabels, labels)
 	r.intValues[(*MetricDescriptor)(handle)] += incr
 }
 
-func (r *fakeMetricsRecorder) RecordFloatHisto(handle *Float64HistoHandle, incr float64, labels ...string) {
+func (r *fakeMetricsRecorder) RecordFloat64Histo(handle *Float64HistoHandle, incr float64, labels ...string) {
 	verifyLabels(r.t, (*MetricDescriptor)(handle).Labels, (*MetricDescriptor)(handle).OptionalLabels, labels)
 	r.floatValues[(*MetricDescriptor)(handle)] += incr
 }
 
-func (r *fakeMetricsRecorder) RecordIntGauge(handle *Int64GaugeHandle, incr int64, labels ...string) {
+func (r *fakeMetricsRecorder) RecordInt64Gauge(handle *Int64GaugeHandle, incr int64, labels ...string) {
 	verifyLabels(r.t, (*MetricDescriptor)(handle).Labels, (*MetricDescriptor)(handle).OptionalLabels, labels)
 	r.intValues[(*MetricDescriptor)(handle)] += incr
 }
