@@ -72,7 +72,7 @@ type LoadBalancer_BalanceLoadClient = grpc.BidiStreamingClient[LoadBalanceReques
 
 // LoadBalancerServer is the server API for LoadBalancer service.
 // All implementations should embed UnimplementedLoadBalancerServer
-// for forward compatibility
+// for forward compatibility.
 type LoadBalancerServer interface {
 	// Bidirectional rpc to get a list of servers.
 	BalanceLoad(grpc.BidiStreamingServer[LoadBalanceRequest, LoadBalanceResponse]) error

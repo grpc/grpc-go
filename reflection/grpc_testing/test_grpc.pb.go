@@ -78,7 +78,7 @@ type SearchService_StreamingSearchClient = grpc.BidiStreamingClient[SearchReques
 
 // SearchServiceServer is the server API for SearchService service.
 // All implementations must embed UnimplementedSearchServiceServer
-// for forward compatibility
+// for forward compatibility.
 type SearchServiceServer interface {
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
 	StreamingSearch(grpc.BidiStreamingServer[SearchRequest, SearchResponse]) error

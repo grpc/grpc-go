@@ -72,7 +72,7 @@ type ServerReflection_ServerReflectionInfoClient = grpc.BidiStreamingClient[Serv
 
 // ServerReflectionServer is the server API for ServerReflection service.
 // All implementations should embed UnimplementedServerReflectionServer
-// for forward compatibility
+// for forward compatibility.
 type ServerReflectionServer interface {
 	// The reflection service is structured as a bidirectional stream, ensuring
 	// all related requests go to a single server.

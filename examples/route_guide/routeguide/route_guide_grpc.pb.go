@@ -136,7 +136,7 @@ type RouteGuide_RouteChatClient = grpc.BidiStreamingClient[RouteNote, RouteNote]
 
 // RouteGuideServer is the server API for RouteGuide service.
 // All implementations must embed UnimplementedRouteGuideServer
-// for forward compatibility
+// for forward compatibility.
 //
 // Interface exported by the server.
 type RouteGuideServer interface {

@@ -143,7 +143,7 @@ type BenchmarkService_StreamingBothWaysClient = grpc.BidiStreamingClient[SimpleR
 
 // BenchmarkServiceServer is the server API for BenchmarkService service.
 // All implementations must embed UnimplementedBenchmarkServiceServer
-// for forward compatibility
+// for forward compatibility.
 type BenchmarkServiceServer interface {
 	// One request followed by one response.
 	// The server returns the client payload as-is.

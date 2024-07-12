@@ -153,7 +153,7 @@ func (c *channelzClient) GetSocket(ctx context.Context, in *GetSocketRequest, op
 
 // ChannelzServer is the server API for Channelz service.
 // All implementations should embed UnimplementedChannelzServer
-// for forward compatibility
+// for forward compatibility.
 //
 // Channelz is a service exposed by gRPC servers that provides detailed debug
 // information.
