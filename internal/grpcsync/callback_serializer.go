@@ -53,14 +53,14 @@ func NewCallbackSerializer(ctx context.Context) *CallbackSerializer {
 	return cs
 }
 
-// MaybeSchedule schedules the provided callback function f to be executed in
-// the order it was added. This is a best-effort operation. If the context
-// passed to NewCallbackSerializer was canceled before this method is called,
-// the callback will not be scheduled.
+// TrySchedule tries to schedules the provided callback function f to be
+// executed in the order it was added. This is a best-effort operation. If the
+// context passed to NewCallbackSerializer was canceled before this method is
+// called, the callback will not be scheduled.
 //
 // Callbacks are expected to honor the context when performing any blocking
 // operations, and should return early when the context is canceled.
-func (cs *CallbackSerializer) MaybeSchedule(f func(ctx context.Context)) {
+func (cs *CallbackSerializer) TrySchedule(f func(ctx context.Context)) {
 	cs.callbacks.Put(f)
 }
 

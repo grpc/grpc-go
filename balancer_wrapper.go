@@ -128,7 +128,7 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 // resolverError is invoked by grpc to push a resolver error to the underlying
 // balancer.  The call to the balancer is executed from the serializer.
 func (ccb *ccBalancerWrapper) resolverError(err error) {
-	ccb.serializer.MaybeSchedule(func(ctx context.Context) {
+	ccb.serializer.TrySchedule(func(ctx context.Context) {
 		if ctx.Err() != nil || ccb.balancer == nil {
 			return
 		}
@@ -144,7 +144,7 @@ func (ccb *ccBalancerWrapper) close() {
 	ccb.closed = true
 	ccb.mu.Unlock()
 	channelz.Info(logger, ccb.cc.channelz, "ccBalancerWrapper: closing")
-	ccb.serializer.MaybeSchedule(func(context.Context) {
+	ccb.serializer.TrySchedule(func(context.Context) {
 		if ccb.balancer == nil {
 			return
 		}
@@ -156,7 +156,7 @@ func (ccb *ccBalancerWrapper) close() {
 
 // exitIdle invokes the balancer's exitIdle method in the serializer.
 func (ccb *ccBalancerWrapper) exitIdle() {
-	ccb.serializer.MaybeSchedule(func(ctx context.Context) {
+	ccb.serializer.TrySchedule(func(ctx context.Context) {
 		if ctx.Err() != nil || ccb.balancer == nil {
 			return
 		}
@@ -264,7 +264,7 @@ type acBalancerWrapper struct {
 // updateState is invoked by grpc to push a subConn state update to the
 // underlying balancer.
 func (acbw *acBalancerWrapper) updateState(s connectivity.State, curAddr resolver.Address, err error) {
-	acbw.ccb.serializer.MaybeSchedule(func(ctx context.Context) {
+	acbw.ccb.serializer.TrySchedule(func(ctx context.Context) {
 		if ctx.Err() != nil || acbw.ccb.balancer == nil {
 			return
 		}

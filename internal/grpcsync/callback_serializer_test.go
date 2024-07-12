@@ -55,7 +55,7 @@ func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
 			mu.Lock()
 			defer mu.Unlock()
 			scheduleOrderCh <- id
-			cs.MaybeSchedule(func(ctx context.Context) {
+			cs.TrySchedule(func(ctx context.Context) {
 				select {
 				case <-ctx.Done():
 					return
@@ -115,7 +115,7 @@ func (s) TestCallbackSerializer_Schedule_Concurrent(t *testing.T) {
 	wg.Add(numCallbacks)
 	for i := 0; i < numCallbacks; i++ {
 		go func() {
-			cs.MaybeSchedule(func(context.Context) {
+			cs.TrySchedule(func(context.Context) {
 				wg.Done()
 			})
 		}()
@@ -148,7 +148,7 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	// Schedule a callback which blocks until the context passed to it is
 	// canceled. It also closes a channel to signal that it has started.
 	firstCallbackStartedCh := make(chan struct{})
-	cs.MaybeSchedule(func(ctx context.Context) {
+	cs.TrySchedule(func(ctx context.Context) {
 		close(firstCallbackStartedCh)
 		<-ctx.Done()
 	})

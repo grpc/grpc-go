@@ -332,7 +332,7 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 
 // ResolverError handles errors reported by the xdsResolver.
 func (b *cdsBalancer) ResolverError(err error) {
-	b.serializer.MaybeSchedule(func(context.Context) {
+	b.serializer.TrySchedule(func(context.Context) {
 		// Resource not found error is reported by the resolver when the
 		// top-level cluster resource is removed by the management server.
 		if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
@@ -364,7 +364,7 @@ func (b *cdsBalancer) closeAllWatchers() {
 // Close cancels the CDS watch, closes the child policy and closes the
 // cdsBalancer.
 func (b *cdsBalancer) Close() {
-	b.serializer.MaybeSchedule(func(ctx context.Context) {
+	b.serializer.TrySchedule(func(ctx context.Context) {
 		b.closeAllWatchers()
 
 		if b.childLB != nil {
@@ -384,7 +384,7 @@ func (b *cdsBalancer) Close() {
 }
 
 func (b *cdsBalancer) ExitIdle() {
-	b.serializer.MaybeSchedule(func(context.Context) {
+	b.serializer.TrySchedule(func(context.Context) {
 		if b.childLB == nil {
 			b.logger.Warningf("Received ExitIdle with no child policy")
 			return
