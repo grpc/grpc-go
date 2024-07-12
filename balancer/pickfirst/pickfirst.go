@@ -40,8 +40,7 @@ import (
 type subConnListState int
 
 const (
-	subConnListPending subConnListState = iota
-	subConnListActive
+	subConnListActive subConnListState = iota
 	subConnListClosed
 )
 
@@ -92,11 +91,11 @@ type subConnList struct {
 	lastFailure error
 	// Whether all the subConns have reported a transient failure once.
 	inTransientFailure bool
-	// Use a mutex to guard the list status as it can be changed concurrently by
-	// the idlePicker. Note that only calls to change the state to active are
-	// triggered from the picker and can happen concurrently.
-	mu     sync.RWMutex
-	status subConnListState
+	// A mutex to guard the list during close calls as they can be be
+	// triggered concurrently by the idlePicker and subchannel/resolver
+	// updates.
+	closeMu sync.RWMutex
+	status  subConnListState
 }
 
 // scWrapper keeps track of the current state of the subConn.
@@ -125,10 +124,12 @@ func newScWrapper(b *pickfirstBalancer, addr resolver.Address, listener func(sta
 	return scw, nil
 }
 
+// newSubConnList creates a new list and starts connecting using it. A new list
+// list should be created only when we want to start connecting.
 func newSubConnList(addrs []resolver.Address, b *pickfirstBalancer) *subConnList {
 	sl := &subConnList{
 		b:      b,
-		status: subConnListPending,
+		status: subConnListActive,
 	}
 
 	for _, addr := range addrs {
@@ -147,17 +148,12 @@ func newSubConnList(addrs []resolver.Address, b *pickfirstBalancer) *subConnList
 		}
 		sl.subConns = append(sl.subConns, scw)
 	}
-	return sl
-}
-
-func (sl *subConnList) startConnectingIfNeeded() {
-	sl.mu.Lock()
-	defer sl.mu.Unlock()
-	if sl.status != subConnListPending {
-		return
+	if len(sl.subConns) > 0 {
+		sl.startConnectingNextSubConn()
+	} else {
+		sl.close()
 	}
-	sl.status = subConnListActive
-	sl.startConnectingNextSubConn()
+	return sl
 }
 
 func (sl *subConnList) stateListener(scw *scWrapper, state balancer.SubConnState) {
@@ -239,9 +235,7 @@ func (sl *subConnList) stateListener(scw *scWrapper, state balancer.SubConnState
 }
 
 func (sl *subConnList) selectSubConn(scw *scWrapper) {
-	if sl.b.logger.V(2) {
-		sl.b.logger.Infof("Selected subConn %p", &scw.subConn)
-	}
+	sl.b.logger.Infof("Selected subConn %p", &scw.subConn)
 	sl.b.unsetSelectedSubConn()
 	sl.b.selectedSubConn = scw
 	sl.b.state = connectivity.Ready
@@ -254,8 +248,8 @@ func (sl *subConnList) selectSubConn(scw *scWrapper) {
 }
 
 func (sl *subConnList) close() {
-	sl.mu.Lock()
-	defer sl.mu.Unlock()
+	sl.closeMu.Lock()
+	defer sl.closeMu.Unlock()
 	if sl.status == subConnListClosed {
 		return
 	}
@@ -320,7 +314,10 @@ type pickfirstBalancer struct {
 	cc     balancer.ClientConn
 	// Pointer to the subConn list currently connecting. Always close the
 	// current list before replacing it to ensure resources are freed.
-	subConnList       *subConnList
+	subConnList *subConnList
+	// A mutex to guard the swapping of subConnLists and it can be triggered
+	// concurrently by the idlePicker and resolver updates.
+	subConnListMu     sync.Mutex
 	selectedSubConn   *scWrapper
 	latestAddressList []resolver.Address
 	shuttingDown      bool
@@ -356,22 +353,6 @@ func (b *pickfirstBalancer) unsetSelectedSubConn() {
 
 func (b *pickfirstBalancer) goIdle() {
 	b.unsetSelectedSubConn()
-	b.refreshSubConnList()
-	if len(b.subConnList.subConns) == 0 {
-		b.state = connectivity.TransientFailure
-		b.cc.UpdateState(balancer.State{
-			ConnectivityState: connectivity.TransientFailure,
-			Picker:            &picker{err: fmt.Errorf("empty address list")},
-		})
-		b.unsetSelectedSubConn()
-		b.subConnList.close()
-		b.cc.ResolveNow(resolver.ResolveNowOptions{})
-		return
-	}
-
-	exitIdle := func() {
-		b.subConnList.startConnectingIfNeeded()
-	}
 
 	nextState := connectivity.Idle
 	if b.state == connectivity.TransientFailure {
@@ -383,12 +364,12 @@ func (b *pickfirstBalancer) goIdle() {
 	b.cc.UpdateState(balancer.State{
 		ConnectivityState: nextState,
 		Picker: &idlePicker{
-			exitIdle: exitIdle,
+			exitIdle: b.ExitIdle,
 		},
 	})
 }
 
-func (b *pickfirstBalancer) refreshSubConnList() {
+func (b *pickfirstBalancer) refreshSubConnListLocked() {
 	subConnList := newSubConnList(b.latestAddressList, b)
 
 	// Reset the previous subConnList to release resources.
@@ -400,7 +381,9 @@ func (b *pickfirstBalancer) refreshSubConnList() {
 }
 
 func (b *pickfirstBalancer) connectUsingLatestAddrs() error {
-	b.refreshSubConnList()
+	b.subConnListMu.Lock()
+	b.refreshSubConnListLocked()
+	b.subConnListMu.Unlock()
 	if len(b.subConnList.subConns) == 0 {
 		b.state = connectivity.TransientFailure
 		b.cc.UpdateState(balancer.State{
@@ -419,7 +402,6 @@ func (b *pickfirstBalancer) connectUsingLatestAddrs() error {
 			Picker:            &picker{err: balancer.ErrNoSubConnAvailable},
 		})
 	}
-	b.subConnList.startConnectingIfNeeded()
 	return nil
 }
 
@@ -503,10 +485,29 @@ func (b *pickfirstBalancer) Close() {
 }
 
 func (b *pickfirstBalancer) ExitIdle() {
-	if b.shuttingDown {
+	b.subConnListMu.Lock()
+	defer b.subConnListMu.Unlock()
+	b.subConnList.closeMu.RLock()
+	if b.subConnList.status == subConnListActive || b.selectedSubConn != nil {
+		// Already exited idle, nothing to do.
+		b.subConnList.closeMu.RUnlock()
 		return
 	}
-	b.subConnList.startConnectingIfNeeded()
+
+	b.subConnList.closeMu.RUnlock()
+	// The current subConnList is closed, create a new subConnList and
+	// start connecting.
+	b.refreshSubConnListLocked()
+	if len(b.subConnList.subConns) == 0 {
+		b.state = connectivity.TransientFailure
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: connectivity.TransientFailure,
+			Picker:            &picker{err: fmt.Errorf("empty address list")},
+		})
+		b.subConnList.close()
+		b.cc.ResolveNow(resolver.ResolveNowOptions{})
+		return
+	}
 }
 
 type picker struct {
