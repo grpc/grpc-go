@@ -75,8 +75,8 @@ download_binary() {
   # │   └── protoc
   # └── include
   #     └── other files...
-  unzip "protoc-${PROTOC_VERSION}-$2-$1.zip" -d "${INSTALL_PATH}" -x "readme.txt"
-  rm "protoc-${PROTOC_VERSION}-$2-$1.zip"
+  unzip "protoc-${PROTOC_VERSION}-${OS}-${ARCH}.zip" -d "${INSTALL_PATH}" -x "readme.txt"
+  rm "protoc-${PROTOC_VERSION}-${OS}-${ARCH}.zip"
   # Make the protoc binary executable. ¯\_(ツ)_/¯  crazy, right?
   chmod +x "${INSTALL_PATH}/bin/protoc"
 }
