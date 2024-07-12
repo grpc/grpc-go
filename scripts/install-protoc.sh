@@ -67,7 +67,7 @@ download_binary() {
   DOWNLOAD_URL="https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-${OS}-${ARCH}.zip"
   # For cURL, -L follows redirects. 
   # For tar, --exclude excludes files, and -C specifies the directory. 
-  curl -L "${DOWNLOAD_URL}" | tar -x --exclude="readme.txt" -C "${INSTALL_PATH}"
+  curl -L "${DOWNLOAD_URL}" | tar -xz --exclude="readme.txt" -C "${INSTALL_PATH}"
   chmod +x "${INSTALL_PATH}/bin/protoc"
 }
 
