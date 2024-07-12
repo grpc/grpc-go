@@ -94,7 +94,7 @@ func newCCBalancerWrapper(cc *ClientConn) *ccBalancerWrapper {
 // the underlying balancer.  This is always executed from the serializer, so
 // it is safe to call into the balancer here.
 func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnState) error {
-	errCh := make(chan error, 1)
+	errCh := make(chan error)
 	uccs := func(ctx context.Context) {
 		defer close(errCh)
 		if ctx.Err() != nil || ccb.balancer == nil {
@@ -111,9 +111,7 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 		}
 		errCh <- err
 	}
-	onFailure := func() {
-		errCh <- nil
-	}
+	onFailure := func() { close(errCh) }
 
 	// UpdateClientConnState can race with Close, and when the latter wins, the
 	// serializer is closed, and the attempt to schedule the callback will fail.
