@@ -369,31 +369,34 @@ func (b *pickfirstBalancer) goIdle() {
 	})
 }
 
-func (b *pickfirstBalancer) refreshSubConnListLocked() {
-	subConnList := newSubConnList(b.latestAddressList, b)
-
-	// Reset the previous subConnList to release resources.
-	if b.logger.V(2) {
-		b.logger.Infof("Closing older subConnList")
-	}
+func (b *pickfirstBalancer) refreshSubConnListLocked() error {
 	b.subConnList.close()
-	b.subConnList = subConnList
-}
-
-func (b *pickfirstBalancer) connectUsingLatestAddrs() error {
-	b.subConnListMu.Lock()
-	b.refreshSubConnListLocked()
-	b.subConnListMu.Unlock()
-	if len(b.subConnList.subConns) == 0 {
+	subConnList := newSubConnList(b.latestAddressList, b)
+	if len(subConnList.subConns) == 0 {
 		b.state = connectivity.TransientFailure
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.TransientFailure,
 			Picker:            &picker{err: fmt.Errorf("empty address list")},
 		})
 		b.unsetSelectedSubConn()
-		b.subConnList.close()
 		return balancer.ErrBadResolverState
 	}
+
+	// Reset the previous subConnList to release resources.
+	if b.logger.V(2) {
+		b.logger.Infof("Closing older subConnList")
+	}
+	b.subConnList = subConnList
+	return nil
+}
+
+func (b *pickfirstBalancer) connectUsingLatestAddrs() error {
+	b.subConnListMu.Lock()
+	if err := b.refreshSubConnListLocked(); err != nil {
+		b.subConnListMu.Unlock()
+		return err
+	}
+	b.subConnListMu.Unlock()
 
 	if b.state != connectivity.TransientFailure {
 		// We stay in TransientFailure until we are Ready. See A62.
@@ -497,14 +500,9 @@ func (b *pickfirstBalancer) ExitIdle() {
 	b.subConnList.closeMu.RUnlock()
 	// The current subConnList is closed, create a new subConnList and
 	// start connecting.
-	b.refreshSubConnListLocked()
-	if len(b.subConnList.subConns) == 0 {
-		b.state = connectivity.TransientFailure
-		b.cc.UpdateState(balancer.State{
-			ConnectivityState: connectivity.TransientFailure,
-			Picker:            &picker{err: fmt.Errorf("empty address list")},
-		})
-		b.subConnList.close()
+	if err := b.refreshSubConnListLocked(); errors.Is(err, balancer.ErrBadResolverState) {
+		// If creation of the subConnList fails, request for re-resolution to
+		// get a new list of addresses.
 		b.cc.ResolveNow(resolver.ResolveNowOptions{})
 		return
 	}
