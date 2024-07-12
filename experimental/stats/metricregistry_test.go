@@ -19,6 +19,7 @@
 package stats
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -40,7 +41,7 @@ func (s) TestPanic(t *testing.T) {
 	snapshotMetricsRegistryForTesting(t)
 	want := "metric simple counter already registered"
 	defer func() {
-		if r := recover(); r == nil || !strings.Contains(r.(string), want) {
+		if r := recover(); !strings.Contains(fmt.Sprint(r), want) {
 			t.Errorf("expected panic contains %q, got %q", want, r)
 		}
 	}()
