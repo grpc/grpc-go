@@ -23,6 +23,7 @@ package codes // import "google.golang.org/grpc/codes"
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // A Code is a status code defined according to the [gRPC documentation].
@@ -247,4 +248,8 @@ func (c *Code) UnmarshalJSON(b []byte) error {
 		return nil
 	}
 	return fmt.Errorf("invalid code: %q", string(b))
+}
+
+func (c Code) IsCustomCode() bool {
+	return strings.HasPrefix(canonicalString(c), "CODE")
 }

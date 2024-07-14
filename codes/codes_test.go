@@ -101,3 +101,21 @@ func (s) TestUnmarshalJSON_InvalidIntegerCode(t *testing.T) {
 		t.Errorf("got.UnmarshalJSON(200) = %v; wantErr: %v", err, wantErr)
 	}
 }
+
+func (s) TestIsCustomCode_DefinedStatusCode(t *testing.T) {
+	want := false
+	okStatusCode := OK
+	got := okStatusCode.IsCustomCode()
+	if got != want {
+		t.Errorf("okStatusCode.IsCustomCode(); want=%v, got=%v", want, got)
+	}
+}
+
+func (s) TestIsCustomCode_CustomStatusCode(t *testing.T) {
+	want := true
+	customStatusCode := Code(100)
+	got := customStatusCode.IsCustomCode()
+	if got != want {
+		t.Errorf("customStatusCode.IsCustomCode(); want=%v, got=%v", want, got)
+	}
+}
