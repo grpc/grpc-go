@@ -982,7 +982,7 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 }
 
 // Close kicks off the shutdown process of the transport. This should be called
-// only once on transport. Once it is called, the transport should not be
+// only once on a transport. Once it is called, the transport should not be
 // accessed anymore.
 func (t *http2Client) Close(err error) {
 	t.mu.Lock()
@@ -1027,7 +1027,8 @@ func (t *http2Client) Close(err error) {
 			st = status.New(codes.Unavailable, err.Error())
 		}
 	case <-time.After(goAwayLoopyWriterTimeout):
-		t.logger.Warningf("Failed to write a GOAWAY frame as part of connection close after %v. Giving up and closing the transport.", goAwayLoopyWriterTimeout)
+		st = status.New(codes.Unavailable, err.Error())
+		t.logger.Warningf("Failed to write a GOAWAY frame as part of connection close after %s. Giving up and closing the transport.", goAwayLoopyWriterTimeout)
 	}
 	t.cancel()
 	t.conn.Close()

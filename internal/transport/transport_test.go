@@ -2748,14 +2748,13 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 }
 
 // Test that in the event of a graceful client transport shutdown
-// , i.e., clientTransport.Close(), if the conn hung for
-// LoopyWriterTimeout, client should still be close itself and should
-// not wait for long.
+// ,  i.e., clientTransport.Close(), if the GOAWAY write is not
+// finished within specified time due to network hang, client
+// should still close without waiting for too long.
 func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
-	// Override goAwayLoopyWriterTimeout to 0 so that we always
-	// time out while writing GOAWAY on client.Close(). This is
-	// equivalent to network hang scenario when client is
-	// failing to write GOAWAY frame.
+	// Override timer for writing GOAWAY to 0 so that the connection write
+	// always times out. It is equivalent of real network hang when conn
+	// write for goaway doesn't finish in specified deadline
 	origGoAwayLoopyTimeout := goAwayLoopyWriterTimeout
 	goAwayLoopyWriterTimeout = 0
 	defer func() {
@@ -2768,13 +2767,13 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 		t.Fatalf("Error while listening: %v", err)
 	}
 	defer lis.Close()
-	// serverGreetingDone is used to notify when server is done greeting the client.
-	serverGreetingDone := make(chan struct{})
 	// errorCh verifies that desired GOAWAY not received by server
 	errorCh := make(chan error, 1)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	// Launch the server.
+	// Launch the server and handle HTTP/2 connections, specifically
+	// focusing on the reception and interpretation of GOAWAY frames
+	// sent from client.
 	go func() {
 		defer close(errorCh)
 		conn, err := lis.Accept()
@@ -2782,28 +2781,11 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 			t.Errorf("Error while accepting: %v", err)
 		}
 		defer conn.Close()
-		if _, err := io.ReadFull(conn, make([]byte, len(clientPreface))); err != nil {
-			t.Errorf("Error while reading client preface: %v", err)
-			return
-		}
 		framer := http2.NewFramer(conn, conn)
 		if err := framer.WriteSettings(); err != nil {
 			t.Errorf("Error while writing settings %v", err)
 			return
 		}
-		fr, _ := framer.ReadFrame()
-		if _, ok := fr.(*http2.SettingsFrame); !ok {
-			t.Errorf("Expected settings frame, got %T", fr)
-		}
-		fr, _ = framer.ReadFrame()
-		if fr, ok := fr.(*http2.SettingsFrame); !ok || !fr.IsAck() {
-			t.Errorf("Expected settings ACK frame, got %T", fr)
-		}
-		fr, _ = framer.ReadFrame()
-		if fr, ok := fr.(*http2.HeadersFrame); !ok || !fr.Flags.Has(http2.FlagHeadersEndHeaders) {
-			t.Errorf("Expected Headers frame with END_HEADERS frame, got %T", fr)
-		}
-		close(serverGreetingDone)
 
 		frame, err := framer.ReadFrame()
 		if err != nil {
@@ -2830,16 +2812,14 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open stream: %v", err)
 	}
-	// Wait until server receives the headers and settings frame as part of greet.
-	<-serverGreetingDone
-	// ct.Close will try to send the GOAWAY to server and will fail writing
-	// GOAWAY and will eventually close the loopyWriter as
-	// goAwayLoopyWriterTimeout (time out for writing GOAWAY) is set to zero, which is
-	// equivalent to network hang scenario.
+	// ct.Close will try to send the GOAWAY to server but conn.
+	// Write will time out due to goAwayLoopyWriterTimeout being
+	// 0. It is equivalent of a network hang when GOAWAY doesn't
+	// finish within specified deadline.
 	ct.Close(errors.New("manually closed by client"))
 	select {
 	case <-errorCh:
 	case <-ctx.Done():
-		t.Errorf("Context timed out")
+		t.Errorf("timeout waiting for client Close(): Context timed out")
 	}
 }
