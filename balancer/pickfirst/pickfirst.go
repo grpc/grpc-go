@@ -84,17 +84,18 @@ type pfConfig struct {
 // the pick-first algorithm.
 type subConnList struct {
 	subConns []*scWrapper
-	// The index within the subConns list for the subConn being tried.
-	attemptingIndex int
-	b               *pickfirstBalancer
+	b        *pickfirstBalancer
 	// The most recent failure during the initial connection attempt over the
 	// entire sunConns list.
 	lastFailure error
-	// Whether all the subConns have reported a transient failure once.
-	inTransientFailure bool
+	// The number of transient failures seen while connecting.
+	transientFailuresCount int
 	// State updates are serialized by the clientConn, but the picker may attempt
 	// to read the state in parallel, so we use an atomic.
 	state atomic.Uint32
+	// connectingCh is used to signal the transition of the subConnList out of
+	// the connecting state.
+	connectingCh chan struct{}
 }
 
 // scWrapper keeps track of the current state of the subConn.
@@ -102,12 +103,16 @@ type scWrapper struct {
 	subConn balancer.SubConn
 	state   connectivity.State
 	addr    resolver.Address
+	// failureChan is used to communicate the failure when connection fails.
+	failureChan         chan error
+	hasFailedPreviously bool
 }
 
 func newScWrapper(b *pickfirstBalancer, addr resolver.Address, listener func(state balancer.SubConnState)) (*scWrapper, error) {
 	scw := &scWrapper{
-		state: connectivity.Idle,
-		addr:  addr,
+		state:       connectivity.Idle,
+		addr:        addr,
+		failureChan: make(chan error, 1),
 	}
 	sc, err := b.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{
 		StateListener: func(scs balancer.SubConnState) {
@@ -127,7 +132,8 @@ func newScWrapper(b *pickfirstBalancer, addr resolver.Address, listener func(sta
 // want to start connecting to minimize creation of subConns.
 func newSubConnList(b *pickfirstBalancer) *subConnList {
 	sl := &subConnList{
-		b: b,
+		b:            b,
+		connectingCh: make(chan struct{}),
 	}
 	sl.state.Store(subConnListConnecting)
 
@@ -173,16 +179,39 @@ func (sl *subConnList) stateListener(scw *scWrapper, state balancer.SubConnState
 		}
 		return
 	}
-	if !sl.inTransientFailure {
-		// We are still trying to connect to each subConn once.
+	if !scw.hasFailedPreviously {
+		// This subConn is attempting to connect for the first time, we're in the
+		// initial pass.
 		switch state.ConnectivityState {
 		case connectivity.TransientFailure:
 			if sl.b.logger.V(2) {
 				sl.b.logger.Infof("SubConn %p failed to connect due to error: %v", &scw.subConn, state.ConnectionError)
 			}
-			sl.attemptingIndex++
+			scw.hasFailedPreviously = true
 			sl.lastFailure = state.ConnectionError
-			sl.startConnectingNextSubConn()
+			sl.transientFailuresCount++
+			// If we've seen one failure from each subConn, the first pass ends
+			// and we can set the channel state to transient failure.
+			if sl.transientFailuresCount == len(sl.subConns) {
+				sl.b.logger.Infof("Received one failure from each subConn in list %p, waiting for any subConn to connect.", sl)
+				// Phase 1 is over, start phase 2.
+				sl.b.state = connectivity.TransientFailure
+				sl.b.cc.UpdateState(balancer.State{
+					ConnectivityState: connectivity.TransientFailure,
+					Picker:            &picker{err: sl.lastFailure},
+				})
+
+				// In phase 2, we attempt to connect to all the subConns in parallel.
+				// Connect to addresses that have already completed the back-off.
+				for idx := 0; idx < len(sl.subConns); idx++ {
+					sc := sl.subConns[idx]
+					if sc.state == connectivity.TransientFailure {
+						continue
+					}
+					sl.subConns[idx].subConn.Connect()
+				}
+			}
+			scw.failureChan <- state.ConnectionError
 		case connectivity.Ready:
 			// Cleanup and update the picker to use the subconn.
 			sl.selectSubConn(scw)
@@ -203,20 +232,19 @@ func (sl *subConnList) stateListener(scw *scWrapper, state balancer.SubConnState
 		return
 	}
 
-	// We have attempted to connect to all the subConns once and failed.
+	if sl.transientFailuresCount < len(sl.subConns) {
+		// This subConn has failed once, but other subConns are still connecting.
+		// Wait for other subConns to complete.
+		return
+	}
+
+	// We have completed the first phase.
 	switch state.ConnectivityState {
 	case connectivity.TransientFailure:
 		if sl.b.logger.V(2) {
 			sl.b.logger.Infof("SubConn %p failed to connect due to error: %v", &scw.subConn, state.ConnectionError)
 		}
-		// If its the initial connection attempt, try to connect to the next subConn.
-		if sl.attemptingIndex < len(sl.subConns) && sl.subConns[sl.attemptingIndex] == scw {
-			// Going over all the subConns and try connecting to ones that are idle.
-			sl.attemptingIndex++
-			sl.startConnectingNextSubConn()
-		}
 	case connectivity.Ready:
-		// Cleanup and update the picker to use the subconn.
 		sl.selectSubConn(scw)
 	case connectivity.Idle:
 		// Trigger re-connection.
@@ -232,18 +260,17 @@ func (sl *subConnList) selectSubConn(scw *scWrapper) {
 	if !sl.state.CompareAndSwap(subConnListConnecting, subConnListConnected) {
 		return
 	}
+	close(sl.connectingCh)
 	sl.b.logger.Infof("Selected subConn %p", &scw.subConn)
 	sl.b.unsetSelectedSubConn()
 	sl.b.selectedSubConn = scw
 	sl.b.state = connectivity.Ready
-	sl.inTransientFailure = false
 	for _, sc := range sl.subConns {
 		if sc == sl.b.selectedSubConn {
 			continue
 		}
 		sc.subConn.Shutdown()
 	}
-	sl.subConns = nil
 	sl.b.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.Ready,
 		Picker:            &picker{result: balancer.PickResult{SubConn: scw.subConn}},
@@ -251,8 +278,12 @@ func (sl *subConnList) selectSubConn(scw *scWrapper) {
 }
 
 func (sl *subConnList) close() {
-	if prevState := sl.state.Swap(subConnListClosed); prevState == subConnListClosed {
+	prevState := sl.state.Swap(subConnListClosed)
+	if prevState == subConnListClosed {
 		return
+	}
+	if prevState == subConnListConnecting {
+		close(sl.connectingCh)
 	}
 	// Close all the subConns except the selected one. The selected subConn
 	// will be closed by the balancer.
@@ -262,42 +293,23 @@ func (sl *subConnList) close() {
 		}
 		sc.subConn.Shutdown()
 	}
-	sl.subConns = nil
 }
 
-func (sl *subConnList) startConnectingNextSubConn() {
-	if sl.state.Load() != subConnListConnecting {
-		return
-	}
-	if !sl.inTransientFailure && sl.attemptingIndex < len(sl.subConns) {
-		// Try to connect to the next subConn.
-		sl.subConns[sl.attemptingIndex].subConn.Connect()
-		return
-	}
-	if !sl.inTransientFailure {
-		// Failed to connect to each subConn once, enter transient failure.
-		sl.b.state = connectivity.TransientFailure
-		sl.inTransientFailure = true
-		sl.attemptingIndex = 0
-		sl.b.cc.UpdateState(balancer.State{
-			ConnectivityState: connectivity.TransientFailure,
-			Picker:            &picker{err: sl.lastFailure},
-		})
-		// Drop the existing (working) connection, if any.  This may be
-		// sub-optimal, but we can't ignore what the control plane told us.
-		sl.b.unsetSelectedSubConn()
-	}
-
-	// Attempt to connect to addresses that have already completed the back-off.
-	for ; sl.attemptingIndex < len(sl.subConns); sl.attemptingIndex++ {
-		sc := sl.subConns[sl.attemptingIndex]
-		if sc.state == connectivity.TransientFailure {
-			continue
+// connect attempts to connect to subConns till it finds a healthy one.
+func (sl *subConnList) connect() {
+	// Attempt to connect to each subConn once.
+	for _, scw := range sl.subConns {
+		scw.subConn.Connect()
+		select {
+		case <-sl.connectingCh:
+			return
+		case err := <-scw.failureChan:
+			if err == nil {
+				// Connected successfully.
+				return
+			}
 		}
-		sl.subConns[sl.attemptingIndex].subConn.Connect()
-		return
 	}
-	// Wait for the next subConn to enter idle state, then re-connect.
 }
 
 func (pickfirstBuilder) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
@@ -391,7 +403,7 @@ func (b *pickfirstBalancer) refreshSubConnListLocked() error {
 		b.logger.Infof("Closing older subConnList")
 	}
 	b.subConnList = subConnList
-	subConnList.startConnectingNextSubConn()
+	go subConnList.connect()
 	// Don't read any fields on subConnList after we start connecting as it will
 	// cause races with subConn state updates being handled by the stateListener.
 	return nil
