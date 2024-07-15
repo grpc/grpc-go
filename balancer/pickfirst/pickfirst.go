@@ -46,6 +46,11 @@ const (
 	// Name is the name of the pick_first balancer.
 	Name      = "pick_first"
 	logPrefix = "[pick-first-lb %p] "
+	// TODO(arjan-bal): This is a hack to disable outlier_detection when used
+	// with pick_first, for the reasons described in
+	// https://github.com/grpc/grpc/issues/32967.  Remove this when
+	// implementing the dualstack design.
+	DisableOutlierDetectionAttributeName = "disable_outlier_detection"
 )
 
 type pickfirstBuilder struct{}
@@ -162,6 +167,21 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		if cfg.ShuffleAddressList {
 			addrs = append([]resolver.Address{}, addrs...)
 			rand.Shuffle(len(addrs), func(i, j int) { addrs[i], addrs[j] = addrs[j], addrs[i] })
+		}
+	}
+
+	// TODO(arjan-bal): This is a hack to disable outlier_detection when used
+	// with pick_first, for the reasons described in
+	// https://github.com/grpc/grpc/issues/32967.  Remove this when
+	// implementing the dualstack design.
+	for idx := 0; idx < len(addrs); idx++ {
+		orig := addrs[idx]
+		addrs[idx] = resolver.Address{
+			Addr:               orig.Addr,
+			ServerName:         orig.ServerName,
+			Attributes:         orig.Attributes.WithValue(DisableOutlierDetectionAttributeName, 1),
+			BalancerAttributes: orig.BalancerAttributes,
+			Metadata:           orig.Metadata,
 		}
 	}
 

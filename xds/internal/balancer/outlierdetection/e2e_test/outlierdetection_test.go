@@ -28,6 +28,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
@@ -365,5 +366,69 @@ func (s) TestNoopConfiguration(t *testing.T) {
 	// upstreams.
 	if err = checkRoundRobinRPCs(ctx, testServiceClient, okAddresses); err != nil {
 		t.Fatalf("error in expected round robin: %v", err)
+	}
+}
+
+// TestPickFirstIsNoop verifies that outlier detection is not performed
+// when pickfirst LB policy is used. The test server returns error for
+// consecutive requests and test verifies that the endpoint is not ejected.
+func (s) TestPickFirstIsNoop(t *testing.T) {
+	backend := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return nil, errors.New("some error")
+		},
+	}
+	if err := backend.StartServer(); err != nil {
+		t.Fatalf("Failed to start backend: %v", err)
+	}
+	defer backend.Stop()
+	t.Logf("Started bad TestService backend at: %q", backend.Address)
+	countingODServiceConfigJSON := `
+{
+  "loadBalancingConfig": [
+    {
+      "outlier_detection_experimental": {
+        "interval": "0.025s",
+		"baseEjectionTime": "100s",
+		"maxEjectionTime": "300s",
+		"failurePercentageEjection": {
+			"threshold": 50,
+			"enforcementPercentage": 100,
+			"minimumHosts": 0,
+			"requestVolume": 1
+		},
+        "childPolicy": [{"pick_first": {}}]
+      }
+    }
+  ]
+}`
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(countingODServiceConfigJSON)
+
+	mr := manual.NewBuilderWithScheme("od-e2e")
+	// The full list of addresses.
+	mr.InitialState(resolver.State{
+		Addresses:     []resolver.Address{{Addr: backend.Address}},
+		ServiceConfig: sc,
+	})
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	testServiceClient := testgrpc.NewTestServiceClient(cc)
+
+	// Make 10 RPCs and verify that the conn doesn't go into transient failure.
+	// The conn can go into transient failure if the only backend is ejected.
+	for i := 0; i < 10; i++ {
+		testServiceClient.EmptyCall(ctx, &testpb.Empty{})
+	}
+
+	// Wait for the failure rate algorithm to run once.
+	<-time.After(50 * time.Millisecond)
+
+	if got := cc.GetState(); got != connectivity.Ready {
+		t.Fatalf("cc.GetState() = %v, want = %v", got, connectivity.Ready)
 	}
 }

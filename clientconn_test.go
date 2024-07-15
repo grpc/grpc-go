@@ -1072,7 +1072,7 @@ func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 
 	// Call UpdateAddresses with the same list of addresses, it should be a noop
 	// (even when the SubConn is Connecting, and doesn't have a curAddr).
-	ac.acbw.UpdateAddresses(addrsList)
+	ac.acbw.UpdateAddresses(ac.addrs)
 
 	// We've called tryUpdateAddrs - now let's make server2 close the
 	// connection and check that it continues to server3.

@@ -33,6 +33,7 @@ import (
 	"unsafe"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/buffer"
@@ -484,6 +485,13 @@ func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts bal
 	defer b.mu.Unlock()
 	b.scWrappers[sc] = scw
 	if len(addrs) != 1 {
+		return scw, nil
+	}
+	// TODO(arjan-bal): This is a hack to disable outlier_detection when used
+	// with pick_first, for the reasons described in
+	// https://github.com/grpc/grpc/issues/32967.  Remove this when
+	// implementing the dualstack design.
+	if addrs[0].Attributes.Value(pickfirst.DisableOutlierDetectionAttributeName) != nil {
 		return scw, nil
 	}
 	addrInfo, ok := b.addrs[addrs[0].Addr]
