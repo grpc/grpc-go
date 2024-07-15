@@ -149,7 +149,7 @@ func (f *RSTStreamFrame) Free() {}
 
 type SettingsFrame struct {
 	hdr      *FrameHeader
-	settings []Setting
+	Settings []Setting
 }
 
 func (f *SettingsFrame) Header() *FrameHeader {
