@@ -603,7 +603,7 @@ func WaitForHandlers(w bool) ServerOption {
 // options are used: StatsHandler, EnableTracing, or binary logging. In such
 // cases, the shared buffer pool will be ignored.
 //
-// Deprecated: use experimental.WithRecvBufferPool instead.  Will be deleted in
+// Deprecated: use experimental.RecvBufferPool instead.  Will be deleted in
 // v1.60.0 or later.
 func RecvBufferPool(bufferPool SharedBufferPool) ServerOption {
 	return recvBufferPool(bufferPool)
