@@ -19,7 +19,7 @@ set -eu -o pipefail
 WORKDIR="/tmp/grpc-go-tools"
 mkdir -p "${WORKDIR}"
 
-$(dirname "${0}")/install-protoc.sh ${WORKDIR}
+"$(dirname "${0}")"/install-protoc.sh ${WORKDIR}
 
 export GOBIN="${WORKDIR}"/bin
 export PATH="${GOBIN}:${PATH}"

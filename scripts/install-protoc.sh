@@ -39,13 +39,13 @@ main() {
   if [[ "$#" -ne 1 ]]; then
     die "Usage: $0 INSTALL_PATH"
   fi
-  
+
   INSTALL_PATH="${1}"
 
   if [[ ! -d "${INSTALL_PATH}" ]]; then
     die "INSTALL_PATH (${INSTALL_PATH}) does not exist."
   fi
-  
+
   echo "Installing protoc version $PROTOC_VERSION to ${INSTALL_PATH}..."
 
   # Detect the hardware platform.
@@ -55,7 +55,7 @@ main() {
     "arm64")    ARCH="aarch_64";;
     *)          die "Install unsuccessful. Hardware platform not supported by installer: $1";;
   esac
-  
+
   # Detect the Operating System.
   case "$(uname -s)" in
     "Darwin") OS="osx";;
@@ -72,11 +72,11 @@ main() {
   fi
 
   DOWNLOAD_URL="https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-${OS}-${ARCH}.zip"
-  
+
   # -L follows redirects.
   # -O writes output to a file.
   curl -LO "${DOWNLOAD_URL}"
-  
+
   # Unzip the downloaded file and except readme.txt.
   # The file structure should look like:
   # INSTALL_PATH
@@ -86,7 +86,7 @@ main() {
   #     └── other files...
   unzip "protoc-${PROTOC_VERSION}-${OS}-${ARCH}.zip" -d "${INSTALL_PATH}" -x "readme.txt"
   rm "protoc-${PROTOC_VERSION}-${OS}-${ARCH}.zip"
-  
+
   # Make the protoc binary executable. ¯\_(ツ)_/¯  crazy, right?
   chmod +x "${INSTALL_PATH}/bin/protoc"
 }
