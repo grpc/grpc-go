@@ -820,6 +820,87 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 	}
 }
 
+// Test ensures the picker is updated synchronously upon
+// receipt of a configuration update.
+func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
+	// Override the newPickerUpdated to ensure picker was updated.
+	pckrUpdated := make(chan struct{})
+	origNewPickerUpdated := newPickerUpdated
+	newPickerUpdated = func() {
+		select {
+		case pckrUpdated <- struct{}{}:
+		default:
+		}
+	}
+	defer func() { newPickerUpdated = origNewPickerUpdated }()
+
+	var testLocality = xdsinternal.LocalityID{
+		Region:  "test-region",
+		Zone:    "test-zone",
+		SubZone: "test-sub-zone",
+	}
+
+	// Create xds client
+	xdsC := fakeclient.NewClient()
+
+	builder := balancer.Get(Name)
+	cc := testutils.NewBalancerClientConn(t)
+	b := builder.Build(cc, balancer.BuildOptions{})
+	defer b.Close()
+
+	addrs := make([]resolver.Address, len(testBackendAddrs))
+	// Set locality to addresses in testBackendAddrs
+	for i, a := range testBackendAddrs {
+		addrs[i] = xdsinternal.SetLocalityID(a, testLocality)
+	}
+	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:          "trafficdirector.googleapis.com:443",
+		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
+
+	// errCh verifies that UpdateClientConnState was not successful
+	errCh := make(chan error, 1)
+	go func() {
+		err := b.UpdateClientConnState(balancer.ClientConnState{
+			ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
+			BalancerConfig: &LBConfig{
+				Cluster:             testClusterName,
+				EDSServiceName:      testServiceName,
+				LoadReportingServer: testLRSServerConfig,
+				ChildPolicy: &internalserviceconfig.BalancerConfig{
+					Name: roundrobin.Name,
+				},
+			},
+		})
+		errCh <- err
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Wait for the config update to be done
+	//
+	// Note: We don't need to check separately if picker update is
+	// happening synchronously with config update , as
+	// UpdateClientConnState waits for the picker update and then
+	// returns from it.
+	select {
+	case <-pckrUpdated:
+	case err := <-errCh:
+		t.Fatalf("client conn state updated before picker was updated: %v", err)
+	case <-ctx.Done():
+		t.Fatalf("xds_cluster_impl config update couldn't complete: %v", ctx.Err().Error())
+	}
+
+	// Once picker was updated, wait for client conn update
+	// to complete.
+	if err := <-errCh; err != nil {
+		t.Fatalf("error updating client conn state: %v", err)
+	}
+}
+
 func assertString(f func() (string, error)) string {
 	s, err := f()
 	if err != nil {

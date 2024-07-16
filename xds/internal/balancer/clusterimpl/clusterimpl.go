@@ -53,7 +53,13 @@ const (
 	defaultRequestCountMax = 1024
 )
 
-var connectedAddress = internal.ConnectedAddress.(func(balancer.SubConnState) resolver.Address)
+var (
+	connectedAddress = internal.ConnectedAddress.(func(balancer.SubConnState) resolver.Address)
+
+	// Below function is no-op in actual code, but can be overridden in
+	// tests to give tests visibility into exactly when certain events happen.
+	newPickerUpdated = func() {}
+)
 
 func init() {
 	balancer.Register(bb{})
@@ -70,6 +76,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		loadWrapper:     loadstore.NewWrapper(),
 		pickerUpdateCh:  buffer.NewUnbounded(),
 		requestCountMax: defaultRequestCountMax,
+		cfgUpdateDone:   make(chan struct{}),
 	}
 	b.logger = prefixLogger(b)
 	b.child = gracefulswitch.NewBalancer(b, bOpts)
@@ -105,7 +112,9 @@ type clusterImplBalancer struct {
 	logger    *grpclog.PrefixLogger
 	xdsClient xdsclient.XDSClient
 
-	config           *LBConfig
+	config *LBConfig
+	// cfgUpdateDone verifies the completion of config update
+	cfgUpdateDone    chan struct{}
 	child            *gracefulswitch.Balancer
 	cancelLoadReport func()
 	edsServiceName   string
@@ -256,6 +265,9 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	// Notify run() of this new config, in case drop and request counter need
 	// update (which means a new picker needs to be generated).
 	b.pickerUpdateCh.Put(newConfig)
+	// Wait for LB config update to be done
+	<-b.cfgUpdateDone
+	newPickerUpdated()
 
 	// Addresses and sub-balancer config are sent to sub-balancer.
 	return b.child.UpdateClientConnState(balancer.ClientConnState{
@@ -499,6 +511,7 @@ func (b *clusterImplBalancer) run() {
 						Picker:            b.newPicker(dc),
 					})
 				}
+				b.cfgUpdateDone <- struct{}{}
 			}
 			b.mu.Unlock()
 		case <-b.closed.Done():
