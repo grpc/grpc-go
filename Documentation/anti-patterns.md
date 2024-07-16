@@ -30,7 +30,7 @@ to create _a_ connection which may need to be recreated if it is lost.
 
 `grpc.Dial` uses "passthrough" as the default name resolver for backward
 compatibility while `grpc.NewClient` uses "dns" as its default name resolver.
-This subtle diffrence is important to legacy systems that also specified a
+This subtle difference is important to legacy systems that also specified a
 custom dialer and expected it to receive the target string directly.
 
 For these reasons, using `grpc.Dial` is discouraged.  Even though it is marked
