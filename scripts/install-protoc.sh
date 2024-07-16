@@ -46,7 +46,7 @@ main() {
     die "INSTALL_PATH (${INSTALL_PATH}) does not exist."
   fi
   
-  echo "Installing protoc version $PROTOC_VERSION to ${INSTALL_PATH}."
+  echo "Installing protoc version $PROTOC_VERSION to ${INSTALL_PATH}..."
 
   # Detect the hardware platform.
   case "$(uname -m)" in
@@ -66,7 +66,7 @@ main() {
   # Check if the protoc binary with the right version is already installed.
   if [[ -f "${INSTALL_PATH}/bin/protoc" ]]; then
     if [[ "$("${INSTALL_PATH}/bin/protoc" --version)" == "libprotoc ${PROTOC_VERSION}" ]]; then
-      echo "protoc version ${PROTOC_VERSION} is already installed in ${INSTALL_PATH}."
+      echo "protoc version ${PROTOC_VERSION} is already installed in ${INSTALL_PATH}"
       return
     fi
   fi

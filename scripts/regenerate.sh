@@ -19,31 +19,31 @@ set -eu -o pipefail
 WORKDIR="/tmp/grpc-go-tools"
 mkdir -p "${WORKDIR}"
 
-"./$(dirname "${0}")/install-protoc.sh" ${WORKDIR}
+$(dirname "${0}")/install-protoc.sh ${WORKDIR}
 
 export GOBIN="${WORKDIR}"/bin
 export PATH="${GOBIN}:${PATH}"
 mkdir -p "${GOBIN}"
 
-echo "remove existing generated files"
+echo "removing existing generated files..."
 # grpc_testing_not_regenerate/*.pb.go is not re-generated,
 # see grpc_testing_not_regenerate/README.md for details.
 find . -name '*.pb.go' | grep -v 'grpc_testing_not_regenerate' | xargs rm -f || true
 
-echo "go install google.golang.org/protobuf/cmd/protoc-gen-go"
+echo "Executing: go install google.golang.org/protobuf/cmd/protoc-gen-go..."
 (cd test/tools && go install google.golang.org/protobuf/cmd/protoc-gen-go)
 
-echo "go install cmd/protoc-gen-go-grpc"
+echo "Executing: go install cmd/protoc-gen-go-grpc..."
 (cd cmd/protoc-gen-go-grpc && go install .)
 
-echo "git clone https://github.com/grpc/grpc-proto"
+echo "Pulling protos from https://github.com/grpc/grpc-proto..."
 if [ -d "${WORKDIR}/grpc-proto" ]; then
   (cd "${WORKDIR}/grpc-proto" && git pull)
 else
   git clone --quiet https://github.com/grpc/grpc-proto "${WORKDIR}/grpc-proto"
 fi
 
-echo "git clone https://github.com/protocolbuffers/protobuf"
+echo "Pulling protos from https://github.com/protocolbuffers/protobuf..."
 if [ -d "${WORKDIR}/protobuf" ]; then
   (cd "${WORKDIR}/protobuf" && git pull)
 else
@@ -52,7 +52,7 @@ fi
 
 # Pull in code.proto as a proto dependency
 mkdir -p "${WORKDIR}/googleapis/google/rpc"
-echo "curl https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto"
+echo "Pulling code.proto from https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto..."
 curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto > "${WORKDIR}/googleapis/google/rpc/code.proto"
 
 
