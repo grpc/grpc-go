@@ -82,6 +82,7 @@ func newCCBalancerWrapper(cc *ClientConn) *ccBalancerWrapper {
 			CustomUserAgent: cc.dopts.copts.UserAgent,
 			ChannelzParent:  cc.channelz,
 			Target:          cc.parsedTarget,
+			MetricsRecorder: cc.metricsRecorderList,
 		},
 		serializer:       grpcsync.NewCallbackSerializer(ctx),
 		serializerCancel: cancel,
