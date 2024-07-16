@@ -35,22 +35,29 @@ source "$(dirname $0)/common.sh"
 # The version of protoc that will be installed.
 PROTOC_VERSION="27.1"
 
-INSTALL_PATH="${1}"
+main() {
+  if [[ "$#" -ne 1 ]]; then
+    die "Usage: $0 INSTALL_PATH"
+  fi
+  
+  INSTALL_PATH="${1}"
 
-# downloads the pre-built binaries for Linux to $INSTALL_PATH.
-# Usage:
-#   download_binary ARCH OS
-# Arguments:
-#   ARCH:  The hardware platform of the system.  Accepted values: [x86_64, aarch_64]
-#   OS:    The operating system of the system.   Accepted values: [osx, linux]
-download_binary() {
-  case "${1}" in
+  if [[ ! -d "${INSTALL_PATH}" ]]; then
+    die "INSTALL_PATH (${INSTALL_PATH}) does not exist."
+  fi
+  
+  echo "Installing protoc version $PROTOC_VERSION to ${INSTALL_PATH}."
+
+  # Detect the hardware platform.
+  case "$(uname -m)" in
     "x86_64")   ARCH="x86_64";;
     "aarch64")  ARCH="aarch_64";;
     "arm64")    ARCH="aarch_64";;
     *)          die "Install unsuccessful. Hardware platform not supported by installer: $1";;
   esac
-  case "${2}" in
+  
+  # Detect the Operating System.
+  case "$(uname -s)" in
     "Darwin") OS="osx";;
     "Linux")  OS="linux";;
     *)        die "Install unsuccessful. OS not supported by installer: $2";;
@@ -65,9 +72,11 @@ download_binary() {
   fi
 
   DOWNLOAD_URL="https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-${OS}-${ARCH}.zip"
+  
   # -L follows redirects.
   # -O writes output to a file.
   curl -LO "${DOWNLOAD_URL}"
+  
   # Unzip the downloaded file and except readme.txt.
   # The file structure should look like:
   # INSTALL_PATH
@@ -77,24 +86,9 @@ download_binary() {
   #     └── other files...
   unzip "protoc-${PROTOC_VERSION}-${OS}-${ARCH}.zip" -d "${INSTALL_PATH}" -x "readme.txt"
   rm "protoc-${PROTOC_VERSION}-${OS}-${ARCH}.zip"
+  
   # Make the protoc binary executable. ¯\_(ツ)_/¯  crazy, right?
   chmod +x "${INSTALL_PATH}/bin/protoc"
-}
-
-main() {
-  if [[ "$#" -ne 1 ]]; then
-    die "Usage: $0 INSTALL_PATH"
-  fi
-
-  if [[ ! -d "${INSTALL_PATH}" ]]; then
-    die "INSTALL_PATH (${INSTALL_PATH}) does not exist."
-  fi
-  echo "Installing protoc version $PROTOC_VERSION to ${INSTALL_PATH}."
-  # Detect the hardware platform.
-  ARCH="$(uname -m)"
-  # Detect the Operating System.
-  OS="$(uname -s)"
-  download_binary "${ARCH}" "${OS}"
 }
 
 main "$@"
