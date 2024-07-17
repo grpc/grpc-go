@@ -129,7 +129,6 @@ func (s) TestMetricsRegistryMetrics(t *testing.T) {
 	// so only those should show up in metrics emissions. All the required
 	// labels should show up in metrics emissions.
 	mo := MetricsOptions{
-		Context:        ctx, // Tests the context logic on metrics recording calls - OTel is a separate component than grpc.ClientConn/grpc.Server and is independent so gets own context.
 		Metrics:        DefaultMetrics().Add("int-counter-3"),
 		OptionalLabels: []string{"float counter optional label key", "float histo optional label key"},
 		MeterProvider:  provider,

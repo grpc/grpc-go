@@ -30,10 +30,10 @@ import (
 
 	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/metric/noop"
 )
 
 type clientStatsHandler struct {
+	registryMetrics
 	options Options
 
 	clientMetrics clientMetrics
@@ -62,110 +62,37 @@ func (h *clientStatsHandler) initializeMetrics() {
 	h.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.client.attempt.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
 	h.clientMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 
-	h.clientMetrics.intCounts = make(map[*estats.MetricDescriptor]otelmetric.Int64Counter)
-	h.clientMetrics.floatCounts = make(map[*estats.MetricDescriptor]otelmetric.Float64Counter)
-	h.clientMetrics.intHistos = make(map[*estats.MetricDescriptor]otelmetric.Int64Histogram)
-	h.clientMetrics.floatHistos = make(map[*estats.MetricDescriptor]otelmetric.Float64Histogram)
-	h.clientMetrics.intGauges = make(map[*estats.MetricDescriptor]otelmetric.Int64Gauge)
+	h.registryMetrics = registryMetrics{
+		intCounts:   make(map[*estats.MetricDescriptor]otelmetric.Int64Counter),
+		floatCounts: make(map[*estats.MetricDescriptor]otelmetric.Float64Counter),
+		intHistos:   make(map[*estats.MetricDescriptor]otelmetric.Int64Histogram),
+		floatHistos: make(map[*estats.MetricDescriptor]otelmetric.Float64Histogram),
+		intGauges:   make(map[*estats.MetricDescriptor]otelmetric.Int64Gauge),
+
+		optionalLabels: h.options.MetricsOptions.OptionalLabels,
+	}
 
 	for metric := range metrics.Metrics() {
 		desc := estats.DescriptorForMetric(metric)
-		// Per call or metrics not registered, when gets a handle corresponding
-		// it will be a no-op record.
 		if desc == nil {
+			// Either the metric was per call or the metric is not registered.
+			// Thus, if this component ever receives the desc as a handle in
+			// record it will be a no-op.
 			continue
 		}
 		switch desc.Type {
 		case estats.MetricTypeIntCount:
-			ic := createInt64Counter(metrics.Metrics(), estats.Metric(desc.Name), meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
-			h.clientMetrics.intCounts[desc] = ic
+			h.registryMetrics.intCounts[desc] = createInt64Counter(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
 		case estats.MetricTypeFloatCount:
-			fc := createFloat64Counter(metrics.Metrics(), estats.Metric(desc.Name), meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
-			h.clientMetrics.floatCounts[desc] = fc
+			h.registryMetrics.floatCounts[desc] = createFloat64Counter(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
 		case estats.MetricTypeIntHisto:
-			opts := []otelmetric.Int64HistogramOption{otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description)}
-			if len(desc.Bounds) != 0 {
-				opts = append(opts, otelmetric.WithExplicitBucketBoundaries(desc.Bounds...))
-			}
-			ih := createInt64Histogram(metrics.Metrics(), estats.Metric(desc.Name), meter, opts...)
-			h.clientMetrics.intHistos[desc] = ih
+			h.registryMetrics.intHistos[desc] = createInt64Histogram(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description), otelmetric.WithExplicitBucketBoundaries(desc.Bounds...))
 		case estats.MetricTypeFloatHisto:
-			opts := []otelmetric.Float64HistogramOption{otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description)}
-			if len(desc.Bounds) != 0 {
-				opts = append(opts, otelmetric.WithExplicitBucketBoundaries(desc.Bounds...))
-			}
-			fh := createFloat64Histogram(metrics.Metrics(), estats.Metric(desc.Name), meter, opts...)
-			h.clientMetrics.floatHistos[desc] = fh
+			h.registryMetrics.floatHistos[desc] = createFloat64Histogram(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description), otelmetric.WithExplicitBucketBoundaries(desc.Bounds...))
 		case estats.MetricTypeIntGauge:
-			ig := createInt64Gauge(metrics.Metrics(), estats.Metric(desc.Name), meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
-			h.clientMetrics.intGauges[desc] = ig
+			h.registryMetrics.intGauges[desc] = createInt64Gauge(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
 		}
 	}
-}
-
-func (h *clientStatsHandler) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
-	desc := (*estats.MetricDescriptor)(handle)
-	ao := createAttributeOptionFromLabels(desc.Labels, desc.OptionalLabels, h.options.MetricsOptions.OptionalLabels, labels...)
-	h.getInt64Counter(desc).Add(h.options.MetricsOptions.Context, incr, ao)
-}
-
-func (h *clientStatsHandler) getInt64Counter(desc *estats.MetricDescriptor) otelmetric.Int64Counter {
-	if ic, ok := h.clientMetrics.intCounts[desc]; ok {
-		return ic
-	}
-	return noop.Int64Counter{}
-}
-
-func (h *clientStatsHandler) RecordFloat64Count(handle *estats.Float64CountHandle, incr float64, labels ...string) {
-	desc := (*estats.MetricDescriptor)(handle)
-	ao := createAttributeOptionFromLabels(desc.Labels, desc.OptionalLabels, h.options.MetricsOptions.OptionalLabels, labels...)
-	h.getFloat64Counter(desc).Add(h.options.MetricsOptions.Context, incr, ao)
-}
-
-func (h *clientStatsHandler) getFloat64Counter(desc *estats.MetricDescriptor) otelmetric.Float64Counter {
-	if fc, ok := h.clientMetrics.floatCounts[desc]; ok {
-		return fc
-	}
-	return noop.Float64Counter{}
-}
-
-func (h *clientStatsHandler) RecordInt64Histo(handle *estats.Int64HistoHandle, incr int64, labels ...string) {
-	desc := (*estats.MetricDescriptor)(handle)
-	ao := createAttributeOptionFromLabels(desc.Labels, desc.OptionalLabels, h.options.MetricsOptions.OptionalLabels, labels...)
-	h.getInt64Histo(desc).Record(h.options.MetricsOptions.Context, incr, ao)
-}
-
-func (h *clientStatsHandler) getInt64Histo(desc *estats.MetricDescriptor) otelmetric.Int64Histogram {
-	if ih, ok := h.clientMetrics.intHistos[desc]; ok {
-		return ih
-	}
-	return noop.Int64Histogram{}
-}
-
-func (h *clientStatsHandler) RecordFloat64Histo(handle *estats.Float64HistoHandle, incr float64, labels ...string) {
-	desc := (*estats.MetricDescriptor)(handle)
-	ao := createAttributeOptionFromLabels(desc.Labels, desc.OptionalLabels, h.options.MetricsOptions.OptionalLabels, labels...)
-	h.getFloat64Histo(desc).Record(h.options.MetricsOptions.Context, incr, ao)
-}
-
-func (h *clientStatsHandler) getFloat64Histo(desc *estats.MetricDescriptor) otelmetric.Float64Histogram {
-	if fh, ok := h.clientMetrics.floatHistos[desc]; ok {
-		return fh
-	}
-	return noop.Float64Histogram{}
-}
-
-func (h *clientStatsHandler) RecordInt64Gauge(handle *estats.Int64GaugeHandle, incr int64, labels ...string) {
-	desc := (*estats.MetricDescriptor)(handle)
-	ao := createAttributeOptionFromLabels(desc.Labels, desc.OptionalLabels, h.options.MetricsOptions.OptionalLabels, labels...)
-	h.getInt64Gauge(desc).Record(h.options.MetricsOptions.Context, incr, ao)
-}
-
-func (h *clientStatsHandler) getInt64Gauge(desc *estats.MetricDescriptor) otelmetric.Int64Gauge {
-	if ig, ok := h.clientMetrics.intGauges[desc]; ok {
-		return ig
-	}
-	return noop.Int64Gauge{}
 }
 
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {

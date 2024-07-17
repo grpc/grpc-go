@@ -82,9 +82,6 @@ type MetricsOptions struct {
 
 	// pluginOption is used to get labels to attach to certain metrics, if set.
 	pluginOption otelinternal.PluginOption
-	// Context is the context of the OpenTelemetry plugin. If unset, will
-	// default to a context.Background.
-	Context context.Context
 }
 
 // DialOption returns a dial option which enables OpenTelemetry instrumentation
@@ -100,9 +97,6 @@ type MetricsOptions struct {
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 func DialOption(o Options) grpc.DialOption {
-	if o.MetricsOptions.Context == nil {
-		o.MetricsOptions.Context = context.Background()
-	}
 	csh := &clientStatsHandler{options: o}
 	csh.initializeMetrics()
 	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
@@ -123,9 +117,6 @@ var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) g
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 func ServerOption(o Options) grpc.ServerOption {
-	if o.MetricsOptions.Context == nil {
-		o.MetricsOptions.Context = context.Background()
-	}
 	ssh := &serverStatsHandler{options: o}
 	ssh.initializeMetrics()
 	return joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
@@ -201,16 +192,8 @@ type clientMetrics struct {
 	attemptSentTotalCompressedMessageSize otelmetric.Int64Histogram
 	// "grpc.client.attempt.rcvd_total_compressed_message_size"
 	attemptRcvdTotalCompressedMessageSize otelmetric.Int64Histogram
-
 	// "grpc.client.call.duration"
 	callDuration otelmetric.Float64Histogram
-
-	// Metrics from metrics registry:
-	intCounts   map[*estats.MetricDescriptor]otelmetric.Int64Counter
-	floatCounts map[*estats.MetricDescriptor]otelmetric.Float64Counter
-	intHistos   map[*estats.MetricDescriptor]otelmetric.Int64Histogram
-	floatHistos map[*estats.MetricDescriptor]otelmetric.Float64Histogram
-	intGauges   map[*estats.MetricDescriptor]otelmetric.Int64Gauge
 }
 
 type serverMetrics struct {
@@ -222,13 +205,6 @@ type serverMetrics struct {
 	callRcvdTotalCompressedMessageSize otelmetric.Int64Histogram
 	// "grpc.server.call.duration"
 	callDuration otelmetric.Float64Histogram
-
-	// Metrics from metrics registry:
-	intCounts   map[*estats.MetricDescriptor]otelmetric.Int64Counter
-	floatCounts map[*estats.MetricDescriptor]otelmetric.Float64Counter
-	intHistos   map[*estats.MetricDescriptor]otelmetric.Int64Histogram
-	floatHistos map[*estats.MetricDescriptor]otelmetric.Float64Histogram
-	intGauges   map[*estats.MetricDescriptor]otelmetric.Int64Gauge
 }
 
 func createInt64Counter(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter otelmetric.Meter, options ...otelmetric.Int64CounterOption) otelmetric.Int64Counter {
@@ -256,7 +232,6 @@ func createFloat64Counter(setOfMetrics map[estats.Metric]bool, metricName estats
 }
 
 func createInt64Histogram(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter otelmetric.Meter, options ...otelmetric.Int64HistogramOption) otelmetric.Int64Histogram {
-
 	if _, ok := setOfMetrics[metricName]; !ok {
 		return noop.Int64Histogram{}
 	}
@@ -292,7 +267,7 @@ func createInt64Gauge(setOfMetrics map[estats.Metric]bool, metricName estats.Met
 	return ret
 }
 
-func createAttributeOptionFromLabels(labelKeys []string, optionalLabelKeys []string, optionalLabels []string, labelVals ...string) otelmetric.MeasurementOption {
+func optionFromLabels(labelKeys []string, optionalLabelKeys []string, optionalLabels []string, labelVals ...string) otelmetric.MeasurementOption {
 	var attributes []otelattribute.KeyValue
 
 	// Once it hits here lower level has guaranteed length of labelVals matches
@@ -311,6 +286,57 @@ func createAttributeOptionFromLabels(labelKeys []string, optionalLabelKeys []str
 	return otelmetric.WithAttributes(attributes...)
 }
 
+type registryMetrics struct {
+	intCounts   map[*estats.MetricDescriptor]otelmetric.Int64Counter
+	floatCounts map[*estats.MetricDescriptor]otelmetric.Float64Counter
+	intHistos   map[*estats.MetricDescriptor]otelmetric.Int64Histogram
+	floatHistos map[*estats.MetricDescriptor]otelmetric.Float64Histogram
+	intGauges   map[*estats.MetricDescriptor]otelmetric.Int64Gauge
+
+	optionalLabels []string
+}
+
+func (rm *registryMetrics) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
+	desc := (*estats.MetricDescriptor)(handle)
+	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
+
+	if ic, ok := rm.intCounts[desc]; ok {
+		ic.Add(context.TODO(), incr, ao)
+	}
+}
+
+func (rm *registryMetrics) RecordFloat64Count(handle *estats.Float64CountHandle, incr float64, labels ...string) {
+	desc := (*estats.MetricDescriptor)(handle)
+	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
+	if fc, ok := rm.floatCounts[desc]; ok {
+		fc.Add(context.TODO(), incr, ao)
+	}
+}
+
+func (rm *registryMetrics) RecordInt64Histo(handle *estats.Int64HistoHandle, incr int64, labels ...string) {
+	desc := (*estats.MetricDescriptor)(handle)
+	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
+	if ih, ok := rm.intHistos[desc]; ok {
+		ih.Record(context.TODO(), incr, ao)
+	}
+}
+
+func (rm *registryMetrics) RecordFloat64Histo(handle *estats.Float64HistoHandle, incr float64, labels ...string) {
+	desc := (*estats.MetricDescriptor)(handle)
+	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
+	if fh, ok := rm.floatHistos[desc]; ok {
+		fh.Record(context.TODO(), incr, ao)
+	}
+}
+
+func (rm *registryMetrics) RecordInt64Gauge(handle *estats.Int64GaugeHandle, incr int64, labels ...string) {
+	desc := (*estats.MetricDescriptor)(handle)
+	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
+	if ig, ok := rm.intGauges[desc]; ok {
+		ig.Record(context.TODO(), incr, ao)
+	}
+}
+
 // Users of this component should use these bucket boundaries as part of their
 // SDK MeterProvider passed in. This component sends this as "advice" to the
 // API, which works, however this stability is not guaranteed, so for safety the
@@ -325,8 +351,7 @@ var (
 	defaultPerCallMetrics = estats.NewMetrics(ClientAttemptStarted, ClientAttemptDuration, ClientAttemptSentCompressedTotalMessageSize, ClientAttemptRcvdCompressedTotalMessageSize, ClientCallDuration, ServerCallStarted, ServerCallSentCompressedTotalMessageSize, ServerCallRcvdCompressedTotalMessageSize, ServerCallDuration)
 )
 
-// DefaultMetrics returns a set of default metrics for per call joined with any
-// default metrics registered through metrics registry.
+// DefaultMetrics returns a set of default OpenTelemetry metrics.
 //
 // This should only be invoked after init time.
 func DefaultMetrics() *estats.Metrics {
