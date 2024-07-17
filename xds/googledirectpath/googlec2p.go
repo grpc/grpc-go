@@ -26,6 +26,7 @@
 package googledirectpath
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net/url"
@@ -37,7 +38,6 @@ import (
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal/xdsclient"
 
 	_ "google.golang.org/grpc/xds" // To register xds resolvers and balancers.
 )
@@ -58,15 +58,9 @@ const (
 
 // For overriding in unittests.
 var (
-	onGCE = googlecloud.OnGCE
-
+	onGCE   = googlecloud.OnGCE
 	randInt = rand.Int
-
-	newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
-		return xdsclient.NewWithConfig(config)
-	}
-
-	logger = internalgrpclog.NewPrefixLogger(grpclog.Component("directpath"), logPrefix)
+	logger  = internalgrpclog.NewPrefixLogger(grpclog.Component("directpath"), logPrefix)
 )
 
 func init() {
@@ -105,23 +99,18 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	xdsServerCfg := newXdsServerConfig(xdsServerURI)
 	authoritiesCfg := newAuthoritiesConfig(xdsServerCfg)
 
-	config, err := bootstrap.NewConfigFromContents([]byte(fmt.Sprintf(`
-	{
-		"xds_servers": [%s],
-		"client_default_listener_resource_name_template": "%%s",
-		"authorities": %s,
-		"node": %s
-	}`, xdsServerCfg, authoritiesCfg, nodeCfg)))
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to build bootstrap configuration: %v", err)
+	cfg := map[string]any{
+		"xds_servers": []any{xdsServerCfg},
+		"client_default_listener_resource_name_template": "%s",
+		"authorities": authoritiesCfg,
+		"node":        nodeCfg,
 	}
-
-	// Create singleton xds client with this config. The xds client will be
-	// used by the xds resolver later.
-	_, close, err := newClientWithConfig(config)
+	cfgJSON, err := json.Marshal(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to start xDS client: %v", err)
+		return nil, fmt.Errorf("failed to marshal bootstrap configuration: %v", err)
+	}
+	if err := bootstrap.SetFallbackBootstrapConfig(cfgJSON); err != nil {
+		return nil, fmt.Errorf("failed to set fallback bootstrap configuration: %v", err)
 	}
 
 	t = resolver.Target{
@@ -131,64 +120,36 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 			Path:   t.URL.Path,
 		},
 	}
-	xdsR, err := resolver.Get(xdsName).Build(t, cc, opts)
-	if err != nil {
-		close()
-		return nil, err
-	}
-	return &c2pResolver{
-		Resolver:        xdsR,
-		clientCloseFunc: close,
-	}, nil
+	return resolver.Get(xdsName).Build(t, cc, opts)
 }
 
 func (b c2pResolverBuilder) Scheme() string {
 	return c2pScheme
 }
 
-type c2pResolver struct {
-	resolver.Resolver
-	clientCloseFunc func()
-}
-
-func (r *c2pResolver) Close() {
-	r.Resolver.Close()
-	r.clientCloseFunc()
-}
-
-func newNodeConfig(zone string, ipv6Capable bool) string {
-	metadata := ""
+func newNodeConfig(zone string, ipv6Capable bool) map[string]any {
+	node := map[string]any{
+		"id":       fmt.Sprintf("C2P-%d", randInt()),
+		"locality": map[string]any{"zone": zone},
+	}
 	if ipv6Capable {
-		metadata = fmt.Sprintf(`, "metadata":  { "%s": true }`, ipv6CapableMetadataName)
+		node["metadata"] = map[string]any{ipv6CapableMetadataName: true}
 	}
-
-	return fmt.Sprintf(`
-	{
-		"id": "%s",
-		"locality": {
-			"zone": "%s"
-		}
-		%s
-	}`, fmt.Sprintf("C2P-%d", randInt()), zone, metadata)
+	return node
 }
 
-func newAuthoritiesConfig(xdsServer string) string {
-	return fmt.Sprintf(`
-	{
-		"%s": {
-			"xds_servers": [%s]
-		}
+func newAuthoritiesConfig(serverCfg map[string]any) map[string]any {
+	return map[string]any{
+		c2pAuthority: map[string]any{"xds_servers": []any{serverCfg}},
 	}
-	`, c2pAuthority, xdsServer)
 }
 
-func newXdsServerConfig(xdsServerURI string) string {
-	return fmt.Sprintf(`
-	{
-		"server_uri": "%s",
-		"channel_creds": [{"type": "google_default"}],
-		"server_features": ["ignore_resource_deletion"]
-	}`, xdsServerURI)
+func newXdsServerConfig(uri string) map[string]any {
+	return map[string]any{
+		"server_uri":      uri,
+		"channel_creds":   []map[string]any{{"type": "google_default"}},
+		"server_features": []any{"ignore_resource_deletion"},
+	}
 }
 
 // runDirectPath returns whether this resolver should use direct path.

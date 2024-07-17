@@ -189,7 +189,7 @@ func (c *testServiceClient) UnimplementedCall(ctx context.Context, in *Empty, op
 
 // TestServiceServer is the server API for TestService service.
 // All implementations must embed UnimplementedTestServiceServer
-// for forward compatibility
+// for forward compatibility.
 //
 // A simple service to test the various types of RPCs and experiment with
 // performance with various types of payload.
@@ -454,7 +454,7 @@ func (c *unimplementedServiceClient) UnimplementedCall(ctx context.Context, in *
 
 // UnimplementedServiceServer is the server API for UnimplementedService service.
 // All implementations must embed UnimplementedUnimplementedServiceServer
-// for forward compatibility
+// for forward compatibility.
 //
 // A simple service NOT implemented at servers so clients can test for
 // that case.
@@ -563,7 +563,7 @@ func (c *reconnectServiceClient) Stop(ctx context.Context, in *Empty, opts ...gr
 
 // ReconnectServiceServer is the server API for ReconnectService service.
 // All implementations must embed UnimplementedReconnectServiceServer
-// for forward compatibility
+// for forward compatibility.
 //
 // A service used to control reconnect server.
 type ReconnectServiceServer interface {
@@ -698,7 +698,7 @@ func (c *loadBalancerStatsServiceClient) GetClientAccumulatedStats(ctx context.C
 
 // LoadBalancerStatsServiceServer is the server API for LoadBalancerStatsService service.
 // All implementations must embed UnimplementedLoadBalancerStatsServiceServer
-// for forward compatibility
+// for forward compatibility.
 //
 // A service used to obtain stats for verifying LB behavior.
 type LoadBalancerStatsServiceServer interface {
@@ -850,7 +850,7 @@ func (c *hookServiceClient) ClearReturnStatus(ctx context.Context, in *Empty, op
 
 // HookServiceServer is the server API for HookService service.
 // All implementations must embed UnimplementedHookServiceServer
-// for forward compatibility
+// for forward compatibility.
 //
 // Hook service. Used to keep Kubernetes from shutting the pod down.
 type HookServiceServer interface {
@@ -1025,7 +1025,7 @@ func (c *xdsUpdateHealthServiceClient) SendHookRequest(ctx context.Context, in *
 
 // XdsUpdateHealthServiceServer is the server API for XdsUpdateHealthService service.
 // All implementations must embed UnimplementedXdsUpdateHealthServiceServer
-// for forward compatibility
+// for forward compatibility.
 //
 // A service to remotely control health status of an xDS test server.
 type XdsUpdateHealthServiceServer interface {
@@ -1174,7 +1174,7 @@ func (c *xdsUpdateClientConfigureServiceClient) Configure(ctx context.Context, i
 
 // XdsUpdateClientConfigureServiceServer is the server API for XdsUpdateClientConfigureService service.
 // All implementations must embed UnimplementedXdsUpdateClientConfigureServiceServer
-// for forward compatibility
+// for forward compatibility.
 //
 // A service to dynamically update the configuration of an xDS test client.
 type XdsUpdateClientConfigureServiceServer interface {

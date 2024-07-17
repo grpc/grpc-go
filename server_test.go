@@ -153,7 +153,11 @@ func (s) TestRetryChainedInterceptor(t *testing.T) {
 	handler := func(ctx context.Context, req any) (any, error) {
 		return nil, nil
 	}
-	ii(context.Background(), nil, nil, handler)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	ii(ctx, nil, nil, handler)
 	if !cmp.Equal(records, []int{1, 2, 3, 2, 3}) {
 		t.Fatalf("retry failed on chained interceptors: %v", records)
 	}
@@ -161,7 +165,10 @@ func (s) TestRetryChainedInterceptor(t *testing.T) {
 
 func (s) TestStreamContext(t *testing.T) {
 	expectedStream := &transport.Stream{}
-	ctx := NewContextWithServerTransportStream(context.Background(), expectedStream)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = NewContextWithServerTransportStream(ctx, expectedStream)
+
 	s := ServerTransportStreamFromContext(ctx)
 	stream, ok := s.(*transport.Stream)
 	if !ok || expectedStream != stream {
@@ -170,6 +177,8 @@ func (s) TestStreamContext(t *testing.T) {
 }
 
 func BenchmarkChainUnaryInterceptor(b *testing.B) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for _, n := range []int{1, 3, 5, 10} {
 		n := n
 		b.Run(strconv.Itoa(n), func(b *testing.B) {
@@ -186,7 +195,7 @@ func BenchmarkChainUnaryInterceptor(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				if _, err := s.opts.unaryInt(context.Background(), nil, nil,
+				if _, err := s.opts.unaryInt(ctx, nil, nil,
 					func(ctx context.Context, req any) (any, error) {
 						return nil, nil
 					},

@@ -78,9 +78,11 @@ func (s) TestBlockingPick(t *testing.T) {
 	bp := newPickerWrapper(nil)
 	// All goroutines should block because picker is nil in bp.
 	var finishedCount uint64
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
-			if tr, _, err := bp.pick(context.Background(), true, balancer.PickInfo{}); err != nil || tr != testT {
+			if tr, _, err := bp.pick(ctx, true, balancer.PickInfo{}); err != nil || tr != testT {
 				t.Errorf("bp.pick returned non-nil error: %v", err)
 			}
 			atomic.AddUint64(&finishedCount, 1)
@@ -97,10 +99,12 @@ func (s) TestBlockingPickNoSubAvailable(t *testing.T) {
 	bp := newPickerWrapper(nil)
 	var finishedCount uint64
 	bp.updatePicker(&testingPicker{err: balancer.ErrNoSubConnAvailable, maxCalled: goroutineCount})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// All goroutines should block because picker returns no subConn available.
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
-			if tr, _, err := bp.pick(context.Background(), true, balancer.PickInfo{}); err != nil || tr != testT {
+			if tr, _, err := bp.pick(ctx, true, balancer.PickInfo{}); err != nil || tr != testT {
 				t.Errorf("bp.pick returned non-nil error: %v", err)
 			}
 			atomic.AddUint64(&finishedCount, 1)
@@ -117,11 +121,13 @@ func (s) TestBlockingPickTransientWaitforready(t *testing.T) {
 	bp := newPickerWrapper(nil)
 	bp.updatePicker(&testingPicker{err: balancer.ErrTransientFailure, maxCalled: goroutineCount})
 	var finishedCount uint64
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// All goroutines should block because picker returns transientFailure and
 	// picks are not failfast.
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
-			if tr, _, err := bp.pick(context.Background(), false, balancer.PickInfo{}); err != nil || tr != testT {
+			if tr, _, err := bp.pick(ctx, false, balancer.PickInfo{}); err != nil || tr != testT {
 				t.Errorf("bp.pick returned non-nil error: %v", err)
 			}
 			atomic.AddUint64(&finishedCount, 1)
@@ -138,10 +144,12 @@ func (s) TestBlockingPickSCNotReady(t *testing.T) {
 	bp := newPickerWrapper(nil)
 	bp.updatePicker(&testingPicker{sc: testSCNotReady, maxCalled: goroutineCount})
 	var finishedCount uint64
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// All goroutines should block because subConn is not ready.
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
-			if tr, _, err := bp.pick(context.Background(), true, balancer.PickInfo{}); err != nil || tr != testT {
+			if tr, _, err := bp.pick(ctx, true, balancer.PickInfo{}); err != nil || tr != testT {
 				t.Errorf("bp.pick returned non-nil error: %v", err)
 			}
 			atomic.AddUint64(&finishedCount, 1)

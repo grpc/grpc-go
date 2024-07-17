@@ -122,7 +122,7 @@ func (c *workerServiceClient) QuitWorker(ctx context.Context, in *Void, opts ...
 
 // WorkerServiceServer is the server API for WorkerService service.
 // All implementations must embed UnimplementedWorkerServiceServer
-// for forward compatibility
+// for forward compatibility.
 type WorkerServiceServer interface {
 	// Start server with specified workload.
 	// First request sent specifies the ServerConfig followed by ServerStatus

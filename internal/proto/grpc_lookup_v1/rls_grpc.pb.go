@@ -64,7 +64,7 @@ func (c *routeLookupServiceClient) RouteLookup(ctx context.Context, in *RouteLoo
 
 // RouteLookupServiceServer is the server API for RouteLookupService service.
 // All implementations must embed UnimplementedRouteLookupServiceServer
-// for forward compatibility
+// for forward compatibility.
 type RouteLookupServiceServer interface {
 	// Lookup returns a target for a single key.
 	RouteLookup(context.Context, *RouteLookupRequest) (*RouteLookupResponse, error)

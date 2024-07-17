@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
@@ -45,60 +46,6 @@ var canonicalString = internal.CanonicalString.(func(codes.Code) string)
 
 var joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.DialOption)
 
-// Metric is an identifier for a metric provided by this package.
-type Metric string
-
-// Metrics is a set of metrics to record. Once created, Metrics is immutable,
-// however Add and Remove can make copies with specific metrics added or
-// removed, respectively.
-type Metrics struct {
-	// metrics are the set of metrics to initialize.
-	metrics map[Metric]bool
-}
-
-// NewMetrics returns a Metrics containing Metrics.
-func NewMetrics(metrics ...Metric) *Metrics {
-	newMetrics := make(map[Metric]bool)
-	for _, metric := range metrics {
-		newMetrics[metric] = true
-	}
-	return &Metrics{
-		metrics: newMetrics,
-	}
-}
-
-// Add adds the metrics to the metrics set and returns a new copy with the
-// additional metrics.
-func (m *Metrics) Add(metrics ...Metric) *Metrics {
-	newMetrics := make(map[Metric]bool)
-	for metric := range m.metrics {
-		newMetrics[metric] = true
-	}
-
-	for _, metric := range metrics {
-		newMetrics[metric] = true
-	}
-	return &Metrics{
-		metrics: newMetrics,
-	}
-}
-
-// Remove removes the metrics from the metrics set and returns a new copy with
-// the metrics removed.
-func (m *Metrics) Remove(metrics ...Metric) *Metrics {
-	newMetrics := make(map[Metric]bool)
-	for metric := range m.metrics {
-		newMetrics[metric] = true
-	}
-
-	for _, metric := range metrics {
-		delete(newMetrics, metric)
-	}
-	return &Metrics{
-		metrics: newMetrics,
-	}
-}
-
 // Options are the options for OpenTelemetry instrumentation.
 type Options struct {
 	// MetricsOptions are the metrics options for OpenTelemetry instrumentation.
@@ -118,7 +65,7 @@ type MetricsOptions struct {
 	// for corresponding metric supported by the client and server
 	// instrumentation components if applicable. If not set, the default metrics
 	// will be recorded.
-	Metrics *Metrics
+	Metrics *estats.Metrics
 
 	// MethodAttributeFilter is to record the method name of RPCs handled by
 	// grpc.UnknownServiceHandler, but take care to limit the values allowed, as
@@ -260,7 +207,7 @@ type serverMetrics struct {
 	callDuration metric.Float64Histogram
 }
 
-func createInt64Counter(setOfMetrics map[Metric]bool, metricName Metric, meter metric.Meter, options ...metric.Int64CounterOption) metric.Int64Counter {
+func createInt64Counter(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter metric.Meter, options ...metric.Int64CounterOption) metric.Int64Counter {
 	if _, ok := setOfMetrics[metricName]; !ok {
 		return noop.Int64Counter{}
 	}
@@ -272,7 +219,7 @@ func createInt64Counter(setOfMetrics map[Metric]bool, metricName Metric, meter m
 	return ret
 }
 
-func createInt64Histogram(setOfMetrics map[Metric]bool, metricName Metric, meter metric.Meter, options ...metric.Int64HistogramOption) metric.Int64Histogram {
+func createInt64Histogram(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter metric.Meter, options ...metric.Int64HistogramOption) metric.Int64Histogram {
 	if _, ok := setOfMetrics[metricName]; !ok {
 		return noop.Int64Histogram{}
 	}
@@ -284,7 +231,7 @@ func createInt64Histogram(setOfMetrics map[Metric]bool, metricName Metric, meter
 	return ret
 }
 
-func createFloat64Histogram(setOfMetrics map[Metric]bool, metricName Metric, meter metric.Meter, options ...metric.Float64HistogramOption) metric.Float64Histogram {
+func createFloat64Histogram(setOfMetrics map[estats.Metric]bool, metricName estats.Metric, meter metric.Meter, options ...metric.Float64HistogramOption) metric.Float64Histogram {
 	if _, ok := setOfMetrics[metricName]; !ok {
 		return noop.Float64Histogram{}
 	}
@@ -307,5 +254,5 @@ var (
 	// DefaultSizeBounds are the default bounds for metrics which record size.
 	DefaultSizeBounds = []float64{0, 1024, 2048, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864, 268435456, 1073741824, 4294967296}
 	// DefaultMetrics are the default metrics provided by this module.
-	DefaultMetrics = NewMetrics(ClientAttemptStarted, ClientAttemptDuration, ClientAttemptSentCompressedTotalMessageSize, ClientAttemptRcvdCompressedTotalMessageSize, ClientCallDuration, ServerCallStarted, ServerCallSentCompressedTotalMessageSize, ServerCallRcvdCompressedTotalMessageSize, ServerCallDuration)
+	DefaultMetrics = estats.NewMetrics(ClientAttemptStarted, ClientAttemptDuration, ClientAttemptSentCompressedTotalMessageSize, ClientAttemptRcvdCompressedTotalMessageSize, ClientCallDuration, ServerCallStarted, ServerCallSentCompressedTotalMessageSize, ServerCallRcvdCompressedTotalMessageSize, ServerCallDuration)
 )

@@ -87,7 +87,7 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
 		}`, defaultAuthorityServer.Address))},
-		NodeID: nodeID,
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			testAuthority1: []byte(`{}`),
 			testAuthority2: []byte(`{}`),
@@ -101,7 +101,12 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{Contents: bootstrapContents, WatchExpiryTimeout: defaultTestWatchExpiryTimeout, AuthorityIdleTimeout: idleTimeout})
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:                 t.Name(),
+		Contents:             bootstrapContents,
+		WatchExpiryTimeout:   defaultTestWatchExpiryTimeout,
+		AuthorityIdleTimeout: idleTimeout,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
 	}

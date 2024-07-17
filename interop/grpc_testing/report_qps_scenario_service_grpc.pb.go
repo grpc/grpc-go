@@ -67,7 +67,7 @@ func (c *reportQpsScenarioServiceClient) ReportScenario(ctx context.Context, in 
 
 // ReportQpsScenarioServiceServer is the server API for ReportQpsScenarioService service.
 // All implementations must embed UnimplementedReportQpsScenarioServiceServer
-// for forward compatibility
+// for forward compatibility.
 type ReportQpsScenarioServiceServer interface {
 	// Report results of a QPS test benchmark scenario.
 	ReportScenario(context.Context, *ScenarioResult) (*Void, error)

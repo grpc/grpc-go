@@ -55,7 +55,7 @@ func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
 			mu.Lock()
 			defer mu.Unlock()
 			scheduleOrderCh <- id
-			cs.Schedule(func(ctx context.Context) {
+			cs.TrySchedule(func(ctx context.Context) {
 				select {
 				case <-ctx.Done():
 					return
@@ -115,7 +115,7 @@ func (s) TestCallbackSerializer_Schedule_Concurrent(t *testing.T) {
 	wg.Add(numCallbacks)
 	for i := 0; i < numCallbacks; i++ {
 		go func() {
-			cs.Schedule(func(context.Context) {
+			cs.TrySchedule(func(context.Context) {
 				wg.Done()
 			})
 		}()
@@ -148,7 +148,7 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	// Schedule a callback which blocks until the context passed to it is
 	// canceled. It also closes a channel to signal that it has started.
 	firstCallbackStartedCh := make(chan struct{})
-	cs.Schedule(func(ctx context.Context) {
+	cs.TrySchedule(func(ctx context.Context) {
 		close(firstCallbackStartedCh)
 		<-ctx.Done()
 	})
@@ -159,9 +159,9 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	callbackCh := make(chan int, numCallbacks)
 	for i := 0; i < numCallbacks; i++ {
 		num := i
-		if !cs.Schedule(func(context.Context) { callbackCh <- num }) {
-			t.Fatal("Schedule failed to accept a callback when the serializer is yet to be closed")
-		}
+		callback := func(context.Context) { callbackCh <- num }
+		onFailure := func() { t.Fatal("Schedule failed to accept a callback when the serializer is yet to be closed") }
+		cs.ScheduleOr(callback, onFailure)
 	}
 
 	// Ensure that none of the newer callbacks are executed at this point.
@@ -192,15 +192,15 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	}
 	<-cs.Done()
 
+	// Ensure that a callback cannot be scheduled after the serializer is
+	// closed.
 	done := make(chan struct{})
-	if cs.Schedule(func(context.Context) { close(done) }) {
-		t.Fatal("Scheduled a callback after closing the serializer")
-	}
-
-	// Ensure that the latest callback is executed at this point.
+	callback := func(context.Context) { t.Fatal("Scheduled a callback after closing the serializer") }
+	onFailure := func() { close(done) }
+	cs.ScheduleOr(callback, onFailure)
 	select {
-	case <-time.After(defaultTestShortTimeout):
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Successfully scheduled callback after serializer is closed")
 	case <-done:
-		t.Fatal("Newer callback executed when scheduled after closing serializer")
 	}
 }

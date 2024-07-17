@@ -19,13 +19,12 @@ WORKDIR=$(mktemp -d)
 
 function finish {
   rm -rf "$WORKDIR"
-  # Revert back the PATH to client's original value
-  export PATH=$ORIGINAL_PATH
 }
 trap finish EXIT
 
-GOBIN="${WORKDIR}"/bin
-ORIGINAL_PATH=$PATH
+./scripts/install-protoc.sh "${WORKDIR}"
+
+export GOBIN="${WORKDIR}"/bin
 export PATH="${GOBIN}:${PATH}"
 mkdir -p "${GOBIN}"
 
@@ -51,7 +50,6 @@ mkdir -p "${WORKDIR}/googleapis/google/rpc"
 echo "curl https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto"
 curl --silent https://raw.githubusercontent.com/googleapis/googleapis/master/google/rpc/code.proto > "${WORKDIR}/googleapis/google/rpc/code.proto"
 
-source ./scripts/install_protoc.sh $WORKDIR
 
 mkdir -p "${WORKDIR}/out"
 
@@ -98,7 +96,7 @@ Mgrpc/testing/empty.proto=google.golang.org/grpc/interop/grpc_testing
 
 for src in ${SOURCES[@]}; do
   echo "protoc ${src}"
-  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS},use_generic_streams_experimental=true:${WORKDIR}/out \
+  protoc --go_out=${OPTS}:${WORKDIR}/out --go-grpc_out=${OPTS}:${WORKDIR}/out \
     -I"." \
     -I"${WORKDIR}/grpc-proto" \
     -I"${WORKDIR}/googleapis" \
