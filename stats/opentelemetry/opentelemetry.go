@@ -296,6 +296,36 @@ type registryMetrics struct {
 	optionalLabels []string
 }
 
+func (rm *registryMetrics) registerMetrics(metrics *estats.Metrics, meter otelmetric.Meter) {
+	rm.intCounts = make(map[*estats.MetricDescriptor]otelmetric.Int64Counter)
+	rm.floatCounts = make(map[*estats.MetricDescriptor]otelmetric.Float64Counter)
+	rm.intHistos = make(map[*estats.MetricDescriptor]otelmetric.Int64Histogram)
+	rm.floatHistos = make(map[*estats.MetricDescriptor]otelmetric.Float64Histogram)
+	rm.intGauges = make(map[*estats.MetricDescriptor]otelmetric.Int64Gauge)
+
+	for metric := range metrics.Metrics() {
+		desc := estats.DescriptorForMetric(metric)
+		if desc == nil {
+			// Either the metric was per call or the metric is not registered.
+			// Thus, if this component ever receives the desc as a handle in
+			// record it will be a no-op.
+			continue
+		}
+		switch desc.Type {
+		case estats.MetricTypeIntCount:
+			rm.intCounts[desc] = createInt64Counter(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
+		case estats.MetricTypeFloatCount:
+			rm.floatCounts[desc] = createFloat64Counter(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
+		case estats.MetricTypeIntHisto:
+			rm.intHistos[desc] = createInt64Histogram(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description), otelmetric.WithExplicitBucketBoundaries(desc.Bounds...))
+		case estats.MetricTypeFloatHisto:
+			rm.floatHistos[desc] = createFloat64Histogram(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description), otelmetric.WithExplicitBucketBoundaries(desc.Bounds...))
+		case estats.MetricTypeIntGauge:
+			rm.intGauges[desc] = createInt64Gauge(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
+		}
+	}
+}
+
 func (rm *registryMetrics) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
 	desc := (*estats.MetricDescriptor)(handle)
 	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)

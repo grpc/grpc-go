@@ -33,10 +33,8 @@ import (
 )
 
 type serverStatsHandler struct {
-	registryMetrics
-
-	options Options
-
+	estats.MetricsRecorder
+	options       Options
 	serverMetrics serverMetrics
 }
 
@@ -61,38 +59,11 @@ func (h *serverStatsHandler) initializeMetrics() {
 	h.serverMetrics.callRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.server.call.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
 	h.serverMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.server.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a call from server transport's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 
-	h.registryMetrics = registryMetrics{
-		intCounts:   make(map[*estats.MetricDescriptor]otelmetric.Int64Counter),
-		floatCounts: make(map[*estats.MetricDescriptor]otelmetric.Float64Counter),
-		intHistos:   make(map[*estats.MetricDescriptor]otelmetric.Int64Histogram),
-		floatHistos: make(map[*estats.MetricDescriptor]otelmetric.Float64Histogram),
-		intGauges:   make(map[*estats.MetricDescriptor]otelmetric.Int64Gauge),
-
+	rm := &registryMetrics{
 		optionalLabels: h.options.MetricsOptions.OptionalLabels,
 	}
-
-	// Metric registry metrics:
-	for metric := range metrics.Metrics() {
-		desc := estats.DescriptorForMetric(metric)
-		if desc == nil {
-			// Either the metric was per call or the metric is not registered.
-			// Thus, if this component ever receives the desc as a handle in
-			// record it will be a no-op.
-			continue
-		}
-		switch desc.Type {
-		case estats.MetricTypeIntCount:
-			h.registryMetrics.intCounts[desc] = createInt64Counter(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
-		case estats.MetricTypeFloatCount:
-			h.registryMetrics.floatCounts[desc] = createFloat64Counter(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
-		case estats.MetricTypeIntHisto:
-			h.registryMetrics.intHistos[desc] = createInt64Histogram(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description), otelmetric.WithExplicitBucketBoundaries(desc.Bounds...))
-		case estats.MetricTypeFloatHisto:
-			h.registryMetrics.floatHistos[desc] = createFloat64Histogram(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description), otelmetric.WithExplicitBucketBoundaries(desc.Bounds...))
-		case estats.MetricTypeIntGauge:
-			h.registryMetrics.intGauges[desc] = createInt64Gauge(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
-		}
-	}
+	h.MetricsRecorder = rm
+	rm.registerMetrics(metrics, meter)
 }
 
 // attachLabelsTransportStream intercepts SetHeader and SendHeader calls of the

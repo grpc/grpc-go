@@ -33,9 +33,8 @@ import (
 )
 
 type clientStatsHandler struct {
-	registryMetrics
-	options Options
-
+	estats.MetricsRecorder
+	options       Options
 	clientMetrics clientMetrics
 }
 
@@ -62,37 +61,11 @@ func (h *clientStatsHandler) initializeMetrics() {
 	h.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.client.attempt.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
 	h.clientMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 
-	h.registryMetrics = registryMetrics{
-		intCounts:   make(map[*estats.MetricDescriptor]otelmetric.Int64Counter),
-		floatCounts: make(map[*estats.MetricDescriptor]otelmetric.Float64Counter),
-		intHistos:   make(map[*estats.MetricDescriptor]otelmetric.Int64Histogram),
-		floatHistos: make(map[*estats.MetricDescriptor]otelmetric.Float64Histogram),
-		intGauges:   make(map[*estats.MetricDescriptor]otelmetric.Int64Gauge),
-
+	rm := &registryMetrics{
 		optionalLabels: h.options.MetricsOptions.OptionalLabels,
 	}
-
-	for metric := range metrics.Metrics() {
-		desc := estats.DescriptorForMetric(metric)
-		if desc == nil {
-			// Either the metric was per call or the metric is not registered.
-			// Thus, if this component ever receives the desc as a handle in
-			// record it will be a no-op.
-			continue
-		}
-		switch desc.Type {
-		case estats.MetricTypeIntCount:
-			h.registryMetrics.intCounts[desc] = createInt64Counter(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
-		case estats.MetricTypeFloatCount:
-			h.registryMetrics.floatCounts[desc] = createFloat64Counter(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
-		case estats.MetricTypeIntHisto:
-			h.registryMetrics.intHistos[desc] = createInt64Histogram(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description), otelmetric.WithExplicitBucketBoundaries(desc.Bounds...))
-		case estats.MetricTypeFloatHisto:
-			h.registryMetrics.floatHistos[desc] = createFloat64Histogram(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description), otelmetric.WithExplicitBucketBoundaries(desc.Bounds...))
-		case estats.MetricTypeIntGauge:
-			h.registryMetrics.intGauges[desc] = createInt64Gauge(metrics.Metrics(), desc.Name, meter, otelmetric.WithUnit(desc.Unit), otelmetric.WithDescription(desc.Description))
-		}
-	}
+	h.MetricsRecorder = rm
+	rm.registerMetrics(metrics, meter)
 }
 
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
