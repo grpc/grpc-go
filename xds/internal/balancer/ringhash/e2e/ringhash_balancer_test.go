@@ -84,7 +84,7 @@ var fastConnectParams = grpc.ConnectParams{
 	Backoff: backoff.Config{
 		BaseDelay: 10 * time.Millisecond,
 	},
-	MinConnectTimeout: 10 * time.Millisecond,
+	MinConnectTimeout: 100 * time.Millisecond,
 }
 
 // Tests the case where the ring contains a single subConn, and verifies that
