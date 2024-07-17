@@ -16,13 +16,12 @@
  *
  */
 
-package grpchttp2_test
+package grpchttp2
 
 import (
 	"testing"
 
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/transport/grpchttp2"
 )
 
 type s struct {
@@ -35,25 +34,25 @@ func Test(t *testing.T) {
 
 func (s) TestErrorCodeString(t *testing.T) {
 	errCodesTest := []struct {
-		err  grpchttp2.ErrCode
+		err  ErrCode
 		want string
 	}{
-		{grpchttp2.ErrCodeNoError, "NO_ERROR"},
-		{grpchttp2.ErrCodeProtocol, "PROTOCOL_ERROR"},
-		{grpchttp2.ErrCodeInternal, "INTERNAL_ERROR"},
-		{grpchttp2.ErrCodeFlowControl, "FLOW_CONTROL_ERROR"},
-		{grpchttp2.ErrCodeSettingsTimeout, "SETTINGS_TIMEOUT"},
-		{grpchttp2.ErrCodeStreamClosed, "STREAM_CLOSED"},
-		{grpchttp2.ErrCodeFrameSize, "FRAME_SIZE_ERROR"},
-		{grpchttp2.ErrCodeRefusedStream, "REFUSED_STREAM"},
-		{grpchttp2.ErrCodeCancel, "CANCEL"},
-		{grpchttp2.ErrCodeCompression, "COMPRESSION_ERROR"},
-		{grpchttp2.ErrCodeConnect, "CONNECT_ERROR"},
-		{grpchttp2.ErrCodeEnhanceYourCalm, "ENHANCE_YOUR_CALM"},
-		{grpchttp2.ErrCodeIndaequateSecurity, "INADEQUATE_SECURITY"},
-		{grpchttp2.ErrCodeHTTP11Required, "HTTP_1_1_REQUIRED"},
-		{grpchttp2.ErrCode(0x1), "PROTOCOL_ERROR"},
-		{grpchttp2.ErrCode(0xf), "unknown error code 0xf"},
+		{ErrCodeNoError, "NO_ERROR"},
+		{ErrCodeProtocol, "PROTOCOL_ERROR"},
+		{ErrCodeInternal, "INTERNAL_ERROR"},
+		{ErrCodeFlowControl, "FLOW_CONTROL_ERROR"},
+		{ErrCodeSettingsTimeout, "SETTINGS_TIMEOUT"},
+		{ErrCodeStreamClosed, "STREAM_CLOSED"},
+		{ErrCodeFrameSize, "FRAME_SIZE_ERROR"},
+		{ErrCodeRefusedStream, "REFUSED_STREAM"},
+		{ErrCodeCancel, "CANCEL"},
+		{ErrCodeCompression, "COMPRESSION_ERROR"},
+		{ErrCodeConnect, "CONNECT_ERROR"},
+		{ErrCodeEnhanceYourCalm, "ENHANCE_YOUR_CALM"},
+		{ErrCodeIndaequateSecurity, "INADEQUATE_SECURITY"},
+		{ErrCodeHTTP11Required, "HTTP_1_1_REQUIRED"},
+		{ErrCode(0x1), "PROTOCOL_ERROR"},
+		{ErrCode(0xf), "unknown error code 0xf"},
 	}
 
 	for _, errTest := range errCodesTest {
