@@ -164,6 +164,7 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 // Servers are closed when the test is stopped.
 func startTestServiceBackends(t *testing.T, num int) []string {
 	t.Helper()
+
 	addrs := make([]string, 0, num)
 	for i := 0; i < num; i++ {
 		server := stubserver.StartTestService(t, nil)
@@ -222,6 +223,8 @@ func checkRPCSendOK(ctx context.Context, t *testing.T, client testgrpc.TestServi
 // of which is closed immediately. Useful to simulate servers that are
 // unreachable.
 func makeNonExistentBackends(t *testing.T, num int) []string {
+	t.Helper()
+
 	closedListeners := make([]net.Listener, 0, num)
 	for i := 0; i < num; i++ {
 		lis, err := testutils.LocalTCPListener()
@@ -250,6 +253,8 @@ func makeNonExistentBackends(t *testing.T, num int) []string {
 //
 // Returns the management server, node ID and the xDS resolver builder.
 func setupManagementServerAndResolver(t *testing.T) (*e2e.ManagementServer, string, resolver.Builder) {
+	t.Helper()
+
 	// Start an xDS management server.
 	xdsServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 
@@ -285,7 +290,6 @@ func xdsUpdateOpts(nodeID string, endpoints *v3endpointpb.ClusterLoadAssignment,
 // the first cluster is in transient failure, all RPCs are sent to the second
 // cluster using the ring hash policy.
 func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T) {
-
 	addrs := startTestServiceBackends(t, 2)
 
 	const primaryClusterName = "new_cluster_1"
@@ -595,6 +599,8 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 // endpointResource creates a ClusterLoadAssignment containing a single locality
 // with the given addresses.
 func endpointResource(t *testing.T, clusterName string, addrs []string) *v3endpointpb.ClusterLoadAssignment {
+	t.Helper()
+
 	// We must set the host name socket address in EDS, as the ring hash policy
 	// uses it to construct the ring.
 	host, _, err := net.SplitHostPort(addrs[0])
@@ -1334,7 +1340,8 @@ func (s) TestRingHash_FixedHashingTerminalPolicy(t *testing.T) {
 
 // TestRingHash_IdleToReady tests that the channel will go from idle to ready
 // via connecting; (though it is not possible to catch the connecting state
-// before moving to ready).
+// before moving to ready via the public API).
+// TODO: we should be able to catch all state transitions by using the internal.SubscribeToConnectivityStateChanges API.
 func (s) TestRingHash_IdleToReady(t *testing.T) {
 	backends := startTestServiceBackends(t, 1)
 
@@ -1420,6 +1427,8 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicks(t *testing.T) {
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 
+	hold := dialer.Hold(backend.Address)
+
 	rpcCtx, rpcCancel := context.WithCancel(ctx)
 	go func() {
 		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", nonExistantServerAddr+"_0"))
@@ -1430,7 +1439,6 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicks(t *testing.T) {
 	}()
 
 	// Wait for the connection attempt to the real backend.
-	hold := dialer.Hold(backend.Address)
 	if !hold.Wait(ctx) {
 		t.Fatalf("Timeout waiting for connection attempt to backend %v.", backend.Address)
 	}
@@ -1438,7 +1446,7 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicks(t *testing.T) {
 	rpcCancel()
 
 	// This allows the connection attempts to continue. The RPC was cancelled
-	// before the backend was connected, but the backends is up. The conn
+	// before the backend was connected, but the backend is up. The conn
 	// becomes Ready due to the connection attempt to the existing backend
 	// succeeding, despite no new RPC being sent.
 	hold.Resume()

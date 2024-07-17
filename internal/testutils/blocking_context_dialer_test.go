@@ -63,12 +63,13 @@ func (s) TestBlockingDialer_HoldWaitResume(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 	go func() {
+		defer close(done)
 		conn, err := d.DialContext(ctx, lis.Addr().String())
 		if err != nil {
 			t.Errorf("BlockingDialer.DialContext() got error: %v, want success", err)
+			return
 		}
 		conn.Close()
-		done <- struct{}{}
 	}()
 
 	// This should block until the goroutine above is scheduled.
