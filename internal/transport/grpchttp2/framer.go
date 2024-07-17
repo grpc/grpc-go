@@ -96,17 +96,23 @@ type FrameHeader struct {
 	StreamID uint32
 }
 
-// Frame represents an HTTP/2 Frame.
+// Frame represents an HTTP/2 Frame. This interface struct is only to be used
+// on the read path of the Framer. The writing path expects the data to be
+// passed individually, not using this type.
+//
+// Each concrete Frame type defined below implements the Frame interface.
 type Frame interface {
 	Header() *FrameHeader
 	// Free frees the underlying buffer if present so it can be reused by the
 	// framer.
+	//
+	// TODO: Remove method from the interface once the mem package gets merged.
+	// Free will be called on each mem.Buffer individually.
 	Free()
 }
 
-// DataFrame is the representation of a [DATA frame]. It implements the Frame
-// interface. DATA frames convey arbitrary, variable-length sequences of octets
-// associated with a stream.
+// DataFrame is the representation of a [DATA frame]. DATA frames convey
+// arbitrary, variable-length sequences of octets associated with a stream.
 //
 // [DATA frame]: https://httpwg.org/specs/rfc7540.html#DATA
 type DataFrame struct {
@@ -125,9 +131,8 @@ func (f *DataFrame) Free() {
 	}
 }
 
-// HeadersFrame is the representation of a [HEADERS Frame]. It implements
-// the Frame interface. The HEADERS frame is used to open a stream, and
-// additionally carries a header block fragment.
+// HeadersFrame is the representation of a [HEADERS Frame]. The HEADERS frame
+// is used to open a stream, and additionally carries a header block fragment.
 //
 // [HEADERS Frame]: https://httpwg.org/specs/rfc7540.html#HEADERS
 type HeadersFrame struct {
@@ -146,11 +151,9 @@ func (f *HeadersFrame) Free() {
 	}
 }
 
-// RSTStreamFrame is the representation of a [RST_STREAM Frame]. It implements
-// the Frame interface. There is no underlying byte array in this frame, so
-// Free() is a no-op.
-//
-// The RST_STREAM frame allows for immediate termination of a stream
+// RSTStreamFrame is the representation of a [RST_STREAM Frame]. There is no
+// underlying byte array in this frame, so Free() is a no-op. The RST_STREAM
+// frame allows for immediate termination of a stream
 //
 // [RST_STREAM Frame]: https://httpwg.org/specs/rfc7540.html#RST_STREAM
 type RSTStreamFrame struct {
@@ -164,9 +167,8 @@ func (f *RSTStreamFrame) Header() *FrameHeader {
 
 func (f *RSTStreamFrame) Free() {}
 
-// SettingsFrame is the representation of a [SETTINGS Frame]. It implements
-// the Frame interface. There is no underlying byte array in this frame, so
-// Free() is a no-op.
+// SettingsFrame is the representation of a [SETTINGS Frame]. There is no
+// underlying byte array in this frame, so Free() is a no-op.
 //
 // The SETTINGS frame conveys configuration parameters that affect how
 // endpoints communicate, such as preferences and constraints on peer behavior.
@@ -183,10 +185,9 @@ func (f *SettingsFrame) Header() *FrameHeader {
 
 func (f *SettingsFrame) Free() {}
 
-// PingFrame is the representation of a [PING Frame]. It implements the Frame
-// interface. The PING frame is a mechanism for measuring a minimal round-trip
-// time from the sender, as well as determining whether an idle connection is
-// still functional.
+// PingFrame is the representation of a [PING Frame]. The PING frame is a
+// mechanism for measuring a minimal round-trip time from the sender, as well
+// as determining whether an idle connection is still functional.
 //
 // [PING Frame]: https://httpwg.org/specs/rfc7540.html#PING
 type PingFrame struct {
@@ -205,9 +206,9 @@ func (f *PingFrame) Free() {
 	}
 }
 
-// GoAwayFrame is the representation of a [GOAWAY Frame]. It implements the
-// Frame interface. The GOAWAY frame is used to initiate shutdown of a
-// connection or to signal serious error conditions.
+// GoAwayFrame is the representation of a [GOAWAY Frame]. The GOAWAY frame is
+// used to initiate shutdown of a connection or to signal serious error
+// conditions.
 //
 // [GOAWAY Frame]: https://httpwg.org/specs/rfc7540.html#GOAWAY
 type GoAwayFrame struct {
@@ -228,9 +229,8 @@ func (f *GoAwayFrame) Free() {
 	}
 }
 
-// WindowUpdateFrame is the representation of a [WINDOW_UPDATE Frame]. It
-// implements the Frame interface. The WINDOW_UPDATE frame is used to implement
-// flow control.
+// WindowUpdateFrame is the representation of a [WINDOW_UPDATE Frame]. The
+// WINDOW_UPDATE frame is used to implement flow control.
 //
 // [WINDOW_UPDATE Frame]: https://httpwg.org/specs/rfc7540.html#WINDOW_UPDATE
 type WindowUpdateFrame struct {
@@ -242,9 +242,8 @@ func (f *WindowUpdateFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
-// ContinuationFrame is the representation of a [CONTINUATION Frame]. It
-// implements the Frame interface. The CONTINUATION frame (type=0x9) is used to
-// continue a sequence of header block fragments.
+// ContinuationFrame is the representation of a [CONTINUATION Frame]. The
+// CONTINUATION frame is used to continue a sequence of header block fragments.
 //
 // [CONTINUATION Frame]: https://httpwg.org/specs/rfc7540.html#CONTINUATION
 type ContinuationFrame struct {
@@ -267,6 +266,8 @@ func (f *ContinuationFrame) Free() {
 // contiguous CONTINUATION frames and the decoding of their HPACK-encoded
 // contents.  This frame type is not transmitted over the network and is only
 // generated by the ReadFrame() function.
+//
+// Since there is no underlying buffer in this Frame, Free() is a no-op.
 type MetaHeadersFrame struct {
 	hdr    *FrameHeader
 	Fields []hpack.HeaderField
@@ -283,17 +284,18 @@ func (f *MetaHeadersFrame) Free() {}
 
 // Framer encapsulates the functionality to read and write HTTP/2 frames.
 type Framer interface {
-	// SetMetaDecoder will set a decoder for the framer. When the decoder is
-	// set, ReadFrame will parse the header values, merging all Headers and
-	// Continuation frames.
-	SetMetaDecoder(d *hpack.Decoder)
 	// ReadFrame returns grpchttp2.Frame. It is the caller's responsibility to
-	// call Frame.Free() once it is done using it.
+	// call Frame.Free() once it is done using it. Note that once the mem
+	// package gets merged, this API will change in favor of Buffer.Free().
 	ReadFrame() (Frame, error)
 	// WriteData writes an HTTP/2 DATA frame to the stream.
+	// TODO: Once the mem package gets merged, data will change type to
+	// mem.BufferSlice.
 	WriteData(streamID uint32, endStream bool, data ...[]byte) error
 	// WriteData writes an HTTP/2 HEADERS frame to the stream.
-	WriteHeaders(streamID uint32, endStream, endHeaders bool, headerBlock ...[]byte) error
+	// TODO: Once the mem package gets merged, headerBlock will change type to
+	// mem.Buffer.
+	WriteHeaders(streamID uint32, endStream, endHeaders bool, headerBlocks []byte) error
 	// WriteData writes an HTTP/2 RST_STREAM frame to the stream.
 	WriteRSTStream(streamID uint32, code ErrCode) error
 	// WriteSettings writes an HTTP/2 SETTINGS frame to the connection.
@@ -303,9 +305,13 @@ type Framer interface {
 	// WritePing writes an HTTP/2 PING frame to the connection.
 	WritePing(ack bool, data [8]byte) error
 	// WriteGoAway writes an HTTP/2 GOAWAY frame to the connection.
+	// TODO: Once the mem package gets merged, debugData will change type to
+	// mem.Buffer.
 	WriteGoAway(maxStreamID uint32, code ErrCode, debugData []byte) error
 	// WriteWindowUpdate writes an HTTP/2 WINDOW_UPDATE frame to the stream.
 	WriteWindowUpdate(streamID, inc uint32) error
 	// WriteContinuation writes an HTTP/2 CONTINUATION frame to the stream.
-	WriteContinuation(streamID uint32, endHeaders bool, headerBlock ...[]byte) error
+	// TODO: Once the mem package gets merged, data will change type to
+	// mem.Buffer.
+	WriteContinuation(streamID uint32, endHeaders bool, headerBlock []byte) error
 }
