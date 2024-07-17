@@ -34,18 +34,31 @@ func Test(t *testing.T) {
 }
 
 func (s) TestErrorCodeString(t *testing.T) {
-	err := grpchttp2.ErrCodeNoError
-	if err.String() != "NO_ERROR" {
-		t.Errorf("got %q, want %q", err.String(), "NO_ERROR")
+	errCodesTest := []struct {
+		err  grpchttp2.ErrCode
+		want string
+	}{
+		{grpchttp2.ErrCodeNoError, "NO_ERROR"},
+		{grpchttp2.ErrCodeProtocol, "PROTOCOL_ERROR"},
+		{grpchttp2.ErrCodeInternal, "INTERNAL_ERROR"},
+		{grpchttp2.ErrCodeFlowControl, "FLOW_CONTROL_ERROR"},
+		{grpchttp2.ErrCodeSettingsTimeout, "SETTINGS_TIMEOUT"},
+		{grpchttp2.ErrCodeStreamClosed, "STREAM_CLOSED"},
+		{grpchttp2.ErrCodeFrameSize, "FRAME_SIZE_ERROR"},
+		{grpchttp2.ErrCodeRefusedStream, "REFUSED_STREAM"},
+		{grpchttp2.ErrCodeCancel, "CANCEL"},
+		{grpchttp2.ErrCodeCompression, "COMPRESSION_ERROR"},
+		{grpchttp2.ErrCodeConnect, "CONNECT_ERROR"},
+		{grpchttp2.ErrCodeEnhanceYourCalm, "ENHANCE_YOUR_CALM"},
+		{grpchttp2.ErrCodeIndaequateSecurity, "INADEQUATE_SECURITY"},
+		{grpchttp2.ErrCodeHTTP11Required, "HTTP_1_1_REQUIRED"},
+		{grpchttp2.ErrCode(0x1), "PROTOCOL_ERROR"},
+		{grpchttp2.ErrCode(0xf), "unknown error code 0xf"},
 	}
 
-	err = grpchttp2.ErrCode(0x1)
-	if err.String() != "PROTOCOL_ERROR" {
-		t.Errorf("got %q, want %q", err.String(), "PROTOCOL_ERROR")
-	}
-
-	err = grpchttp2.ErrCode(0xf)
-	if err.String() != "unknown error code 0xf" {
-		t.Errorf("got %q, want %q", err.String(), "unknown error code 0xf")
+	for _, errTest := range errCodesTest {
+		if errTest.err.String() != errTest.want {
+			t.Errorf("got %q, want %q", errTest.err.String(), errTest.want)
+		}
 	}
 }
