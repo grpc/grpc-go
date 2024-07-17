@@ -121,7 +121,7 @@ XXXXX PleaseIgnoreUnused'
 
   # Ignore a false positive when operands have side affectes.
   # TODO(https://github.com/dominikh/go-tools/issues/54): Remove this once the issue is fixed in staticcheck.
-  noret_grep "(SA4000)" "${SC_OUT}" | not grep -v -e "crl.go:\d*:\d*: identical expressions on the left and right side of the '||' operator (SA4000)"
+  noret_grep "(SA4000)" "${SC_OUT}" | not grep -v -e "crl.go:[0-9]\+:[0-9]\+: identical expressions on the left and right side of the '||' operator (SA4000)"
 
   # Only ignore the following deprecated types/fields/functions and exclude
   # generated code.
