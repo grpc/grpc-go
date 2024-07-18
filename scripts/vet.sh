@@ -90,7 +90,7 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   go mod tidy -compat=1.21
   git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
- 
+
   # - Collection of static analysis checks
   SC_OUT="$(mktemp)"
   staticcheck -go 1.21 -checks 'all' ./... >"${SC_OUT}" || true
