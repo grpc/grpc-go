@@ -23,6 +23,7 @@ package transport
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -84,7 +85,24 @@ func (p *proxyServer) run() {
 		return
 	}
 	resp := http.Response{StatusCode: http.StatusOK, Proto: "HTTP/1.0"}
-	resp.Write(p.in)
+	var buf bytes.Buffer
+	resp.Write(&buf)
+	// Batch the first message from the server with the http connect
+	// response. This is done to test the cases in which the grpc client has
+	// the response to the connect request and proxied packets from the
+	// destination server when it reads the transport.
+	out.SetReadDeadline(time.Now().Add(20 * time.Millisecond))
+	b := make([]byte, 50)
+	bytesRead, err := out.Read(b)
+	// The read is expected to fail with deadline exceeded if the server doesn't
+	// have a message to send.
+	if err != nil {
+		p.t.Logf("Got error while reading message from server: %v", err)
+	}
+	// reset the deadline.
+	out.SetReadDeadline(time.Time{})
+	buf.Write(b[0:bytesRead])
+	p.in.Write(buf.Bytes())
 	p.out = out
 	go io.Copy(p.in, p.out)
 	go io.Copy(p.out, p.in)
@@ -100,7 +118,7 @@ func (p *proxyServer) stop() {
 	}
 }
 
-func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxyReqCheck func(*http.Request) error) {
+func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxyReqCheck func(*http.Request) error, serverMessage []byte) {
 	plis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
@@ -128,6 +146,7 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 			return
 		}
 		defer in.Close()
+		in.Write(serverMessage)
 		in.Read(recvBuf)
 		done <- nil
 	}()
@@ -157,6 +176,18 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 	if string(recvBuf) != string(msg) {
 		t.Fatalf("received msg: %v, want %v", recvBuf, msg)
 	}
+
+	c.SetReadDeadline(time.Now().Add(20 * time.Millisecond))
+
+	gotServerMessage := make([]byte, len(serverMessage))
+	// This call will return a deadline exceeded error if the server has nothing
+	// to send. This is expected.
+	if _, err := c.Read(gotServerMessage); err != nil {
+		t.Logf("Got error while reading message from server: %v", err)
+	}
+	if string(gotServerMessage) != string(serverMessage) {
+		t.Fatalf("message from server: %v, want %v", gotServerMessage, serverMessage)
+	}
 }
 
 func (s) TestHTTPConnect(t *testing.T) {
@@ -170,6 +201,22 @@ func (s) TestHTTPConnect(t *testing.T) {
 			}
 			return nil
 		},
+		nil,
+	)
+}
+
+func (s) TestHTTPConnectWithServerHello(t *testing.T) {
+	testHTTPConnect(t,
+		func(in *url.URL) *url.URL {
+			return in
+		},
+		func(req *http.Request) error {
+			if req.Method != http.MethodConnect {
+				return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
+			}
+			return nil
+		},
+		[]byte("server-hello"),
 	)
 }
 
@@ -195,6 +242,7 @@ func (s) TestHTTPConnectBasicAuth(t *testing.T) {
 			}
 			return nil
 		},
+		nil,
 	)
 }
 
