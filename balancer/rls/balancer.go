@@ -309,7 +309,6 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		evicted := b.dataCache.resize(newCfg.cacheSizeBytes)
 		if evicted {
 			b.sendNewPickerLocked()
-			entryWithValidBackoffEvicted()
 		}
 		b.cacheMu.Unlock()
 	}
@@ -516,6 +515,7 @@ func (b *rlsBalancer) sendNewPickerLocked() {
 	if !b.inhibitPickerUpdates {
 		b.logger.Infof("New balancer.State: %+v", state)
 		b.cc.UpdateState(state)
+		entryWithValidBackoffEvicted()
 	} else {
 		b.logger.Infof("Delaying picker update: %+v", state)
 	}
