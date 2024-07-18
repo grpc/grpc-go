@@ -59,6 +59,10 @@ func (s) TestBlockingDialer_HoldWaitResume(t *testing.T) {
 	d := NewBlockingDialer()
 	h := d.Hold(lis.Addr().String())
 
+	if h.IsStarted() {
+		t.Fatalf("hold.IsStarted() = true, want false")
+	}
+
 	done := make(chan struct{})
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
@@ -69,6 +73,10 @@ func (s) TestBlockingDialer_HoldWaitResume(t *testing.T) {
 			t.Errorf("BlockingDialer.DialContext() got error: %v, want success", err)
 			return
 		}
+
+		if !h.IsStarted() {
+			t.Errorf("hold.IsStarted() = false, want true")
+		}
 		conn.Close()
 	}()
 
@@ -76,6 +84,11 @@ func (s) TestBlockingDialer_HoldWaitResume(t *testing.T) {
 	if !h.Wait(ctx) {
 		t.Fatalf("Timeout while waiting for a connection attempt to %q", h.addr)
 	}
+
+	if !h.IsStarted() {
+		t.Errorf("hold.IsStarted() = false, want true")
+	}
+
 	select {
 	case <-done:
 		t.Fatalf("Expected dialer to be blocked.")
