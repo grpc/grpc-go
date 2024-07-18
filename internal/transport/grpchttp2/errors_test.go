@@ -33,31 +33,35 @@ func Test(t *testing.T) {
 }
 
 func (s) TestErrorCodeString(t *testing.T) {
-	errCodesTest := []struct {
+	tests := []struct {
 		err  ErrCode
 		want string
 	}{
-		{ErrCodeNoError, "NO_ERROR"},
-		{ErrCodeProtocol, "PROTOCOL_ERROR"},
-		{ErrCodeInternal, "INTERNAL_ERROR"},
-		{ErrCodeFlowControl, "FLOW_CONTROL_ERROR"},
-		{ErrCodeSettingsTimeout, "SETTINGS_TIMEOUT"},
-		{ErrCodeStreamClosed, "STREAM_CLOSED"},
-		{ErrCodeFrameSize, "FRAME_SIZE_ERROR"},
-		{ErrCodeRefusedStream, "REFUSED_STREAM"},
-		{ErrCodeCancel, "CANCEL"},
-		{ErrCodeCompression, "COMPRESSION_ERROR"},
-		{ErrCodeConnect, "CONNECT_ERROR"},
-		{ErrCodeEnhanceYourCalm, "ENHANCE_YOUR_CALM"},
-		{ErrCodeIndaequateSecurity, "INADEQUATE_SECURITY"},
-		{ErrCodeHTTP11Required, "HTTP_1_1_REQUIRED"},
-		{ErrCode(0x1), "PROTOCOL_ERROR"},
-		{ErrCode(0xf), "unknown error code 0xf"},
+		// Known error cases
+		{err: ErrCodeNoError, want: "NO_ERROR"},
+		{err: ErrCodeProtocol, want: "PROTOCOL_ERROR"},
+		{err: ErrCodeInternal, want: "INTERNAL_ERROR"},
+		{err: ErrCodeFlowControl, want: "FLOW_CONTROL_ERROR"},
+		{err: ErrCodeSettingsTimeout, want: "SETTINGS_TIMEOUT"},
+		{err: ErrCodeStreamClosed, want: "STREAM_CLOSED"},
+		{err: ErrCodeFrameSize, want: "FRAME_SIZE_ERROR"},
+		{err: ErrCodeRefusedStream, want: "REFUSED_STREAM"},
+		{err: ErrCodeCancel, want: "CANCEL"},
+		{err: ErrCodeCompression, want: "COMPRESSION_ERROR"},
+		{err: ErrCodeConnect, want: "CONNECT_ERROR"},
+		{err: ErrCodeEnhanceYourCalm, want: "ENHANCE_YOUR_CALM"},
+		{err: ErrCodeIndaequateSecurity, want: "INADEQUATE_SECURITY"},
+		{err: ErrCodeHTTP11Required, want: "HTTP_1_1_REQUIRED"},
+		// Type casting known error case
+		{err: ErrCode(0x1), want: "PROTOCOL_ERROR"},
+		// Unknown error case
+		{err: ErrCode(0xf), want: "unknown error code 0xf"},
 	}
 
-	for _, errTest := range errCodesTest {
-		if errTest.err.String() != errTest.want {
-			t.Errorf("got %q, want %q", errTest.err.String(), errTest.want)
+	for _, test := range tests {
+		got := test.err.String()
+		if got != test.want {
+			t.Errorf("ErrCode.String(%#x) = %q, want %q", int(test.err), got, test.want)
 		}
 	}
 }

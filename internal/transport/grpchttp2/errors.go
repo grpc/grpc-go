@@ -68,5 +68,5 @@ func (err ErrCode) String() string {
 	if v, ok := errorCodeNames[err]; ok {
 		return v
 	}
-	return fmt.Sprintf("unknown error code 0x%x", uint32(err))
+	return fmt.Sprintf("unknown error code %#x", uint32(err))
 }
