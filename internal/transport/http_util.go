@@ -36,6 +36,7 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+
 	"google.golang.org/grpc/codes"
 )
 
@@ -329,13 +330,15 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 		b := w.pool.Get().(*[]byte)
 		w.buf = *b
 	}
+	var bytesWritten int
 	for len(b) > 0 {
 		nn := copy(w.buf[w.offset:], b)
 		b = b[nn:]
 		w.offset += nn
-		n += nn
 		if w.offset >= w.batchSize {
-			if err = w.flushKeepBuffer(); err != nil {
+			bytesWritten, err = w.flushKeepBuffer()
+			n += bytesWritten
+			if err != nil {
 				return n, err
 			}
 		}
@@ -344,7 +347,7 @@ func (w *bufWriter) Write(b []byte) (n int, err error) {
 }
 
 func (w *bufWriter) Flush() error {
-	err := w.flushKeepBuffer()
+	_, err := w.flushKeepBuffer()
 	// Only release the buffer if we are in a "shared" mode
 	if w.buf != nil && w.pool != nil {
 		b := w.buf
@@ -354,17 +357,18 @@ func (w *bufWriter) Flush() error {
 	return err
 }
 
-func (w *bufWriter) flushKeepBuffer() error {
+func (w *bufWriter) flushKeepBuffer() (int, error) {
 	if w.err != nil {
-		return w.err
+		return 0, w.err
 	}
 	if w.offset == 0 {
-		return nil
+		return 0, nil
 	}
-	_, w.err = w.conn.Write(w.buf[:w.offset])
+	var n int
+	n, w.err = w.conn.Write(w.buf[:w.offset])
 	w.err = toIOError(w.err)
 	w.offset = 0
-	return w.err
+	return n, w.err
 }
 
 type ioError struct {
