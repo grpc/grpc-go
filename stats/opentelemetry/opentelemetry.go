@@ -286,6 +286,8 @@ func optionFromLabels(labelKeys []string, optionalLabelKeys []string, optionalLa
 	return otelmetric.WithAttributes(attributes...)
 }
 
+// registryMetrics implements MetricsRecorder for the client and server stats
+// handlers.
 type registryMetrics struct {
 	intCounts   map[*estats.MetricDescriptor]otelmetric.Int64Counter
 	floatCounts map[*estats.MetricDescriptor]otelmetric.Float64Counter

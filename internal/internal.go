@@ -216,10 +216,10 @@ var (
 	// SetConnectedAddress sets the connected address for a SubConnState.
 	SetConnectedAddress any // func(scs *SubConnState, addr resolver.Address)
 
-	// SnapshotMetricsRegistryForTesting snapshots the global data of the
-	// metrics registry. Registers a cleanup function on the provided testing.T
-	// that sets the metrics registry to its original state. Only called in
-	// testing functions.
+	// SnapshotMetricRegistryForTesting snapshots the global data of the metric
+	// registry. Registers a cleanup function on the provided testing.T that
+	// sets the metric registry to its original state. Only called in testing
+	// functions.
 	SnapshotMetricRegistryForTesting any // func(t *testing.T)
 )
 

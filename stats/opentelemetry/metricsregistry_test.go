@@ -41,6 +41,19 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+type metricsRecorderForTest interface {
+	estats.MetricsRecorder
+	initializeMetrics()
+}
+
+func newClientStatsHandler(options MetricsOptions) metricsRecorderForTest {
+	return &clientStatsHandler{options: Options{MetricsOptions: options}}
+}
+
+func newServerStatsHandler(options MetricsOptions) metricsRecorderForTest {
+	return &serverStatsHandler{options: Options{MetricsOptions: options}}
+}
+
 // TestMetricsRegistryMetrics tests the OpenTelemetry behavior with respect to
 // registered metrics. It registers metrics in the metrics registry. It then
 // creates an OpenTelemetry client and server stats handler This test then makes
@@ -219,93 +232,78 @@ func (s) TestMetricsRegistryMetrics(t *testing.T) {
 		},
 	}
 
-	clientReader := otelmetric.NewManualReader()
-	clientProvider := otelmetric.NewMeterProvider(otelmetric.WithReader(clientReader))
-
-	// This configures the defaults alongside int counter 3. All the instruments
-	// registered except int counter 2 and 3 are default, so all measurements
-	// recorded should show up in reader collected metrics except those for int
-	// counter 2.
-	// This also only toggles the float count and float histo optional labels,
-	// so only those should show up in metrics emissions. All the required
-	// labels should show up in metrics emissions.
-	mo := MetricsOptions{
-		Metrics:        DefaultMetrics().Add("int-counter-3"),
-		OptionalLabels: []string{"float counter optional label key", "float histo optional label key"},
-		MeterProvider:  clientProvider,
-	}
-	// Don't have access to clientStatsHandler in DialOption, so just create
-	// one directly.
-	csh := &clientStatsHandler{options: Options{MetricsOptions: mo}}
-	csh.initializeMetrics()
-
-	serverReader := otelmetric.NewManualReader()
-	serverProvider := otelmetric.NewMeterProvider(otelmetric.WithReader(serverReader))
-	mo = MetricsOptions{
-		Metrics:        DefaultMetrics().Add("int-counter-3"),
-		OptionalLabels: []string{"float counter optional label key", "float histo optional label key"},
-		MeterProvider:  serverProvider,
-	}
-	// Don't have access to serverStatsHandler in ServerOption, so just create
-	// one directly.
-	ssh := &serverStatsHandler{options: Options{MetricsOptions: mo}}
-	ssh.initializeMetrics()
-
-	tests := []struct {
-		metricsRecorder estats.MetricsRecorder
-		reader          *otelmetric.ManualReader
+	for _, test := range []struct {
+		name        string
+		constructor func(options MetricsOptions) metricsRecorderForTest
 	}{
 		{
-			metricsRecorder: csh,
-			reader:          clientReader,
+			name:        "client stats handler",
+			constructor: newClientStatsHandler,
 		},
 		{
-			metricsRecorder: ssh,
-			reader:          serverReader,
+			name:        "server stats handler",
+			constructor: newServerStatsHandler,
 		},
-	}
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			reader := otelmetric.NewManualReader()
+			provider := otelmetric.NewMeterProvider(otelmetric.WithReader(reader))
 
-	for _, test := range tests {
-		// These Record calls are guaranteed at a layer underneath OpenTelemetry for
-		// labels emitted to match the length of labels + optional labels.
-		intCountHandle1.Record(test.metricsRecorder, 1, []string{"int counter 1 label value", "int counter 1 optional label value"}...)
-		// int-counter-2 is not part of metrics specified (not default), so this
-		// record call shouldn't show up in the reader.
-		intCountHandle2.Record(test.metricsRecorder, 2, []string{"int counter 2 label value", "int counter 2 optional label value"}...)
-		// int-counter-3 is part of metrics specified, so this call should show up
-		// in the reader.
-		intCountHandle3.Record(test.metricsRecorder, 4, []string{"int counter 3 label value", "int counter 3 optional label value"}...)
-
-		// All future recording points should show up in emissions as all of these are defaults.
-		floatCountHandle.Record(test.metricsRecorder, 1.2, []string{"float counter label value", "float counter optional label value"}...)
-		intHistoHandle.Record(test.metricsRecorder, 3, []string{"int histo label value", "int histo optional label value"}...)
-		floatHistoHandle.Record(test.metricsRecorder, 4.3, []string{"float histo label value", "float histo optional label value"}...)
-		intGaugeHandle.Record(test.metricsRecorder, 7, []string{"int gauge label value", "int gauge optional label value"}...)
-		// This second gauge call should take the place of the previous gauge call.
-		intGaugeHandle.Record(test.metricsRecorder, 8, []string{"int gauge label value", "int gauge optional label value"}...)
-		rm := &metricdata.ResourceMetrics{}
-		test.reader.Collect(ctx, rm)
-		gotMetrics := map[string]metricdata.Metrics{}
-		for _, sm := range rm.ScopeMetrics {
-			for _, m := range sm.Metrics {
-				gotMetrics[m.Name] = m
+			// This configures the defaults alongside int counter 3. All the instruments
+			// registered except int counter 2 and 3 are default, so all measurements
+			// recorded should show up in reader collected metrics except those for int
+			// counter 2.
+			// This also only toggles the float count and float histo optional labels,
+			// so only those should show up in metrics emissions. All the required
+			// labels should show up in metrics emissions.
+			mo := MetricsOptions{
+				Metrics:        DefaultMetrics().Add("int-counter-3"),
+				OptionalLabels: []string{"float counter optional label key", "float histo optional label key"},
+				MeterProvider:  provider,
 			}
-		}
+			mr := test.constructor(mo)
+			mr.initializeMetrics()
+			// These Record calls are guaranteed at a layer underneath OpenTelemetry for
+			// labels emitted to match the length of labels + optional labels.
+			intCountHandle1.Record(mr, 1, []string{"int counter 1 label value", "int counter 1 optional label value"}...)
+			// int-counter-2 is not part of metrics specified (not default), so this
+			// record call shouldn't show up in the reader.
+			intCountHandle2.Record(mr, 2, []string{"int counter 2 label value", "int counter 2 optional label value"}...)
+			// int-counter-3 is part of metrics specified, so this call should show up
+			// in the reader.
+			intCountHandle3.Record(mr, 4, []string{"int counter 3 label value", "int counter 3 optional label value"}...)
 
-		for _, metric := range wantMetrics {
-			val, ok := gotMetrics[metric.Name]
-			if !ok {
-				t.Fatalf("Metric %v not present in recorded metrics", metric.Name)
+			// All future recording points should show up in emissions as all of these are defaults.
+			floatCountHandle.Record(mr, 1.2, []string{"float counter label value", "float counter optional label value"}...)
+			intHistoHandle.Record(mr, 3, []string{"int histo label value", "int histo optional label value"}...)
+			floatHistoHandle.Record(mr, 4.3, []string{"float histo label value", "float histo optional label value"}...)
+			intGaugeHandle.Record(mr, 7, []string{"int gauge label value", "int gauge optional label value"}...)
+			// This second gauge call should take the place of the previous gauge call.
+			intGaugeHandle.Record(mr, 8, []string{"int gauge label value", "int gauge optional label value"}...)
+			rm := &metricdata.ResourceMetrics{}
+			reader.Collect(ctx, rm)
+			gotMetrics := map[string]metricdata.Metrics{}
+			for _, sm := range rm.ScopeMetrics {
+				for _, m := range sm.Metrics {
+					gotMetrics[m.Name] = m
+				}
 			}
-			if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
-				t.Fatalf("Metrics data type not equal for metric: %v", metric.Name)
-			}
-		}
 
-		// int-counter-2 is not a default metric and wasn't specified in
-		// constructor, so emissions should not show up.
-		if _, ok := gotMetrics["int-counter-2"]; ok {
-			t.Fatalf("Metric int-counter-2 present in recorded metrics, was not configured")
-		}
+			for _, metric := range wantMetrics {
+				val, ok := gotMetrics[metric.Name]
+				if !ok {
+					t.Fatalf("Metric %v not present in recorded metrics", metric.Name)
+				}
+				if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
+					t.Fatalf("Metrics data type not equal for metric: %v", metric.Name)
+				}
+			}
+
+			// int-counter-2 is not a default metric and wasn't specified in
+			// constructor, so emissions should not show up.
+			if _, ok := gotMetrics["int-counter-2"]; ok {
+				t.Fatalf("Metric int-counter-2 present in recorded metrics, was not configured")
+			}
+		})
 	}
 }
