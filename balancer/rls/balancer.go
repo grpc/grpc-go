@@ -74,10 +74,10 @@ var (
 
 	// Following functions are no-ops in actual code, but can be overridden in
 	// tests to give tests visibility into exactly when certain events happen.
-	clientConnUpdateHook         = func() {}
-	dataCachePurgeHook           = func() {}
-	resetBackoffHook             = func() {}
-	entryWithValidBackoffEvicted = func() {}
+	clientConnUpdateHook = func() {}
+	dataCachePurgeHook   = func() {}
+	resetBackoffHook     = func() {}
+	newPickerGenerated   = func() {}
 )
 
 func init() {
@@ -511,11 +511,10 @@ func (b *rlsBalancer) sendNewPickerLocked() {
 		ConnectivityState: aggregatedState,
 		Picker:            picker,
 	}
-
+	newPickerGenerated()
 	if !b.inhibitPickerUpdates {
 		b.logger.Infof("New balancer.State: %+v", state)
 		b.cc.UpdateState(state)
-		entryWithValidBackoffEvicted()
 	} else {
 		b.logger.Infof("Delaying picker update: %+v", state)
 	}
