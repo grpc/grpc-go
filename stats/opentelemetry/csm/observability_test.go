@@ -206,13 +206,13 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 				serverOptionWithCSMPluginOption(opentelemetry.Options{
 					MetricsOptions: opentelemetry.MetricsOptions{
 						MeterProvider: provider,
-						Metrics:       opentelemetry.DefaultMetrics,
+						Metrics:       opentelemetry.DefaultMetrics(),
 					}}, po),
 			}
 			dopts := []grpc.DialOption{dialOptionWithCSMPluginOption(opentelemetry.Options{
 				MetricsOptions: opentelemetry.MetricsOptions{
 					MeterProvider:  provider,
-					Metrics:        opentelemetry.DefaultMetrics,
+					Metrics:        opentelemetry.DefaultMetrics(),
 					OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name"},
 				},
 			}, po)}
@@ -368,13 +368,13 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 				serverOptionWithCSMPluginOption(opentelemetry.Options{
 					MetricsOptions: opentelemetry.MetricsOptions{
 						MeterProvider: provider,
-						Metrics:       opentelemetry.DefaultMetrics,
+						Metrics:       opentelemetry.DefaultMetrics(),
 					}}, po),
 			}
 			dopts := []grpc.DialOption{dialOptionWithCSMPluginOption(opentelemetry.Options{
 				MetricsOptions: opentelemetry.MetricsOptions{
 					MeterProvider:  provider,
-					Metrics:        opentelemetry.DefaultMetrics,
+					Metrics:        opentelemetry.DefaultMetrics(),
 					OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name"},
 				},
 			}, po)}
@@ -460,7 +460,7 @@ func (s) TestXDSLabels(t *testing.T) {
 	dopts := []grpc.DialOption{dialOptionWithCSMPluginOption(opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider:  provider,
-			Metrics:        opentelemetry.DefaultMetrics,
+			Metrics:        opentelemetry.DefaultMetrics(),
 			OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name"},
 		},
 	}, po), grpc.WithUnaryInterceptor(unaryInterceptorAttachXDSLabels)}

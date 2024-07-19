@@ -33,8 +33,8 @@ import (
 )
 
 type clientStatsHandler struct {
-	options Options
-
+	estats.MetricsRecorder
+	options       Options
 	clientMetrics clientMetrics
 }
 
@@ -52,7 +52,7 @@ func (h *clientStatsHandler) initializeMetrics() {
 
 	metrics := h.options.MetricsOptions.Metrics
 	if metrics == nil {
-		metrics = DefaultMetrics
+		metrics = DefaultMetrics()
 	}
 
 	h.clientMetrics.attemptStarted = createInt64Counter(metrics.Metrics(), "grpc.client.attempt.started", meter, otelmetric.WithUnit("attempt"), otelmetric.WithDescription("Number of client call attempts started."))
@@ -60,6 +60,12 @@ func (h *clientStatsHandler) initializeMetrics() {
 	h.clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.client.attempt.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
 	h.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.client.attempt.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
 	h.clientMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+
+	rm := &registryMetrics{
+		optionalLabels: h.options.MetricsOptions.OptionalLabels,
+	}
+	h.MetricsRecorder = rm
+	rm.registerMetrics(metrics, meter)
 }
 
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {

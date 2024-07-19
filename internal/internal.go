@@ -215,6 +215,12 @@ var (
 
 	// SetConnectedAddress sets the connected address for a SubConnState.
 	SetConnectedAddress any // func(scs *SubConnState, addr resolver.Address)
+
+	// SnapshotMetricRegistryForTesting snapshots the global data of the metric
+	// registry. Registers a cleanup function on the provided testing.T that
+	// sets the metric registry to its original state. Only called in testing
+	// functions.
+	SnapshotMetricRegistryForTesting any // func(t *testing.T)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health

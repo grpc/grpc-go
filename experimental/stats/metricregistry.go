@@ -23,7 +23,12 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 )
+
+func init() {
+	internal.SnapshotMetricRegistryForTesting = snapshotMetricsRegistryForTesting
+}
 
 var logger = grpclog.Component("metrics-registry")
 
@@ -54,6 +59,10 @@ type MetricDescriptor struct {
 	// The type of metric. This is set by the metric registry, and not intended
 	// to be set by a component registering a metric.
 	Type MetricType
+	// Bounds are the bounds of this metric. This only applies to histogram
+	// metrics. If unset or set with length 0, stats handlers will fall back to
+	// default bounds.
+	Bounds []float64
 }
 
 // MetricType is the type of metric.
