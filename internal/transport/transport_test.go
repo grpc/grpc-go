@@ -205,8 +205,7 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 		conn.controlBuf.put(&dataFrame{
 			streamID:    s.id,
 			h:           nil,
-			d:           data,
-			r:           data.Reader(),
+			reader:      data.Reader(),
 			onEachWrite: func() {},
 		})
 		sent += len(p)
@@ -1031,8 +1030,7 @@ func (s) TestServerContextCanceledOnClosedConnection(t *testing.T) {
 		streamID:    s.id,
 		endStream:   false,
 		h:           nil,
-		d:           d,
-		r:           d.Reader(),
+		reader:      d.Reader(),
 		onEachWrite: func() {},
 	})
 	// Loop until the server side stream is created.

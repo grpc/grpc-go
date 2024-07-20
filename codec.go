@@ -53,12 +53,12 @@ func getCodec(name string) encoding.CodecV2 {
 }
 
 func newCodecV0Bridge(c Codec) baseCodec {
-	return codecV0Bridge{c}
+	return codecV0Bridge{codec: c}
 }
 
 func newCodecV1Bridge(c encoding.Codec) encoding.CodecV2 {
 	return codecV1Bridge{
-		codecV0Bridge: codecV0Bridge{c},
+		codecV0Bridge: codecV0Bridge{codec: c},
 		name:          c.Name(),
 	}
 }

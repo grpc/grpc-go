@@ -81,7 +81,7 @@ func init() {
 	}
 	internal.BinaryLogger = binaryLogger
 	internal.JoinServerOptions = newJoinServerOption
-	internal.RecvBufferPool = recvBufferPool
+	internal.BufferPool = bufferPool
 }
 
 var statusOK = status.New(codes.OK, "")
@@ -608,7 +608,7 @@ func WaitForHandlers(w bool) ServerOption {
 	})
 }
 
-func recvBufferPool(bufferPool mem.BufferPool) ServerOption {
+func bufferPool(bufferPool mem.BufferPool) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.bufferPool = bufferPool
 	})

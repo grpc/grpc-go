@@ -1080,11 +1080,10 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *O
 		streamID:  s.id,
 		endStream: opts.Last,
 		h:         hdr,
-		d:         data,
-		r:         data.Reader(),
+		reader:    data.Reader(),
 	}
-	if hdr != nil || df.r.Remaining() != 0 { // If it's not an empty data frame, check quota.
-		if err := s.wq.get(int32(len(hdr) + df.r.Remaining())); err != nil {
+	if hdr != nil || df.reader.Remaining() != 0 { // If it's not an empty data frame, check quota.
+		if err := s.wq.get(int32(len(hdr) + df.reader.Remaining())); err != nil {
 			data.Free()
 			return err
 		}
@@ -1200,6 +1199,8 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		if len(f.Data()) > 0 {
 			pool := s.ct.bufferPool
 			if pool == nil {
+				// Note that this is only supposed to be nil in tests. Otherwise, stream is
+				// always initialized with a BufferPool.
 				pool = mem.DefaultBufferPool()
 			}
 			s.write(recvMsg{buffer: mem.Copy(f.Data(), pool)})

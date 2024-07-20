@@ -26,11 +26,6 @@ import (
 
 // BufferPool is a pool of buffers that can be shared, resulting in
 // decreased memory allocation.
-//
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
 type BufferPool interface {
 	// Get returns a buffer with specified length from the pool.
 	Get(length int) []byte
@@ -55,14 +50,22 @@ var defaultBufferPool = func() *atomic.Pointer[BufferPool] {
 	return ptr
 }()
 
+// DefaultBufferPool returns the current default buffer pool. It is a BufferPool
+// created with NewBufferPool that uses a set of default sizes optimized for
+// expected workflows.
 func DefaultBufferPool() BufferPool {
 	return *defaultBufferPool.Load()
 }
 
-func SetDefaultBufferPool(pool BufferPool) {
+// SetDefaultBufferPoolForTesting updates the default buffer pool, for testing
+// purposes.
+func SetDefaultBufferPoolForTesting(pool BufferPool) {
 	defaultBufferPool.Store(&pool)
 }
 
+// NewBufferPool returns a BufferPool implementation that uses multiple
+// underlying pools of the given pool sizes. When a buffer is requested from the
+// returned pool, it will have a
 func NewBufferPool(poolSizes ...int) BufferPool {
 	sort.Ints(poolSizes)
 	pools := make([]*sizedBufferPool, len(poolSizes))
@@ -70,8 +73,7 @@ func NewBufferPool(poolSizes ...int) BufferPool {
 		pools[i] = newBufferPool(s)
 	}
 	return &tieredBufferPool{
-		sizedPools:   pools,
-		fallbackPool: new(simpleBufferPool),
+		sizedPools: pools,
 	}
 }
 
@@ -79,7 +81,7 @@ func NewBufferPool(poolSizes ...int) BufferPool {
 // buffer pools for different sizes of buffers.
 type tieredBufferPool struct {
 	sizedPools   []*sizedBufferPool
-	fallbackPool *simpleBufferPool
+	fallbackPool simpleBufferPool
 }
 
 func (p *tieredBufferPool) Get(size int) []byte {
@@ -87,7 +89,7 @@ func (p *tieredBufferPool) Get(size int) []byte {
 }
 
 func (p *tieredBufferPool) Put(buf []byte) {
-	p.getPool(len(buf)).Put(buf)
+	p.getPool(cap(buf)).Put(buf)
 }
 
 func (p *tieredBufferPool) getPool(size int) BufferPool {
@@ -96,7 +98,7 @@ func (p *tieredBufferPool) getPool(size int) BufferPool {
 	})
 
 	if poolIdx == len(p.sizedPools) {
-		return p.fallbackPool
+		return &p.fallbackPool
 	}
 
 	return p.sizedPools[poolIdx]
@@ -118,6 +120,11 @@ func (p *sizedBufferPool) Get(size int) []byte {
 }
 
 func (p *sizedBufferPool) Put(buf []byte) {
+	if cap(buf) < p.defaultSize {
+		// Ignore buffers that are too small to fit in the pool. Otherwise, when Get is
+		// called it will panic as it tries to index outside the bounds of the buffer.
+		return
+	}
 	buf = buf[:cap(buf)]
 	clear(buf)
 	p.pool.Put(&buf)

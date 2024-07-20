@@ -61,7 +61,7 @@ func init() {
 	internal.WithBinaryLogger = withBinaryLogger
 	internal.JoinDialOptions = newJoinDialOption
 	internal.DisableGlobalDialOptions = newDisableGlobalDialOptions
-	internal.WithRecvBufferPool = withRecvBufferPool
+	internal.WithBufferPool = withBufferPool
 }
 
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
@@ -758,7 +758,7 @@ func WithMaxCallAttempts(n int) DialOption {
 	})
 }
 
-func withRecvBufferPool(bufferPool mem.BufferPool) DialOption {
+func withBufferPool(bufferPool mem.BufferPool) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.BufferPool = bufferPool
 	})

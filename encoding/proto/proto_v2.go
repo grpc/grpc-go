@@ -44,8 +44,7 @@ func (c *codecV2) Marshal(v any) (mem.BufferSlice, error) {
 
 	pool := mem.DefaultBufferPool()
 	buf := pool.Get(proto.Size(vv))
-	_, err := proto.MarshalOptions{}.MarshalAppend(buf[:0], vv)
-	if err != nil {
+	if _, err := (proto.MarshalOptions{}).MarshalAppend(buf[:0], vv); err != nil {
 		pool.Put(buf)
 		return nil, err
 	}
@@ -62,7 +61,9 @@ func (c *codecV2) Unmarshal(data mem.BufferSlice, v any) (err error) {
 
 	buf := data.LazyMaterialize(mem.DefaultBufferPool())
 	defer buf.Free()
-	// TODO: Upgrade proto.Unmarshal to support encoding.BufferSlice
+	// TODO: Upgrade proto.Unmarshal to support mem.BufferSlice. Right now, it's not
+	//  really possible without a major overhaul of the proto package, but the
+	//  vtprotobuf library may be able to support this.
 	return proto.Unmarshal(buf.ReadOnlyData(), vv)
 }
 

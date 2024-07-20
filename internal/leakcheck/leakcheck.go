@@ -18,7 +18,9 @@
 
 // Package leakcheck contains functions to check leaked goroutines and buffers.
 //
-// Call "defer leakcheck.Check(t)" at the beginning of tests.
+// Call the following at the beginning of test:
+//
+//	defer leakcheck.NewLeakChecker(t).Check()
 package leakcheck
 
 import (
@@ -33,20 +35,27 @@ import (
 	"google.golang.org/grpc/mem"
 )
 
+// SetTrackingBufferPool upgrades the default buffer pool in the mem package to
+// one that tracks where buffers are allocated. CheckTrackingBufferPool should
+// then be invoked at the end of the test to validate that all buffers pulled
+// from the pool were returned.
 func SetTrackingBufferPool(efer Errorfer) {
-	mem.SetDefaultBufferPool(&trackingBufferPool{
+	mem.SetDefaultBufferPoolForTesting(&trackingBufferPool{
 		pool:             mem.DefaultBufferPool(),
 		efer:             efer,
 		allocatedBuffers: make(map[*byte]string),
 	})
 }
 
+// CheckTrackingBufferPool undoes the effects of SetTrackingBufferPool, and fails
+// unit tests if not all buffers were returned. It is invalid to invoke this
+// method without previously having invoked SetTrackingBufferPool.
 func CheckTrackingBufferPool() {
 	p := mem.DefaultBufferPool().(*trackingBufferPool)
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	mem.SetDefaultBufferPool(p.pool)
+	mem.SetDefaultBufferPoolForTesting(p.pool)
 	for b, trace := range p.allocatedBuffers {
 		p.efer.Errorf("Allocated buffer never freed %p:\n%s", b, trace)
 	}
@@ -180,4 +189,30 @@ func CheckGoroutines(efer Errorfer, timeout time.Duration) {
 	for _, g := range leaked {
 		efer.Errorf("Leaked goroutine: %v", g)
 	}
+}
+
+// LeakChecker captures an Errorfer and is returned by NewLeakChecker as a
+// convenient method to set up leak check tests in a unit test.
+type LeakChecker struct {
+	efer Errorfer
+}
+
+// Check executes the leak check tests, failing the unit test if any buffer or
+// goroutine leaks are detected.
+func (lc *LeakChecker) Check() {
+	CheckTrackingBufferPool()
+	CheckGoroutines(lc.efer, 10*time.Second)
+}
+
+// NewLeakChecker offers a convenient way to set up the leak checks for a
+// specific unit test. It can be used as follows, at the beginning of tests:
+//
+//	defer leakcheck.NewLeakChecker(t).Check()
+//
+// It initially invokes SetTrackingBufferPool to set up buffer tracking, then the
+// deferred LeakChecker.Check call will invoke CheckTrackingBufferPool and
+// CheckGoroutines with a default timeout of 10 seconds.
+func NewLeakChecker(efer Errorfer) *LeakChecker {
+	SetTrackingBufferPool(efer)
+	return &LeakChecker{efer: efer}
 }

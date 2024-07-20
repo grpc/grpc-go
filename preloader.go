@@ -60,7 +60,8 @@ func (p *PreparedMsg) Encode(s Stream, msg any) error {
 	}
 	p.encodedData = data
 	// TODO: it should be possible to grab the bufferPool from the underlying
-	// stream implementation.
+	//  stream implementation with a type cast to its actual type (such as
+	//  addrConnStream) and accessing the buffer pool directly.
 	compData, pf, err := compress(data, rpcInfo.preloaderInfo.cp, rpcInfo.preloaderInfo.comp, mem.DefaultBufferPool())
 	if err != nil {
 		data.Free()

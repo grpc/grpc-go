@@ -149,10 +149,9 @@ type dataFrame struct {
 	streamID  uint32
 	endStream bool
 	h         []byte
-	d         mem.BufferSlice
-	r         *mem.Reader
+	reader    *mem.Reader
 	// onEachWrite is called every time
-	// a part of d is written out.
+	// a part of data is written out.
 	onEachWrite func()
 }
 
@@ -442,7 +441,7 @@ func (c *controlBuffer) finish() {
 				v.onOrphaned(ErrConnClosing)
 			}
 		case *dataFrame:
-			v.d.Free()
+			_ = v.reader.Close()
 		}
 	}
 	// In case throttle() is currently in flight, it needs to be unblocked.
@@ -499,16 +498,7 @@ type loopyWriter struct {
 	ssGoAwayHandler func(*goAway) (bool, error)
 }
 
-func newLoopyWriter(
-	s side,
-	fr *framer,
-	cbuf *controlBuffer,
-	bdpEst *bdpEstimator,
-	conn net.Conn,
-	logger *grpclog.PrefixLogger,
-	goAwayHandler func(*goAway) (bool, error),
-	bufferPool mem.BufferPool,
-) *loopyWriter {
+func newLoopyWriter(s side, fr *framer, cbuf *controlBuffer, bdpEst *bdpEstimator, conn net.Conn, logger *grpclog.PrefixLogger, goAwayHandler func(*goAway) (bool, error), bufferPool mem.BufferPool) *loopyWriter {
 	var buf bytes.Buffer
 	l := &loopyWriter{
 		side:            s,
@@ -784,7 +774,7 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 		str.deleteSelf()
 		for head := str.itl.dequeueAll(); head != nil; head = head.next {
 			if df, ok := head.it.(*dataFrame); ok {
-				df.d.Free()
+				_ = df.reader.Close()
 			}
 		}
 	}
@@ -922,17 +912,18 @@ func (l *loopyWriter) processData() (bool, error) {
 	dataItem := str.itl.peek().(*dataFrame) // Peek at the first data item this stream.
 	// A data item is represented by a dataFrame, since it later translates into
 	// multiple HTTP2 data frames.
-	// Every dataFrame has two buffers; h that keeps grpc-message header and d that is actual data.
-	// As an optimization to keep wire traffic low, data from d is copied to h to make as big as the
-	// maximum possible HTTP2 frame size.
+	// Every dataFrame has two buffers; h that keeps grpc-message header and data
+	// that is the actual message. As an optimization to keep wire traffic low, data
+	// from data is copied to h to make as big as the maximum possible HTTP2 frame
+	// size.
 
-	if len(dataItem.h) == 0 && dataItem.r.Remaining() == 0 { // Empty data frame
+	if len(dataItem.h) == 0 && dataItem.reader.Remaining() == 0 { // Empty data frame
 		// Client sends out empty data frame with endStream = true
 		if err := l.framer.fr.WriteData(dataItem.streamID, dataItem.endStream, nil); err != nil {
 			return false, err
 		}
 		str.itl.dequeue() // remove the empty data item from stream
-		dataItem.d.Free()
+		_ = dataItem.reader.Close()
 		if str.itl.isEmpty() {
 			str.state = empty
 		} else if trailer, ok := str.itl.peek().(*headerFrame); ok { // the next item is trailers.
@@ -961,8 +952,8 @@ func (l *loopyWriter) processData() (bool, error) {
 	}
 	// Compute how much of the header and data we can send within quota and max frame length
 	hSize := min(maxSize, len(dataItem.h))
-	dSize := min(maxSize-hSize, dataItem.r.Remaining())
-	remainingBytes := len(dataItem.h) + dataItem.r.Remaining() - hSize - dSize
+	dSize := min(maxSize-hSize, dataItem.reader.Remaining())
+	remainingBytes := len(dataItem.h) + dataItem.reader.Remaining() - hSize - dSize
 	size := hSize + dSize
 
 	var buf []byte
@@ -975,13 +966,15 @@ func (l *loopyWriter) processData() (bool, error) {
 		// TODO: Revisit once https://github.com/golang/go/issues/66655 is addressed.
 		pool := l.bufferPool
 		if pool == nil {
+			// Note that this is only supposed to be nil in tests. Otherwise, stream is
+			// always initialized with a BufferPool.
 			pool = mem.DefaultBufferPool()
 		}
 		buf = pool.Get(size)
 		defer pool.Put(buf)
 
 		copy(buf[:hSize], dataItem.h)
-		_, _ = dataItem.r.Read(buf[hSize:])
+		_, _ = dataItem.reader.Read(buf[hSize:])
 	}
 
 	// Now that outgoing flow controls are checked we can replenish str's write quota
@@ -1002,7 +995,7 @@ func (l *loopyWriter) processData() (bool, error) {
 	dataItem.h = dataItem.h[hSize:]
 
 	if remainingBytes == 0 { // All the data from that message was written out.
-		dataItem.d.Free()
+		_ = dataItem.reader.Close()
 		str.itl.dequeue()
 	}
 	if str.itl.isEmpty() {

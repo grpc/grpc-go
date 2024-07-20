@@ -815,6 +815,8 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		if len(f.Data()) > 0 {
 			pool := s.st.BufferPool()
 			if pool == nil {
+				// Note that this is only supposed to be nil in tests. Otherwise, stream is
+				// always initialized with a BufferPool.
 				pool = mem.DefaultBufferPool()
 			}
 			s.write(recvMsg{buffer: mem.Copy(f.Data(), pool)})
@@ -1130,11 +1132,10 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *O
 	df := &dataFrame{
 		streamID:    s.id,
 		h:           hdr,
-		d:           data,
-		r:           data.Reader(),
+		reader:      data.Reader(),
 		onEachWrite: t.setResetPingStrikes,
 	}
-	if err := s.wq.get(int32(len(hdr) + df.r.Remaining())); err != nil {
+	if err := s.wq.get(int32(len(hdr) + df.reader.Remaining())); err != nil {
 		data.Free()
 		return t.streamContextErr(s)
 	}

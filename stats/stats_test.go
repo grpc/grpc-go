@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
@@ -38,6 +39,7 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -549,13 +551,13 @@ func checkInPayload(t *testing.T, d *gotData, e *expectedData) {
 		payloads = e.requests
 	}
 
-	expectedPayload := payloads[*idx]
-	if !proto.Equal(st.Payload.(proto.Message), expectedPayload) {
-		t.Fatalf("st.Payload = %v, want %v", st.Payload, expectedPayload)
+	wantPayload := payloads[*idx]
+	if diff := cmp.Diff(wantPayload, st.Payload.(proto.Message), protocmp.Transform()); diff != "" {
+		t.Fatalf("unexpected difference in st.Payload (-want +got):\n%s", diff)
 	}
 	*idx++
-	if st.Length != proto.Size(expectedPayload) {
-		t.Fatalf("st.Length = %v, want %v", st.Length, proto.Size(expectedPayload))
+	if st.Length != proto.Size(wantPayload) {
+		t.Fatalf("st.Length = %v, want %v", st.Length, proto.Size(wantPayload))
 	}
 
 	// Below are sanity checks that WireLength and RecvTime are populated.

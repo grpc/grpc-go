@@ -40,25 +40,25 @@ import (
 //
 // Note: The following options will interfere with the buffer pool because they
 // require a fully materialized buffer instead of a sequence of buffers:
-// WithStatsHandler, EnableTracing, and binary logging. In such cases,
-// materializing the buffer will generate a lot of garbage, reducing the overall
-// benefit from using a pool.
+// EnableTracing, and binary logging. In such cases, materializing the buffer
+// will generate a lot of garbage, reducing the overall benefit from using a
+// pool.
 func WithBufferPool(bufferPool mem.BufferPool) grpc.DialOption {
-	return internal.WithRecvBufferPool.(func(mem.BufferPool) grpc.DialOption)(bufferPool)
+	return internal.WithBufferPool.(func(mem.BufferPool) grpc.DialOption)(bufferPool)
 }
 
 // BufferPool returns a grpc.ServerOption that configures the server to use the
 // provided buffer pool for parsing incoming messages and for temporary buffers
-// // when marshaling outgoing messages. By default, mem.DefaultBufferPool is used,
+// when marshaling outgoing messages. By default, mem.DefaultBufferPool is used,
 // and this option only exists to provide alternative buffer pool implementations
-// to the client, such as more optimized size allocations etc. However, the
+// to the server, such as more optimized size allocations etc. However, the
 // default buffer pool is already tuned to account for many different use-cases.
 //
 // Note: The following options will interfere with the buffer pool because they
 // require a fully materialized buffer instead of a sequence of buffers:
-// WithStatsHandler, EnableTracing, and binary logging. In such cases,
-// materializing the buffer will generate a lot of garbage, reducing the overall
-// benefit from using a pool.
+// EnableTracing, and binary logging. In such cases, materializing the buffer
+// will generate a lot of garbage, reducing the overall benefit from using a
+// pool.
 func BufferPool(bufferPool mem.BufferPool) grpc.ServerOption {
-	return internal.RecvBufferPool.(func(mem.BufferPool) grpc.ServerOption)(bufferPool)
+	return internal.BufferPool.(func(mem.BufferPool) grpc.ServerOption)(bufferPool)
 }

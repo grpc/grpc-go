@@ -39,3 +39,23 @@ func TestSharedBufferPool(t *testing.T) {
 		}
 	}
 }
+
+func TestTieredBufferPool(t *testing.T) {
+	pool := &tieredBufferPool{
+		sizedPools: []*sizedBufferPool{
+			newBufferPool(10),
+			newBufferPool(20),
+		},
+	}
+	buf := pool.Get(1)
+	if cap(buf) != 10 {
+		t.Fatalf("Unexpected buffer capacity: %d", cap(buf))
+	}
+
+	// Insert a short buffer into the pool, which is currently empty.
+	pool.Put(make([]byte, 1))
+	// Then immediately request a buffer that would be pulled from the pool where the
+	// short buffer would have been returned. If the short buffer is pulled from the
+	// pool, it could cause a panic.
+	pool.Get(10)
+}
