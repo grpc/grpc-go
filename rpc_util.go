@@ -520,6 +520,46 @@ func (o ForceCodecCallOption) before(c *callInfo) error {
 }
 func (o ForceCodecCallOption) after(c *callInfo, attempt *csAttempt) {}
 
+// ForceCodecV2 returns a CallOption that will set codec to be used for all
+// request and response messages for a call. The result of calling Name() will
+// be used as the content-subtype after converting to lowercase, unless
+// CallContentSubtype is also used.
+//
+// See Content-Type on
+// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests for
+// more details. Also see the documentation on RegisterCodec and
+// CallContentSubtype for more details on the interaction between Codec and
+// content-subtype.
+//
+// This function is provided for advanced users; prefer to use only
+// CallContentSubtype to select a registered codec instead.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func ForceCodecV2(codec encoding.CodecV2) CallOption {
+	return ForceCodecV2CallOption{CodecV2: codec}
+}
+
+// ForceCodecV2CallOption is a CallOption that indicates the codec used for
+// marshaling messages.
+//
+// # Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
+type ForceCodecV2CallOption struct {
+	CodecV2 encoding.CodecV2
+}
+
+func (o ForceCodecV2CallOption) before(c *callInfo) error {
+	c.codec = o.CodecV2
+	return nil
+}
+
+func (o ForceCodecV2CallOption) after(c *callInfo, attempt *csAttempt) {}
+
 // CallCustomCodec behaves like ForceCodec, but accepts a grpc.Codec instead of
 // an encoding.Codec.
 //
