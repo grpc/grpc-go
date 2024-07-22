@@ -43,6 +43,9 @@ const serviceNamespaceKeyCSM = "csm.service_namespace_name"
 const serviceNameValue = "grpc-service"
 const serviceNamespaceValue = "grpc-service-namespace"
 
+const localityKey = "grpc.lb.locality"
+const localityValue = "{\"region\":\"region-1\",\"zone\":\"zone-1\",\"subZone\":\"subzone-1\"}"
+
 // TestTelemetryLabels tests that telemetry labels from CDS make their way to
 // the stats handler. The stats handler sets the mutable context value that the
 // cluster impl picker will write telemetry labels to, and then the stats
@@ -132,7 +135,9 @@ func (fsh *fakeStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 		if label, ok := fsh.labels.TelemetryLabels[serviceNamespaceKeyCSM]; !ok || label != serviceNamespaceValue {
 			fsh.t.Fatalf("for telemetry label %v, want: %v, got: %v", serviceNamespaceKeyCSM, serviceNamespaceValue, label)
 		}
-
+		if label, ok := fsh.labels.TelemetryLabels[localityKey]; !ok || label != localityValue {
+			fsh.t.Fatalf("for telemetry label %v, want: %v, got: %v", localityKey, localityValue, label)
+		}
 	default:
 		// Nothing to assert for the other stats.Handler callouts.
 	}

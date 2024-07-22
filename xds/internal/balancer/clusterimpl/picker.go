@@ -156,6 +156,12 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		return pr, err
 	}
 
+	if info.Ctx != nil {
+		if labels := stats.GetLabels(info.Ctx); labels != nil && labels.TelemetryLabels != nil {
+			labels.TelemetryLabels["grpc.lb.locality"] = lIDStr
+		}
+	}
+
 	if d.loadStore != nil {
 		d.loadStore.CallStarted(lIDStr)
 		oldDone := pr.Done
