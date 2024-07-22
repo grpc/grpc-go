@@ -66,6 +66,15 @@ func FatalDepth(depth int, args ...any) {
 	os.Exit(1)
 }
 
+// V reports whether verbosity level l is at least the requested verbose level.
+func V(l int) bool {
+	if DepthLogger != nil {
+		return DepthLogger.V(l)
+	} else {
+		return Logger.V(l)
+	}
+}
+
 // LoggerV2 does underlying logging work for grpclog.
 // This is a copy of the LoggerV2 defined in the external grpclog package. It
 // is defined here to avoid a circular dependency.
@@ -123,4 +132,6 @@ type DepthLoggerV2 interface {
 	ErrorDepth(depth int, args ...any)
 	// FatalDepth logs to FATAL log at the specified depth. Arguments are handled in the manner of fmt.Println.
 	FatalDepth(depth int, args ...any)
+	// V reports whether verbosity level l is at least the requested verbose level.
+	V(l int) bool
 }
