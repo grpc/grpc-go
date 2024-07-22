@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-syntax = "proto3";
+edition = "2023";
 
+option features.field_presence = IMPLICIT;
 option go_package = "google.golang.org/grpc/examples/route_guide/routeguide";
 option java_multiple_files = true;
 option java_package = "io.grpc.examples.routeguide";

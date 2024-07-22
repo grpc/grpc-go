@@ -102,6 +102,27 @@ func overrideTimeAfterFuncWithChannel(t *testing.T) (durChan chan time.Duration,
 	return durChan, timeChan
 }
 
+// Override the current time used by the DNS resolver.
+func overrideTimeNowFunc(t *testing.T, now time.Time) {
+	origTimeNowFunc := dnsinternal.TimeNowFunc
+	dnsinternal.TimeNowFunc = func() time.Time { return now }
+	t.Cleanup(func() { dnsinternal.TimeNowFunc = origTimeNowFunc })
+}
+
+// Override the remaining wait time to allow re-resolution by DNS resolver.
+// Use the timeChan to read the time until resolver needs to wait for
+// and return 0 wait time.
+func overrideTimeUntilFuncWithChannel(t *testing.T) (timeChan chan time.Time) {
+	timeCh := make(chan time.Time, 1)
+	origTimeUntil := dnsinternal.TimeUntilFunc
+	dnsinternal.TimeUntilFunc = func(t time.Time) time.Duration {
+		timeCh <- t
+		return 0
+	}
+	t.Cleanup(func() { dnsinternal.TimeUntilFunc = origTimeUntil })
+	return timeCh
+}
+
 func enableSRVLookups(t *testing.T) {
 	origEnableSRVLookups := dns.EnableSRVLookups
 	dns.EnableSRVLookups = true
@@ -1288,5 +1309,62 @@ func (s) TestMinResolutionInterval(t *testing.T) {
 
 		verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
 		r.ResolveNow(resolver.ResolveNowOptions{})
+	}
+}
+
+// TestMinResolutionInterval_NoExtraDelay verifies that there is no extra delay
+// between two resolution requests apart from [MinResolutionInterval].
+func (s) TestMinResolutionInterval_NoExtraDelay(t *testing.T) {
+	tr := &testNetResolver{
+		hostLookupTable: map[string][]string{
+			"foo.bar.com": {"1.2.3.4", "5.6.7.8"},
+		},
+		txtLookupTable: map[string][]string{
+			"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+		},
+	}
+	overrideNetResolver(t, tr)
+	// Override time.Now() to return a zero value for time. This will allow us
+	// to verify that the call to time.Until is made with the exact
+	// [MinResolutionInterval] that we expect.
+	overrideTimeNowFunc(t, time.Time{})
+	// Override time.Until() to read the time passed to it
+	// and return immediately without any delay
+	timeCh := overrideTimeUntilFuncWithChannel(t)
+
+	r, stateCh, errorCh := buildResolverWithTestClientConn(t, "foo.bar.com")
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Ensure that the first resolution happens.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for DNS resolver")
+	case err := <-errorCh:
+		t.Fatalf("Unexpected error from resolver, %v", err)
+	case <-stateCh:
+	}
+
+	// Request re-resolution and verify that the resolver waits for
+	// [MinResolutionInterval].
+	r.ResolveNow(resolver.ResolveNowOptions{})
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for DNS resolver")
+	case gotTime := <-timeCh:
+		wantTime := time.Time{}.Add(dns.MinResolutionInterval)
+		if !gotTime.Equal(wantTime) {
+			t.Fatalf("DNS resolver waits for %v time before re-resolution, want %v", gotTime, wantTime)
+		}
+	}
+
+	// Ensure that the re-resolution request actually happens.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for an error from the resolver")
+	case err := <-errorCh:
+		t.Fatalf("Unexpected error from resolver, %v", err)
+	case <-stateCh:
 	}
 }

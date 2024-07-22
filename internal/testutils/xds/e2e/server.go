@@ -25,6 +25,7 @@ import (
 	"net"
 	"reflect"
 	"strconv"
+	"testing"
 
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	"google.golang.org/grpc"
@@ -60,6 +61,11 @@ type ManagementServer struct {
 	gs      *grpc.Server          // gRPC server which exports the ADS service.
 	cache   v3cache.SnapshotCache // Resource snapshot.
 	version int                   // Version of resource snapshot.
+
+	// A logging interface, usually supplied from *testing.T.
+	logger interface {
+		Logf(format string, args ...any)
+	}
 }
 
 // ManagementServerOptions contains options to be passed to the management
@@ -120,23 +126,25 @@ type ManagementServerOptions struct {
 // StartManagementServer initializes a management server which implements the
 // AggregatedDiscoveryService endpoint. The management server is initialized
 // with no resources. Tests should call the Update() method to change the
-// resource snapshot held by the management server, as required by the test
-// logic. When the test is done, it should call the Stop() method to cleanup
-// resources allocated by the management server.
-func StartManagementServer(opts ManagementServerOptions) (*ManagementServer, error) {
+// resource snapshot held by the management server, as per by the test logic.
+//
+// Registers a cleanup function on t to stop the management server.
+func StartManagementServer(t *testing.T, opts ManagementServerOptions) *ManagementServer {
+	t.Helper()
+
 	// Create a snapshot cache. The first parameter to NewSnapshotCache()
 	// controls whether the server should wait for all resources to be
 	// explicitly named in the request before responding to any of them.
 	wait := !opts.AllowResourceSubset
-	cache := v3cache.NewSnapshotCache(wait, v3cache.IDHash{}, serverLogger{})
-	logger.Infof("Created new snapshot cache...")
+	cache := v3cache.NewSnapshotCache(wait, v3cache.IDHash{}, serverLogger{t})
+	t.Logf("Created new snapshot cache...")
 
 	lis := opts.Listener
 	if lis == nil {
 		var err error
 		lis, err = net.Listen("tcp", "localhost:0")
 		if err != nil {
-			return nil, fmt.Errorf("listening on local host and port: %v", err)
+			t.Fatalf("Failed to listen on localhost:0: %v", err)
 		}
 	}
 
@@ -155,7 +163,7 @@ func StartManagementServer(opts ManagementServerOptions) (*ManagementServer, err
 	xs := v3server.NewServer(ctx, cache, callbacks)
 	gs := grpc.NewServer()
 	v3discoverygrpc.RegisterAggregatedDiscoveryServiceServer(gs, xs)
-	logger.Infof("Registered Aggregated Discovery Service (ADS)...")
+	t.Logf("Registered Aggregated Discovery Service (ADS)...")
 
 	mgmtServer := &ManagementServer{
 		Address: lis.Addr().String(),
@@ -164,19 +172,20 @@ func StartManagementServer(opts ManagementServerOptions) (*ManagementServer, err
 		gs:      gs,
 		xs:      xs,
 		cache:   cache,
+		logger:  t,
 	}
 	if opts.SupportLoadReportingService {
 		lrs := fakeserver.NewServer(lis.Addr().String())
 		v3lrsgrpc.RegisterLoadReportingServiceServer(gs, lrs)
 		mgmtServer.LRSServer = lrs
-		logger.Infof("Registered Load Reporting Service (LRS)...")
+		t.Logf("Registered Load Reporting Service (LRS)...")
 	}
 
 	// Start serving.
 	go gs.Serve(lis)
-	logger.Infof("xDS management server serving at: %v...", lis.Addr().String())
-
-	return mgmtServer, nil
+	t.Logf("xDS management server serving at: %v...", lis.Addr().String())
+	t.Cleanup(mgmtServer.Stop)
+	return mgmtServer
 }
 
 // UpdateOptions wraps parameters to be passed to the Update() method.
@@ -217,13 +226,13 @@ func (s *ManagementServer) Update(ctx context.Context, opts UpdateOptions) error
 			return fmt.Errorf("failed to create new resource snapshot: %v", err)
 		}
 	}
-	logger.Infof("Created new resource snapshot...")
+	s.logger.Logf("Created new resource snapshot...")
 
 	// Update the cache with the new resource snapshot.
 	if err := s.cache.SetSnapshot(ctx, opts.NodeID, snapshot); err != nil {
 		return fmt.Errorf("failed to update resource snapshot in management server: %v", err)
 	}
-	logger.Infof("Updated snapshot cache with resource snapshot...")
+	s.logger.Logf("Updated snapshot cache with resource snapshot...")
 	return nil
 }
 

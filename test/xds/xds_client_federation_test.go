@@ -20,6 +20,7 @@ package xds_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -31,8 +32,8 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 
@@ -54,28 +55,32 @@ import (
 // - EDS: new style, in a different authority
 func (s) TestClientSideFederation(t *testing.T) {
 	// Start a management server as the default authority.
-	serverDefaultAuth, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to spin up the xDS management server: %v", err)
-	}
-	t.Cleanup(serverDefaultAuth.Stop)
+	serverDefaultAuth := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Start another management server as the other authority.
 	const nonDefaultAuth = "non-default-auth"
-	serverAnotherAuth, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to spin up the xDS management server: %v", err)
-	}
-	t.Cleanup(serverAnotherAuth.Stop)
+	serverAnotherAuth := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		NodeID:                             nodeID,
-		ServerURI:                          serverDefaultAuth.Address,
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, serverDefaultAuth.Address))},
+		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 		// Specify the address of the non-default authority.
-		Authorities: map[string]string{nonDefaultAuth: serverAnotherAuth.Address},
+		Authorities: map[string]json.RawMessage{
+			nonDefaultAuth: []byte(fmt.Sprintf(`{
+				"xds_servers": [
+					{
+						"server_uri": %q,
+						"channel_creds": [{"type": "insecure"}]
+					}
+				]
+			}`, serverAnotherAuth.Address)),
+		},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
@@ -148,19 +153,28 @@ func (s) TestClientSideFederation(t *testing.T) {
 func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 	// Start a management server as a sophisticated authority.
 	const authority = "traffic-manager.xds.notgoogleapis.com"
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to spin up the xDS management server: %v", err)
-	}
-	t.Cleanup(mgmtServer.Stop)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: mgmtServer.Address,
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}`, mgmtServer.Address))},
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ClientDefaultListenerResourceNameTemplate: fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%%s", authority),
-		Authorities: map[string]string{authority: mgmtServer.Address},
+		// Specify the address of the non-default authority.
+		Authorities: map[string]json.RawMessage{
+			authority: []byte(fmt.Sprintf(`{
+				"xds_servers": [
+					{
+						"server_uri": %q,
+						"channel_creds": [{"type": "insecure"}]
+					}
+				]
+			}`, mgmtServer.Address)),
+		},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
@@ -236,8 +250,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	// server and actually making an RPC ensures that the xDS client is
 	// configured properly, and when we dial with an unknown authority in the
 	// next step, we can be sure that the error we receive is legitimate.
-	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup1()
+	managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
@@ -258,7 +271,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 
 	// Create a ClientConn and make a successful RPC.
 	target := fmt.Sprintf("xds:///%s", serviceName)
-	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("Dialing target %q: %v", target, err)
 	}
@@ -274,7 +287,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	target = fmt.Sprintf("xds://unknown-authority/%s", serviceName)
 	t.Logf("Dialing target %q with unknown authority which is expected to fail", target)
 	wantErr := fmt.Sprintf("authority \"unknown-authority\" specified in dial target %q is not found in the bootstrap file", target)
-	_, err = grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	_, err = grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("grpc.Dial(%q) returned %v, want: %s", target, err, wantErr)
 	}
@@ -285,27 +298,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 // with an authority which is not specified in the bootstrap configuration. The
 // test verifies that RPCs fail with an appropriate error.
 func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to spin up the xDS management server: %v", err)
-	}
-	defer mgmtServer.Stop()
-
-	nodeID := uuid.New().String()
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		NodeID:                             nodeID,
-		ServerURI:                          mgmtServer.Address,
-		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	resolverBuilder := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))
-	resolver, err := resolverBuilder(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Creating xDS resolver for testing: %v", err)
-	}
+	mgmtServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
 
 	// LDS is old style name.
 	// RDS is new style, with an unknown authority.
@@ -327,7 +320,7 @@ func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
 	}
 
 	target := fmt.Sprintf("xds:///%s", serviceName)
-	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("Dialing target %q: %v", target, err)
 	}

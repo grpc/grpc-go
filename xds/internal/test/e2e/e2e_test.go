@@ -59,11 +59,10 @@ func setup(t *testing.T, opts testOpts) (*controlPlane, *client, []*server) {
 		backendCount = opts.backendCount
 	}
 
-	cp, err := newControlPlane()
+	cp, err := newControlPlane(t)
 	if err != nil {
 		t.Fatalf("failed to start control-plane: %v", err)
 	}
-	t.Cleanup(cp.stop)
 
 	var clientLog bytes.Buffer
 	c, err := newClient(fmt.Sprintf("xds:///%s", opts.testName), *clientPath, cp.bootstrapContent, &clientLog, opts.clientFlags...)

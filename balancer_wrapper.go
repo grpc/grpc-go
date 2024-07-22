@@ -25,11 +25,14 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 )
+
+var setConnectedAddress = internal.SetConnectedAddress.(func(*balancer.SubConnState, resolver.Address))
 
 // ccBalancerWrapper sits between the ClientConn and the Balancer.
 //
@@ -92,7 +95,7 @@ func newCCBalancerWrapper(cc *ClientConn) *ccBalancerWrapper {
 // it is safe to call into the balancer here.
 func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnState) error {
 	errCh := make(chan error)
-	ok := ccb.serializer.Schedule(func(ctx context.Context) {
+	uccs := func(ctx context.Context) {
 		defer close(errCh)
 		if ctx.Err() != nil || ccb.balancer == nil {
 			return
@@ -107,17 +110,23 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 			logger.Infof("error from balancer.UpdateClientConnState: %v", err)
 		}
 		errCh <- err
-	})
-	if !ok {
-		return nil
 	}
+	onFailure := func() { close(errCh) }
+
+	// UpdateClientConnState can race with Close, and when the latter wins, the
+	// serializer is closed, and the attempt to schedule the callback will fail.
+	// It is acceptable to ignore this failure. But since we want to handle the
+	// state update in a blocking fashion (when we successfully schedule the
+	// callback), we have to use the ScheduleOr method and not the MaybeSchedule
+	// method on the serializer.
+	ccb.serializer.ScheduleOr(uccs, onFailure)
 	return <-errCh
 }
 
 // resolverError is invoked by grpc to push a resolver error to the underlying
 // balancer.  The call to the balancer is executed from the serializer.
 func (ccb *ccBalancerWrapper) resolverError(err error) {
-	ccb.serializer.Schedule(func(ctx context.Context) {
+	ccb.serializer.TrySchedule(func(ctx context.Context) {
 		if ctx.Err() != nil || ccb.balancer == nil {
 			return
 		}
@@ -133,7 +142,7 @@ func (ccb *ccBalancerWrapper) close() {
 	ccb.closed = true
 	ccb.mu.Unlock()
 	channelz.Info(logger, ccb.cc.channelz, "ccBalancerWrapper: closing")
-	ccb.serializer.Schedule(func(context.Context) {
+	ccb.serializer.TrySchedule(func(context.Context) {
 		if ccb.balancer == nil {
 			return
 		}
@@ -145,7 +154,7 @@ func (ccb *ccBalancerWrapper) close() {
 
 // exitIdle invokes the balancer's exitIdle method in the serializer.
 func (ccb *ccBalancerWrapper) exitIdle() {
-	ccb.serializer.Schedule(func(ctx context.Context) {
+	ccb.serializer.TrySchedule(func(ctx context.Context) {
 		if ctx.Err() != nil || ccb.balancer == nil {
 			return
 		}
@@ -252,15 +261,19 @@ type acBalancerWrapper struct {
 
 // updateState is invoked by grpc to push a subConn state update to the
 // underlying balancer.
-func (acbw *acBalancerWrapper) updateState(s connectivity.State, err error) {
-	acbw.ccb.serializer.Schedule(func(ctx context.Context) {
+func (acbw *acBalancerWrapper) updateState(s connectivity.State, curAddr resolver.Address, err error) {
+	acbw.ccb.serializer.TrySchedule(func(ctx context.Context) {
 		if ctx.Err() != nil || acbw.ccb.balancer == nil {
 			return
 		}
 		// Even though it is optional for balancers, gracefulswitch ensures
 		// opts.StateListener is set, so this cannot ever be nil.
 		// TODO: delete this comment when UpdateSubConnState is removed.
-		acbw.stateListener(balancer.SubConnState{ConnectivityState: s, ConnectionError: err})
+		scs := balancer.SubConnState{ConnectivityState: s, ConnectionError: err}
+		if s == connectivity.Ready {
+			setConnectedAddress(&scs, curAddr)
+		}
+		acbw.stateListener(scs)
 	})
 }
 

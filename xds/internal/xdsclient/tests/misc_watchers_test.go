@@ -20,14 +20,15 @@ package xdsclient_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -98,17 +99,42 @@ func (rw *testRouteConfigWatcher) cancel() {
 func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	// Start an xDS management server and set the option to allow it to respond
 	// to requests which only specify a subset of the configured resources.
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	defer cleanup()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
+	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+					"server_uri": %q,
+					"channel_creds": [{"type": "insecure"}]
+				}`, mgmtServer.Address))},
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+		Authorities: map[string]json.RawMessage{
+			// Xdstp style resource names used in this test use a slash removed
+			// version of t.Name as their authority, and the empty config
+			// results in the top-level xds server configuration being used for
+			// this authority.
+			authority: []byte(`{}`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
 	defer close()
 
 	// Configure the management server to respond with route config resources.
+	ldsNameNewStyle := makeNewStyleLDSName(authority)
+	rdsNameNewStyle := makeNewStyleRDSName(authority)
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Routes: []*v3routepb.RouteConfiguration{
@@ -204,16 +230,13 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: mgmtServer.Address,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap file: %v", err)
-	}
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}

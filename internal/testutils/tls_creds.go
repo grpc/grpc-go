@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2022 gRPC authors.
+ * Copyright 2024 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,64 +13,19 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package e2e
+package testutils
 
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"os"
-	"path"
 	"testing"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/testdata"
 )
-
-const (
-	// Names of files inside tempdir, for certprovider plugin to watch.
-	certFile = "cert.pem"
-	keyFile  = "key.pem"
-	rootFile = "ca.pem"
-)
-
-func createTmpFile(src, dst string) error {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return fmt.Errorf("os.ReadFile(%q) failed: %v", src, err)
-	}
-	if err := os.WriteFile(dst, data, os.ModePerm); err != nil {
-		return fmt.Errorf("os.WriteFile(%q) failed: %v", dst, err)
-	}
-	return nil
-}
-
-// createTempDirWithFiles creates a temporary directory under the system default
-// tempDir with the given dirSuffix. It also reads from certSrc, keySrc and
-// rootSrc files are creates appropriate files under the newly create tempDir.
-// Returns the name of the created tempDir.
-func createTmpDirWithFiles(dirSuffix, certSrc, keySrc, rootSrc string) (string, error) {
-	// Create a temp directory. Passing an empty string for the first argument
-	// uses the system temp directory.
-	dir, err := os.MkdirTemp("", dirSuffix)
-	if err != nil {
-		return "", fmt.Errorf("os.MkdirTemp() failed: %v", err)
-	}
-
-	if err := createTmpFile(testdata.Path(certSrc), path.Join(dir, certFile)); err != nil {
-		return "", err
-	}
-	if err := createTmpFile(testdata.Path(keySrc), path.Join(dir, keyFile)); err != nil {
-		return "", err
-	}
-	if err := createTmpFile(testdata.Path(rootSrc), path.Join(dir, rootFile)); err != nil {
-		return "", err
-	}
-	return dir, nil
-}
 
 // CreateClientTLSCredentials creates client-side TLS transport credentials
 // using certificate and key files from testdata/x509 directory.

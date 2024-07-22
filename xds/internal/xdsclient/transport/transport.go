@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
+	"google.golang.org/grpc/xds/internal/xdsclient/transport/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -47,8 +48,7 @@ import (
 
 // Any per-RPC level logs which print complete request or response messages
 // should be gated at this verbosity level. Other per-RPC level logs which print
-// terse output should be at `INFO` and verbosity 2, which corresponds to using
-// the `Debugf` method on the logger.
+// terse output should be at `INFO` and verbosity 2.
 const perRPCVerbosityLevel = 9
 
 type adsStream = v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient
@@ -135,7 +135,7 @@ type ResourceUpdate struct {
 type Options struct {
 	// ServerCfg contains all the configuration required to connect to the xDS
 	// management server.
-	ServerCfg bootstrap.ServerConfig
+	ServerCfg *bootstrap.ServerConfig
 	// OnRecvHandler is the component which makes ACK/NACK decisions based on
 	// the received resources.
 	//
@@ -169,16 +169,13 @@ type Options struct {
 	NodeProto *v3corepb.Node
 }
 
-// For overriding in unit tests.
-var grpcDial = grpc.Dial
+func init() {
+	internal.GRPCNewClient = grpc.NewClient
+}
 
 // New creates a new Transport.
 func New(opts Options) (*Transport, error) {
 	switch {
-	case opts.ServerCfg.ServerURI == "":
-		return nil, errors.New("missing server URI when creating a new transport")
-	case opts.ServerCfg.CredsDialOption() == nil:
-		return nil, errors.New("missing credentials when creating a new transport")
 	case opts.OnRecvHandler == nil:
 		return nil, errors.New("missing OnRecv callback handler when creating a new transport")
 	case opts.OnErrorHandler == nil:
@@ -197,11 +194,13 @@ func New(opts Options) (*Transport, error) {
 			Timeout: 20 * time.Second,
 		}),
 	}
-	cc, err := grpcDial(opts.ServerCfg.ServerURI, dopts...)
+	grpcNewClient := internal.GRPCNewClient.(func(string, ...grpc.DialOption) (*grpc.ClientConn, error))
+	cc, err := grpcNewClient(opts.ServerCfg.ServerURI(), dopts...)
 	if err != nil {
 		// An error from a non-blocking dial indicates something serious.
-		return nil, fmt.Errorf("failed to create a transport to the management server %q: %v", opts.ServerCfg.ServerURI, err)
+		return nil, fmt.Errorf("failed to create a transport to the management server %q: %v", opts.ServerCfg.ServerURI(), err)
 	}
+	cc.Connect()
 
 	boff := opts.Backoff
 	if boff == nil {
@@ -209,7 +208,7 @@ func New(opts Options) (*Transport, error) {
 	}
 	ret := &Transport{
 		cc:             cc,
-		serverURI:      opts.ServerCfg.ServerURI,
+		serverURI:      opts.ServerCfg.ServerURI(),
 		onRecvHandler:  opts.OnRecvHandler,
 		onErrorHandler: opts.OnErrorHandler,
 		onSendHandler:  opts.OnSendHandler,
@@ -298,7 +297,9 @@ func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, send
 	if t.logger.V(perRPCVerbosityLevel) {
 		t.logger.Infof("ADS request sent: %v", pretty.ToJSON(req))
 	} else {
-		t.logger.Debugf("ADS request sent for type %q, resources: %v, version %q, nonce %q", resourceURL, resourceNames, version, nonce)
+		if t.logger.V(2) {
+			t.logger.Infof("ADS request sent for type %q, resources: %v, version %q, nonce %q", resourceURL, resourceNames, version, nonce)
+		}
 	}
 	t.onSendHandler(&ResourceSendInfo{URL: resourceURL, ResourceNames: resourceNames})
 	return nil
@@ -311,8 +312,8 @@ func (t *Transport) recvAggregatedDiscoveryServiceResponse(stream adsStream) (re
 	}
 	if t.logger.V(perRPCVerbosityLevel) {
 		t.logger.Infof("ADS response received: %v", pretty.ToJSON(resp))
-	} else {
-		t.logger.Debugf("ADS response received for type %q, version %q, nonce %q", resp.GetTypeUrl(), resp.GetVersionInfo(), resp.GetNonce())
+	} else if t.logger.V(2) {
+		t.logger.Infof("ADS response received for type %q, version %q, nonce %q", resp.GetTypeUrl(), resp.GetVersionInfo(), resp.GetNonce())
 	}
 	return resp.GetResources(), resp.GetTypeUrl(), resp.GetVersionInfo(), resp.GetNonce(), nil
 }
@@ -512,7 +513,9 @@ func (t *Transport) recv(stream adsStream) bool {
 			stream:  stream,
 			version: rVersion,
 		})
-		t.logger.Debugf("Sending ACK for resource type: %q, version: %q, nonce: %q", url, rVersion, nonce)
+		if t.logger.V(2) {
+			t.logger.Infof("Sending ACK for resource type: %q, version: %q, nonce: %q", url, rVersion, nonce)
+		}
 	}
 }
 

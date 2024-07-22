@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 
@@ -36,7 +37,6 @@ import (
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
-	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -234,7 +234,7 @@ func (es *endpointSharding) updateState() {
 	p := &pickerWithChildStates{
 		pickers:     pickers,
 		childStates: childStates,
-		next:        uint32(grpcrand.Intn(len(pickers))),
+		next:        uint32(rand.Intn(len(pickers))),
 	}
 	es.cc.UpdateState(balancer.State{
 		ConnectivityState: aggState,

@@ -26,12 +26,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/admin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/status"
 
 	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
@@ -54,16 +52,6 @@ type ExpectedStatusCodes struct {
 // RunRegisterTests makes a client, runs the RPCs, and compares the status
 // codes.
 func RunRegisterTests(t *testing.T, ec ExpectedStatusCodes) {
-	nodeID := uuid.New().String()
-	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: "no.need.for.a.server",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bootstrapCleanup()
-
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("cannot create listener: %v", err)

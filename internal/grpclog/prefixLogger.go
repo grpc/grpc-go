@@ -61,24 +61,6 @@ func (pl *PrefixLogger) Errorf(format string, args ...any) {
 	ErrorDepth(1, fmt.Sprintf(format, args...))
 }
 
-// Debugf does info logging at verbose level 2.
-func (pl *PrefixLogger) Debugf(format string, args ...any) {
-	// TODO(6044): Refactor interfaces LoggerV2 and DepthLogger, and maybe
-	// rewrite PrefixLogger a little to ensure that we don't use the global
-	// `Logger` here, and instead use the `logger` field.
-	if !Logger.V(2) {
-		return
-	}
-	if pl != nil {
-		// Handle nil, so the tests can pass in a nil logger.
-		format = pl.prefix + format
-		pl.logger.InfoDepth(1, fmt.Sprintf(format, args...))
-		return
-	}
-	InfoDepth(1, fmt.Sprintf(format, args...))
-
-}
-
 // V reports whether verbosity level l is at least the requested verbose level.
 func (pl *PrefixLogger) V(l int) bool {
 	// TODO(6044): Refactor interfaces LoggerV2 and DepthLogger, and maybe

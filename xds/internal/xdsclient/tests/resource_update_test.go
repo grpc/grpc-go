@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
@@ -66,7 +65,7 @@ func startFakeManagementServer(t *testing.T) (*fakeserver.Server, func()) {
 	return fs, sCleanup
 }
 
-func compareUpdateMetadata(ctx context.Context, dumpFunc func() (*v3statuspb.ClientStatusResponse, error), want []*v3statuspb.ClientConfig_GenericXdsConfig) error {
+func compareUpdateMetadata(ctx context.Context, dumpFunc func() *v3statuspb.ClientStatusResponse, want []*v3statuspb.ClientConfig_GenericXdsConfig) error {
 	var cmpOpts = cmp.Options{
 		cmp.Transformer("sort", func(in []*v3statuspb.ClientConfig_GenericXdsConfig) []*v3statuspb.ClientConfig_GenericXdsConfig {
 			out := append([]*v3statuspb.ClientConfig_GenericXdsConfig(nil), in...)
@@ -92,11 +91,10 @@ func compareUpdateMetadata(ctx context.Context, dumpFunc func() (*v3statuspb.Cli
 
 	var lastErr error
 	for ; ctx.Err() == nil; <-time.After(100 * time.Millisecond) {
-		resp, err := dumpFunc()
-		if err != nil {
-			return err
+		var got []*v3statuspb.ClientConfig_GenericXdsConfig
+		for _, cfg := range dumpFunc().GetConfig() {
+			got = append(got, cfg.GetGenericXdsConfigs()...)
 		}
-		got := resp.GetConfig()[0].GetGenericXdsConfigs()
 		diff := cmp.Diff(want, got, cmpOpts)
 		if diff == "" {
 			return nil
@@ -284,12 +282,14 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-				XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
-				NodeProto: &v3corepb.Node{Id: nodeID},
-			}, defaultTestWatchExpiryTimeout, time.Duration(0))
+			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:               t.Name(),
+				Contents:           bc,
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
-				t.Fatalf("failed to create xds client: %v", err)
+				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
 			defer close()
 			t.Logf("Created xDS client to %s", mgmtServer.Address)
@@ -308,13 +308,20 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("Timeout when waiting for discovery request at the management server: %v", ctx)
 			}
 			wantReq := &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
-				Node:          &v3corepb.Node{Id: nodeID},
+				Node: &v3corepb.Node{
+					Id:            nodeID,
+					UserAgentName: "gRPC Go",
+					ClientFeatures: []string{
+						"envoy.lb.does_not_support_overprovisioning",
+						"xds.config.resource-in-sotw",
+					},
+				},
 				ResourceNames: []string{test.resourceName},
 				TypeUrl:       "type.googleapis.com/envoy.config.listener.v3.Listener",
 			}}
 			gotReq := val.(*fakeserver.Request)
-			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
-				t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform(), protocmp.IgnoreFields(&v3corepb.Node{}, "user_agent_version")); diff != "" {
+				t.Fatalf("Discovery request received with unexpected diff (-got +want):\n%s\n got: %+v, want: %+v", diff, gotReq, wantReq)
 			}
 			t.Logf("Discovery request received at management server")
 
@@ -343,7 +350,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, client.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -554,12 +561,14 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-				XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
-				NodeProto: &v3corepb.Node{Id: nodeID},
-			}, defaultTestWatchExpiryTimeout, time.Duration(0))
+			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:               t.Name(),
+				Contents:           bc,
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
-				t.Fatalf("failed to create xds client: %v", err)
+				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
 			defer close()
 			t.Logf("Created xDS client to %s", mgmtServer.Address)
@@ -578,13 +587,20 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("Timeout when waiting for discovery request at the management server: %v", ctx)
 			}
 			wantReq := &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
-				Node:          &v3corepb.Node{Id: nodeID},
+				Node: &v3corepb.Node{
+					Id:            nodeID,
+					UserAgentName: "gRPC Go",
+					ClientFeatures: []string{
+						"envoy.lb.does_not_support_overprovisioning",
+						"xds.config.resource-in-sotw",
+					},
+				},
 				ResourceNames: []string{test.resourceName},
 				TypeUrl:       "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
 			}}
 			gotReq := val.(*fakeserver.Request)
-			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
-				t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform(), protocmp.IgnoreFields(&v3corepb.Node{}, "user_agent_version")); diff != "" {
+				t.Fatalf("Discovery request received with unexpected diff (-got +want):\n%s\n got: %+v, want: %+v", diff, gotReq, wantReq)
 			}
 			t.Logf("Discovery request received at management server")
 
@@ -612,7 +628,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, client.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -785,12 +801,14 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-				XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
-				NodeProto: &v3corepb.Node{Id: nodeID},
-			}, defaultTestWatchExpiryTimeout, time.Duration(0))
+			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:               t.Name(),
+				Contents:           bc,
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
-				t.Fatalf("failed to create xds client: %v", err)
+				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
 			defer close()
 			t.Logf("Created xDS client to %s", mgmtServer.Address)
@@ -809,13 +827,20 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("Timeout when waiting for discovery request at the management server: %v", ctx)
 			}
 			wantReq := &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
-				Node:          &v3corepb.Node{Id: nodeID},
+				Node: &v3corepb.Node{
+					Id:            nodeID,
+					UserAgentName: "gRPC Go",
+					ClientFeatures: []string{
+						"envoy.lb.does_not_support_overprovisioning",
+						"xds.config.resource-in-sotw",
+					},
+				},
 				ResourceNames: []string{test.resourceName},
 				TypeUrl:       "type.googleapis.com/envoy.config.cluster.v3.Cluster",
 			}}
 			gotReq := val.(*fakeserver.Request)
-			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
-				t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform(), protocmp.IgnoreFields(&v3corepb.Node{}, "user_agent_version")); diff != "" {
+				t.Fatalf("Discovery request received with unexpected diff (-got +want):\n%s\n got: %+v, want: %+v", diff, gotReq, wantReq)
 			}
 			t.Logf("Discovery request received at management server")
 
@@ -844,16 +869,20 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			// server at that point, hence we do it here before verifying the
 			// received update.
 			if test.wantErr == "" {
-				test.wantUpdate.LRSServerConfig = xdstestutils.ServerConfigForAddress(t, mgmtServer.Address)
+				serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fmt.Sprintf("passthrough:///%s", mgmtServer.Address)})
+				if err != nil {
+					t.Fatalf("Failed to create server config for testing: %v", err)
+				}
+				test.wantUpdate.LRSServerConfig = serverCfg
 			}
 			cmpOpts := []cmp.Option{
 				cmpopts.EquateEmpty(),
-				cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy"),
+				cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy", "TelemetryLabels"),
 			}
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, client.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -1124,12 +1153,14 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-				XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
-				NodeProto: &v3corepb.Node{Id: nodeID},
-			}, defaultTestWatchExpiryTimeout, time.Duration(0))
+			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:               t.Name(),
+				Contents:           bc,
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
-				t.Fatalf("failed to create xds client: %v", err)
+				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
 			defer close()
 			t.Logf("Created xDS client to %s", mgmtServer.Address)
@@ -1148,13 +1179,20 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("Timeout when waiting for discovery request at the management server: %v", ctx)
 			}
 			wantReq := &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
-				Node:          &v3corepb.Node{Id: nodeID},
+				Node: &v3corepb.Node{
+					Id:            nodeID,
+					UserAgentName: "gRPC Go",
+					ClientFeatures: []string{
+						"envoy.lb.does_not_support_overprovisioning",
+						"xds.config.resource-in-sotw",
+					},
+				},
 				ResourceNames: []string{test.resourceName},
 				TypeUrl:       "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
 			}}
 			gotReq := val.(*fakeserver.Request)
-			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
-				t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform(), protocmp.IgnoreFields(&v3corepb.Node{}, "user_agent_version")); diff != "" {
+				t.Fatalf("Discovery request received with unexpected diff (-got +want):\n%s\n got: %+v, want: %+v", diff, gotReq, wantReq)
 			}
 			t.Logf("Discovery request received at management server")
 
@@ -1182,7 +1220,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, client.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})

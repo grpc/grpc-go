@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -77,7 +78,7 @@ func xdsSetupForTests(t *testing.T) (*e2e.ManagementServer, string, chan []strin
 
 	// Setup the management server to push the requested route configuration
 	// resource names on to a channel for the test to inspect.
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			switch req.GetTypeUrl() {
 			case version.V3ListenerURL: // Waits on the listener, and route config below...
@@ -105,9 +106,15 @@ func xdsSetupForTests(t *testing.T) (*e2e.ManagementServer, string, chan []strin
 		},
 		AllowResourceSubset: true,
 	})
-	t.Cleanup(cleanup)
 
-	xdsC, cancel, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	xdsC, cancel, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bootstrapContents,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

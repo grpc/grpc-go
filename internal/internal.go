@@ -193,16 +193,9 @@ var (
 
 	ChannelzTurnOffForTesting func()
 
-	// TriggerXDSResourceNameNotFoundForTesting triggers the resource-not-found
-	// error for a given resource type and name. This is usually triggered when
-	// the associated watch timer fires. For testing purposes, having this
-	// function makes events more predictable than relying on timer events.
-	TriggerXDSResourceNameNotFoundForTesting any // func(func(xdsresource.Type, string), string, string) error
-
-	// TriggerXDSResourceNameNotFoundClient invokes the testing xDS Client
-	// singleton to invoke resource not found for a resource type name and
-	// resource name.
-	TriggerXDSResourceNameNotFoundClient any // func(string, string) error
+	// TriggerXDSResourceNotFoundForTesting causes the provided xDS Client to
+	// invoke resource-not-found error for the given resource type and name.
+	TriggerXDSResourceNotFoundForTesting any // func(xdsclient.XDSClient, xdsresource.Type, string) error
 
 	// FromOutgoingContextRaw returns the un-merged, intermediary contents of
 	// metadata.rawMD.
@@ -211,6 +204,23 @@ var (
 	// UserSetDefaultScheme is set to true if the user has overridden the
 	// default resolver scheme.
 	UserSetDefaultScheme bool = false
+
+	// ShuffleAddressListForTesting pseudo-randomizes the order of addresses.  n
+	// is the number of elements.  swap swaps the elements with indexes i and j.
+	ShuffleAddressListForTesting any // func(n int, swap func(i, j int))
+
+	// ConnectedAddress returns the connected address for a SubConnState. The
+	// address is only valid if the state is READY.
+	ConnectedAddress any // func (scs SubConnState) resolver.Address
+
+	// SetConnectedAddress sets the connected address for a SubConnState.
+	SetConnectedAddress any // func(scs *SubConnState, addr resolver.Address)
+
+	// SnapshotMetricRegistryForTesting snapshots the global data of the metric
+	// registry. Registers a cleanup function on the provided testing.T that
+	// sets the metric registry to its original state. Only called in testing
+	// functions.
+	SnapshotMetricRegistryForTesting any // func(t *testing.T)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health

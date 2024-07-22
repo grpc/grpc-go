@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap/tlscreds"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -165,7 +165,7 @@ func (s) TestCaReloading(t *testing.T) {
 	}
 	defer stop()
 
-	serverCredentials := grpc.Creds(e2e.CreateServerTLSCredentials(t, tls.NoClientCert))
+	serverCredentials := grpc.Creds(testutils.CreateServerTLSCredentials(t, tls.NoClientCert))
 	server := stubserver.StartTestService(t, nil, serverCredentials)
 
 	conn, err := grpc.NewClient(
@@ -225,7 +225,7 @@ func (s) TestCaReloading(t *testing.T) {
 }
 
 func (s) TestMTLS(t *testing.T) {
-	s := stubserver.StartTestService(t, nil, grpc.Creds(e2e.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)))
+	s := stubserver.StartTestService(t, nil, grpc.Creds(testutils.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)))
 	defer s.Stop()
 
 	cfg := fmt.Sprintf(`{
@@ -247,7 +247,9 @@ func (s) TestMTLS(t *testing.T) {
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
-	if _, err = client.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Errorf("EmptyCall(): got error %v when expected to succeed", err)
 	}
 }

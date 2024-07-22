@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,6 +32,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
@@ -72,6 +74,8 @@ var (
 	// invalidDefaultServiceConfigErrPrefix is used to prefix the json parsing error for the default
 	// service config.
 	invalidDefaultServiceConfigErrPrefix = "grpc: the provided default service config is invalid"
+	// PickFirstBalancerName is the name of the pick_first balancer.
+	PickFirstBalancerName = pickfirst.Name
 )
 
 // The following errors are returned from Dial and DialContext
@@ -809,17 +813,11 @@ func (cc *ClientConn) applyFailingLBLocked(sc *serviceconfig.ParseResult) {
 	cc.csMgr.updateState(connectivity.TransientFailure)
 }
 
-// Makes a copy of the input addresses slice and clears out the balancer
-// attributes field. Addresses are passed during subconn creation and address
-// update operations. In both cases, we will clear the balancer attributes by
-// calling this function, and therefore we will be able to use the Equal method
-// provided by the resolver.Address type for comparison.
-func copyAddressesWithoutBalancerAttributes(in []resolver.Address) []resolver.Address {
+// Makes a copy of the input addresses slice. Addresses are passed during
+// subconn creation and address update operations.
+func copyAddresses(in []resolver.Address) []resolver.Address {
 	out := make([]resolver.Address, len(in))
-	for i := range in {
-		out[i] = in[i]
-		out[i].BalancerAttributes = nil
-	}
+	copy(out, in)
 	return out
 }
 
@@ -834,7 +832,7 @@ func (cc *ClientConn) newAddrConnLocked(addrs []resolver.Address, opts balancer.
 	ac := &addrConn{
 		state:        connectivity.Idle,
 		cc:           cc,
-		addrs:        copyAddressesWithoutBalancerAttributes(addrs),
+		addrs:        copyAddresses(addrs),
 		scopts:       opts,
 		dopts:        cc.dopts,
 		channelz:     channelz.RegisterSubChannel(cc.channelz, ""),
@@ -915,28 +913,29 @@ func (ac *addrConn) connect() error {
 		ac.mu.Unlock()
 		return nil
 	}
-	ac.mu.Unlock()
 
-	ac.resetTransport()
+	ac.resetTransportAndUnlock()
 	return nil
 }
 
-func equalAddresses(a, b []resolver.Address) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, v := range a {
-		if !v.Equal(b[i]) {
-			return false
-		}
-	}
-	return true
+// equalAddressIgnoringBalAttributes returns true is a and b are considered equal.
+// This is different from the Equal method on the resolver.Address type which
+// considers all fields to determine equality. Here, we only consider fields
+// that are meaningful to the subConn.
+func equalAddressIgnoringBalAttributes(a, b *resolver.Address) bool {
+	return a.Addr == b.Addr && a.ServerName == b.ServerName &&
+		a.Attributes.Equal(b.Attributes) &&
+		a.Metadata == b.Metadata
+}
+
+func equalAddressesIgnoringBalAttributes(a, b []resolver.Address) bool {
+	return slices.EqualFunc(a, b, func(a, b resolver.Address) bool { return equalAddressIgnoringBalAttributes(&a, &b) })
 }
 
 // updateAddrs updates ac.addrs with the new addresses list and handles active
 // connections or connection attempts.
 func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
-	addrs = copyAddressesWithoutBalancerAttributes(addrs)
+	addrs = copyAddresses(addrs)
 	limit := len(addrs)
 	if limit > 5 {
 		limit = 5
@@ -944,7 +943,7 @@ func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 	channelz.Infof(logger, ac.channelz, "addrConn: updateAddrs addrs (%d of %d): %v", limit, len(addrs), addrs[:limit])
 
 	ac.mu.Lock()
-	if equalAddresses(ac.addrs, addrs) {
+	if equalAddressesIgnoringBalAttributes(ac.addrs, addrs) {
 		ac.mu.Unlock()
 		return
 	}
@@ -963,7 +962,7 @@ func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 		// Try to find the connected address.
 		for _, a := range addrs {
 			a.ServerName = ac.cc.getServerName(a)
-			if a.Equal(ac.curAddr) {
+			if equalAddressIgnoringBalAttributes(&a, &ac.curAddr) {
 				// We are connected to a valid address, so do nothing but
 				// update the addresses.
 				ac.mu.Unlock()
@@ -989,11 +988,9 @@ func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 		ac.updateConnectivityState(connectivity.Idle, nil)
 	}
 
-	ac.mu.Unlock()
-
 	// Since we were connecting/connected, we should start a new connection
 	// attempt.
-	go ac.resetTransport()
+	go ac.resetTransportAndUnlock()
 }
 
 // getServerName determines the serverName to be used in the connection
@@ -1211,7 +1208,7 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	} else {
 		channelz.Infof(logger, ac.channelz, "Subchannel Connectivity change to %v, last error: %s", s, lastErr)
 	}
-	ac.acbw.updateState(s, lastErr)
+	ac.acbw.updateState(s, ac.curAddr, lastErr)
 }
 
 // adjustParams updates parameters used to create transports upon
@@ -1228,8 +1225,10 @@ func (ac *addrConn) adjustParams(r transport.GoAwayReason) {
 	}
 }
 
-func (ac *addrConn) resetTransport() {
-	ac.mu.Lock()
+// resetTransportAndUnlock unconditionally connects the addrConn.
+//
+// ac.mu must be held by the caller, and this function will guarantee it is released.
+func (ac *addrConn) resetTransportAndUnlock() {
 	acCtx := ac.ctx
 	if acCtx.Err() != nil {
 		ac.mu.Unlock()

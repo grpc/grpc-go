@@ -29,7 +29,8 @@ import (
 
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
+	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/google/go-cmp/cmp"
@@ -333,14 +334,8 @@ func (s) TestBootstrap(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cleanup, err := bootstrap.CreateFile(bootstrap.Options{
-				NodeID:    test.nodeID,
-				ServerURI: "xds_server_uri",
-			})
-			if err != nil {
-				t.Fatalf("failed to create bootstrap: %v", err)
-			}
-			defer cleanup()
+			bootstrapContents := e2e.DefaultBootstrapContents(t, test.nodeID, "xds_server_uri")
+			testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 			nodeIDGot := getNodeID() // this should return the node ID plumbed into bootstrap above
 			if nodeIDGot != test.nodeID {
 				t.Fatalf("getNodeID: got %v, want %v", nodeIDGot, test.nodeID)
@@ -486,14 +481,8 @@ func (s) TestSetLabels(t *testing.T) {
 					defer os.Unsetenv("CSM_WORKLOAD_NAME")
 				}
 				if test.bootstrapGeneratorPopulated {
-					cleanup, err := bootstrap.CreateFile(bootstrap.Options{
-						NodeID:    "projects/12345/networks/mesh:mesh_id/nodes/aaaa-aaaa-aaaa-aaaa",
-						ServerURI: "xds_server_uri",
-					})
-					if err != nil {
-						t.Fatalf("failed to create bootstrap: %v", err)
-					}
-					defer cleanup()
+					bootstrapContents := e2e.DefaultBootstrapContents(t, "projects/12345/networks/mesh:mesh_id/nodes/aaaa-aaaa-aaaa-aaaa", "xds_server_uri")
+					testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 				}
 				var attributes []attribute.KeyValue
 				for k, v := range test.resourceKeyValues {

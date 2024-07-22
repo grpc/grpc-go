@@ -25,16 +25,20 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/testdata"
+
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-	"google.golang.org/grpc/testdata"
 )
+
+const defaultTestTimeout = 5 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -53,7 +57,7 @@ func (f failingProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial
 func (f failingProvider) Close() {}
 
 func (s) TestFailingProvider(t *testing.T) {
-	s := stubserver.StartTestService(t, nil, grpc.Creds(e2e.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)))
+	s := stubserver.StartTestService(t, nil, grpc.Creds(testutils.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)))
 	defer s.Stop()
 
 	cfg := fmt.Sprintf(`{
@@ -85,7 +89,9 @@ func (s) TestFailingProvider(t *testing.T) {
 	defer conn.Close()
 
 	client := testgrpc.NewTestServiceClient(conn)
-	_, err = client.EmptyCall(context.Background(), &testpb.Empty{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err = client.EmptyCall(ctx, &testpb.Empty{})
 	if wantErr := "test error"; err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("EmptyCall() got err: %s, want err to contain: %s", err, wantErr)
 	}

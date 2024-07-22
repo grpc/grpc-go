@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -56,8 +55,8 @@ var (
 // dynamically, and subsequent RPC's on that connection should start failing
 // with status code UNAVAILABLE.
 func (s) TestServeLDSRDS(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
+	managementServer, nodeID, bootstrapContents, _ := setupManagementServerAndResolver(t)
+
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
@@ -166,8 +165,7 @@ func waitForFailedRPCWithStatus(ctx context.Context, t *testing.T, cc *grpc.Clie
 // serving, successfully Accept Connections, and fail at the L7 level with a
 // certain error message.
 func (s) TestRDSNack(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
+	managementServer, nodeID, bootstrapContents, _ := setupManagementServerAndResolver(t)
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
@@ -224,204 +222,6 @@ func (s) TestRDSNack(t *testing.T) {
 	waitForFailedRPCWithStatus(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
 }
 
-// TestResourceNotFoundRDS tests the case where an LDS points to an RDS which
-// returns resource not found. Before getting the resource not found, the xDS
-// Server has not received all configuration needed, so it should Accept and
-// Close any new connections. After it has received the resource not found
-// error, the server should move to serving, successfully Accept Connections,
-// and fail at the L7 level with resource not found specified.
-func (s) TestResourceNotFoundRDS(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
-	lis, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
-	}
-	// Setup the management server to respond with a listener resource that
-	// specifies a route name to watch, and no RDS resource corresponding to
-	// this route name.
-	host, port, err := hostPortFromListener(lis)
-	if err != nil {
-		t.Fatalf("failed to retrieve host and port of server: %v", err)
-	}
-
-	listener := e2e.DefaultServerListenerWithRouteConfigName(host, port, e2e.SecurityLevelNone, "routeName")
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		SkipValidation: true,
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-	serving := grpcsync.NewEvent()
-	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
-		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
-		if args.Mode == connectivity.ServingModeServing {
-			serving.Fire()
-		}
-	})
-
-	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
-	if err != nil {
-		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
-	}
-	defer server.Stop()
-	testgrpc.RegisterTestServiceServer(server, &testService{})
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
-
-	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
-
-	waitForFailedRPCWithStatus(ctx, t, cc, errAcceptAndClose)
-
-	// Invoke resource not found - this should result in L7 RPC error with
-	// unavailable receive on serving as a result, should trigger it to go
-	// serving. Poll as watch might not be started yet to trigger resource not
-	// found.
-loop:
-	for {
-		if err := internal.TriggerXDSResourceNameNotFoundClient.(func(string, string) error)("RouteConfigResource", "routeName"); err != nil {
-			t.Fatalf("Failed to trigger resource name not found for testing: %v", err)
-		}
-		select {
-		case <-serving.Done():
-			break loop
-		case <-ctx.Done():
-			t.Fatalf("timed out waiting for serving mode to go serving")
-		case <-time.After(time.Millisecond):
-		}
-	}
-	waitForFailedRPCWithStatus(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
-}
-
-// TestServingModeChanges tests the Server's logic as it transitions from Not
-// Ready to Ready, then to Not Ready. Before it goes Ready, connections should
-// be accepted and closed. After it goes ready, RPC's should proceed as normal
-// according to matched route configuration. After it transitions back into not
-// ready (through an explicit LDS Resource Not Found), previously running RPC's
-// should be gracefully closed and still work, and new RPC's should fail.
-func (s) TestServingModeChanges(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
-	lis, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
-	}
-	// Setup the management server to respond with a listener resource that
-	// specifies a route name to watch. Due to not having received the full
-	// configuration, this should cause the server to be in mode Serving.
-	host, port, err := hostPortFromListener(lis)
-	if err != nil {
-		t.Fatalf("failed to retrieve host and port of server: %v", err)
-	}
-
-	listener := e2e.DefaultServerListenerWithRouteConfigName(host, port, e2e.SecurityLevelNone, "routeName")
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		SkipValidation: true,
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	serving := grpcsync.NewEvent()
-	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
-		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
-		if args.Mode == connectivity.ServingModeServing {
-			serving.Fire()
-		}
-	})
-
-	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
-	if err != nil {
-		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
-	}
-	defer server.Stop()
-	testgrpc.RegisterTestServiceServer(server, &testService{})
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
-	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
-
-	waitForFailedRPCWithStatus(ctx, t, cc, errAcceptAndClose)
-	routeConfig := e2e.RouteConfigNonForwardingAction("routeName")
-	resources = e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{listener},
-		Routes:    []*v3routepb.RouteConfiguration{routeConfig},
-	}
-	defer cancel()
-	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	select {
-	case <-ctx.Done():
-		t.Fatal("timeout waiting for the xDS Server to go Serving")
-	case <-serving.Done():
-	}
-
-	// A unary RPC should work once it transitions into serving. (need this same
-	// assertion from LDS resource not found triggering it).
-	waitForSuccessfulRPC(ctx, t, cc)
-
-	// Start a stream before switching the server to not serving. Due to the
-	// stream being created before the graceful stop of the underlying
-	// connection, it should be able to continue even after the server switches
-	// to not serving.
-	c := testgrpc.NewTestServiceClient(cc)
-	stream, err := c.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("cc.FullDuplexCall failed: %f", err)
-	}
-
-	// Invoke the lds resource not found - this should cause the server to
-	// switch to not serving. This should gracefully drain connections, and fail
-	// RPC's after. (how to assert accepted + closed) does this make it's way to
-	// application layer? (should work outside of resource not found...
-
-	// Invoke LDS Resource not found here (tests graceful close)
-	if err := internal.TriggerXDSResourceNameNotFoundClient.(func(string, string) error)("ListenerResource", listener.GetName()); err != nil {
-		t.Fatalf("Failed to trigger resource name not found for testing: %v", err)
-	}
-
-	// New RPCs on that connection should eventually start failing. Due to
-	// Graceful Stop any started streams continue to work.
-	if err = stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
-		t.Fatalf("stream.Send() failed: %v, should continue to work due to graceful stop", err)
-	}
-	if err = stream.CloseSend(); err != nil {
-		t.Fatalf("stream.CloseSend() failed: %v, should continue to work due to graceful stop", err)
-	}
-	if _, err = stream.Recv(); err != io.EOF {
-		t.Fatalf("unexpected error: %v, expected an EOF error", err)
-	}
-
-	// New RPCs on that connection should eventually start failing.
-	waitForFailedRPCWithStatus(ctx, t, cc, errAcceptAndClose)
-}
-
 // TestMultipleUpdatesImmediatelySwitch tests the case where you get an LDS
 // specifying RDS A, B, and C (with A being matched to). The Server should be in
 // not serving until it receives all 3 RDS Configurations, and then transition
@@ -435,8 +235,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 // RPC's will match to). This configuration should eventually be represented in
 // the Server's state, and RPCs should proceed successfully.
 func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
+	managementServer, nodeID, bootstrapContents, _ := setupManagementServerAndResolver(t)
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
