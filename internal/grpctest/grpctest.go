@@ -35,6 +35,10 @@ type errorer struct {
 	t *testing.T
 }
 
+func (e errorer) Logf(format string, args ...any) {
+	e.t.Logf(format, args...)
+}
+
 func (e errorer) Errorf(format string, args ...any) {
 	atomic.StoreUint32(&lcFailed, 1)
 	e.t.Errorf(format, args...)

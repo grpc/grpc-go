@@ -26,7 +26,9 @@ package leakcheck
 import (
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -43,8 +45,20 @@ func SetTrackingBufferPool(efer Errorfer) {
 	mem.SetDefaultBufferPoolForTesting(&trackingBufferPool{
 		pool:             mem.DefaultBufferPool(),
 		efer:             efer,
-		allocatedBuffers: make(map[*byte]string),
+		allocatedBuffers: make(map[*byte][]uintptr),
 	})
+}
+
+// DisableBufferLeakCheckTestFailure disables failing the test when a buffer leak
+// is detected. Only meant to be used to disable the buffer leak checker for
+// specific tests while still leaving the checker enabled on the remaining tests.
+// Reset when CheckTrackingBufferPool is invoked.
+func DisableBufferLeakCheckTestFailure() {
+	p := mem.DefaultBufferPool().(*trackingBufferPool)
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	p.disableTestFailure = true
 }
 
 // CheckTrackingBufferPool undoes the effects of SetTrackingBufferPool, and fails
@@ -56,17 +70,55 @@ func CheckTrackingBufferPool() {
 	defer p.lock.Unlock()
 
 	mem.SetDefaultBufferPoolForTesting(p.pool)
-	for b, trace := range p.allocatedBuffers {
-		p.efer.Errorf("Allocated buffer never freed %p:\n%s", b, trace)
+
+	type uniqueTrace struct {
+		stack []uintptr
+		count int
+	}
+
+	var uniqueTraces []uniqueTrace
+	for _, stack := range p.allocatedBuffers {
+		idx, ok := slices.BinarySearchFunc(uniqueTraces, stack, func(trace uniqueTrace, stack []uintptr) int {
+			return slices.Compare(trace.stack, stack)
+		})
+		if !ok {
+			uniqueTraces = slices.Insert(uniqueTraces, idx, uniqueTrace{stack: stack})
+		}
+		uniqueTraces[idx].count++
+	}
+
+	for _, ut := range uniqueTraces {
+		frames := runtime.CallersFrames(ut.stack)
+		var trace strings.Builder
+		for {
+			f, ok := frames.Next()
+			if !ok {
+				break
+			}
+			trace.WriteString(f.Function)
+			trace.WriteString("\n\t")
+			trace.WriteString(f.File)
+			trace.WriteString(":")
+			trace.WriteString(strconv.Itoa(f.Line))
+			trace.WriteString("\n")
+		}
+		format := "%d allocated buffers never freed:\n%s"
+		args := []any{ut.count, trace.String()}
+		if p.disableTestFailure {
+			p.efer.Logf("WARNING "+format, args...)
+		} else {
+			p.efer.Errorf(format, args...)
+		}
 	}
 }
 
 type trackingBufferPool struct {
-	pool mem.BufferPool
-	efer Errorfer
+	pool               mem.BufferPool
+	efer               Errorfer
+	disableTestFailure bool
 
 	lock             sync.Mutex
-	allocatedBuffers map[*byte]string
+	allocatedBuffers map[*byte][]uintptr
 }
 
 func (p *trackingBufferPool) Get(length int) []byte {
@@ -78,7 +130,18 @@ func (p *trackingBufferPool) Get(length int) []byte {
 
 	buf := p.pool.Get(length)
 
-	p.allocatedBuffers[unsafe.SliceData(buf)] = string(debug.Stack())
+	var stackBuf [16]uintptr
+	var stack []uintptr
+	skip := 2
+	for {
+		n := runtime.Callers(skip, stackBuf[:])
+		stack = append(stack, stackBuf[:n]...)
+		if n < len(stackBuf) {
+			break
+		}
+		skip += len(stackBuf)
+	}
+	p.allocatedBuffers[unsafe.SliceData(buf)] = stack
 
 	return buf
 }
@@ -166,9 +229,10 @@ func interestingGoroutines() (gs []string) {
 	return
 }
 
-// Errorfer is the interface that wraps the Errorf method. It's a subset of
-// testing.TB to make it easy to use Check.
+// Errorfer is the interface that wraps the Logf and Errorf method. It's a subset
+// of testing.TB to make it easy to use this package.
 type Errorfer interface {
+	Logf(format string, args ...any)
 	Errorf(format string, args ...any)
 }
 

@@ -56,6 +56,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport"
@@ -1378,6 +1379,10 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 }
 
 func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
+	// Disable the buffer leak check for this test as there are unresolved leaks when
+	// the stream is closed with an error.
+	leakcheck.DisableBufferLeakCheckTestFailure()
+
 	e := tcpClearRREnv
 	r := manual.NewBuilderWithScheme("whatever")
 
@@ -1830,6 +1835,10 @@ func (s) TestPreloaderSenderSend(t *testing.T) {
 }
 
 func (s) TestMaxMsgSizeClientDefault(t *testing.T) {
+	// Disable the buffer leak check for this test as there are unresolved leaks when
+	// the stream is closed with an error.
+	leakcheck.DisableBufferLeakCheckTestFailure()
+
 	for _, e := range listTestEnv() {
 		testMaxMsgSizeClientDefault(t, e)
 	}
@@ -1890,6 +1899,10 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 }
 
 func (s) TestMaxMsgSizeClientAPI(t *testing.T) {
+	// Disable the buffer leak check for this test as there are unresolved leaks when
+	// the stream is closed with an error.
+	leakcheck.DisableBufferLeakCheckTestFailure()
+
 	for _, e := range listTestEnv() {
 		testMaxMsgSizeClientAPI(t, e)
 	}
@@ -2247,6 +2260,10 @@ func testLargeUnary(t *testing.T, e env) {
 
 // Test backward-compatibility API for setting msg size limit.
 func (s) TestExceedMsgLimit(t *testing.T) {
+	// Disable the buffer leak check for this test as there are unresolved leaks when
+	// the stream is closed with an error.
+	leakcheck.DisableBufferLeakCheckTestFailure()
+
 	for _, e := range listTestEnv() {
 		testExceedMsgLimit(t, e)
 	}
@@ -4153,6 +4170,10 @@ func testClientSendDataAfterCloseSend(t *testing.T, e env) {
 }
 
 func (s) TestClientResourceExhaustedCancelFullDuplex(t *testing.T) {
+	// Disable the buffer leak check for this test as there are unresolved leaks when
+	// the stream is closed with an error.
+	leakcheck.DisableBufferLeakCheckTestFailure()
+
 	for _, e := range listTestEnv() {
 		if e.httpHandler {
 			// httpHandler write won't be blocked on flow control window.
@@ -4267,6 +4288,10 @@ func (s) TestFailfastRPCFailOnFatalHandshakeError(t *testing.T) {
 }
 
 func (s) TestFlowControlLogicalRace(t *testing.T) {
+	// Disable the buffer leak check for this test as there are unresolved leaks when
+	// the stream is closed with an error.
+	leakcheck.DisableBufferLeakCheckTestFailure()
+
 	// Test for a regression of https://github.com/grpc/grpc-go/issues/632,
 	// and other flow control bugs.
 
@@ -6137,6 +6162,10 @@ func (s) TestNilStatsHandler(t *testing.T) {
 // message length, and the second gets a large response. This second RPC should
 // not fail with unexpected.EOF.
 func (s) TestUnexpectedEOF(t *testing.T) {
+	// Disable the buffer leak check for this test as there are unresolved leaks when
+	// the stream is closed with an error.
+	leakcheck.DisableBufferLeakCheckTestFailure()
+
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{

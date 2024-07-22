@@ -87,9 +87,9 @@ var _ io.ReadCloser = (*Reader)(nil)
 // Note that reading data from the reader does not free the underlying buffers!
 // Only calling Close once all data is read will free the buffers.
 type Reader struct {
-	data BufferSlice
-	len  int
-	idx  int
+	data         BufferSlice
+	len          int
+	dataIdx, idx int
 }
 
 // Remaining returns the number of unread bytes remaining in the slice.
@@ -106,14 +106,14 @@ func (r *Reader) Close() error {
 
 func (r *Reader) Read(buf []byte) (n int, _ error) {
 	for len(buf) != 0 && r.len != 0 {
-		data := r.data[0].ReadOnlyData()
+		data := r.data[r.dataIdx].ReadOnlyData()
 		copied := copy(buf, data[r.idx:])
 		r.len -= copied
 
 		buf = buf[copied:]
 
 		if copied == len(data) {
-			r.data = r.data[1:]
+			r.dataIdx++
 			r.idx = 0
 		} else {
 			r.idx += copied

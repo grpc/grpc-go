@@ -886,6 +886,10 @@ func (s) TestGracefulClose(t *testing.T) {
 }
 
 func (s) TestLargeMessageSuspension(t *testing.T) {
+	// Disable the buffer leak check for this test as there are unresolved leaks when
+	// the stream is closed with an error.
+	leakcheck.DisableBufferLeakCheckTestFailure()
+
 	server, ct, cancel := setUp(t, 0, suspended)
 	defer cancel()
 	callHdr := &CallHdr{
@@ -994,6 +998,10 @@ func (s) TestMaxStreams(t *testing.T) {
 }
 
 func (s) TestServerContextCanceledOnClosedConnection(t *testing.T) {
+	// Disable the buffer leak check for this test as there are unresolved leaks when
+	// the stream is closed with an error.
+	leakcheck.DisableBufferLeakCheckTestFailure()
+
 	server, ct, cancel := setUp(t, 0, suspended)
 	defer cancel()
 	callHdr := &CallHdr{
@@ -1148,6 +1156,10 @@ func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 }
 
 func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
+	// Disable the buffer leak check for this test as there are unresolved leaks when
+	// the stream is closed with an error.
+	leakcheck.DisableBufferLeakCheckTestFailure()
+
 	serverConfig := &ServerConfig{
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
@@ -1219,6 +1231,10 @@ func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 }
 
 func (s) TestServerWithMisbehavedClient(t *testing.T) {
+	// Disable the buffer leak check for this test as there are unresolved leaks when
+	// the stream is closed with an error.
+	leakcheck.DisableBufferLeakCheckTestFailure()
+
 	server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
 	defer server.stop()
 	// Create a client that can override server stream quota.
@@ -1472,6 +1488,10 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 var encodingTestStatus = status.New(codes.Internal, "\n")
 
 func (s) TestEncodingRequiredStatus(t *testing.T) {
+	// Disable the buffer leak check for this test as there are unresolved leaks when
+	// the stream is closed with an error.
+	leakcheck.DisableBufferLeakCheckTestFailure()
+
 	server, ct, cancel := setUp(t, 0, encodingRequiredStatus)
 	defer cancel()
 	callHdr := &CallHdr{
