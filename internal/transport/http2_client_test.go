@@ -3,7 +3,6 @@ package transport
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -21,18 +20,10 @@ func (hc *hangingConnSettingsWrite) Read(b []byte) (n int, err error) {
 }
 
 func (hc *hangingConnSettingsWrite) Write(b []byte) (n int, err error) {
-	//return 0, errors.New("write error")
-	incorrectPreface := "INCORRECT PREFACE\r\n\r\n"
-	n, err = hc.Conn.Write([]byte(incorrectPreface))
-	//fmt.Printf("hangingConn Write %v\n", n)
-	// if n == 42 {
-	// 	time.Sleep(1 * time.Hour) // sleep after writing last frame i.e. GoAway to simulate network hang at client side
-	// }
-	return n, err
+	return 0, errors.New("preface write error")
 }
 
 func (hc *hangingConnSettingsWrite) Close() error {
-	fmt.Printf("hangingConn Close %v\n", time.Now())
 	return hc.Conn.Close()
 }
 
@@ -45,7 +36,6 @@ func (hc *hangingConnSettingsWrite) RemoteAddr() net.Addr {
 }
 
 func (hc *hangingConnSettingsWrite) SetDeadline(t time.Time) error {
-	//return hc.Conn.SetDeadline(time.Now().Add(1 * time.Nanosecond))
 	return hc.Conn.SetDeadline(t)
 }
 
@@ -54,7 +44,6 @@ func (hc *hangingConnSettingsWrite) SetReadDeadline(t time.Time) error {
 }
 
 func (hc *hangingConnSettingsWrite) SetWriteDeadline(t time.Time) error {
-	//	return hc.Conn.SetWriteDeadline(time.Now().Add(1 * time.Nanosecond))
 	return hc.Conn.SetWriteDeadline(t)
 }
 
@@ -67,17 +56,25 @@ func hangingDialerSettingsWrite(_ context.Context, addr string) (net.Conn, error
 }
 
 func TestNewHTTP2ClientSettingsWriteFailure(t *testing.T) {
+
 	// Create a server.
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening: %v", err)
 	}
 	defer lis.Close()
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("TestNewHTTP2ClientSettingsWriteFailure panicked: %v", r)
+		}
+	}()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	defer cancel()
 	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: hangingDialerSettingsWrite}, func(GoAwayReason) {})
-	if err != nil {
-		t.Errorf("TestNewHTTP2ClientSettingsWriteFailure(): %v", err)
+	if err == nil {
+		t.Error("Expected an error, but got nil")
+	} else {
+		t.Logf("Expected error: %v\n", err)
 	}
 }
 
@@ -91,14 +88,13 @@ func (hc *hangingConnSettingsWriteLength) Read(b []byte) (n int, err error) {
 }
 
 func (hc *hangingConnSettingsWriteLength) Write(b []byte) (n int, err error) {
-	return 0, errors.New("write preface error")
-	// n, err = hc.Conn.Write(b)
-	// fmt.Printf("hangingConn Write %v\n", n)
-	// return n, err
+
+	incorrectPreface := "INCORRECT PREFACE\r\n\r\n"
+	n, err = hc.Conn.Write([]byte(incorrectPreface))
+	return n, err
 }
 
 func (hc *hangingConnSettingsWriteLength) Close() error {
-	fmt.Printf("hangingConn Close %v\n", time.Now())
 	return hc.Conn.Close()
 }
 
@@ -111,7 +107,6 @@ func (hc *hangingConnSettingsWriteLength) RemoteAddr() net.Addr {
 }
 
 func (hc *hangingConnSettingsWriteLength) SetDeadline(t time.Time) error {
-	//return hc.Conn.SetDeadline(time.Now().Add(1 * time.Nanosecond))
 	return hc.Conn.SetDeadline(t)
 }
 
@@ -120,7 +115,6 @@ func (hc *hangingConnSettingsWriteLength) SetReadDeadline(t time.Time) error {
 }
 
 func (hc *hangingConnSettingsWriteLength) SetWriteDeadline(t time.Time) error {
-	//return hc.Conn.SetWriteDeadline(time.Now().Add(1 * time.Nanosecond))
 	return hc.Conn.SetWriteDeadline(t)
 }
 
@@ -140,10 +134,29 @@ func TestNewHTTP2ClientSettingsWriteLengthFailure(t *testing.T) {
 	defer lis.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	defer cancel()
-	fmt.Println(ctx)
-	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: hangingDialerSettingsWriteLength}, func(GoAwayReason) {})
-	if err != nil {
-		t.Errorf("NewHTTP2ClientSettingsWriteLengthFailure(): %v", err)
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("TestNewHTTP2ClientSettingsWriteFailure panicked: %v", r)
+		}
+	}()
 
+	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: hangingDialerSettingsWriteLength}, func(GoAwayReason) {})
+	if err == nil {
+		t.Errorf("Expected an error, but got nil")
+	} else {
+		t.Logf("Expected error: %v\n", err)
 	}
 }
+
+/*type hangingFramer struct {
+	http2.Framer
+}
+
+func (f *hangingFramer) WriteSettings(settings ...http2.Setting) error {
+	return errors.New("Error while write settings")
+}
+
+func (f *hangingFramer) WriteWindowUpdate(streamID uint32, incr uint32) error {
+	return errors.New("Error while write windows update")
+}
+*/
