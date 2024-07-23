@@ -181,12 +181,14 @@ func (p *simpleBufferPool) Put(buf []byte) {
 
 var _ BufferPool = NopBufferPool{}
 
-// NopBufferPool is a buffer pool just makes new buffer without pooling.
+// NopBufferPool is a buffer pool that returns new buffers without pooling.
 type NopBufferPool struct{}
 
+// Get returns a buffer with specified length from the pool.
 func (NopBufferPool) Get(length int) []byte {
 	return make([]byte, length)
 }
 
+// Put returns a buffer to the pool.
 func (NopBufferPool) Put([]byte) {
 }

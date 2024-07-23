@@ -20,10 +20,17 @@ package mem_test
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/mem"
+)
+
+const (
+	defaultTestTimeout      = 5 * time.Second
+	defaultTestShortTimeout = 100 * time.Millisecond
 )
 
 type s struct {
@@ -32,6 +39,160 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
+}
+
+// Tests that a buffer created with NewBuffer, which when later freed, invokes
+// the free function with the correct data.
+func (s) TestNewBuffer_Free(t *testing.T) {
+	data := "abcd"
+	errCh := make(chan error, 1)
+	freeF := func(got []byte) {
+		if !bytes.Equal(got, []byte(data)) {
+			errCh <- fmt.Errorf("Free function called with bytes %s, want %s", string(got), string(data))
+			return
+		}
+		errCh <- nil
+	}
+
+	buf := mem.NewBuffer([]byte(data), freeF)
+	if got := buf.ReadOnlyData(); !bytes.Equal(got, []byte(data)) {
+		t.Fatalf("Buffer contains data %s, want %s", string(got), string(data))
+	}
+
+	// Verify that the free function is invoked when all references are freed.
+	buf.Free()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timeout waiting for Buffer to freed")
+	}
+}
+
+// Tests that a buffer created with NewBuffer, on which an additional reference
+// is acquired, which when later freed, invokes the free function with the
+// correct data, but only after all references are released.
+func (s) TestNewBuffer_RefAndFree(t *testing.T) {
+	data := "abcd"
+	errCh := make(chan error, 1)
+	freeF := func(got []byte) {
+		if !bytes.Equal(got, []byte(data)) {
+			errCh <- fmt.Errorf("Free function called with bytes %s, want %s", string(got), string(data))
+			return
+		}
+		errCh <- nil
+	}
+
+	buf := mem.NewBuffer([]byte(data), freeF)
+	if got := buf.ReadOnlyData(); !bytes.Equal(got, []byte(data)) {
+		t.Fatalf("Buffer contains data %s, want %s", string(got), string(data))
+	}
+
+	bufRef := buf.Ref()
+	if got := bufRef.ReadOnlyData(); !bytes.Equal(got, []byte(data)) {
+		t.Fatalf("New reference to the Buffer contains data %s, want %s", string(got), string(data))
+	}
+
+	// Verify that the free function is not invoked when all references are yet
+	// to be freed.
+	buf.Free()
+	select {
+	case <-errCh:
+		t.Fatalf("Free function called before all references freed")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Verify that the free function is invoked when all references are freed.
+	bufRef.Free()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timeout waiting for Buffer to freed")
+	}
+}
+
+// testBufferPool is a buffer pool that makes new buffer without pooling, and
+// notifies on a channel that a buffer was returned to the pool.
+type testBufferPool struct {
+	putCh chan []byte
+}
+
+func (t *testBufferPool) Get(length int) []byte {
+	return make([]byte, length)
+}
+
+func (t *testBufferPool) Put(data []byte) {
+	t.putCh <- data
+}
+
+func newTestBufferPool() *testBufferPool {
+	return &testBufferPool{putCh: make(chan []byte, 1)}
+}
+
+// Tests that a buffer created with Copy, which when later freed, returns the underlying
+// byte slice to the buffer pool.
+func (s) TestCopy_Free(t *testing.T) {
+	data := "abcd"
+	testPool := newTestBufferPool()
+
+	buf := mem.Copy([]byte(data), testPool)
+	if got := buf.ReadOnlyData(); !bytes.Equal(got, []byte(data)) {
+		t.Fatalf("Buffer contains data %s, want %s", string(got), string(data))
+	}
+
+	// Verify that the free function is invoked when all references are freed.
+	buf.Free()
+	select {
+	case got := <-testPool.putCh:
+		if !bytes.Equal(got, []byte(data)) {
+			t.Fatalf("Free function called with bytes %s, want %s", string(got), string(data))
+		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timeout waiting for Buffer to freed")
+	}
+}
+
+// Tests that a buffer created with Copy, on which an additional reference is
+// acquired, which when later freed, returns the underlying byte slice to the
+// buffer pool.
+func (s) TestCopy_RefAndFree(t *testing.T) {
+	data := "abcd"
+	testPool := newTestBufferPool()
+
+	buf := mem.Copy([]byte(data), testPool)
+	if got := buf.ReadOnlyData(); !bytes.Equal(got, []byte(data)) {
+		t.Fatalf("Buffer contains data %s, want %s", string(got), string(data))
+	}
+
+	bufRef := buf.Ref()
+	if got := bufRef.ReadOnlyData(); !bytes.Equal(got, []byte(data)) {
+		t.Fatalf("New reference to the Buffer contains data %s, want %s", string(got), string(data))
+	}
+
+	// Verify that the free function is not invoked when all references are yet
+	// to be freed.
+	buf.Free()
+	select {
+	case <-testPool.putCh:
+		t.Fatalf("Free function called before all references freed")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Verify that the free function is invoked when all references are freed.
+	bufRef.Free()
+	select {
+	case got := <-testPool.putCh:
+		if !bytes.Equal(got, []byte(data)) {
+			t.Fatalf("Free function called with bytes %s, want %s", string(got), string(data))
+		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timeout waiting for Buffer to freed")
+	}
 }
 
 func (s) TestSplit(t *testing.T) {
