@@ -76,7 +76,11 @@ func (s BufferSlice) CopyTo(out []byte) int {
 // Materialize concatenates all the underlying Buffer's data into a single
 // contiguous buffer using CopyTo.
 func (s BufferSlice) Materialize() []byte {
-	out := make([]byte, s.Len())
+	l := s.Len()
+	if l == 0 {
+		return nil
+	}
+	out := make([]byte, l)
 	s.CopyTo(out)
 	return out
 }
@@ -94,10 +98,11 @@ func (s BufferSlice) LazyMaterialize(pool BufferPool) *Buffer {
 	return NewBuffer(buf, pool.Put)
 }
 
-// Reader returns a new Reader for the input slice.
+// Reader returns a new Reader for the input slice after taking references to
+// each underlying buffer.
 func (s BufferSlice) Reader() *Reader {
 	return &Reader{
-		data: s,
+		data: s.Ref(),
 		len:  s.Len(),
 	}
 }
@@ -113,9 +118,7 @@ var _ io.ReadCloser = (*Reader)(nil)
 type Reader struct {
 	data BufferSlice
 	len  int
-	// The index of the current Buffer being read in data.
-	dataIdx int
-	// The index into data[dataIdx].ReadOnlyData().
+	// The index into data[0].ReadOnlyData().
 	bufferIdx int
 }
 
@@ -124,10 +127,12 @@ func (r *Reader) Remaining() int {
 	return r.len
 }
 
-// Close frees the underlying BufferSlice and never returns an error.
+// Close frees the underlying BufferSlice and never returns an error. Subsequent
+// calls to Read will return (0, io.EOF).
 func (r *Reader) Close() error {
 	r.data.Free()
 	r.data = nil
+	r.len = 0
 	return nil
 }
 
@@ -137,14 +142,16 @@ func (r *Reader) Read(buf []byte) (n int, _ error) {
 	}
 
 	for len(buf) != 0 && r.len != 0 {
-		data := r.data[r.dataIdx].ReadOnlyData()
+		data := r.data[0].ReadOnlyData()
 		copied := copy(buf, data[r.bufferIdx:])
 		r.len -= copied
 
 		buf = buf[copied:]
 
 		if copied == len(data) {
-			r.dataIdx++
+			oldBuffer := r.data[0]
+			oldBuffer.Free()
+			r.data = r.data[1:]
 			r.bufferIdx = 0
 		} else {
 			r.bufferIdx += copied

@@ -100,7 +100,7 @@ func (b *Buffer) Ref() *Buffer {
 // otherwise, or if Free has already been called. All subsequent calls to
 // ReadOnlyData will panic. Noop if receiver is nil.
 func (b *Buffer) Free() {
-	if b == nil || b.freed {
+	if b.freed {
 		return
 	}
 
