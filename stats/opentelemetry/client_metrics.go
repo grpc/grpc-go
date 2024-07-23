@@ -150,8 +150,9 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 	var labels *istats.Labels
 	if labels = istats.GetLabels(ctx); labels == nil {
 		labels = &istats.Labels{
-			// The defaults for all the per call optional labels that this
-			// OpenTelemetry component currently supports.
+			// The defaults for all the per call label from a plugin that
+			// executes on callpath that this OpenTelemetry component currently
+			// supports.
 			TelemetryLabels: map[string]string{
 				"grpc.lb.locality": "",
 			},
@@ -240,7 +241,6 @@ func (h *clientStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo,
 		// CSM Plugin Option layer by adding an optional labels API.
 		if val, ok := ai.xdsLabels[o]; ok {
 			attributes = append(attributes, otelattribute.String(o, val))
-			continue
 		}
 	}
 
