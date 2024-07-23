@@ -464,7 +464,7 @@ func (s) TestXDSLabels(t *testing.T) {
 	dopts := []grpc.DialOption{dialOptionSetCSM(opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider:  provider,
-      Metrics:        opentelemetry.DefaultMetrics(),
+			Metrics:        opentelemetry.DefaultMetrics(),
 			OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name", "grpc.lb.locality"},
 		},
 	}, po), grpc.WithUnaryInterceptor(unaryInterceptorAttachXDSLabels)}
