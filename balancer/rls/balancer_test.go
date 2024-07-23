@@ -656,12 +656,7 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 	// Override the clientConn update hook to get notified.
 	clientConnUpdateDone := make(chan struct{})
 	origClientConnUpdateHook := clientConnUpdateHook
-	clientConnUpdateHook = func() {
-		select {
-		case clientConnUpdateDone <- struct{}{}:
-		default:
-		}
-	}
+	clientConnUpdateHook = func() { clientConnUpdateDone <- struct{}{} }
 	defer func() { clientConnUpdateHook = origClientConnUpdateHook }()
 
 	// Override the cache entry size func, and always return 1.
@@ -823,6 +818,10 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 	case <-ctx.Done():
 		t.Errorf("client conn update could not complete: %v", ctx.Err().Error())
 	}
+
+	// Once picker was updated, wait for client conn update
+	// to complete.
+	<-clientConnUpdateDone
 }
 
 // TestDataCachePurging verifies that the LB policy periodically evicts expired
