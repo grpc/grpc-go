@@ -1066,30 +1066,33 @@ func (t *http2Client) GracefulClose() {
 // Write formats the data into HTTP2 data frame(s) and sends it out. The caller
 // should proceed only if Write returns nil.
 func (t *http2Client) Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error {
+	reader := data.Reader()
+	data.Free()
+
 	if opts.Last {
 		// If it's the last message, update stream state.
 		if !s.compareAndSwapState(streamActive, streamWriteDone) {
-			data.Free()
+			_ = reader.Close()
 			return errStreamDone
 		}
 	} else if s.getState() != streamActive {
-		data.Free()
+		_ = reader.Close()
 		return errStreamDone
 	}
 	df := &dataFrame{
 		streamID:  s.id,
 		endStream: opts.Last,
 		h:         hdr,
-		reader:    data.Reader(),
+		reader:    reader,
 	}
 	if hdr != nil || df.reader.Remaining() != 0 { // If it's not an empty data frame, check quota.
 		if err := s.wq.get(int32(len(hdr) + df.reader.Remaining())); err != nil {
-			data.Free()
+			_ = reader.Close()
 			return err
 		}
 	}
 	if err := t.controlBuf.put(df); err != nil {
-		data.Free()
+		_ = reader.Close()
 		return err
 	}
 	return nil

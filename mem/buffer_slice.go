@@ -52,7 +52,11 @@ func (s BufferSlice) CopyTo(out []byte) int {
 // Materialize concatenates all the underlying Buffer's data into a single
 // contiguous buffer using CopyTo.
 func (s BufferSlice) Materialize() []byte {
-	out := make([]byte, s.Len())
+	l := s.Len()
+	if l == 0 {
+		return nil
+	}
+	out := make([]byte, l)
 	s.CopyTo(out)
 	return out
 }
@@ -70,10 +74,11 @@ func (s BufferSlice) LazyMaterialize(pool BufferPool) *Buffer {
 	return NewBuffer(buf, pool.Put)
 }
 
-// Reader returns a new Reader for the input slice.
+// Reader returns a new Reader for the input slice after taking references to
+// each underlying buffer.
 func (s BufferSlice) Reader() *Reader {
 	return &Reader{
-		data: s,
+		data: s.Ref(),
 		len:  s.Len(),
 	}
 }
@@ -82,14 +87,12 @@ var _ io.ReadCloser = (*Reader)(nil)
 
 // Reader exposes a BufferSlice's data as an io.Reader, allowing it to interface
 // with other parts systems. It also provides an additional convenience method
-// Remaining which returns the number of unread bytes remaining in the slice.
-//
-// Note that reading data from the reader does not free the underlying buffers!
-// Only calling Close once all data is read will free the buffers.
+// Remaining which returns the number of unread bytes remaining in the slice. It
+// frees the underlying buffers as it finishes reading them.
 type Reader struct {
-	data         BufferSlice
-	len          int
-	dataIdx, idx int
+	data BufferSlice
+	len  int
+	idx  int
 }
 
 // Remaining returns the number of unread bytes remaining in the slice.
@@ -97,23 +100,27 @@ func (r *Reader) Remaining() int {
 	return r.len
 }
 
-// Close frees the underlying BufferSlice and never returns an error.
+// Close frees the underlying BufferSlice and never returns an error. Subsequent
+// calls to Read will return (0, io.EOF).
 func (r *Reader) Close() error {
 	r.data.Free()
 	r.data = nil
+	r.len = 0
 	return nil
 }
 
 func (r *Reader) Read(buf []byte) (n int, _ error) {
 	for len(buf) != 0 && r.len != 0 {
-		data := r.data[r.dataIdx].ReadOnlyData()
+		data := r.data[0].ReadOnlyData()
 		copied := copy(buf, data[r.idx:])
 		r.len -= copied
 
 		buf = buf[copied:]
 
 		if copied == len(data) {
-			r.dataIdx++
+			oldBuffer := r.data[0]
+			oldBuffer.Free()
+			r.data = r.data[1:]
 			r.idx = 0
 		} else {
 			r.idx += copied
