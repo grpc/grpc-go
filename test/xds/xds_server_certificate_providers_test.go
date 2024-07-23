@@ -120,7 +120,7 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 			}
 			select {
 			case nackCh <- struct{}{}:
-			case <-ctx.Done():
+			default:
 			}
 			return nil
 		},
@@ -247,7 +247,7 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 			}
 			select {
 			case nackCh <- struct{}{}:
-			case <-ctx.Done():
+			default:
 			}
 			return nil
 		},
