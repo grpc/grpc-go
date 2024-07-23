@@ -16,17 +16,23 @@
  *
  */
 
-package mem
+package mem_test
 
-import "testing"
+import (
+	"testing"
 
-func TestSharedBufferPool(t *testing.T) {
-	pools := []BufferPool{
-		NopBufferPool{},
-		NewBufferPool(defaultBufferPoolSizes...),
+	"google.golang.org/grpc/mem"
+)
+
+func (s) TestBufferPool(t *testing.T) {
+	var poolSizes = []int{4, 8, 16, 32}
+	pools := []mem.BufferPool{
+		mem.NopBufferPool{},
+		mem.NewBufferPool(poolSizes...),
 	}
 
-	testSizes := append(defaultBufferPoolSizes, 1<<20+1)
+	testSizes := append([]int{1}, poolSizes...)
+	testSizes = append(testSizes, 64)
 
 	for _, p := range pools {
 		for _, l := range testSizes {
@@ -40,13 +46,8 @@ func TestSharedBufferPool(t *testing.T) {
 	}
 }
 
-func TestTieredBufferPool(t *testing.T) {
-	pool := &tieredBufferPool{
-		sizedPools: []*sizedBufferPool{
-			newBufferPool(10),
-			newBufferPool(20),
-		},
-	}
+func (s) TestBufferPoolIgnoresShortBuffers(t *testing.T) {
+	pool := mem.NewBufferPool(10, 20)
 	buf := pool.Get(1)
 	if cap(buf) != 10 {
 		t.Fatalf("Unexpected buffer capacity: %d", cap(buf))

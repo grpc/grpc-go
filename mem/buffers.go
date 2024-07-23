@@ -46,14 +46,17 @@ import (
 type Buffer struct {
 	data  []byte
 	refs  *atomic.Int32
-	free  func([]byte)
+	free  func()
 	freed bool
 }
 
 // NewBuffer creates a new buffer from the given data, initializing the reference
 // counter to 1. Note that the given data is not copied.
 func NewBuffer(data []byte, free func([]byte)) *Buffer {
-	b := &Buffer{data: data, refs: new(atomic.Int32), free: free}
+	b := &Buffer{data: data, refs: new(atomic.Int32)}
+	if free != nil {
+		b.free = func() { free(data) }
+	}
 	b.refs.Add(1)
 	return b
 }
@@ -104,7 +107,7 @@ func (b *Buffer) Free() {
 	b.freed = true
 	refs := b.refs.Add(-1)
 	if refs == 0 && b.free != nil {
-		b.free(b.data)
+		b.free()
 	}
 	b.data = nil
 }
@@ -130,27 +133,18 @@ func (b *Buffer) Split(n int) *Buffer {
 
 	b.refs.Add(1)
 
-	data := b.data
-	var free func([]byte)
-	if f := b.free; f != nil {
-		free = func(_ []byte) {
-			f(data)
-		}
-	}
-
-	b.data = data[:n]
-	b.free = free
-
-	return &Buffer{
-		data: data[n:],
+	split := &Buffer{
 		refs: b.refs,
-		free: free,
+		free: b.free,
 	}
+
+	b.data, split.data = b.data[:n], b.data[n:]
+
+	return split
 }
 
-// String returns a string representation of the buffer that contains the address
-// of the Buffer, the address of the first byte of ReadOnlyData (used to uniquely
-// identify the underlying buffer) and the length of the data.
+// String returns a string representation of the buffer. May be used for
+// debugging purposes.
 func (b *Buffer) String() string {
 	return fmt.Sprintf("mem.Buffer(%p, data: %p, length: %d)", b, b.ReadOnlyData(), len(b.ReadOnlyData()))
 }

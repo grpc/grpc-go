@@ -1,3 +1,21 @@
+/*
+ *
+ * Copyright 2024 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package mem
 
 import (
@@ -5,7 +23,13 @@ import (
 )
 
 // BufferSlice offers a means to represent data that spans one or more Buffer
-// instances.
+// instances. A BufferSlice is meant to be immutable after creation, and methods
+// like Ref create and return copies of the slice. This is why all methods have
+// value receivers rather than pointer receivers. Note that any of the methods
+// that read the underlying buffers such as Ref, Len or CopyTo etc., will panic
+// if any underlying buffers have already been freed. It is recommended to not
+// directly interact with any of the underlying buffers directly, rather such
+// interactions should be mediated through the various methods on this type.
 type BufferSlice []*Buffer
 
 // Len returns the sum of the length of all the Buffers in this slice.
@@ -32,7 +56,7 @@ func (s BufferSlice) Ref() BufferSlice {
 	return out
 }
 
-// Free invokes Buffer.Free on each Buffer in the slice.
+// Free invokes Buffer.Free() on each Buffer in the slice.
 func (s BufferSlice) Free() {
 	for _, b := range s {
 		b.Free()
@@ -82,14 +106,17 @@ var _ io.ReadCloser = (*Reader)(nil)
 
 // Reader exposes a BufferSlice's data as an io.Reader, allowing it to interface
 // with other parts systems. It also provides an additional convenience method
-// Remaining which returns the number of unread bytes remaining in the slice.
+// Remaining(), which returns the number of unread bytes remaining in the slice.
 //
 // Note that reading data from the reader does not free the underlying buffers!
 // Only calling Close once all data is read will free the buffers.
 type Reader struct {
-	data         BufferSlice
-	len          int
-	dataIdx, idx int
+	data BufferSlice
+	len  int
+	// The index of the current Buffer being read in data.
+	dataIdx int
+	// The index into data[dataIdx].ReadOnlyData().
+	bufferIdx int
 }
 
 // Remaining returns the number of unread bytes remaining in the slice.
@@ -105,24 +132,24 @@ func (r *Reader) Close() error {
 }
 
 func (r *Reader) Read(buf []byte) (n int, _ error) {
+	if r.len == 0 {
+		return 0, io.EOF
+	}
+
 	for len(buf) != 0 && r.len != 0 {
 		data := r.data[r.dataIdx].ReadOnlyData()
-		copied := copy(buf, data[r.idx:])
+		copied := copy(buf, data[r.bufferIdx:])
 		r.len -= copied
 
 		buf = buf[copied:]
 
 		if copied == len(data) {
 			r.dataIdx++
-			r.idx = 0
+			r.bufferIdx = 0
 		} else {
-			r.idx += copied
+			r.bufferIdx += copied
 		}
 		n += copied
-	}
-
-	if n == 0 {
-		return 0, io.EOF
 	}
 
 	return n, nil
