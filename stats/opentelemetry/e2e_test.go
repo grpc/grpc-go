@@ -52,9 +52,7 @@ func Test(t *testing.T) {
 // component and the server.
 func setup(t *testing.T, methodAttributeFilter func(string) bool) (*metric.ManualReader, *stubserver.StubServer) {
 	reader := metric.NewManualReader()
-	provider := metric.NewMeterProvider(
-		metric.WithReader(reader),
-	)
+	provider := metric.NewMeterProvider(metric.WithReader(reader))
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Payload: &testpb.Payload{
@@ -74,12 +72,12 @@ func setup(t *testing.T, methodAttributeFilter func(string) bool) (*metric.Manua
 	if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider:         provider,
-			Metrics:               opentelemetry.DefaultMetrics,
+			Metrics:               opentelemetry.DefaultMetrics(),
 			MethodAttributeFilter: methodAttributeFilter,
 		}})}, opentelemetry.DialOption(opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider: provider,
-			Metrics:       opentelemetry.DefaultMetrics,
+			Metrics:       opentelemetry.DefaultMetrics(),
 		},
 	})); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
