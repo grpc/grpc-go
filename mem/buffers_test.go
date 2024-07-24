@@ -211,27 +211,27 @@ func (s) TestSplit(t *testing.T) {
 		}
 	}
 
+	// Take a ref of the original buffer
 	ref1 := buf.Ref()
 
 	split1 := buf.Split(2)
 	checkBufData(buf, data[:2])
 	checkBufData(split1, data[2:])
+	// Check that even though buf was split, the reference wasn't modified
 	checkBufData(ref1, data)
+	ref1.Free()
 
+	// Check that splitting the buffer more than once works as intended.
 	split2 := split1.Split(1)
 	checkBufData(split1, data[2:3])
 	checkBufData(split2, data[3:])
 
-	splitRef := split1.Ref()
-	ref2 := buf.Ref()
-	split1.Free()
+	// If any of the following frees actually free the buffer, the test will fail.
 	buf.Free()
-	ref1.Free()
-	splitRef.Free()
 	split2.Free()
 
 	ready = true
-	ref2.Free()
+	split1.Free()
 
 	if !freed {
 		t.Fatalf("Buffer never freed")
