@@ -19,3 +19,10 @@ E.g.:
 
 Note that this is not recommended, and the option is only provided to restore
 backward compatibility with previously-generated code.
+
+When embedding the `Unimplemented<ServiceName>Server` in a struct that
+implements the service, it should be embedded by _value_ instead of as a
+_pointer_.  If it is embedded as a pointer, it must be assigned to a valid,
+non-nil pointer or else unimplemented methods would panic when called.  This is
+tested at service registration time, and will lead to a panic in
+`Register<ServiceName>Server` if it is not embedded properly.

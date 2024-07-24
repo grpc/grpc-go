@@ -104,9 +104,12 @@ type MetricsServiceServer interface {
 	mustEmbedUnimplementedMetricsServiceServer()
 }
 
-// UnimplementedMetricsServiceServer must be embedded to have forward compatible implementations.
-type UnimplementedMetricsServiceServer struct {
-}
+// UnimplementedMetricsServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedMetricsServiceServer struct{}
 
 func (UnimplementedMetricsServiceServer) GetAllGauges(*EmptyMessage, grpc.ServerStreamingServer[GaugeResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method GetAllGauges not implemented")
@@ -115,6 +118,7 @@ func (UnimplementedMetricsServiceServer) GetGauge(context.Context, *GaugeRequest
 	return nil, status.Errorf(codes.Unimplemented, "method GetGauge not implemented")
 }
 func (UnimplementedMetricsServiceServer) mustEmbedUnimplementedMetricsServiceServer() {}
+func (UnimplementedMetricsServiceServer) testEmbeddedByValue()                        {}
 
 // UnsafeMetricsServiceServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to MetricsServiceServer will
@@ -124,6 +128,13 @@ type UnsafeMetricsServiceServer interface {
 }
 
 func RegisterMetricsServiceServer(s grpc.ServiceRegistrar, srv MetricsServiceServer) {
+	// If the following call pancis, it indicates UnimplementedMetricsServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
 	s.RegisterService(&MetricsService_ServiceDesc, srv)
 }
 

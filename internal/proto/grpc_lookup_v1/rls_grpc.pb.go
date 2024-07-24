@@ -71,14 +71,18 @@ type RouteLookupServiceServer interface {
 	mustEmbedUnimplementedRouteLookupServiceServer()
 }
 
-// UnimplementedRouteLookupServiceServer must be embedded to have forward compatible implementations.
-type UnimplementedRouteLookupServiceServer struct {
-}
+// UnimplementedRouteLookupServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedRouteLookupServiceServer struct{}
 
 func (UnimplementedRouteLookupServiceServer) RouteLookup(context.Context, *RouteLookupRequest) (*RouteLookupResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RouteLookup not implemented")
 }
 func (UnimplementedRouteLookupServiceServer) mustEmbedUnimplementedRouteLookupServiceServer() {}
+func (UnimplementedRouteLookupServiceServer) testEmbeddedByValue()                            {}
 
 // UnsafeRouteLookupServiceServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to RouteLookupServiceServer will
@@ -88,6 +92,13 @@ type UnsafeRouteLookupServiceServer interface {
 }
 
 func RegisterRouteLookupServiceServer(s grpc.ServiceRegistrar, srv RouteLookupServiceServer) {
+	// If the following call pancis, it indicates UnimplementedRouteLookupServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
 	s.RegisterService(&RouteLookupService_ServiceDesc, srv)
 }
 
