@@ -310,9 +310,10 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	}
 	serviceDescVar := service.GoName + "_ServiceDesc"
 	g.P("func Register", service.GoName, "Server(s ", grpcPackage.Ident("ServiceRegistrar"), ", srv ", serverType, ") {")
-	g.P("// If the following call pancis, it indicates Unimplemented", serverType, " was embedded by pointer")
-	g.P("// and is nil.  This will cause panics if an unimplemented method is ever invoked, so we test this")
-	g.P("// at initialization time to prevent it from happening at runtime later due to I/O.")
+	g.P("// If the following call pancis, it indicates Unimplemented", serverType, " was")
+	g.P("// embedded by pointer and is nil.  This will cause panics if an")
+	g.P("// unimplemented method is ever invoked, so we test this at initialization")
+	g.P("// time to prevent it from happening at runtime later due to I/O.")
 	g.P("if t, ok := srv.(interface { testEmbeddedByValue() }); ok {")
 	g.P("t.testEmbeddedByValue()")
 	g.P("}")
