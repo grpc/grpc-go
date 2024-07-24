@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -659,6 +660,19 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 	clientConnUpdateHook = func() { clientConnUpdateDone <- struct{}{} }
 	defer func() { clientConnUpdateHook = origClientConnUpdateHook }()
 
+	// Override the newPickerGenerated to measure the number of times
+	// the picker is generated because state updates can be inhibited.
+	pckrSentBeforeClientConnUpdate := make(chan struct{}, 1)
+	// Block udpates until the last configuration update
+	blkUpdates := atomic.Bool{}
+	origNewPickerGenerated := newPickerGenerated
+	newPickerGenerated = func() {
+		if blkUpdates.Load() == true {
+			pckrSentBeforeClientConnUpdate <- struct{}{}
+		}
+	}
+	defer func() { newPickerGenerated = origNewPickerGenerated }()
+
 	// Override the cache entry size func, and always return 1.
 	origEntrySizeFunc := computeDataCacheEntrySize
 	computeDataCacheEntrySize = func(cacheKey, *cacheEntry) int64 { return 1 }
@@ -773,12 +787,19 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 		}
 		ccCh <- cc
 	}()
-	<-clientConnUpdateDone
-	cc := <-ccCh
-	defer cc.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+
+	select {
+	case <-clientConnUpdateDone:
+	case <-ctx.Done():
+		t.Fatalf("error waiting for the client conn update on initial configuration udpate: %v", ctx.Err().Error())
+	}
+
+	cc := <-ccCh
+	defer cc.Close()
+
 	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, nil)
 	t.Logf("Verifying if RPC failed when listener is stopped.")
 
@@ -790,38 +811,26 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh2)
 	verifyRLSRequest(t, rlsReqCh, true)
 
-	// Override the newPickerGenerated to measure the number of times
-	// the picker is generated because state updates can be inhibited.
-	//
-	// Note: This needs to be initialised here and not in the beginning
-	// of the test, as otherwise for every RPC call we make, it'd have
-	// affected total picker count.
-	pckrSentBeforeClientConnUpdate := make(chan struct{}, 1)
-	totalPickerGenerated := 0
-	origNewPickerGenerated := newPickerGenerated
-	newPickerGenerated = func() {
-		totalPickerGenerated++
-		if totalPickerGenerated == 2 {
-			pckrSentBeforeClientConnUpdate <- struct{}{}
-		}
-	}
-	defer func() { newPickerGenerated = origNewPickerGenerated }()
-
 	// Setting the size to 1 will cause the entries to be evicted.
 	scJSON1 := fmt.Sprintf(configJSON, topLevelBalancerName, headers, rlsServer.Address, 1, childPolicyName)
 	sc1 := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON1)
+	blkUpdates.Store(true)
 	go r.UpdateState(resolver.State{ServiceConfig: sc1})
 	select {
 	case <-pckrSentBeforeClientConnUpdate:
 	case <-clientConnUpdateDone:
 		t.Fatalf("Client conn update was completed before picker update.")
 	case <-ctx.Done():
-		t.Errorf("client conn update could not complete: %v", ctx.Err().Error())
+		t.Errorf("error waiting for picker update on receipt of configuration udpate: %v", ctx.Err().Error())
 	}
 
 	// Once picker was updated, wait for client conn update
 	// to complete.
-	<-clientConnUpdateDone
+	select {
+	case <-clientConnUpdateDone:
+	case <-ctx.Done():
+		t.Errorf("client conn update could not complete: %v", ctx.Err().Error())
+	}
 }
 
 // TestDataCachePurging verifies that the LB policy periodically evicts expired
