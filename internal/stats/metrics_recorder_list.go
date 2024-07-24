@@ -49,10 +49,14 @@ func NewMetricsRecorderList(shs []stats.Handler) *MetricsRecorderList {
 	}
 }
 
-func (l *MetricsRecorderList) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
-	if got, want := len(handle.Labels)+len(handle.OptionalLabels), len(labels); got != want {
-		logger.Infof("length of labels passed to RecordInt64Count incorrect got: %v, want: %v", got, want)
+func verifyLabels(labels []string, optionalLabels []string, labelsRecv ...string) {
+	if got, want := len(labelsRecv), len(labels)+len(optionalLabels); got != want {
+		logger.Fatalf("Length of labels passed to Record incorrect, got: %v, want: %v.", got, want)
 	}
+}
+
+func (l *MetricsRecorderList) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
+	verifyLabels(handle.Labels, handle.OptionalLabels, labels...)
 
 	for _, metricRecorder := range l.metricsRecorders {
 		metricRecorder.RecordInt64Count(handle, incr, labels...)
@@ -60,9 +64,7 @@ func (l *MetricsRecorderList) RecordInt64Count(handle *estats.Int64CountHandle, 
 }
 
 func (l *MetricsRecorderList) RecordFloat64Count(handle *estats.Float64CountHandle, incr float64, labels ...string) {
-	if got, want := len(handle.Labels)+len(handle.OptionalLabels), len(labels); got != want {
-		logger.Infof("length of labels passed to RecordFloat64Count incorrect got: %v, want: %v", got, want)
-	}
+	verifyLabels(handle.Labels, handle.OptionalLabels, labels...)
 
 	for _, metricRecorder := range l.metricsRecorders {
 		metricRecorder.RecordFloat64Count(handle, incr, labels...)
@@ -70,9 +72,7 @@ func (l *MetricsRecorderList) RecordFloat64Count(handle *estats.Float64CountHand
 }
 
 func (l *MetricsRecorderList) RecordInt64Histo(handle *estats.Int64HistoHandle, incr int64, labels ...string) {
-	if got, want := len(handle.Labels)+len(handle.OptionalLabels), len(labels); got != want {
-		logger.Infof("length of labels passed to RecordInt64Histo incorrect got: %v, want: %v", got, want)
-	}
+	verifyLabels(handle.Labels, handle.OptionalLabels, labels...)
 
 	for _, metricRecorder := range l.metricsRecorders {
 		metricRecorder.RecordInt64Histo(handle, incr, labels...)
@@ -80,9 +80,7 @@ func (l *MetricsRecorderList) RecordInt64Histo(handle *estats.Int64HistoHandle, 
 }
 
 func (l *MetricsRecorderList) RecordFloat64Histo(handle *estats.Float64HistoHandle, incr float64, labels ...string) {
-	if got, want := len(handle.Labels)+len(handle.OptionalLabels), len(labels); got != want {
-		logger.Infof("length of labels passed to RecordFloat64Histo incorrect got: %v, want: %v", got, want)
-	}
+	verifyLabels(handle.Labels, handle.OptionalLabels, labels...)
 
 	for _, metricRecorder := range l.metricsRecorders {
 		metricRecorder.RecordFloat64Histo(handle, incr, labels...)
@@ -90,9 +88,7 @@ func (l *MetricsRecorderList) RecordFloat64Histo(handle *estats.Float64HistoHand
 }
 
 func (l *MetricsRecorderList) RecordInt64Gauge(handle *estats.Int64GaugeHandle, incr int64, labels ...string) {
-	if got, want := len(handle.Labels)+len(handle.OptionalLabels), len(labels); got != want {
-		logger.Infof("length of labels passed to RecordInt64Gauge incorrect got: %v, want: %v", got, want)
-	}
+	verifyLabels(handle.Labels, handle.OptionalLabels, labels...)
 
 	for _, metricRecorder := range l.metricsRecorders {
 		metricRecorder.RecordInt64Gauge(handle, incr, labels...)

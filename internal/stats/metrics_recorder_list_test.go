@@ -16,21 +16,27 @@
  *
  */
 
-// Package test implements an e2e test for the Metrics Recorder List component
-// of the Client Conn, and a TestMetricsRecorder utility.
-package test
+// Package stats_test implements an e2e test for the Metrics Recorder List
+// component of the Client Conn.
+package stats_test
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"strings"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/credentials/insecure"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
+	istats "google.golang.org/grpc/internal/stats"
+	"google.golang.org/grpc/internal/testutils/stats"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
@@ -48,14 +54,85 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+var (
+	intCountHandle = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:           "simple counter",
+		Description:    "sum of all emissions from tests",
+		Unit:           "int",
+		Labels:         []string{"int counter label"},
+		OptionalLabels: []string{"int counter optional label"},
+		Default:        false,
+	})
+	floatCountHandle = estats.RegisterFloat64Count(estats.MetricDescriptor{
+		Name:           "float counter",
+		Description:    "sum of all emissions from tests",
+		Unit:           "float",
+		Labels:         []string{"float counter label"},
+		OptionalLabels: []string{"float counter optional label"},
+		Default:        false,
+	})
+	intHistoHandle = estats.RegisterInt64Histo(estats.MetricDescriptor{
+		Name:           "int histo",
+		Description:    "sum of all emissions from tests",
+		Unit:           "int",
+		Labels:         []string{"int histo label"},
+		OptionalLabels: []string{"int histo optional label"},
+		Default:        false,
+	})
+	floatHistoHandle = estats.RegisterFloat64Histo(estats.MetricDescriptor{
+		Name:           "float histo",
+		Description:    "sum of all emissions from tests",
+		Unit:           "float",
+		Labels:         []string{"float histo label"},
+		OptionalLabels: []string{"float histo optional label"},
+		Default:        false,
+	})
+	intGaugeHandle = estats.RegisterInt64Gauge(estats.MetricDescriptor{
+		Name:           "simple gauge",
+		Description:    "the most recent int emitted by test",
+		Unit:           "int",
+		Labels:         []string{"int gauge label"},
+		OptionalLabels: []string{"int gauge optional label"},
+		Default:        false,
+	})
+)
+
+func init() {
+	balancer.Register(recordingLoadBalancerBuilder{})
+}
+
+const recordingLoadBalancerName = "recording_load_balancer"
+
+type recordingLoadBalancerBuilder struct{}
+
+func (recordingLoadBalancerBuilder) Name() string {
+	return recordingLoadBalancerName
+}
+
+func (recordingLoadBalancerBuilder) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
+	intCountHandle.Record(bOpts.MetricsRecorder, 1, "int counter label val", "int counter optional label val")
+	floatCountHandle.Record(bOpts.MetricsRecorder, 2, "float counter label val", "float counter optional label val")
+	intHistoHandle.Record(bOpts.MetricsRecorder, 3, "int histo label val", "int histo optional label val")
+	floatHistoHandle.Record(bOpts.MetricsRecorder, 4, "float histo label val", "float histo optional label val")
+	intGaugeHandle.Record(bOpts.MetricsRecorder, 5, "int gauge label val", "int gauge optional label val")
+
+	return &recordingLoadBalancer{
+		Balancer: balancer.Get(pickfirst.Name).Build(cc, bOpts),
+	}
+}
+
+type recordingLoadBalancer struct {
+	balancer.Balancer
+}
+
 // TestMetricsRecorderList tests the metrics recorder list functionality of the
 // ClientConn. It configures a global and local stats handler Dial Option. These
 // stats handlers implement the MetricsRecorder interface. It also configures a
 // balancer which registers metrics and records on metrics at build time. This
 // test then asserts that the recorded metrics show up on both configured stats
-// handlers, and that metrics calls with the incorrect number of labels do not
-// make their way to stats handlers.
+// handlers.
 func (s) TestMetricsRecorderList(t *testing.T) {
+	internal.SnapshotMetricRegistryForTesting.(func(t *testing.T))(t)
 	mr := manual.NewBuilderWithScheme("test-metrics-recorder-list")
 	defer mr.Close()
 
@@ -67,8 +144,8 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 
 	// Create two stats.Handlers which also implement MetricsRecorder, configure
 	// one as a global dial option and one as a local dial option.
-	mr1 := NewTestMetricsRecorder(t, []string{})
-	mr2 := NewTestMetricsRecorder(t, []string{})
+	mr1 := stats.NewTestMetricsRecorder(t, []string{})
+	mr2 := stats.NewTestMetricsRecorder(t, []string{})
 
 	defer internal.ClearGlobalDialOptions()
 	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(grpc.WithStatsHandler(mr1))
@@ -87,7 +164,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 	// to record.
 	tsc.UnaryCall(ctx, &testpb.SimpleRequest{})
 
-	mdWant := MetricsData{
+	mdWant := stats.MetricsData{
 		Handle:    (*estats.MetricDescriptor)(intCountHandle),
 		IntIncr:   1,
 		LabelKeys: []string{"int counter label", "int counter optional label"},
@@ -96,7 +173,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 	mr1.WaitForInt64Count(ctx, mdWant)
 	mr2.WaitForInt64Count(ctx, mdWant)
 
-	mdWant = MetricsData{
+	mdWant = stats.MetricsData{
 		Handle:    (*estats.MetricDescriptor)(floatCountHandle),
 		FloatIncr: 2,
 		LabelKeys: []string{"float counter label", "float counter optional label"},
@@ -105,7 +182,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 	mr1.WaitForFloat64Count(ctx, mdWant)
 	mr2.WaitForFloat64Count(ctx, mdWant)
 
-	mdWant = MetricsData{
+	mdWant = stats.MetricsData{
 		Handle:    (*estats.MetricDescriptor)(intHistoHandle),
 		IntIncr:   3,
 		LabelKeys: []string{"int histo label", "int histo optional label"},
@@ -114,7 +191,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 	mr1.WaitForInt64Histo(ctx, mdWant)
 	mr2.WaitForInt64Histo(ctx, mdWant)
 
-	mdWant = MetricsData{
+	mdWant = stats.MetricsData{
 		Handle:    (*estats.MetricDescriptor)(floatHistoHandle),
 		FloatIncr: 4,
 		LabelKeys: []string{"float histo label", "float histo optional label"},
@@ -122,12 +199,36 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 	}
 	mr1.WaitForFloat64Histo(ctx, mdWant)
 	mr2.WaitForFloat64Histo(ctx, mdWant)
-	mdWant = MetricsData{
+	mdWant = stats.MetricsData{
 		Handle:    (*estats.MetricDescriptor)(intGaugeHandle),
-		IntIncr:   5, // Should ignore the 7 metrics recording point because emits wrong number of labels.
+		IntIncr:   5,
 		LabelKeys: []string{"int gauge label", "int gauge optional label"},
 		LabelVals: []string{"int gauge label val", "int gauge optional label val"},
 	}
 	mr1.WaitForInt64Gauge(ctx, mdWant)
 	mr2.WaitForInt64Gauge(ctx, mdWant)
+}
+
+// TestMetricRecorderListPanic tests that the metrics recorder list panics if
+// received the wrong number of labels for a particular metric.
+func (s) TestMetricRecorderListPanic(t *testing.T) {
+	internal.SnapshotMetricRegistryForTesting.(func(t *testing.T))(t)
+	intCountHandle := estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:           "simple counter",
+		Description:    "sum of all emissions from tests",
+		Unit:           "int",
+		Labels:         []string{"int counter label"},
+		OptionalLabels: []string{"int counter optional label"},
+		Default:        false,
+	})
+	mrl := istats.NewMetricsRecorderList(nil)
+
+	want := "Length of labels passed to Record incorrect, got: 1, want: 2."
+	defer func() {
+		if r := recover(); !strings.Contains(fmt.Sprint(r), want) {
+			t.Errorf("expected panic contains %q, got %q", want, r)
+		}
+	}()
+
+	intCountHandle.Record(mrl, 1, "only one label")
 }

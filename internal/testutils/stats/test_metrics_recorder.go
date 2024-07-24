@@ -16,9 +16,8 @@
  *
  */
 
-// Package test implements an e2e test for the Metrics Recorder List component
-// of the Client Conn, and a TestMetricsRecorder utility.
-package test
+// Package stats implements a TestMetricsRecorder utility.
+package stats
 
 import (
 	"context"
