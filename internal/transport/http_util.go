@@ -36,6 +36,7 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+
 	"google.golang.org/grpc/codes"
 )
 
@@ -317,32 +318,34 @@ func newBufWriter(conn net.Conn, batchSize int, pool *sync.Pool) *bufWriter {
 	return w
 }
 
-func (w *bufWriter) Write(b []byte) (n int, err error) {
+func (w *bufWriter) Write(b []byte) (int, error) {
 	if w.err != nil {
 		return 0, w.err
 	}
 	if w.batchSize == 0 { // Buffer has been disabled.
-		n, err = w.conn.Write(b)
+		n, err := w.conn.Write(b)
 		return n, toIOError(err)
 	}
 	if w.buf == nil {
 		b := w.pool.Get().(*[]byte)
 		w.buf = *b
 	}
-	var bytesWritten int
+	written := 0
 	for len(b) > 0 {
-		nn := copy(w.buf[w.offset:], b)
-		b = b[nn:]
-		w.offset += nn
-		if w.offset >= w.batchSize {
-			bytesWritten, err = w.flushKeepBuffer()
-			n += bytesWritten
-			if err != nil {
-				return n, err
-			}
+		copied := copy(w.buf[w.offset:], b)
+		b = b[copied:]
+		w.offset += copied
+		if w.offset < w.batchSize {
+			written += copied
+			continue
 		}
+		flushed, err := w.flushKeepBuffer()
+		if err != nil {
+			return written + flushed, err
+		}
+		written += flushed
 	}
-	return n, nil
+	return written, nil
 }
 
 func (w *bufWriter) Flush() error {
