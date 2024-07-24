@@ -75,14 +75,18 @@ type GreeterServer interface {
 	mustEmbedUnimplementedGreeterServer()
 }
 
-// UnimplementedGreeterServer must be embedded to have forward compatible implementations.
-type UnimplementedGreeterServer struct {
-}
+// UnimplementedGreeterServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedGreeterServer struct{}
 
 func (UnimplementedGreeterServer) SayHello(context.Context, *HelloRequest) (*HelloReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SayHello not implemented")
 }
 func (UnimplementedGreeterServer) mustEmbedUnimplementedGreeterServer() {}
+func (UnimplementedGreeterServer) testEmbeddedByValue()                 {}
 
 // UnsafeGreeterServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to GreeterServer will
@@ -92,6 +96,12 @@ type UnsafeGreeterServer interface {
 }
 
 func RegisterGreeterServer(s grpc.ServiceRegistrar, srv GreeterServer) {
+	// If the following call pancis, it indicates UnimplementedGreeterServer was embedded by pointer
+	// and is nil.  This will cause panics if an unimplemented method is ever invoked, so we test this
+	// at initialization time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
 	s.RegisterService(&Greeter_ServiceDesc, srv)
 }
 
