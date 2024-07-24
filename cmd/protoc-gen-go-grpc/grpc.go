@@ -84,9 +84,12 @@ func (serviceGenerateHelper) generateUnimplementedServerType(gen *protogen.Plugi
 		mustOrShould = "should"
 	}
 	// Server Unimplemented struct for forward compatibility.
-	g.P("// Unimplemented", serverType, " ", mustOrShould, " be embedded to have forward compatible implementations.")
-	g.P("type Unimplemented", serverType, " struct {")
-	g.P("}")
+	g.P("// Unimplemented", serverType, " ", mustOrShould, " be embedded to have")
+	g.P("// forward compatible implementations.")
+	g.P("//")
+	g.P("// NOTE: this should be embedded by value instead of pointer to avoid a nil")
+	g.P("// pointer dereference when methods are called.")
+	g.P("type Unimplemented", serverType, " struct {}")
 	g.P()
 	for _, method := range service.Methods {
 		nilArg := ""
@@ -100,6 +103,7 @@ func (serviceGenerateHelper) generateUnimplementedServerType(gen *protogen.Plugi
 	if *requireUnimplemented {
 		g.P("func (Unimplemented", serverType, ") mustEmbedUnimplemented", serverType, "() {}")
 	}
+	g.P("func (Unimplemented", serverType, ") testEmbeddedByValue() {}")
 	g.P()
 }
 
@@ -306,6 +310,12 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	}
 	serviceDescVar := service.GoName + "_ServiceDesc"
 	g.P("func Register", service.GoName, "Server(s ", grpcPackage.Ident("ServiceRegistrar"), ", srv ", serverType, ") {")
+	g.P("// If the following call pancis, it indicates Unimplemented", serverType, " was embedded by pointer")
+	g.P("// and is nil.  This will cause panics if an unimplemented method is ever invoked, so we test this")
+	g.P("// at initialization time to prevent it from happening at runtime later due to I/O.")
+	g.P("if t, ok := srv.(interface { testEmbeddedByValue() }); ok {")
+	g.P("t.testEmbeddedByValue()")
+	g.P("}")
 	g.P("s.RegisterService(&", serviceDescVar, `, srv)`)
 	g.P("}")
 	g.P()
