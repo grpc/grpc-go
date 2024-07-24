@@ -150,9 +150,9 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 	var labels *istats.Labels
 	if labels = istats.GetLabels(ctx); labels == nil {
 		labels = &istats.Labels{
-			// The defaults for all the per call label from a plugin that
-			// executes on callpath that this OpenTelemetry component currently
-			// supports.
+			// The defaults for all the per call labels from a plugin that
+			// executes on the callpath that this OpenTelemetry component
+			// currently supports.
 			TelemetryLabels: map[string]string{
 				"grpc.lb.locality": "",
 			},
