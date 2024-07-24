@@ -172,9 +172,10 @@ type UnsafeHealthServer interface {
 }
 
 func RegisterHealthServer(s grpc.ServiceRegistrar, srv HealthServer) {
-	// If the following call pancis, it indicates UnimplementedHealthServer was embedded by pointer
-	// and is nil.  This will cause panics if an unimplemented method is ever invoked, so we test this
-	// at initialization time to prevent it from happening at runtime later due to I/O.
+	// If the following call pancis, it indicates UnimplementedHealthServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}

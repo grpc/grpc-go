@@ -265,9 +265,10 @@ type UnsafeTestServiceServer interface {
 }
 
 func RegisterTestServiceServer(s grpc.ServiceRegistrar, srv TestServiceServer) {
-	// If the following call pancis, it indicates UnimplementedTestServiceServer was embedded by pointer
-	// and is nil.  This will cause panics if an unimplemented method is ever invoked, so we test this
-	// at initialization time to prevent it from happening at runtime later due to I/O.
+	// If the following call pancis, it indicates UnimplementedTestServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
@@ -495,9 +496,10 @@ type UnsafeUnimplementedServiceServer interface {
 }
 
 func RegisterUnimplementedServiceServer(s grpc.ServiceRegistrar, srv UnimplementedServiceServer) {
-	// If the following call pancis, it indicates UnimplementedUnimplementedServiceServer was embedded by pointer
-	// and is nil.  This will cause panics if an unimplemented method is ever invoked, so we test this
-	// at initialization time to prevent it from happening at runtime later due to I/O.
+	// If the following call pancis, it indicates UnimplementedUnimplementedServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
@@ -616,9 +618,10 @@ type UnsafeReconnectServiceServer interface {
 }
 
 func RegisterReconnectServiceServer(s grpc.ServiceRegistrar, srv ReconnectServiceServer) {
-	// If the following call pancis, it indicates UnimplementedReconnectServiceServer was embedded by pointer
-	// and is nil.  This will cause panics if an unimplemented method is ever invoked, so we test this
-	// at initialization time to prevent it from happening at runtime later due to I/O.
+	// If the following call pancis, it indicates UnimplementedReconnectServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
@@ -764,9 +767,10 @@ type UnsafeLoadBalancerStatsServiceServer interface {
 }
 
 func RegisterLoadBalancerStatsServiceServer(s grpc.ServiceRegistrar, srv LoadBalancerStatsServiceServer) {
-	// If the following call pancis, it indicates UnimplementedLoadBalancerStatsServiceServer was embedded by pointer
-	// and is nil.  This will cause panics if an unimplemented method is ever invoked, so we test this
-	// at initialization time to prevent it from happening at runtime later due to I/O.
+	// If the following call pancis, it indicates UnimplementedLoadBalancerStatsServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
@@ -931,9 +935,10 @@ type UnsafeHookServiceServer interface {
 }
 
 func RegisterHookServiceServer(s grpc.ServiceRegistrar, srv HookServiceServer) {
-	// If the following call pancis, it indicates UnimplementedHookServiceServer was embedded by pointer
-	// and is nil.  This will cause panics if an unimplemented method is ever invoked, so we test this
-	// at initialization time to prevent it from happening at runtime later due to I/O.
+	// If the following call pancis, it indicates UnimplementedHookServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
@@ -1113,9 +1118,10 @@ type UnsafeXdsUpdateHealthServiceServer interface {
 }
 
 func RegisterXdsUpdateHealthServiceServer(s grpc.ServiceRegistrar, srv XdsUpdateHealthServiceServer) {
-	// If the following call pancis, it indicates UnimplementedXdsUpdateHealthServiceServer was embedded by pointer
-	// and is nil.  This will cause panics if an unimplemented method is ever invoked, so we test this
-	// at initialization time to prevent it from happening at runtime later due to I/O.
+	// If the following call pancis, it indicates UnimplementedXdsUpdateHealthServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
@@ -1265,9 +1271,10 @@ type UnsafeXdsUpdateClientConfigureServiceServer interface {
 }
 
 func RegisterXdsUpdateClientConfigureServiceServer(s grpc.ServiceRegistrar, srv XdsUpdateClientConfigureServiceServer) {
-	// If the following call pancis, it indicates UnimplementedXdsUpdateClientConfigureServiceServer was embedded by pointer
-	// and is nil.  This will cause panics if an unimplemented method is ever invoked, so we test this
-	// at initialization time to prevent it from happening at runtime later due to I/O.
+	// If the following call pancis, it indicates UnimplementedXdsUpdateClientConfigureServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
