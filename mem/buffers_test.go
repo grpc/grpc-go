@@ -43,7 +43,7 @@ func Test(t *testing.T) {
 
 // Tests that a buffer created with NewBuffer, which when later freed, invokes
 // the free function with the correct data.
-func (s) TestNewBuffer_Free(t *testing.T) {
+func (s) TestBuffer_NewBufferAndFree(t *testing.T) {
 	data := "abcd"
 	errCh := make(chan error, 1)
 	freeF := func(got []byte) {
@@ -74,7 +74,7 @@ func (s) TestNewBuffer_Free(t *testing.T) {
 // Tests that a buffer created with NewBuffer, on which an additional reference
 // is acquired, which when later freed, invokes the free function with the
 // correct data, but only after all references are released.
-func (s) TestNewBuffer_RefAndFree(t *testing.T) {
+func (s) TestBuffer_NewBufferRefAndFree(t *testing.T) {
 	data := "abcd"
 	errCh := make(chan error, 1)
 	freeF := func(got []byte) {
@@ -136,7 +136,7 @@ func newTestBufferPool() *testBufferPool {
 
 // Tests that a buffer created with Copy, which when later freed, returns the underlying
 // byte slice to the buffer pool.
-func (s) TestCopy_Free(t *testing.T) {
+func (s) TestBufer_CopyAndFree(t *testing.T) {
 	data := "abcd"
 	testPool := newTestBufferPool()
 
@@ -160,7 +160,7 @@ func (s) TestCopy_Free(t *testing.T) {
 // Tests that a buffer created with Copy, on which an additional reference is
 // acquired, which when later freed, returns the underlying byte slice to the
 // buffer pool.
-func (s) TestCopy_RefAndFree(t *testing.T) {
+func (s) TestBuffer_CopyRefAndFree(t *testing.T) {
 	data := "abcd"
 	testPool := newTestBufferPool()
 
@@ -195,7 +195,7 @@ func (s) TestCopy_RefAndFree(t *testing.T) {
 	}
 }
 
-func (s) TestSplit(t *testing.T) {
+func (s) TestBuffer_Split(t *testing.T) {
 	ready := false
 	freed := false
 	data := []byte{1, 2, 3, 4}
@@ -249,7 +249,7 @@ func checkForPanic(t *testing.T, wantErr string) {
 	}
 }
 
-func (s) TestReadOnlyDataAfterFree(t *testing.T) {
+func (s) TestBuffer_ReadOnlyDataAfterFree(t *testing.T) {
 	// Verify that reading before freeing does not panic.
 	buf := mem.NewBuffer([]byte("abcd"), nil)
 	buf.ReadOnlyData()
@@ -259,7 +259,7 @@ func (s) TestReadOnlyDataAfterFree(t *testing.T) {
 	buf.ReadOnlyData()
 }
 
-func (s) TestRefAfterFree(t *testing.T) {
+func (s) TestBuffer_RefAfterFree(t *testing.T) {
 	// Verify that acquiring a ref before freeing does not panic.
 	buf := mem.NewBuffer([]byte("abcd"), nil)
 	bufRef := buf.Ref()
@@ -270,7 +270,7 @@ func (s) TestRefAfterFree(t *testing.T) {
 	buf.Ref()
 }
 
-func (s) TestSplitAfterFree(t *testing.T) {
+func (s) TestBuffer_SplitAfterFree(t *testing.T) {
 	// Verify that splitting before freeing does not panic.
 	buf := mem.NewBuffer([]byte("abcd"), nil)
 	bufSplit := buf.Split(2)
@@ -281,7 +281,7 @@ func (s) TestSplitAfterFree(t *testing.T) {
 	buf.Split(1)
 }
 
-func (s) TestFreeAfterFree(t *testing.T) {
+func (s) TestBuffer_FreeAfterFree(t *testing.T) {
 	buf := mem.NewBuffer([]byte("abcd"), nil)
 	if buf.Len() != 4 {
 		t.Fatalf("Buffer length is %d, want 4", buf.Len())
