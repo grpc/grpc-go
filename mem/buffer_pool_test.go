@@ -38,7 +38,7 @@ func (s) TestBufferPool(t *testing.T) {
 		for _, l := range testSizes {
 			bs := p.Get(l)
 			if len(bs) != l {
-				t.Fatalf("Expected buffer of length %d, got %d", l, len(bs))
+				t.Fatalf("Get(%d) returned buffer of length %d, want %d", l, len(bs), l)
 			}
 
 			p.Put(bs)
@@ -50,7 +50,7 @@ func (s) TestBufferPoolIgnoresShortBuffers(t *testing.T) {
 	pool := mem.NewBufferPool(10, 20)
 	buf := pool.Get(1)
 	if cap(buf) != 10 {
-		t.Fatalf("Unexpected buffer capacity: %d", cap(buf))
+		t.Fatalf("Get(1) returned buffer with capacity: %d, want 10", cap(buf))
 	}
 
 	// Insert a short buffer into the pool, which is currently empty.

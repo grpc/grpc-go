@@ -25,11 +25,17 @@ import (
 // BufferSlice offers a means to represent data that spans one or more Buffer
 // instances. A BufferSlice is meant to be immutable after creation, and methods
 // like Ref create and return copies of the slice. This is why all methods have
-// value receivers rather than pointer receivers. Note that any of the methods
-// that read the underlying buffers such as Ref, Len or CopyTo etc., will panic
-// if any underlying buffers have already been freed. It is recommended to not
-// directly interact with any of the underlying buffers directly, rather such
-// interactions should be mediated through the various methods on this type.
+// value receivers rather than pointer receivers.
+//
+// Note that any of the methods that read the underlying buffers such as Ref,
+// Len or CopyTo etc., will panic if any underlying buffers have already been
+// freed. It is recommended to not directly interact with any of the underlying
+// buffers directly, rather such interactions should be mediated through the
+// various methods on this type.
+//
+// By convention, any APIs that return (mem.BufferSlice, error) should reduce
+// the burden on the caller by never returning a mem.BufferSlice that needs to
+// be freed if the error is non-nil, unless explicitly stated.
 type BufferSlice []*Buffer
 
 // Len returns the sum of the length of all the Buffers in this slice.

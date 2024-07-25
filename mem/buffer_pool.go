@@ -39,8 +39,7 @@ var defaultBufferPoolSizes = []int{
 	4 << 10,  // 4KB (go page size)
 	16 << 10, // 16KB (max HTTP/2 frame size used by gRPC)
 	32 << 10, // 32KB (default buffer size for io.Copy)
-	// TODO: Report the buffer sizes requested with Get to tune this properly.
-	1 << 20, // 1MB
+	1 << 20,  // 1MB
 }
 
 var defaultBufferPool = func() *atomic.Pointer[BufferPool] {
@@ -113,8 +112,8 @@ func (p *tieredBufferPool) getPool(size int) BufferPool {
 // capacity of 16kb. Note that however it does not support returning larger
 // buffers and in fact panics if such a buffer is requested. Because of this,
 // this BufferPool implementation is not meant to be used on its own and rather
-// is intended to be embedded in a tieredBufferPool such that Get is only invoked
-// when the required size is smaller than or equal to defaultSize.
+// is intended to be embedded in a tieredBufferPool such that Get is only
+// invoked when the required size is smaller than or equal to defaultSize.
 type sizedBufferPool struct {
 	pool        sync.Pool
 	defaultSize int
@@ -127,8 +126,9 @@ func (p *sizedBufferPool) Get(size int) []byte {
 
 func (p *sizedBufferPool) Put(buf []byte) {
 	if cap(buf) < p.defaultSize {
-		// Ignore buffers that are too small to fit in the pool. Otherwise, when Get is
-		// called it will panic as it tries to index outside the bounds of the buffer.
+		// Ignore buffers that are too small to fit in the pool. Otherwise, when
+		// Get is called it will panic as it tries to index outside the bounds
+		// of the buffer.
 		return
 	}
 	buf = buf[:cap(buf)]
@@ -164,8 +164,8 @@ func (p *simpleBufferPool) Get(size int) []byte {
 		return (*bs)[:size]
 	}
 
-	// A buffer was pulled from the pool, but it is tool small. Put it back in the
-	// pool and create one large enough.
+	// A buffer was pulled from the pool, but it is tool small. Put it back in
+	// the pool and create one large enough.
 	if ok {
 		p.pool.Put(bs)
 	}

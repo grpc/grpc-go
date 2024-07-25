@@ -237,3 +237,57 @@ func (s) TestSplit(t *testing.T) {
 		t.Fatalf("Buffer never freed")
 	}
 }
+
+func checkForPanic(t *testing.T, wantErr string) {
+	t.Helper()
+	r := recover()
+	if r == nil {
+		t.Fatalf("Use after free dit not panic")
+	}
+	if r.(string) != wantErr {
+		t.Fatalf("panic called with %v, want %s", r, wantErr)
+	}
+}
+
+func (s) TestReadOnlyDataAfterFree(t *testing.T) {
+	// Verify that reading before freeing does not panic.
+	buf := mem.NewBuffer([]byte("abcd"), nil)
+	buf.ReadOnlyData()
+
+	buf.Free()
+	defer checkForPanic(t, "Cannot read freed buffer")
+	buf.ReadOnlyData()
+}
+
+func (s) TestRefAfterFree(t *testing.T) {
+	// Verify that acquiring a ref before freeing does not panic.
+	buf := mem.NewBuffer([]byte("abcd"), nil)
+	bufRef := buf.Ref()
+	defer bufRef.Free()
+
+	buf.Free()
+	defer checkForPanic(t, "Cannot ref freed buffer")
+	buf.Ref()
+}
+
+func (s) TestSplitAfterFree(t *testing.T) {
+	// Verify that splitting before freeing does not panic.
+	buf := mem.NewBuffer([]byte("abcd"), nil)
+	bufSplit := buf.Split(2)
+	defer bufSplit.Free()
+
+	buf.Free()
+	defer checkForPanic(t, "Cannot split freed buffer")
+	buf.Split(1)
+}
+
+func (s) TestFreeAfterFree(t *testing.T) {
+	buf := mem.NewBuffer([]byte("abcd"), nil)
+	if buf.Len() != 4 {
+		t.Fatalf("Buffer length is %d, want 4", buf.Len())
+	}
+
+	// Ensure that a double free does not panic.
+	buf.Free()
+	buf.Free()
+}
