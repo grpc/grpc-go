@@ -36,10 +36,6 @@ import (
 type TestMetricsRecorder struct {
 	t *testing.T
 
-	// TODO: scale this persisted storage up with label key values.
-	intValues   map[*estats.MetricDescriptor]int64
-	floatValues map[*estats.MetricDescriptor]float64
-
 	intCountCh   *testutils.Channel
 	floatCountCh *testutils.Channel
 	intHistoCh   *testutils.Channel
@@ -48,10 +44,8 @@ type TestMetricsRecorder struct {
 }
 
 func NewTestMetricsRecorder(t *testing.T, metrics []string) *TestMetricsRecorder {
-	tmr := &TestMetricsRecorder{
-		t:           t,
-		intValues:   make(map[*estats.MetricDescriptor]int64),
-		floatValues: make(map[*estats.MetricDescriptor]float64),
+	return &TestMetricsRecorder{
+		t: t,
 
 		intCountCh:   testutils.NewChannelWithSize(10),
 		floatCountCh: testutils.NewChannelWithSize(10),
@@ -59,20 +53,6 @@ func NewTestMetricsRecorder(t *testing.T, metrics []string) *TestMetricsRecorder
 		floatHistoCh: testutils.NewChannelWithSize(10),
 		intGaugeCh:   testutils.NewChannelWithSize(10),
 	}
-
-	for _, metric := range metrics {
-		desc := estats.DescriptorForMetric(estats.Metric(metric))
-		switch desc.Type {
-		case estats.MetricTypeIntCount:
-		case estats.MetricTypeIntHisto:
-		case estats.MetricTypeIntGauge:
-			tmr.intValues[desc] = 0
-		case estats.MetricTypeFloatCount:
-		case estats.MetricTypeFloatHisto:
-			tmr.floatValues[desc] = 0
-		}
-	}
-	return tmr
 }
 
 type MetricsData struct {
@@ -105,8 +85,6 @@ func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, 
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
-
-	r.intValues[(*estats.MetricDescriptor)(handle)] += incr
 }
 
 func (r *TestMetricsRecorder) WaitForFloat64Count(ctx context.Context, metricsDataWant MetricsData) {
@@ -127,8 +105,6 @@ func (r *TestMetricsRecorder) RecordFloat64Count(handle *estats.Float64CountHand
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
-
-	r.floatValues[(*estats.MetricDescriptor)(handle)] += incr
 }
 
 func (r *TestMetricsRecorder) WaitForInt64Histo(ctx context.Context, metricsDataWant MetricsData) {
@@ -149,8 +125,6 @@ func (r *TestMetricsRecorder) RecordInt64Histo(handle *estats.Int64HistoHandle, 
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
-
-	r.intValues[(*estats.MetricDescriptor)(handle)] += incr
 }
 
 func (r *TestMetricsRecorder) WaitForFloat64Histo(ctx context.Context, metricsDataWant MetricsData) {
@@ -171,7 +145,6 @@ func (r *TestMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHand
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
-	r.floatValues[(*estats.MetricDescriptor)(handle)] += incr
 }
 
 func (r *TestMetricsRecorder) WaitForInt64Gauge(ctx context.Context, metricsDataWant MetricsData) {
@@ -192,8 +165,6 @@ func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
-
-	r.intValues[(*estats.MetricDescriptor)(handle)] = incr
 }
 
 // To implement a stats.Handler, which allows it to be set as a dial option:
