@@ -102,4 +102,5 @@ func TestNewHTTP2ClientPrefaceLengthFailure(t *testing.T) {
 	if err == nil {
 		t.Errorf("Expected an error, but got nil")
 	}
+
 }
