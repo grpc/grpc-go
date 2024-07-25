@@ -165,7 +165,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 	tsc.UnaryCall(ctx, &testpb.SimpleRequest{})
 
 	mdWant := stats.MetricsData{
-		Handle:    (*estats.MetricDescriptor)(intCountHandle),
+		Handle:    intCountHandle.Descriptor(),
 		IntIncr:   1,
 		LabelKeys: []string{"int counter label", "int counter optional label"},
 		LabelVals: []string{"int counter label val", "int counter optional label val"},
@@ -174,7 +174,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 	mr2.WaitForInt64Count(ctx, mdWant)
 
 	mdWant = stats.MetricsData{
-		Handle:    (*estats.MetricDescriptor)(floatCountHandle),
+		Handle:    floatCountHandle.Descriptor(),
 		FloatIncr: 2,
 		LabelKeys: []string{"float counter label", "float counter optional label"},
 		LabelVals: []string{"float counter label val", "float counter optional label val"},
@@ -183,7 +183,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 	mr2.WaitForFloat64Count(ctx, mdWant)
 
 	mdWant = stats.MetricsData{
-		Handle:    (*estats.MetricDescriptor)(intHistoHandle),
+		Handle:    intHistoHandle.Descriptor(),
 		IntIncr:   3,
 		LabelKeys: []string{"int histo label", "int histo optional label"},
 		LabelVals: []string{"int histo label val", "int histo optional label val"},
@@ -192,7 +192,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 	mr2.WaitForInt64Histo(ctx, mdWant)
 
 	mdWant = stats.MetricsData{
-		Handle:    (*estats.MetricDescriptor)(floatHistoHandle),
+		Handle:    floatHistoHandle.Descriptor(),
 		FloatIncr: 4,
 		LabelKeys: []string{"float histo label", "float histo optional label"},
 		LabelVals: []string{"float histo label val", "float histo optional label val"},
@@ -200,7 +200,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 	mr1.WaitForFloat64Histo(ctx, mdWant)
 	mr2.WaitForFloat64Histo(ctx, mdWant)
 	mdWant = stats.MetricsData{
-		Handle:    (*estats.MetricDescriptor)(intGaugeHandle),
+		Handle:    intGaugeHandle.Descriptor(),
 		IntIncr:   5,
 		LabelKeys: []string{"int gauge label", "int gauge optional label"},
 		LabelVals: []string{"int gauge label val", "int gauge optional label val"},

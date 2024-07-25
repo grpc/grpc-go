@@ -329,7 +329,7 @@ func (rm *registryMetrics) registerMetrics(metrics *estats.Metrics, meter otelme
 }
 
 func (rm *registryMetrics) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
-	desc := (*estats.MetricDescriptor)(handle)
+	desc := handle.Descriptor()
 	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
 
 	if ic, ok := rm.intCounts[desc]; ok {
@@ -338,7 +338,7 @@ func (rm *registryMetrics) RecordInt64Count(handle *estats.Int64CountHandle, inc
 }
 
 func (rm *registryMetrics) RecordFloat64Count(handle *estats.Float64CountHandle, incr float64, labels ...string) {
-	desc := (*estats.MetricDescriptor)(handle)
+	desc := handle.Descriptor()
 	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
 	if fc, ok := rm.floatCounts[desc]; ok {
 		fc.Add(context.TODO(), incr, ao)
@@ -346,7 +346,7 @@ func (rm *registryMetrics) RecordFloat64Count(handle *estats.Float64CountHandle,
 }
 
 func (rm *registryMetrics) RecordInt64Histo(handle *estats.Int64HistoHandle, incr int64, labels ...string) {
-	desc := (*estats.MetricDescriptor)(handle)
+	desc := handle.Descriptor()
 	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
 	if ih, ok := rm.intHistos[desc]; ok {
 		ih.Record(context.TODO(), incr, ao)
@@ -354,7 +354,7 @@ func (rm *registryMetrics) RecordInt64Histo(handle *estats.Int64HistoHandle, inc
 }
 
 func (rm *registryMetrics) RecordFloat64Histo(handle *estats.Float64HistoHandle, incr float64, labels ...string) {
-	desc := (*estats.MetricDescriptor)(handle)
+	desc := handle.Descriptor()
 	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
 	if fh, ok := rm.floatHistos[desc]; ok {
 		fh.Record(context.TODO(), incr, ao)
@@ -362,7 +362,7 @@ func (rm *registryMetrics) RecordFloat64Histo(handle *estats.Float64HistoHandle,
 }
 
 func (rm *registryMetrics) RecordInt64Gauge(handle *estats.Int64GaugeHandle, incr int64, labels ...string) {
-	desc := (*estats.MetricDescriptor)(handle)
+	desc := handle.Descriptor()
 	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
 	if ig, ok := rm.intGauges[desc]; ok {
 		ig.Record(context.TODO(), incr, ao)

@@ -80,7 +80,7 @@ func (r *TestMetricsRecorder) WaitForInt64Count(ctx context.Context, metricsData
 
 func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
 	r.intCountCh.Send(MetricsData{
-		Handle:    (*estats.MetricDescriptor)(handle),
+		Handle:    handle.Descriptor(),
 		IntIncr:   incr,
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
@@ -100,7 +100,7 @@ func (r *TestMetricsRecorder) WaitForFloat64Count(ctx context.Context, metricsDa
 
 func (r *TestMetricsRecorder) RecordFloat64Count(handle *estats.Float64CountHandle, incr float64, labels ...string) {
 	r.floatCountCh.Send(MetricsData{
-		Handle:    (*estats.MetricDescriptor)(handle),
+		Handle:    handle.Descriptor(),
 		FloatIncr: incr,
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
@@ -120,7 +120,7 @@ func (r *TestMetricsRecorder) WaitForInt64Histo(ctx context.Context, metricsData
 
 func (r *TestMetricsRecorder) RecordInt64Histo(handle *estats.Int64HistoHandle, incr int64, labels ...string) {
 	r.intHistoCh.Send(MetricsData{
-		Handle:    (*estats.MetricDescriptor)(handle),
+		Handle:    handle.Descriptor(),
 		IntIncr:   incr,
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
@@ -140,7 +140,7 @@ func (r *TestMetricsRecorder) WaitForFloat64Histo(ctx context.Context, metricsDa
 
 func (r *TestMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHandle, incr float64, labels ...string) {
 	r.floatHistoCh.Send(MetricsData{
-		Handle:    (*estats.MetricDescriptor)(handle),
+		Handle:    handle.Descriptor(),
 		FloatIncr: incr,
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
@@ -160,7 +160,7 @@ func (r *TestMetricsRecorder) WaitForInt64Gauge(ctx context.Context, metricsData
 
 func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, incr int64, labels ...string) {
 	r.intGaugeCh.Send(MetricsData{
-		Handle:    (*estats.MetricDescriptor)(handle),
+		Handle:    handle.Descriptor(),
 		IntIncr:   incr,
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
