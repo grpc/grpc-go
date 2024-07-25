@@ -148,21 +148,23 @@ func (r *Reader) Read(buf []byte) (n int, _ error) {
 	}
 
 	for len(buf) != 0 && r.len != 0 {
+		// Copy as much as possible from the first Buffer in the slice into the
+		// given byte slice.
 		data := r.data[0].ReadOnlyData()
 		copied := copy(buf, data[r.bufferIdx:])
-		r.len -= copied
+		r.len -= copied       // Reduce len by the number of bytes copied.
+		r.bufferIdx += copied // Increment the buffer index.
+		n += copied           // Increment the total number of bytes read.
+		buf = buf[copied:]    // Shrink the given byte slice.
 
-		buf = buf[copied:]
-
-		if copied == len(data) {
+		// If we have copied all of the data from the first Buffer, free it and
+		// advance to the next in the slice.
+		if r.bufferIdx == len(data) {
 			oldBuffer := r.data[0]
 			oldBuffer.Free()
 			r.data = r.data[1:]
 			r.bufferIdx = 0
-		} else {
-			r.bufferIdx += copied
 		}
-		n += copied
 	}
 
 	return n, nil
@@ -188,7 +190,7 @@ func (w *writer) Write(p []byte) (n int, err error) {
 // following code can be used to copy the contents of a request into a
 // BufferSlice:
 //
-//	var out BufferSlice
+//	var out mem.BufferSlice
 //	n, err := io.Copy(mem.NewWriter(&out, pool), req.Body)
 func NewWriter(buffers *BufferSlice, pool BufferPool) io.Writer {
 	return &writer{buffers: buffers, pool: pool}
