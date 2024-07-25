@@ -46,6 +46,11 @@ func TestNewHTTP2ClientPrefaceFailure(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	defer cancel()
 	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: hangingDialerClientPreface}, func(GoAwayReason) {})
+	if err != nil {
+		if err.Error() != "connection error: desc = \"transport: failed to write client preface: preface write error\"" {
+			t.Fatalf("Error while creating client transport: %v", err)
+		}
+	}
 	if err == nil {
 		t.Error("Expected an error, but got nil")
 	}
@@ -89,6 +94,11 @@ func TestNewHTTP2ClientPrefaceLengthFailure(t *testing.T) {
 	}()
 
 	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: hangingDialerClientPrefaceLength}, func(GoAwayReason) {})
+	if err != nil {
+		if err.Error() != "connection error: desc = \"transport: preface mismatch, wrote 21 bytes; want 24\"" {
+			t.Fatalf("Error while creating client transport: %v", err)
+		}
+	}
 	if err == nil {
 		t.Errorf("Expected an error, but got nil")
 	}
