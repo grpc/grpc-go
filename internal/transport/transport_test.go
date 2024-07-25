@@ -2747,10 +2747,10 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 	}
 }
 
-// Test that in the event of a graceful client transport shutdown
-// ,  i.e., clientTransport.Close(), if the GOAWAY write is not
-// finished within specified time due to network hang, client
-// should still close without waiting for too long.
+// Tests the scenario where a client transport is closed and writing of the
+// GOAWAY frame as part of the close does not complete because of a network
+// hang. The test verifies that the client transport is closed without waiting
+// for too long.
 func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 	// Override timer for writing GOAWAY to 0 so that the connection write
 	// always times out. It is equivalent of real network hang when conn
@@ -2761,49 +2761,22 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 		goAwayLoopyWriterTimeout = origGoAwayLoopyTimeout
 	}()
 
-	// Create a server.
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Error while listening: %v", err)
-	}
-	defer lis.Close()
-
-	// Launch the server and allow HTTP/2 connections
-	go func() {
-		conn, err := lis.Accept()
-		if err != nil {
-			t.Errorf("Error while accepting: %v", err)
-		}
-		defer conn.Close()
-		framer := http2.NewFramer(conn, conn)
-		if err := framer.WriteSettings(); err != nil {
-			t.Errorf("Error while writing settings %v", err)
-			return
-		}
-		_, err = framer.ReadFrame()
-		if err != nil {
-			return
-		}
-	}()
+	server, ct, cancel := setUp(t, 0, normal)
+	defer cancel()
+	defer server.stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	ct, err := NewClientTransport(ctx, ctx, resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{}, func(GoAwayReason) {})
-	if err != nil {
-		t.Fatalf("Error while creating client transport: %v", err)
-	}
-	_, err = ct.NewStream(ctx, &CallHdr{})
-	if err != nil {
-		t.Fatalf("failed to open stream: %v", err)
+	if _, err := ct.NewStream(ctx, &CallHdr{}); err != nil {
+		t.Fatalf("Failed to open stream: %v", err)
 	}
 
-	// ctClosed verifies that clientTransport is closed successfully
-	ctClosed := make(chan error, 1)
+	ctClosed := make(chan struct{})
 	go func() {
-		// ct.Close will try to send the GOAWAY to server but conn.
-		// Write will time out due to goAwayLoopyWriterTimeout being
-		// 0. It is equivalent of a network hang when GOAWAY doesn't
-		// finish within specified deadline.
+		// ct.Close will try to send a GOAWAY frame to the server but conn.Write
+		// will time out due to goAwayLoopyWriterTimeout being 0. It is
+		// equivalent of a network hang when GOAWAY doesn't finish within
+		// specified deadline.
 		ct.Close(errors.New("manually closed by client"))
 		close(ctClosed)
 	}()
@@ -2811,6 +2784,6 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 	select {
 	case <-ctClosed:
 	case <-ctx.Done():
-		t.Errorf("timeout waiting for client Close(): Context timed out")
+		t.Errorf("Timeout waiting for Close() to complete")
 	}
 }
