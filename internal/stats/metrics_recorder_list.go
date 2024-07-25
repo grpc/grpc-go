@@ -49,8 +49,8 @@ func NewMetricsRecorderList(shs []stats.Handler) *MetricsRecorderList {
 }
 
 func verifyLabels(desc *estats.MetricDescriptor, labelsRecv ...string) {
-	if len(labelsRecv) != len(desc.Labels)+len(desc.OptionalLabels) {
-		panic(fmt.Sprintf("Length of labels passed to Record incorrect for metric %q.", desc.Name))
+	if got, want := len(labelsRecv), len(desc.Labels)+len(desc.OptionalLabels); got != want {
+		panic(fmt.Sprintf("Received %d labels in call to record metric %q, but expected %d.", got, desc.Name, want))
 	}
 }
 

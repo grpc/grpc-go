@@ -223,7 +223,7 @@ func (s) TestMetricRecorderListPanic(t *testing.T) {
 	})
 	mrl := istats.NewMetricsRecorderList(nil)
 
-	want := `Length of labels passed to Record incorrect for metric "simple counter".`
+	want := `Received 1 labels in call to record metric "simple counter", but expected 2.`
 	defer func() {
 		if r := recover(); !strings.Contains(fmt.Sprint(r), want) {
 			t.Errorf("expected panic contains %q, got %q", want, r)
