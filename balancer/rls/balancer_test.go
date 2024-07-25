@@ -662,13 +662,13 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 
 	// Override the newPickerGenerated to measure the number of times
 	// the picker is generated because state updates can be inhibited.
-	pckrSentBeforeClientConnUpdate := make(chan struct{}, 1)
+	pickerUpdateCh := make(chan struct{})
 	// Block udpates until the last configuration update
 	blkUpdates := atomic.Bool{}
 	origNewPickerGenerated := newPickerGenerated
 	newPickerGenerated = func() {
 		if blkUpdates.Load() == true {
-			pckrSentBeforeClientConnUpdate <- struct{}{}
+			pickerUpdateCh <- struct{}{}
 		}
 	}
 	defer func() { newPickerGenerated = origNewPickerGenerated }()
@@ -816,12 +816,15 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 	sc1 := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON1)
 	blkUpdates.Store(true)
 	go r.UpdateState(resolver.State{ServiceConfig: sc1})
-	select {
-	case <-pckrSentBeforeClientConnUpdate:
-	case <-clientConnUpdateDone:
-		t.Fatalf("Client conn update was completed before picker update.")
-	case <-ctx.Done():
-		t.Errorf("error waiting for picker update on receipt of configuration udpate: %v", ctx.Err().Error())
+
+	for i := 0; i < 2; i++ {
+		select {
+		case <-pickerUpdateCh:
+		case <-clientConnUpdateDone:
+			t.Fatalf("Client conn update was completed before picker update.")
+		case <-ctx.Done():
+			t.Errorf("error waiting for picker update on receipt of configuration udpate: %v", ctx.Err().Error())
+		}
 	}
 
 	// Once picker was updated, wait for client conn update
