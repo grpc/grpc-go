@@ -59,7 +59,7 @@ type proxyServer struct {
 	requestCheck func(*http.Request) error
 }
 
-func (p *proxyServer) run() {
+func (p *proxyServer) run(waitForServerHello bool) {
 	in, err := p.lis.Accept()
 	if err != nil {
 		return
@@ -84,24 +84,23 @@ func (p *proxyServer) run() {
 		p.t.Errorf("failed to dial to server: %v", err)
 		return
 	}
+	out.SetReadDeadline(time.Now().Add(defaultTestTimeout))
 	resp := http.Response{StatusCode: http.StatusOK, Proto: "HTTP/1.0"}
 	var buf bytes.Buffer
 	resp.Write(&buf)
-	// Batch the first message from the server with the http connect
-	// response. This is done to test the cases in which the grpc client has
-	// the response to the connect request and proxied packets from the
-	// destination server when it reads the transport.
-	out.SetReadDeadline(time.Now().Add(20 * time.Millisecond))
-	b := make([]byte, 50)
-	bytesRead, err := out.Read(b)
-	// The read is expected to fail with deadline exceeded if the server doesn't
-	// have a message to send.
-	if err != nil {
-		p.t.Logf("Got error while reading message from server: %v", err)
+	if waitForServerHello {
+		// Batch the first message from the server with the http connect
+		// response. This is done to test the cases in which the grpc client has
+		// the response to the connect request and proxied packets from the
+		// destination server when it reads the transport.
+		b := make([]byte, 50)
+		bytesRead, err := out.Read(b)
+		if err != nil {
+			p.t.Errorf("Got error while reading server hello: %v", err)
+			return
+		}
+		buf.Write(b[0:bytesRead])
 	}
-	// reset the deadline.
-	out.SetReadDeadline(time.Time{})
-	buf.Write(b[0:bytesRead])
 	p.in.Write(buf.Bytes())
 	p.out = out
 	go io.Copy(p.in, p.out)
@@ -128,7 +127,7 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 		lis:          plis,
 		requestCheck: proxyReqCheck,
 	}
-	go p.run()
+	go p.run(len(serverMessage) > 0)
 	defer p.stop()
 
 	blis, err := net.Listen("tcp", "localhost:0")
@@ -177,16 +176,16 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 		t.Fatalf("received msg: %v, want %v", recvBuf, msg)
 	}
 
-	c.SetReadDeadline(time.Now().Add(20 * time.Millisecond))
-
-	gotServerMessage := make([]byte, len(serverMessage))
-	// This call will return a deadline exceeded error if the server has nothing
-	// to send. This is expected.
-	if _, err := c.Read(gotServerMessage); err != nil {
-		t.Logf("Got error while reading message from server: %v", err)
-	}
-	if string(gotServerMessage) != string(serverMessage) {
-		t.Fatalf("message from server: %v, want %v", gotServerMessage, serverMessage)
+	if len(serverMessage) > 0 {
+		c.SetReadDeadline(time.Now().Add(defaultTestTimeout))
+		gotServerMessage := make([]byte, len(serverMessage))
+		if _, err := c.Read(gotServerMessage); err != nil {
+			t.Errorf("Got error while reading message from server: %v", err)
+			return
+		}
+		if string(gotServerMessage) != string(serverMessage) {
+			t.Fatalf("message from server: %v, want %v", gotServerMessage, serverMessage)
+		}
 	}
 }
 
