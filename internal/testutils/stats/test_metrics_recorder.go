@@ -21,7 +21,9 @@ package stats
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	estats "google.golang.org/grpc/experimental/stats"
@@ -41,18 +43,65 @@ type TestMetricsRecorder struct {
 	intHistoCh   *testutils.Channel
 	floatHistoCh *testutils.Channel
 	intGaugeCh   *testutils.Channel
+
+	// The most recent update for each metric name.
+	mu   sync.Mutex
+	data map[estats.Metric]float64
 }
 
 func NewTestMetricsRecorder(t *testing.T, metrics []string) *TestMetricsRecorder {
-	return &TestMetricsRecorder{
+	tmr := &TestMetricsRecorder{
 		t: t,
 
-		intCountCh:   testutils.NewChannelWithSize(10),
-		floatCountCh: testutils.NewChannelWithSize(10),
-		intHistoCh:   testutils.NewChannelWithSize(10),
-		floatHistoCh: testutils.NewChannelWithSize(10),
-		intGaugeCh:   testutils.NewChannelWithSize(10),
+		intCountCh:   testutils.NewChannelWithSize(1000),
+		floatCountCh: testutils.NewChannelWithSize(1000),
+		intHistoCh:   testutils.NewChannelWithSize(1000),
+		floatHistoCh: testutils.NewChannelWithSize(1000),
+		intGaugeCh:   testutils.NewChannelWithSize(1000),
+
+		data: make(map[estats.Metric]float64),
 	}
+
+	for _, metric := range metrics {
+		tmr.data[estats.Metric(metric)] = 0
+	}
+
+	return tmr
+}
+
+// AssertDataForMetric asserts data is present for metric. The zero value in the
+// check is equivalent to unset.
+func (r *TestMetricsRecorder) AssertDataForMetric(metricName string, wantVal float64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.data[estats.Metric(metricName)] != wantVal {
+		r.t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", metricName, r.data[estats.Metric(metricName)], wantVal)
+	}
+}
+
+// AssertEitherDataForMetric asserts either data point is present for metric.
+// The zero value in the check is equivalent to unset.
+
+func (r *TestMetricsRecorder) AssertEitherDataForMetric(metricName string, wantVal1 float64, wantVal2 float64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.data[estats.Metric(metricName)] != wantVal1 && r.data[estats.Metric(metricName)] != wantVal2 {
+		r.t.Fatalf("Unexpected data for metric %v, got: %v, want: %v or %v", metricName, r.data[estats.Metric(metricName)], wantVal1, wantVal2)
+	}
+}
+
+// PollForDataForMetric polls the metric data for the want. Fails if context
+// provided expires before data for metric is found.
+func (r *TestMetricsRecorder) PollForDataForMetric(ctx context.Context, metricName string, wantVal float64) {
+	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
+		r.mu.Lock()
+		if r.data[estats.Metric(metricName)] == wantVal {
+			r.mu.Unlock()
+			break
+		}
+		r.mu.Unlock()
+	}
+	r.t.Fatalf("Timeout waiting for data %v for metric %v", wantVal, metricName)
 }
 
 type MetricsData struct {
@@ -85,6 +134,10 @@ func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, 
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.data[handle.Name] = float64(incr)
 }
 
 func (r *TestMetricsRecorder) WaitForFloat64Count(ctx context.Context, metricsDataWant MetricsData) {
@@ -105,6 +158,10 @@ func (r *TestMetricsRecorder) RecordFloat64Count(handle *estats.Float64CountHand
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.data[handle.Name] = incr
 }
 
 func (r *TestMetricsRecorder) WaitForInt64Histo(ctx context.Context, metricsDataWant MetricsData) {
@@ -125,6 +182,10 @@ func (r *TestMetricsRecorder) RecordInt64Histo(handle *estats.Int64HistoHandle, 
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.data[handle.Name] = float64(incr)
 }
 
 func (r *TestMetricsRecorder) WaitForFloat64Histo(ctx context.Context, metricsDataWant MetricsData) {
@@ -145,6 +206,10 @@ func (r *TestMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHand
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.data[handle.Name] = incr
 }
 
 func (r *TestMetricsRecorder) WaitForInt64Gauge(ctx context.Context, metricsDataWant MetricsData) {
@@ -165,6 +230,10 @@ func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	})
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.data[handle.Name] = float64(incr)
 }
 
 // To implement a stats.Handler, which allows it to be set as a dial option:

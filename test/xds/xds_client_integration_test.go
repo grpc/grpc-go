@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/resolver"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -84,7 +85,7 @@ func setupManagementServerAndResolver(t *testing.T) (*e2e.ManagementServer, stri
 }
 
 func (s) TestClientSideXDS(t *testing.T) {
-	managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()

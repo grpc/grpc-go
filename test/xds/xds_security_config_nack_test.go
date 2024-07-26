@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/resolver"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -147,7 +148,7 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			managementServer, nodeID, bootstrapContents, xdsResolver := setupManagementServerAndResolver(t)
+			managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
 
 			lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
 			defer cleanup2()
