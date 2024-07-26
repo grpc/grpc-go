@@ -155,5 +155,4 @@ func TestNewHTTP2ClientFramerWriteSettingsFailure(t *testing.T) {
 	if err == nil {
 		t.Errorf("Expected an error, but got nil")
 	}
-
 }
