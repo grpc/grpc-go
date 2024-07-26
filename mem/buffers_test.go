@@ -67,7 +67,7 @@ func (s) TestBuffer_NewBufferAndFree(t *testing.T) {
 			t.Fatal(err)
 		}
 	case <-time.After(defaultTestTimeout):
-		t.Fatalf("Timeout waiting for Buffer to freed")
+		t.Fatalf("Timeout waiting for Buffer to be freed")
 	}
 }
 
@@ -112,7 +112,7 @@ func (s) TestBuffer_NewBufferRefAndFree(t *testing.T) {
 			t.Fatal(err)
 		}
 	case <-time.After(defaultTestTimeout):
-		t.Fatalf("Timeout waiting for Buffer to freed")
+		t.Fatalf("Timeout waiting for Buffer to be freed")
 	}
 }
 
@@ -153,7 +153,7 @@ func (s) TestBufer_CopyAndFree(t *testing.T) {
 			t.Fatalf("Free function called with bytes %s, want %s", string(got), string(data))
 		}
 	case <-time.After(defaultTestTimeout):
-		t.Fatalf("Timeout waiting for Buffer to freed")
+		t.Fatalf("Timeout waiting for Buffer to be freed")
 	}
 }
 
@@ -191,7 +191,7 @@ func (s) TestBuffer_CopyRefAndFree(t *testing.T) {
 			t.Fatalf("Free function called with bytes %s, want %s", string(got), string(data))
 		}
 	case <-time.After(defaultTestTimeout):
-		t.Fatalf("Timeout waiting for Buffer to freed")
+		t.Fatalf("Timeout waiting for Buffer to be freed")
 	}
 }
 

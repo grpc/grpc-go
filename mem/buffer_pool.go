@@ -22,7 +22,13 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+
+	"google.golang.org/grpc/internal"
 )
+
+func init() {
+	internal.SetDefaultBufferPoolForTesting = func(pool BufferPool) { defaultBufferPool.Store(&pool) }
+}
 
 // BufferPool is a pool of buffers that can be shared, resulting in
 // decreased memory allocation.
@@ -56,13 +62,7 @@ func DefaultBufferPool() BufferPool {
 	return *defaultBufferPool.Load()
 }
 
-// SetDefaultBufferPoolForTesting updates the default buffer pool, for testing
-// purposes.
-//
-// # Testing Only
-//
-// This function should ONLY be used for testing purposes.
-func SetDefaultBufferPoolForTesting(pool BufferPool) {
+func setDefaultBufferPoolForTesting(pool BufferPool) {
 	defaultBufferPool.Store(&pool)
 }
 
