@@ -88,9 +88,9 @@ type localityKeyType string
 
 const localityKey = localityKeyType("locality")
 
-// GetLocality returns the locality from the resolver.State provided, or an
-// empty string if not present.
-func GetLocality(state resolver.State) string {
+// LocalityFromResolverState returns the locality from the resolver.State
+// provided, or an empty string if not present.
+func LocalityFromResolverState(state resolver.State) string {
 	locality, _ := state.Attributes.Value(localityKey).(string)
 	return locality
 }

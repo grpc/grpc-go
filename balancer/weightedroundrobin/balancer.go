@@ -48,35 +48,35 @@ import (
 const Name = "weighted_round_robin"
 
 var (
-	rrFallbackHandle = estats.RegisterInt64Count(estats.MetricDescriptor{
+	rrFallbackMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:           "grpc.lb.wrr.rr_fallback",
-		Description:    "This metric is experimental. Number of scheduler updates in which there were not enough endpoints with valid weight, which caused the WRR policy to fall back to RR behavior.",
+		Description:    "EXPERIMENTAL. Number of scheduler updates in which there were not enough endpoints with valid weight, which caused the WRR policy to fall back to RR behavior.",
 		Unit:           "update",
 		Labels:         []string{"grpc.target"},
 		OptionalLabels: []string{"grpc.lb.locality"},
 		Default:        false,
 	})
 
-	endpointWeightNotYetUsableHandle = estats.RegisterInt64Count(estats.MetricDescriptor{
+	endpointWeightNotYetUsableMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:           "grpc.lb.wrr.endpoint_weight_not_yet_usable",
-		Description:    "This metric is experimental. Number of endpoints from each scheduler update that don't yet have usable weight information (i.e., either the load report has not yet been received, or it is within the blackout period).",
+		Description:    "EXPERIMENTAL. Number of endpoints from each scheduler update that don't yet have usable weight information (i.e., either the load report has not yet been received, or it is within the blackout period).",
 		Unit:           "endpoint",
 		Labels:         []string{"grpc.target"},
 		OptionalLabels: []string{"grpc.lb.locality"},
 		Default:        false,
 	})
 
-	endpointWeightStaleHandle = estats.RegisterInt64Count(estats.MetricDescriptor{
+	endpointWeightStaleMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:           "grpc.lb.wrr.endpoint_weight_stale",
-		Description:    "This metric is experimental. Number of endpoints from each scheduler update whose latest weight is older than the expiration period.",
+		Description:    "EXPERIMENTAL. Number of endpoints from each scheduler update whose latest weight is older than the expiration period.",
 		Unit:           "endpoint",
 		Labels:         []string{"grpc.target"},
 		OptionalLabels: []string{"grpc.lb.locality"},
 		Default:        false,
 	})
-	endpointWeightsHandle = estats.RegisterFloat64Histo(estats.MetricDescriptor{
+	endpointWeightsMetric = estats.RegisterFloat64Histo(estats.MetricDescriptor{
 		Name:           "grpc.lb.wrr.endpoint_weights",
-		Description:    "This metric is experimental. Weight of each endpoint, recorded on every scheduler update. Endpoints without usable weights will be recorded as weight 0.",
+		Description:    "EXPERIMENTAL. Weight of each endpoint, recorded on every scheduler update. Endpoints without usable weights will be recorded as weight 0.",
 		Unit:           "endpoint",
 		Labels:         []string{"grpc.target"},
 		OptionalLabels: []string{"grpc.lb.locality"},
@@ -143,7 +143,7 @@ func (bb) Name() string {
 
 // wrrBalancer implements the weighted round robin LB policy.
 type wrrBalancer struct {
-	// These fields are set during construction and read only after.
+	// The following fields are immutable.
 	cc              balancer.ClientConn
 	logger          *grpclog.PrefixLogger
 	target          string
@@ -171,7 +171,7 @@ func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	}
 
 	b.cfg = cfg
-	b.locality = weightedtarget.GetLocality(ccs.ResolverState)
+	b.locality = weightedtarget.LocalityFromResolverState(ccs.ResolverState)
 	b.updateAddresses(ccs.ResolverState.Addresses)
 
 	if len(ccs.ResolverState.Addresses) == 0 {
@@ -394,18 +394,17 @@ type picker struct {
 	cfg       *lbConfig          // active config when picker created
 	subConns  []*weightedSubConn // all READY subconns
 
-	// These fields are built out at creation time and read only after, so no
-	// need for synchronization.
+	// The following fields are immutable.
 	target          string
 	locality        string
 	metricsRecorder estats.MetricsRecorder
 }
 
-func (p *picker) scWeights() []float64 {
+func (p *picker) scWeights(recordMetrics bool) []float64 {
 	ws := make([]float64, len(p.subConns))
 	now := internal.TimeNow()
 	for i, wsc := range p.subConns {
-		ws[i] = wsc.weight(now, time.Duration(p.cfg.WeightExpirationPeriod), time.Duration(p.cfg.BlackoutPeriod), true)
+		ws[i] = wsc.weight(now, time.Duration(p.cfg.WeightExpirationPeriod), time.Duration(p.cfg.BlackoutPeriod), recordMetrics)
 	}
 
 	return ws
@@ -464,8 +463,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 // When needed, it also tracks connectivity state, listens for metrics updates
 // by implementing the orca.OOBListener interface and manages that listener.
 type weightedSubConn struct {
-	// These fields are set at construction time and read only after, so no need
-	// for synchronization.
+	// The following fields are immutable.
 	balancer.SubConn
 	logger          *grpclog.PrefixLogger
 	target          string
@@ -595,32 +593,34 @@ func (w *weightedSubConn) updateConnectivityState(cs connectivity.State) connect
 // will cause the backend weight to be treated as the mean of the weights of the
 // other backends. If forScheduler is set to true, this function will emit
 // metrics through the mtrics registry.
-func (w *weightedSubConn) weight(now time.Time, weightExpirationPeriod, blackoutPeriod time.Duration, forScheduler bool) (weight float64) {
+func (w *weightedSubConn) weight(now time.Time, weightExpirationPeriod, blackoutPeriod time.Duration, recordMetrics bool) float64 {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	weight = 0
-	if forScheduler {
-		defer endpointWeightsHandle.Record(w.metricsRecorder, weight, []string{w.target, w.locality}...)
+	weight := float64(0)
+	if recordMetrics {
+		defer func() {
+			endpointWeightsMetric.Record(w.metricsRecorder, weight, w.target, w.locality)
+		}()
 	}
 
 	// If the most recent update was longer ago than the expiration period,
 	// reset nonEmptySince so that we apply the blackout period again if we
 	// start getting data again in the future, and return 0.
 	if now.Sub(w.lastUpdated) >= weightExpirationPeriod {
-		if forScheduler {
-			endpointWeightStaleHandle.Record(w.metricsRecorder, 1, []string{w.target, w.locality}...)
+		if recordMetrics {
+			endpointWeightStaleMetric.Record(w.metricsRecorder, 1, w.target, w.locality)
 		}
 		w.nonEmptySince = time.Time{}
-		return
+		return weight
 	}
 
 	// If we don't have at least blackoutPeriod worth of data, return 0.
 	if blackoutPeriod != 0 && (w.nonEmptySince == (time.Time{}) || now.Sub(w.nonEmptySince) < blackoutPeriod) {
-		endpointWeightNotYetUsableHandle.Record(w.metricsRecorder, 1, []string{w.target, w.locality}...)
+		endpointWeightNotYetUsableMetric.Record(w.metricsRecorder, 1, w.target, w.locality)
 
-		return
+		return weight
 	}
-
-	return w.weightVal
+	weight = w.weightVal
+	return weight
 }

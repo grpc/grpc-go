@@ -32,13 +32,13 @@ type scheduler interface {
 // will return an Earliest Deadline First (EDF) scheduler implementation that
 // selects the subchannels according to their weights.
 func (p *picker) newScheduler() scheduler {
-	scWeights := p.scWeights()
+	scWeights := p.scWeights(true)
 	n := len(scWeights)
 	if n == 0 {
 		return nil
 	}
 	if n == 1 {
-		rrFallbackHandle.Record(p.metricsRecorder, 1, []string{p.target, p.locality}...)
+		rrFallbackMetric.Record(p.metricsRecorder, 1, p.target, p.locality)
 		return &rrScheduler{numSCs: 1, inc: p.inc}
 	}
 	sum := float64(0)
@@ -55,7 +55,7 @@ func (p *picker) newScheduler() scheduler {
 	}
 
 	if numZero >= n-1 {
-		rrFallbackHandle.Record(p.metricsRecorder, 1, []string{p.target, p.locality}...)
+		rrFallbackMetric.Record(p.metricsRecorder, 1, p.target, p.locality)
 		return &rrScheduler{numSCs: uint32(n), inc: p.inc}
 	}
 	unscaledMean := sum / float64(n-numZero)
