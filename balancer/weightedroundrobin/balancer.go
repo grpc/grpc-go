@@ -593,11 +593,10 @@ func (w *weightedSubConn) updateConnectivityState(cs connectivity.State) connect
 // will cause the backend weight to be treated as the mean of the weights of the
 // other backends. If forScheduler is set to true, this function will emit
 // metrics through the mtrics registry.
-func (w *weightedSubConn) weight(now time.Time, weightExpirationPeriod, blackoutPeriod time.Duration, recordMetrics bool) float64 {
+func (w *weightedSubConn) weight(now time.Time, weightExpirationPeriod, blackoutPeriod time.Duration, recordMetrics bool) (weight float64) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	weight := float64(0)
 	if recordMetrics {
 		defer func() {
 			endpointWeightsMetric.Record(w.metricsRecorder, weight, w.target, w.locality)
@@ -612,15 +611,16 @@ func (w *weightedSubConn) weight(now time.Time, weightExpirationPeriod, blackout
 			endpointWeightStaleMetric.Record(w.metricsRecorder, 1, w.target, w.locality)
 		}
 		w.nonEmptySince = time.Time{}
-		return weight
+		return 0
 	}
 
 	// If we don't have at least blackoutPeriod worth of data, return 0.
 	if blackoutPeriod != 0 && (w.nonEmptySince == (time.Time{}) || now.Sub(w.nonEmptySince) < blackoutPeriod) {
-		endpointWeightNotYetUsableMetric.Record(w.metricsRecorder, 1, w.target, w.locality)
-
-		return weight
+		if recordMetrics {
+			endpointWeightNotYetUsableMetric.Record(w.metricsRecorder, 1, w.target, w.locality)
+		}
+		return 0
 	}
-	weight = w.weightVal
-	return weight
+
+	return w.weightVal
 }
