@@ -27,6 +27,7 @@ import "golang.org/x/net/http2/hpack"
 // [Frame Type]: https://httpwg.org/specs/rfc7540.html#FrameType
 type FrameType uint8
 
+// Frame types defined in the HTTP/2 Spec.
 const (
 	FrameTypeData         FrameType = 0x0
 	FrameTypeHeaders      FrameType = 0x1
@@ -41,6 +42,7 @@ const (
 // Flag represents one or more flags set on an HTTP/2 Frame.
 type Flag uint8
 
+// Flags defined in the HTTP/2 Spec.
 const (
 	FlagDataEndStream          Flag = 0x1
 	FlagDataPadded             Flag = 0x8
@@ -68,6 +70,7 @@ type Setting struct {
 // [Setting Values]: https://httpwg.org/specs/rfc7540.html#SettingValues
 type SettingID uint16
 
+// Setting IDs defined in the HTTP/2 Spec.
 const (
 	SettingsHeaderTableSize      SettingID = 0x1
 	SettingsEnablePush           SettingID = 0x2
@@ -121,10 +124,12 @@ type DataFrame struct {
 	Data []byte
 }
 
+// Header returns the 9 byte header for this frame.
 func (f *DataFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
+// Free frees the buffer containing the data in this frame.
 func (f *DataFrame) Free() {
 	if f.free != nil {
 		f.free()
@@ -141,10 +146,12 @@ type HeadersFrame struct {
 	HdrBlock []byte
 }
 
+// Header returns the 9 byte header for this frame.
 func (f *HeadersFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
+// Free frees the buffer containing the header block in this frame.
 func (f *HeadersFrame) Free() {
 	if f.free != nil {
 		f.free()
@@ -161,10 +168,12 @@ type RSTStreamFrame struct {
 	Code ErrCode
 }
 
+// Header returns the 9 byte header for this frame.
 func (f *RSTStreamFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
+// Free is a no-op for RSTStreamFrame.
 func (f *RSTStreamFrame) Free() {}
 
 // SettingsFrame is the representation of a [SETTINGS Frame]. There is no
@@ -179,10 +188,12 @@ type SettingsFrame struct {
 	Settings []Setting
 }
 
+// Header returns the 9 byte header for this frame.
 func (f *SettingsFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
+// Free is a no-op for SettingsFrame.
 func (f *SettingsFrame) Free() {}
 
 // PingFrame is the representation of a [PING Frame]. The PING frame is a
@@ -196,10 +207,12 @@ type PingFrame struct {
 	Data []byte
 }
 
+// Header returns the 9 byte header for this frame.
 func (f *PingFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
+// Free frees the buffer containing the data in this frame.
 func (f *PingFrame) Free() {
 	if f.free != nil {
 		f.free()
@@ -219,10 +232,12 @@ type GoAwayFrame struct {
 	DebugData    []byte
 }
 
+// Header returns the 9 byte header for this frame.
 func (f *GoAwayFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
+// Free frees the buffer containing the debug data in this frame.
 func (f *GoAwayFrame) Free() {
 	if f.free != nil {
 		f.free()
@@ -238,6 +253,7 @@ type WindowUpdateFrame struct {
 	Inc uint32
 }
 
+// Header returns the 9 byte header for this frame.
 func (f *WindowUpdateFrame) Header() *FrameHeader {
 	return f.hdr
 }
@@ -252,10 +268,12 @@ type ContinuationFrame struct {
 	HdrBlock []byte
 }
 
+// Header returns the 9 byte header for this frame.
 func (f *ContinuationFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
+// Free frees the buffer containing the header block in this frame.
 func (f *ContinuationFrame) Free() {
 	if f.free != nil {
 		f.free()
@@ -276,10 +294,12 @@ type MetaHeadersFrame struct {
 	Truncated bool
 }
 
+// Header returns the 9 byte header for this frame.
 func (f *MetaHeadersFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
+// Free is a no-op for MetaHeadersFrame.
 func (f *MetaHeadersFrame) Free() {}
 
 // Framer encapsulates the functionality to read and write HTTP/2 frames.
