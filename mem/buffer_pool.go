@@ -21,16 +21,11 @@ package mem
 import (
 	"sort"
 	"sync"
-	"sync/atomic"
 
 	"google.golang.org/grpc/internal"
 )
 
-func init() {
-	internal.SetDefaultBufferPoolForTesting = func(pool BufferPool) { defaultBufferPool.Store(&pool) }
-}
-
-// BufferPool is a pool of buffers that can be shared, resulting in
+// BufferPool is a pool of buffers that can be shared and reused, resulting in
 // decreased memory allocation.
 type BufferPool interface {
 	// Get returns a buffer with specified length from the pool.
@@ -48,27 +43,24 @@ var defaultBufferPoolSizes = []int{
 	1 << 20,  // 1MB
 }
 
-var defaultBufferPool = func() *atomic.Pointer[BufferPool] {
-	pool := NewBufferPool(defaultBufferPoolSizes...)
-	ptr := new(atomic.Pointer[BufferPool])
-	ptr.Store(&pool)
-	return ptr
-}()
+var defaultBufferPool BufferPool
+
+func init() {
+	defaultBufferPool = NewTieredBufferPool(defaultBufferPoolSizes...)
+
+	internal.SetDefaultBufferPoolForTesting = func(pool BufferPool) { defaultBufferPool = pool }
+}
 
 // DefaultBufferPool returns the current default buffer pool. It is a BufferPool
 // created with NewBufferPool that uses a set of default sizes optimized for
 // expected workflows.
 func DefaultBufferPool() BufferPool {
-	return *defaultBufferPool.Load()
+	return defaultBufferPool
 }
 
-func setDefaultBufferPoolForTesting(pool BufferPool) {
-	defaultBufferPool.Store(&pool)
-}
-
-// NewBufferPool returns a BufferPool implementation that uses multiple
+// NewTieredBufferPool returns a BufferPool implementation that uses multiple
 // underlying pools of the given pool sizes.
-func NewBufferPool(poolSizes ...int) BufferPool {
+func NewTieredBufferPool(poolSizes ...int) BufferPool {
 	sort.Ints(poolSizes)
 	pools := make([]*sizedBufferPool, len(poolSizes))
 	for i, s := range poolSizes {

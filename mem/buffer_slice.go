@@ -186,12 +186,7 @@ func (w *writer) Write(p []byte) (n int, err error) {
 // NewWriter wraps the given BufferSlice and BufferPool to implement the
 // io.Writer interface. Every call to Write copies the contents of the given
 // buffer into a new Buffer pulled from the given pool and the Buffer is added to
-// the given BufferSlice. For example, in the context of a http.Handler, the
-// following code can be used to copy the contents of a request into a
-// BufferSlice:
-//
-//	var out mem.BufferSlice
-//	n, err := io.Copy(mem.NewWriter(&out, pool), req.Body)
+// the given BufferSlice.
 func NewWriter(buffers *BufferSlice, pool BufferPool) io.Writer {
 	return &writer{buffers: buffers, pool: pool}
 }

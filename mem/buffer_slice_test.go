@@ -20,6 +20,7 @@ package mem_test
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"testing"
 
@@ -149,7 +150,7 @@ func (s) TestBufferSlice_Reader(t *testing.T) {
 	}
 }
 
-func (s) TestBufferSlice_Writer(t *testing.T) {
+func ExampleNewWriter() {
 	var bs mem.BufferSlice
 	pool := mem.DefaultBufferPool()
 	writer := mem.NewWriter(&bs, pool)
@@ -160,16 +161,12 @@ func (s) TestBufferSlice_Writer(t *testing.T) {
 		[]byte("abcd"),
 	} {
 		n, err := writer.Write(data)
-		if n != len(data) {
-			t.Fatalf("BufferSlice.Writer() wrote %d bytes, want %d", n, len(data))
-		}
-		if err != nil {
-			t.Fatalf("BufferSlice.Writer() failed unexpectedly: %v", err)
-		}
+		fmt.Printf("Wrote %d bytes, err: %v\n", n, err)
 	}
-	gotData := bs.Materialize()
-	wantData := []byte("abcdabcdabcd")
-	if !bytes.Equal(gotData, wantData) {
-		t.Errorf("BufferSlice.Materialize() = %s, want %s", string(gotData), string(wantData))
-	}
+	fmt.Println(string(bs.Materialize()))
+	// Output:
+	// Wrote 4 bytes, err: <nil>
+	// Wrote 4 bytes, err: <nil>
+	// Wrote 4 bytes, err: <nil>
+	// abcdabcdabcd
 }

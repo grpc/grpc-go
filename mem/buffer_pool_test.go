@@ -28,7 +28,7 @@ func (s) TestBufferPool(t *testing.T) {
 	var poolSizes = []int{4, 8, 16, 32}
 	pools := []mem.BufferPool{
 		mem.NopBufferPool{},
-		mem.NewBufferPool(poolSizes...),
+		mem.NewTieredBufferPool(poolSizes...),
 	}
 
 	testSizes := append([]int{1}, poolSizes...)
@@ -47,7 +47,7 @@ func (s) TestBufferPool(t *testing.T) {
 }
 
 func (s) TestBufferPoolIgnoresShortBuffers(t *testing.T) {
-	pool := mem.NewBufferPool(10, 20)
+	pool := mem.NewTieredBufferPool(10, 20)
 	buf := pool.Get(1)
 	if cap(buf) != 10 {
 		t.Fatalf("Get(1) returned buffer with capacity: %d, want 10", cap(buf))
