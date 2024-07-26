@@ -117,7 +117,13 @@ func (p *proxyServer) stop() {
 	}
 }
 
-func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxyReqCheck func(*http.Request) error, serverMessage []byte) {
+type testArgs struct {
+	proxyURLModify func(*url.URL) *url.URL
+	proxyReqCheck  func(*http.Request) error
+	serverMessage  []byte
+}
+
+func testHTTPConnect(t *testing.T, args testArgs) {
 	plis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
@@ -125,9 +131,9 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 	p := &proxyServer{
 		t:            t,
 		lis:          plis,
-		requestCheck: proxyReqCheck,
+		requestCheck: args.proxyReqCheck,
 	}
-	go p.run(len(serverMessage) > 0)
+	go p.run(len(args.serverMessage) > 0)
 	defer p.stop()
 
 	blis, err := net.Listen("tcp", "localhost:0")
@@ -145,14 +151,14 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 			return
 		}
 		defer in.Close()
-		in.Write(serverMessage)
+		in.Write(args.serverMessage)
 		in.Read(recvBuf)
 		done <- nil
 	}()
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
-		return proxyURLModify(&url.URL{Host: plis.Addr().String()}), nil
+		return args.proxyURLModify(&url.URL{Host: plis.Addr().String()}), nil
 	}
 	defer overwrite(hpfe)()
 
@@ -176,47 +182,48 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 		t.Fatalf("received msg: %v, want %v", recvBuf, msg)
 	}
 
-	if len(serverMessage) > 0 {
+	if len(args.serverMessage) > 0 {
 		c.SetReadDeadline(time.Now().Add(defaultTestTimeout))
-		gotServerMessage := make([]byte, len(serverMessage))
+		gotServerMessage := make([]byte, len(args.serverMessage))
 		if _, err := c.Read(gotServerMessage); err != nil {
 			t.Errorf("Got error while reading message from server: %v", err)
 			return
 		}
-		if string(gotServerMessage) != string(serverMessage) {
-			t.Fatalf("message from server: %v, want %v", gotServerMessage, serverMessage)
+		if string(gotServerMessage) != string(args.serverMessage) {
+			t.Errorf("message from server: %v, want %v", gotServerMessage, args.serverMessage)
 		}
 	}
 }
 
 func (s) TestHTTPConnect(t *testing.T) {
-	testHTTPConnect(t,
-		func(in *url.URL) *url.URL {
+	args := testArgs{
+		proxyURLModify: func(in *url.URL) *url.URL {
 			return in
 		},
-		func(req *http.Request) error {
+		proxyReqCheck: func(req *http.Request) error {
 			if req.Method != http.MethodConnect {
 				return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
 			}
 			return nil
 		},
-		nil,
-	)
+	}
+	testHTTPConnect(t, args)
 }
 
 func (s) TestHTTPConnectWithServerHello(t *testing.T) {
-	testHTTPConnect(t,
-		func(in *url.URL) *url.URL {
+	args := testArgs{
+		proxyURLModify: func(in *url.URL) *url.URL {
 			return in
 		},
-		func(req *http.Request) error {
+		proxyReqCheck: func(req *http.Request) error {
 			if req.Method != http.MethodConnect {
 				return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
 			}
 			return nil
 		},
-		[]byte("server-hello"),
-	)
+		serverMessage: []byte("server-hello"),
+	}
+	testHTTPConnect(t, args)
 }
 
 func (s) TestHTTPConnectBasicAuth(t *testing.T) {
@@ -224,12 +231,12 @@ func (s) TestHTTPConnectBasicAuth(t *testing.T) {
 		user     = "notAUser"
 		password = "notAPassword"
 	)
-	testHTTPConnect(t,
-		func(in *url.URL) *url.URL {
+	args := testArgs{
+		proxyURLModify: func(in *url.URL) *url.URL {
 			in.User = url.UserPassword(user, password)
 			return in
 		},
-		func(req *http.Request) error {
+		proxyReqCheck: func(req *http.Request) error {
 			if req.Method != http.MethodConnect {
 				return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
 			}
@@ -241,8 +248,8 @@ func (s) TestHTTPConnectBasicAuth(t *testing.T) {
 			}
 			return nil
 		},
-		nil,
-	)
+	}
+	testHTTPConnect(t, args)
 }
 
 func (s) TestMapAddressEnv(t *testing.T) {
