@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-//option features.field_presence = IMPLICIT;
+// option features.field_presence = IMPLICIT;
 option go_package = "/routeguide";
 option java_multiple_files = true;
 option java_package = "io.grpc.examples.routeguide";
@@ -50,6 +50,10 @@ service RouteGuide {
   //
   // Accepts a stream of RouteNotes sent while a route is being traversed,
   // while receiving other RouteNotes (e.g. from other users).
+
+   // A bidirectional streaming RPC method RouteChat.
+  // Both the client and server send a stream of RouteNote messages to each other.
+  // Clients can send route notes, and the server can send route notes back to the client.
   rpc RouteChat(stream RouteNote) returns (stream RouteNote) {}
 }
 

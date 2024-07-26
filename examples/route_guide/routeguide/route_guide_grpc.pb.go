@@ -41,10 +41,9 @@ type RouteGuideClient interface {
 	// Accepts a stream of Points on a route being traversed, returning a
 	// RouteSummary when traversal is completed.
 	RecordRoute(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RecordRouteClient, error)
-	// A Bidirectional streaming RPC.
-	//
-	// Accepts a stream of RouteNotes sent while a route is being traversed,
-	// while receiving other RouteNotes (e.g. from other users).
+	// A bidirectional streaming RPC method RouteChat.
+	// Both the client and server send a stream of RouteNote messages to each other.
+	// Clients can send route notes, and the server can send route notes back to the client.
 	RouteChat(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RouteChatClient, error)
 }
 
@@ -185,10 +184,9 @@ type RouteGuideServer interface {
 	// Accepts a stream of Points on a route being traversed, returning a
 	// RouteSummary when traversal is completed.
 	RecordRoute(RouteGuide_RecordRouteServer) error
-	// A Bidirectional streaming RPC.
-	//
-	// Accepts a stream of RouteNotes sent while a route is being traversed,
-	// while receiving other RouteNotes (e.g. from other users).
+	// A bidirectional streaming RPC method RouteChat.
+	// Both the client and server send a stream of RouteNote messages to each other.
+	// Clients can send route notes, and the server can send route notes back to the client.
 	RouteChat(RouteGuide_RouteChatServer) error
 	mustEmbedUnimplementedRouteGuideServer()
 }

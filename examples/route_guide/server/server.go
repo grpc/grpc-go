@@ -120,29 +120,31 @@ func (s *routeGuideServer) RecordRoute(stream pb.RouteGuide_RecordRouteServer) e
 
 // RouteChat receives a stream of message/location pairs, and responds with a stream of all
 // previous messages at each of those locations.
+// RouteChat which is a receiver for routeGuideServer.
+// The stream parameter is of type pb.RouteGuide_RouteChatServer which represents the bidirectional streaming RPC for this method.
 func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error {
-	for {
-		in, err := stream.Recv()
-		if err == io.EOF {
+	for { // Infinite loop. This loop continuously processes incoming messages from the client until an error or end of stream is encountered.
+		in, err := stream.Recv() // Receives a message from the client stream. 'in' will hold the received message and 'err' if any error occurred during the receive operation.
+		if err == io.EOF {       // this will checks if the error is 'io.EOF' which indicates that the client has finished sending messages and closed the stream.
 			return nil
 		}
-		if err != nil {
-			return err
+		if err != nil { // Checks if there was an error other than EOF during the receive operation.
+			return err // If there was an error, the method returns the error to indicate a failure in processing.
 		}
-		key := serialize(in.Location)
+		key := serialize(in.Location) // serializes the location data from the received message
 
-		s.mu.Lock()
-		s.routeNotes[key] = append(s.routeNotes[key], in)
+		s.mu.Lock()                                       // Acquires a lock on 's.mu' which is a mutex.
+		s.routeNotes[key] = append(s.routeNotes[key], in) // appends the received route note to the slice of route note.
 		// Note: this copy prevents blocking other clients while serving this one.
 		// We don't need to do a deep copy, because elements in the slice are
 		// insert-only and never modified.
-		rn := make([]*pb.RouteNote, len(s.routeNotes[key]))
-		copy(rn, s.routeNotes[key])
-		s.mu.Unlock()
+		rn := make([]*pb.RouteNote, len(s.routeNotes[key])) // Creates a new slce 'rn'
+		copy(rn, s.routeNotes[key])                         // Copies the elements from the slice in s.routeNotes to the newly created slice 'rn'
+		s.mu.Unlock()                                       // Releases the lock on 's.mu'
 
-		for _, note := range rn {
-			if err := stream.Send(note); err != nil {
-				return err
+		for _, note := range rn { // Iterates the copied slice of route notes to send each note back to the client.
+			if err := stream.Send(note); err != nil { // Send each route note to the client. If an error occurred during sending it will throw an error.
+				return err //If there was ab error while sending a route note, the method returns the error, indicating a error in sending data to the client.
 			}
 		}
 	}
