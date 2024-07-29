@@ -3,7 +3,6 @@ package transport
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -68,10 +67,6 @@ func (hc *hangingClientPrefaceLength) Write(b []byte) (n int, err error) {
 	return n, err
 }
 
-func (hc *hangingClientPrefaceLength) Close() error {
-	return hc.Conn.Close()
-}
-
 func hangingDialerClientPrefaceLength(_ context.Context, addr string) (net.Conn, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
@@ -113,15 +108,10 @@ type hangingFramerWriteSettings struct {
 func (hc *hangingFramerWriteSettings) Write(b []byte) (n int, err error) {
 
 	n, err = hc.Conn.Write(b)
-	fmt.Printf("hangingConn Write %v\n", n)
 	if n == 9 {
 		return 0, errors.New("Framer write setting error")
 	}
 	return n, err
-}
-
-func (hc *hangingFramerWriteSettings) Close() error {
-	return hc.Conn.Close()
 }
 
 func hangingDialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error) {
@@ -149,6 +139,52 @@ func TestNewHTTP2ClientFramerWriteSettingsFailure(t *testing.T) {
 	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: hangingDialerFramerWriteSettings}, func(GoAwayReason) {})
 	if err != nil {
 		if err.Error() != "connection error: desc = \"transport: failed to write initial settings frame: Framer write setting error\"" {
+			t.Fatalf("Error while creating client transport: %v", err)
+		}
+	}
+	if err == nil {
+		t.Errorf("Expected an error, but got nil")
+	}
+}
+
+type hangingFramerWriteWindowUpdate struct {
+	net.Conn
+}
+
+func (hc *hangingFramerWriteWindowUpdate) Write(b []byte) (n int, err error) {
+
+	n, err = hc.Conn.Write(b)
+	if n == 13 {
+		return 0, errors.New("Framer write windowupdate error")
+	}
+	return n, err
+}
+
+func hangingDialerFramerWriteWindowUpdate(_ context.Context, addr string) (net.Conn, error) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	return &hangingFramerWriteWindowUpdate{Conn: conn}, nil
+}
+func TestNewHTTP2ClientFramerWriteWindowUpdateFailure(t *testing.T) {
+	// Create a server.
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening: %v", err)
+	}
+	defer lis.Close()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
+	defer cancel()
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("TestNewHTTP2ClientFramerWriteWindowUpdateFailure panicked: %v", r)
+		}
+	}()
+
+	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: hangingDialerFramerWriteWindowUpdate, InitialConnWindowSize: 80000}, func(GoAwayReason) {})
+	if err != nil {
+		if err.Error() != "connection error: desc = \"transport: failed to write window update: Framer write windowupdate error\"" {
 			t.Fatalf("Error while creating client transport: %v", err)
 		}
 	}
