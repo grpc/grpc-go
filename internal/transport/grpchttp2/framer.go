@@ -124,7 +124,7 @@ type DataFrame struct {
 	Data []byte
 }
 
-// Header returns the 9 byte header for this frame.
+// Header returns the 9 byte HTTP/2 header for this frame.
 func (f *DataFrame) Header() *FrameHeader {
 	return f.hdr
 }
@@ -146,7 +146,7 @@ type HeadersFrame struct {
 	HdrBlock []byte
 }
 
-// Header returns the 9 byte header for this frame.
+// Header returns the 9 byte HTTP/2 header for this frame.
 func (f *HeadersFrame) Header() *FrameHeader {
 	return f.hdr
 }
@@ -168,7 +168,7 @@ type RSTStreamFrame struct {
 	Code ErrCode
 }
 
-// Header returns the 9 byte header for this frame.
+// Header returns the 9 byte HTTP/2 header for this frame.
 func (f *RSTStreamFrame) Header() *FrameHeader {
 	return f.hdr
 }
@@ -188,7 +188,7 @@ type SettingsFrame struct {
 	Settings []Setting
 }
 
-// Header returns the 9 byte header for this frame.
+// Header returns the 9 byte HTTP/2 header for this frame.
 func (f *SettingsFrame) Header() *FrameHeader {
 	return f.hdr
 }
@@ -207,7 +207,7 @@ type PingFrame struct {
 	Data []byte
 }
 
-// Header returns the 9 byte header for this frame.
+// Header returns the 9 byte HTTP/2 header for this frame.
 func (f *PingFrame) Header() *FrameHeader {
 	return f.hdr
 }
@@ -232,7 +232,7 @@ type GoAwayFrame struct {
 	DebugData    []byte
 }
 
-// Header returns the 9 byte header for this frame.
+// Header returns the 9 byte HTTP/2 header for this frame.
 func (f *GoAwayFrame) Header() *FrameHeader {
 	return f.hdr
 }
@@ -253,7 +253,7 @@ type WindowUpdateFrame struct {
 	Inc uint32
 }
 
-// Header returns the 9 byte header for this frame.
+// Header returns the 9 byte HTTP/2 header for this frame.
 func (f *WindowUpdateFrame) Header() *FrameHeader {
 	return f.hdr
 }
@@ -268,7 +268,7 @@ type ContinuationFrame struct {
 	HdrBlock []byte
 }
 
-// Header returns the 9 byte header for this frame.
+// Header returns the 9 byte HTTP/2 header for this frame.
 func (f *ContinuationFrame) Header() *FrameHeader {
 	return f.hdr
 }
@@ -294,7 +294,7 @@ type MetaHeadersFrame struct {
 	Truncated bool
 }
 
-// Header returns the 9 byte header for this frame.
+// Header returns the 9 byte HTTP/2 header for this frame.
 func (f *MetaHeadersFrame) Header() *FrameHeader {
 	return f.hdr
 }
