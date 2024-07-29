@@ -41,9 +41,20 @@ type RouteGuideClient interface {
 	// Accepts a stream of Points on a route being traversed, returning a
 	// RouteSummary when traversal is completed.
 	RecordRoute(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RecordRouteClient, error)
-	// A bidirectional streaming RPC method RouteChat.
-	// Both the client and server send a stream of RouteNote messages to each other.
-	// Clients can send route notes, and the server can send route notes back to the client.
+	// A Bidirectional streaming RPC.
+	//
+	// This RPC method enables real-time communication between the client and the server
+	// through a bidirectional streaming mechanism. Both the client and the server can
+	// send and receive messages concurrently.
+	//
+	// The `RouteChat` method facilitates this kind of interaction, where:
+	//   - The client sends a stream of `RouteNote` messages, which could represent real-time
+	//     updates or messages related to the route being traversed, such as comments or
+	//     notifications about the route.
+	//   - The server processes these incoming `RouteNote` messages and can respond with
+	//     its own stream of `RouteNote` messages. These server responses could contain
+	//     additional information, updates, or responses from other users who are also
+	//     traversing routes.
 	RouteChat(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RouteChatClient, error)
 }
 
@@ -184,9 +195,20 @@ type RouteGuideServer interface {
 	// Accepts a stream of Points on a route being traversed, returning a
 	// RouteSummary when traversal is completed.
 	RecordRoute(RouteGuide_RecordRouteServer) error
-	// A bidirectional streaming RPC method RouteChat.
-	// Both the client and server send a stream of RouteNote messages to each other.
-	// Clients can send route notes, and the server can send route notes back to the client.
+	// A Bidirectional streaming RPC.
+	//
+	// This RPC method enables real-time communication between the client and the server
+	// through a bidirectional streaming mechanism. Both the client and the server can
+	// send and receive messages concurrently.
+	//
+	// The `RouteChat` method facilitates this kind of interaction, where:
+	//   - The client sends a stream of `RouteNote` messages, which could represent real-time
+	//     updates or messages related to the route being traversed, such as comments or
+	//     notifications about the route.
+	//   - The server processes these incoming `RouteNote` messages and can respond with
+	//     its own stream of `RouteNote` messages. These server responses could contain
+	//     additional information, updates, or responses from other users who are also
+	//     traversing routes.
 	RouteChat(RouteGuide_RouteChatServer) error
 	mustEmbedUnimplementedRouteGuideServer()
 }

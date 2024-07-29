@@ -52,8 +52,8 @@ var (
 )
 
 type routeGuideServer struct {
-	pb.UnimplementedRouteGuideServer
-	savedFeatures []*pb.Feature // read-only after initialized
+	pb.UnimplementedRouteGuideServer               // Embeds the default implementation of RouteGuide service methods
+	savedFeatures                    []*pb.Feature // read-only after initialized
 
 	mu         sync.Mutex // protects routeNotes
 	routeNotes map[string][]*pb.RouteNote
