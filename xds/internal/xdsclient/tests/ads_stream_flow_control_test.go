@@ -459,7 +459,6 @@ func (s) TestADSFlowControl_ResourceErrors(t *testing.T) {
 
 	// Configure a watcher for a listener resource.
 	const listenerResourceName = "test-listener-resource"
-	const routeConfigurationName = "test-route-configuration-resource"
 	watcher := newBLockingListenerWatcher()
 	cancel = xdsresource.WatchListener(client, listenerResourceName, watcher)
 	defer cancel()
