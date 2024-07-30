@@ -109,7 +109,7 @@ type UnsafeSearchServiceServer interface {
 }
 
 func RegisterSearchServiceServer(s grpc.ServiceRegistrar, srv SearchServiceServer) {
-	// If the following call pancis, it indicates UnimplementedSearchServiceServer was
+	// If the following call panics, it indicates UnimplementedSearchServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
