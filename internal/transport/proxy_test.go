@@ -84,7 +84,7 @@ func (p *proxyServer) run(waitForServerHello bool) {
 		p.t.Errorf("failed to dial to server: %v", err)
 		return
 	}
-	out.SetReadDeadline(time.Now().Add(defaultTestTimeout))
+	out.SetDeadline(time.Now().Add(defaultTestTimeout))
 	resp := http.Response{StatusCode: http.StatusOK, Proto: "HTTP/1.0"}
 	var buf bytes.Buffer
 	resp.Write(&buf)
@@ -97,6 +97,8 @@ func (p *proxyServer) run(waitForServerHello bool) {
 		bytesRead, err := out.Read(b)
 		if err != nil {
 			p.t.Errorf("Got error while reading server hello: %v", err)
+			in.Close()
+			out.Close()
 			return
 		}
 		buf.Write(b[0:bytesRead])
@@ -167,30 +169,30 @@ func testHTTPConnect(t *testing.T, args testArgs) {
 	defer cancel()
 	c, err := proxyDial(ctx, blis.Addr().String(), "test")
 	if err != nil {
-		t.Fatalf("http connect Dial failed: %v", err)
+		t.Fatalf("HTTP connect Dial failed: %v", err)
 	}
 	defer c.Close()
+	c.SetDeadline(time.Now().Add(defaultTestTimeout))
 
 	// Send msg on the connection.
 	c.Write(msg)
 	if err := <-done; err != nil {
-		t.Fatalf("failed to accept: %v", err)
+		t.Fatalf("Failed to accept: %v", err)
 	}
 
 	// Check received msg.
 	if string(recvBuf) != string(msg) {
-		t.Fatalf("received msg: %v, want %v", recvBuf, msg)
+		t.Fatalf("Received msg: %v, want %v", recvBuf, msg)
 	}
 
 	if len(args.serverMessage) > 0 {
-		c.SetReadDeadline(time.Now().Add(defaultTestTimeout))
 		gotServerMessage := make([]byte, len(args.serverMessage))
 		if _, err := c.Read(gotServerMessage); err != nil {
 			t.Errorf("Got error while reading message from server: %v", err)
 			return
 		}
 		if string(gotServerMessage) != string(args.serverMessage) {
-			t.Errorf("message from server: %v, want %v", gotServerMessage, args.serverMessage)
+			t.Errorf("Message from server: %v, want %v", gotServerMessage, args.serverMessage)
 		}
 	}
 }
