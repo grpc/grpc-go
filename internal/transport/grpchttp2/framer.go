@@ -53,6 +53,10 @@ const (
 	FlagContinuationEndHeaders Flag = 0x4
 )
 
+func (f Flag) Has(flag Flag) bool {
+	return f&flag != 0
+}
+
 // Setting represents the id and value pair of an HTTP/2 setting.
 // See [Setting Format].
 //
@@ -241,6 +245,8 @@ type WindowUpdateFrame struct {
 func (f *WindowUpdateFrame) Header() *FrameHeader {
 	return f.hdr
 }
+
+func (f *WindowUpdateFrame) Free() {}
 
 // ContinuationFrame is the representation of a [CONTINUATION Frame]. The
 // CONTINUATION frame is used to continue a sequence of header block fragments.

@@ -70,3 +70,9 @@ func (err ErrCode) String() string {
 	}
 	return fmt.Sprintf("unknown error code %#x", uint32(err))
 }
+
+type connError ErrCode
+
+func (err connError) Error() string {
+	return fmt.Sprintf("connection error: %s", ErrCode(err))
+}
