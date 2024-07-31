@@ -30,6 +30,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
@@ -38,6 +39,76 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
+
+func (s) TestCompressionCases(t *testing.T) {
+	tests := []struct {
+		desc           string
+		clientUseNop   bool
+		serverUseNop   bool
+		expectedStatus codes.Code
+	}{
+		{
+			desc:           "Client and Server use nop compression",
+			clientUseNop:   true,
+			serverUseNop:   true,
+			expectedStatus: codes.OK,
+		},
+		{
+			desc:           "Only Client use nop compression",
+			clientUseNop:   true,
+			serverUseNop:   false,
+			expectedStatus: codes.Unimplemented,
+		},
+		{
+			desc:           "Only Server use nop compression",
+			clientUseNop:   false,
+			serverUseNop:   true,
+			expectedStatus: codes.Internal,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			ss := &stubserver.StubServer{
+				UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					return &testpb.SimpleResponse{
+						Payload: in.Payload,
+					}, nil
+				},
+			}
+			sopts := []grpc.ServerOption{}
+			if test.serverUseNop {
+				sopts = append(sopts, grpc.RPCCompressor(newNopCompressor()), grpc.RPCDecompressor(newNopDecompressor()))
+			}
+			if err := ss.Start(sopts); err != nil {
+				t.Fatalf("Error starting server: %v", err)
+			}
+
+			defer ss.Stop()
+			dOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+			if test.clientUseNop {
+				dOpts = append(dOpts, grpc.WithCompressor(newNopCompressor()), grpc.WithDecompressor(newNopDecompressor()))
+			}
+			cc, err := grpc.NewClient(ss.Address, dOpts...)
+			if err != nil {
+				t.Fatalf("Failed to dial server: %v", err)
+			}
+			defer cc.Close()
+			ss.Client = testpb.NewTestServiceClient(cc)
+
+			payload := &testpb.SimpleRequest{
+				Payload: &testpb.Payload{
+					Body: []byte("test message"),
+				},
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			_, err = ss.Client.UnaryCall(ctx, payload)
+			if st := status.Code(err); st != test.expectedStatus {
+				t.Errorf("got %v want %v", st, test.expectedStatus)
+			}
+		})
+	}
+}
 
 func (s) TestCompressServerHasNoSupport(t *testing.T) {
 	for _, e := range listTestEnv() {
