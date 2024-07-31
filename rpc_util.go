@@ -726,10 +726,12 @@ func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool
 		if recvCompress == "" || recvCompress == encoding.Identity {
 			return status.New(codes.Internal, "grpc: compressed flag set with identity or empty encoding")
 		}
-		if isServer {
-			return status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
-		} else {
-			return status.Newf(codes.Internal, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
+		if !haveCompressor {
+			if isServer {
+				return status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
+			} else {
+				return status.Newf(codes.Internal, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
+			}
 		}
 	default:
 		return status.Newf(codes.Internal, "grpc: received unexpected payload format %d", pf)
