@@ -16,6 +16,8 @@
  *
  */
 
+// Package grpclog provides logging functionality for internal gRPC packages,
+// outside of the functionality provided by the external `grpclog` package.
 package grpclog
 
 import (

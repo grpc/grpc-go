@@ -16,6 +16,7 @@
  *
  */
 
+// Package internal contains functionality internal to the grpclog package.
 package internal
 
 // LoggerV2Impl is the logger used for the non-depth log functions.
