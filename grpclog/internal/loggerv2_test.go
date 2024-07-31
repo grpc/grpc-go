@@ -16,7 +16,7 @@
  *
  */
 
-package grpclog
+package internal
 
 import (
 	"bytes"
@@ -27,11 +27,11 @@ import (
 
 func TestLoggerV2Severity(t *testing.T) {
 	buffers := []*bytes.Buffer{new(bytes.Buffer), new(bytes.Buffer), new(bytes.Buffer)}
-	SetLoggerV2(NewLoggerV2(buffers[infoLog], buffers[warningLog], buffers[errorLog]))
+	l := NewLoggerV2(buffers[infoLog], buffers[warningLog], buffers[errorLog], LoggerV2Config{})
 
-	Info(severityName[infoLog])
-	Warning(severityName[warningLog])
-	Error(severityName[errorLog])
+	l.Info(severityName[infoLog])
+	l.Warning(severityName[warningLog])
+	l.Error(severityName[errorLog])
 
 	for i := 0; i < fatalLog; i++ {
 		buf := buffers[i]

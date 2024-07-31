@@ -20,13 +20,15 @@ package grpclog
 
 import (
 	"fmt"
+
+	"google.golang.org/grpc/grpclog"
 )
 
 // PrefixLogger does logging with a prefix.
 //
 // Logging method on a nil logs without any prefix.
 type PrefixLogger struct {
-	logger DepthLoggerV2
+	logger grpclog.DepthLoggerV2
 	prefix string
 }
 
@@ -38,7 +40,7 @@ func (pl *PrefixLogger) Infof(format string, args ...any) {
 		pl.logger.InfoDepth(1, fmt.Sprintf(format, args...))
 		return
 	}
-	InfoDepth(1, fmt.Sprintf(format, args...))
+	grpclog.InfoDepth(1, fmt.Sprintf(format, args...))
 }
 
 // Warningf does warning logging.
@@ -48,7 +50,7 @@ func (pl *PrefixLogger) Warningf(format string, args ...any) {
 		pl.logger.WarningDepth(1, fmt.Sprintf(format, args...))
 		return
 	}
-	WarningDepth(1, fmt.Sprintf(format, args...))
+	grpclog.WarningDepth(1, fmt.Sprintf(format, args...))
 }
 
 // Errorf does error logging.
@@ -58,18 +60,18 @@ func (pl *PrefixLogger) Errorf(format string, args ...any) {
 		pl.logger.ErrorDepth(1, fmt.Sprintf(format, args...))
 		return
 	}
-	ErrorDepth(1, fmt.Sprintf(format, args...))
+	grpclog.ErrorDepth(1, fmt.Sprintf(format, args...))
 }
 
 // V reports whether verbosity level l is at least the requested verbose level.
 func (pl *PrefixLogger) V(l int) bool {
-	// TODO(6044): Refactor interfaces LoggerV2 and DepthLogger, and maybe
-	// rewrite PrefixLogger a little to ensure that we don't use the global
-	// `Logger` here, and instead use the `logger` field.
-	return Logger.V(l)
+	if pl == nil {
+		return true
+	}
+	return pl.logger.V(l)
 }
 
 // NewPrefixLogger creates a prefix logger with the given prefix.
-func NewPrefixLogger(logger DepthLoggerV2, prefix string) *PrefixLogger {
+func NewPrefixLogger(logger grpclog.DepthLoggerV2, prefix string) *PrefixLogger {
 	return &PrefixLogger{logger: logger, prefix: prefix}
 }
