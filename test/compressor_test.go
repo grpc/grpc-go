@@ -42,7 +42,7 @@ import (
 
 // TestCompressionCases validates gRPC status codes for different client-server compression setups
 // ensuring the correct behavior when compression is enabled or disabled on either side.
-func (s) TestCompressionCases(t *testing.T) {
+func (s) TestUnsupportedEncodingResponse(t *testing.T) {
 	tests := []struct {
 		name           string
 		clientUseNop   bool
@@ -68,6 +68,7 @@ func (s) TestCompressionCases(t *testing.T) {
 			expectedStatus: codes.Internal,
 		},
 	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ss := &stubserver.StubServer{
@@ -79,6 +80,8 @@ func (s) TestCompressionCases(t *testing.T) {
 			}
 			sopts := []grpc.ServerOption{}
 			if test.serverUseNop {
+				// Using deprecated methods to selectively apply compression only on the server side.
+				// with encoding.registerCompressor(), the compressor is applied globally, affecting both the client and server.
 				sopts = append(sopts, grpc.RPCCompressor(newNopCompressor()), grpc.RPCDecompressor(newNopDecompressor()))
 			}
 			if err := ss.Start(sopts); err != nil {
@@ -88,11 +91,13 @@ func (s) TestCompressionCases(t *testing.T) {
 			defer ss.Stop()
 			dOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 			if test.clientUseNop {
+				// UseCompressor() requires the compressor to be registered using encoding.RegisterCompressor() which applies compressor globally,
+				// Hence, using deprecated WithCompressor() and WithDecompressor() to apply compression only on client.
 				dOpts = append(dOpts, grpc.WithCompressor(newNopCompressor()), grpc.WithDecompressor(newNopDecompressor()))
 			}
 			cc, err := grpc.NewClient(ss.Address, dOpts...)
 			if err != nil {
-				t.Fatalf("Failed to dial server: %v", err)
+				t.Fatalf("grpc.NewClient() returned unexpected error: %v", err)
 			}
 			defer cc.Close()
 			ss.Client = testpb.NewTestServiceClient(cc)
@@ -105,8 +110,8 @@ func (s) TestCompressionCases(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			_, err = ss.Client.UnaryCall(ctx, payload)
-			if st := status.Code(err); st != test.expectedStatus {
-				t.Errorf("got %v want %v", st, test.expectedStatus)
+			if status.Code(err) != test.expectedStatus {
+				t.Errorf("Client.UnaryCall(_, _) = _, %v, want _, error code %s", err, test.expectedStatus)
 			}
 		})
 	}
