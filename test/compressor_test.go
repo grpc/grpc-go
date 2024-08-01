@@ -40,7 +40,7 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-// TestCompressionCases validates gRPC status codes for different client-server compression setups
+// TestUnsupportedEncodingResponse validates gRPC status codes for different client-server compression setups
 // ensuring the correct behavior when compression is enabled or disabled on either side.
 func (s) TestUnsupportedEncodingResponse(t *testing.T) {
 	tests := []struct {
