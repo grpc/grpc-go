@@ -80,7 +80,7 @@ func (s) TestBufferSlice_Ref(t *testing.T) {
 	}
 }
 
-func (s) TestBufferSlice_LazyMaterialize(t *testing.T) {
+func (s) TestBufferSlice_Concatenate(t *testing.T) {
 	tests := []struct {
 		name     string
 		in       mem.BufferSlice
