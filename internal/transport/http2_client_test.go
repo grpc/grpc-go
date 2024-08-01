@@ -1,3 +1,20 @@
+/*
+ *
+ * Copyright 2024 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package transport
 
 import (
@@ -10,24 +27,36 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-type hangingClientPreface struct {
+type clientPrefaceWrite struct {
 	net.Conn
 }
 
-func (hc *hangingClientPreface) Write(b []byte) (n int, err error) {
+type clientPrefaceLength struct {
+	net.Conn
+}
+
+type framerWriteSettings struct {
+	net.Conn
+}
+
+type framerWriteWindowUpdate struct {
+	net.Conn
+}
+
+func (hc *clientPrefaceWrite) Write(b []byte) (n int, err error) {
 	return 0, errors.New("preface write error")
 }
 
-func (hc *hangingClientPreface) Close() error {
+func (hc *clientPrefaceWrite) Close() error {
 	return hc.Conn.Close()
 }
 
-func hangingDialerClientPreface(_ context.Context, addr string) (net.Conn, error) {
+func dialerClientPrefaceWrite(_ context.Context, addr string) (net.Conn, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	return &hangingClientPreface{Conn: conn}, nil
+	return &clientPrefaceWrite{Conn: conn}, nil
 }
 
 func TestNewHTTP2ClientPrefaceFailure(t *testing.T) {
@@ -45,35 +74,32 @@ func TestNewHTTP2ClientPrefaceFailure(t *testing.T) {
 	}()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	defer cancel()
-	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: hangingDialerClientPreface}, func(GoAwayReason) {})
+	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: dialerClientPrefaceWrite}, func(GoAwayReason) {})
+	if err == nil {
+		t.Error("Expected an error, but got nil")
+	}
 	if err != nil {
 		if err.Error() != "connection error: desc = \"transport: failed to write client preface: preface write error\"" {
 			t.Fatalf("Error while creating client transport: %v", err)
 		}
 	}
-	if err == nil {
-		t.Error("Expected an error, but got nil")
-	}
 }
 
-type hangingClientPrefaceLength struct {
-	net.Conn
-}
-
-func (hc *hangingClientPrefaceLength) Write(b []byte) (n int, err error) {
+func (hc *clientPrefaceLength) Write(b []byte) (n int, err error) {
 
 	incorrectPreface := "INCORRECT PREFACE\r\n\r\n"
 	n, err = hc.Conn.Write([]byte(incorrectPreface))
 	return n, err
 }
 
-func hangingDialerClientPrefaceLength(_ context.Context, addr string) (net.Conn, error) {
+func dialerClientPrefaceLength(_ context.Context, addr string) (net.Conn, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	return &hangingClientPrefaceLength{Conn: conn}, nil
+	return &clientPrefaceLength{Conn: conn}, nil
 }
+
 func TestNewHTTP2ClientPrefaceLengthFailure(t *testing.T) {
 	// Create a server.
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -89,38 +115,34 @@ func TestNewHTTP2ClientPrefaceLengthFailure(t *testing.T) {
 		}
 	}()
 
-	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: hangingDialerClientPrefaceLength}, func(GoAwayReason) {})
+	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: dialerClientPrefaceLength}, func(GoAwayReason) {})
+	if err == nil {
+		t.Errorf("Expected an error, but got nil")
+	}
 	if err != nil {
 		if err.Error() != "connection error: desc = \"transport: preface mismatch, wrote 21 bytes; want 24\"" {
 			t.Fatalf("Error while creating client transport: %v", err)
 		}
 	}
-	if err == nil {
-		t.Errorf("Expected an error, but got nil")
-	}
-
 }
 
-type hangingFramerWriteSettings struct {
-	net.Conn
-}
-
-func (hc *hangingFramerWriteSettings) Write(b []byte) (n int, err error) {
-
+func (hc *framerWriteSettings) Write(b []byte) (n int, err error) {
 	n, err = hc.Conn.Write(b)
+	//compare framer value
 	if n == 9 {
 		return 0, errors.New("Framer write setting error")
 	}
 	return n, err
 }
 
-func hangingDialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error) {
+func dialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	return &hangingFramerWriteSettings{Conn: conn}, nil
+	return &framerWriteSettings{Conn: conn}, nil
 }
+
 func TestNewHTTP2ClientFramerWriteSettingsFailure(t *testing.T) {
 	// Create a server.
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -136,37 +158,35 @@ func TestNewHTTP2ClientFramerWriteSettingsFailure(t *testing.T) {
 		}
 	}()
 
-	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: hangingDialerFramerWriteSettings}, func(GoAwayReason) {})
+	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: dialerFramerWriteSettings}, func(GoAwayReason) {})
+	if err == nil {
+		t.Errorf("Expected an error, but got nil")
+	}
 	if err != nil {
 		if err.Error() != "connection error: desc = \"transport: failed to write initial settings frame: Framer write setting error\"" {
 			t.Fatalf("Error while creating client transport: %v", err)
 		}
 	}
-	if err == nil {
-		t.Errorf("Expected an error, but got nil")
-	}
 }
 
-type hangingFramerWriteWindowUpdate struct {
-	net.Conn
-}
-
-func (hc *hangingFramerWriteWindowUpdate) Write(b []byte) (n int, err error) {
+func (hc *framerWriteWindowUpdate) Write(b []byte) (n int, err error) {
 
 	n, err = hc.Conn.Write(b)
+	// compare for windowupdate value
 	if n == 13 {
 		return 0, errors.New("Framer write windowupdate error")
 	}
 	return n, err
 }
 
-func hangingDialerFramerWriteWindowUpdate(_ context.Context, addr string) (net.Conn, error) {
+func dialerFramerWriteWindowUpdate(_ context.Context, addr string) (net.Conn, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	return &hangingFramerWriteWindowUpdate{Conn: conn}, nil
+	return &framerWriteWindowUpdate{Conn: conn}, nil
 }
+
 func TestNewHTTP2ClientFramerWriteWindowUpdateFailure(t *testing.T) {
 	// Create a server.
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -182,13 +202,13 @@ func TestNewHTTP2ClientFramerWriteWindowUpdateFailure(t *testing.T) {
 		}
 	}()
 
-	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: hangingDialerFramerWriteWindowUpdate, InitialConnWindowSize: 80000}, func(GoAwayReason) {})
+	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: dialerFramerWriteWindowUpdate, InitialConnWindowSize: 80000}, func(GoAwayReason) {})
+	if err == nil {
+		t.Errorf("Expected an error, but got nil")
+	}
 	if err != nil {
 		if err.Error() != "connection error: desc = \"transport: failed to write window update: Framer write windowupdate error\"" {
 			t.Fatalf("Error while creating client transport: %v", err)
 		}
-	}
-	if err == nil {
-		t.Errorf("Expected an error, but got nil")
 	}
 }
