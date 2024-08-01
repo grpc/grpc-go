@@ -30,7 +30,8 @@ if [[ "$1" = "-install" ]]; then
   go install \
     golang.org/x/tools/cmd/goimports \
     honnef.co/go/tools/cmd/staticcheck \
-    github.com/client9/misspell/cmd/misspell
+    github.com/client9/misspell/cmd/misspell \
+    github.com/mgechev/revive
   popd
   exit 0
 elif [[ "$#" -ne 0 ]]; then
@@ -94,6 +95,9 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   # - Collection of static analysis checks
   SC_OUT="$(mktemp)"
   staticcheck -go 1.21 -checks 'all' ./... >"${SC_OUT}" || true
+
+  # - Collection of revive linter analysis checks
+  revive -formatter friendly $MOD_DIR/... || true
 
   # Error for anything other than checks that need exclusions.
   noret_grep -v "(ST1000)" "${SC_OUT}" | noret_grep -v "(SA1019)" | noret_grep -v "(ST1003)" | noret_grep -v "(ST1019)\|\(other import of\)" | not grep -v "(SA4000)"
