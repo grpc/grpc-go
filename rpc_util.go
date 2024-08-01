@@ -732,7 +732,7 @@ func compress(in mem.BufferSlice, cp Compressor, compressor encoding.Compressor,
 		// there is no way around this with the old Compressor API. At least it attempts
 		// to return the buffer to the provider, in the hopes it can be reused (maybe
 		// even by a subsequent call to this very function).
-		buf := in.Concatenate(pool)
+		buf := in.MaterializeToBuffer(pool)
 		defer buf.Free()
 		if err := cp.Do(w, buf.ReadOnlyData()); err != nil {
 			return nil, 0, wrapErr(err)

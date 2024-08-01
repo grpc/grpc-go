@@ -80,7 +80,7 @@ func (s) TestBufferSlice_Ref(t *testing.T) {
 	}
 }
 
-func (s) TestBufferSlice_Concatenate(t *testing.T) {
+func (s) TestBufferSlice_MaterializeToBuffer(t *testing.T) {
 	tests := []struct {
 		name     string
 		in       mem.BufferSlice
@@ -90,7 +90,7 @@ func (s) TestBufferSlice_Concatenate(t *testing.T) {
 		{
 			name:     "single",
 			in:       mem.BufferSlice{mem.NewBuffer([]byte("abcd"), nil)},
-			pool:     nil, // Concatenate should not use the pool in this case.
+			pool:     nil, // MaterializeToBuffer should not use the pool in this case.
 			wantData: []byte("abcd"),
 		},
 		{
@@ -106,10 +106,10 @@ func (s) TestBufferSlice_Concatenate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.in.Concatenate(tt.pool)
+			got := tt.in.MaterializeToBuffer(tt.pool)
 			defer got.Free()
 			if !bytes.Equal(got.ReadOnlyData(), tt.wantData) {
-				t.Errorf("BufferSlice.Concatenate() = %s, want %s", string(got.ReadOnlyData()), string(tt.wantData))
+				t.Errorf("BufferSlice.MaterializeToBuffer() = %s, want %s", string(got.ReadOnlyData()), string(tt.wantData))
 			}
 		})
 	}

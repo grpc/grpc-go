@@ -59,7 +59,7 @@ func (c *codecV2) Unmarshal(data mem.BufferSlice, v any) (err error) {
 
 	defer data.Free()
 
-	buf := data.Concatenate(mem.DefaultBufferPool())
+	buf := data.MaterializeToBuffer(mem.DefaultBufferPool())
 	defer buf.Free()
 	// TODO: Upgrade proto.Unmarshal to support mem.BufferSlice. Right now, it's not
 	//  really possible without a major overhaul of the proto package, but the
