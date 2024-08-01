@@ -108,69 +108,90 @@ type loggerT struct {
 	jsonFormat bool
 }
 
-func (g *loggerT) output(severity int, s string) {
-	sevStr := severityName[severity]
-	if !g.jsonFormat {
-		g.m[severity].Output(2, fmt.Sprintf("%v: %v", sevStr, s))
+// printFunc prints the output of fn to the logger of the given severity.
+// If the logger at given severity is io.Discard, fn is not called.
+func (g *loggerT) printFunc(severity int, fn func() string) {
+	lg := g.m[severity]
+	if lg.Writer() == io.Discard {
 		return
 	}
+
+	sevStr := severityName[severity]
+
+	if !g.jsonFormat {
+		lg.Output(2, sevStr+": "+fn())
+		return
+	}
+
 	// TODO: we can also include the logging component, but that needs more
 	// (API) changes.
 	b, _ := json.Marshal(map[string]string{
 		"severity": sevStr,
-		"message":  s,
+		"message":  fn(),
 	})
-	g.m[severity].Output(2, string(b))
+	lg.Output(2, string(b))
+}
+
+func (g *loggerT) printf(severity int, format string, args ...any) {
+	g.printFunc(severity, func() string { return fmt.Sprintf(format, args...) })
+}
+
+func (g *loggerT) print(severity int, v ...any) {
+	g.printFunc(severity, func() string { return fmt.Sprint(v...) })
+}
+
+func (g *loggerT) println(severity int, v ...any) {
+	g.printFunc(severity, func() string { return fmt.Sprintln(v...) })
 }
 
 func (g *loggerT) Info(args ...any) {
-	g.output(infoLog, fmt.Sprint(args...))
+	g.print(infoLog, args...)
 }
 
 func (g *loggerT) Infoln(args ...any) {
-	g.output(infoLog, fmt.Sprintln(args...))
+	g.println(infoLog, args...)
 }
 
 func (g *loggerT) Infof(format string, args ...any) {
-	g.output(infoLog, fmt.Sprintf(format, args...))
+	g.printf(infoLog, format, args...)
 }
 
 func (g *loggerT) Warning(args ...any) {
-	g.output(warningLog, fmt.Sprint(args...))
+	g.print(warningLog, args...)
 }
 
 func (g *loggerT) Warningln(args ...any) {
-	g.output(warningLog, fmt.Sprintln(args...))
+	g.println(warningLog, args...)
 }
 
 func (g *loggerT) Warningf(format string, args ...any) {
-	g.output(warningLog, fmt.Sprintf(format, args...))
+	g.printf(warningLog, format, args...)
 }
 
 func (g *loggerT) Error(args ...any) {
-	g.output(errorLog, fmt.Sprint(args...))
+	g.print(errorLog, args...)
 }
 
 func (g *loggerT) Errorln(args ...any) {
-	g.output(errorLog, fmt.Sprintln(args...))
+	g.println(errorLog, args...)
 }
 
 func (g *loggerT) Errorf(format string, args ...any) {
-	g.output(errorLog, fmt.Sprintf(format, args...))
+	g.printf(errorLog, format, args...)
 }
 
 func (g *loggerT) Fatal(args ...any) {
-	g.output(fatalLog, fmt.Sprint(args...))
+	g.print(fatalLog, args...)
 	os.Exit(1)
 }
 
 func (g *loggerT) Fatalln(args ...any) {
-	g.output(fatalLog, fmt.Sprintln(args...))
+	g.println(fatalLog, args...)
 	os.Exit(1)
 }
 
 func (g *loggerT) Fatalf(format string, args ...any) {
-	g.output(fatalLog, fmt.Sprintf(format, args...))
+	g.printf(fatalLog, format, args...)
 	os.Exit(1)
 }
 
@@ -190,15 +211,35 @@ type LoggerV2Config struct {
 // The infoW, warningW, and errorW writers are used to write log messages of
 // different severity levels.
 func NewLoggerV2(infoW, warningW, errorW io.Writer, c LoggerV2Config) LoggerV2 {
-	var m []*log.Logger
 	flag := log.LstdFlags
 	if c.FormatJSON {
 		flag = 0
 	}
-	m = append(m, log.New(infoW, "", flag))
-	m = append(m, log.New(io.MultiWriter(infoW, warningW), "", flag))
-	ew := io.MultiWriter(infoW, warningW, errorW) // ew will be used for error and fatal.
-	m = append(m, log.New(ew, "", flag))
-	m = append(m, log.New(ew, "", flag))
+
+	infoLogW := infoW
+
+	// Use io.Discard instead of io.MultiWriter when all loggers at a given level
+	// are set to io.Discard. Both this package and the standard log package have
+	// significant optimizations for io.Discard, which io.MultiWriter lacks (as of
+	// this writing).
+
+	warnLogW := io.Discard
+	if warningW != io.Discard || infoW != io.Discard {
+		warnLogW = io.MultiWriter(infoW, warningW)
+	}
+
+	errLogW := io.Discard
+	if errorW != io.Discard || warningW != io.Discard || infoW != io.Discard {
+		errLogW = io.MultiWriter(infoW, warningW, errorW)
+	}
+
+	fatalLogW := errLogW
+
+	m := []*log.Logger{
+		log.New(infoLogW, "", flag),
+		log.New(warnLogW, "", flag),
+		log.New(errLogW, "", flag),
+		log.New(fatalLogW, "", flag),
+	}
 	return &loggerT{m: m, v: c.Verbosity, jsonFormat: c.FormatJSON}
 }
