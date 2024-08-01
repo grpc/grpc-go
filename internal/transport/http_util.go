@@ -333,22 +333,20 @@ func (w *bufWriter) Write(b []byte) (int, error) {
 	for len(b) > 0 {
 		copied := copy(w.buf[w.offset:], b)
 		b = b[copied:]
+		written += copied
 		w.offset += copied
 		if w.offset < w.batchSize {
-			written += copied
 			continue
 		}
-		flushed, err := w.flushKeepBuffer()
-		if err != nil {
-			return written + flushed, err
+		if err := w.flushKeepBuffer(); err != nil {
+			return written, err
 		}
-		written += flushed
 	}
 	return written, nil
 }
 
 func (w *bufWriter) Flush() error {
-	_, err := w.flushKeepBuffer()
+	err := w.flushKeepBuffer()
 	// Only release the buffer if we are in a "shared" mode
 	if w.buf != nil && w.pool != nil {
 		b := w.buf
@@ -358,17 +356,17 @@ func (w *bufWriter) Flush() error {
 	return err
 }
 
-func (w *bufWriter) flushKeepBuffer() (int, error) {
+func (w *bufWriter) flushKeepBuffer() error {
 	if w.err != nil {
-		return 0, w.err
+		return w.err
 	}
 	if w.offset == 0 {
-		return 0, nil
+		return nil
 	}
-	n, err := w.conn.Write(w.buf[:w.offset])
+	_, err := w.conn.Write(w.buf[:w.offset])
 	w.err = toIOError(err)
 	w.offset = 0
-	return n, w.err
+	return w.err
 }
 
 type ioError struct {
