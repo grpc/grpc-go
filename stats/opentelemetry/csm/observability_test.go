@@ -425,9 +425,12 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 func unaryInterceptorAttachXDSLabels(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ctx = istats.SetLabels(ctx, &istats.Labels{
 		TelemetryLabels: map[string]string{
-			// mock what the cluster impl would write here ("csm." xDS Labels)
+			// mock what the cluster impl would write here ("csm." xDS Labels
+			// and locality label)
 			"csm.service_name":           "service_name_val",
 			"csm.service_namespace_name": "service_namespace_val",
+
+			"grpc.lb.locality": "grpc.lb.locality_val",
 		},
 	})
 
@@ -441,8 +444,9 @@ func unaryInterceptorAttachXDSLabels(ctx context.Context, method string, req, re
 // Optional Labels turned on. It then configures an interceptor to attach
 // labels, representing the cluster_impl picker. It then makes a unary RPC, and
 // expects xDS Labels labels to be attached to emitted relevant metrics. Full
-// xDS System alongside OpenTelemetry will be tested with interop. (there is
-// a test for xDS -> Stats handler and this tests -> OTel -> emission).
+// xDS System alongside OpenTelemetry will be tested with interop. (there is a
+// test for xDS -> Stats handler and this tests -> OTel -> emission). It also
+// tests the optional per call locality label in the same manner.
 func (s) TestXDSLabels(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -457,11 +461,11 @@ func (s) TestXDSLabels(t *testing.T) {
 	}
 
 	po := newPluginOption(ctx)
-	dopts := []grpc.DialOption{dialOptionWithCSMPluginOption(opentelemetry.Options{
+	dopts := []grpc.DialOption{dialOptionSetCSM(opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider:  provider,
 			Metrics:        opentelemetry.DefaultMetrics(),
-			OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name"},
+			OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name", "grpc.lb.locality"},
 		},
 	}, po), grpc.WithUnaryInterceptor(unaryInterceptorAttachXDSLabels)}
 	if err := ss.Start(nil, dopts...); err != nil {
@@ -489,6 +493,7 @@ func (s) TestXDSLabels(t *testing.T) {
 
 	serviceNameAttr := attribute.String("csm.service_name", "service_name_val")
 	serviceNamespaceAttr := attribute.String("csm.service_namespace_name", "service_namespace_val")
+	localityAttr := attribute.String("grpc.lb.locality", "grpc.lb.locality_val")
 	meshIDAttr := attribute.String("csm.mesh_id", "unknown")
 	workloadCanonicalServiceAttr := attribute.String("csm.workload_canonical_service", "unknown")
 	remoteWorkloadTypeAttr := attribute.String("csm.remote_workload_type", "unknown")
@@ -500,6 +505,7 @@ func (s) TestXDSLabels(t *testing.T) {
 		unaryStatusAttr,
 		serviceNameAttr,
 		serviceNamespaceAttr,
+		localityAttr,
 		meshIDAttr,
 		workloadCanonicalServiceAttr,
 		remoteWorkloadTypeAttr,
