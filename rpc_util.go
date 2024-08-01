@@ -692,7 +692,7 @@ func encode(c baseCodec, msg any) (mem.BufferSlice, error) {
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
 	}
-	if b.Len() > math.MaxUint32 {
+	if uint(b.Len()) > math.MaxUint32 {
 		b.Free()
 		return nil, status.Errorf(codes.ResourceExhausted, "grpc: message too large (%d bytes)", len(b))
 	}
