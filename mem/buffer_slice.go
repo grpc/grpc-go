@@ -93,11 +93,11 @@ func (s BufferSlice) Materialize() []byte {
 	return out
 }
 
-// Concatenate functions like Materialize except that it writes the data to a
-// single Buffer pulled from the given BufferPool. As a special case, if the
+// MaterializeToBuffer functions like Materialize except that it writes the data
+// to a single Buffer pulled from the given BufferPool. As a special case, if the
 // input BufferSlice only actually has one Buffer, this function has nothing to
 // do and simply returns said Buffer.
-func (s BufferSlice) Concatenate(pool BufferPool) *Buffer {
+func (s BufferSlice) MaterializeToBuffer(pool BufferPool) *Buffer {
 	if len(s) == 1 {
 		return s[0].Ref()
 	}
