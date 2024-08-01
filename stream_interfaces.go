@@ -22,9 +22,12 @@ package grpc
 // request, many responses) RPC. It is generic over the type of the response
 // message. It is used in generated code.
 type ServerStreamingClient[Res any] interface {
-	// Recv receives a message from the server. The message type is determined
-	// by the Res type parameter. This method blocks until a message is received
-	// or an error occurs.
+	// Recv receives the next message from the server's response stream. This
+	// method is called repeatedly to receive all messages sent by the server.
+	// The message type is determined by the Res type parameter of the
+	// ServerStreamingClient receiver.
+	// It returns the received message and an error if any occurred.
+	// It returns (nil, io.EOF) when the server has finished sending messages.
 	Recv() (*Res, error)
 
 	// ClientStream represents the basic client-side streaming operations.
@@ -37,9 +40,12 @@ type ServerStreamingClient[Res any] interface {
 // request, many responses) RPC. It is generic over the type of the response
 // message. It is used in generated code.
 type ServerStreamingServer[Res any] interface {
-	// Send sends a message to the client. The message type is determined by
-	// the Res type parameter. This method blocks until the message is sent
-	// or an error occurs.
+	// Send sends a response message to the client. This method is called to
+	// send each individual message as part of the server's response stream.
+	// The message type is determined by the Res type parameter
+	// of the ServerStreamingServer receiver.
+	// It returns an error if the message could not be sent.
+	// The end-of-stream is indicated by the return of the server-side handler.
 	Send(*Res) error
 
 	// ServerStream represents the basic server-side streaming operations.
@@ -53,14 +59,20 @@ type ServerStreamingServer[Res any] interface {
 // message stream and the type of the unary response message. It is used in
 // generated code.
 type ClientStreamingClient[Req any, Res any] interface {
-	// Send sends a message to the server. The message type is determined by
-	// the Req type parameter. This method blocks until the message is sent
-	// or an error occurs.
+	// Send sends a request message to the server. This method is called repeatedly
+	// to send all messages as part of the client’s request stream.
+	// The message type is determined by the Req type parameter
+	// of the ClientStreamingClient receiver. It returns an error
+	// if the message could not be sent.
 	Send(*Req) error
 
-	// CloseAndRecv closes the sending side of the stream and receives the
-	// unary response from the server. The response message type is determined
-	// by the Res type parameter.
+	// CloseAndRecv closes the sending side of the request stream and waits for the server
+	// to send a unary response message. This method is typically called after
+	// sending all request messages to signal the end of the stream and to receive
+	// the final response from the server. The response message type is determined
+	// by the Res type parameter of the ClientStreamingClient receiver.
+	// It returns the received response message and an error if any occurred.
+	// The CloseAndRecv method must be called once and only once to complete the RPC.
 	CloseAndRecv() (*Res, error)
 
 	// ClientStream represents the basic client-side streaming operations.
@@ -74,13 +86,21 @@ type ClientStreamingClient[Req any, Res any] interface {
 // message stream and the type of the unary response message. It is used in
 // generated code.
 type ClientStreamingServer[Req any, Res any] interface {
-	// Recv receives a message from the client. The message type is determined
-	// by the Req type parameter. This method blocks until a message is received
-	// or an error occurs.
+	// Recv reads a request message from the client. This method is called repeatedly
+	// to receive all messages sent by the client as part of the request stream.
+	// The message type is determined by the Req type parameter of the
+	// ClientStreamingServer receiver.
+	// It returns the received message and an error if any occurred.
+	// It returns (nil, io.EOF) when the client has finished sending messages.
 	Recv() (*Req, error)
 
-	// SendAndClose sends the unary response to the client and closes the stream.
-	// The response message type is determined by the Res type parameter.
+	// SendAndClose sends the unary response message to the client and closes
+	// the stream. This method is typically called after processing all
+	// request messages from the client to send the final response and close
+	// the stream. The response type is determined by the Res type parameter
+	// of the ClientStreamingServer receiver.
+	// It returns an error if the response could not be sent.
+	// SendAndClose must be called once and only once to complete the RPC.
 	SendAndClose(*Res) error
 
 	// ServerStream represents the basic server-side streaming operations.
@@ -94,14 +114,18 @@ type ClientStreamingServer[Req any, Res any] interface {
 // request message stream and the type of the response message stream. It is
 // used in generated code.
 type BidiStreamingClient[Req any, Res any] interface {
-	// Send sends a message to the server. The message type is determined by
-	// the Req type parameter. This method blocks until the message is sent
-	// or an error occurs.
+	// Send sends a single message to the server. This method is called repeatedly
+	// to send all messages as part of the client’s request stream.
+	// The message type is determined by the Req type parameter
+	// of the BidiStreamingClient receiver.
+	// It returns an error if the message could not be sent.
 	Send(*Req) error
 
-	// Recv receives a message from the server. The message type is determined
-	// by the Res type parameter. This method blocks until a message is received
-	// or an error occurs.
+	// Recv receives the next message from the server's response stream. This
+	// method is called repeatedly to receive all messages sent by the server. The
+	// message type is determined by the Res type parameter of the BidiStreamingClient
+	// receiver. It returns the received message and an error if any occurred.
+	// It returns (nil, io.EOF) when the server has finished sending messages.
 	Recv() (*Res, error)
 
 	// ClientStream represents the basic client-side streaming operations.
@@ -115,14 +139,21 @@ type BidiStreamingClient[Req any, Res any] interface {
 // request message stream and the type of the response message stream. It is
 // used in generated code.
 type BidiStreamingServer[Req any, Res any] interface {
-	// Recv receives a message from the client. The message type is determined
-	// by the Req type parameter. This method blocks until a message is received
-	// or an error occurs.
+	// Recv receives a request message from the client. This method is called repeatedly
+	// to receive all messages sent by the client as part of the request stream.
+	// The message type is determined by the Req type parameter of the
+	// BidiStreamingServer receiver.
+	// It returns the received message and an error if any occurred.
+	// It returns (nil, io.EOF) when the client has finished sending messages.
 	Recv() (*Req, error)
 
-	// Send sends a message to the client. The message type is determined by
-	// the Res type parameter. This method blocks until the message is sent
-	// or an error occurs.
+	// Send sends a response message to the client. This method is called
+	// repeatedly to send all messages as part of the server's response stream.
+	// The message type is determined by the Res type parameter of the
+	// BidiStreamingServer receiver.
+	// It returns an error if the message could not be sent.
+	// The end-of-stream for the server-to-client stream is indicated by the return
+	// of the bidirectional streaming method handler.
 	Send(*Res) error
 
 	// ServerStream represents the basic server-side streaming operations.
