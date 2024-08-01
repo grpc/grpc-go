@@ -110,8 +110,8 @@ func (s) TestUnsupportedEncodingResponse(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			_, err = ss.Client.UnaryCall(ctx, payload)
-			if status.Code(err) != test.expectedStatus {
-				t.Errorf("Client.UnaryCall(_, _) = _, %v, want _, error code %s", err, test.expectedStatus)
+			if got, want := status.Code(err), test.expectedStatus; got != want {
+				t.Errorf("Client.UnaryCall() = %v, want %v", got, want)
 			}
 		})
 	}
