@@ -34,6 +34,16 @@ type ClientParameters struct {
 	// After a duration of this time if the client doesn't see any activity it
 	// pings the server to see if the transport is still alive.
 	// If set below 10s, a minimum value of 10s will be used instead.
+	//
+	// Note that server has a default EnforcementPolicy.MinTime of 5 minutes
+	// (which means the client shouldn't ping more frequently than every 5 minutes).
+	//
+	// But it's not a strong requirement to set this less than
+	// EnforcementPolicy.MinTime, because the server sends a GOAWAY with error code
+	// ENHANCE_YOUR_CALM and debug data equal to ASCII "too_many_pings", and the
+	// client will double this interval upon receiving that.
+	//
+	// For more details, see https://github.com/grpc/proposal/blob/master/A8-client-side-keepalive.md
 	Time time.Duration // The current default value is infinity.
 	// After having pinged for keepalive check, the client waits for a duration
 	// of Timeout and if no activity is seen even after that the connection is
