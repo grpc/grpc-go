@@ -11,6 +11,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240604185151-ef581f913117
 	google.golang.org/grpc v1.64.0
 	google.golang.org/grpc/gcp/observability v1.0.1
+	google.golang.org/grpc/security/advancedtls v1.0.0
 	google.golang.org/grpc/stats/opentelemetry v0.0.0-20240604165302-6d236200ea68
 	google.golang.org/protobuf v1.34.1
 )
