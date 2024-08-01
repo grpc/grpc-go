@@ -31,22 +31,45 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/mem"
 )
+
+func init() {
+	defaultPool := mem.DefaultBufferPool()
+	globalPool.Store(&defaultPool)
+	(internal.SetDefaultBufferPoolForTesting.(func(mem.BufferPool)))(&globalPool)
+}
+
+var globalPool swappableBufferPool
+
+type swappableBufferPool struct {
+	atomic.Pointer[mem.BufferPool]
+}
+
+func (b *swappableBufferPool) Get(length int) []byte {
+	return (*b.Load()).Get(length)
+}
+
+func (b *swappableBufferPool) Put(buf []byte) {
+	(*b.Load()).Put(buf)
+}
 
 // SetTrackingBufferPool upgrades the default buffer pool in the mem package to
 // one that tracks where buffers are allocated. CheckTrackingBufferPool should
 // then be invoked at the end of the test to validate that all buffers pulled
 // from the pool were returned.
 func SetTrackingBufferPool(efer Errorfer) {
-	mem.SetDefaultBufferPoolForTesting(&trackingBufferPool{
-		pool:             mem.DefaultBufferPool(),
+	newPool := mem.BufferPool(&trackingBufferPool{
+		pool:             *globalPool.Load(),
 		efer:             efer,
 		allocatedBuffers: make(map[*byte][]uintptr),
 	})
+	globalPool.Store(&newPool)
 }
 
 // DisableBufferLeakCheckTestFailure disables failing the test when a buffer leak
@@ -54,7 +77,7 @@ func SetTrackingBufferPool(efer Errorfer) {
 // specific tests while still leaving the checker enabled on the remaining tests.
 // Reset when CheckTrackingBufferPool is invoked.
 func DisableBufferLeakCheckTestFailure() {
-	p := mem.DefaultBufferPool().(*trackingBufferPool)
+	p := (*globalPool.Load()).(*trackingBufferPool)
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -65,11 +88,11 @@ func DisableBufferLeakCheckTestFailure() {
 // unit tests if not all buffers were returned. It is invalid to invoke this
 // method without previously having invoked SetTrackingBufferPool.
 func CheckTrackingBufferPool() {
-	p := mem.DefaultBufferPool().(*trackingBufferPool)
+	p := (*globalPool.Load()).(*trackingBufferPool)
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	mem.SetDefaultBufferPoolForTesting(p.pool)
+	globalPool.Store(&p.pool)
 
 	type uniqueTrace struct {
 		stack []uintptr
