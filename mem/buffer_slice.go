@@ -70,11 +70,13 @@ func (s BufferSlice) Free() {
 }
 
 // CopyTo copies each of the underlying Buffer's data into the given buffer,
-// returning the number of bytes copied.
-func (s BufferSlice) CopyTo(out []byte) int {
+// returning the number of bytes copied. Has the same semantics as the copy
+// builtin in that it will copy as many bytes as it can, stopping when either dst
+// is full or s runs out of data, returning the minimum of s.Len() and len(dst).
+func (s BufferSlice) CopyTo(dst []byte) int {
 	off := 0
 	for _, b := range s {
-		off += copy(out[off:], b.ReadOnlyData())
+		off += copy(dst[off:], b.ReadOnlyData())
 	}
 	return off
 }
@@ -91,11 +93,11 @@ func (s BufferSlice) Materialize() []byte {
 	return out
 }
 
-// LazyMaterialize functions like Materialize except that it writes the data to a
+// Concatenate functions like Materialize except that it writes the data to a
 // single Buffer pulled from the given BufferPool. As a special case, if the
 // input BufferSlice only actually has one Buffer, this function has nothing to
-// do and simply returns said Buffer, hence it being "lazy".
-func (s BufferSlice) LazyMaterialize(pool BufferPool) *Buffer {
+// do and simply returns said Buffer.
+func (s BufferSlice) Concatenate(pool BufferPool) *Buffer {
 	if len(s) == 1 {
 		return s[0].Ref()
 	}

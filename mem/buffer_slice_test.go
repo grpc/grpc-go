@@ -90,7 +90,7 @@ func (s) TestBufferSlice_LazyMaterialize(t *testing.T) {
 		{
 			name:     "single",
 			in:       mem.BufferSlice{mem.NewBuffer([]byte("abcd"), nil)},
-			pool:     nil, // LazyMaterialize should not use the pool in this case.
+			pool:     nil, // Concatenate should not use the pool in this case.
 			wantData: []byte("abcd"),
 		},
 		{
@@ -106,9 +106,9 @@ func (s) TestBufferSlice_LazyMaterialize(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.in.LazyMaterialize(tt.pool)
+			got := tt.in.Concatenate(tt.pool)
 			if !bytes.Equal(got.ReadOnlyData(), tt.wantData) {
-				t.Errorf("BufferSlice.LazyMaterialize() = %s, want %s", string(got.ReadOnlyData()), string(tt.wantData))
+				t.Errorf("BufferSlice.Concatenate() = %s, want %s", string(got.ReadOnlyData()), string(tt.wantData))
 			}
 		})
 	}

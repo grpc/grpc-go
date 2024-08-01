@@ -21,6 +21,7 @@ package mem_test
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/mem"
 )
 
@@ -43,6 +44,18 @@ func (s) TestBufferPool(t *testing.T) {
 
 			p.Put(bs)
 		}
+	}
+}
+
+func (s) TestBufferPoolClears(t *testing.T) {
+	pool := mem.NewTieredBufferPool(4)
+
+	buf := pool.Get(4)
+	copy(buf, "1234")
+	pool.Put(buf)
+
+	if !cmp.Equal(buf, make([]byte, 4)) {
+		t.Fatalf("buffer not cleared")
 	}
 }
 
