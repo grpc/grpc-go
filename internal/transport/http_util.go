@@ -363,8 +363,8 @@ func (w *bufWriter) flushKeepBuffer() error {
 	if w.offset == 0 {
 		return nil
 	}
-	_, err := w.conn.Write(w.buf[:w.offset])
-	w.err = toIOError(err)
+	_, w.err = w.conn.Write(w.buf[:w.offset])
+	w.err = toIOError(w.err)
 	w.offset = 0
 	return w.err
 }
