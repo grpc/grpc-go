@@ -44,32 +44,32 @@ import (
 // ensuring the correct behavior when compression is enabled or disabled on either side.
 func (s) TestCompressionCases(t *testing.T) {
 	tests := []struct {
-		desc           string
+		name           string
 		clientUseNop   bool
 		serverUseNop   bool
 		expectedStatus codes.Code
 	}{
 		{
-			desc:           "Client and Server use nop compression",
+			name:           "client_server_nop_compression",
 			clientUseNop:   true,
 			serverUseNop:   true,
 			expectedStatus: codes.OK,
 		},
 		{
-			desc:           "Only Client use nop compression",
+			name:           "client_nop_compression",
 			clientUseNop:   true,
 			serverUseNop:   false,
 			expectedStatus: codes.Unimplemented,
 		},
 		{
-			desc:           "Only Server use nop compression",
+			name:           "server_nop_compression",
 			clientUseNop:   false,
 			serverUseNop:   true,
 			expectedStatus: codes.Internal,
 		},
 	}
 	for _, test := range tests {
-		t.Run(test.desc, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			ss := &stubserver.StubServer{
 				UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 					return &testpb.SimpleResponse{
