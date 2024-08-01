@@ -16,15 +16,8 @@
  *
  */
 
-// Package mem provides utilities that facilitate reusing memory. This involves
-// pulling Buffer instances from a BufferPool and freeing the Buffers when done,
-// returning them to the pool. Each buffer is reference counted, allowing different
-// goroutines to concurrently access then free the data without explicit
-// synchronization by leveraging multiple references.
-//
-// By convention, any APIs that return (mem.BufferSlice, error) should reduce the
-// burden on the caller by never returning a mem.BufferSlice that needs to be freed
-// if the error is non-nil, unless explicitly listed in the API's documentation.
+// Package mem provides utilities that facilitate memory reuse in byte slices
+// that are used as buffers.
 //
 // # Experimental
 //
@@ -37,30 +30,44 @@ import (
 	"sync/atomic"
 )
 
-// A Buffer represents a piece of data (in bytes) that can be referenced then
-// later freed, via a given function. Note that a Buffer is not safe for
-// concurrent access and instead each goroutine should use its own reference to
-// the data (which can be acquired with Ref). Instances of Buffer can only be
-// acquired by NewBuffer, and the given free function will only be invoked when
-// Free is invoked on all references.
+// A Buffer represents a reference counted piece of data (in bytes) that can be
+// acquired by a call to NewBuffer() or Copy(). A reference to a Buffer may be
+// released by calling Free(), which invokes the given free function only after
+// all references are released.
+//
+// Note that a Buffer is not safe for concurrent access and instead each
+// goroutine should use its own reference to the data, which can be acquired via
+// a call to Ref().
+//
+// Attempts to access the underlying data after releasing the reference to the
+// Buffer will panic.
 type Buffer struct {
 	data  []byte
 	refs  *atomic.Int32
-	free  func([]byte)
+	free  func()
 	freed bool
 }
 
-// NewBuffer creates a new buffer from the given data, initializing the reference
-// counter to 1. Note that the given data is not copied.
+// NewBuffer creates a new Buffer from the given data, initializing the
+// reference counter to 1. The given free function is called when all references
+// to the returned Buffer are released.
+//
+// Note that the backing array of the given data is not copied.
 func NewBuffer(data []byte, free func([]byte)) *Buffer {
-	b := &Buffer{data: data, refs: new(atomic.Int32), free: free}
+	b := &Buffer{data: data, refs: new(atomic.Int32)}
+	if free != nil {
+		b.free = func() { free(data) }
+	}
 	b.refs.Add(1)
 	return b
 }
 
-// Copy first invokes BufferPool.Get to acquire a new buffer of the size of the
-// given buffer, then copies the given buffer's data into the new buffer, and
-// finally returns a Buffer that, when freed, will be returned to the pool.
+// Copy creates a new Buffer from the given data, initializing the reference
+// counter to 1.
+//
+// It acquires a []byte from the given pool and copies over the backing array
+// of the given data. The []byte acquired from the pool is returned to the
+// pool when all references to the returned Buffer are released.
 func Copy(data []byte, pool BufferPool) *Buffer {
 	buf := pool.Get(len(data))
 	copy(buf, data)
@@ -76,9 +83,7 @@ func (b *Buffer) ReadOnlyData() []byte {
 	return b.data
 }
 
-// Ref returns a new reference to this Buffer's underlying buffer. Calling Free
-// on this reference will only free the buffer if all other references have been
-// freed.
+// Ref returns a new reference to this Buffer's underlying byte slice.
 func (b *Buffer) Ref() *Buffer {
 	if b.freed {
 		panic("Cannot ref freed buffer")
@@ -92,10 +97,8 @@ func (b *Buffer) Ref() *Buffer {
 	}
 }
 
-// Free decrements this Buffer's reference counter. It then frees the underlying
-// buffer if the counter reaches 0 as a result of this call, does nothing
-// otherwise, or if Free has already been called. All subsequent calls to
-// ReadOnlyData will panic. Noop if receiver is nil.
+// Free decrements this Buffer's reference counter and frees the underlying
+// byte slice if the counter reaches 0 as a result of this call.
 func (b *Buffer) Free() {
 	if b.freed {
 		return
@@ -104,7 +107,7 @@ func (b *Buffer) Free() {
 	b.freed = true
 	refs := b.refs.Add(-1)
 	if refs == 0 && b.free != nil {
-		b.free(b.data)
+		b.free()
 	}
 	b.data = nil
 }
@@ -121,8 +124,7 @@ func (b *Buffer) Len() int {
 
 // Split modifies the receiver to point to the first n bytes while it returns a
 // new reference to the remaining bytes. The returned Buffer functions just like
-// a normal reference acquired using Ref in that the underlying buffer will only
-// be freed once both the receiver and the returned Buffer are freed.
+// a normal reference acquired using Ref().
 func (b *Buffer) Split(n int) *Buffer {
 	if b.freed {
 		panic("Cannot split freed buffer")
@@ -130,27 +132,18 @@ func (b *Buffer) Split(n int) *Buffer {
 
 	b.refs.Add(1)
 
-	data := b.data
-	var free func([]byte)
-	if f := b.free; f != nil {
-		free = func(_ []byte) {
-			f(data)
-		}
-	}
-
-	b.data = data[:n]
-	b.free = free
-
-	return &Buffer{
-		data: data[n:],
+	split := &Buffer{
 		refs: b.refs,
-		free: free,
+		free: b.free,
 	}
+
+	b.data, split.data = b.data[:n], b.data[n:]
+
+	return split
 }
 
-// String returns a string representation of the buffer that contains the address
-// of the Buffer, the address of the first byte of ReadOnlyData (used to uniquely
-// identify the underlying buffer) and the length of the data.
+// String returns a string representation of the buffer. May be used for
+// debugging purposes.
 func (b *Buffer) String() string {
 	return fmt.Sprintf("mem.Buffer(%p, data: %p, length: %d)", b, b.ReadOnlyData(), len(b.ReadOnlyData()))
 }

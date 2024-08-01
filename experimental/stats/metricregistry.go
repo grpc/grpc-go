@@ -68,6 +68,7 @@ type MetricDescriptor struct {
 // MetricType is the type of metric.
 type MetricType int
 
+// Type of metric supported by this instrument registry.
 const (
 	MetricTypeIntCount MetricType = iota
 	MetricTypeFloatCount
@@ -81,6 +82,12 @@ const (
 // on.
 type Int64CountHandle MetricDescriptor
 
+// Descriptor returns the int64 count handle typecast to a pointer to a
+// MetricDescriptor.
+func (h *Int64CountHandle) Descriptor() *MetricDescriptor {
+	return (*MetricDescriptor)(h)
+}
+
 // Record records the int64 count value on the metrics recorder provided.
 func (h *Int64CountHandle) Record(recorder MetricsRecorder, incr int64, labels ...string) {
 	recorder.RecordInt64Count(h, incr, labels...)
@@ -90,6 +97,12 @@ func (h *Int64CountHandle) Record(recorder MetricsRecorder, incr int64, labels .
 // passed at the recording point in order to know which metric to record on.
 type Float64CountHandle MetricDescriptor
 
+// Descriptor returns the float64 count handle typecast to a pointer to a
+// MetricDescriptor.
+func (h *Float64CountHandle) Descriptor() *MetricDescriptor {
+	return (*MetricDescriptor)(h)
+}
+
 // Record records the float64 count value on the metrics recorder provided.
 func (h *Float64CountHandle) Record(recorder MetricsRecorder, incr float64, labels ...string) {
 	recorder.RecordFloat64Count(h, incr, labels...)
@@ -98,6 +111,12 @@ func (h *Float64CountHandle) Record(recorder MetricsRecorder, incr float64, labe
 // Int64HistoHandle is a typed handle for an int histogram metric. This handle
 // is passed at the recording point in order to know which metric to record on.
 type Int64HistoHandle MetricDescriptor
+
+// Descriptor returns the int64 histo handle typecast to a pointer to a
+// MetricDescriptor.
+func (h *Int64HistoHandle) Descriptor() *MetricDescriptor {
+	return (*MetricDescriptor)(h)
+}
 
 // Record records the int64 histo value on the metrics recorder provided.
 func (h *Int64HistoHandle) Record(recorder MetricsRecorder, incr int64, labels ...string) {
@@ -109,6 +128,12 @@ func (h *Int64HistoHandle) Record(recorder MetricsRecorder, incr int64, labels .
 // record on.
 type Float64HistoHandle MetricDescriptor
 
+// Descriptor returns the float64 histo handle typecast to a pointer to a
+// MetricDescriptor.
+func (h *Float64HistoHandle) Descriptor() *MetricDescriptor {
+	return (*MetricDescriptor)(h)
+}
+
 // Record records the float64 histo value on the metrics recorder provided.
 func (h *Float64HistoHandle) Record(recorder MetricsRecorder, incr float64, labels ...string) {
 	recorder.RecordFloat64Histo(h, incr, labels...)
@@ -117,6 +142,12 @@ func (h *Float64HistoHandle) Record(recorder MetricsRecorder, incr float64, labe
 // Int64GaugeHandle is a typed handle for an int gauge metric. This handle is
 // passed at the recording point in order to know which metric to record on.
 type Int64GaugeHandle MetricDescriptor
+
+// Descriptor returns the int64 gauge handle typecast to a pointer to a
+// MetricDescriptor.
+func (h *Int64GaugeHandle) Descriptor() *MetricDescriptor {
+	return (*MetricDescriptor)(h)
+}
 
 // Record records the int64 histo value on the metrics recorder provided.
 func (h *Int64GaugeHandle) Record(recorder MetricsRecorder, incr int64, labels ...string) {

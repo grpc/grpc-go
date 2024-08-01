@@ -16,23 +16,30 @@
  *
  */
 
-package mem
+package mem_test
 
-import "testing"
+import (
+	"testing"
 
-func TestSharedBufferPool(t *testing.T) {
-	pools := []BufferPool{
-		NopBufferPool{},
-		NewBufferPool(defaultBufferPoolSizes...),
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/mem"
+)
+
+func (s) TestBufferPool(t *testing.T) {
+	var poolSizes = []int{4, 8, 16, 32}
+	pools := []mem.BufferPool{
+		mem.NopBufferPool{},
+		mem.NewTieredBufferPool(poolSizes...),
 	}
 
-	testSizes := append(defaultBufferPoolSizes, 1<<20+1)
+	testSizes := append([]int{1}, poolSizes...)
+	testSizes = append(testSizes, 64)
 
 	for _, p := range pools {
 		for _, l := range testSizes {
 			bs := p.Get(l)
 			if len(bs) != l {
-				t.Fatalf("Expected buffer of length %d, got %d", l, len(bs))
+				t.Fatalf("Get(%d) returned buffer of length %d, want %d", l, len(bs), l)
 			}
 
 			p.Put(bs)
@@ -40,16 +47,23 @@ func TestSharedBufferPool(t *testing.T) {
 	}
 }
 
-func TestTieredBufferPool(t *testing.T) {
-	pool := &tieredBufferPool{
-		sizedPools: []*sizedBufferPool{
-			newBufferPool(10),
-			newBufferPool(20),
-		},
+func (s) TestBufferPoolClears(t *testing.T) {
+	pool := mem.NewTieredBufferPool(4)
+
+	buf := pool.Get(4)
+	copy(buf, "1234")
+	pool.Put(buf)
+
+	if !cmp.Equal(buf, make([]byte, 4)) {
+		t.Fatalf("buffer not cleared")
 	}
+}
+
+func (s) TestBufferPoolIgnoresShortBuffers(t *testing.T) {
+	pool := mem.NewTieredBufferPool(10, 20)
 	buf := pool.Get(1)
 	if cap(buf) != 10 {
-		t.Fatalf("Unexpected buffer capacity: %d", cap(buf))
+		t.Fatalf("Get(1) returned buffer with capacity: %d, want 10", cap(buf))
 	}
 
 	// Insert a short buffer into the pool, which is currently empty.

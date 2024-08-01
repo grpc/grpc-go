@@ -28,11 +28,12 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/stats"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -42,6 +43,9 @@ const serviceNamespaceKey = "service_namespace"
 const serviceNamespaceKeyCSM = "csm.service_namespace_name"
 const serviceNameValue = "grpc-service"
 const serviceNamespaceValue = "grpc-service-namespace"
+
+const localityKey = "grpc.lb.locality"
+const localityValue = `{"region":"region-1","zone":"zone-1","subZone":"subzone-1"}`
 
 // TestTelemetryLabels tests that telemetry labels from CDS make their way to
 // the stats handler. The stats handler sets the mutable context value that the
@@ -126,13 +130,14 @@ func (fsh *fakeStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	// aren't started. All of these should have access to the desired telemetry
 	// labels.
 	case *stats.OutPayload, *stats.InPayload, *stats.End:
-		if label, ok := fsh.labels.TelemetryLabels[serviceNameKeyCSM]; !ok || label != serviceNameValue {
-			fsh.t.Fatalf("for telemetry label %v, want: %v, got: %v", serviceNameKeyCSM, serviceNameValue, label)
+		want := map[string]string{
+			serviceNameKeyCSM:      serviceNameValue,
+			serviceNamespaceKeyCSM: serviceNamespaceValue,
+			localityKey:            localityValue,
 		}
-		if label, ok := fsh.labels.TelemetryLabels[serviceNamespaceKeyCSM]; !ok || label != serviceNamespaceValue {
-			fsh.t.Fatalf("for telemetry label %v, want: %v, got: %v", serviceNamespaceKeyCSM, serviceNamespaceValue, label)
+		if diff := cmp.Diff(fsh.labels.TelemetryLabels, want); diff != "" {
+			fsh.t.Fatalf("fsh.labels.TelemetryLabels (-got +want): %v", diff)
 		}
-
 	default:
 		// Nothing to assert for the other stats.Handler callouts.
 	}
