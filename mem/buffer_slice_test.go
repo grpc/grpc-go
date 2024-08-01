@@ -107,6 +107,7 @@ func (s) TestBufferSlice_Concatenate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.in.Concatenate(tt.pool)
+			defer got.Free()
 			if !bytes.Equal(got.ReadOnlyData(), tt.wantData) {
 				t.Errorf("BufferSlice.Concatenate() = %s, want %s", string(got.ReadOnlyData()), string(tt.wantData))
 			}
