@@ -53,10 +53,10 @@ type Buffer struct {
 // to the returned Buffer are released.
 //
 // Note that the backing array of the given data is not copied.
-func NewBuffer(data []byte, free func([]byte)) *Buffer {
+func NewBuffer(data []byte, onFree func([]byte)) *Buffer {
 	b := &Buffer{data: data, refs: new(atomic.Int32)}
-	if free != nil {
-		b.free = func() { free(data) }
+	if onFree != nil {
+		b.free = func() { onFree(data) }
 	}
 	b.refs.Add(1)
 	return b
