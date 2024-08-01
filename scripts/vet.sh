@@ -168,8 +168,10 @@ XXXXX PleaseIgnoreUnused'
   popd
 done
 
-# Print the revive linter analysis checks
-# TODO: Fail if any checks are failing once existing issues are fixed.
-revive -formatter friendly ./...
+# - Collection of revive linter analysis checks
+REV_OUT="$(mktemp)"
+revive -formatter unix ./... >"${REV_OUT}" || true
+
+(noret_grep "[unused-parameter]" "${REV_OUT}" | not grep -v "\.pb\.go:") || true
 
 echo SUCCESS
