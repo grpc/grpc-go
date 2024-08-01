@@ -168,10 +168,14 @@ XXXXX PleaseIgnoreUnused'
   popd
 done
 
-# - Collection of revive linter analysis checks
+# Collection of revive linter analysis checks
 REV_OUT="$(mktemp)"
-revive -formatter unix ./... >"${REV_OUT}" || true
+revive -formatter plain ./... >"${REV_OUT}" || true
 
-(noret_grep "[unused-parameter]" "${REV_OUT}" | not grep -v "\.pb\.go:") || true
+# Error for anything other than checks that need exclusions.
+noret_grep -v "unused" "${REV_OUT}" | not grep -v "\.pb\.go:"
+
+# Exclude exported linter checks for generated code.
+#(noret_grep "exported" "${REV_OUT}" | noret_grep "var-naming" "${REV_OUT}" | noret_grep "redefines-builtin-id" "${REV_OUT}" | noret_grep "package-comments" "${REV_OUT}" | noret_grep "empty-block" "${REV_OUT}" | noret_grep "var-declaration" "${REV_OUT}" | noret_grep "indent-error-flow" "${REV_OUT}" | noret_grep "increment-decrement" "${REV_OUT}" | noret_grep -v "context-as-argument" "${REV_OUT}" | noret_grep -v "context-as-argument" "${REV_OUT}" | not grep -v "\.pb\.go:") || true
 
 echo SUCCESS
