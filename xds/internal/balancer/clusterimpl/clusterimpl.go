@@ -58,7 +58,7 @@ var (
 
 	// Below function is no-op in actual code, but can be overridden in
 	// tests to give tests visibility into exactly when certain events happen.
-	newPickerUpdated = func() {}
+	newPickerHook = func() {}
 )
 
 func init() {
@@ -76,7 +76,6 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		loadWrapper:     loadstore.NewWrapper(),
 		pickerUpdateCh:  buffer.NewUnbounded(),
 		requestCountMax: defaultRequestCountMax,
-		cfgUpdateDone:   make(chan struct{}),
 	}
 	b.logger = prefixLogger(b)
 	b.child = gracefulswitch.NewBalancer(b, bOpts)
@@ -112,9 +111,7 @@ type clusterImplBalancer struct {
 	logger    *grpclog.PrefixLogger
 	xdsClient xdsclient.XDSClient
 
-	config *LBConfig
-	// cfgUpdateDone verifies the completion of config update
-	cfgUpdateDone    chan struct{}
+	config           *LBConfig
 	child            *gracefulswitch.Balancer
 	cancelLoadReport func()
 	edsServiceName   string
@@ -136,7 +133,12 @@ type clusterImplBalancer struct {
 	requestCounter        *xdsclient.ClusterRequestsCounter
 	requestCountMax       uint32
 	telemetryLabels       map[string]string
-	pickerUpdateCh        *buffer.Unbounded
+	// Set during UpdateClientConnState when pushing updates to child policies.
+	// Prevents state updates from child policies causing new pickers to be sent
+	// up the channel. Cleared after all child policies have processed the
+	// updates sent to them, after which a new picker is sent up the channel.
+	inhibitPickerUpdates bool
+	pickerUpdateCh       *buffer.Unbounded
 }
 
 // updateLoadStore checks the config for load store, and decides whether it
@@ -217,6 +219,11 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 	return nil
 }
 
+type resumePickerUpdates struct {
+	done     chan struct{}
+	lbConfig *LBConfig
+}
+
 func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	if b.closed.HasFired() {
 		b.logger.Warningf("xds: received ClientConnState {%+v} after clusterImplBalancer was closed", s)
@@ -262,12 +269,16 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	}
 	b.config = newConfig
 
+	b.mu.Lock()
+	b.logger.Infof("Delaying picker updates until config is propagated to and processed by child policies")
+	b.inhibitPickerUpdates = true
+	b.mu.Unlock()
 	// Notify run() of this new config, in case drop and request counter need
 	// update (which means a new picker needs to be generated).
 	b.pickerUpdateCh.Put(newConfig)
-	// Wait for LB config update to be done
-	<-b.cfgUpdateDone
-	newPickerUpdated()
+	done := make(chan struct{})
+	b.pickerUpdateCh.Put(resumePickerUpdates{done: done, lbConfig: newConfig})
+	<-done
 
 	// Addresses and sub-balancer config are sent to sub-balancer.
 	return b.child.UpdateClientConnState(balancer.ClientConnState{
@@ -502,6 +513,18 @@ func (b *clusterImplBalancer) run() {
 						requestCountMax: b.requestCountMax,
 					}),
 				})
+			case resumePickerUpdates:
+				dc := b.handleDropAndRequestCount(u.lbConfig)
+				if dc != nil && b.childState.Picker != nil {
+					b.ClientConn.UpdateState(balancer.State{
+						ConnectivityState: b.childState.ConnectivityState,
+						Picker:            b.newPicker(dc),
+					})
+				}
+				newPickerHook()
+				b.logger.Infof("Resuming picker updates after config propagation to child policies")
+				b.inhibitPickerUpdates = false
+				close(u.done)
 			case *LBConfig:
 				b.telemetryLabels = u.TelemetryLabels
 				dc := b.handleDropAndRequestCount(u)
@@ -511,7 +534,6 @@ func (b *clusterImplBalancer) run() {
 						Picker:            b.newPicker(dc),
 					})
 				}
-				b.cfgUpdateDone <- struct{}{}
 			}
 			b.mu.Unlock()
 		case <-b.closed.Done():

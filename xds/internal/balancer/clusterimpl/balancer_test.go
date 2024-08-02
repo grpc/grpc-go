@@ -823,16 +823,16 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 // Test ensures the picker is updated synchronously upon
 // receipt of a configuration update.
 func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
-	// Override the newPickerUpdated to ensure picker was updated.
-	pckrUpdated := make(chan struct{})
-	origNewPickerUpdated := newPickerUpdated
-	newPickerUpdated = func() {
+	// Override the newPickerHook to ensure picker was updated.
+	pickerUpdated := make(chan struct{})
+	origNewPickerHook := newPickerHook
+	newPickerHook = func() {
 		select {
-		case pckrUpdated <- struct{}{}:
+		case pickerUpdated <- struct{}{}:
 		default:
 		}
 	}
-	defer func() { newPickerUpdated = origNewPickerUpdated }()
+	defer func() { newPickerHook = origNewPickerHook }()
 
 	var testLocality = xdsinternal.LocalityID{
 		Region:  "test-region",
@@ -880,24 +880,20 @@ func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	// Wait for the config update to be done
-	//
-	// Note: We don't need to check separately if picker update is
-	// happening synchronously with config update , as
-	// UpdateClientConnState waits for the picker update and then
-	// returns from it.
+
+	// Wait for the picker update to be done
 	select {
-	case <-pckrUpdated:
+	case <-pickerUpdated:
 	case err := <-errCh:
-		t.Fatalf("client conn state updated before picker was updated: %v", err)
+		t.Fatalf("Client conn state updated before picker was updated: %v", err)
 	case <-ctx.Done():
-		t.Fatalf("xds_cluster_impl config update couldn't complete: %v", ctx.Err().Error())
+		t.Fatal("Timed out waiting for picker update on receipt of configuration update")
 	}
 
 	// Once picker was updated, wait for client conn update
 	// to complete.
 	if err := <-errCh; err != nil {
-		t.Fatalf("error updating client conn state: %v", err)
+		t.Fatalf("Error updating client conn state: %v", err)
 	}
 }
 
