@@ -660,18 +660,18 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 	clientConnUpdateHook = func() { clientConnUpdateDone <- struct{}{} }
 	defer func() { clientConnUpdateHook = origClientConnUpdateHook }()
 
-	// Override the newPickerGenerated to measure the number of times
+	// Override the newPickerHook to measure the number of times
 	// the picker is generated because state updates can be inhibited.
 	pickerUpdateCh := make(chan struct{})
 	// Block udpates until the last configuration update
 	blkUpdates := atomic.Bool{}
-	origNewPickerGenerated := newPickerGenerated
-	newPickerGenerated = func() {
+	origNewPickerHook := newPickerHook
+	newPickerHook = func() {
 		if blkUpdates.Load() == true {
 			pickerUpdateCh <- struct{}{}
 		}
 	}
-	defer func() { newPickerGenerated = origNewPickerGenerated }()
+	defer func() { newPickerHook = origNewPickerHook }()
 
 	// Override the cache entry size func, and always return 1.
 	origEntrySizeFunc := computeDataCacheEntrySize
@@ -794,14 +794,16 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 	select {
 	case <-clientConnUpdateDone:
 	case <-ctx.Done():
-		t.Fatalf("error waiting for the client conn update on initial configuration udpate: %v", ctx.Err().Error())
+		t.Fatal("Timed out waiting for the client conn update on initial configuration update")
 	}
 
 	cc := <-ccCh
 	defer cc.Close()
-
+	// Make an RPC call with empty metadata, which will eventually throw
+	// the error as no metadata will match from rlsServer response
+	// callback defined above. This will cause the control channel to
+	// throw the error and cause the item to get into backoff.
 	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, nil)
-	t.Logf("Verifying if RPC failed when listener is stopped.")
 
 	ctxOutgoing := metadata.AppendToOutgoingContext(ctx, "n1", "v1")
 	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh1)
@@ -821,9 +823,9 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 		select {
 		case <-pickerUpdateCh:
 		case <-clientConnUpdateDone:
-			t.Fatalf("Client conn update was completed before picker update.")
+			t.Fatal("Client conn update was completed before picker update.")
 		case <-ctx.Done():
-			t.Errorf("error waiting for picker update on receipt of configuration udpate: %v", ctx.Err().Error())
+			t.Fatal("Timed out waiting for picker update upon receiving a configuration update")
 		}
 	}
 
@@ -832,7 +834,7 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 	select {
 	case <-clientConnUpdateDone:
 	case <-ctx.Done():
-		t.Errorf("client conn update could not complete: %v", ctx.Err().Error())
+		t.Fatal("Timed out waiting for client conn update upon receiving a configuration update")
 	}
 }
 

@@ -77,7 +77,7 @@ var (
 	clientConnUpdateHook = func() {}
 	dataCachePurgeHook   = func() {}
 	resetBackoffHook     = func() {}
-	newPickerGenerated   = func() {}
+	newPickerHook        = func() {}
 )
 
 func init() {
@@ -306,8 +306,7 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		// `resizeCache` boolean) because `cacheMu` needs to be grabbed before
 		// `stateMu` if we are to hold both locks at the same time.
 		b.cacheMu.Lock()
-		evicted := b.dataCache.resize(newCfg.cacheSizeBytes)
-		if evicted {
+		if b.dataCache.resize(newCfg.cacheSizeBytes) {
 			b.sendNewPickerLocked()
 		}
 		b.cacheMu.Unlock()
@@ -511,10 +510,10 @@ func (b *rlsBalancer) sendNewPickerLocked() {
 		ConnectivityState: aggregatedState,
 		Picker:            picker,
 	}
-	newPickerGenerated()
 	if !b.inhibitPickerUpdates {
 		b.logger.Infof("New balancer.State: %+v", state)
 		b.cc.UpdateState(state)
+		newPickerHook()
 	} else {
 		b.logger.Infof("Delaying picker update: %+v", state)
 	}
