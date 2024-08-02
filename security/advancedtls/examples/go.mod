@@ -5,7 +5,7 @@ go 1.21
 require (
 	google.golang.org/grpc v1.64.0
 	google.golang.org/grpc/examples v0.0.0-20240606220939-dfcabe08c639
-	google.golang.org/grpc/security/advancedtls v0.0.0-20240606220939-dfcabe08c639
+	google.golang.org/grpc/security/advancedtls v1.0.0
 )
 
 require (
