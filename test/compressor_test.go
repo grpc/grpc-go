@@ -40,32 +40,33 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-// TestUnsupportedEncodingResponse validates gRPC status codes for different client-server compression setups
+// TestUnsupportedEncodingResponse validates gRPC status codes
+// for different client-server compression setups
 // ensuring the correct behavior when compression is enabled or disabled on either side.
 func (s) TestUnsupportedEncodingResponse(t *testing.T) {
 	tests := []struct {
 		name           string
-		clientUseNop   bool
-		serverUseNop   bool
-		expectedStatus codes.Code
+		clientCompress bool
+		serverCompress bool
+		wantStatus     codes.Code
 	}{
 		{
-			name:           "client_server_nop_compression",
-			clientUseNop:   true,
-			serverUseNop:   true,
-			expectedStatus: codes.OK,
+			name:           "client_server_compression",
+			clientCompress: true,
+			serverCompress: true,
+			wantStatus:     codes.OK,
 		},
 		{
-			name:           "client_nop_compression",
-			clientUseNop:   true,
-			serverUseNop:   false,
-			expectedStatus: codes.Unimplemented,
+			name:           "client_compression",
+			clientCompress: true,
+			serverCompress: false,
+			wantStatus:     codes.Unimplemented,
 		},
 		{
-			name:           "server_nop_compression",
-			clientUseNop:   false,
-			serverUseNop:   true,
-			expectedStatus: codes.Internal,
+			name:           "server_compression",
+			clientCompress: false,
+			serverCompress: true,
+			wantStatus:     codes.Internal,
 		},
 	}
 
@@ -73,34 +74,32 @@ func (s) TestUnsupportedEncodingResponse(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ss := &stubserver.StubServer{
 				UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-					return &testpb.SimpleResponse{
-						Payload: in.Payload,
-					}, nil
+					return &testpb.SimpleResponse{Payload: in.Payload}, nil
 				},
 			}
 			sopts := []grpc.ServerOption{}
-			if test.serverUseNop {
+			if test.serverCompress {
 				// Using deprecated methods to selectively apply compression only on the server side.
-				// with encoding.registerCompressor(), the compressor is applied globally, affecting both the client and server.
+				// with encoding.registerCompressor(), the compressor is applied globally,
+				// affecting both the client and server.
 				sopts = append(sopts, grpc.RPCCompressor(newNopCompressor()), grpc.RPCDecompressor(newNopDecompressor()))
 			}
 			if err := ss.Start(sopts); err != nil {
 				t.Fatalf("Error starting server: %v", err)
 			}
-
 			defer ss.Stop()
-			dOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-			if test.clientUseNop {
-				// UseCompressor() requires the compressor to be registered using encoding.RegisterCompressor() which applies compressor globally,
-				// Hence, using deprecated WithCompressor() and WithDecompressor() to apply compression only on client.
-				dOpts = append(dOpts, grpc.WithCompressor(newNopCompressor()), grpc.WithDecompressor(newNopDecompressor()))
+
+			dopts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+			if test.clientCompress {
+				// UseCompressor() requires the compressor to be registered
+				// using encoding.RegisterCompressor() which applies compressor globally,
+				// Hence, using deprecated WithCompressor() and WithDecompressor()
+				// to apply compression only on client.
+				dopts = append(dopts, grpc.WithCompressor(newNopCompressor()), grpc.WithDecompressor(newNopDecompressor()))
 			}
-			cc, err := grpc.NewClient(ss.Address, dOpts...)
-			if err != nil {
-				t.Fatalf("grpc.NewClient() returned unexpected error: %v", err)
+			if err := ss.StartClient(dopts...); err != nil {
+				t.Fatalf("Error starting client: %v", err)
 			}
-			defer cc.Close()
-			ss.Client = testpb.NewTestServiceClient(cc)
 
 			payload := &testpb.SimpleRequest{
 				Payload: &testpb.Payload{
@@ -109,8 +108,8 @@ func (s) TestUnsupportedEncodingResponse(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			_, err = ss.Client.UnaryCall(ctx, payload)
-			if got, want := status.Code(err), test.expectedStatus; got != want {
+			_, err := ss.Client.UnaryCall(ctx, payload)
+			if got, want := status.Code(err), test.wantStatus; got != want {
 				t.Errorf("Client.UnaryCall() = %v, want %v", got, want)
 			}
 		})

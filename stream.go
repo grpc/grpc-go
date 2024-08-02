@@ -1083,8 +1083,7 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 		// Only initialize this state once per stream.
 		a.decompSet = true
 	}
-	err = recv(a.p, cs.codec, a.s, a.dc, m, *cs.callInfo.maxReceiveMessageSize, payInfo, a.decomp, false)
-	if err != nil {
+	if err = recv(a.p, cs.codec, a.s, a.dc, m, *cs.callInfo.maxReceiveMessageSize, payInfo, a.decomp, false); err != nil {
 		if err == io.EOF {
 			if statusErr := a.s.Status().Err(); statusErr != nil {
 				return statusErr
@@ -1122,8 +1121,7 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 	}
 	// Special handling for non-server-stream rpcs.
 	// This recv expects EOF or errors, so we don't collect inPayload.
-	err = recv(a.p, cs.codec, a.s, a.dc, m, *cs.callInfo.maxReceiveMessageSize, nil, a.decomp, false)
-	if err == nil {
+	if err = recv(a.p, cs.codec, a.s, a.dc, m, *cs.callInfo.maxReceiveMessageSize, nil, a.decomp, false); err == nil {
 		return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 	}
 	if err == io.EOF {
@@ -1423,8 +1421,7 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 		// Only initialize this state once per stream.
 		as.decompSet = true
 	}
-	err = recv(as.p, as.codec, as.s, as.dc, m, *as.callInfo.maxReceiveMessageSize, nil, as.decomp, false)
-	if err != nil {
+	if err = recv(as.p, as.codec, as.s, as.dc, m, *as.callInfo.maxReceiveMessageSize, nil, as.decomp, false); err != nil {
 		if err == io.EOF {
 			if statusErr := as.s.Status().Err(); statusErr != nil {
 				return statusErr
@@ -1444,8 +1441,7 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 
 	// Special handling for non-server-stream rpcs.
 	// This recv expects EOF or errors, so we don't collect inPayload.
-	err = recv(as.p, as.codec, as.s, as.dc, m, *as.callInfo.maxReceiveMessageSize, nil, as.decomp, false)
-	if err == nil {
+	if err = recv(as.p, as.codec, as.s, as.dc, m, *as.callInfo.maxReceiveMessageSize, nil, as.decomp, false); err == nil {
 		return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 	}
 	if err == io.EOF {
