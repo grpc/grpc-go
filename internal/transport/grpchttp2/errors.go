@@ -30,6 +30,7 @@ import "fmt"
 // [GOAWAY]: https://httpwg.org/specs/rfc7540.html#GOAWAY
 type ErrCode uint32
 
+// Error Codes defined by the HTTP/2 Spec.
 const (
 	ErrCodeNoError            ErrCode = 0x0
 	ErrCodeProtocol           ErrCode = 0x1
