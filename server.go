@@ -1304,7 +1304,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 	} else if rc != "" && rc != encoding.Identity {
 		decomp = encoding.GetCompressor(rc)
 		if decomp == nil {
-			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q, supported compressions: %v", rc, grpcutil.RegisteredCompressors())
+			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", rc)
 			t.WriteStatus(stream, st)
 			return st.Err()
 		}
@@ -1632,7 +1632,7 @@ func (s *Server) processStreamingRPC(ctx context.Context, t transport.ServerTran
 	} else if rc != "" && rc != encoding.Identity {
 		ss.decomp = encoding.GetCompressor(rc)
 		if ss.decomp == nil {
-			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q, supported compressions: %v", rc, grpcutil.RegisteredCompressors())
+			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", rc)
 			t.WriteStatus(ss.s, st)
 			return st.Err()
 		}
