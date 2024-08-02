@@ -33,7 +33,6 @@ const initHeaderTableSize = 4096 // Default HTTP/2 header table size.
 type FrameType uint8
 
 // Frame types defined in the HTTP/2 Spec.
-// Frame types defined in the HTTP/2 Spec.
 const (
 	FrameTypeData         FrameType = 0x0
 	FrameTypeHeaders      FrameType = 0x1
@@ -48,7 +47,6 @@ const (
 // Flag represents one or more flags set on an HTTP/2 Frame.
 type Flag uint8
 
-// Flags defined in the HTTP/2 Spec.
 // Flags defined in the HTTP/2 Spec.
 const (
 	FlagDataEndStream          Flag = 0x1
@@ -83,7 +81,6 @@ type Setting struct {
 // [Setting Values]: https://httpwg.org/specs/rfc7540.html#SettingValues
 type SettingID uint16
 
-// Setting IDs defined in the HTTP/2 Spec.
 // Setting IDs defined in the HTTP/2 Spec.
 const (
 	SettingsHeaderTableSize      SettingID = 0x1
@@ -133,7 +130,6 @@ type DataFrame struct {
 }
 
 // Header returns the 9 byte HTTP/2 header for this frame.
-// Header returns the 9 byte HTTP/2 header for this frame.
 func (f *DataFrame) Header() *FrameHeader {
 	return f.hdr
 }
@@ -148,7 +144,6 @@ type HeadersFrame struct {
 }
 
 // Header returns the 9 byte HTTP/2 header for this frame.
-// Header returns the 9 byte HTTP/2 header for this frame.
 func (f *HeadersFrame) Header() *FrameHeader {
 	return f.hdr
 }
@@ -162,7 +157,6 @@ type RSTStreamFrame struct {
 	Code ErrCode
 }
 
-// Header returns the 9 byte HTTP/2 header for this frame.
 // Header returns the 9 byte HTTP/2 header for this frame.
 func (f *RSTStreamFrame) Header() *FrameHeader {
 	return f.hdr
@@ -179,7 +173,6 @@ type SettingsFrame struct {
 }
 
 // Header returns the 9 byte HTTP/2 header for this frame.
-// Header returns the 9 byte HTTP/2 header for this frame.
 func (f *SettingsFrame) Header() *FrameHeader {
 	return f.hdr
 }
@@ -194,7 +187,6 @@ type PingFrame struct {
 	Data *mem.Buffer
 }
 
-// Header returns the 9 byte HTTP/2 header for this frame.
 // Header returns the 9 byte HTTP/2 header for this frame.
 func (f *PingFrame) Header() *FrameHeader {
 	return f.hdr
@@ -213,7 +205,6 @@ type GoAwayFrame struct {
 }
 
 // Header returns the 9 byte HTTP/2 header for this frame.
-// Header returns the 9 byte HTTP/2 header for this frame.
 func (f *GoAwayFrame) Header() *FrameHeader {
 	return f.hdr
 }
@@ -228,7 +219,6 @@ type WindowUpdateFrame struct {
 }
 
 // Header returns the 9 byte HTTP/2 header for this frame.
-// Header returns the 9 byte HTTP/2 header for this frame.
 func (f *WindowUpdateFrame) Header() *FrameHeader {
 	return f.hdr
 }
@@ -242,7 +232,6 @@ type ContinuationFrame struct {
 	HdrBlock *mem.Buffer
 }
 
-// Header returns the 9 byte HTTP/2 header for this frame.
 // Header returns the 9 byte HTTP/2 header for this frame.
 func (f *ContinuationFrame) Header() *FrameHeader {
 	return f.hdr
@@ -260,7 +249,6 @@ type MetaHeadersFrame struct {
 	Truncated bool
 }
 
-// Header returns the 9 byte HTTP/2 header for this frame.
 // Header returns the 9 byte HTTP/2 header for this frame.
 func (f *MetaHeadersFrame) Header() *FrameHeader {
 	return f.hdr
