@@ -221,10 +221,6 @@ var (
 	// sets the metric registry to its original state. Only called in testing
 	// functions.
 	SnapshotMetricRegistryForTesting any // func(t *testing.T)
-
-	// SetDefaultBufferPoolForTesting updates the default buffer pool, for
-	// testing purposes.
-	SetDefaultBufferPoolForTesting any // func(mem.BufferPool)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health

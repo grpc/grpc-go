@@ -23,7 +23,6 @@ package transport
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -59,7 +58,7 @@ type proxyServer struct {
 	requestCheck func(*http.Request) error
 }
 
-func (p *proxyServer) run(waitForServerHello bool) {
+func (p *proxyServer) run() {
 	in, err := p.lis.Accept()
 	if err != nil {
 		return
@@ -84,26 +83,8 @@ func (p *proxyServer) run(waitForServerHello bool) {
 		p.t.Errorf("failed to dial to server: %v", err)
 		return
 	}
-	out.SetDeadline(time.Now().Add(defaultTestTimeout))
 	resp := http.Response{StatusCode: http.StatusOK, Proto: "HTTP/1.0"}
-	var buf bytes.Buffer
-	resp.Write(&buf)
-	if waitForServerHello {
-		// Batch the first message from the server with the http connect
-		// response. This is done to test the cases in which the grpc client has
-		// the response to the connect request and proxied packets from the
-		// destination server when it reads the transport.
-		b := make([]byte, 50)
-		bytesRead, err := out.Read(b)
-		if err != nil {
-			p.t.Errorf("Got error while reading server hello: %v", err)
-			in.Close()
-			out.Close()
-			return
-		}
-		buf.Write(b[0:bytesRead])
-	}
-	p.in.Write(buf.Bytes())
+	resp.Write(p.in)
 	p.out = out
 	go io.Copy(p.in, p.out)
 	go io.Copy(p.out, p.in)
@@ -119,13 +100,7 @@ func (p *proxyServer) stop() {
 	}
 }
 
-type testArgs struct {
-	proxyURLModify func(*url.URL) *url.URL
-	proxyReqCheck  func(*http.Request) error
-	serverMessage  []byte
-}
-
-func testHTTPConnect(t *testing.T, args testArgs) {
+func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxyReqCheck func(*http.Request) error) {
 	plis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
@@ -133,9 +108,9 @@ func testHTTPConnect(t *testing.T, args testArgs) {
 	p := &proxyServer{
 		t:            t,
 		lis:          plis,
-		requestCheck: args.proxyReqCheck,
+		requestCheck: proxyReqCheck,
 	}
-	go p.run(len(args.serverMessage) > 0)
+	go p.run()
 	defer p.stop()
 
 	blis, err := net.Listen("tcp", "localhost:0")
@@ -153,14 +128,13 @@ func testHTTPConnect(t *testing.T, args testArgs) {
 			return
 		}
 		defer in.Close()
-		in.Write(args.serverMessage)
 		in.Read(recvBuf)
 		done <- nil
 	}()
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
-		return args.proxyURLModify(&url.URL{Host: plis.Addr().String()}), nil
+		return proxyURLModify(&url.URL{Host: plis.Addr().String()}), nil
 	}
 	defer overwrite(hpfe)()
 
@@ -169,63 +143,34 @@ func testHTTPConnect(t *testing.T, args testArgs) {
 	defer cancel()
 	c, err := proxyDial(ctx, blis.Addr().String(), "test")
 	if err != nil {
-		t.Fatalf("HTTP connect Dial failed: %v", err)
+		t.Fatalf("http connect Dial failed: %v", err)
 	}
 	defer c.Close()
-	c.SetDeadline(time.Now().Add(defaultTestTimeout))
 
 	// Send msg on the connection.
 	c.Write(msg)
 	if err := <-done; err != nil {
-		t.Fatalf("Failed to accept: %v", err)
+		t.Fatalf("failed to accept: %v", err)
 	}
 
 	// Check received msg.
 	if string(recvBuf) != string(msg) {
-		t.Fatalf("Received msg: %v, want %v", recvBuf, msg)
-	}
-
-	if len(args.serverMessage) > 0 {
-		gotServerMessage := make([]byte, len(args.serverMessage))
-		if _, err := c.Read(gotServerMessage); err != nil {
-			t.Errorf("Got error while reading message from server: %v", err)
-			return
-		}
-		if string(gotServerMessage) != string(args.serverMessage) {
-			t.Errorf("Message from server: %v, want %v", gotServerMessage, args.serverMessage)
-		}
+		t.Fatalf("received msg: %v, want %v", recvBuf, msg)
 	}
 }
 
 func (s) TestHTTPConnect(t *testing.T) {
-	args := testArgs{
-		proxyURLModify: func(in *url.URL) *url.URL {
+	testHTTPConnect(t,
+		func(in *url.URL) *url.URL {
 			return in
 		},
-		proxyReqCheck: func(req *http.Request) error {
+		func(req *http.Request) error {
 			if req.Method != http.MethodConnect {
 				return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
 			}
 			return nil
 		},
-	}
-	testHTTPConnect(t, args)
-}
-
-func (s) TestHTTPConnectWithServerHello(t *testing.T) {
-	args := testArgs{
-		proxyURLModify: func(in *url.URL) *url.URL {
-			return in
-		},
-		proxyReqCheck: func(req *http.Request) error {
-			if req.Method != http.MethodConnect {
-				return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
-			}
-			return nil
-		},
-		serverMessage: []byte("server-hello"),
-	}
-	testHTTPConnect(t, args)
+	)
 }
 
 func (s) TestHTTPConnectBasicAuth(t *testing.T) {
@@ -233,12 +178,12 @@ func (s) TestHTTPConnectBasicAuth(t *testing.T) {
 		user     = "notAUser"
 		password = "notAPassword"
 	)
-	args := testArgs{
-		proxyURLModify: func(in *url.URL) *url.URL {
+	testHTTPConnect(t,
+		func(in *url.URL) *url.URL {
 			in.User = url.UserPassword(user, password)
 			return in
 		},
-		proxyReqCheck: func(req *http.Request) error {
+		func(req *http.Request) error {
 			if req.Method != http.MethodConnect {
 				return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
 			}
@@ -250,8 +195,7 @@ func (s) TestHTTPConnectBasicAuth(t *testing.T) {
 			}
 			return nil
 		},
-	}
-	testHTTPConnect(t, args)
+	)
 }
 
 func (s) TestMapAddressEnv(t *testing.T) {

@@ -36,6 +36,7 @@ var (
 	retryPolicy = `{
 		"methodConfig": [{
 		  "name": [{"service": "grpc.examples.echo.Echo"}],
+		  "waitForReady": true,
 		  "retryPolicy": {
 			  "MaxAttempts": 4,
 			  "InitialBackoff": ".01s",
