@@ -748,6 +748,8 @@ type payloadInfo struct {
 //
 // Cancelling the returned cancel function releases the buffer back to the pool. So the caller should cancel as soon as
 // the buffer is no longer needed.
+// TODO: Refactor this function to reduce the number of arguments.
+// See: https://google.github.io/styleguide/go/best-practices.html#function-argument-lists
 func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, isServer bool,
 ) (uncompressedBuf []byte, cancel func(), err error) {
 	pf, compressedBuf, err := p.recvMsg(maxReceiveMessageSize)
