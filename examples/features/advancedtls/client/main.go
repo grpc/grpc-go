@@ -61,14 +61,14 @@ func makeRootProvider(credsDirectory string) certprovider.Provider {
 }
 
 func makeIdentityProvider(revoked bool, credsDirectory string) certprovider.Provider {
-	var cert_file string
+	var certFile string
 	if revoked {
-		cert_file = filepath.Join(credsDirectory, "client_cert_revoked.pem")
+		certFile = filepath.Join(credsDirectory, "client_cert_revoked.pem")
 	} else {
-		cert_file = filepath.Join(credsDirectory, "client_cert.pem")
+		certFile = filepath.Join(credsDirectory, "client_cert.pem")
 	}
 	identityOptions := pemfile.Options{
-		CertFile:        cert_file,
+		CertFile:        certFile,
 		KeyFile:         filepath.Join(credsDirectory, "client_key.pem"),
 		RefreshDuration: credRefreshInterval,
 	}
