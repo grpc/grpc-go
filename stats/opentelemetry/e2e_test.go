@@ -19,6 +19,7 @@ package opentelemetry_test
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/internal/grpcsync"
 
 	"io"
 	"testing"
@@ -340,6 +341,18 @@ func clusterWithLBConfiguration(t *testing.T, clusterName, edsServiceName string
 	return cluster
 }
 
+func metricsDataFromReader(ctx context.Context, reader *metric.ManualReader) map[string]metricdata.Metrics {
+	rm := &metricdata.ResourceMetrics{}
+	reader.Collect(ctx, rm)
+	gotMetrics := map[string]metricdata.Metrics{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			gotMetrics[m.Name] = m
+		}
+	}
+	return gotMetrics
+}
+
 // TestWRRMetrics tests the metrics emitted from the WRR LB Policy. It
 // configures WRR as an endpoint picking policy through xDS on a ClientConn
 // alongside an OpenTelemetry stats handler. It makes a few RPC's, and then
@@ -366,7 +379,18 @@ func (s) TestWRRMetrics(t *testing.T) {
 	cmr.SetQPS(10.0)
 	cmr.SetApplicationUtilization(1.0)
 
-	backend2 := stubserver.StartTestService(t, nil)
+	backend2 := stubserver.StartTestService(t, &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			if r := orca.CallMetricsRecorderFromContext(ctx); r != nil {
+				// Copy metrics from what the test set in cmr into r.
+				sm := cmr.(orca.ServerMetricsProvider).ServerMetrics()
+				r.SetApplicationUtilization(sm.AppUtilization)
+				r.SetQPS(sm.QPS)
+				r.SetEPS(sm.EPS)
+			}
+			return &testpb.Empty{}, nil
+		},
+	}, orca.CallMetricsServerOption(nil))
 	port2 := itestutils.ParsePort(t, backend2.Address)
 	defer backend2.Stop()
 
@@ -443,28 +467,22 @@ func (s) TestWRRMetrics(t *testing.T) {
 
 	client := testgrpc.NewTestServiceClient(cc)
 
-	// Make 100 RPC's. One of these should hit backend 1 and trigger a per call
-	// load report, giving that SubConn a weight which will eventually expire.
-	// Two backends needed as for only one backend, WRR does not recompute the
+	// Make 100 RPC's. The two backends will send back load reports per call
+	// giving the two SubChannels weights which will eventually expire. Two
+	// backends needed as for only one backend, WRR does not recompute the
 	// scheduler.
-	for i := 0; i < 100; i++ {
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-			t.Fatalf("EmptyCall() = %v, want <nil>", err)
+	receivedExpectedMetrics := grpcsync.NewEvent()
+	go func() {
+		for i := 0; i < 100; i++ {
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+				t.Fatalf("EmptyCall() = %v, want <nil>", err)
+			}
+			if receivedExpectedMetrics.HasFired() {
+				break
+			}
 		}
-	}
+	}()
 
-	rm := &metricdata.ResourceMetrics{}
-	reader.Collect(ctx, rm)
-	gotMetrics := map[string]metricdata.Metrics{}
-	for _, sm := range rm.ScopeMetrics {
-		for _, m := range sm.Metrics {
-			gotMetrics[m.Name] = m
-		}
-	}
-
-	// No need to poll for first assertion because WRR emits metrics
-	// synchronously on the first picker/scheduler update, which happens before
-	// first RPC finishes.
 	targetAttr := attribute.String("grpc.target", target)
 	localityAttr := attribute.String("grpc.lb.locality", `{"region":"region-1","zone":"zone-1","subZone":"subzone-1"}`)
 
@@ -515,23 +533,13 @@ func (s) TestWRRMetrics(t *testing.T) {
 		},
 	}
 
-	// First three should immediately be present as happens synchronously from
-	// first scheduler update.
-	for _, metric := range wantMetrics {
-		val, ok := gotMetrics[metric.Name]
-		if !ok {
-			t.Fatalf("Metric %v not present in recorded metrics", metric.Name)
-		}
-		if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreValue(), metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
-			t.Fatalf("Metrics data type not equal for metric: %v", metric.Name)
-		}
+	if err := pollForWantMetrics(ctx, t, reader, wantMetrics); err != nil {
+		t.Fatal(err)
 	}
+	receivedExpectedMetrics.Fire()
 
-	// Sleep, then poll for 5 seconds for weight expiration metric. No more
-	// RPC's are being made, so weight should expire on a subsequent scheduler
-	// update.
-	time.Sleep(time.Second)
-
+	// Poll for 5 seconds for weight expiration metric. No more RPC's are being
+	// made, so weight should expire on a subsequent scheduler update.
 	eventuallyWantMetric := metricdata.Metrics{
 		Name:        "grpc.lb.wrr.endpoint_weight_stale",
 		Description: "EXPERIMENTAL. Number of endpoints from each scheduler update whose latest weight is older than the expiration period.",
@@ -548,27 +556,37 @@ func (s) TestWRRMetrics(t *testing.T) {
 		},
 	}
 
-	// Poll for 5 seconds for stale metric to appear.
-	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
-		rm := &metricdata.ResourceMetrics{}
-		reader.Collect(ctx, rm)
-		gotMetrics := map[string]metricdata.Metrics{}
-		for _, sm := range rm.ScopeMetrics {
-			for _, m := range sm.Metrics {
-				gotMetrics[m.Name] = m
-			}
-		}
-		val, ok := gotMetrics[eventuallyWantMetric.Name]
-		if !ok {
-			continue
-		}
-		if !metricdatatest.AssertEqual(t, eventuallyWantMetric, val, metricdatatest.IgnoreValue(), metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
-			t.Fatalf("Metrics data type not equal for metric: %v", eventuallyWantMetric.Name)
-		}
-		break
-	}
-
 	if ctx.Err() != nil {
 		t.Fatalf("Timeout waiting for metric %v", eventuallyWantMetric.Name)
 	}
+
+	if err := pollForWantMetrics(ctx, t, reader, []metricdata.Metrics{eventuallyWantMetric}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// pollForWantMetrics polls for the wantMetrics to show up on reader. Returns an
+// error if metric is present but not equal to expected, or if the wantMetrics
+// do not show up during the context timeout.
+func pollForWantMetrics(ctx context.Context, t *testing.T, reader *metric.ManualReader, wantMetrics []metricdata.Metrics) error {
+	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
+		gotMetrics := metricsDataFromReader(ctx, reader)
+		containsAllMetrics := true
+		for _, metric := range wantMetrics {
+			val, ok := gotMetrics[metric.Name]
+			if !ok {
+				containsAllMetrics = false
+				break
+			}
+			if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreValue(), metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
+				return fmt.Errorf("metrics data type not equal for metric: %v", metric.Name)
+			}
+		}
+		if containsAllMetrics {
+			return nil
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	return fmt.Errorf("error waiting for metrics %v: %v", wantMetrics, ctx.Err())
 }

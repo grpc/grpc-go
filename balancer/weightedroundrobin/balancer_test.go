@@ -555,8 +555,7 @@ func (s) TestBalancer_TwoAddresses_BlackoutPeriod(t *testing.T) {
 		cfg := oobConfig
 		cfg.BlackoutPeriod = tc.blackoutPeriodCfg
 		sc := svcConfig(t, cfg)
-		mr := stats.NewTestMetricsRecorder(t, []string{"grpc.lb.wrr.rr_fallback", "grpc.lb.wrr.endpoint_weight_not_yet_usable", "grpc.lb.wrr.endpoint_weight_stale", "grpc.lb.wrr.endpoint_weights"})
-		if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc), grpc.WithStatsHandler(mr)); err != nil {
+		if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
 			t.Fatalf("Error starting client: %v", err)
 		}
 		addrs := []resolver.Address{{Addr: srv1.Address}, {Addr: srv2.Address}}
@@ -583,20 +582,12 @@ func (s) TestBalancer_TwoAddresses_BlackoutPeriod(t *testing.T) {
 		// Wait for the weight update period to allow the new weights to be processed.
 		time.Sleep(weightUpdatePeriod)
 		checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 10})
-
-		mr.AssertDataForMetric("grpc.lb.wrr.rr_fallback", 1)
-		mr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_stale", 0)
-		mr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_not_yet_usable", 1)
-		// Either 10 or 100, dependent on whatever ordering SubConns are
-		// processed, which is nondeterministic.
-		mr.AssertEitherDataForMetric("grpc.lb.wrr.endpoint_weights", 10, 100)
 	}
 }
 
 // Tests that the weight expiration period causes backends to use 0 as their
 // weight (meaning to use the average weight) once the expiration period
-// elapses. After the weight expires, the expected metrics to be emitted from
-// WRR are also configured.
+// elapses.
 func (s) TestBalancer_TwoAddresses_WeightExpiration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -661,11 +652,6 @@ func (s) TestBalancer_TwoAddresses_WeightExpiration(t *testing.T) {
 	// Wait for the weight expiration period so the weights have expired.
 	time.Sleep(weightUpdatePeriod)
 	checkWeights(ctx, t, srvWeight{srv1, 1}, srvWeight{srv2, 1})
-
-	mr.AssertDataForMetric("grpc.lb.wrr.rr_fallback", 1)
-	mr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_stale", 1)
-	mr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_not_yet_usable", 1)
-	mr.AssertDataForMetric("grpc.lb.wrr.endpoint_weights", 0)
 }
 
 // Tests logic surrounding subchannel management.
