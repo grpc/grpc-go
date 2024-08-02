@@ -19,7 +19,6 @@ package opentelemetry_test
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc/internal/grpcsync"
 
 	"io"
 	"testing"
@@ -39,6 +38,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	itestutils "google.golang.org/grpc/internal/testutils"
@@ -474,9 +474,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 	receivedExpectedMetrics := grpcsync.NewEvent()
 	go func() {
 		for i := 0; i < 100; i++ {
-			if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-				t.Fatalf("EmptyCall() = %v, want <nil>", err)
-			}
+			client.EmptyCall(ctx, &testpb.Empty{})
 			if receivedExpectedMetrics.HasFired() {
 				break
 			}

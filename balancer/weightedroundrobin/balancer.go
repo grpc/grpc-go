@@ -595,7 +595,7 @@ func (w *weightedSubConn) updateConnectivityState(cs connectivity.State) connect
 // account the parameters.  Returns 0 for blacked out or expired data, which
 // will cause the backend weight to be treated as the mean of the weights of the
 // other backends. If forScheduler is set to true, this function will emit
-// metrics through the mtrics registry.
+// metrics through the metrics registry.
 func (w *weightedSubConn) weight(now time.Time, weightExpirationPeriod, blackoutPeriod time.Duration, recordMetrics bool) (weight float64) {
 	w.mu.Lock()
 	defer w.mu.Unlock()

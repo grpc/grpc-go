@@ -104,6 +104,16 @@ func (r *TestMetricsRecorder) PollForDataForMetric(ctx context.Context, metricNa
 	r.t.Fatalf("Timeout waiting for data %v for metric %v", wantVal, metricName)
 }
 
+// ClearMetrics clears the metrics data stores of the test metrics recorder by
+// setting all the data to 0.
+func (r *TestMetricsRecorder) ClearMetrics() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for metric := range r.data {
+		r.data[metric] = 0
+	}
+}
+
 type MetricsData struct {
 	Handle *estats.MetricDescriptor
 
