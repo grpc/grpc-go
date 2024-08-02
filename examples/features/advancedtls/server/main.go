@@ -53,10 +53,10 @@ func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoRe
 
 func tlsServers(credentialsDirectory string) {
 	go func() {
-		createAndRunTlsServer(credentialsDirectory, false, goodServerWithCrlPort)
+		createAndRunTLSServer(credentialsDirectory, false, goodServerWithCrlPort)
 	}()
 	go func() {
-		createAndRunTlsServer(credentialsDirectory, true, revokedServerWithCrlPort)
+		createAndRunTLSServer(credentialsDirectory, true, revokedServerWithCrlPort)
 	}()
 
 	fmt.Printf(`Running servers with the following configuration:
@@ -88,7 +88,7 @@ func createAndRunInsecureServer(port int) {
 	}
 }
 
-func createAndRunTlsServer(credsDirectory string, useRevokedCert bool, port int) {
+func createAndRunTLSServer(credsDirectory string, useRevokedCert bool, port int) {
 	identityProvider := makeIdentityProvider(useRevokedCert, credsDirectory)
 	defer identityProvider.Close()
 
