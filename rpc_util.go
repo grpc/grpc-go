@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/encoding/proto"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -728,9 +729,9 @@ func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool
 		}
 		if !haveCompressor {
 			if isServer {
-				return status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
+				return status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q, supported compressions: %v", recvCompress, grpcutil.RegisteredCompressors())
 			} else {
-				return status.Newf(codes.Internal, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
+				return status.Newf(codes.Internal, "grpc: Decompressor is not installed for grpc-encoding %q, supported compressions: %v", recvCompress, grpcutil.RegisteredCompressors())
 			}
 		}
 	default:
