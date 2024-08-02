@@ -51,7 +51,7 @@ func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoRe
 	return &pb.EchoResponse{Message: req.Message}, nil
 }
 
-func TlsServers(credentialsDirectory string) {
+func tlsServers(credentialsDirectory string) {
 	go func() {
 		createAndRunTlsServer(credentialsDirectory, false, goodServerWithCrlPort)
 	}()
@@ -65,7 +65,7 @@ func TlsServers(credentialsDirectory string) {
 `)
 }
 
-func InsecureServer(credentialsDirectory string) {
+func insecureServer(credentialsDirectory string) {
 	go func() {
 		createAndRunInsecureServer(insecurePort)
 	}()
@@ -189,8 +189,8 @@ func main() {
 		fmt.Println("Must set credentials_directory argument")
 		os.Exit(1)
 	}
-	TlsServers(*credentialsDirectory)
-	InsecureServer(*credentialsDirectory)
+	tlsServers(*credentialsDirectory)
+	insecureServer(*credentialsDirectory)
 	fmt.Printf("Ctrl-C or kill the process to stop\n")
 	for {
 		time.Sleep(1 * time.Second)

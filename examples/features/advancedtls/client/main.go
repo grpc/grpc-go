@@ -109,7 +109,7 @@ func runClientWithProviders(rootProvider certprovider.Provider, identityProvider
 	runWithCredentials(clientTLSCreds, fullServerAddr, !shouldFail)
 }
 
-func TlsWithCrlsToGoodServer(credsDirectory string) {
+func tlsWithCrlsToGoodServer(credsDirectory string) {
 	rootProvider := makeRootProvider(credsDirectory)
 	defer rootProvider.Close()
 	identityProvider := makeIdentityProvider(false, credsDirectory)
@@ -121,7 +121,7 @@ func TlsWithCrlsToGoodServer(credsDirectory string) {
 	runClientWithProviders(rootProvider, identityProvider, crlProvider, goodServerPort, false)
 }
 
-func TlsWithCrlsToRevokedServer(credsDirectory string) {
+func tlsWithCrlsToRevokedServer(credsDirectory string) {
 	rootProvider := makeRootProvider(credsDirectory)
 	defer rootProvider.Close()
 	identityProvider := makeIdentityProvider(false, credsDirectory)
@@ -133,11 +133,11 @@ func TlsWithCrlsToRevokedServer(credsDirectory string) {
 	runClientWithProviders(rootProvider, identityProvider, crlProvider, revokedServerPort, true)
 }
 
-func TlsWithCrls(credsDirectory string) {
+func tlsWithCrls(credsDirectory string) {
 	fmt.Println("---------- Running TLS with CRLs to Good Server ----------")
-	TlsWithCrlsToGoodServer(credsDirectory)
+	tlsWithCrlsToGoodServer(credsDirectory)
 	fmt.Println("---------- Running TLS with CRLs to Revoked Server ----------")
-	TlsWithCrlsToRevokedServer(credsDirectory)
+	tlsWithCrlsToRevokedServer(credsDirectory)
 }
 
 func makeCrlProvider(crlDirectory string) *advancedtls.FileWatcherCRLProvider {
@@ -169,7 +169,7 @@ func customVerificaitonFail(info *advancedtls.HandshakeVerificationInfo) (*advan
 	return &advancedtls.PostHandshakeVerificationResults{}, nil
 }
 
-func CustomVerification(credsDirectory string) {
+func customVerification(credsDirectory string) {
 	fmt.Println("---------- Running TLS with Custom Verification ----------")
 	runClientWithCustomVerification(credsDirectory, goodServerPort)
 
@@ -232,13 +232,16 @@ func runClientWithCustomVerification(credsDirectory string, port string) {
 }
 
 // -- credentials.NewTLS example --
-func CredentialsNewTLSExample(credsDirectory string) {
+func credentialsNewTLSExample(credsDirectory string) {
 	fmt.Println("---------- Running client using NewTLS to create Credentials ----------")
 	cert, err := tls.LoadX509KeyPair(filepath.Join(credsDirectory, "client_cert.pem"), filepath.Join(credsDirectory, "client_key.pem"))
 	if err != nil {
 		os.Exit(1)
 	}
 	rootPem, err := os.ReadFile(filepath.Join(credsDirectory, "ca_cert.pem"))
+	if err != nil {
+		os.Exit(1)
+	}
 	root := x509.NewCertPool()
 	if !root.AppendCertsFromPEM(rootPem) {
 		os.Exit(1)
@@ -258,7 +261,7 @@ func CredentialsNewTLSExample(credsDirectory string) {
 }
 
 // -- Insecure --
-func InsecureCredentialsExample(credsDirectory string) {
+func insecureCredentialsExample(credsDirectory string) {
 	fmt.Println("---------- Running client using Insecure Credentials ----------")
 	creds := insecure.NewCredentials()
 	port := insecurePort
@@ -313,8 +316,8 @@ func main() {
 		fmt.Println("Must set credentials_directory argument to this repo's creds directory")
 		os.Exit(1)
 	}
-	TlsWithCrls(*credsDirectory)
-	CustomVerification(*credsDirectory)
-	CredentialsNewTLSExample(*credsDirectory)
-	InsecureCredentialsExample(*credsDirectory)
+	tlsWithCrls(*credsDirectory)
+	customVerification(*credsDirectory)
+	credentialsNewTLSExample(*credsDirectory)
+	insecureCredentialsExample(*credsDirectory)
 }
