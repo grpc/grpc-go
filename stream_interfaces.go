@@ -29,10 +29,6 @@ type ServerStreamingClient[Res any] interface {
 	// It returns the received message and an error if any occurred.
 	// It returns (nil, io.EOF) when the server has finished sending messages.
 	Recv() (*Res, error)
-
-	// ClientStream represents the basic client-side streaming operations.
-	// It provides methods like SendMsg, RecvMsg, etc., for interacting with
-	// the streaming RPC.
 	ClientStream
 }
 
@@ -47,10 +43,6 @@ type ServerStreamingServer[Res any] interface {
 	// It returns an error if the message could not be sent.
 	// The end-of-stream is indicated by the return of the server-side handler.
 	Send(*Res) error
-
-	// ServerStream represents the basic server-side streaming operations.
-	// It provides methods like SendMsg, RecvMsg, etc., for interacting with
-	// the streaming RPC.
 	ServerStream
 }
 
@@ -74,10 +66,6 @@ type ClientStreamingClient[Req any, Res any] interface {
 	// It returns the received response message and an error if any occurred.
 	// The CloseAndRecv method must be called once and only once to complete the RPC.
 	CloseAndRecv() (*Res, error)
-
-	// ClientStream represents the basic client-side streaming operations.
-	// It provides methods like SendMsg, RecvMsg, etc., for interacting with
-	// the streaming RPC.
 	ClientStream
 }
 
@@ -102,10 +90,6 @@ type ClientStreamingServer[Req any, Res any] interface {
 	// It returns an error if the response could not be sent.
 	// SendAndClose must be called once and only once to complete the RPC.
 	SendAndClose(*Res) error
-
-	// ServerStream represents the basic server-side streaming operations.
-	// It provides methods like SendMsg, RecvMsg, etc., for interacting with
-	// the streaming RPC.
 	ServerStream
 }
 
@@ -127,10 +111,6 @@ type BidiStreamingClient[Req any, Res any] interface {
 	// receiver. It returns the received message and an error if any occurred.
 	// It returns (nil, io.EOF) when the server has finished sending messages.
 	Recv() (*Res, error)
-
-	// ClientStream represents the basic client-side streaming operations.
-	// It provides methods like SendMsg, RecvMsg, etc., for interacting with
-	// the streaming RPC.
 	ClientStream
 }
 
@@ -155,10 +135,6 @@ type BidiStreamingServer[Req any, Res any] interface {
 	// The end-of-stream for the server-to-client stream is indicated by the return
 	// of the bidirectional streaming method handler.
 	Send(*Res) error
-
-	// ServerStream represents the basic server-side streaming operations.
-	// It provides methods like SendMsg, RecvMsg, etc., for interacting with
-	// the streaming RPC.
 	ServerStream
 }
 
