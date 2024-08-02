@@ -59,6 +59,56 @@ func dialerClientPrefaceWrite(_ context.Context, addr string) (net.Conn, error) 
 	return &clientPrefaceWrite{Conn: conn}, nil
 }
 
+func (hc *clientPrefaceLength) Write(b []byte) (n int, err error) {
+
+	incorrectPreface := "INCORRECT PREFACE\r\n\r\n"
+	n, err = hc.Conn.Write([]byte(incorrectPreface))
+	return n, err
+}
+
+func dialerClientPrefaceLength(_ context.Context, addr string) (net.Conn, error) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	return &clientPrefaceLength{Conn: conn}, nil
+}
+
+func (hc *framerWriteSettings) Write(b []byte) (n int, err error) {
+	n, err = hc.Conn.Write(b)
+	//compare framer value
+	if n == 9 {
+		return 0, errors.New("Framer write setting error")
+	}
+	return n, err
+}
+
+func dialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	return &framerWriteSettings{Conn: conn}, nil
+}
+
+func (hc *framerWriteWindowUpdate) Write(b []byte) (n int, err error) {
+
+	n, err = hc.Conn.Write(b)
+	// compare for windowupdate value
+	if n == 13 {
+		return 0, errors.New("Framer write windowupdate error")
+	}
+	return n, err
+}
+
+func dialerFramerWriteWindowUpdate(_ context.Context, addr string) (net.Conn, error) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	return &framerWriteWindowUpdate{Conn: conn}, nil
+}
+
 func TestNewHTTP2ClientPrefaceFailure(t *testing.T) {
 
 	// Create a server.
@@ -83,21 +133,6 @@ func TestNewHTTP2ClientPrefaceFailure(t *testing.T) {
 			t.Fatalf("Error while creating client transport: %v", err)
 		}
 	}
-}
-
-func (hc *clientPrefaceLength) Write(b []byte) (n int, err error) {
-
-	incorrectPreface := "INCORRECT PREFACE\r\n\r\n"
-	n, err = hc.Conn.Write([]byte(incorrectPreface))
-	return n, err
-}
-
-func dialerClientPrefaceLength(_ context.Context, addr string) (net.Conn, error) {
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-	return &clientPrefaceLength{Conn: conn}, nil
 }
 
 func TestNewHTTP2ClientPrefaceLengthFailure(t *testing.T) {
@@ -126,23 +161,6 @@ func TestNewHTTP2ClientPrefaceLengthFailure(t *testing.T) {
 	}
 }
 
-func (hc *framerWriteSettings) Write(b []byte) (n int, err error) {
-	n, err = hc.Conn.Write(b)
-	//compare framer value
-	if n == 9 {
-		return 0, errors.New("Framer write setting error")
-	}
-	return n, err
-}
-
-func dialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error) {
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-	return &framerWriteSettings{Conn: conn}, nil
-}
-
 func TestNewHTTP2ClientFramerWriteSettingsFailure(t *testing.T) {
 	// Create a server.
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -167,24 +185,6 @@ func TestNewHTTP2ClientFramerWriteSettingsFailure(t *testing.T) {
 			t.Fatalf("Error while creating client transport: %v", err)
 		}
 	}
-}
-
-func (hc *framerWriteWindowUpdate) Write(b []byte) (n int, err error) {
-
-	n, err = hc.Conn.Write(b)
-	// compare for windowupdate value
-	if n == 13 {
-		return 0, errors.New("Framer write windowupdate error")
-	}
-	return n, err
-}
-
-func dialerFramerWriteWindowUpdate(_ context.Context, addr string) (net.Conn, error) {
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-	return &framerWriteWindowUpdate{Conn: conn}, nil
 }
 
 func TestNewHTTP2ClientFramerWriteWindowUpdateFailure(t *testing.T) {
