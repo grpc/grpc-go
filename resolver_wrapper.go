@@ -177,6 +177,9 @@ func (ccr *ccResolverWrapper) ParseServiceConfig(scJSON string) *serviceconfig.P
 // addChannelzTraceEvent adds a channelz trace event containing the new
 // state received from resolver implementations.
 func (ccr *ccResolverWrapper) addChannelzTraceEvent(s resolver.State) {
+	if !logger.V(0) && !channelz.IsOn() {
+		return
+	}
 	var updates []string
 	var oldSC, newSC *ServiceConfig
 	var oldOK, newOK bool

@@ -68,6 +68,7 @@ type MetricDescriptor struct {
 // MetricType is the type of metric.
 type MetricType int
 
+// Type of metric supported by this instrument registry.
 const (
 	MetricTypeIntCount MetricType = iota
 	MetricTypeFloatCount
