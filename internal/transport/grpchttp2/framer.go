@@ -117,7 +117,7 @@ type Frame interface {
 // [DATA frame]: https://httpwg.org/specs/rfc7540.html#DATA
 type DataFrame struct {
 	hdr  *FrameHeader
-	Data mem.Buffer
+	Data *mem.Buffer
 }
 
 // Header returns the 9 byte HTTP/2 header for this frame.
@@ -131,7 +131,7 @@ func (f *DataFrame) Header() *FrameHeader {
 // [HEADERS Frame]: https://httpwg.org/specs/rfc7540.html#HEADERS
 type HeadersFrame struct {
 	hdr      *FrameHeader
-	HdrBlock mem.Buffer
+	HdrBlock *mem.Buffer
 }
 
 // Header returns the 9 byte HTTP/2 header for this frame.
@@ -175,7 +175,7 @@ func (f *SettingsFrame) Header() *FrameHeader {
 // [PING Frame]: https://httpwg.org/specs/rfc7540.html#PING
 type PingFrame struct {
 	hdr  *FrameHeader
-	Data mem.Buffer
+	Data *mem.Buffer
 }
 
 // Header returns the 9 byte HTTP/2 header for this frame.
@@ -192,7 +192,7 @@ type GoAwayFrame struct {
 	hdr          *FrameHeader
 	LastStreamID uint32
 	Code         ErrCode
-	DebugData    mem.Buffer
+	DebugData    *mem.Buffer
 }
 
 // Header returns the 9 byte HTTP/2 header for this frame.
@@ -220,7 +220,7 @@ func (f *WindowUpdateFrame) Header() *FrameHeader {
 // [CONTINUATION Frame]: https://httpwg.org/specs/rfc7540.html#CONTINUATION
 type ContinuationFrame struct {
 	hdr      *FrameHeader
-	HdrBlock mem.Buffer
+	HdrBlock *mem.Buffer
 }
 
 // Header returns the 9 byte HTTP/2 header for this frame.
