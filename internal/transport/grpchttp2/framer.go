@@ -112,7 +112,9 @@ type Frame interface {
 }
 
 // DataFrame is the representation of a [DATA frame]. DATA frames convey
-// arbitrary, variable-length sequences of octets associated with a stream.
+// arbitrary, variable-length sequences of octets associated with a stream. It
+// is the user's responsibility to call Data.Free() when it is no longer
+// needed.
 //
 // [DATA frame]: https://httpwg.org/specs/rfc7540.html#DATA
 type DataFrame struct {
@@ -127,6 +129,8 @@ func (f *DataFrame) Header() *FrameHeader {
 
 // HeadersFrame is the representation of a [HEADERS Frame]. The HEADERS frame
 // is used to open a stream, and additionally carries a header block fragment.
+// It is the user's responsibility to call HdrBlock.Free() when it is no longer
+// needed.
 //
 // [HEADERS Frame]: https://httpwg.org/specs/rfc7540.html#HEADERS
 type HeadersFrame struct {
@@ -172,6 +176,9 @@ func (f *SettingsFrame) Header() *FrameHeader {
 // mechanism for measuring a minimal round-trip time from the sender, as well
 // as determining whether an idle connection is still functional.
 //
+// It is the user's responsibility to call Data.Free() when it is no longer
+// needed.
+//
 // [PING Frame]: https://httpwg.org/specs/rfc7540.html#PING
 type PingFrame struct {
 	hdr  *FrameHeader
@@ -186,6 +193,9 @@ func (f *PingFrame) Header() *FrameHeader {
 // GoAwayFrame is the representation of a [GOAWAY Frame]. The GOAWAY frame is
 // used to initiate shutdown of a connection or to signal serious error
 // conditions.
+//
+// It is the user's responsibility to call DebugData.Free() when it is no longer
+// needed.
 //
 // [GOAWAY Frame]: https://httpwg.org/specs/rfc7540.html#GOAWAY
 type GoAwayFrame struct {
@@ -216,6 +226,9 @@ func (f *WindowUpdateFrame) Header() *FrameHeader {
 
 // ContinuationFrame is the representation of a [CONTINUATION Frame]. The
 // CONTINUATION frame is used to continue a sequence of header block fragments.
+//
+// It is the user's responsibility to call HdrBlock.Free() when it is no longer
+// needed.
 //
 // [CONTINUATION Frame]: https://httpwg.org/specs/rfc7540.html#CONTINUATION
 type ContinuationFrame struct {
@@ -250,7 +263,8 @@ type Framer interface {
 	// ReadFrame returns grpchttp2.Frame. It is the caller's responsibility to
 	// free the underlying buffer when done using the Frame.
 	ReadFrame() (Frame, error)
-	// WriteData writes an HTTP/2 DATA frame to the stream.
+	// WriteData writes an HTTP/2 DATA frame to the stream. The function will
+	// not Free the data.
 	WriteData(streamID uint32, endStream bool, data mem.BufferSlice) error
 	// WriteHeaders writes an HTTP/2 HEADERS frame to the stream.
 	WriteHeaders(streamID uint32, endStream, endHeaders bool, headerBlock []byte) error
