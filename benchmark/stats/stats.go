@@ -494,10 +494,3 @@ func (s *Stats) dump(result *BenchResults) {
 	b.WriteString(fmt.Sprintf("Number of responses: %v\tResponse throughput: %v bit/s\n", resp, result.Data.RespT))
 	fmt.Println(b.String())
 }
-
-func max(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
-}

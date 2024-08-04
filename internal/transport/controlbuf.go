@@ -30,6 +30,7 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/status"
@@ -1016,11 +1017,4 @@ func (l *loopyWriter) processData() (bool, error) {
 		l.activeStreams.enqueue(str)
 	}
 	return false, nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
