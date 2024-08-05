@@ -1013,7 +1013,8 @@ func (t *http2Client) Close(err error) {
 	// Per HTTP/2 spec, a GOAWAY frame must be sent before closing the
 	// connection. See https://httpwg.org/specs/rfc7540.html#GOAWAY. It
 	// also waits for loopyWriter to be closed with a timer to avoid the
-	// long blocking in case the connection is half closed.
+	// long blocking in case the connection is blackholed, i.e. TCP is
+	// just stuck.
 	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte("client transport shutdown"), closeConn: err})
 	timer := time.NewTimer(goAwayLoopyWriterTimeout)
 	defer timer.Stop()
@@ -1031,7 +1032,7 @@ func (t *http2Client) Close(err error) {
 		}
 	case <-timer.C:
 		st = status.New(codes.Unavailable, err.Error())
-		t.logger.Warningf("Failed to write a GOAWAY frame as part of connection close after %s. Giving up and closing the transport.", goAwayLoopyWriterTimeout)
+		t.logger.Infof("Failed to write a GOAWAY frame as part of connection close after %s. Giving up and closing the transport.", goAwayLoopyWriterTimeout)
 	}
 	t.cancel()
 	t.conn.Close()

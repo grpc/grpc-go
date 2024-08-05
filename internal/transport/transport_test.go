@@ -2771,19 +2771,5 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
 
-	ctClosed := make(chan struct{})
-	go func() {
-		// ct.Close will try to send a GOAWAY frame to the server but conn.Write
-		// will time out due to goAwayLoopyWriterTimeout being 0. It is
-		// equivalent of a network hang when GOAWAY doesn't finish within
-		// specified deadline.
-		ct.Close(errors.New("manually closed by client"))
-		close(ctClosed)
-	}()
-
-	select {
-	case <-ctClosed:
-	case <-ctx.Done():
-		t.Errorf("Timeout waiting for Close() to complete")
-	}
+	ct.Close(errors.New("manually closed by client"))
 }
