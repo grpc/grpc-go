@@ -52,7 +52,7 @@ func NewFramerBridge(w io.Writer, r io.Reader, maxHeaderListSize uint32) *Framer
 	return fr
 }
 
-// ReadFrame() reads a frame from the underlying http2.Framer and returns a
+// ReadFrame reads a frame from the underlying http2.Framer and returns a
 // Frame defined in the grpchttp2 package.
 func (fr *FramerBridge) ReadFrame() (Frame, error) {
 	f, err := fr.framer.ReadFrame()
