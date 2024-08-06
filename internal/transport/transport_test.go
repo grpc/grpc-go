@@ -427,8 +427,12 @@ func setUpServerOnly(t *testing.T, port int, sc *ServerConfig, ht hType) *server
 	return server
 }
 
-func setUp(t *testing.T, port int, ht hType) (*server, *http2Client, func()) {
-	return setUpWithOptions(t, port, &ServerConfig{}, ht, ConnectOptions{})
+func setUp(t *testing.T, port int, ht hType, options ...ConnectOptions) (*server, *http2Client, func()) {
+	var copts = ConnectOptions{}
+	if len(options) > 0 {
+		copts = options[0]
+	}
+	return setUpWithOptions(t, port, &ServerConfig{}, ht, copts)
 }
 
 func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts ConnectOptions) (*server, *http2Client, func()) {
@@ -2747,6 +2751,65 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 	}
 }
 
+// serverGreetingDone verifies that client-server setup is complete
+// for the test.
+var serverGreetingDone chan struct{}
+
+// hangingConn is a net.Conn wrapper for testing, simulating hanging connections
+// after a GOAWAY frame is sent, of which Write operations pause until explicitly signaled
+// or a timeout occurs.
+type hangingConn struct {
+	net.Conn
+}
+
+func (hc *hangingConn) Read(b []byte) (n int, err error) {
+	n, err = hc.Conn.Read(b)
+	return n, err
+}
+
+func (hc *hangingConn) Write(b []byte) (n int, err error) {
+	n, err = hc.Conn.Write(b)
+	if serverGreetingDone != nil {
+		// Wait for client-server conn to set up
+		<-serverGreetingDone
+		// Add a delay which is more than goAwayLoopyWriterTimeout
+		time.Sleep(2 * time.Second)
+	}
+	return n, err
+}
+
+func (hc *hangingConn) Close() error {
+	return hc.Conn.Close()
+}
+
+func (hc *hangingConn) LocalAddr() net.Addr {
+	return hc.Conn.LocalAddr()
+}
+
+func (hc *hangingConn) RemoteAddr() net.Addr {
+	return hc.Conn.RemoteAddr()
+}
+
+func (hc *hangingConn) SetDeadline(t time.Time) error {
+	return hc.Conn.SetDeadline(t)
+}
+
+func (hc *hangingConn) SetReadDeadline(t time.Time) error {
+	return hc.Conn.SetReadDeadline(t)
+}
+
+func (hc *hangingConn) SetWriteDeadline(t time.Time) error {
+	return hc.Conn.SetWriteDeadline(t)
+}
+
+func hangingDialer(_ context.Context, addr string) (net.Conn, error) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	return &hangingConn{Conn: conn}, nil
+}
+
 // Tests the scenario where a client transport is closed and writing of the
 // GOAWAY frame as part of the close does not complete because of a network
 // hang. The test verifies that the client transport is closed without waiting
@@ -2756,12 +2819,16 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 	// always times out. It is equivalent of real network hang when conn
 	// write for goaway doesn't finish in specified deadline
 	origGoAwayLoopyTimeout := goAwayLoopyWriterTimeout
-	goAwayLoopyWriterTimeout = 0
+	goAwayLoopyWriterTimeout = time.Second
 	defer func() {
 		goAwayLoopyWriterTimeout = origGoAwayLoopyTimeout
 	}()
 
-	server, ct, cancel := setUp(t, 0, normal)
+	server, ct, cancel := setUp(t, 0, normal, ConnectOptions{Dialer: hangingDialer})
+	serverGreetingDone = make(chan struct{})
+	// Acknowledge that client-server greeting is done
+	serverGreetingDone <- struct{}{}
+	defer close(serverGreetingDone)
 	defer cancel()
 	defer server.stop()
 
