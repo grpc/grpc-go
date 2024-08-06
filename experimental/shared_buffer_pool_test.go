@@ -205,6 +205,6 @@ func (p *checkBufferPool) Get(size int) []byte {
 	return make([]byte, size)
 }
 
-func (p *checkBufferPool) Put(bs []byte) {
-	p.puts = append(p.puts, bs)
+func (p *checkBufferPool) Put(bs *[]byte) {
+	p.puts = append(p.puts, *bs)
 }

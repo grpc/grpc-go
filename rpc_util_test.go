@@ -40,6 +40,17 @@ type fullReader struct {
 	data []byte
 }
 
+func (f *fullReader) ReadHeader(header []byte) error {
+	buf, err := f.Read(len(header))
+	defer buf.Free()
+	if err != nil {
+		return err
+	}
+
+	buf.CopyTo(header)
+	return nil
+}
+
 func (f *fullReader) Read(n int) (mem.BufferSlice, error) {
 	if len(f.data) == 0 {
 		return nil, io.EOF

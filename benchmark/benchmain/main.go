@@ -65,7 +65,7 @@ import (
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/experimental"
+	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
@@ -129,10 +129,11 @@ const (
 	workloadsUnconstrained = "unconstrained"
 	workloadsAll           = "all"
 	// Compression modes.
-	compModeOff  = "off"
-	compModeGzip = "gzip"
-	compModeNop  = "nop"
-	compModeAll  = "all"
+	compModeOff    = "off"
+	compModeGzip   = "gzip"
+	compModeGzipV2 = "gzipV2"
+	compModeNop    = "nop"
+	compModeAll    = "all"
 	// Toggle modes.
 	toggleModeOff  = "off"
 	toggleModeOn   = "on"
@@ -153,9 +154,34 @@ const (
 	warmuptime      = time.Second
 )
 
+var useNopBufferPool atomic.Bool
+
+type swappableBufferPool struct{}
+
+func (swappableBufferPool) Get(length int) []byte {
+	var pool mem.BufferPool
+	if useNopBufferPool.Load() {
+		pool = mem.NopBufferPool{}
+	} else {
+		pool = mem.DefaultBufferPool()
+	}
+	return pool.Get(length)
+}
+
+func (swappableBufferPool) Put(i *[]byte) {
+	if useNopBufferPool.Load() {
+		return
+	}
+	mem.DefaultBufferPool().Put(i)
+}
+
+func init() {
+	internal.SetDefaultBufferPoolForTesting.(func(mem.BufferPool))(swappableBufferPool{})
+}
+
 var (
 	allWorkloads              = []string{workloadsUnary, workloadsStreaming, workloadsUnconstrained, workloadsAll}
-	allCompModes              = []string{compModeOff, compModeGzip, compModeNop, compModeAll}
+	allCompModes              = []string{compModeOff, compModeGzip, compModeGzipV2, compModeNop, compModeAll}
 	allToggleModes            = []string{toggleModeOff, toggleModeOn, toggleModeBoth}
 	allNetworkModes           = []string{networkModeNone, networkModeLocal, networkModeLAN, networkModeWAN, networkLongHaul}
 	allRecvBufferPools        = []string{recvBufferPoolNil, recvBufferPoolSimple, recvBufferPoolAll}
@@ -311,6 +337,11 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
 		)
 	}
+	if bf.ModeCompressor == compModeGzipV2 {
+		opts = append(opts,
+			grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
+		)
+	}
 	if bf.EnableKeepalive {
 		sopts = append(sopts,
 			grpc.KeepaliveParams(keepalive.ServerParameters{
@@ -348,8 +379,9 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 	}
 	switch bf.RecvBufferPool {
 	case recvBufferPoolNil:
-		opts = append(opts, experimental.WithBufferPool(mem.NopBufferPool{}))
-		sopts = append(sopts, experimental.BufferPool(mem.NopBufferPool{}))
+		useNopBufferPool.Store(true)
+		//opts = append(opts, experimental.WithBufferPool(mem.NopBufferPool{}))
+		//sopts = append(sopts, experimental.BufferPool(mem.NopBufferPool{}))
 	case recvBufferPoolSimple:
 		// Do nothing as buffering is enabled by default.
 	default:
@@ -876,10 +908,10 @@ func setToggleMode(val string) []bool {
 
 func setCompressorMode(val string) []string {
 	switch val {
-	case compModeNop, compModeGzip, compModeOff:
+	case compModeNop, compModeGzip, compModeGzipV2, compModeOff:
 		return []string{val}
 	case compModeAll:
-		return []string{compModeNop, compModeGzip, compModeOff}
+		return []string{compModeNop, compModeGzip, compModeGzipV2, compModeOff}
 	default:
 		// This should never happen because a wrong value passed to this flag would
 		// be caught during flag.Parse().

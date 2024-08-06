@@ -35,6 +35,7 @@ type PreparedMsg struct {
 	encodedData mem.BufferSlice
 	hdr         []byte
 	payload     mem.BufferSlice
+	freePayload func()
 }
 
 // Encode marshalls and compresses the message using the codec and compressor for the stream.
@@ -68,6 +69,6 @@ func (p *PreparedMsg) Encode(s Stream, msg any) error {
 		return err
 	}
 
-	p.hdr, p.encodedData, p.payload = msgHeader(data, compData, pf)
+	p.hdr, p.encodedData, p.payload, p.freePayload = msgHeader(data, compData, pf)
 	return nil
 }

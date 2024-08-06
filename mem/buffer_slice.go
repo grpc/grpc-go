@@ -53,27 +53,18 @@ func (s BufferSlice) Len() int {
 	return length
 }
 
-// Ref returns a new BufferSlice containing a new reference of each Buffer in the
-// input slice.
-func (s BufferSlice) Ref() BufferSlice {
-	out := make(BufferSlice, len(s))
-	for i, b := range s {
-		out[i] = b.Ref()
+// Ref invokes Buffer.Ref on each Buffer in the slice.
+func (s BufferSlice) Ref() {
+	for i := range s {
+		s[i].Ref()
 	}
-	return out
 }
 
-// Free invokes Buffer.Free() on each Buffer in the slice. Subsequent calls to
-// this function will be no-ops.
+// Free invokes Buffer.Free() on each Buffer in the slice.
 func (s BufferSlice) Free() {
-	if len(s) == 0 || s[0] == nil {
-		// Do nothing if the slice is empty, or has already been freed.
-		return
-	}
 	for _, b := range s {
 		b.Free()
 	}
-	clear(s)
 }
 
 // CopyTo copies each of the underlying Buffer's data into the given buffer,
@@ -106,7 +97,8 @@ func (s BufferSlice) Materialize() []byte {
 // do and simply returns said Buffer.
 func (s BufferSlice) MaterializeToBuffer(pool BufferPool) Buffer {
 	if len(s) == 1 {
-		return s[0].Ref()
+		s[0].Ref()
+		return s[0]
 	}
 	buf := pool.Get(s.Len())
 	s.CopyTo(buf)
@@ -116,8 +108,9 @@ func (s BufferSlice) MaterializeToBuffer(pool BufferPool) Buffer {
 // Reader returns a new Reader for the input slice after taking references to
 // each underlying buffer.
 func (s BufferSlice) Reader() *Reader {
+	s.Ref()
 	return &Reader{
-		data: s.Ref(),
+		data: s,
 		len:  s.Len(),
 	}
 }

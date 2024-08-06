@@ -130,7 +130,24 @@ type recvBufferReader struct {
 	ctxDone     <-chan struct{} // cache of ctx.Done() (for performance).
 	recv        *recvBuffer
 	last        mem.Buffer // Stores the remaining data in the previous calls.
+	lastIdx     int
 	err         error
+}
+
+func (r *recvBufferReader) ReadHeader(header []byte) (n int, err error) {
+	if r.err != nil {
+		return 0, r.err
+	}
+	if r.last != nil {
+		n, r.last = mem.ReadUnsafe(header, r.last)
+		return n, nil
+	}
+	if r.closeStream != nil {
+		n, r.err = r.readHeaderClient(header)
+	} else {
+		n, r.err = r.readHeader(header)
+	}
+	return n, r.err
 }
 
 // Read reads the next n bytes from last. If last is drained, it tries to read
@@ -144,7 +161,7 @@ func (r *recvBufferReader) Read(n int) (buf mem.Buffer, err error) {
 	if r.last != nil {
 		buf = r.last
 		if r.last.Len() > n {
-			r.last = buf.Split(n)
+			buf, r.last = mem.SplitUnsafe(buf, n)
 		} else {
 			r.last = nil
 		}
@@ -158,12 +175,48 @@ func (r *recvBufferReader) Read(n int) (buf mem.Buffer, err error) {
 	return buf, r.err
 }
 
+func (r *recvBufferReader) readHeader(header []byte) (n int, err error) {
+	select {
+	case <-r.ctxDone:
+		return 0, ContextErr(r.ctx.Err())
+	case m := <-r.recv.get():
+		return r.readHeaderAdditional(m, header)
+	}
+}
+
 func (r *recvBufferReader) read(n int) (buf mem.Buffer, err error) {
 	select {
 	case <-r.ctxDone:
 		return nil, ContextErr(r.ctx.Err())
 	case m := <-r.recv.get():
 		return r.readAdditional(m, n)
+	}
+}
+
+func (r *recvBufferReader) readHeaderClient(header []byte) (n int, err error) {
+	// If the context is canceled, then closes the stream with nil metadata.
+	// closeStream writes its error parameter to r.recv as a recvMsg.
+	// r.readAdditional acts on that message and returns the necessary error.
+	select {
+	case <-r.ctxDone:
+		// Note that this adds the ctx error to the end of recv buffer, and
+		// reads from the head. This will delay the error until recv buffer is
+		// empty, thus will delay ctx cancellation in Recv().
+		//
+		// It's done this way to fix a race between ctx cancel and trailer. The
+		// race was, stream.Recv() may return ctx error if ctxDone wins the
+		// race, but stream.Trailer() may return a non-nil md because the stream
+		// was not marked as done when trailer is received. This closeStream
+		// call will mark stream as done, thus fix the race.
+		//
+		// TODO: delaying ctx error seems like a unnecessary side effect. What
+		// we really want is to mark the stream as done, and return ctx error
+		// faster.
+		r.closeStream(ContextErr(r.ctx.Err()))
+		m := <-r.recv.get()
+		return r.readHeaderAdditional(m, header)
+	case m := <-r.recv.get():
+		return r.readHeaderAdditional(m, header)
 	}
 }
 
@@ -194,6 +247,20 @@ func (r *recvBufferReader) readClient(n int) (buf mem.Buffer, err error) {
 	}
 }
 
+func (r *recvBufferReader) readHeaderAdditional(m recvMsg, header []byte) (n int, err error) {
+	r.recv.load()
+	if m.err != nil {
+		if m.buffer != nil {
+			m.buffer.Free()
+		}
+		return 0, m.err
+	}
+
+	n, r.last = mem.ReadUnsafe(header, m.buffer)
+
+	return n, nil
+}
+
 func (r *recvBufferReader) readAdditional(m recvMsg, n int) (b mem.Buffer, err error) {
 	r.recv.load()
 	if m.err != nil {
@@ -204,7 +271,7 @@ func (r *recvBufferReader) readAdditional(m recvMsg, n int) (b mem.Buffer, err e
 	}
 
 	if m.buffer.Len() > n {
-		r.last = m.buffer.Split(n)
+		m.buffer, r.last = mem.SplitUnsafe(m.buffer, n)
 	}
 
 	return m.buffer, nil
@@ -481,6 +548,28 @@ func (s *Stream) write(m recvMsg) {
 	s.buf.put(m)
 }
 
+func (s *Stream) ReadHeader(header []byte) (err error) {
+	// Don't request a read if there was an error earlier
+	if er := s.trReader.er; er != nil {
+		return er
+	}
+	s.requestRead(len(header))
+	for len(header) != 0 {
+		n, err := s.trReader.ReadHeader(header)
+		header = header[n:]
+		if len(header) == 0 {
+			err = nil
+		}
+		if err != nil {
+			if len(header) > 0 && err == io.EOF {
+				err = io.ErrUnexpectedEOF
+			}
+			return err
+		}
+	}
+	return nil
+}
+
 // Read reads n bytes from the wire for this stream.
 func (s *Stream) Read(n int) (data mem.BufferSlice, err error) {
 	// Don't request a read if there was an error earlier
@@ -522,14 +611,24 @@ type transportReader struct {
 	er            error
 }
 
-func (t *transportReader) Read(n int) (buf mem.Buffer, err error) {
-	buf, err = t.reader.Read(n)
+func (t *transportReader) ReadHeader(header []byte) (int, error) {
+	n, err := t.reader.ReadHeader(header)
 	if err != nil {
 		t.er = err
-		return
+		return 0, err
+	}
+	t.windowHandler(len(header))
+	return n, nil
+}
+
+func (t *transportReader) Read(n int) (mem.Buffer, error) {
+	buf, err := t.reader.Read(n)
+	if err != nil {
+		t.er = err
+		return buf, err
 	}
 	t.windowHandler(buf.Len())
-	return
+	return buf, nil
 }
 
 // BytesReceived indicates whether any bytes have been received on this stream.

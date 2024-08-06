@@ -618,6 +618,7 @@ const (
 )
 
 type streamReader interface {
+	ReadHeader(header []byte) error
 	Read(n int) (mem.BufferSlice, error)
 }
 
@@ -651,12 +652,10 @@ type parser struct {
 // that the underlying streamReader must not return an incompatible
 // error.
 func (p *parser) recvMsg(maxReceiveMessageSize int) (payloadFormat, mem.BufferSlice, error) {
-	header, err := p.r.Read(5)
+	err := p.r.ReadHeader(p.header[:])
 	if err != nil {
 		return 0, nil, err
 	}
-	header.CopyTo(p.header[:])
-	header.Free()
 
 	pf := payloadFormat(p.header[0])
 	length := binary.BigEndian.Uint32(p.header[1:])
@@ -749,7 +748,7 @@ const (
 
 // msgHeader returns a 5-byte header for the message being transmitted and the
 // payload, which is compData if non-nil or data otherwise.
-func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, dataRef, payload mem.BufferSlice) {
+func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, dataRef, payload mem.BufferSlice, freePayload func()) {
 	hdr = make([]byte, headerLen)
 	hdr[0] = byte(pf)
 
@@ -757,14 +756,16 @@ func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, da
 	if pf == compressionMade {
 		length = uint32(compData.Len())
 		payload = compData
+		freePayload = compData.Free
 	} else {
 		length = uint32(data.Len())
 		payload = data
+		freePayload = data.Free
 	}
 
 	// Write length of payload into buf
 	binary.BigEndian.PutUint32(hdr[payloadLen:], length)
-	return hdr, data, payload
+	return hdr, data, payload, freePayload
 }
 
 func outPayload(client bool, msg any, dataLength, payloadLength int, t time.Time) *stats.OutPayload {
@@ -851,7 +852,8 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 
 	if payInfo != nil {
 		payInfo.compressedLength = compressedLength
-		payInfo.uncompressedBytes = out.Ref()
+		out.Ref()
+		payInfo.uncompressedBytes = out
 	}
 
 	return out, nil
