@@ -1809,7 +1809,7 @@ func MethodFromServerStream(stream ServerStream) (string, bool) {
 // passed preparedmsg
 func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor, pool mem.BufferPool) (hdr []byte, data, payload mem.BufferSlice, err error) {
 	if preparedMsg, ok := m.(*PreparedMsg); ok {
-		return preparedMsg.hdr, preparedMsg.encodedData, preparedMsg.payload, nil
+		return preparedMsg.hdr, preparedMsg.encodedData.Ref(), preparedMsg.payload.Ref(), nil
 	}
 	// The input interface is not a prepared msg.
 	// Marshal and Compress the data at this point
