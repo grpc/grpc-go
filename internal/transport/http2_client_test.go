@@ -127,8 +127,7 @@ func TestNewHTTP2ClientPrefaceFailure(t *testing.T) {
 	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: dialerClientPrefaceWrite}, func(GoAwayReason) {})
 	if err == nil {
 		t.Error("Expected an error, but got nil")
-	}
-	if err != nil {
+	} else {
 		if err.Error() != "connection error: desc = \"transport: failed to write client preface: preface write error\"" {
 			t.Fatalf("Error while creating client transport: %v", err)
 		}
@@ -153,8 +152,7 @@ func TestNewHTTP2ClientPrefaceLengthFailure(t *testing.T) {
 	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: dialerClientPrefaceLength}, func(GoAwayReason) {})
 	if err == nil {
 		t.Errorf("Expected an error, but got nil")
-	}
-	if err != nil {
+	} else {
 		if err.Error() != "connection error: desc = \"transport: preface mismatch, wrote 21 bytes; want 24\"" {
 			t.Fatalf("Error while creating client transport: %v", err)
 		}
@@ -179,8 +177,7 @@ func TestNewHTTP2ClientFramerWriteSettingsFailure(t *testing.T) {
 	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: dialerFramerWriteSettings}, func(GoAwayReason) {})
 	if err == nil {
 		t.Errorf("Expected an error, but got nil")
-	}
-	if err != nil {
+	} else {
 		if err.Error() != "connection error: desc = \"transport: failed to write initial settings frame: Framer write setting error\"" {
 			t.Fatalf("Error while creating client transport: %v", err)
 		}
@@ -205,8 +202,7 @@ func TestNewHTTP2ClientFramerWriteWindowUpdateFailure(t *testing.T) {
 	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: dialerFramerWriteWindowUpdate, InitialConnWindowSize: 80000}, func(GoAwayReason) {})
 	if err == nil {
 		t.Errorf("Expected an error, but got nil")
-	}
-	if err != nil {
+	} else {
 		if err.Error() != "connection error: desc = \"transport: failed to write window update: Framer write windowupdate error\"" {
 			t.Fatalf("Error while creating client transport: %v", err)
 		}
