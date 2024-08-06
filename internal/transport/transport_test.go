@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -427,6 +428,10 @@ func setUpServerOnly(t *testing.T, port int, sc *ServerConfig, ht hType) *server
 	return server
 }
 
+// isGreetingDone verifies that client-server setup is complete
+// for the test.
+var isGreetingsDone = atomic.Bool{}
+
 func setUp(t *testing.T, port int, ht hType, options ...ConnectOptions) (*server, *http2Client, func()) {
 	var copts = ConnectOptions{}
 	if len(options) > 0 {
@@ -446,6 +451,7 @@ func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts 
 		cancel() // Do not cancel in success path.
 		t.Fatalf("failed to create transport: %v", connErr)
 	}
+	isGreetingsDone.Store(true)
 	return server, ct.(*http2Client), cancel
 }
 
@@ -2751,10 +2757,6 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 	}
 }
 
-// serverGreetingDone verifies that client-server setup is complete
-// for the test.
-var serverGreetingDone chan struct{}
-
 // hangingConn is a net.Conn wrapper for testing, simulating hanging connections
 // after a GOAWAY frame is sent, of which Write operations pause until explicitly signaled
 // or a timeout occurs.
@@ -2769,9 +2771,7 @@ func (hc *hangingConn) Read(b []byte) (n int, err error) {
 
 func (hc *hangingConn) Write(b []byte) (n int, err error) {
 	n, err = hc.Conn.Write(b)
-	if serverGreetingDone != nil {
-		// Wait for client-server conn to set up
-		<-serverGreetingDone
+	if isGreetingsDone.Load() == true {
 		// Add a delay which is more than goAwayLoopyWriterTimeout
 		time.Sleep(2 * time.Second)
 	}
@@ -2824,11 +2824,9 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 		goAwayLoopyWriterTimeout = origGoAwayLoopyTimeout
 	}()
 
+	isGreetingsDone = atomic.Bool{}
+
 	server, ct, cancel := setUp(t, 0, normal, ConnectOptions{Dialer: hangingDialer})
-	serverGreetingDone = make(chan struct{})
-	// Acknowledge that client-server greeting is done
-	serverGreetingDone <- struct{}{}
-	defer close(serverGreetingDone)
 	defer cancel()
 	defer server.stop()
 
