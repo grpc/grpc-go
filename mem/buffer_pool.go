@@ -112,8 +112,9 @@ type sizedBufferPool struct {
 }
 
 func (p *sizedBufferPool) Get(size int) []byte {
-	bs := *p.pool.Get().(*[]byte)
-	return bs[:size]
+	buf := p.pool.Get().([]byte)
+	clear(buf[:cap(buf)])
+	return buf[:size]
 }
 
 func (p *sizedBufferPool) Put(buf []byte) {
@@ -123,17 +124,14 @@ func (p *sizedBufferPool) Put(buf []byte) {
 		// of the buffer.
 		return
 	}
-	buf = buf[:cap(buf)]
-	clear(buf)
-	p.pool.Put(&buf)
+	p.pool.Put(buf)
 }
 
 func newSizedBufferPool(size int) *sizedBufferPool {
 	return &sizedBufferPool{
 		pool: sync.Pool{
 			New: func() any {
-				buf := make([]byte, size)
-				return &buf
+				return make([]byte, size)
 			},
 		},
 		defaultSize: size,

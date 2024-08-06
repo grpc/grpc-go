@@ -287,7 +287,8 @@ func (s) TestBuffer_FreeAfterFree(t *testing.T) {
 		t.Fatalf("Buffer length is %d, want 4", buf.Len())
 	}
 
-	// Ensure that a double free does not panic.
+	// Ensure that a double free does panic.
 	buf.Free()
+	defer checkForPanic(t, "Cannot free freed buffer")
 	buf.Free()
 }

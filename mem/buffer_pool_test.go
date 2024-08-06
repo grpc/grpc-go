@@ -50,12 +50,24 @@ func (s) TestBufferPool(t *testing.T) {
 func (s) TestBufferPoolClears(t *testing.T) {
 	pool := mem.NewTieredBufferPool(4)
 
-	buf := pool.Get(4)
-	copy(buf, "1234")
-	pool.Put(buf)
+	for {
+		buf1 := pool.Get(4)
+		copy(buf1, "1234")
+		pool.Put(buf1)
 
-	if !cmp.Equal(buf, make([]byte, 4)) {
-		t.Fatalf("buffer not cleared")
+		buf2 := pool.Get(4)
+		if &buf1[0] != &buf2[0] {
+			pool.Put(buf2)
+			// This test is only relevant if a buffer is reused, otherwise try again. This
+			// can happen if a GC pause happens between putting the buffer back in the pool
+			// and getting a new one.
+			continue
+		}
+
+		if !cmp.Equal(buf1, make([]byte, 4)) {
+			t.Fatalf("buffer not cleared")
+		}
+		break
 	}
 }
 

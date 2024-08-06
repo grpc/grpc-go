@@ -62,11 +62,17 @@ func (s BufferSlice) Ref() BufferSlice {
 	return out
 }
 
-// Free invokes Buffer.Free() on each Buffer in the slice.
+// Free invokes Buffer.Free() on each Buffer in the slice. Subsequent calls to
+// this function will be no-ops.
 func (s BufferSlice) Free() {
+	if len(s) == 0 || s[0] == nil {
+		// Do nothing if the slice is empty, or has already been freed.
+		return
+	}
 	for _, b := range s {
 		b.Free()
 	}
+	clear(s)
 }
 
 // CopyTo copies each of the underlying Buffer's data into the given buffer,

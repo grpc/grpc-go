@@ -27,8 +27,13 @@ package mem
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 )
+
+var bufferObjectPool = sync.Pool{New: func() any {
+	return new(Buffer)
+}}
 
 // A Buffer represents a reference counted piece of data (in bytes) that can be
 // acquired by a call to NewBuffer() or Copy(). A reference to a Buffer may be
@@ -42,10 +47,13 @@ import (
 // Attempts to access the underlying data after releasing the reference to the
 // Buffer will panic.
 type Buffer struct {
-	data  []byte
-	refs  *atomic.Int32
-	free  func()
-	freed bool
+	data []byte
+	refs *atomic.Int32
+	free func()
+}
+
+func newBuffer() *Buffer {
+	return bufferObjectPool.Get().(*Buffer)
 }
 
 // NewBuffer creates a new Buffer from the given data, initializing the
@@ -54,7 +62,9 @@ type Buffer struct {
 //
 // Note that the backing array of the given data is not copied.
 func NewBuffer(data []byte, onFree func([]byte)) *Buffer {
-	b := &Buffer{data: data, refs: new(atomic.Int32)}
+	b := newBuffer()
+	b.data = data
+	b.refs = new(atomic.Int32)
 	if onFree != nil {
 		b.free = func() { onFree(data) }
 	}
@@ -77,7 +87,7 @@ func Copy(data []byte, pool BufferPool) *Buffer {
 // ReadOnlyData returns the underlying byte slice. Note that it is undefined
 // behavior to modify the contents of this slice in any way.
 func (b *Buffer) ReadOnlyData() []byte {
-	if b.freed {
+	if b.refs == nil {
 		panic("Cannot read freed buffer")
 	}
 	return b.data
@@ -85,31 +95,34 @@ func (b *Buffer) ReadOnlyData() []byte {
 
 // Ref returns a new reference to this Buffer's underlying byte slice.
 func (b *Buffer) Ref() *Buffer {
-	if b.freed {
+	if b.refs == nil {
 		panic("Cannot ref freed buffer")
 	}
 
 	b.refs.Add(1)
-	return &Buffer{
-		data: b.data,
-		refs: b.refs,
-		free: b.free,
-	}
+	newB := newBuffer()
+	newB.data = b.data
+	newB.refs = b.refs
+	newB.free = b.free
+	return newB
 }
 
 // Free decrements this Buffer's reference counter and frees the underlying
 // byte slice if the counter reaches 0 as a result of this call.
 func (b *Buffer) Free() {
-	if b.freed {
-		return
+	if b.refs == nil {
+		panic("Cannot free freed buffer")
 	}
 
-	b.freed = true
 	refs := b.refs.Add(-1)
 	if refs == 0 && b.free != nil {
 		b.free()
 	}
+
 	b.data = nil
+	b.refs = nil
+	b.free = nil
+	bufferObjectPool.Put(b)
 }
 
 // Len returns the Buffer's size.
@@ -126,16 +139,15 @@ func (b *Buffer) Len() int {
 // new reference to the remaining bytes. The returned Buffer functions just like
 // a normal reference acquired using Ref().
 func (b *Buffer) Split(n int) *Buffer {
-	if b.freed {
+	if b.refs == nil {
 		panic("Cannot split freed buffer")
 	}
 
 	b.refs.Add(1)
 
-	split := &Buffer{
-		refs: b.refs,
-		free: b.free,
-	}
+	split := newBuffer()
+	split.refs = b.refs
+	split.free = b.free
 
 	b.data, split.data = b.data[:n], b.data[n:]
 
