@@ -95,7 +95,7 @@ func checkReadHeader(gotHdr *FrameHeader, size int, ft FrameType, f Flag, stream
 	return errors
 }
 
-func (s) TestHTTP2Bridge_ReadFrame_Data(t *testing.T) {
+func (s) TestBridge_ReadFrame_Data(t *testing.T) {
 	c := &testConn{}
 	recvData := "test data"
 	c.rbuf = append(c.rbuf, 0, 0, byte(len(recvData)), byte(FrameTypeData), byte(FlagDataEndStream))
@@ -119,7 +119,7 @@ func (s) TestHTTP2Bridge_ReadFrame_Data(t *testing.T) {
 	df.Data.Free()
 }
 
-func (s) TestHTTP2Bridge_ReadFrame_RSTStream(t *testing.T) {
+func (s) TestBridge_ReadFrame_RSTStream(t *testing.T) {
 	c := &testConn{}
 	c.rbuf = append(c.rbuf, 0, 0, 4, byte(FrameTypeRSTStream), 0)
 	c.rbuf = appendUint32(c.rbuf, 1)
@@ -141,7 +141,7 @@ func (s) TestHTTP2Bridge_ReadFrame_RSTStream(t *testing.T) {
 	}
 }
 
-func (s) TestHTTP2Bridge_ReadFrame_Settings(t *testing.T) {
+func (s) TestBridge_ReadFrame_Settings(t *testing.T) {
 	c := &testConn{}
 	s := Setting{ID: SettingsHeaderTableSize, Value: 200}
 	c.rbuf = append(c.rbuf, 0, 0, 6, byte(FrameTypeSettings), 0)
@@ -169,7 +169,7 @@ func (s) TestHTTP2Bridge_ReadFrame_Settings(t *testing.T) {
 	}
 }
 
-func (s) TestHTTP2Bridge_ReadFrame_Ping(t *testing.T) {
+func (s) TestBridge_ReadFrame_Ping(t *testing.T) {
 	c := &testConn{}
 	d := []byte{1, 2, 3, 4, 5, 6, 7, 8}
 	c.rbuf = append(c.rbuf, 0, 0, 8, byte(FrameTypePing), 0)
@@ -197,7 +197,7 @@ func (s) TestHTTP2Bridge_ReadFrame_Ping(t *testing.T) {
 	pf.Data.Free()
 }
 
-func (s) TestHTTP2Bridge_ReadFrame_GoAway(t *testing.T) {
+func (s) TestBridge_ReadFrame_GoAway(t *testing.T) {
 	c := &testConn{}
 	d := "debug_data"
 	// The length of data + 4 byte code + 4 byte streamID
@@ -232,7 +232,7 @@ func (s) TestHTTP2Bridge_ReadFrame_GoAway(t *testing.T) {
 	gf.DebugData.Free()
 }
 
-func (s) TestHTTP2Bridge_ReadFrame_WindowUpdate(t *testing.T) {
+func (s) TestBridge_ReadFrame_WindowUpdate(t *testing.T) {
 	c := &testConn{}
 	c.rbuf = append(c.rbuf, 0, 0, 4, byte(FrameTypeWindowUpdate), 0)
 	c.rbuf = appendUint32(c.rbuf, 1)
@@ -253,7 +253,7 @@ func (s) TestHTTP2Bridge_ReadFrame_WindowUpdate(t *testing.T) {
 	}
 }
 
-func (s) TestHTTP2Bridge_ReadFrame_MetaHeaders(t *testing.T) {
+func (s) TestBridge_ReadFrame_MetaHeaders(t *testing.T) {
 	fields := []hpack.HeaderField{
 		{Name: "foo", Value: "bar"},
 		{Name: "baz", Value: "qux"},
@@ -302,7 +302,7 @@ func (s) TestHTTP2Bridge_ReadFrame_MetaHeaders(t *testing.T) {
 
 }
 
-func (s) TestHTTP2Bridge_WriteData(t *testing.T) {
+func (s) TestBridge_WriteData(t *testing.T) {
 	c := &testConn{}
 	wantData := "test data"
 	testBuf := mem.BufferSlice{mem.NewBuffer([]byte(wantData), nil)}
@@ -317,7 +317,7 @@ func (s) TestHTTP2Bridge_WriteData(t *testing.T) {
 	testBuf.Free()
 }
 
-func (s) TestHttp2Bridge_WriteHeaders(t *testing.T) {
+func (s) TestBridge_WriteHeaders(t *testing.T) {
 	tests := []struct {
 		endStream  bool
 		endHeaders bool
@@ -350,7 +350,7 @@ func (s) TestHttp2Bridge_WriteHeaders(t *testing.T) {
 	}
 }
 
-func (s) TestHTTP2Bridge_WriteRSTStream(t *testing.T) {
+func (s) TestBridge_WriteRSTStream(t *testing.T) {
 	c := &testConn{}
 	f := NewFramerBridge(c, c, 0)
 	f.WriteRSTStream(1, ErrCodeProtocol)
@@ -363,7 +363,7 @@ func (s) TestHTTP2Bridge_WriteRSTStream(t *testing.T) {
 	}
 }
 
-func (s) TestHTTP2Bridge_WriteSettings(t *testing.T) {
+func (s) TestBridge_WriteSettings(t *testing.T) {
 	c := &testConn{}
 	f := NewFramerBridge(c, c, 0)
 	f.WriteSettings(Setting{ID: SettingsHeaderTableSize, Value: 200})
@@ -380,7 +380,7 @@ func (s) TestHTTP2Bridge_WriteSettings(t *testing.T) {
 	}
 }
 
-func (s) TestHTTP2Bridge_WriteSettingsAck(t *testing.T) {
+func (s) TestBridge_WriteSettingsAck(t *testing.T) {
 	c := &testConn{}
 	f := NewFramerBridge(c, c, 0)
 	f.WriteSettingsAck()
@@ -390,7 +390,7 @@ func (s) TestHTTP2Bridge_WriteSettingsAck(t *testing.T) {
 	}
 }
 
-func (s) TestHTTP2Bridge_WritePing(t *testing.T) {
+func (s) TestBridge_WritePing(t *testing.T) {
 	c := &testConn{}
 	f := NewFramerBridge(c, c, 0)
 	acks := []bool{true, false}
@@ -414,7 +414,7 @@ func (s) TestHTTP2Bridge_WritePing(t *testing.T) {
 	}
 }
 
-func (s) TestHTTP2Bridge_WriteGoAway(t *testing.T) {
+func (s) TestBridge_WriteGoAway(t *testing.T) {
 	c := &testConn{}
 	f := NewFramerBridge(c, c, 0)
 	f.WriteGoAway(2, ErrCodeFlowControl, []byte("debug_data"))
@@ -434,7 +434,7 @@ func (s) TestHTTP2Bridge_WriteGoAway(t *testing.T) {
 	}
 }
 
-func (s) TestHTTP2Bridge_WriteWindowUpdate(t *testing.T) {
+func (s) TestBridge_WriteWindowUpdate(t *testing.T) {
 	c := &testConn{}
 	f := NewFramerBridge(c, c, 0)
 	f.WriteWindowUpdate(1, 2)
@@ -448,7 +448,7 @@ func (s) TestHTTP2Bridge_WriteWindowUpdate(t *testing.T) {
 	}
 }
 
-func (s) TestHTTP2Bridge_WriteContinuation(t *testing.T) {
+func (s) TestBridge_WriteContinuation(t *testing.T) {
 	c := &testConn{}
 	f := NewFramerBridge(c, c, 0)
 	wantData := "hdr block"
