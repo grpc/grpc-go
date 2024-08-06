@@ -79,12 +79,12 @@ func (s) TestUnsupportedEncodingResponse(t *testing.T) {
 			}
 			sopts := []grpc.ServerOption{}
 			if test.serverCompress {
-				// Using deprecated methods to selectively apply compression only on the server side.
-				// with encoding.registerCompressor(), the compressor is applied globally,
-				// affecting both the client and server.
+				// Using deprecated methods to selectively apply compression
+				// only on the server side. With encoding.registerCompressor(),
+				// the compressor is applied globally, affecting client and server
 				sopts = append(sopts, grpc.RPCCompressor(newNopCompressor()), grpc.RPCDecompressor(newNopDecompressor()))
 			}
-			if err := ss.Start(sopts); err != nil {
+			if err := ss.StartServer(sopts...); err != nil {
 				t.Fatalf("Error starting server: %v", err)
 			}
 			defer ss.Stop()
