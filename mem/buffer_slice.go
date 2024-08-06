@@ -19,6 +19,7 @@
 package mem
 
 import (
+	"compress/flate"
 	"io"
 )
 
@@ -121,7 +122,10 @@ func (s BufferSlice) Reader() *Reader {
 	}
 }
 
-var _ io.ReadCloser = (*Reader)(nil)
+var _ interface {
+	io.ReadCloser
+	flate.Reader
+} = (*Reader)(nil)
 
 // Reader exposes a BufferSlice's data as an io.Reader, allowing it to interface
 // with other parts systems. It also provides an additional convenience method
@@ -150,6 +154,17 @@ func (r *Reader) Close() error {
 	return nil
 }
 
+func (r *Reader) freeFirstBufferIfEmpty() bool {
+	if len(r.data) == 0 || r.bufferIdx != len(r.data[0].ReadOnlyData()) {
+		return false
+	}
+
+	r.data[0].Free()
+	r.data = r.data[1:]
+	r.bufferIdx = 0
+	return true
+}
+
 func (r *Reader) Read(buf []byte) (n int, _ error) {
 	if r.len == 0 {
 		return 0, io.EOF
@@ -165,17 +180,30 @@ func (r *Reader) Read(buf []byte) (n int, _ error) {
 		n += copied           // Increment the total number of bytes read.
 		buf = buf[copied:]    // Shrink the given byte slice.
 
-		// If we have copied all of the data from the first Buffer, free it and
-		// advance to the next in the slice.
-		if r.bufferIdx == len(data) {
-			oldBuffer := r.data[0]
-			oldBuffer.Free()
-			r.data = r.data[1:]
-			r.bufferIdx = 0
-		}
+		// If we have copied all the data from the first Buffer, free it and advance to
+		// the next in the slice.
+		r.freeFirstBufferIfEmpty()
 	}
 
 	return n, nil
+}
+
+func (r *Reader) ReadByte() (byte, error) {
+	if r.len == 0 {
+		return 0, io.EOF
+	}
+
+	// There may be any number of empty buffers in the slice, clear them all until a
+	// non-empty buffer is reached. This is guaranteed to exit since r.len is not 0.
+	for r.freeFirstBufferIfEmpty() {
+	}
+
+	b := r.data[0].ReadOnlyData()[r.bufferIdx]
+	r.len--
+	r.bufferIdx++
+	// Free the first buffer in the slice if the last byte was read
+	r.freeFirstBufferIfEmpty()
+	return b, nil
 }
 
 var _ io.Writer = (*writer)(nil)
