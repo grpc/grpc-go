@@ -432,7 +432,7 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 			if n > 0 {
 				s.buf.put(recvMsg{buffer: mem.NewBuffer(buf[:n], ht.bufferPool.Put)})
 			} else {
-				ht.bufferPool.Put(buf)
+				ht.bufferPool.Put(&buf)
 			}
 			if err != nil {
 				s.buf.put(recvMsg{err: mapRecvMsgError(err)})

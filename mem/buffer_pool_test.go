@@ -42,7 +42,7 @@ func (s) TestBufferPool(t *testing.T) {
 				t.Fatalf("Get(%d) returned buffer of length %d, want %d", l, len(bs), l)
 			}
 
-			p.Put(bs)
+			p.Put(&bs)
 		}
 	}
 }
@@ -53,11 +53,11 @@ func (s) TestBufferPoolClears(t *testing.T) {
 	for {
 		buf1 := pool.Get(4)
 		copy(buf1, "1234")
-		pool.Put(buf1)
+		pool.Put(&buf1)
 
 		buf2 := pool.Get(4)
 		if &buf1[0] != &buf2[0] {
-			pool.Put(buf2)
+			pool.Put(&buf2)
 			// This test is only relevant if a buffer is reused, otherwise try again. This
 			// can happen if a GC pause happens between putting the buffer back in the pool
 			// and getting a new one.
@@ -79,7 +79,8 @@ func (s) TestBufferPoolIgnoresShortBuffers(t *testing.T) {
 	}
 
 	// Insert a short buffer into the pool, which is currently empty.
-	pool.Put(make([]byte, 1))
+	short := make([]byte, 1)
+	pool.Put(&short)
 	// Then immediately request a buffer that would be pulled from the pool where the
 	// short buffer would have been returned. If the short buffer is pulled from the
 	// pool, it could cause a panic.

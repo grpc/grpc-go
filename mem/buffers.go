@@ -61,12 +61,12 @@ func newBuffer() *Buffer {
 // to the returned Buffer are released.
 //
 // Note that the backing array of the given data is not copied.
-func NewBuffer(data []byte, onFree func([]byte)) *Buffer {
+func NewBuffer(data []byte, onFree func(*[]byte)) *Buffer {
 	b := newBuffer()
 	b.data = data
 	b.refs = new(atomic.Int32)
 	if onFree != nil {
-		b.free = func() { onFree(data) }
+		b.free = func() { onFree(&data) }
 	}
 	b.refs.Add(1)
 	return b

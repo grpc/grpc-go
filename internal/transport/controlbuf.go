@@ -990,7 +990,7 @@ func (l *loopyWriter) processData() (bool, error) {
 			pool = mem.DefaultBufferPool()
 		}
 		buf = pool.Get(size)
-		defer pool.Put(buf)
+		defer pool.Put(&buf)
 
 		copy(buf[:hSize], dataItem.h)
 		_, _ = dataItem.reader.Read(buf[hSize:])

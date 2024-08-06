@@ -55,7 +55,7 @@ func (b *swappableBufferPool) Get(length int) []byte {
 	return (*b.Load()).Get(length)
 }
 
-func (b *swappableBufferPool) Put(buf []byte) {
+func (b *swappableBufferPool) Put(buf *[]byte) {
 	(*b.Load()).Put(buf)
 }
 
@@ -169,15 +169,15 @@ func (p *trackingBufferPool) Get(length int) []byte {
 	return buf
 }
 
-func (p *trackingBufferPool) Put(buf []byte) {
+func (p *trackingBufferPool) Put(buf *[]byte) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	if len(buf) == 0 {
+	if len(*buf) == 0 {
 		return
 	}
 
-	key := unsafe.SliceData(buf)
+	key := unsafe.SliceData(*buf)
 	if _, ok := p.allocatedBuffers[key]; !ok {
 		p.efer.Errorf("Unknown buffer freed:\n%s", string(debug.Stack()))
 	} else {

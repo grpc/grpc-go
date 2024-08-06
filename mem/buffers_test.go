@@ -46,9 +46,9 @@ func Test(t *testing.T) {
 func (s) TestBuffer_NewBufferAndFree(t *testing.T) {
 	data := "abcd"
 	errCh := make(chan error, 1)
-	freeF := func(got []byte) {
-		if !bytes.Equal(got, []byte(data)) {
-			errCh <- fmt.Errorf("Free function called with bytes %s, want %s", string(got), string(data))
+	freeF := func(got *[]byte) {
+		if !bytes.Equal(*got, []byte(data)) {
+			errCh <- fmt.Errorf("Free function called with bytes %s, want %s", string(*got), string(data))
 			return
 		}
 		errCh <- nil
@@ -77,9 +77,9 @@ func (s) TestBuffer_NewBufferAndFree(t *testing.T) {
 func (s) TestBuffer_NewBufferRefAndFree(t *testing.T) {
 	data := "abcd"
 	errCh := make(chan error, 1)
-	freeF := func(got []byte) {
-		if !bytes.Equal(got, []byte(data)) {
-			errCh <- fmt.Errorf("Free function called with bytes %s, want %s", string(got), string(data))
+	freeF := func(got *[]byte) {
+		if !bytes.Equal(*got, []byte(data)) {
+			errCh <- fmt.Errorf("Free function called with bytes %s, want %s", string(*got), string(data))
 			return
 		}
 		errCh <- nil
@@ -126,8 +126,8 @@ func (t *testBufferPool) Get(length int) []byte {
 	return make([]byte, length)
 }
 
-func (t *testBufferPool) Put(data []byte) {
-	t.putCh <- data
+func (t *testBufferPool) Put(data *[]byte) {
+	t.putCh <- *data
 }
 
 func newTestBufferPool() *testBufferPool {
@@ -199,7 +199,7 @@ func (s) TestBuffer_Split(t *testing.T) {
 	ready := false
 	freed := false
 	data := []byte{1, 2, 3, 4}
-	buf := mem.NewBuffer(data, func(bytes []byte) {
+	buf := mem.NewBuffer(data, func(bytes *[]byte) {
 		if !ready {
 			t.Fatalf("Freed too early")
 		}
