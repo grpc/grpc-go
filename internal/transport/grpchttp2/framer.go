@@ -267,6 +267,9 @@ func (f *WindowUpdateFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
+// Free is a no-op for WindowUpdateFrame.
+func (f *WindowUpdateFrame) Free() {}
+
 // ContinuationFrame is the representation of a [CONTINUATION Frame]. The
 // CONTINUATION frame is used to continue a sequence of header block fragments.
 //

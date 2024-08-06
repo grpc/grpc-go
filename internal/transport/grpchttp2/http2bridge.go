@@ -70,17 +70,23 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 
 	switch f := f.(type) {
 	case *http2.DataFrame:
-		buf := mem.Copy(f.Data(), fr.pool)
-		return &DataFrame{
+		buf := fr.pool.Get(int(hdr.Size))
+		copy(buf, f.Data())
+		df := &DataFrame{
 			hdr:  hdr,
 			Data: buf,
-		}, nil
+		}
+		df.free = func() { fr.pool.Put(buf) }
+		return df, nil
 	case *http2.HeadersFrame:
-		buf := mem.Copy(f.HeaderBlockFragment(), fr.pool)
-		return &HeadersFrame{
+		buf := fr.pool.Get(int(hdr.Size))
+		copy(buf, f.HeaderBlockFragment())
+		hf := &HeadersFrame{
 			hdr:      hdr,
 			HdrBlock: buf,
-		}, nil
+		}
+		hf.free = func() { fr.pool.Put(buf) }
+		return hf, nil
 	case *http2.RSTStreamFrame:
 		return &RSTStreamFrame{
 			hdr:  hdr,
@@ -100,30 +106,40 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 			Settings: buf,
 		}, nil
 	case *http2.PingFrame:
-		buf := mem.Copy(f.Data[:], fr.pool)
-		return &PingFrame{
+		buf := fr.pool.Get(int(hdr.Size))
+		copy(buf, f.Data[:])
+		pf := &PingFrame{
 			hdr:  hdr,
 			Data: buf,
-		}, nil
+		}
+		pf.free = func() { fr.pool.Put(buf) }
+		return pf, nil
 	case *http2.GoAwayFrame:
-		buf := mem.Copy(f.DebugData(), fr.pool)
-		return &GoAwayFrame{
+		// Size of the frame minus the code and lastStreamID
+		buf := fr.pool.Get(int(hdr.Size) - 8)
+		copy(buf, f.DebugData())
+		gf := &GoAwayFrame{
 			hdr:          hdr,
 			LastStreamID: f.LastStreamID,
 			Code:         ErrCode(f.ErrCode),
 			DebugData:    buf,
-		}, nil
+		}
+		gf.free = func() { fr.pool.Put(buf) }
+		return gf, nil
 	case *http2.WindowUpdateFrame:
 		return &WindowUpdateFrame{
 			hdr: hdr,
 			Inc: f.Increment,
 		}, nil
 	case *http2.ContinuationFrame:
-		buf := mem.Copy(f.HeaderBlockFragment(), fr.pool)
-		return &ContinuationFrame{
+		buf := fr.pool.Get(int(hdr.Size))
+		copy(buf, f.HeaderBlockFragment())
+		cf := &ContinuationFrame{
 			hdr:      hdr,
 			HdrBlock: buf,
-		}, nil
+		}
+		cf.free = func() { fr.pool.Put(buf) }
+		return cf, nil
 	case *http2.MetaHeadersFrame:
 		return &MetaHeadersFrame{
 			hdr:    hdr,

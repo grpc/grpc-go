@@ -113,10 +113,10 @@ func (s) TestBridge_ReadFrame_Data(t *testing.T) {
 		t.Errorf("ReadFrame():\n%s", errors.Join(errs...))
 	}
 	df := fr.(*DataFrame)
-	if string(df.Data.ReadOnlyData()) != recvData {
-		t.Errorf("ReadFrame(): Data: got %q, want %q", string(df.Data.ReadOnlyData()), recvData)
+	if string(df.Data) != recvData {
+		t.Errorf("ReadFrame(): Data: got %q, want %q", string(df.Data), recvData)
 	}
-	df.Data.Free()
+	df.Free()
 }
 
 func (s) TestBridge_ReadFrame_RSTStream(t *testing.T) {
@@ -188,13 +188,12 @@ func (s) TestBridge_ReadFrame_Ping(t *testing.T) {
 	}
 
 	pf := fr.(*PingFrame)
-	data := pf.Data.ReadOnlyData()
-	for i := range data {
-		if data[i] != d[i] {
-			t.Errorf("ReadFrame(): Data[%d]: got %d, want %d", i, data[i], d[i])
+	for i := range pf.Data {
+		if pf.Data[i] != d[i] {
+			t.Errorf("ReadFrame(): Data[%d]: got %d, want %d", i, pf.Data[i], d[i])
 		}
 	}
-	pf.Data.Free()
+	pf.Free()
 }
 
 func (s) TestBridge_ReadFrame_GoAway(t *testing.T) {
@@ -226,10 +225,10 @@ func (s) TestBridge_ReadFrame_GoAway(t *testing.T) {
 	if gf.Code != ErrCodeFlowControl {
 		t.Errorf("ReadFrame(): Code: got %#x, want %#x", gf.Code, ErrCodeFlowControl)
 	}
-	if string(gf.DebugData.ReadOnlyData()) != d {
-		t.Errorf("ReadFrame(): DebugData: got %q, want %q", string(gf.DebugData.ReadOnlyData()), d)
+	if string(gf.DebugData) != d {
+		t.Errorf("ReadFrame(): DebugData: got %q, want %q", string(gf.DebugData), d)
 	}
-	gf.DebugData.Free()
+	gf.Free()
 }
 
 func (s) TestBridge_ReadFrame_WindowUpdate(t *testing.T) {
