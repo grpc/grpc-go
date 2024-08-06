@@ -263,8 +263,8 @@ type Framer interface {
 	// ReadFrame returns grpchttp2.Frame. It is the caller's responsibility to
 	// free the underlying buffer when done using the Frame.
 	ReadFrame() (Frame, error)
-	// WriteData writes an HTTP/2 DATA frame to the stream. The function will
-	// not Free the data.
+	// WriteData writes an HTTP/2 DATA frame to the stream. The data is expected
+	// to be freed by the caller.
 	WriteData(streamID uint32, endStream bool, data mem.BufferSlice) error
 	// WriteHeaders writes an HTTP/2 HEADERS frame to the stream.
 	WriteHeaders(streamID uint32, endStream, endHeaders bool, headerBlock []byte) error
