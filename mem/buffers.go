@@ -31,8 +31,16 @@ import (
 	"sync/atomic"
 )
 
+type Buffer interface {
+	ReadOnlyData() []byte
+	Ref() Buffer
+	Free()
+	Len() int
+	Split(n int) Buffer
+}
+
 var bufferObjectPool = sync.Pool{New: func() any {
-	return new(Buffer)
+	return new(buffer)
 }}
 
 // A Buffer represents a reference counted piece of data (in bytes) that can be
@@ -46,14 +54,20 @@ var bufferObjectPool = sync.Pool{New: func() any {
 //
 // Attempts to access the underlying data after releasing the reference to the
 // Buffer will panic.
-type Buffer struct {
+type buffer struct {
 	data []byte
 	refs *atomic.Int32
 	free func()
 }
 
-func newBuffer() *Buffer {
-	return bufferObjectPool.Get().(*Buffer)
+func newBuffer() *buffer {
+	return bufferObjectPool.Get().(*buffer)
+}
+
+var magic = 1 << 10
+
+func SetMagic(m int) {
+	magic = m
 }
 
 // NewBuffer creates a new Buffer from the given data, initializing the
@@ -61,7 +75,10 @@ func newBuffer() *Buffer {
 // to the returned Buffer are released.
 //
 // Note that the backing array of the given data is not copied.
-func NewBuffer(data []byte, onFree func(*[]byte)) *Buffer {
+func NewBuffer(data []byte, onFree func(*[]byte)) Buffer {
+	if len(data) < magic {
+		return (*sliceBuffer)(&data)
+	}
 	b := newBuffer()
 	b.data = data
 	b.refs = new(atomic.Int32)
@@ -78,7 +95,7 @@ func NewBuffer(data []byte, onFree func(*[]byte)) *Buffer {
 // It acquires a []byte from the given pool and copies over the backing array
 // of the given data. The []byte acquired from the pool is returned to the
 // pool when all references to the returned Buffer are released.
-func Copy(data []byte, pool BufferPool) *Buffer {
+func Copy(data []byte, pool BufferPool) Buffer {
 	buf := pool.Get(len(data))
 	copy(buf, data)
 	return NewBuffer(buf, pool.Put)
@@ -86,7 +103,7 @@ func Copy(data []byte, pool BufferPool) *Buffer {
 
 // ReadOnlyData returns the underlying byte slice. Note that it is undefined
 // behavior to modify the contents of this slice in any way.
-func (b *Buffer) ReadOnlyData() []byte {
+func (b *buffer) ReadOnlyData() []byte {
 	if b.refs == nil {
 		panic("Cannot read freed buffer")
 	}
@@ -94,7 +111,7 @@ func (b *Buffer) ReadOnlyData() []byte {
 }
 
 // Ref returns a new reference to this Buffer's underlying byte slice.
-func (b *Buffer) Ref() *Buffer {
+func (b *buffer) Ref() Buffer {
 	if b.refs == nil {
 		panic("Cannot ref freed buffer")
 	}
@@ -109,7 +126,7 @@ func (b *Buffer) Ref() *Buffer {
 
 // Free decrements this Buffer's reference counter and frees the underlying
 // byte slice if the counter reaches 0 as a result of this call.
-func (b *Buffer) Free() {
+func (b *buffer) Free() {
 	if b.refs == nil {
 		panic("Cannot free freed buffer")
 	}
@@ -126,7 +143,7 @@ func (b *Buffer) Free() {
 }
 
 // Len returns the Buffer's size.
-func (b *Buffer) Len() int {
+func (b *buffer) Len() int {
 	// Convenience: io.Reader returns (n int, err error), and n is often checked
 	// before err is checked. To mimic this, Len() should work on nil Buffers.
 	if b == nil {
@@ -138,7 +155,7 @@ func (b *Buffer) Len() int {
 // Split modifies the receiver to point to the first n bytes while it returns a
 // new reference to the remaining bytes. The returned Buffer functions just like
 // a normal reference acquired using Ref().
-func (b *Buffer) Split(n int) *Buffer {
+func (b *buffer) Split(n int) Buffer {
 	if b.refs == nil {
 		panic("Cannot split freed buffer")
 	}
@@ -156,6 +173,29 @@ func (b *Buffer) Split(n int) *Buffer {
 
 // String returns a string representation of the buffer. May be used for
 // debugging purposes.
-func (b *Buffer) String() string {
+func (b *buffer) String() string {
 	return fmt.Sprintf("mem.Buffer(%p, data: %p, length: %d)", b, b.ReadOnlyData(), len(b.ReadOnlyData()))
+}
+
+type sliceBuffer []byte
+
+func (s *sliceBuffer) ReadOnlyData() []byte {
+	return *s
+}
+
+func (s *sliceBuffer) Ref() Buffer {
+	return s
+}
+
+func (s *sliceBuffer) Free() {
+}
+
+func (s *sliceBuffer) Len() int {
+	return len(*s)
+}
+
+func (s *sliceBuffer) Split(n int) Buffer {
+	newBuf := (*s)[n:]
+	*s = (*s)[:n]
+	return &newBuf
 }

@@ -50,7 +50,7 @@ const logLevel = 2
 // recvMsg represents the received msg from the transport. All transport
 // protocol specific info has been removed.
 type recvMsg struct {
-	buffer *mem.Buffer
+	buffer mem.Buffer
 	// nil: received some data
 	// io.EOF: stream is completed. data is nil.
 	// other non-nil error: transport failure. data is nil.
@@ -129,7 +129,7 @@ type recvBufferReader struct {
 	ctx         context.Context
 	ctxDone     <-chan struct{} // cache of ctx.Done() (for performance).
 	recv        *recvBuffer
-	last        *mem.Buffer // Stores the remaining data in the previous calls.
+	last        mem.Buffer // Stores the remaining data in the previous calls.
 	err         error
 }
 
@@ -137,7 +137,7 @@ type recvBufferReader struct {
 // additional data from recv. It blocks if there no additional data available in
 // recv. If Read returns any non-nil error, it will continue to return that
 // error.
-func (r *recvBufferReader) Read(n int) (buf *mem.Buffer, err error) {
+func (r *recvBufferReader) Read(n int) (buf mem.Buffer, err error) {
 	if r.err != nil {
 		return nil, r.err
 	}
@@ -158,7 +158,7 @@ func (r *recvBufferReader) Read(n int) (buf *mem.Buffer, err error) {
 	return buf, r.err
 }
 
-func (r *recvBufferReader) read(n int) (buf *mem.Buffer, err error) {
+func (r *recvBufferReader) read(n int) (buf mem.Buffer, err error) {
 	select {
 	case <-r.ctxDone:
 		return nil, ContextErr(r.ctx.Err())
@@ -167,7 +167,7 @@ func (r *recvBufferReader) read(n int) (buf *mem.Buffer, err error) {
 	}
 }
 
-func (r *recvBufferReader) readClient(n int) (buf *mem.Buffer, err error) {
+func (r *recvBufferReader) readClient(n int) (buf mem.Buffer, err error) {
 	// If the context is canceled, then closes the stream with nil metadata.
 	// closeStream writes its error parameter to r.recv as a recvMsg.
 	// r.readAdditional acts on that message and returns the necessary error.
@@ -194,7 +194,7 @@ func (r *recvBufferReader) readClient(n int) (buf *mem.Buffer, err error) {
 	}
 }
 
-func (r *recvBufferReader) readAdditional(m recvMsg, n int) (b *mem.Buffer, err error) {
+func (r *recvBufferReader) readAdditional(m recvMsg, n int) (b mem.Buffer, err error) {
 	r.recv.load()
 	if m.err != nil {
 		if m.buffer != nil {
@@ -490,12 +490,16 @@ func (s *Stream) Read(n int) (data mem.BufferSlice, err error) {
 	s.requestRead(n)
 	for n != 0 {
 		buf, err := s.trReader.Read(n)
-		n -= buf.Len()
+		var bufLen int
+		if buf != nil {
+			bufLen = buf.Len()
+		}
+		n -= bufLen
 		if n == 0 {
 			err = nil
 		}
 		if err != nil {
-			if buf.Len() > 0 && err == io.EOF {
+			if bufLen > 0 && err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}
 			data.Free()
@@ -518,7 +522,7 @@ type transportReader struct {
 	er            error
 }
 
-func (t *transportReader) Read(n int) (buf *mem.Buffer, err error) {
+func (t *transportReader) Read(n int) (buf mem.Buffer, err error) {
 	buf, err = t.reader.Read(n)
 	if err != nil {
 		t.er = err

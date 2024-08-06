@@ -79,10 +79,17 @@ type tieredBufferPool struct {
 }
 
 func (p *tieredBufferPool) Get(size int) []byte {
+	if size <= magic {
+		return make([]byte, size)
+	}
 	return p.getPool(size).Get(size)
 }
 
 func (p *tieredBufferPool) Put(buf *[]byte) {
+	c := cap(*buf)
+	if c <= magic {
+		return
+	}
 	p.getPool(cap(*buf)).Put(buf)
 }
 

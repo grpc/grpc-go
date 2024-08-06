@@ -33,6 +33,10 @@ const (
 	defaultTestShortTimeout = 100 * time.Millisecond
 )
 
+func init() {
+	mem.SetMagic(0)
+}
+
 type s struct {
 	grpctest.Tester
 }
@@ -205,7 +209,7 @@ func (s) TestBuffer_Split(t *testing.T) {
 		}
 		freed = true
 	})
-	checkBufData := func(b *mem.Buffer, expected []byte) {
+	checkBufData := func(b mem.Buffer, expected []byte) {
 		if !bytes.Equal(b.ReadOnlyData(), expected) {
 			t.Fatalf("Buffer did not contain expected data %v, got %v", expected, b.ReadOnlyData())
 		}
