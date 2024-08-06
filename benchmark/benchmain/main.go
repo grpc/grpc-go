@@ -65,6 +65,7 @@ import (
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
@@ -128,10 +129,11 @@ const (
 	workloadsUnconstrained = "unconstrained"
 	workloadsAll           = "all"
 	// Compression modes.
-	compModeOff  = "off"
-	compModeGzip = "gzip"
-	compModeNop  = "nop"
-	compModeAll  = "all"
+	compModeOff    = "off"
+	compModeGzip   = "gzip"
+	compModeGzipV2 = "gzipV2"
+	compModeNop    = "nop"
+	compModeAll    = "all"
 	// Toggle modes.
 	toggleModeOff  = "off"
 	toggleModeOn   = "on"
@@ -154,7 +156,7 @@ const (
 
 var (
 	allWorkloads              = []string{workloadsUnary, workloadsStreaming, workloadsUnconstrained, workloadsAll}
-	allCompModes              = []string{compModeOff, compModeGzip, compModeNop, compModeAll}
+	allCompModes              = []string{compModeOff, compModeGzip, compModeGzipV2, compModeNop, compModeAll}
 	allToggleModes            = []string{toggleModeOff, toggleModeOn, toggleModeBoth}
 	allNetworkModes           = []string{networkModeNone, networkModeLocal, networkModeLAN, networkModeWAN, networkLongHaul}
 	allRecvBufferPools        = []string{recvBufferPoolNil, recvBufferPoolSimple, recvBufferPoolAll}
@@ -308,6 +310,11 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 		opts = append(opts,
 			grpc.WithCompressor(grpc.NewGZIPCompressor()),
 			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
+		)
+	}
+	if bf.ModeCompressor == compModeGzipV2 {
+		opts = append(opts,
+			grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
 		)
 	}
 	if bf.EnableKeepalive {
@@ -875,10 +882,10 @@ func setToggleMode(val string) []bool {
 
 func setCompressorMode(val string) []string {
 	switch val {
-	case compModeNop, compModeGzip, compModeOff:
+	case compModeNop, compModeGzip, compModeGzipV2, compModeOff:
 		return []string{val}
 	case compModeAll:
-		return []string{compModeNop, compModeGzip, compModeOff}
+		return []string{compModeNop, compModeGzip, compModeGzipV2, compModeOff}
 	default:
 		// This should never happen because a wrong value passed to this flag would
 		// be caught during flag.Parse().
