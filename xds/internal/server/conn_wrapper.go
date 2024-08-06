@@ -47,7 +47,7 @@ type connWrapper struct {
 	// The specific filter chain picked for handling this connection.
 	filterChain *xdsresource.FilterChain
 
-	// A reference fo the listenerWrapper on which this connection was accepted.
+	// A reference to the listenerWrapper on which this connection was accepted.
 	parent *listenerWrapper
 
 	// The certificate providers created for this connection.

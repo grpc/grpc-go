@@ -165,7 +165,7 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 //   - hold a lock and send updates to balancer (e.g. update resolved addresses)
 //   - the balancer calls back (NewSubConn or update picker) in line
 //
-// The callback will try to hold hte same lock again, which will cause a
+// The callback will try to hold the same lock again, which will cause a
 // deadlock.
 //
 // This test starts the balancer group with a test balancer, will updates picker
@@ -345,7 +345,7 @@ func (s) TestBalancerGroup_locality_caching_close_group(t *testing.T) {
 
 // Sub-balancers in cache will be closed if not re-added within timeout, and
 // subConns will be shut down.
-func (s) TestBalancerGroup_locality_caching_not_readd_within_timeout(t *testing.T) {
+func (s) TestBalancerGroup_locality_caching_not_read_within_timeout(t *testing.T) {
 	_, _, cc, addrToSC := initBalancerGroupForCachingTest(t, time.Second)
 
 	// The sub-balancer is not re-added within timeout. The subconns should be
@@ -385,7 +385,7 @@ func (*noopBalancerBuilderWrapper) Name() string {
 
 // After removing a sub-balancer, re-add with same ID, but different balancer
 // builder. Old subconns should be shut down, and new subconns should be created.
-func (s) TestBalancerGroup_locality_caching_readd_with_different_builder(t *testing.T) {
+func (s) TestBalancerGroup_locality_caching_read_with_different_builder(t *testing.T) {
 	gator, bg, cc, addrToSC := initBalancerGroupForCachingTest(t, defaultTestTimeout)
 
 	// Re-add sub-balancer-1, but with a different balancer builder. The

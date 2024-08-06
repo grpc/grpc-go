@@ -485,7 +485,7 @@ const (
 // stream maintains a queue of data frames; as loopy receives data frames
 // it gets added to the queue of the relevant stream.
 // Loopy goes over this list of active streams by processing one node every iteration,
-// thereby closely resemebling to a round-robin scheduling over all streams. While
+// thereby closely resembling a round-robin scheduling over all streams. While
 // processing a stream, loopy writes out data bytes from this stream capped by the min
 // of http2MaxFrameLen, connection-level flow control and stream-level flow control.
 type loopyWriter struct {

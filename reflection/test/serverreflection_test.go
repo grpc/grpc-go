@@ -605,9 +605,9 @@ func testFileContainingSymbol(t *testing.T, stream v1reflectiongrpc.ServerReflec
 
 func testFileContainingSymbolError(t *testing.T, stream v1reflectiongrpc.ServerReflection_ServerReflectionInfoClient) {
 	for _, test := range []string{
-		"grpc.testing.SerchService",
+		"grpc.testing.SearchService",
 		"grpc.testing.SearchService.SearchE",
-		"grpc.tesing.SearchResponse",
+		"grpc.testing.SearchResponse",
 		"gpc.testing.ToBeExtended",
 	} {
 		if err := stream.Send(&v1reflectionpb.ServerReflectionRequest{

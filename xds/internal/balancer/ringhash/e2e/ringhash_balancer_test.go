@@ -148,7 +148,7 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 		t.Fatal("EmptyCall RPC succeeded when the channel is in TRANSIENT_FAILURE")
 	}
 
-	// Restart the server listener. The ring_hash LB polcy is expected to
+	// Restart the server listener. The ring_hash LB policy is expected to
 	// attempt to reconnect on its own and come out of TRANSIENT_FAILURE, even
 	// without an RPC attempt.
 	lis.Restart()
@@ -795,7 +795,7 @@ func computeIdealNumberOfRPCs(t *testing.T, p, errorTolerance float64) int {
 		t.Fatal("p must be in (0, 1)")
 	}
 	numRPCs := math.Ceil(p * (1 - p) * 5. * 5. / errorTolerance / errorTolerance)
-	return int(numRPCs + 1000.) // add 1k as a buffer to avoid flakyness.
+	return int(numRPCs + 1000.) // add 1k as a buffer to avoid flakiness.
 }
 
 // setRingHashLBPolicyWithHighMinRingSize sets the ring hash policy with a high
@@ -1394,10 +1394,10 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicks(t *testing.T) {
 	})
 	defer backend.Stop()
 
-	nonExistantServerAddr := makeNonExistentBackends(t, 1)[0]
+	nonExistentServerAddr := makeNonExistentBackends(t, 1)[0]
 
 	const clusterName = "cluster"
-	endpoints := endpointResource(t, clusterName, []string{backend.Address, nonExistantServerAddr})
+	endpoints := endpointResource(t, clusterName, []string{backend.Address, nonExistentServerAddr})
 	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
 		ServiceName: clusterName,
@@ -1431,7 +1431,7 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicks(t *testing.T) {
 
 	rpcCtx, rpcCancel := context.WithCancel(ctx)
 	go func() {
-		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", nonExistantServerAddr+"_0"))
+		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", nonExistentServerAddr+"_0"))
 		_, err := client.EmptyCall(rpcCtx, &testpb.Empty{})
 		if status.Code(err) != codes.Canceled {
 			t.Errorf("Expected RPC to be canceled, got error: %v", err)

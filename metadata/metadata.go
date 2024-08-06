@@ -223,7 +223,7 @@ func ValueFromIncomingContext(ctx context.Context, key string) []string {
 		return copyOf(v)
 	}
 	for k, v := range md {
-		// Case insenitive comparison: MD is a map, and there's no guarantee
+		// Case insensitive comparison: MD is a map, and there's no guarantee
 		// that the MD attached to the context is created using our helper
 		// functions.
 		if strings.EqualFold(k, key) {

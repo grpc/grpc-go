@@ -367,7 +367,7 @@ type requestParameters struct {
 	ActorTokenType string `json:"actor_token_type,omitempty"`
 }
 
-// nesponseParameters stores all attributes sent as JSON in a successful STS
+// responseParameters stores all attributes sent as JSON in a successful STS
 // response. These attributes are defined in
 // https://tools.ietf.org/html/rfc8693#section-2.2.1.
 type responseParameters struct {

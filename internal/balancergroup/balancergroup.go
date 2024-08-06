@@ -204,7 +204,7 @@ type BalancerGroup struct {
 	// after it's closed.
 	//
 	// We don't share the mutex to avoid deadlocks (e.g. a call to sub-balancer
-	// may call back to balancer group inline. It causes deaclock if they
+	// may call back to balancer group inline. It causes deadlock if they
 	// require the same mutex).
 	//
 	// We should never need to hold multiple locks at the same time in this
@@ -218,7 +218,7 @@ type BalancerGroup struct {
 	// guards the map from SubConn to balancer ID, so updateSubConnState needs
 	// to hold it shortly to potentially delete from the map.
 	//
-	// UpdateState is called by the balancer state aggretator, and it will
+	// UpdateState is called by the balancer state aggregator, and it will
 	// decide when and whether to call.
 	//
 	// The corresponding boolean incomingStarted is used to stop further updates
@@ -292,7 +292,7 @@ func (bg *BalancerGroup) Start() {
 // AddWithClientConn adds a balancer with the given id to the group. The
 // balancer is built with a balancer builder registered with balancerName. The
 // given ClientConn is passed to the newly built balancer instead of the
-// onepassed to balancergroup.New().
+// one passed to balancergroup.New().
 //
 // TODO: Get rid of the existing Add() API and replace it with this.
 func (bg *BalancerGroup) AddWithClientConn(id, balancerName string, cc balancer.ClientConn) error {

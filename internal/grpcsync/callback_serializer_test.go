@@ -153,7 +153,7 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 		<-ctx.Done()
 	})
 
-	// Schedule a bunch of callbacks. These should be exeuted since the are
+	// Schedule a bunch of callbacks. These should be executed since they are
 	// scheduled before the serializer is closed.
 	const numCallbacks = 10
 	callbackCh := make(chan int, numCallbacks)

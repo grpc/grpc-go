@@ -47,7 +47,7 @@ type cacheEntry struct {
 	// headerData is received in the RLS response and is to be sent in the
 	// X-Google-RLS-Data header for matching RPCs.
 	headerData string
-	// expiryTime is the absolute time at which this cache entry entry stops
+	// expiryTime is the absolute time at which this cache entry stops
 	// being valid. When an RLS request succeeds, this is set to the current
 	// time plus the max_age field from the LB policy config.
 	expiryTime time.Time
@@ -223,7 +223,7 @@ func (dc *dataCache) resize(size int64) (backoffCancelled bool) {
 				backoffCancelled = true
 			}
 		}
-		dc.deleteAndcleanup(key, entry)
+		dc.deleteAndCleanup(key, entry)
 	}
 	dc.maxSize = size
 	return backoffCancelled
@@ -249,7 +249,7 @@ func (dc *dataCache) evictExpiredEntries() bool {
 		if entry.expiryTime.After(now) || entry.backoffExpiryTime.After(now) {
 			continue
 		}
-		dc.deleteAndcleanup(key, entry)
+		dc.deleteAndCleanup(key, entry)
 		evicted = true
 	}
 	return evicted
@@ -339,7 +339,7 @@ func (dc *dataCache) removeEntryForTesting(key cacheKey) {
 	if !ok {
 		return
 	}
-	dc.deleteAndcleanup(key, entry)
+	dc.deleteAndCleanup(key, entry)
 }
 
 // deleteAndCleanup performs actions required at the time of deleting an entry
@@ -347,7 +347,7 @@ func (dc *dataCache) removeEntryForTesting(key cacheKey) {
 // - the entry is removed from the map of entries
 // - current size of the data cache is update
 // - the key is removed from the LRU
-func (dc *dataCache) deleteAndcleanup(key cacheKey, entry *cacheEntry) {
+func (dc *dataCache) deleteAndCleanup(key cacheKey, entry *cacheEntry) {
 	delete(dc.entries, key)
 	dc.currentSize -= entry.size
 	dc.keys.removeEntry(key)
@@ -355,7 +355,7 @@ func (dc *dataCache) deleteAndcleanup(key cacheKey, entry *cacheEntry) {
 
 func (dc *dataCache) stop() {
 	for key, entry := range dc.entries {
-		dc.deleteAndcleanup(key, entry)
+		dc.deleteAndCleanup(key, entry)
 	}
 	dc.shutdown.Fire()
 }

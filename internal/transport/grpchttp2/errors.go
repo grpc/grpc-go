@@ -44,7 +44,7 @@ const (
 	ErrCodeCompression        ErrCode = 0x9
 	ErrCodeConnect            ErrCode = 0xa
 	ErrCodeEnhanceYourCalm    ErrCode = 0xb
-	ErrCodeIndaequateSecurity ErrCode = 0xc
+	ErrCodeInadequateSecurity ErrCode = 0xc
 	ErrCodeHTTP11Required     ErrCode = 0xd
 )
 
@@ -61,7 +61,7 @@ var errorCodeNames = map[ErrCode]string{
 	ErrCodeCompression:        "COMPRESSION_ERROR",
 	ErrCodeConnect:            "CONNECT_ERROR",
 	ErrCodeEnhanceYourCalm:    "ENHANCE_YOUR_CALM",
-	ErrCodeIndaequateSecurity: "INADEQUATE_SECURITY",
+	ErrCodeInadequateSecurity: "INADEQUATE_SECURITY",
 	ErrCodeHTTP11Required:     "HTTP_1_1_REQUIRED",
 }
 
