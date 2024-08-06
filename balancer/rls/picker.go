@@ -61,12 +61,13 @@ type rlsPicker struct {
 
 	// The picker is given its own copy of the below fields from the RLS LB policy
 	// to avoid having to grab the mutex on the latter.
-	defaultPolicy *childPolicyWrapper // Child policy for the default target.
-	ctrlCh        *controlChannel     // Control channel to the RLS server.
-	maxAge        time.Duration       // Cache max age from LB config.
-	staleAge      time.Duration       // Cache stale age from LB config.
-	bg            exitIdler
-	logger        *internalgrpclog.PrefixLogger
+	rlsServerTarget string
+	defaultPolicy   *childPolicyWrapper // Child policy for the default target.
+	ctrlCh          *controlChannel     // Control channel to the RLS server.
+	maxAge          time.Duration       // Cache max age from LB config.
+	staleAge        time.Duration       // Cache stale age from LB config.
+	bg              exitIdler
+	logger          *internalgrpclog.PrefixLogger
 }
 
 // isFullMethodNameValid return true if name is of the form `/service/method`.
@@ -164,8 +165,11 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 			// X-Google-RLS-Data header.
 			res, err := state.Picker.Pick(info)
 			if err != nil {
+				targetPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget, cpw.target, "fail")
 				return res, err
 			}
+			targetPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget, cpw.target, "complete")
+
 			if res.Metadata == nil {
 				res.Metadata = metadata.Pairs(rlsDataHeaderName, dcEntry.headerData)
 			} else {
@@ -174,6 +178,8 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 			return res, nil
 		}
 	}
+
+	failedPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget)
 	// In the unlikely event that we have a cache entry with no targets, we end up
 	// queueing the RPC.
 	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
@@ -184,8 +190,16 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 func (p *rlsPicker) useDefaultPickIfPossible(info balancer.PickInfo, errOnNoDefault error) (balancer.PickResult, error) {
 	if p.defaultPolicy != nil {
 		state := (*balancer.State)(atomic.LoadPointer(&p.defaultPolicy.state))
-		return state.Picker.Pick(info)
+		res, err := state.Picker.Pick(info)
+		pr := "complete"
+		if err != nil {
+			pr = "fail"
+		}
+		defaultTargetPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget, p.defaultPolicy.target, pr)
+		return res, err
 	}
+
+	failedPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget)
 	return balancer.PickResult{}, errOnNoDefault
 }
 
@@ -218,8 +232,9 @@ func (p *rlsPicker) handleRouteLookupResponse(cacheKey cacheKey, targets []strin
 
 	p.lb.cacheMu.Lock()
 	defer func() {
-		// Pending request map entry is unconditionally deleted since the request is
-		// no longer pending.
+		grpcTarget := p.lb.bopts.Target.String()
+		cacheSizeMetric.Record(p.lb.bopts.MetricsRecorder, p.lb.dataCache.currentSize, grpcTarget, p.rlsServerTarget, p.lb.uuid)
+		cacheEntriesMetric.Record(p.lb.bopts.MetricsRecorder, int64(len(p.lb.dataCache.entries)), grpcTarget, p.rlsServerTarget, p.lb.uuid)
 		p.logger.Infof("Removing pending request entry for key %+v", cacheKey)
 		delete(p.lb.pendingMap, cacheKey)
 		p.lb.sendNewPicker()

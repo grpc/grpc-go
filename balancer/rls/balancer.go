@@ -28,8 +28,10 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
@@ -77,6 +79,42 @@ var (
 	clientConnUpdateHook = func() {}
 	dataCachePurgeHook   = func() {}
 	resetBackoffHook     = func() {}
+
+	cacheEntriesMetric = estats.RegisterInt64Gauge(estats.MetricDescriptor{
+		Name:        "grpc.lb.rls.cache_entries",
+		Description: "EXPERIMENTAL. Number of entries in the RLS cache.",
+		Unit:        "entry",
+		Labels:      []string{"grpc.target", "grpc.lb.rls.server_target", "grpc.lb.rls.instance_uuid"},
+		Default:     false,
+	})
+	cacheSizeMetric = estats.RegisterInt64Gauge(estats.MetricDescriptor{
+		Name:        "grpc.lb.rls.cache_size",
+		Description: "EXPERIMENTAL. The current size of the RLS cache.",
+		Unit:        "By",
+		Labels:      []string{"grpc.target", "grpc.lb.rls.server_target", "grpc.lb.rls.instance_uuid"},
+		Default:     false,
+	})
+	defaultTargetPicksMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.lb.rls.default_target_picks",
+		Description: "EXPERIMENTAL. Number of LB picks sent to the default target.",
+		Unit:        "pick",
+		Labels:      []string{"grpc.target", "grpc.lb.rls.server_target", "grpc.lb.rls.instance_uuid", "grpc.lb.pick_result"},
+		Default:     false,
+	})
+	targetPicksMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.lb.rls.target_picks",
+		Description: "EXPERIMENTAL. Number of LB picks sent to each RLS target. Note that if the default target is also returned by the RLS server, RPCs sent to that target from the cache will be counted in this metric, not in grpc.rls.default_target_picks.",
+		Unit:        "pick",
+		Labels:      []string{"grpc.target", "grpc.lb.rls.server_target", "grpc.lb.rls.instance_uuid", "grpc.lb.pick_result"},
+		Default:     false,
+	})
+	failedPicksMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.lb.rls.failed_picks",
+		Description: "EXPERIMENTAL. Number of LB picks failed due to either a failed RLS request or the RLS channel being throttled.",
+		Unit:        "pick",
+		Labels:      []string{"grpc.target", "grpc.lb.rls.server_target"},
+		Default:     false,
+	})
 )
 
 func init() {
@@ -95,6 +133,7 @@ func (rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 		done:               grpcsync.NewEvent(),
 		cc:                 cc,
 		bopts:              opts,
+		uuid:               uuid.New().String(),
 		purgeTicker:        dataCachePurgeTicker(),
 		dataCachePurgeHook: dataCachePurgeHook,
 		lbCfg:              &lbConfig{},
@@ -122,6 +161,7 @@ type rlsBalancer struct {
 	done               *grpcsync.Event // Fires when Close() is done.
 	cc                 balancer.ClientConn
 	bopts              balancer.BuildOptions
+	uuid               string
 	purgeTicker        *time.Ticker
 	dataCachePurgeHook func()
 	logger             *internalgrpclog.PrefixLogger
@@ -240,7 +280,16 @@ func (b *rlsBalancer) purgeDataCache(doneCh chan struct{}) {
 		case <-b.purgeTicker.C:
 			b.cacheMu.Lock()
 			updatePicker := b.dataCache.evictExpiredEntries()
+
+			b.stateMu.Lock()
+			rlsLookupService := b.lbCfg.lookupService
+			b.stateMu.Unlock()
+			cacheSize := b.dataCache.currentSize
+			cacheEntries := int64(len(b.dataCache.entries))
 			b.cacheMu.Unlock()
+			grpcTarget := b.bopts.Target.String()
+			cacheSizeMetric.Record(b.bopts.MetricsRecorder, cacheSize, grpcTarget, rlsLookupService, b.uuid)
+			cacheEntriesMetric.Record(b.bopts.MetricsRecorder, cacheEntries, grpcTarget, rlsLookupService, b.uuid)
 			if updatePicker {
 				b.sendNewPicker()
 			}
@@ -304,7 +353,12 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		// `stateMu` if we are to hold both locks at the same time.
 		b.cacheMu.Lock()
 		b.dataCache.resize(newCfg.cacheSizeBytes)
+		dataCacheSize := b.dataCache.currentSize
+		dataCacheEntries := int64(len(b.dataCache.entries))
 		b.cacheMu.Unlock()
+		grpcTarget := b.bopts.Target.String()
+		cacheSizeMetric.Record(b.bopts.MetricsRecorder, dataCacheSize, grpcTarget, newCfg.lookupService, b.uuid)
+		cacheEntriesMetric.Record(b.bopts.MetricsRecorder, dataCacheEntries, grpcTarget, newCfg.lookupService, b.uuid)
 	}
 	return nil
 }
@@ -490,15 +544,17 @@ func (b *rlsBalancer) sendNewPickerLocked() {
 	if b.defaultPolicy != nil {
 		b.defaultPolicy.acquireRef()
 	}
+
 	picker := &rlsPicker{
-		kbm:           b.lbCfg.kbMap,
-		origEndpoint:  b.bopts.Target.Endpoint(),
-		lb:            b,
-		defaultPolicy: b.defaultPolicy,
-		ctrlCh:        b.ctrlCh,
-		maxAge:        b.lbCfg.maxAge,
-		staleAge:      b.lbCfg.staleAge,
-		bg:            b.bg,
+		kbm:             b.lbCfg.kbMap,
+		origEndpoint:    b.bopts.Target.Endpoint(),
+		lb:              b,
+		defaultPolicy:   b.defaultPolicy,
+		ctrlCh:          b.ctrlCh,
+		maxAge:          b.lbCfg.maxAge,
+		staleAge:        b.lbCfg.staleAge,
+		bg:              b.bg,
+		rlsServerTarget: b.lbCfg.lookupService,
 	}
 	picker.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-picker %p] ", picker))
 	state := balancer.State{
