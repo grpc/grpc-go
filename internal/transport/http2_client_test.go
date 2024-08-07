@@ -142,7 +142,7 @@ func (s) TestNewHTTP2ClientTarget(t *testing.T) {
 			// Create a server.
 			lis, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
-				t.Fatalf("Error while listening: %v", err)
+				t.Fatalf("Listen() = _, %v, want _, <nil>", err)
 			}
 			defer lis.Close()
 			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
@@ -153,7 +153,7 @@ func (s) TestNewHTTP2ClientTarget(t *testing.T) {
 				t.Errorf("Expected an error, but got nil")
 			} else {
 				if err.Error() != test.expected {
-					t.Fatalf("TestNewHTTP2ClientTarget() = %v, want %s", err.Error(), test.expected)
+					t.Fatalf("TestNewHTTP2ClientTarget() = %s, want %s", err.Error(), test.expected)
 				}
 			}
 		})
