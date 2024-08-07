@@ -35,8 +35,8 @@ type resourceUpdate struct {
 	// TRANSIENT_FAILURE (if there was a single discovery mechanism), or would
 	// fallback to the next highest priority that is available.
 	priorities []priorityConfig
-	// To be invoked once the update is completely processed, or is dropped on
-	// the floor in favor of a newer update.
+	// To be invoked once the update is completely processed, or is dropped in
+	// favor of a newer update.
 	onDone xdsresource.DoneNotifier
 }
 
@@ -47,8 +47,8 @@ type resourceUpdate struct {
 type topLevelResolver interface {
 	// onUpdate is called when a new update is received from the underlying
 	// endpointsResolver implementation. The onDone callback is to be invoked
-	// once the update is completely processed, or is dropped on the floor in
-	// favor of a newer update.
+	// once the update is completely processed, or is dropped in favor of a
+	// newer update.
 	onUpdate(onDone xdsresource.DoneNotifier)
 }
 
@@ -276,7 +276,7 @@ func (rr *resourceResolver) stop(closing bool) {
 // one update. Otherwise it returns early.
 //
 // The onDone callback is invoked inline if not all child resolvers have
-// received at least on update. If all child resolvers have received at least
+// received at least one update. If all child resolvers have received at least
 // one update, onDone is invoked when the combined update is processed by the
 // clusterresolver LB policy.
 //
@@ -299,6 +299,9 @@ func (rr *resourceResolver) generateLocked(onDone xdsresource.DoneNotifier) {
 		}
 	}
 	select {
+	// A previously unprocessed update is dropped in favor of the new one, and
+	// the former's onDone callback is invoked to unblock the xDS client's
+	// receive path.
 	case ru := <-rr.updateChannel:
 		if ru.onDone != nil {
 			ru.onDone.OnDone()

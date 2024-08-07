@@ -71,6 +71,9 @@ type ResourceWatcher interface {
 	// OnUpdate is invoked to report an update for the resource being watched.
 	// The ResourceData parameter needs to be type asserted to the appropriate
 	// type for the resource being watched.
+	//
+	// The watcher is expected to call Done() on the DoneNotifier once it has
+	// processed the update.
 	OnUpdate(ResourceData, DoneNotifier)
 
 	// OnError is invoked under different error conditions including but not

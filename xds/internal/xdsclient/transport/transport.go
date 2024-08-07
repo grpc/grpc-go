@@ -669,9 +669,13 @@ func (fc *ADSFlowControl) Add() {
 // Wait blocks until all the watchers have consumed the most recent update and
 // returns true. If the context expires before that, it returns false.
 func (fc *ADSFlowControl) Wait(ctx context.Context) bool {
-	// If there are no watchers with pending updates, there is no need to block.
+	// If there are no watchers or none with pending updates, there is no need
+	// to block.
 	if n := fc.pending.Load(); n == 0 {
-		// If all watchers
+		// If all watchers finished processing the most recent update before the
+		// `recv` goroutine made the next call to `Wait()`, there would be an
+		// entry in the readyCh channel that needs to be drained to ensure that
+		// the next call to `Wait()` doesn't unblock before it actually should.
 		select {
 		case <-fc.readyCh:
 		default:
@@ -689,16 +693,17 @@ func (fc *ADSFlowControl) Wait(ctx context.Context) bool {
 
 // OnDone indicates that a watcher has consumed the most recent update.
 func (fc *ADSFlowControl) OnDone() {
-	pending := fc.pending.Add(-1)
-	if pending == 0 {
-		select {
-		// Writes to the readyCh channel should not block ideally. The default
-		// branch here is to appease the paranoid mind.
-		case fc.readyCh <- struct{}{}:
-		default:
-			if fc.logger.V(2) {
-				fc.logger.Infof("ADS stream flow control readyCh is full")
-			}
+	if pending := fc.pending.Add(-1); pending != 0 {
+		return
+	}
+
+	select {
+	// Writes to the readyCh channel should not block ideally. The default
+	// branch here is to appease the paranoid mind.
+	case fc.readyCh <- struct{}{}:
+	default:
+		if fc.logger.V(2) {
+			fc.logger.Infof("ADS stream flow control readyCh is full")
 		}
 	}
 }
