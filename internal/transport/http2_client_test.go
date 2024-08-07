@@ -27,27 +27,27 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-type clientPrefaceWrite struct {
+type clientPrefaceConn struct {
 	net.Conn
 }
 
-type clientPrefaceLength struct {
+type clientPrefaceLengthConn struct {
 	net.Conn
 }
 
-type framerWriteSettings struct {
+type framerWriteSettingsConn struct {
 	net.Conn
 }
 
-type framerWriteWindowUpdate struct {
+type framerWriteWindowUpdateConn struct {
 	net.Conn
 }
 
-func (hc *clientPrefaceWrite) Write(b []byte) (n int, err error) {
+func (hc *clientPrefaceConn) Write(b []byte) (n int, err error) {
 	return 0, errors.New("preface write error")
 }
 
-func (hc *clientPrefaceWrite) Close() error {
+func (hc *clientPrefaceConn) Close() error {
 	return hc.Conn.Close()
 }
 
@@ -56,10 +56,10 @@ func dialerClientPrefaceWrite(_ context.Context, addr string) (net.Conn, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &clientPrefaceWrite{Conn: conn}, nil
+	return &clientPrefaceConn{Conn: conn}, nil
 }
 
-func (hc *clientPrefaceLength) Write(b []byte) (n int, err error) {
+func (hc *clientPrefaceLengthConn) Write(b []byte) (n int, err error) {
 
 	incorrectPreface := "INCORRECT PREFACE\r\n\r\n"
 	n, err = hc.Conn.Write([]byte(incorrectPreface))
@@ -71,10 +71,10 @@ func dialerClientPrefaceLength(_ context.Context, addr string) (net.Conn, error)
 	if err != nil {
 		return nil, err
 	}
-	return &clientPrefaceLength{Conn: conn}, nil
+	return &clientPrefaceLengthConn{Conn: conn}, nil
 }
 
-func (hc *framerWriteSettings) Write(b []byte) (n int, err error) {
+func (hc *framerWriteSettingsConn) Write(b []byte) (n int, err error) {
 	n, err = hc.Conn.Write(b)
 	//compare framer value
 	if n == 9 {
@@ -88,10 +88,10 @@ func dialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error)
 	if err != nil {
 		return nil, err
 	}
-	return &framerWriteSettings{Conn: conn}, nil
+	return &framerWriteSettingsConn{Conn: conn}, nil
 }
 
-func (hc *framerWriteWindowUpdate) Write(b []byte) (n int, err error) {
+func (hc *framerWriteWindowUpdateConn) Write(b []byte) (n int, err error) {
 
 	n, err = hc.Conn.Write(b)
 	// compare for windowupdate value
@@ -106,105 +106,56 @@ func dialerFramerWriteWindowUpdate(_ context.Context, addr string) (net.Conn, er
 	if err != nil {
 		return nil, err
 	}
-	return &framerWriteWindowUpdate{Conn: conn}, nil
+	return &framerWriteWindowUpdateConn{Conn: conn}, nil
 }
 
-func TestNewHTTP2ClientPrefaceFailure(t *testing.T) {
-
-	// Create a server.
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Error while listening: %v", err)
+func (s) TestNewHTTP2ClientTarget(t *testing.T) {
+	tests := []struct {
+		name     string
+		opts     ConnectOptions
+		expected string
+	}{
+		{
+			name:     "client-preface-write",
+			opts:     ConnectOptions{Dialer: dialerClientPrefaceWrite},
+			expected: "connection error: desc = \"transport: failed to write client preface: preface write error\"",
+		},
+		{
+			name:     "client-preface-length",
+			opts:     ConnectOptions{Dialer: dialerClientPrefaceLength},
+			expected: "connection error: desc = \"transport: preface mismatch, wrote 21 bytes; want 24\"",
+		},
+		{
+			name:     "framer-write-settings",
+			opts:     ConnectOptions{Dialer: dialerFramerWriteSettings},
+			expected: "connection error: desc = \"transport: failed to write initial settings frame: Framer write setting error\"",
+		},
+		{
+			name:     "framer-write-windowUpdate",
+			opts:     ConnectOptions{Dialer: dialerFramerWriteWindowUpdate, InitialConnWindowSize: 80000},
+			expected: "connection error: desc = \"transport: failed to write window update: Framer write windowupdate error\"",
+		},
 	}
-	defer lis.Close()
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("TestNewHTTP2ClientPrefaceFailure panicked: %v", r)
-		}
-	}()
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	defer cancel()
-	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: dialerClientPrefaceWrite}, func(GoAwayReason) {})
-	if err == nil {
-		t.Error("Expected an error, but got nil")
-	} else {
-		if err.Error() != "connection error: desc = \"transport: failed to write client preface: preface write error\"" {
-			t.Fatalf("Error while creating client transport: %v", err)
-		}
-	}
-}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
 
-func TestNewHTTP2ClientPrefaceLengthFailure(t *testing.T) {
-	// Create a server.
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Error while listening: %v", err)
-	}
-	defer lis.Close()
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	defer cancel()
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("TestNewHTTP2ClientPrefaceLengthFailure panicked: %v", r)
-		}
-	}()
+			// Create a server.
+			lis, err := net.Listen("tcp", "localhost:0")
+			if err != nil {
+				t.Fatalf("Error while listening: %v", err)
+			}
+			defer lis.Close()
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
+			defer cancel()
 
-	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: dialerClientPrefaceLength}, func(GoAwayReason) {})
-	if err == nil {
-		t.Errorf("Expected an error, but got nil")
-	} else {
-		if err.Error() != "connection error: desc = \"transport: preface mismatch, wrote 21 bytes; want 24\"" {
-			t.Fatalf("Error while creating client transport: %v", err)
-		}
-	}
-}
-
-func TestNewHTTP2ClientFramerWriteSettingsFailure(t *testing.T) {
-	// Create a server.
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Error while listening: %v", err)
-	}
-	defer lis.Close()
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	defer cancel()
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("TestNewHTTP2ClientFramerWriteSettingsFailure panicked: %v", r)
-		}
-	}()
-
-	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: dialerFramerWriteSettings}, func(GoAwayReason) {})
-	if err == nil {
-		t.Errorf("Expected an error, but got nil")
-	} else {
-		if err.Error() != "connection error: desc = \"transport: failed to write initial settings frame: Framer write setting error\"" {
-			t.Fatalf("Error while creating client transport: %v", err)
-		}
-	}
-}
-
-func TestNewHTTP2ClientFramerWriteWindowUpdateFailure(t *testing.T) {
-	// Create a server.
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Error while listening: %v", err)
-	}
-	defer lis.Close()
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	defer cancel()
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("TestNewHTTP2ClientFramerWriteWindowUpdateFailure panicked: %v", r)
-		}
-	}()
-
-	_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: dialerFramerWriteWindowUpdate, InitialConnWindowSize: 80000}, func(GoAwayReason) {})
-	if err == nil {
-		t.Errorf("Expected an error, but got nil")
-	} else {
-		if err.Error() != "connection error: desc = \"transport: failed to write window update: Framer write windowupdate error\"" {
-			t.Fatalf("Error while creating client transport: %v", err)
-		}
+			_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, test.opts, func(GoAwayReason) {})
+			if err == nil {
+				t.Errorf("Expected an error, but got nil")
+			} else {
+				if err.Error() != test.expected {
+					t.Fatalf("TestNewHTTP2ClientTarget() = %v, want %s", err.Error(), test.expected)
+				}
+			}
+		})
 	}
 }
