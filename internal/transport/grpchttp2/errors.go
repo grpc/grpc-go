@@ -72,6 +72,9 @@ func (err ErrCode) String() string {
 	return fmt.Sprintf("unknown error code %#x", uint32(err))
 }
 
+// connError represents an [HTTP/2 connection error].
+//
+// [HTTP/2 connection error]: https://httpwg.org/specs/rfc7540.html#ErrorHandler
 type connError ErrCode
 
 func (err connError) Error() string {

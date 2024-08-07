@@ -36,20 +36,23 @@ type FramerBridge struct {
 }
 
 // NewFramerBridge creates a new framer by taking a writer and a reader,
-// alongside the maxHeaderListSize for the maximum size of the headers table.
-// The underlying framer uses the SetReuseFrames feature to avoid extra
-// allocations.
-func NewFramerBridge(w io.Writer, r io.Reader, maxHeaderListSize uint32) *FramerBridge {
-	fr := &FramerBridge{
-		framer: http2.NewFramer(w, r),
-		pool:   mem.DefaultBufferPool(),
+// alongside the maxHeaderListSize for the maximum size of the headers the
+// receiver is willing to accept from its peer. The underlying framer uses the
+// SetReuseFrames feature to avoid extra allocations.
+func NewFramerBridge(w io.Writer, r io.Reader, maxHeaderListSize uint32, pool mem.BufferPool) *FramerBridge {
+	fr := http2.NewFramer(w, r)
+	fr.SetReuseFrames()
+	fr.MaxHeaderListSize = maxHeaderListSize
+	fr.ReadMetaHeaders = hpack.NewDecoder(initHeaderTableSize, nil)
+
+	if pool == nil {
+		pool = mem.DefaultBufferPool()
 	}
 
-	fr.framer.SetReuseFrames()
-	fr.framer.MaxHeaderListSize = maxHeaderListSize
-	fr.framer.ReadMetaHeaders = hpack.NewDecoder(initHeaderTableSize, nil)
-
-	return fr
+	return &FramerBridge{
+		framer: fr,
+		pool:   pool,
+	}
 }
 
 // ReadFrame reads a frame from the underlying http2.Framer and returns a
@@ -78,15 +81,6 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 		}
 		df.free = func() { fr.pool.Put(buf) }
 		return df, nil
-	case *http2.HeadersFrame:
-		buf := fr.pool.Get(int(hdr.Size))
-		copy(buf, f.HeaderBlockFragment())
-		hf := &HeadersFrame{
-			hdr:      hdr,
-			HdrBlock: buf,
-		}
-		hf.free = func() { fr.pool.Put(buf) }
-		return hf, nil
 	case *http2.RSTStreamFrame:
 		return &RSTStreamFrame{
 			hdr:  hdr,
@@ -131,25 +125,25 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 			hdr: hdr,
 			Inc: f.Increment,
 		}, nil
-	case *http2.ContinuationFrame:
-		buf := fr.pool.Get(int(hdr.Size))
-		copy(buf, f.HeaderBlockFragment())
-		cf := &ContinuationFrame{
-			hdr:      hdr,
-			HdrBlock: buf,
-		}
-		cf.free = func() { fr.pool.Put(buf) }
-		return cf, nil
 	case *http2.MetaHeadersFrame:
 		return &MetaHeadersFrame{
 			hdr:    hdr,
 			Fields: f.Fields,
 		}, nil
+	default:
+		buf := fr.pool.Get(int(hdr.Size))
+		huf := f.(*http2.UnknownFrame)
+		copy(buf, huf.Payload())
+		uf := &UnknownFrame{
+			hdr:     hdr,
+			Payload: buf,
+		}
+		uf.free = func() { fr.pool.Put(buf) }
+		return uf, nil
 	}
-
-	return nil, connError(ErrCodeProtocol)
 }
 
+// WriteData writes a DATA Frame into the underlying writer.
 func (fr *FramerBridge) WriteData(streamID uint32, endStream bool, data ...[]byte) error {
 	var buf []byte
 	if len(data) != 1 {
@@ -167,25 +161,25 @@ func (fr *FramerBridge) WriteData(streamID uint32, endStream bool, data ...[]byt
 		buf = data[0]
 	}
 
-	err := fr.framer.WriteData(streamID, endStream, buf)
-	return err
+	return fr.framer.WriteData(streamID, endStream, buf)
 }
 
+// WriteHeaders writes a Headers Frame into the underlying writer.
 func (fr *FramerBridge) WriteHeaders(streamID uint32, endStream, endHeaders bool, headerBlock []byte) error {
-	p := http2.HeadersFrameParam{
+	return fr.framer.WriteHeaders(http2.HeadersFrameParam{
 		StreamID:      streamID,
 		EndStream:     endStream,
 		EndHeaders:    endHeaders,
 		BlockFragment: headerBlock,
-	}
-
-	return fr.framer.WriteHeaders(p)
+	})
 }
 
+// WriteRSTStream writes a RSTStream Frame into the underlying writer.
 func (fr *FramerBridge) WriteRSTStream(streamID uint32, code ErrCode) error {
 	return fr.framer.WriteRSTStream(streamID, http2.ErrCode(code))
 }
 
+// WriteSettings writes a Settings Frame into the underlying writer.
 func (fr *FramerBridge) WriteSettings(settings ...Setting) error {
 	ss := make([]http2.Setting, 0, len(settings))
 	for _, s := range settings {
@@ -198,22 +192,27 @@ func (fr *FramerBridge) WriteSettings(settings ...Setting) error {
 	return fr.framer.WriteSettings(ss...)
 }
 
+// WriteSettingsAck writes a Settings Frame with the Ack flag set.
 func (fr *FramerBridge) WriteSettingsAck() error {
 	return fr.framer.WriteSettingsAck()
 }
 
+// WritePing writes a Ping frame to the underlying writer.
 func (fr *FramerBridge) WritePing(ack bool, data [8]byte) error {
 	return fr.framer.WritePing(ack, data)
 }
 
+// WriteGoAway writes a GoAway Frame to the unerlying writer.
 func (fr *FramerBridge) WriteGoAway(maxStreamID uint32, code ErrCode, debugData []byte) error {
 	return fr.framer.WriteGoAway(maxStreamID, http2.ErrCode(code), debugData)
 }
 
+// WriteWindowUpdate writes a WindowUpdate Frame into the underlying writer.
 func (fr *FramerBridge) WriteWindowUpdate(streamID, inc uint32) error {
 	return fr.framer.WriteWindowUpdate(streamID, inc)
 }
 
+// WriteContinuation writes a Continuation Frame into the underlying writer.
 func (fr *FramerBridge) WriteContinuation(streamID uint32, endHeaders bool, headerBlock []byte) error {
 	return fr.framer.WriteContinuation(streamID, endHeaders, headerBlock)
 }

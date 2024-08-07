@@ -314,6 +314,26 @@ func (f *MetaHeadersFrame) Header() *FrameHeader {
 // Free is a no-op for MetaHeadersFrame.
 func (f *MetaHeadersFrame) Free() {}
 
+// UnknownFrame is a struct that is returned when the framer encounters an
+// unsupported frame.
+type UnknownFrame struct {
+	hdr     *FrameHeader
+	Payload []byte
+	free    func()
+}
+
+// Header returns the 9 byte HTTP/2 header for this frame.
+func (f *UnknownFrame) Header() *FrameHeader {
+	return f.hdr
+}
+
+// Free frees the underlying data in the frame.
+func (f *UnknownFrame) Free() {
+	if f.free != nil {
+		f.free()
+	}
+}
+
 // Framer encapsulates the functionality to read and write HTTP/2 frames.
 type Framer interface {
 	// ReadFrame returns grpchttp2.Frame. It is the caller's responsibility to
