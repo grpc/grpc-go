@@ -150,12 +150,24 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 	return nil, connError(ErrCodeProtocol)
 }
 
-func (fr *FramerBridge) WriteData(streamID uint32, endStream bool, data mem.BufferSlice) error {
-	buf := data.MaterializeToBuffer(fr.pool)
-	err := fr.framer.WriteData(streamID, endStream, buf.ReadOnlyData())
+func (fr *FramerBridge) WriteData(streamID uint32, endStream bool, data ...[]byte) error {
+	var buf []byte
+	if len(data) != 1 {
+		tl := 0
+		for _, s := range data {
+			tl += len(s)
+		}
 
-	data.Free()
-	buf.Free()
+		buf = fr.pool.Get(tl)[:0]
+		defer fr.pool.Put(buf)
+		for _, s := range data {
+			buf = append(buf, s...)
+		}
+	} else {
+		buf = data[0]
+	}
+
+	err := fr.framer.WriteData(streamID, endStream, buf)
 	return err
 }
 

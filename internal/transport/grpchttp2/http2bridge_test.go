@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	"golang.org/x/net/http2/hpack"
-	"google.golang.org/grpc/mem"
 )
 
 // testConn is a test utility which provides an io.Writer and io.Reader
@@ -304,16 +303,15 @@ func (s) TestBridge_ReadFrame_MetaHeaders(t *testing.T) {
 func (s) TestBridge_WriteData(t *testing.T) {
 	c := &testConn{}
 	wantData := "test data"
-	testBuf := mem.BufferSlice{mem.NewBuffer([]byte(wantData), nil)}
+	testBuf := [][]byte{[]byte("test"), []byte(" data")}
 	f := NewFramerBridge(c, c, 0)
-	f.WriteData(1, false, testBuf)
+	f.WriteData(1, false, testBuf...)
 	if errs := checkWrittenHeader(c.wbuf[0:9], len(wantData), FrameTypeData, 0, 1); len(errs) > 0 {
 		t.Errorf("WriteData():\n%s", errors.Join(errs...))
 	}
 	if string(c.wbuf[9:]) != wantData {
 		t.Errorf("WriteData(): Data: got %q, want %q", string(c.wbuf[9:]), wantData)
 	}
-	testBuf.Free()
 }
 
 func (s) TestBridge_WriteHeaders(t *testing.T) {
