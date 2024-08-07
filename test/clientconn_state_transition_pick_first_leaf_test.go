@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2024 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
 	"testing"
 	"time"
 
@@ -30,6 +29,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst_leaf"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
@@ -40,18 +40,18 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 )
 
-const stateRecordingBalancerName = "state_recording_balancer"
+const stateRecordingPickFirstLeafBalancerName = "state_recording_pick_first_leaf_balancer"
 
-var testBalancerBuilder = newStateRecordingBalancerBuilder(stateRecordingBalancerName, "pick_first")
+var testPickFirstLeafBalancerBuilder = newStateRecordingBalancerBuilder(stateRecordingPickFirstLeafBalancerName, pickfirst_leaf.Name)
 
 func init() {
-	balancer.Register(testBalancerBuilder)
+	balancer.Register(testPickFirstLeafBalancerBuilder)
 }
 
 // These tests use a pipeListener. This listener is similar to net.Listener
 // except that it is unbuffered, so each read and write will wait for the other
 // side's corresponding write or read.
-func (s) TestStateTransitions_SingleAddress(t *testing.T) {
+func (s) TestPickFirstLeafStateTransitions_SingleAddress(t *testing.T) {
 	for _, test := range []struct {
 		desc   string
 		want   []connectivity.State
@@ -143,64 +143,12 @@ client enters TRANSIENT FAILURE.`,
 		},
 	} {
 		t.Log(test.desc)
-		testStateTransitionSingleAddress(t, test.want, test.server, testBalancerBuilder)
-	}
-}
-
-func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, server func(net.Listener) net.Conn, bb *stateRecordingBalancerBuilder) {
-	pl := testutils.NewPipeListener()
-	defer pl.Close()
-
-	// Launch the server.
-	var conn net.Conn
-	var connMu sync.Mutex
-	go func() {
-		connMu.Lock()
-		conn = server(pl)
-		connMu.Unlock()
-	}()
-
-	client, err := grpc.Dial("",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, bb.Name())),
-		grpc.WithDialer(pl.Dialer()),
-		grpc.WithConnectParams(grpc.ConnectParams{
-			Backoff:           backoff.Config{},
-			MinConnectTimeout: 100 * time.Millisecond,
-		}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer client.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	go testutils.StayConnected(ctx, client)
-
-	stateNotifications := bb.nextStateNotifier()
-	for i := 0; i < len(want); i++ {
-		select {
-		case <-time.After(defaultTestTimeout):
-			t.Fatalf("timed out waiting for state %d (%v) in flow %v", i, want[i], want)
-		case seen := <-stateNotifications:
-			if seen != want[i] {
-				t.Fatalf("expected to see %v at position %d in flow %v, got %v", want[i], i, want, seen)
-			}
-		}
-	}
-
-	connMu.Lock()
-	defer connMu.Unlock()
-	if conn != nil {
-		err = conn.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
+		testStateTransitionSingleAddress(t, test.want, test.server, testPickFirstLeafBalancerBuilder)
 	}
 }
 
 // When a READY connection is closed, the client enters IDLE then CONNECTING.
-func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
+func (s) TestPickFirstLeafStateTransitions_ReadyToConnecting(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -234,7 +182,7 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 
 	client, err := grpc.Dial(lis.Addr().String(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)))
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingPickFirstLeafBalancerName)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,12 +192,13 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 	defer cancel()
 	go testutils.StayConnected(ctx, client)
 
-	stateNotifications := testBalancerBuilder.nextStateNotifier()
+	stateNotifications := testPickFirstLeafBalancerBuilder.nextStateNotifier()
 
 	want := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,
 		connectivity.Idle,
+		connectivity.Shutdown,
 		connectivity.Connecting,
 	}
 	for i := 0; i < len(want); i++ {
@@ -269,7 +218,7 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 
 // When the first connection is closed, the client stays in CONNECTING until it
 // tries the second address (which succeeds, and then it enters READY).
-func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) {
+func (s) TestPickFirstLeafStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) {
 	lis1, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -322,15 +271,25 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 	}})
 	client, err := grpc.Dial("whatever:///this-gets-overwritten",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
-		grpc.WithResolvers(rb))
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingPickFirstLeafBalancerName)),
+		grpc.WithResolvers(rb),
+		grpc.WithConnectParams(grpc.ConnectParams{
+			// Set a really long back-off delay to ensure the first subConn does
+			// not enter ready before the second subConn connects.
+			Backoff: backoff.Config{
+				BaseDelay: 1 * time.Hour,
+			},
+		}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer client.Close()
 
-	stateNotifications := testBalancerBuilder.nextStateNotifier()
+	stateNotifications := testPickFirstLeafBalancerBuilder.nextStateNotifier()
 	want := []connectivity.State{
+		connectivity.Connecting,
+		connectivity.TransientFailure,
 		connectivity.Connecting,
 		connectivity.Ready,
 	}
@@ -360,7 +319,7 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 
 // When there are multiple addresses, and we enter READY on one of them, a
 // later closure should cause the client to enter CONNECTING
-func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
+func (s) TestPickFirstLeafStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	lis1, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -408,7 +367,7 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	}})
 	client, err := grpc.Dial("whatever:///this-gets-overwritten",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingPickFirstLeafBalancerName)),
 		grpc.WithResolvers(rb))
 	if err != nil {
 		t.Fatal(err)
@@ -419,11 +378,13 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	defer cancel()
 	go testutils.StayConnected(ctx, client)
 
-	stateNotifications := testBalancerBuilder.nextStateNotifier()
+	stateNotifications := testPickFirstLeafBalancerBuilder.nextStateNotifier()
 	want := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,
+		connectivity.Shutdown, // The second subConn is closed once the first one connects.
 		connectivity.Idle,
+		connectivity.Shutdown, // The subConn will be closed and pickfirst will run on the latest address list.
 		connectivity.Connecting,
 	}
 	for i := 0; i < len(want); i++ {
@@ -446,91 +407,9 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	}
 }
 
-type stateRecordingBalancer struct {
-	balancer.Balancer
-}
-
-func (b *stateRecordingBalancer) Close() {
-	b.Balancer.Close()
-}
-
-func (b *stateRecordingBalancer) ExitIdle() {
-	if ib, ok := b.Balancer.(balancer.ExitIdler); ok {
-		ib.ExitIdle()
-	}
-}
-
-type stateRecordingBalancerBuilder struct {
-	mu           sync.Mutex
-	notifier     chan connectivity.State // The notifier used in the last Balancer.
-	balancerName string
-	childName    string
-}
-
-func newStateRecordingBalancerBuilder(balancerName, childName string) *stateRecordingBalancerBuilder {
-	return &stateRecordingBalancerBuilder{
-		balancerName: balancerName,
-		childName:    childName,
-	}
-}
-
-func (b *stateRecordingBalancerBuilder) Name() string {
-	return b.balancerName
-}
-
-func (b *stateRecordingBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	stateNotifications := make(chan connectivity.State, 10)
-	b.mu.Lock()
-	b.notifier = stateNotifications
-	b.mu.Unlock()
-	return &stateRecordingBalancer{
-		Balancer: balancer.Get(b.childName).Build(&stateRecordingCCWrapper{cc, stateNotifications}, opts),
-	}
-}
-
-func (b *stateRecordingBalancerBuilder) nextStateNotifier() <-chan connectivity.State {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	ret := b.notifier
-	b.notifier = nil
-	return ret
-}
-
-type stateRecordingCCWrapper struct {
-	balancer.ClientConn
-	notifier chan<- connectivity.State
-}
-
-func (ccw *stateRecordingCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	oldListener := opts.StateListener
-	opts.StateListener = func(s balancer.SubConnState) {
-		ccw.notifier <- s.ConnectivityState
-		oldListener(s)
-	}
-	return ccw.ClientConn.NewSubConn(addrs, opts)
-}
-
-// Keep reading until something causes the connection to die (EOF, server
-// closed, etc). Useful as a tool for mindlessly keeping the connection
-// healthy, since the client will error if things like client prefaces are not
-// accepted in a timely fashion.
-func keepReading(conn net.Conn) {
-	buf := make([]byte, 1024)
-	for _, err := conn.Read(buf); err == nil; _, err = conn.Read(buf) {
-	}
-}
-
-type funcConnectivityStateSubscriber struct {
-	onMsg func(connectivity.State)
-}
-
-func (f *funcConnectivityStateSubscriber) OnMessage(msg any) {
-	f.onMsg(msg.(connectivity.State))
-}
-
-// TestConnectivityStateSubscriber confirms updates sent by the balancer in
+// TestPickFirstLeafConnectivityStateSubscriber confirms updates sent by the balancer in
 // rapid succession are not missed by the subscriber.
-func (s) TestConnectivityStateSubscriber(t *testing.T) {
+func (s) TestPickFirstLeafConnectivityStateSubscriber(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 

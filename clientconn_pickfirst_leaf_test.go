@@ -22,10 +22,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"net"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -33,6 +31,7 @@ import (
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst_leaf"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -43,30 +42,23 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/testdata"
 )
 
 const (
-	defaultTestTimeout         = 10 * time.Second
-	stateRecordingBalancerName = "state_recording_balancer"
+	stateRecordingBalancerWithLeafPickFirstName = "state_recording_balancer_new_pick_first"
 )
 
-var testBalancerBuilder = newStateRecordingBalancerBuilder(stateRecordingBalancerName, "pick_first")
+var (
+	testBalancerBuilderPickFirstLeaf = newStateRecordingBalancerBuilder(stateRecordingBalancerWithLeafPickFirstName, pickfirst_leaf.Name)
+	pickFirstLeafServiceConfig       = fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirst_leaf.Name)
+)
 
 func init() {
-	balancer.Register(testBalancerBuilder)
+	balancer.Register(testBalancerBuilderPickFirstLeaf)
 }
 
-func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
-	scpr := r.CC.ParseServiceConfig(s)
-	if scpr.Err != nil {
-		panic(fmt.Sprintf("Error parsing config %q: %v", s, scpr.Err))
-	}
-	return scpr
-}
-
-func (s) TestDialWithTimeout(t *testing.T) {
+func (s) TestPickFirstLeaf_DialWithTimeout(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -93,7 +85,7 @@ func (s) TestDialWithTimeout(t *testing.T) {
 
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{lisAddr}})
-	client, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithTimeout(5*time.Second))
+	client, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithTimeout(5*time.Second), WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 	close(dialDone)
 	if err != nil {
 		t.Fatalf("Dial failed. Err: %v", err)
@@ -107,7 +99,7 @@ func (s) TestDialWithTimeout(t *testing.T) {
 	}
 }
 
-func (s) TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
+func (s) TestPickFirstLeaf_DialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
 	lis1, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -145,7 +137,7 @@ func (s) TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
 
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{lis1Addr, lis2Addr}})
-	client, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
+	client, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 	if err != nil {
 		t.Fatalf("Dial failed. Err: %v", err)
 	}
@@ -163,7 +155,7 @@ func (s) TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
 	}
 }
 
-func (s) TestDialWaitsForServerSettings(t *testing.T) {
+func (s) TestPickFirstLeaf_DialWaitsForServerSettings(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -195,7 +187,11 @@ func (s) TestDialWaitsForServerSettings(t *testing.T) {
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	client, err := DialContext(ctx, lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), WithBlock())
+	client, err := DialContext(ctx, lis.Addr().String(),
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithBlock(),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig),
+	)
 	close(dialDone)
 	if err != nil {
 		t.Fatalf("Error while dialing. Err: %v", err)
@@ -209,7 +205,7 @@ func (s) TestDialWaitsForServerSettings(t *testing.T) {
 	<-done
 }
 
-func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
+func (s) TestPickFirstLeaf_DialWaitsForServerSettingsAndFails(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -238,7 +234,8 @@ func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 		WithConnectParams(ConnectParams{
 			Backoff:           backoff.Config{},
 			MinConnectTimeout: 250 * time.Millisecond,
-		}))
+		}),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 	lis.Close()
 	if err == nil {
 		client.Close()
@@ -258,7 +255,7 @@ func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 // 2. After minConnectTimeout(500 ms here), client disconnects and retries.
 // 3. The new server sends its preface.
 // 4. Client doesn't kill the connection this time.
-func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
+func (s) TestPickFirstLeaf_CloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -312,7 +309,10 @@ func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 			break
 		}
 	}()
-	client, err := Dial(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), withMinConnectDeadline(func() time.Duration { return time.Millisecond * 500 }))
+	client, err := Dial(lis.Addr().String(),
+		WithTransportCredentials(insecure.NewCredentials()),
+		withMinConnectDeadline(func() time.Duration { return time.Millisecond * 500 }),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 	if err != nil {
 		t.Fatalf("Error while dialing. Err: %v", err)
 	}
@@ -333,7 +333,7 @@ func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	<-done
 }
 
-func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
+func (s) TestPickFirstLeaf_BackoffWhenNoServerPrefaceReceived(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Unexpected error from net.Listen(%q, %q): %v", "tcp", "localhost:0", err)
@@ -378,7 +378,10 @@ func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 		Backoff:           bc,
 		MinConnectTimeout: 1 * time.Second,
 	}
-	cc, err := Dial(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), WithConnectParams(cp))
+	cc, err := Dial(lis.Addr().String(),
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithConnectParams(cp),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 	if err != nil {
 		t.Fatalf("Unexpected error from Dial(%v) = %v", lis.Addr(), err)
 	}
@@ -387,11 +390,12 @@ func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 	<-done
 }
 
-func (s) TestWithTimeout(t *testing.T) {
+func (s) TestPickFirstLeaf_WithTimeout(t *testing.T) {
 	conn, err := Dial("passthrough:///Non-Existent.Server:80",
 		WithTimeout(time.Millisecond),
 		WithBlock(),
-		WithTransportCredentials(insecure.NewCredentials()))
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 	if err == nil {
 		conn.Close()
 	}
@@ -400,14 +404,17 @@ func (s) TestWithTimeout(t *testing.T) {
 	}
 }
 
-func (s) TestWithTransportCredentialsTLS(t *testing.T) {
+func (s) TestPickFirstLeaf_WithTransportCredentialsTLS(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
 	creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
-	conn, err := DialContext(ctx, "passthrough:///Non-Existent.Server:80", WithTransportCredentials(creds), WithBlock())
+	conn, err := DialContext(ctx, "passthrough:///Non-Existent.Server:80",
+		WithTransportCredentials(creds),
+		WithBlock(),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 	if err == nil {
 		conn.Close()
 	}
@@ -417,18 +424,16 @@ func (s) TestWithTransportCredentialsTLS(t *testing.T) {
 }
 
 // When creating a transport configured with n addresses, only calculate the
-// backoff once per "round" of attempts instead of once per address (n times
-// per "round" of attempts).
-func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
+// backoff n times per "round" of attempts instead of once per.
+func (s) TestPickFirstLeafDial_NBackoffPerRetryGroup(t *testing.T) {
 	var attempts uint32
 	getMinConnectTimeout := func() time.Duration {
-		if atomic.AddUint32(&attempts, 1) == 1 {
+		if atomic.AddUint32(&attempts, 1) > 2 {
 			// Once all addresses are exhausted, hang around and wait for the
 			// client.Close to happen rather than re-starting a new round of
 			// attempts.
 			return time.Hour
 		}
-		t.Error("only one attempt backoff calculation, but got more")
 		return 0
 	}
 
@@ -480,7 +485,8 @@ func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
 	client, err := DialContext(ctx, "whatever:///this-gets-overwritten",
 		WithTransportCredentials(insecure.NewCredentials()),
 		WithResolvers(rb),
-		withMinConnectDeadline(getMinConnectTimeout))
+		withMinConnectDeadline(getMinConnectTimeout),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,22 +505,24 @@ func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
 		t.Fatal("timed out waiting for test to finish")
 	case <-server2Done:
 	}
+
+	if atomic.LoadUint32(&attempts) != 2 {
+		t.Errorf("Back-off attempts=%d, want=2", attempts)
+	}
 }
 
-func (s) TestDialContextCancel(t *testing.T) {
+func (s) TestPickFirstLeaf_DialContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithTransportCredentials(insecure.NewCredentials())); err != context.Canceled {
+	if _, err := DialContext(ctx, "Non-Existent.Server:80",
+		WithBlock(),
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig)); err != context.Canceled {
 		t.Fatalf("DialContext(%v, _) = _, %v, want _, %v", ctx, err, context.Canceled)
 	}
 }
 
-type failFastError struct{}
-
-func (failFastError) Error() string   { return "failfast" }
-func (failFastError) Temporary() bool { return false }
-
-func (s) TestDialContextFailFast(t *testing.T) {
+func (s) TestPickFirstLeaf_DialContextFailFast(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	failErr := failFastError{}
@@ -522,33 +530,19 @@ func (s) TestDialContextFailFast(t *testing.T) {
 		return nil, failErr
 	}
 
-	_, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithTransportCredentials(insecure.NewCredentials()), WithDialer(dialer), FailOnNonTempDialError(true))
+	_, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(),
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithDialer(dialer),
+		FailOnNonTempDialError(true),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 	if terr, ok := err.(transport.ConnectionError); !ok || terr.Origin() != failErr {
 		t.Fatalf("DialContext() = _, %v, want _, %v", err, failErr)
 	}
 }
 
-// securePerRPCCredentials always requires transport security.
-type securePerRPCCredentials struct {
-	credentials.PerRPCCredentials
-}
-
-func (c securePerRPCCredentials) RequireTransportSecurity() bool {
-	return true
-}
-
-type fakeBundleCreds struct {
-	credentials.Bundle
-	transportCreds credentials.TransportCredentials
-}
-
-func (b *fakeBundleCreds) TransportCredentials() credentials.TransportCredentials {
-	return b.transportCreds
-}
-
-func (s) TestCredentialsMisuse(t *testing.T) {
+func (s) TestPickFirstLeaf_CredentialsMisuse(t *testing.T) {
 	// Use of no transport creds and no creds bundle must fail.
-	if _, err := Dial("passthrough:///Non-Existent.Server:80"); err != errNoTransportSecurity {
+	if _, err := Dial("passthrough:///Non-Existent.Server:80", WithDefaultServiceConfig(pickFirstLeafServiceConfig)); err != errNoTransportSecurity {
 		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errNoTransportSecurity)
 	}
 
@@ -560,6 +554,7 @@ func (s) TestCredentialsMisuse(t *testing.T) {
 	dopts := []DialOption{
 		WithTransportCredentials(creds),
 		WithCredentialsBundle(&fakeBundleCreds{transportCreds: creds}),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig),
 	}
 	if _, err := Dial("passthrough:///Non-Existent.Server:80", dopts...); err != errTransportCredsAndBundle {
 		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errTransportCredsAndBundle)
@@ -567,37 +562,42 @@ func (s) TestCredentialsMisuse(t *testing.T) {
 
 	// Use of perRPC creds requiring transport security over an insecure
 	// transport must fail.
-	if _, err := Dial("passthrough:///Non-Existent.Server:80", WithPerRPCCredentials(securePerRPCCredentials{}), WithTransportCredentials(insecure.NewCredentials())); err != errTransportCredentialsMissing {
+	if _, err := Dial("passthrough:///Non-Existent.Server:80",
+		WithPerRPCCredentials(securePerRPCCredentials{}),
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig)); err != errTransportCredentialsMissing {
 		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errTransportCredentialsMissing)
 	}
 
 	// Use of a creds bundle with nil transport credentials must fail.
-	if _, err := Dial("passthrough:///Non-Existent.Server:80", WithCredentialsBundle(&fakeBundleCreds{})); err != errNoTransportCredsInBundle {
+	if _, err := Dial("passthrough:///Non-Existent.Server:80",
+		WithCredentialsBundle(&fakeBundleCreds{}),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig)); err != errNoTransportCredsInBundle {
 		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errTransportCredsAndBundle)
 	}
 }
 
-func (s) TestWithBackoffConfigDefault(t *testing.T) {
-	testBackoffConfigSet(t, internalbackoff.DefaultExponential)
+func (s) TestPickFirstLeaf_WithBackoffConfigDefault(t *testing.T) {
+	testBackoffConfigSet(t, internalbackoff.DefaultExponential, WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 }
 
-func (s) TestWithBackoffConfig(t *testing.T) {
+func (s) TestPickFirstLeaf_WithBackoffConfig(t *testing.T) {
 	b := BackoffConfig{MaxDelay: DefaultBackoffConfig.MaxDelay / 2}
 	bc := backoff.DefaultConfig
 	bc.MaxDelay = b.MaxDelay
 	wantBackoff := internalbackoff.Exponential{Config: bc}
-	testBackoffConfigSet(t, wantBackoff, WithBackoffConfig(b))
+	testBackoffConfigSet(t, wantBackoff, WithBackoffConfig(b), WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 }
 
-func (s) TestWithBackoffMaxDelay(t *testing.T) {
+func (s) TestPickFirstLeaf_WithBackoffMaxDelay(t *testing.T) {
 	md := DefaultBackoffConfig.MaxDelay / 2
 	bc := backoff.DefaultConfig
 	bc.MaxDelay = md
 	wantBackoff := internalbackoff.Exponential{Config: bc}
-	testBackoffConfigSet(t, wantBackoff, WithBackoffMaxDelay(md))
+	testBackoffConfigSet(t, wantBackoff, WithBackoffMaxDelay(md), WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 }
 
-func (s) TestWithConnectParams(t *testing.T) {
+func (s) TestPickFirstLeaf_WithConnectParams(t *testing.T) {
 	bd := 2 * time.Second
 	mltpr := 2.0
 	jitter := 0.0
@@ -607,35 +607,16 @@ func (s) TestWithConnectParams(t *testing.T) {
 	// MaxDelay is not set in the ConnectParams. So it should not be set on
 	// internalbackoff.Exponential as well.
 	wantBackoff := internalbackoff.Exponential{Config: bc}
-	testBackoffConfigSet(t, wantBackoff, WithConnectParams(crt))
+	testBackoffConfigSet(t, wantBackoff, WithConnectParams(crt), WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 }
 
-func testBackoffConfigSet(t *testing.T, wantBackoff internalbackoff.Exponential, opts ...DialOption) {
-	opts = append(opts, WithTransportCredentials(insecure.NewCredentials()))
-	conn, err := Dial("passthrough:///foo:80", opts...)
-	if err != nil {
-		t.Fatalf("unexpected error dialing connection: %v", err)
-	}
-	defer conn.Close()
-
-	if conn.dopts.bs == nil {
-		t.Fatalf("backoff config not set")
-	}
-
-	gotBackoff, ok := conn.dopts.bs.(internalbackoff.Exponential)
-	if !ok {
-		t.Fatalf("unexpected type of backoff config: %#v", conn.dopts.bs)
-	}
-
-	if gotBackoff != wantBackoff {
-		t.Fatalf("unexpected backoff config on connection: %v, want %v", gotBackoff, wantBackoff)
-	}
-}
-
-func (s) TestConnectParamsWithMinConnectTimeout(t *testing.T) {
+func (s) TestPickFirstLeaf_ConnectParamsWithMinConnectTimeout(t *testing.T) {
 	// Default value specified for minConnectTimeout in the spec is 20 seconds.
 	mct := 1 * time.Minute
-	conn, err := Dial("passthrough:///foo:80", WithTransportCredentials(insecure.NewCredentials()), WithConnectParams(ConnectParams{MinConnectTimeout: mct}))
+	conn, err := Dial("passthrough:///foo:80",
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithConnectParams(ConnectParams{MinConnectTimeout: mct}),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 	if err != nil {
 		t.Fatalf("unexpected error dialing connection: %v", err)
 	}
@@ -646,7 +627,7 @@ func (s) TestConnectParamsWithMinConnectTimeout(t *testing.T) {
 	}
 }
 
-func (s) TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
+func (s) TestPickFirstLeaf_ResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
@@ -662,7 +643,7 @@ func (s) TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
 	time.Sleep(time.Second) // Sleep to make sure the service config is handled by ClientConn.
 }
 
-func (s) TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
+func (s) TestPickFirstLeaf_ResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
 	for i := 0; i < 10; i++ { // Run this multiple times to make sure it doesn't panic.
 		r := manual.NewBuilderWithScheme(fmt.Sprintf("whatever-%d", i))
 
@@ -676,7 +657,7 @@ func (s) TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
 	}
 }
 
-func (s) TestResolverEmptyUpdateNotPanic(t *testing.T) {
+func (s) TestPickFirstLeaf_ResolverEmptyUpdateNotPanic(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
@@ -691,7 +672,7 @@ func (s) TestResolverEmptyUpdateNotPanic(t *testing.T) {
 	time.Sleep(time.Second) // Sleep to make sure the service config is handled by ClientConn.
 }
 
-func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
+func (s) TestPickFirstLeaf_ClientUpdatesParamsAfterGoAway(t *testing.T) {
 	grpctest.TLogger.ExpectError("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"")
 
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -735,7 +716,8 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 		Time:                10 * time.Second,
 		Timeout:             100 * time.Millisecond,
 		PermitWithoutStream: true,
-	}))
+	}),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig))
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
@@ -757,7 +739,7 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	}
 }
 
-func (s) TestDisableServiceConfigOption(t *testing.T) {
+func (s) TestPickFirstLeaf_DisableServiceConfigOption(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 	addr := r.Scheme() + ":///non.existent"
 	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDisableServiceConfig())
@@ -766,6 +748,7 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
 	}
 	defer cc.Close()
 	r.UpdateState(resolver.State{ServiceConfig: parseCfg(r, `{
+    "loadBalancingConfig": [{"pick_first_leaf":{}}],
     "methodConfig": [
         {
             "name": [
@@ -785,9 +768,10 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
 	}
 }
 
-func (s) TestMethodConfigDefaultService(t *testing.T) {
+func (s) TestPickFirstLeaf_MethodConfigDefaultService(t *testing.T) {
 	addr := "nonexist:///non.existent"
 	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithDefaultServiceConfig(`{
+  "loadBalancingConfig": [{"pick_first_leaf":{}}],
   "methodConfig": [{
     "name": [
       {
@@ -808,7 +792,7 @@ func (s) TestMethodConfigDefaultService(t *testing.T) {
 	}
 }
 
-func (s) TestClientConnCanonicalTarget(t *testing.T) {
+func (s) TestPickFirstLeaf_ClientConnCanonicalTarget(t *testing.T) {
 	tests := []struct {
 		name                string
 		addr                string
@@ -837,7 +821,10 @@ func (s) TestClientConnCanonicalTarget(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cc, err := Dial(test.addr, WithTransportCredentials(insecure.NewCredentials()))
+			cc, err := Dial(test.addr,
+				WithTransportCredentials(insecure.NewCredentials()),
+				WithDefaultServiceConfig(pickFirstLeafServiceConfig),
+			)
 			if err != nil {
 				t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", test.addr, err)
 			}
@@ -852,11 +839,7 @@ func (s) TestClientConnCanonicalTarget(t *testing.T) {
 	}
 }
 
-type backoffForever struct{}
-
-func (b backoffForever) Backoff(int) time.Duration { return time.Duration(math.MaxInt64) }
-
-func (s) TestResetConnectBackoff(t *testing.T) {
+func (s) TestPickFirstLeaf_ResetConnectBackoff(t *testing.T) {
 	dials := make(chan struct{})
 	defer func() { // If we fail, let the http2client break out of dialing.
 		select {
@@ -868,7 +851,11 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 		dials <- struct{}{}
 		return nil, errors.New("failed to fake dial")
 	}
-	cc, err := Dial("any", WithTransportCredentials(insecure.NewCredentials()), WithDialer(dialer), withBackoff(backoffForever{}))
+	cc, err := Dial("any", WithTransportCredentials(insecure.NewCredentials()),
+		WithDialer(dialer),
+		withBackoff(backoffForever{}),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig),
+	)
 	if err != nil {
 		t.Fatalf("Dial() = _, %v; want _, nil", err)
 	}
@@ -895,12 +882,15 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 	}
 }
 
-func (s) TestBackoffCancel(t *testing.T) {
+func (s) TestPickFirstLeaf_BackoffCancel(t *testing.T) {
 	dialStrCh := make(chan string)
-	cc, err := Dial("any", WithTransportCredentials(insecure.NewCredentials()), WithDialer(func(t string, _ time.Duration) (net.Conn, error) {
-		dialStrCh <- t
-		return nil, fmt.Errorf("test dialer, always error")
-	}))
+	cc, err := Dial("any", WithTransportCredentials(insecure.NewCredentials()),
+		WithDialer(func(t string, _ time.Duration) (net.Conn, error) {
+			dialStrCh <- t
+			return nil, fmt.Errorf("test dialer, always error")
+		}),
+		WithDefaultServiceConfig(pickFirstLeafServiceConfig),
+	)
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
@@ -916,7 +906,7 @@ func (s) TestBackoffCancel(t *testing.T) {
 // TestUpdateAddresses_NoopIfCalledWithSameAddresses tests that UpdateAddresses
 // should be noop if UpdateAddresses is called with the same list of addresses,
 // even when the SubConn is in Connecting and doesn't have a current address.
-func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
+func (s) TestPickFirstLeaf_UpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 	lis1, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -966,7 +956,7 @@ func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 		// nextStateNotifier() is updated after balancerBuilder.Build(), which is
 		// called by grpc.Dial. It's safe to do it here because lis1.Accept blocks
 		// until balancer is built to process the addresses.
-		stateNotifications := testBalancerBuilder.nextStateNotifier()
+		stateNotifications := testBalancerBuilderPickFirstLeaf.nextStateNotifier()
 		// Wait for the transport to become ready.
 		for {
 			select {
@@ -1039,7 +1029,7 @@ func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 			Backoff:           backoff.Config{},
 			MinConnectTimeout: time.Hour,
 		}),
-		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)))
+		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerWithLeafPickFirstName)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1065,14 +1055,24 @@ func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 	var ac *addrConn
 	client.mu.Lock()
 	for clientAC := range client.conns {
-		ac = clientAC
-		break
+		if got := len(clientAC.addrs); got != 1 {
+			t.Errorf("len(AddrConn.addrs)=%d, want=1", got)
+			continue
+		}
+		if clientAC.addrs[0].Addr == lis2.Addr().String() {
+			ac = clientAC
+			break
+		}
 	}
 	client.mu.Unlock()
 
+	if ac == nil {
+		t.Fatal("Coudn't find the subConn for server 2")
+	}
+
 	// Call UpdateAddresses with the same list of addresses, it should be a noop
 	// (even when the SubConn is Connecting, and doesn't have a curAddr).
-	ac.acbw.UpdateAddresses(addrsList)
+	ac.acbw.UpdateAddresses(addrsList[1:2])
 
 	// We've called tryUpdateAddrs - now let's make server2 close the
 	// connection and check that it continues to server3.
@@ -1089,9 +1089,10 @@ func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 	}
 }
 
-func (s) TestDefaultServiceConfig(t *testing.T) {
+func (s) TestPickFirstLeaf_DefaultServiceConfig(t *testing.T) {
 	const defaultSC = `
 {
+    "loadBalancingConfig": [{"pick_first_leaf":{}}],
     "methodConfig": [
         {
             "name": [
@@ -1140,168 +1141,7 @@ func (s) TestDefaultServiceConfig(t *testing.T) {
 	}
 }
 
-func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
-	var i int
-	for i = 0; i < 10; i++ {
-		mc := cc.GetMethodConfig("/foo/bar")
-		if mc.WaitForReady != nil && *mc.WaitForReady == true {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	return i != 10
-}
-
-func testInvalidDefaultServiceConfig(t *testing.T, r *manual.Resolver, addr, sc string) {
-	_, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(sc))
-	if !strings.Contains(err.Error(), invalidDefaultServiceConfigErrPrefix) {
-		t.Fatalf("Dial got err: %v, want err contains: %v", err, invalidDefaultServiceConfigErrPrefix)
-	}
-}
-
-func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r *manual.Resolver, addr string, js string) {
-	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithDisableServiceConfig(), WithResolvers(r), WithDefaultServiceConfig(js))
-	if err != nil {
-		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
-	}
-	defer cc.Close()
-	// Resolver service config gets ignored since resolver service config is disabled.
-	r.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: addr}},
-		ServiceConfig: parseCfg(r, "{}"),
-	})
-	if !verifyWaitForReadyEqualsTrue(cc) {
-		t.Fatal("default service config failed to be applied after 1s")
-	}
-}
-
-func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T, r *manual.Resolver, addr string, js string) {
-	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(js))
-	if err != nil {
-		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
-	}
-	defer cc.Close()
-	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: addr}},
-	})
-	if !verifyWaitForReadyEqualsTrue(cc) {
-		t.Fatal("default service config failed to be applied after 1s")
-	}
-}
-
-func testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t *testing.T, r *manual.Resolver, addr string, js string) {
-	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(js))
-	if err != nil {
-		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
-	}
-	defer cc.Close()
-	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: addr}},
-	})
-	if !verifyWaitForReadyEqualsTrue(cc) {
-		t.Fatal("default service config failed to be applied after 1s")
-	}
-}
-
-type stateRecordingBalancer struct {
-	balancer.Balancer
-}
-
-func (b *stateRecordingBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
-	panic(fmt.Sprintf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, s))
-}
-
-func (b *stateRecordingBalancer) Close() {
-	b.Balancer.Close()
-}
-
-func (b *stateRecordingBalancer) ExitIdle() {
-	if ib, ok := b.Balancer.(balancer.ExitIdler); ok {
-		ib.ExitIdle()
-	}
-}
-
-type stateRecordingBalancerBuilder struct {
-	mu              sync.Mutex
-	notifier        chan connectivity.State // The notifier used in the last Balancer.
-	policyName      string
-	childPolicyName string
-}
-
-func newStateRecordingBalancerBuilder(policyName, childPolicyName string) *stateRecordingBalancerBuilder {
-	return &stateRecordingBalancerBuilder{
-		childPolicyName: childPolicyName,
-		policyName:      policyName,
-	}
-}
-
-func (b *stateRecordingBalancerBuilder) Name() string {
-	return b.policyName
-}
-
-func (b *stateRecordingBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	stateNotifications := make(chan connectivity.State, 20)
-	b.mu.Lock()
-	b.notifier = stateNotifications
-	b.mu.Unlock()
-	return &stateRecordingBalancer{
-		Balancer: balancer.Get(b.childPolicyName).Build(&stateRecordingCCWrapper{cc, stateNotifications}, opts),
-	}
-}
-
-func (b *stateRecordingBalancerBuilder) nextStateNotifier() <-chan connectivity.State {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	ret := b.notifier
-	b.notifier = nil
-	return ret
-}
-
-type stateRecordingCCWrapper struct {
-	balancer.ClientConn
-	notifier chan<- connectivity.State
-}
-
-func (ccw *stateRecordingCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	oldListener := opts.StateListener
-	opts.StateListener = func(s balancer.SubConnState) {
-		ccw.notifier <- s.ConnectivityState
-		oldListener(s)
-	}
-	return ccw.ClientConn.NewSubConn(addrs, opts)
-}
-
-// Keep reading until something causes the connection to die (EOF, server
-// closed, etc). Useful as a tool for mindlessly keeping the connection
-// healthy, since the client will error if things like client prefaces are not
-// accepted in a timely fashion.
-func keepReading(conn net.Conn) {
-	buf := make([]byte, 1024)
-	for _, err := conn.Read(buf); err == nil; _, err = conn.Read(buf) {
-	}
-}
-
-// stayConnected makes cc stay connected by repeatedly calling cc.Connect()
-// until the state becomes Shutdown or until 10 seconds elapses.
-func stayConnected(cc *ClientConn) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	for {
-		state := cc.GetState()
-		switch state {
-		case connectivity.Idle:
-			cc.Connect()
-		case connectivity.Shutdown:
-			return
-		}
-		if !cc.WaitForStateChange(ctx, state) {
-			return
-		}
-	}
-}
-
-func (s) TestURLAuthorityEscape(t *testing.T) {
+func (s) TestPickFirstLeaf_URLAuthorityEscape(t *testing.T) {
 	tests := []struct {
 		name      string
 		authority string
