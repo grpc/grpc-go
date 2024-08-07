@@ -33,7 +33,7 @@ type Event struct {
 }
 
 // Fire causes e to complete.  It is safe to call multiple times, and
-// concurrently.  It returns true iff this call to Fire caused the signaling
+// concurrently.  It returns true if this call to Fire caused the signaling
 // channel returned by Done to close.
 func (e *Event) Fire() bool {
 	ret := false
