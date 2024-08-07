@@ -53,11 +53,11 @@ func NewTestMetricsRecorder(t *testing.T, metrics []string) *TestMetricsRecorder
 	tmr := &TestMetricsRecorder{
 		t: t,
 
-		intCountCh:   testutils.NewChannelWithSize(1000),
-		floatCountCh: testutils.NewChannelWithSize(1000),
-		intHistoCh:   testutils.NewChannelWithSize(1000),
-		floatHistoCh: testutils.NewChannelWithSize(1000),
-		intGaugeCh:   testutils.NewChannelWithSize(1000),
+		intCountCh:   testutils.NewChannelWithSize(10),
+		floatCountCh: testutils.NewChannelWithSize(10),
+		intHistoCh:   testutils.NewChannelWithSize(10),
+		floatHistoCh: testutils.NewChannelWithSize(10),
+		intGaugeCh:   testutils.NewChannelWithSize(10),
 
 		data: make(map[estats.Metric]float64),
 	}
@@ -79,17 +79,6 @@ func (r *TestMetricsRecorder) AssertDataForMetric(metricName string, wantVal flo
 	}
 }
 
-// AssertEitherDataForMetric asserts either data point is present for metric.
-// The zero value in the check is equivalent to unset.
-
-func (r *TestMetricsRecorder) AssertEitherDataForMetric(metricName string, wantVal1 float64, wantVal2 float64) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.data[estats.Metric(metricName)] != wantVal1 && r.data[estats.Metric(metricName)] != wantVal2 {
-		r.t.Fatalf("Unexpected data for metric %v, got: %v, want: %v or %v", metricName, r.data[estats.Metric(metricName)], wantVal1, wantVal2)
-	}
-}
-
 // PollForDataForMetric polls the metric data for the want. Fails if context
 // provided expires before data for metric is found.
 func (r *TestMetricsRecorder) PollForDataForMetric(ctx context.Context, metricName string, wantVal float64) {
@@ -97,7 +86,7 @@ func (r *TestMetricsRecorder) PollForDataForMetric(ctx context.Context, metricNa
 		r.mu.Lock()
 		if r.data[estats.Metric(metricName)] == wantVal {
 			r.mu.Unlock()
-			break
+			return
 		}
 		r.mu.Unlock()
 	}

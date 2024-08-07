@@ -623,8 +623,7 @@ func (s) TestBalancer_TwoAddresses_WeightExpiration(t *testing.T) {
 	cfg := oobConfig
 	cfg.OOBReportingPeriod = stringp("60s")
 	sc := svcConfig(t, cfg)
-	mr := stats.NewTestMetricsRecorder(t, []string{"grpc.lb.wrr.rr_fallback", "grpc.lb.wrr.endpoint_weight_not_yet_usable", "grpc.lb.wrr.endpoint_weight_stale", "grpc.lb.wrr.endpoint_weights"})
-	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc), grpc.WithStatsHandler(mr)); err != nil {
+	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
 		t.Fatalf("Error starting client: %v", err)
 	}
 	addrs := []resolver.Address{{Addr: srv1.Address}, {Addr: srv2.Address}}

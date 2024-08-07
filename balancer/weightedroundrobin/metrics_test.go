@@ -39,63 +39,94 @@ func Test(t *testing.T) {
 // on a weighted SubConn, and expects certain metrics for each of these
 // scenarios.
 func (s) TestWRR_Metrics_SubConnWeight(t *testing.T) {
-	tmr := stats.NewTestMetricsRecorder(t, []string{"grpc.lb.wrr.rr_fallback", "grpc.lb.wrr.endpoint_weight_not_yet_usable", "grpc.lb.wrr.endpoint_weight_stale", "grpc.lb.wrr.endpoint_weights"})
-
-	wsc := &weightedSubConn{
-		metricsRecorder: tmr,
-		weightVal:       3,
+	tests := []struct {
+		name                           string
+		weightExpirationPeriod         time.Duration
+		blackoutPeriod                 time.Duration
+		lastUpdatedSet                 bool
+		nonEmptySet                    bool
+		nowTime                        time.Time
+		endpointWeightStaleWant        float64
+		endpointWeightNotYetUsableWant float64
+		endpointWeightWant             float64
+	}{
+		// The weighted SubConn's lastUpdated field hasn't been set, so this
+		// SubConn's weight is not yet usable. Thus, should emit that endpoint
+		// weight is not yet usable, and 0 for weight.
+		{
+			name:                           "no weight set",
+			weightExpirationPeriod:         time.Second,
+			blackoutPeriod:                 time.Second,
+			nowTime:                        time.Now(),
+			endpointWeightStaleWant:        0,
+			endpointWeightNotYetUsableWant: 1,
+			endpointWeightWant:             0,
+		},
+		{
+			name:                           "weight expiration",
+			lastUpdatedSet:                 true,
+			weightExpirationPeriod:         2 * time.Second,
+			blackoutPeriod:                 time.Second,
+			nowTime:                        time.Now().Add(100 * time.Second),
+			endpointWeightStaleWant:        1,
+			endpointWeightNotYetUsableWant: 0,
+			endpointWeightWant:             0,
+		},
+		{
+			name:                           "in blackout period",
+			lastUpdatedSet:                 true,
+			weightExpirationPeriod:         time.Minute,
+			blackoutPeriod:                 10 * time.Second,
+			nowTime:                        time.Now(),
+			endpointWeightStaleWant:        0,
+			endpointWeightNotYetUsableWant: 1,
+			endpointWeightWant:             0,
+		},
+		{
+			name:                           "normal weight",
+			lastUpdatedSet:                 true,
+			nonEmptySet:                    true,
+			weightExpirationPeriod:         time.Minute,
+			blackoutPeriod:                 time.Second,
+			nowTime:                        time.Now().Add(10 * time.Second),
+			endpointWeightStaleWant:        0,
+			endpointWeightNotYetUsableWant: 0,
+			endpointWeightWant:             3,
+		},
+		{
+			name:                           "weight expiration takes precdedence over blackout",
+			lastUpdatedSet:                 true,
+			nonEmptySet:                    true,
+			weightExpirationPeriod:         time.Second,
+			blackoutPeriod:                 time.Minute,
+			nowTime:                        time.Now().Add(10 * time.Second),
+			endpointWeightStaleWant:        1,
+			endpointWeightNotYetUsableWant: 0,
+			endpointWeightWant:             0,
+		},
 	}
 
-	// The weighted SubConn's lastUpdated field hasn't been set, so this
-	// SubConn's weight is not yet usable. Thus, should emit that endpoint
-	// weight is not yet usable, and 0 for weight.
-	wsc.weight(time.Now(), time.Second, time.Second, true)
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_stale", 0) // The endpoint weight has not expired so this is 0.
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_not_yet_usable", 1)
-	// Unusable, so no endpoint weight (i.e. 0).
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weights", 0)
-	tmr.ClearMetrics()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tmr := stats.NewTestMetricsRecorder(t, []string{"grpc.lb.wrr.rr_fallback", "grpc.lb.wrr.endpoint_weight_not_yet_usable", "grpc.lb.wrr.endpoint_weight_stale", "grpc.lb.wrr.endpoint_weights"})
+			wsc := &weightedSubConn{
+				metricsRecorder: tmr,
+				weightVal:       3,
+			}
+			if test.lastUpdatedSet {
+				wsc.lastUpdated = time.Now()
+			}
+			if test.nonEmptySet {
+				wsc.nonEmptySince = time.Now()
+			}
+			wsc.weight(test.nowTime, test.weightExpirationPeriod, test.blackoutPeriod, true)
 
-	// Setup a scenario where the SubConn's weight expires. Thus, should emit
-	// that endpoint weight is stale, and 0 for weight.
-	wsc.lastUpdated = time.Now()
-	wsc.weight(time.Now().Add(100*time.Second), 2*time.Second, time.Second, true)
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_stale", 1)
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_not_yet_usable", 0)
-	// Unusable, so no endpoint weight (i.e. 0).
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weights", 0)
-	tmr.ClearMetrics()
+			tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_stale", test.endpointWeightStaleWant)
+			tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_not_yet_usable", test.endpointWeightNotYetUsableWant)
+			tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weights", test.endpointWeightWant)
+		})
+	}
 
-	// Setup a scenario where the SubConn's weight is in the blackout period.
-	// Thus, should emit that endpoint weight is not yet usable, and 0 for
-	// weight.
-	wsc.weight(time.Now(), time.Minute, 10*time.Second, true)
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_stale", 0)
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_not_yet_usable", 1)
-	// Unusable, so no endpoint weight (i.e. 0).
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weights", 0)
-	tmr.ClearMetrics()
-
-	// Setup a scenario where SubConn's weight is what is persists in weight
-	// field. This is triggered by last update being past blackout period and
-	// before weight update period. Should thus emit that endpoint weight is 3,
-	// and no other metrics.
-	wsc.nonEmptySince = time.Now()
-	wsc.weight(time.Now().Add(10*time.Second), time.Minute, time.Second, true)
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_stale", 0)
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_not_yet_usable", 0)
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weights", 3)
-	tmr.ClearMetrics()
-
-	// Setup a scenario where a SubConn's weight both expires and is within the
-	// blackout period. In this case, weight expiry should take precedence with
-	// respect to metrics emitted. Thus, should emit that endpoint weight is not
-	// yet usable, and 0 for weight.
-	wsc.weight(time.Now().Add(10*time.Second), time.Second, time.Minute, true)
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_stale", 1)
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_not_yet_usable", 0)
-	tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weights", 0)
-	tmr.ClearMetrics()
 }
 
 // TestWRR_Metrics_Scheduler_RR_Fallback tests the round robin fallback metric

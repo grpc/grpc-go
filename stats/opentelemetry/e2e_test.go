@@ -473,11 +473,9 @@ func (s) TestWRRMetrics(t *testing.T) {
 	// scheduler.
 	receivedExpectedMetrics := grpcsync.NewEvent()
 	go func() {
-		for i := 0; i < 100; i++ {
+		for !receivedExpectedMetrics.HasFired() {
 			client.EmptyCall(ctx, &testpb.Empty{})
-			if receivedExpectedMetrics.HasFired() {
-				break
-			}
+			time.Sleep(2 * time.Millisecond)
 		}
 	}()
 
@@ -552,10 +550,6 @@ func (s) TestWRRMetrics(t *testing.T) {
 			Temporality: metricdata.CumulativeTemporality,
 			IsMonotonic: true,
 		},
-	}
-
-	if ctx.Err() != nil {
-		t.Fatalf("Timeout waiting for metric %v", eventuallyWantMetric.Name)
 	}
 
 	if err := pollForWantMetrics(ctx, t, reader, []metricdata.Metrics{eventuallyWantMetric}); err != nil {

@@ -243,7 +243,7 @@ func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
 // Detection present in the CDS update, but with SuccessRateEjection unset, and
 // asserts that Outlier Detection is turned on and ejects upstreams.
 func (s) TestOutlierDetectionXDSDefaultOn(t *testing.T) {
-	managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	// Working backend 1.
 	backend1 := stubserver.StartTestService(t, nil)
