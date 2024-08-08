@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/balancer/rls/internal/keys"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	estats "google.golang.org/grpc/experimental/stats"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/metadata"
@@ -62,6 +63,8 @@ type rlsPicker struct {
 	// The picker is given its own copy of the below fields from the RLS LB policy
 	// to avoid having to grab the mutex on the latter.
 	rlsServerTarget string
+	grpcTarget      string
+	metricsRecorder estats.MetricsRecorder
 	defaultPolicy   *childPolicyWrapper // Child policy for the default target.
 	ctrlCh          *controlChannel     // Control channel to the RLS server.
 	maxAge          time.Duration       // Cache max age from LB config.
@@ -175,8 +178,12 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 			// X-Google-RLS-Data header.
 			res, err := state.Picker.Pick(info)
 			if err != nil {
+				pr := "fail"
+				if _, ok := status.FromError(err); ok {
+					pr = "drop"
+				}
 				return res, func() {
-					targetPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget, cpw.target, "fail")
+					targetPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, cpw.target, pr)
 				}, err
 			}
 
@@ -186,7 +193,7 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 				res.Metadata.Append(rlsDataHeaderName, dcEntry.headerData)
 			}
 			return res, func() {
-				targetPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget, cpw.target, "complete")
+				targetPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, cpw.target, "complete")
 			}, nil
 		}
 	}
@@ -206,14 +213,17 @@ func (p *rlsPicker) useDefaultPickIfPossible(info balancer.PickInfo, errOnNoDefa
 		pr := "complete"
 		if err != nil {
 			pr = "fail"
+			if _, ok := status.FromError(err); ok {
+				pr = "drop"
+			}
 		}
 		return res, func() {
-			defaultTargetPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget, p.defaultPolicy.target, pr)
+			defaultTargetPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, p.defaultPolicy.target, pr)
 		}, err
 	}
 
 	return balancer.PickResult{}, func() {
-		failedPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget)
+		failedPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget)
 	}, errOnNoDefault
 }
 

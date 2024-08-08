@@ -524,6 +524,8 @@ func (b *rlsBalancer) sendNewPickerLocked() {
 		staleAge:        b.lbCfg.staleAge,
 		bg:              b.bg,
 		rlsServerTarget: b.lbCfg.lookupService,
+		grpcTarget:      b.bopts.Target.String(),
+		metricsRecorder: b.bopts.MetricsRecorder,
 	}
 	picker.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-picker %p] ", picker))
 	state := balancer.State{
