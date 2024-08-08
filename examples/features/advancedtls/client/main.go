@@ -151,8 +151,8 @@ func makeCrlProvider(crlDirectory string) *advancedtls.FileWatcherCRLProvider {
 // --- Custom Verification ---
 func customVerificaitonSucceed(info *advancedtls.HandshakeVerificationInfo) (*advancedtls.PostHandshakeVerificationResults, error) {
 	// Looks at info for what you care about as the custom verification implementer
-	if info.ServerName != "localhost:8885" {
-		return nil, fmt.Errorf("expected servername of localhost:8885, got %v", info.ServerName)
+	if info.ServerName != "localhost:50051" {
+		return nil, fmt.Errorf("expected servername of localhost:50051, got %v", info.ServerName)
 	}
 	return &advancedtls.PostHandshakeVerificationResults{}, nil
 }

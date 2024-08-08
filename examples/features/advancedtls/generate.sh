@@ -72,11 +72,15 @@ openssl ca -config "openssl-ca.cnf" -gencrl -out client_revoked.crl
 # Make sure the cert is actually revoked
 openssl verify -verbose -CAfile ca_cert.pem -CRLfile client_revoked.crl -crl_check_all client_cert_revoked.pem
 
-
-# Move the crl to another directory and run openssl's rehash
 mkdir crl
 mv client_revoked.crl crl/
-openssl rehash crl
+
+rm 01.pem
+rm 02.pem
+rm 03.pem
+rm 04.pem
+rm *csr*
+rm *.txt*
 
 
 

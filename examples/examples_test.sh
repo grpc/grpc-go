@@ -76,14 +76,16 @@ EXAMPLES=(
 declare -A SERVER_ARGS=(
     ["features/unix_abstract"]="-addr $UNIX_ADDR"
     ["default"]="-port $SERVER_PORT"
-    ["features/advancedtls"]="-credentials_directory $(pwd)/features/advancedtls/creds"
+    # the CI runs this from the grpc-go directory
+    ["features/advancedtls"]="-credentials_directory $(pwd)/examples/features/advancedtls/creds"
 )
 
 declare -A CLIENT_ARGS=(
     ["features/unix_abstract"]="-addr $UNIX_ADDR"
     ["features/orca"]="-test=true"
     ["default"]="-addr localhost:$SERVER_PORT"
-    ["features/advancedtls"]="-credentials_directory $(pwd)/features/advancedtls/creds"
+    # the CI runs this from the grpc-go directory
+    ["features/advancedtls"]="-credentials_directory $(pwd)/examples/features/advancedtls/creds"
 )
 
 declare -A SERVER_WAIT_COMMAND=(
@@ -171,7 +173,6 @@ for example in ${EXAMPLES[@]}; do
     # Start server
     SERVER_LOG="$(mktemp)"
     server_args=${SERVER_ARGS[$example]:-${SERVER_ARGS["default"]}}
-    echo $server_args
     go run ./$example/*server/*.go $server_args &> $SERVER_LOG  &
 
     wait_for_server $example
