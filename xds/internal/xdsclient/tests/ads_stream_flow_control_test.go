@@ -48,7 +48,7 @@ type blockingListenerWatcher struct {
 	doneNotifierCh chan xdsresource.DoneNotifier // DoneNotifier passed to the callback.
 	updateCh       chan struct{}                 // Written to when an update is received.
 	errorCh        chan struct{}                 // Written to when an error is received.
-	notFouncCh     chan struct{}                 // Written to when the resource is not found.
+	notFoundCh     chan struct{}                 // Written to when the resource is not found.
 }
 
 func newBLockingListenerWatcher() *blockingListenerWatcher {
@@ -56,7 +56,7 @@ func newBLockingListenerWatcher() *blockingListenerWatcher {
 		doneNotifierCh: make(chan xdsresource.DoneNotifier, 1),
 		updateCh:       make(chan struct{}, 1),
 		errorCh:        make(chan struct{}, 1),
-		notFouncCh:     make(chan struct{}, 1),
+		notFoundCh:     make(chan struct{}, 1),
 	}
 }
 
@@ -89,7 +89,7 @@ func (lw *blockingListenerWatcher) OnError(err error, done xdsresource.DoneNotif
 func (lw *blockingListenerWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
 	// Notify receipt of resource not found.
 	select {
-	case lw.notFouncCh <- struct{}{}:
+	case lw.notFoundCh <- struct{}{}:
 	default:
 	}
 
@@ -171,7 +171,7 @@ func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient
 //     triggered by the test. This allows the test to verify that the next
 //     Recv() call on the ADS stream does not happen until both watchers have
 //     completely processed the update, i.e invoke the onDone callback.
-//   - Resource is update on the management server, and the test verifies that
+//   - Resource is updated on the management server, and the test verifies that
 //     the update reaches the watchers.
 func (s) TestADSFlowControl_ResourceUpdates_SingleResource(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -311,7 +311,7 @@ func (s) TestADSFlowControl_ResourceUpdates_MultipleResources(t *testing.T) {
 	const listenerResourceName1 = "test-listener-resource-1"
 	const listenerResourceName2 = "test-listener-resource-2"
 	wantResourceNames := []string{listenerResourceName1, listenerResourceName2}
-	requestCh := make(chan struct{})
+	requestCh := make(chan struct{}, 1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() != version.V3ListenerURL {
@@ -598,7 +598,7 @@ func (s) TestADSFlowControl_ResourceDoesNotExist(t *testing.T) {
 
 	// Wait for the resource not found callback to be invoked.
 	select {
-	case <-watcher.notFouncCh:
+	case <-watcher.notFoundCh:
 	case <-ctx.Done():
 		t.Fatalf("Timed out waiting for resource not found callback to be invoked on the watcher")
 	}
