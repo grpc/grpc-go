@@ -28,7 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
-	"google.golang.org/grpc/balancer/pickfirst_leaf"
+	pickfirstleaf "google.golang.org/grpc/balancer/pickfirst_leaf"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -46,7 +46,7 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-var pickFirstLeafServiceConfig = fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirst_leaf.Name)
+var pickFirstLeafServiceConfig = fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)
 
 // setupPickFirstLeaf performs steps required for pick_first tests. It starts a
 // bunch of backends exporting the TestService, creates a ClientConn to them
@@ -60,7 +60,7 @@ func setupPickFirstLeaf(t *testing.T, backendCount int, opts ...grpc.DialOption)
 	addrs := make([]resolver.Address, backendCount)
 	for i := 0; i < backendCount; i++ {
 		backend := &stubserver.StubServer{
-			EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 				return &testpb.Empty{}, nil
 			},
 		}

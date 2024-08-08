@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/pickfirst_leaf"
+	pickfirstleaf "google.golang.org/grpc/balancer/pickfirst_leaf"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
@@ -42,7 +42,7 @@ import (
 
 const stateRecordingPickFirstLeafBalancerName = "state_recording_pick_first_leaf_balancer"
 
-var testPickFirstLeafBalancerBuilder = newStateRecordingBalancerBuilder(stateRecordingPickFirstLeafBalancerName, pickfirst_leaf.Name)
+var testPickFirstLeafBalancerBuilder = newStateRecordingBalancerBuilder(stateRecordingPickFirstLeafBalancerName, pickfirstleaf.Name)
 
 func init() {
 	balancer.Register(testPickFirstLeafBalancerBuilder)

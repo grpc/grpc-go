@@ -31,7 +31,7 @@ import (
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/pickfirst_leaf"
+	pickfirstleaf "google.golang.org/grpc/balancer/pickfirst_leaf"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -50,7 +50,7 @@ const (
 )
 
 var (
-	testBalancerBuilderPickFirstLeaf = newStateRecordingBalancerBuilder(stateRecordingBalancerWithLeafPickFirstName, pickfirst_leaf.Name)
+	testBalancerBuilderPickFirstLeaf = newStateRecordingBalancerBuilder(stateRecordingBalancerWithLeafPickFirstName, pickfirstleaf.Name)
 	pickFirstLeafServiceConfig       = fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirst_leaf.Name)
 )
 

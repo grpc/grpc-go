@@ -16,9 +16,9 @@
  *
  */
 
-// Package pickfirst_leaf contains the pick_first load balancing policy which
+// Package pickfirstleaf contains the pick_first load balancing policy which
 // will be the universal leaf policy after Dual Stack changes are implemented.
-package pickfirst_leaf
+package pickfirstleaf
 
 import (
 	"encoding/json"
@@ -55,7 +55,7 @@ const (
 
 type pickfirstBuilder struct{}
 
-func (pickfirstBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
+func (pickfirstBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	b := &pickfirstBalancer{
 		cc:           cc,
 		addressIndex: newIndex(nil),
@@ -203,15 +203,14 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		b.addressIndex.updateEndpointList(newEndpoints)
 		if b.addressIndex.seekTo(prevAddr) {
 			return nil
-		} else {
-			b.addressIndex.reset()
 		}
+		b.addressIndex.reset()
 	} else {
 		b.addressIndex.updateEndpointList(newEndpoints)
 	}
 	// Remove old subConns that were not in new address list.
 	oldAddrs := map[string]bool{}
-	for k, _ := range b.subConns {
+	for k := range b.subConns {
 		oldAddrs[k] = true
 	}
 
@@ -224,7 +223,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 	}
 
 	// Shut them down and remove them.
-	for oldAddr, _ := range oldAddrs {
+	for oldAddr := range oldAddrs {
 		if _, ok := newAddrs[oldAddr]; ok {
 			continue
 		}
@@ -433,7 +432,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 	// We have finished the first pass, keep re-connecting failing subconns.
 	switch state.ConnectivityState {
 	case connectivity.TransientFailure:
-		b.numTf += 1
+		b.numTf++
 		// We request re-resolution when we've seen the same number of TFs as
 		// subconns. It could be that a subconn has seen multiple TFs due to
 		// differences in back-off durations, but this is a decent approximation.
@@ -511,9 +510,9 @@ func (i *index) increment() bool {
 		return false
 	}
 	ep := i.endpointList[i.endpointIdx]
-	i.addrIdx += 1
+	i.addrIdx++
 	if i.addrIdx >= len(ep.Addresses) {
-		i.endpointIdx += 1
+		i.endpointIdx++
 		i.addrIdx = 0
 		return i.endpointIdx < len(i.endpointList)
 	}
@@ -538,14 +537,14 @@ func (i *index) updateEndpointList(endpointList []resolver.Endpoint) {
 }
 
 // seekTo returns false if the needle was not found and the current index was left unchanged.
-func (idx *index) seekTo(needle *resolver.Address) bool {
-	for i, endpoint := range idx.endpointList {
-		for j, addr := range endpoint.Addresses {
+func (i *index) seekTo(needle *resolver.Address) bool {
+	for ei, endpoint := range i.endpointList {
+		for ai, addr := range endpoint.Addresses {
 			if !addr.Attributes.Equal(needle.Attributes) || addr.Addr != needle.Addr {
 				continue
 			}
-			idx.endpointIdx = i
-			idx.addrIdx = j
+			i.endpointIdx = ei
+			i.addrIdx = ai
 			return true
 		}
 	}
