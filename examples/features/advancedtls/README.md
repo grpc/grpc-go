@@ -17,10 +17,10 @@ Run `./generate.sh` from `/path/to/grpc-go/examples/features/advancedtls` to gen
 
 ## Building and Running
 ```
-# Run the clients from the `grpc-go/examples/features/advancedtls` directory 
-$ go run client/main.go -credentials_directory $(pwd)/creds
 # Run the server
 $ go run server/main.go -credentials_directory $(pwd)/creds
+# Run the clients from the `grpc-go/examples/features/advancedtls` directory 
+$ go run client/main.go -credentials_directory $(pwd)/creds
 ```
 
 Stop the servers with ctrl-c or by killing the process.
