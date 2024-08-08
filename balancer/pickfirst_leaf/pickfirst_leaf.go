@@ -21,6 +21,7 @@
 package pickfirstleaf
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +31,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -56,10 +58,13 @@ const (
 type pickfirstBuilder struct{}
 
 func (pickfirstBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
+	ctx, cancel := context.WithCancel(context.Background())
 	b := &pickfirstBalancer{
-		cc:           cc,
-		addressIndex: newIndex(nil),
-		subConns:     map[string]*scData{},
+		cc:               cc,
+		addressIndex:     newIndex(nil),
+		subConns:         resolver.NewAddressMap(),
+		serializer:       *grpcsync.NewCallbackSerializer(ctx),
+		serializerCancel: cancel,
 	}
 	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(logPrefix, b))
 	return b
@@ -101,8 +106,10 @@ func newScData(b *pickfirstBalancer, addr resolver.Address) (*scData, error) {
 	sc, err := b.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{
 		StateListener: func(state balancer.SubConnState) {
 			// Store the state and delegate.
-			sd.state = state.ConnectivityState
-			b.updateSubConnState(sd, state)
+			b.serializer.TrySchedule(func(_ context.Context) {
+				sd.state = state.ConnectivityState
+				b.updateSubConnState(sd, state)
+			})
 		},
 	})
 	if err != nil {
@@ -116,14 +123,30 @@ type pickfirstBalancer struct {
 	logger       *internalgrpclog.PrefixLogger
 	state        connectivity.State
 	cc           balancer.ClientConn
-	subConns     map[string]*scData
+	subConns     *resolver.AddressMap
 	addressIndex index
 	firstPass    bool
 	firstErr     error
 	numTf        int
+	// A serializer is used to ensure synchronization from updates triggered
+	// due to the idle picker in addition to the already serialized resolver,
+	// subconn state updates.
+	serializer       grpcsync.CallbackSerializer
+	serializerCancel func()
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
+	completion := make(chan struct{})
+	b.serializer.ScheduleOr(func(ctx context.Context) {
+		b.resolverError(err, completion)
+	}, func() {
+		close(completion)
+	})
+	<-completion
+}
+
+func (b *pickfirstBalancer) resolverError(err error, completion chan struct{}) {
+	defer close(completion)
 	if b.logger.V(2) {
 		b.logger.Infof("Received error from the name resolver: %v", err)
 	}
@@ -136,11 +159,11 @@ func (b *pickfirstBalancer) ResolverError(err error) {
 		return
 	}
 
-	for _, sd := range b.subConns {
-		sd.subConn.Shutdown()
+	for _, sd := range b.subConns.Values() {
+		sd.(*scData).subConn.Shutdown()
 	}
-	for k := range b.subConns {
-		delete(b.subConns, k)
+	for _, k := range b.subConns.Keys() {
+		b.subConns.Delete(k)
 	}
 	b.addressIndex.updateEndpointList(nil)
 	b.state = connectivity.TransientFailure
@@ -151,21 +174,34 @@ func (b *pickfirstBalancer) ResolverError(err error) {
 }
 
 func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
+	errCh := make(chan error, 1)
+	b.serializer.ScheduleOr(func(_ context.Context) {
+		b.updateClientConnState(state, errCh)
+	}, func() {
+		close(errCh)
+	})
+	return <-errCh
+}
+
+func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState, errCh chan error) {
 	if b.state == connectivity.Shutdown {
-		return fmt.Errorf("balancer is already closed")
+		errCh <- fmt.Errorf("balancer is already closed")
+		return
 	}
 	if len(state.ResolverState.Addresses) == 0 && len(state.ResolverState.Endpoints) == 0 {
 		// Cleanup state pertaining to the previous resolver state.
 		// Treat an empty address list like an error by calling b.ResolverError.
 		b.state = connectivity.TransientFailure
-		b.ResolverError(errors.New("produced zero addresses"))
-		return balancer.ErrBadResolverState
+		b.resolverError(errors.New("produced zero addresses"), make(chan struct{}))
+		errCh <- balancer.ErrBadResolverState
+		return
 	}
 	// We don't have to guard this block with the env var because ParseConfig
 	// already does so.
 	cfg, ok := state.BalancerConfig.(pfConfig)
 	if state.BalancerConfig != nil && !ok {
-		return fmt.Errorf("pickfirst: received illegal BalancerConfig (type %T): %v", state.BalancerConfig, state.BalancerConfig)
+		errCh <- fmt.Errorf("pickfirst: received illegal BalancerConfig (type %T): %v", state.BalancerConfig, state.BalancerConfig)
+		return
 	}
 
 	if b.logger.V(2) {
@@ -174,7 +210,8 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 
 	newEndpoints := state.ResolverState.Endpoints
 	if len(newEndpoints) == 0 {
-		return fmt.Errorf("addresses are no longer supported, resolvers should produce endpoints instead")
+		errCh <- fmt.Errorf("addresses are no longer supported, resolvers should produce endpoints instead")
+		return
 	}
 
 	// Since we have a new set of addresses, we are again at first pass
@@ -198,40 +235,44 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		if err != nil {
 			// This error should never happen when the state is READY if the
 			// index is managed correctly.
-			return fmt.Errorf("address index is in an invalid state: %v", err)
+			errCh <- fmt.Errorf("address index is in an invalid state: %v", err)
+			return
 		}
 		b.addressIndex.updateEndpointList(newEndpoints)
 		if b.addressIndex.seekTo(prevAddr) {
-			return nil
+			errCh <- nil
+			return
 		}
 		b.addressIndex.reset()
 	} else {
 		b.addressIndex.updateEndpointList(newEndpoints)
 	}
+
 	// Remove old subConns that were not in new address list.
-	oldAddrs := map[string]bool{}
-	for k := range b.subConns {
-		oldAddrs[k] = true
+	oldAddrs := resolver.NewAddressMap()
+	for _, k := range b.subConns.Keys() {
+		oldAddrs.Set(k, true)
 	}
 
 	// Flatten the new endpoint addresses.
-	newAddrs := map[string]bool{}
+	newAddrs := resolver.NewAddressMap()
 	for _, endpoint := range newEndpoints {
 		for _, addr := range endpoint.Addresses {
-			newAddrs[addrKey(&addr)] = true
+			newAddrs.Set(addr, true)
 		}
 	}
 
 	// Shut them down and remove them.
-	for oldAddr := range oldAddrs {
-		if _, ok := newAddrs[oldAddr]; ok {
+	for _, oldAddr := range oldAddrs.Keys() {
+		if _, ok := newAddrs.Get(oldAddr); ok {
 			continue
 		}
-		b.subConns[oldAddr].subConn.Shutdown()
-		delete(b.subConns, oldAddr)
+		val, _ := b.subConns.Get(oldAddr)
+		val.(*scData).subConn.Shutdown()
+		b.subConns.Delete(oldAddr)
 	}
 
-	if len(oldAddrs) == 0 || b.state == connectivity.Ready || b.state == connectivity.Connecting {
+	if oldAddrs.Len() == 0 || b.state == connectivity.Ready || b.state == connectivity.Connecting {
 		// Start connection attempt at first address.
 		b.state = connectivity.Connecting
 		b.cc.UpdateState(balancer.State{
@@ -249,7 +290,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 	} else if b.state == connectivity.TransientFailure {
 		b.requestConnection()
 	}
-	return nil
+	errCh <- nil
 }
 
 // UpdateSubConnState is unused as a StateListener is always registered when
@@ -259,31 +300,53 @@ func (b *pickfirstBalancer) UpdateSubConnState(subConn balancer.SubConn, state b
 }
 
 func (b *pickfirstBalancer) Close() {
-	for _, sd := range b.subConns {
-		sd.subConn.Shutdown()
+	completion := make(chan struct{})
+	b.serializer.ScheduleOr(func(ctx context.Context) {
+		b.close(completion)
+	}, func() {
+		close(completion)
+	})
+	<-completion
+	b.serializerCancel()
+}
+
+func (b *pickfirstBalancer) close(completion chan struct{}) {
+	for _, sd := range b.subConns.Values() {
+		sd.(*scData).subConn.Shutdown()
 	}
-	for k := range b.subConns {
-		delete(b.subConns, k)
+	for _, k := range b.subConns.Keys() {
+		b.subConns.Delete(k)
 	}
 	b.state = connectivity.Shutdown
+	close(completion)
 }
 
 // ExitIdle moves the balancer out of idle state. It can be called concurrently
 // by the idlePicker and clientConn so access to variables should be synchronized.
 func (b *pickfirstBalancer) ExitIdle() {
-	// TODO: Synchronize this.
+	completion := make(chan struct{})
+	b.serializer.ScheduleOr(func(ctx context.Context) {
+		b.exitIdle(completion)
+	}, func() {
+		close(completion)
+	})
+	<-completion
+}
+
+func (b *pickfirstBalancer) exitIdle(completion chan struct{}) {
 	b.requestConnection()
+	close(completion)
 }
 
 // deDupAddresses ensures that each address belongs to only one endpoint.
 func deDupAddresses(endpoints []resolver.Endpoint) []resolver.Endpoint {
-	seenAddrs := map[string]bool{}
+	seenAddrs := resolver.NewAddressMap()
 	newEndpoints := []resolver.Endpoint{}
 
 	for _, ep := range endpoints {
 		addrs := []resolver.Address{}
 		for _, addr := range ep.Addresses {
-			if _, ok := seenAddrs[addrKey(&addr)]; ok {
+			if _, ok := seenAddrs.Get(addr); ok {
 				continue
 			}
 			addrs = append(addrs, addr)
@@ -302,15 +365,16 @@ func deDupAddresses(endpoints []resolver.Endpoint) []resolver.Endpoint {
 // shutdownRemaining shuts down remaining subConns. Called when a subConn
 // becomes ready, which means that all other subConn must be shutdown.
 func (b *pickfirstBalancer) shutdownRemaining(selected *scData) {
-	for _, sd := range b.subConns {
+	for _, v := range b.subConns.Values() {
+		sd := v.(*scData)
 		if sd.subConn != selected.subConn {
 			sd.subConn.Shutdown()
 		}
 	}
-	for k := range b.subConns {
-		delete(b.subConns, k)
+	for _, k := range b.subConns.Keys() {
+		b.subConns.Delete(k)
 	}
-	b.subConns[addrKey(selected.addr)] = selected
+	b.subConns.Set(*selected.addr, selected)
 }
 
 // requestConnection requests a connection to the next applicable address'
@@ -328,7 +392,7 @@ func (b *pickfirstBalancer) requestConnection() {
 		// return early above.
 		return
 	}
-	sd, ok := b.subConns[addrKey(curAddr)]
+	sd, ok := b.subConns.Get(*curAddr)
 	if !ok {
 		sd, err = newScData(b, *curAddr)
 		if err != nil {
@@ -337,12 +401,13 @@ func (b *pickfirstBalancer) requestConnection() {
 			b.addressIndex.increment()
 			b.requestConnection()
 		}
-		b.subConns[addrKey(curAddr)] = sd
+		b.subConns.Set(*curAddr, sd)
 	}
 
-	switch sd.state {
+	scd := sd.(*scData)
+	switch scd.state {
 	case connectivity.Idle:
-		sd.subConn.Connect()
+		scd.subConn.Connect()
 	case connectivity.TransientFailure:
 		if !b.addressIndex.increment() {
 			b.endFirstPass()
@@ -354,16 +419,12 @@ func (b *pickfirstBalancer) requestConnection() {
 	}
 }
 
-func addrKey(addr *resolver.Address) string {
-	return fmt.Sprintf("%s-%s", addr.Addr, addr.Attributes)
-}
-
 func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubConnState) {
 	// Previously relevant subconns can still callback with state updates.
 	// To prevent pickers from returning these obsolete subconns, this logic
 	// is included to check if the current list of active subconns includes this
 	// subconn.
-	if activeSd, found := b.subConns[addrKey(sd.addr)]; !found || activeSd != sd {
+	if activeSd, found := b.subConns.Get(*sd.addr); !found || activeSd != sd {
 		return
 	}
 	if state.ConnectivityState == connectivity.Shutdown {
@@ -416,7 +477,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 				b.logger.Errorf("Current index is invalid during first pass: %v", err)
 				return
 			}
-			if activeSd, found := b.subConns[addrKey(curAddr)]; !found || activeSd != sd {
+			if activeSd, found := b.subConns.Get(*curAddr); !found || activeSd != sd {
 				return
 			}
 			if b.addressIndex.increment() {
@@ -436,7 +497,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 		// We request re-resolution when we've seen the same number of TFs as
 		// subconns. It could be that a subconn has seen multiple TFs due to
 		// differences in back-off durations, but this is a decent approximation.
-		if b.numTf >= len(b.subConns) {
+		if b.numTf >= b.subConns.Len() {
 			b.numTf = 0
 			b.cc.ResolveNow(resolver.ResolveNowOptions{})
 		}
@@ -456,7 +517,8 @@ func (b *pickfirstBalancer) endFirstPass() {
 	// Re-request resolution.
 	b.cc.ResolveNow(resolver.ResolveNowOptions{})
 	// Start re-connecting all the subconns that are already in IDLE.
-	for _, sd := range b.subConns {
+	for _, v := range b.subConns.Values() {
+		sd := v.(*scData)
 		if sd.state == connectivity.Idle {
 			sd.subConn.Connect()
 		}

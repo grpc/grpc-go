@@ -51,7 +51,7 @@ const (
 
 var (
 	testBalancerBuilderPickFirstLeaf = newStateRecordingBalancerBuilder(stateRecordingBalancerWithLeafPickFirstName, pickfirstleaf.Name)
-	pickFirstLeafServiceConfig       = fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirst_leaf.Name)
+	pickFirstLeafServiceConfig       = fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)
 )
 
 func init() {
