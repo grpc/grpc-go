@@ -180,3 +180,19 @@ func (r *TestMetricsRecorder) TagConn(ctx context.Context, _ *stats.ConnTagInfo)
 }
 
 func (r *TestMetricsRecorder) HandleConn(context.Context, stats.ConnStats) {}
+
+// NoopMetricsRecorder is a noop MetricsRecorder to be used in tests to prevent
+// nil panics.
+type NoopMetricsRecorder struct{}
+
+func (r *NoopMetricsRecorder) RecordInt64Count(_ *estats.Int64CountHandle, _ int64, _ ...string) {}
+
+func (r *NoopMetricsRecorder) RecordFloat64Count(_ *estats.Float64CountHandle, _ float64, _ ...string) {
+}
+
+func (r *NoopMetricsRecorder) RecordInt64Histo(_ *estats.Int64HistoHandle, _ int64, _ ...string) {}
+
+func (r *NoopMetricsRecorder) RecordFloat64Histo(_ *estats.Float64HistoHandle, _ float64, _ ...string) {
+}
+
+func (r *NoopMetricsRecorder) RecordInt64Gauge(_ *estats.Int64GaugeHandle, _ int64, _ ...string) {}
