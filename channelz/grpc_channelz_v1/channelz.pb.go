@@ -2636,7 +2636,7 @@ type GetSocketRequest struct {
 	// socket_id is the identifier of the specific socket to get.
 	SocketId int64 `protobuf:"varint,1,opt,name=socket_id,json=socketId,proto3" json:"socket_id,omitempty"`
 	// If true, the response will contain only high level information
-	// that is inexpensive to obtain. Fields thay may be omitted are
+	// that is inexpensive to obtain. Fields that may be omitted are
 	// documented.
 	Summary bool `protobuf:"varint,2,opt,name=summary,proto3" json:"summary,omitempty"`
 }
