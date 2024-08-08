@@ -163,8 +163,7 @@ func (l *lru) getLeastRecentlyUsed() cacheKey {
 //
 // It is not safe for concurrent access.
 type dataCache struct {
-	maxSize int64 // Maximum allowed size.
-
+	maxSize     int64 // Maximum allowed size.
 	currentSize int64 // Current size.
 	keys        *lru  // Cache keys maintained in lru order.
 	entries     map[cacheKey]*cacheEntry

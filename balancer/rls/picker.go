@@ -86,7 +86,13 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	reqKeys := p.kbm.RLSKey(md, p.origEndpoint, info.FullMethodName)
 
 	p.lb.cacheMu.Lock()
-	defer p.lb.cacheMu.Unlock()
+	var pr balancer.PickResult
+	var err error
+	metricsCallback := func() {}
+	defer func() {
+		p.lb.cacheMu.Unlock()
+		metricsCallback()
+	}()
 
 	// Lookup data cache and pending request map using request path and keys.
 	cacheKey := cacheKey{path: info.FullMethodName, keys: reqKeys.Str}
@@ -99,7 +105,8 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	case dcEntry == nil && pendingEntry == nil:
 		throttled := p.sendRouteLookupRequestLocked(cacheKey, &backoffState{bs: defaultBackoffStrategy}, reqKeys.Map, rlspb.RouteLookupRequest_REASON_MISS, "")
 		if throttled {
-			return p.useDefaultPickIfPossible(info, errRLSThrottled)
+			pr, metricsCallback, err = p.useDefaultPickIfPossible(info, errRLSThrottled)
+			return pr, err
 		}
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 
@@ -114,8 +121,8 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 				p.sendRouteLookupRequestLocked(cacheKey, dcEntry.backoffState, reqKeys.Map, rlspb.RouteLookupRequest_REASON_STALE, dcEntry.headerData)
 			}
 			// Delegate to child policies.
-			res, err := p.delegateToChildPoliciesLocked(dcEntry, info)
-			return res, err
+			pr, metricsCallback, err = p.delegateToChildPoliciesLocked(dcEntry, info)
+			return pr, err
 		}
 
 		// We get here only if the data cache entry has expired. If entry is in
@@ -127,21 +134,23 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			// message received from the control plane is still fine, as it could be
 			// useful for debugging purposes.
 			st := dcEntry.status
-			return p.useDefaultPickIfPossible(info, status.Error(codes.Unavailable, fmt.Sprintf("most recent error from RLS server: %v", st.Error())))
+			pr, metricsCallback, err = p.useDefaultPickIfPossible(info, status.Error(codes.Unavailable, fmt.Sprintf("most recent error from RLS server: %v", st.Error())))
+			return pr, err
 		}
 
 		// We get here only if the entry has expired and is not in backoff.
 		throttled := p.sendRouteLookupRequestLocked(cacheKey, dcEntry.backoffState, reqKeys.Map, rlspb.RouteLookupRequest_REASON_MISS, "")
 		if throttled {
-			return p.useDefaultPickIfPossible(info, errRLSThrottled)
+			pr, metricsCallback, err = p.useDefaultPickIfPossible(info, errRLSThrottled)
+			return pr, err
 		}
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 
 	// Data cache hit. Pending request exists.
 	default:
 		if dcEntry.expiryTime.After(now) {
-			res, err := p.delegateToChildPoliciesLocked(dcEntry, info)
-			return res, err
+			pr, metricsCallback, err = p.delegateToChildPoliciesLocked(dcEntry, info)
+			return pr, err
 		}
 		// Data cache entry has expired and pending request exists. Queue pick.
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
@@ -151,8 +160,9 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 // delegateToChildPoliciesLocked is a helper function which iterates through the
 // list of child policy wrappers in a cache entry and attempts to find a child
 // policy to which this RPC can be routed to. If all child policies are in
-// TRANSIENT_FAILURE, we delegate to the last child policy arbitrarily.
-func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info balancer.PickInfo) (balancer.PickResult, error) {
+// TRANSIENT_FAILURE, we delegate to the last child policy arbitrarily. Returns
+// a function to be invoked to record metrics.
+func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info balancer.PickInfo) (balancer.PickResult, func(), error) {
 	const rlsDataHeaderName = "x-google-rls-data"
 	for i, cpw := range dcEntry.childPolicyWrappers {
 		state := (*balancer.State)(atomic.LoadPointer(&cpw.state))
@@ -165,29 +175,31 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 			// X-Google-RLS-Data header.
 			res, err := state.Picker.Pick(info)
 			if err != nil {
-				targetPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget, cpw.target, "fail")
-				return res, err
+				return res, func() {
+					targetPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget, cpw.target, "fail")
+				}, err
 			}
-			targetPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget, cpw.target, "complete")
 
 			if res.Metadata == nil {
 				res.Metadata = metadata.Pairs(rlsDataHeaderName, dcEntry.headerData)
 			} else {
 				res.Metadata.Append(rlsDataHeaderName, dcEntry.headerData)
 			}
-			return res, nil
+			return res, func() {
+				targetPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget, cpw.target, "complete")
+			}, nil
 		}
 	}
 
-	failedPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget)
 	// In the unlikely event that we have a cache entry with no targets, we end up
 	// queueing the RPC.
-	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+	return balancer.PickResult{}, func() {}, balancer.ErrNoSubConnAvailable
 }
 
 // useDefaultPickIfPossible is a helper method which delegates to the default
-// target if one is configured, or fails the pick with the given error.
-func (p *rlsPicker) useDefaultPickIfPossible(info balancer.PickInfo, errOnNoDefault error) (balancer.PickResult, error) {
+// target if one is configured, or fails the pick with the given error. Returns
+// a function to be invoked to record metrics.
+func (p *rlsPicker) useDefaultPickIfPossible(info balancer.PickInfo, errOnNoDefault error) (balancer.PickResult, func(), error) {
 	if p.defaultPolicy != nil {
 		state := (*balancer.State)(atomic.LoadPointer(&p.defaultPolicy.state))
 		res, err := state.Picker.Pick(info)
@@ -195,12 +207,14 @@ func (p *rlsPicker) useDefaultPickIfPossible(info balancer.PickInfo, errOnNoDefa
 		if err != nil {
 			pr = "fail"
 		}
-		defaultTargetPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget, p.defaultPolicy.target, pr)
-		return res, err
+		return res, func() {
+			defaultTargetPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget, p.defaultPolicy.target, pr)
+		}, err
 	}
 
-	failedPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget)
-	return balancer.PickResult{}, errOnNoDefault
+	return balancer.PickResult{}, func() {
+		failedPicksMetric.Record(p.lb.bopts.MetricsRecorder, 1, p.lb.bopts.Target.String(), p.rlsServerTarget)
+	}, errOnNoDefault
 }
 
 // sendRouteLookupRequestLocked adds an entry to the pending request map and
@@ -232,9 +246,8 @@ func (p *rlsPicker) handleRouteLookupResponse(cacheKey cacheKey, targets []strin
 
 	p.lb.cacheMu.Lock()
 	defer func() {
-		grpcTarget := p.lb.bopts.Target.String()
-		cacheSizeMetric.Record(p.lb.bopts.MetricsRecorder, p.lb.dataCache.currentSize, grpcTarget, p.rlsServerTarget, p.lb.uuid)
-		cacheEntriesMetric.Record(p.lb.bopts.MetricsRecorder, int64(len(p.lb.dataCache.entries)), grpcTarget, p.rlsServerTarget, p.lb.uuid)
+		// Pending request map entry is unconditionally deleted since the request is
+		// no longer pending.
 		p.logger.Infof("Removing pending request entry for key %+v", cacheKey)
 		delete(p.lb.pendingMap, cacheKey)
 		p.lb.sendNewPicker()
