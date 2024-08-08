@@ -47,7 +47,6 @@ const revokedServerWithCrlPort int = 8884
 const insecurePort int = 8883
 
 func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
-	fmt.Printf("%v Received: %v\n", s.name, req.GetMessage())
 	return &pb.EchoResponse{Message: req.Message}, nil
 }
 
@@ -58,20 +57,12 @@ func tlsServers(credentialsDirectory string) {
 	go func() {
 		createAndRunTLSServer(credentialsDirectory, true, revokedServerWithCrlPort)
 	}()
-
-	fmt.Printf(`Running servers with the following configuration:
-    a good certificate and a crl active on  8885
-    a revoked certificate and a crl active on 8884
-`)
 }
 
-func insecureServer(credentialsDirectory string) {
+func insecureServer() {
 	go func() {
 		createAndRunInsecureServer(insecurePort)
 	}()
-	fmt.Printf(`Running server with the following configuration:
-    insecure credentials on 8883
-`)
 }
 
 func createAndRunInsecureServer(port int) {
@@ -190,7 +181,7 @@ func main() {
 		os.Exit(1)
 	}
 	tlsServers(*credentialsDirectory)
-	insecureServer(*credentialsDirectory)
+	insecureServer()
 	fmt.Printf("Ctrl-C or kill the process to stop\n")
 	for {
 		time.Sleep(1 * time.Second)

@@ -117,7 +117,6 @@ func tlsWithCrlsToGoodServer(credsDirectory string) {
 	crlProvider := makeCrlProvider(credsDirectory)
 	defer crlProvider.Close()
 
-	fmt.Println("Client running against good server.")
 	runClientWithProviders(rootProvider, identityProvider, crlProvider, goodServerPort, false)
 }
 
@@ -129,14 +128,11 @@ func tlsWithCrlsToRevokedServer(credsDirectory string) {
 	crlProvider := makeCrlProvider(credsDirectory)
 	defer crlProvider.Close()
 
-	fmt.Println("Client running against revoked server.")
 	runClientWithProviders(rootProvider, identityProvider, crlProvider, revokedServerPort, true)
 }
 
 func tlsWithCrls(credsDirectory string) {
-	fmt.Println("---------- Running TLS with CRLs to Good Server ----------")
 	tlsWithCrlsToGoodServer(credsDirectory)
-	fmt.Println("---------- Running TLS with CRLs to Revoked Server ----------")
 	tlsWithCrlsToRevokedServer(credsDirectory)
 }
 
@@ -170,7 +166,6 @@ func customVerificaitonFail(info *advancedtls.HandshakeVerificationInfo) (*advan
 }
 
 func customVerification(credsDirectory string) {
-	fmt.Println("---------- Running TLS with Custom Verification ----------")
 	runClientWithCustomVerification(credsDirectory, goodServerPort)
 
 }
@@ -233,7 +228,6 @@ func runClientWithCustomVerification(credsDirectory string, port string) {
 
 // -- credentials.NewTLS example --
 func credentialsNewTLSExample(credsDirectory string) {
-	fmt.Println("---------- Running client using NewTLS to create Credentials ----------")
 	cert, err := tls.LoadX509KeyPair(filepath.Join(credsDirectory, "client_cert.pem"), filepath.Join(credsDirectory, "client_key.pem"))
 	if err != nil {
 		os.Exit(1)
@@ -261,8 +255,7 @@ func credentialsNewTLSExample(credsDirectory string) {
 }
 
 // -- Insecure --
-func insecureCredentialsExample(credsDirectory string) {
-	fmt.Println("---------- Running client using Insecure Credentials ----------")
+func insecureCredentialsExample() {
 	creds := insecure.NewCredentials()
 	port := insecurePort
 	fullServerAddr := serverAddr + ":" + port
@@ -289,22 +282,10 @@ func runWithCredentials(creds credentials.TransportCredentials, fullServerAddr s
 	resp, err := client.UnaryEcho(context, req)
 	defer cancel()
 
-	if shouldSucceed {
-		if err != nil {
-			fmt.Printf("Error during client.UnaryEcho %v\n", err)
-		} else {
-			fmt.Printf("Response: %v\n", resp.Message)
-			if resp.Message != message {
-				fmt.Println("Didn't get correct response")
-			}
-		}
-	} else {
-		// This should fail
-		if err == nil {
-			fmt.Printf("Should have failed but didn't, got response: %v\n", resp)
-		} else {
-			fmt.Printf("Handshake failed expectedly with error: %v\n", err)
-		}
+	if shouldSucceed && err != nil {
+		fmt.Printf("Error during client.UnaryEcho %v\n", err)
+	} else if !shouldSucceed && err == nil {
+		fmt.Printf("Should have failed but didn't, got response: %v\n", resp)
 	}
 
 }
@@ -319,5 +300,5 @@ func main() {
 	tlsWithCrls(*credsDirectory)
 	customVerification(*credsDirectory)
 	credentialsNewTLSExample(*credsDirectory)
-	insecureCredentialsExample(*credsDirectory)
+	insecureCredentialsExample()
 }
