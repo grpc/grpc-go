@@ -33,19 +33,16 @@ type clusterWatcher struct {
 }
 
 func (cw *clusterWatcher) OnUpdate(u *xdsresource.ClusterResourceData, onDone xdsresource.DoneNotifier) {
-	// Ensure that the onDone callback is always called.
 	handleUpdate := func(context.Context) { cw.parent.onClusterUpdate(cw.name, u.Resource); onDone.OnDone() }
 	cw.parent.serializer.ScheduleOr(handleUpdate, onDone.OnDone)
 }
 
 func (cw *clusterWatcher) OnError(err error, onDone xdsresource.DoneNotifier) {
-	// Ensure that the onDone callback is always called.
 	handleError := func(context.Context) { cw.parent.onClusterError(cw.name, err); onDone.OnDone() }
 	cw.parent.serializer.ScheduleOr(handleError, onDone.OnDone)
 }
 
 func (cw *clusterWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	// Ensure that the onDone callback is always called.
 	handleNotFound := func(context.Context) { cw.parent.onClusterResourceNotFound(cw.name); onDone.OnDone() }
 	cw.parent.serializer.ScheduleOr(handleNotFound, onDone.OnDone)
 }

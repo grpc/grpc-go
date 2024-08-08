@@ -37,19 +37,16 @@ func newListenerWatcher(resourceName string, parent *xdsResolver) *listenerWatch
 }
 
 func (l *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.DoneNotifier) {
-	// Ensure that the onDone callback is always called.
 	handleUpdate := func(context.Context) { l.parent.onListenerResourceUpdate(update.Resource); onDone.OnDone() }
 	l.parent.serializer.ScheduleOr(handleUpdate, onDone.OnDone)
 }
 
 func (l *listenerWatcher) OnError(err error, onDone xdsresource.DoneNotifier) {
-	// Ensure that the onDone callback is always called.
 	handleError := func(context.Context) { l.parent.onListenerResourceError(err); onDone.OnDone() }
 	l.parent.serializer.ScheduleOr(handleError, onDone.OnDone)
 }
 
 func (l *listenerWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	// Ensure that the onDone callback is always called.
 	handleNotFound := func(context.Context) { l.parent.onListenerResourceNotFound(); onDone.OnDone() }
 	l.parent.serializer.ScheduleOr(handleNotFound, onDone.OnDone)
 }
