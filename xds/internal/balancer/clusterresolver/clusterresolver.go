@@ -77,10 +77,11 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 	}
 
 	b := &clusterResolverBalancer{
-		bOpts:                opts,
-		updateCh:             buffer.NewUnbounded(),
-		closed:               grpcsync.NewEvent(),
-		done:                 grpcsync.NewEvent(),
+		bOpts:    opts,
+		updateCh: buffer.NewUnbounded(),
+		closed:   grpcsync.NewEvent(),
+		done:     grpcsync.NewEvent(),
+
 		priorityBuilder:      priorityBuilder,
 		priorityConfigParser: priorityConfigParser,
 	}
@@ -311,6 +312,8 @@ func (b *clusterResolverBalancer) run() {
 			case *ccUpdate:
 				b.handleClientConnUpdate(update)
 				if update.done != nil {
+					// Close the channel to convey to the consumers of updateCh
+					// that child policies config are updated inline.
 					close(update.done)
 				}
 			case exitIdle:
