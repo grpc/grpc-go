@@ -91,6 +91,10 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	p.lb.cacheMu.Lock()
 	var pr balancer.PickResult
 	var err error
+
+	// Record metrics without the cache mutex held, to prevent lock contention
+	// between concurrent RPC's and their Pick calls. Metrics Recording can
+	// potentially be expensive.
 	metricsCallback := func() {}
 	defer func() {
 		p.lb.cacheMu.Unlock()
@@ -160,6 +164,21 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}
 }
 
+// errToPickResult is a helper function which converts the error value returned
+// by Pick() to a string that represents the pick result.
+func errToPickResult(err error) string {
+	if err == nil {
+		return "complete"
+	}
+	if errors.Is(err, balancer.ErrNoSubConnAvailable) {
+		return "queue"
+	}
+	if _, ok := status.FromError(err); ok {
+		return "drop"
+	}
+	return "fail"
+}
+
 // delegateToChildPoliciesLocked is a helper function which iterates through the
 // list of child policy wrappers in a cache entry and attempts to find a child
 // policy to which this RPC can be routed to. If all child policies are in
@@ -178,13 +197,15 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 			// X-Google-RLS-Data header.
 			res, err := state.Picker.Pick(info)
 			if err != nil {
-				pr := "fail"
-				if _, ok := status.FromError(err); ok {
-					pr = "drop"
-				}
-				return res, func() {
+				pr := errToPickResult(err)
+				rf := func() {
 					targetPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, cpw.target, pr)
-				}, err
+				}
+				if pr == "queue" {
+					// Don't record metrics for queued Picks.
+					rf = func() {}
+				}
+				return res, rf, err
 			}
 
 			if res.Metadata == nil {
@@ -210,16 +231,15 @@ func (p *rlsPicker) useDefaultPickIfPossible(info balancer.PickInfo, errOnNoDefa
 	if p.defaultPolicy != nil {
 		state := (*balancer.State)(atomic.LoadPointer(&p.defaultPolicy.state))
 		res, err := state.Picker.Pick(info)
-		pr := "complete"
-		if err != nil {
-			pr = "fail"
-			if _, ok := status.FromError(err); ok {
-				pr = "drop"
-			}
-		}
-		return res, func() {
+		pr := errToPickResult(err)
+		rf := func() {
 			defaultTargetPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, p.defaultPolicy.target, pr)
-		}, err
+		}
+		if pr == "queue" {
+			// Don't record metrics for queued Picks.
+			rf = func() {}
+		}
+		return res, rf, err
 	}
 
 	return balancer.PickResult{}, func() {
