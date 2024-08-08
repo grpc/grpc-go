@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
@@ -42,7 +43,7 @@ import (
 
 const stateRecordingBalancerName = "state_recording_balancer"
 
-var testBalancerBuilder = newStateRecordingBalancerBuilder(stateRecordingBalancerName, "pick_first")
+var testBalancerBuilder = newStateRecordingBalancerBuilder()
 
 func init() {
 	balancer.Register(testBalancerBuilder)
@@ -143,11 +144,11 @@ client enters TRANSIENT FAILURE.`,
 		},
 	} {
 		t.Log(test.desc)
-		testStateTransitionSingleAddress(t, test.want, test.server, testBalancerBuilder)
+		testStateTransitionSingleAddress(t, test.want, test.server)
 	}
 }
 
-func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, server func(net.Listener) net.Conn, bb *stateRecordingBalancerBuilder) {
+func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, server func(net.Listener) net.Conn) {
 	pl := testutils.NewPipeListener()
 	defer pl.Close()
 
@@ -162,7 +163,7 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 
 	client, err := grpc.Dial("",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, bb.Name())),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
 		grpc.WithDialer(pl.Dialer()),
 		grpc.WithConnectParams(grpc.ConnectParams{
 			Backoff:           backoff.Config{},
@@ -177,7 +178,7 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 	defer cancel()
 	go testutils.StayConnected(ctx, client)
 
-	stateNotifications := bb.nextStateNotifier()
+	stateNotifications := testBalancerBuilder.nextStateNotifier()
 	for i := 0; i < len(want); i++ {
 		select {
 		case <-time.After(defaultTestTimeout):
@@ -252,6 +253,15 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 		connectivity.Idle,
 		connectivity.Connecting,
 	}
+	if envconfig.NewPickFirstEnabled {
+		want = []connectivity.State{
+			connectivity.Connecting,
+			connectivity.Ready,
+			connectivity.Idle,
+			connectivity.Shutdown, // Unselected subconn will shutdown.
+			connectivity.Connecting,
+		}
+	}
 	for i := 0; i < len(want); i++ {
 		select {
 		case <-time.After(defaultTestTimeout):
@@ -323,6 +333,13 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 	client, err := grpc.Dial("whatever:///this-gets-overwritten",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
+		grpc.WithConnectParams(grpc.ConnectParams{
+			// Set a really long back-off delay to ensure the first subConn does
+			// not enter ready before the second subConn connects.
+			Backoff: backoff.Config{
+				BaseDelay: 1 * time.Hour,
+			},
+		}),
 		grpc.WithResolvers(rb))
 	if err != nil {
 		t.Fatal(err)
@@ -333,6 +350,16 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 	want := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,
+	}
+	if envconfig.NewPickFirstEnabled {
+		want = []connectivity.State{
+			// The first subconn fails.
+			connectivity.Connecting,
+			connectivity.TransientFailure,
+			// The second subconn connects.
+			connectivity.Connecting,
+			connectivity.Ready,
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -426,6 +453,16 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 		connectivity.Idle,
 		connectivity.Connecting,
 	}
+	if envconfig.NewPickFirstEnabled {
+		want = []connectivity.State{
+			connectivity.Connecting,
+			connectivity.Ready,
+			connectivity.Shutdown, // The second subConn is closed once the first one connects.
+			connectivity.Idle,
+			connectivity.Shutdown, // The subConn will be closed and pickfirst will run on the latest address list.
+			connectivity.Connecting,
+		}
+	}
 	for i := 0; i < len(want); i++ {
 		select {
 		case <-ctx.Done():
@@ -454,28 +491,17 @@ func (b *stateRecordingBalancer) Close() {
 	b.Balancer.Close()
 }
 
-func (b *stateRecordingBalancer) ExitIdle() {
-	if ib, ok := b.Balancer.(balancer.ExitIdler); ok {
-		ib.ExitIdle()
-	}
-}
-
 type stateRecordingBalancerBuilder struct {
-	mu           sync.Mutex
-	notifier     chan connectivity.State // The notifier used in the last Balancer.
-	balancerName string
-	childName    string
+	mu       sync.Mutex
+	notifier chan connectivity.State // The notifier used in the last Balancer.
 }
 
-func newStateRecordingBalancerBuilder(balancerName, childName string) *stateRecordingBalancerBuilder {
-	return &stateRecordingBalancerBuilder{
-		balancerName: balancerName,
-		childName:    childName,
-	}
+func newStateRecordingBalancerBuilder() *stateRecordingBalancerBuilder {
+	return &stateRecordingBalancerBuilder{}
 }
 
 func (b *stateRecordingBalancerBuilder) Name() string {
-	return b.balancerName
+	return stateRecordingBalancerName
 }
 
 func (b *stateRecordingBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
@@ -484,7 +510,7 @@ func (b *stateRecordingBalancerBuilder) Build(cc balancer.ClientConn, opts balan
 	b.notifier = stateNotifications
 	b.mu.Unlock()
 	return &stateRecordingBalancer{
-		Balancer: balancer.Get(b.childName).Build(&stateRecordingCCWrapper{cc, stateNotifications}, opts),
+		Balancer: balancer.Get("pick_first").Build(&stateRecordingCCWrapper{cc, stateNotifications}, opts),
 	}
 }
 

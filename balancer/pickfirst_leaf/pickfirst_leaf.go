@@ -25,11 +25,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/envconfig"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
@@ -44,20 +46,29 @@ const (
 )
 
 func init() {
-	balancer.Register(pickfirstBuilder{})
+	balancer.Register(pickfirstBuilder{name: PickFirstLeafName})
+	if envconfig.NewPickFirstEnabled {
+		// Register as the default pickfirst balancer also.
+		internal.ShuffleAddressListForTesting = func(n int, swap func(i, j int)) { rand.Shuffle(n, swap) }
+		balancer.Register(pickfirstBuilder{name: PickFirstName})
+	}
 }
 
 var logger = grpclog.Component("pick-first-leaf-lb")
 
 const (
-	// Name is the name of the pick_first balancer.
-	Name      = "pick_first_leaf"
-	logPrefix = "[pick-first-leaf-lb %p] "
+	// PickFirstLeafName is the name of the pick_first balancer.
+	PickFirstLeafName = "pick_first_leaf"
+	PickFirstName     = "pick_first"
+	logPrefix         = "[pick-first-leaf-lb %p] "
 )
 
-type pickfirstBuilder struct{}
+type pickfirstBuilder struct {
+	name string
+}
 
 func (pickfirstBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
+    fmt.Printf("Building a pf balancer\n")
 	ctx, cancel := context.WithCancel(context.Background())
 	b := &pickfirstBalancer{
 		cc:               cc,
@@ -70,8 +81,8 @@ func (pickfirstBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) b
 	return b
 }
 
-func (pickfirstBuilder) Name() string {
-	return Name
+func (b pickfirstBuilder) Name() string {
+	return b.name
 }
 
 func (pickfirstBuilder) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
@@ -210,8 +221,10 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 
 	newEndpoints := state.ResolverState.Endpoints
 	if len(newEndpoints) == 0 {
-		errCh <- fmt.Errorf("addresses are no longer supported, resolvers should produce endpoints instead")
-		return
+		// Convert addresses to endpoints.
+		for _, addr := range state.ResolverState.Addresses {
+			newEndpoints = append(newEndpoints, resolver.Endpoint{Addresses: []resolver.Address{addr}})
+		}
 	}
 
 	// Since we have a new set of addresses, we are again at first pass
@@ -300,17 +313,20 @@ func (b *pickfirstBalancer) UpdateSubConnState(subConn balancer.SubConn, state b
 }
 
 func (b *pickfirstBalancer) Close() {
+	fmt.Printf("Arjan: Close called\n")
 	completion := make(chan struct{})
 	b.serializer.ScheduleOr(func(ctx context.Context) {
 		b.close(completion)
 	}, func() {
-		close(completion)
+		b.close(completion)
 	})
 	<-completion
-	b.serializerCancel()
+	<-b.serializer.Done()
+	fmt.Printf("Arjan: serializer Close called\n")
 }
 
 func (b *pickfirstBalancer) close(completion chan struct{}) {
+	b.serializerCancel()
 	for _, sd := range b.subConns.Values() {
 		sd.(*scData).subConn.Shutdown()
 	}
@@ -397,9 +413,14 @@ func (b *pickfirstBalancer) requestConnection() {
 		sd, err = newScData(b, *curAddr)
 		if err != nil {
 			// This should never happen.
-			b.logger.Errorf("Failed to create a subConn for address %v: %v", curAddr.String(), err)
-			b.addressIndex.increment()
-			b.requestConnection()
+			b.logger.Warningf("Failed to create a subConn for address %v: %v", curAddr.String(), err)
+			b.state = connectivity.TransientFailure
+			b.cc.UpdateState(balancer.State{
+				ConnectivityState: connectivity.TransientFailure,
+				Picker:            &picker{err: fmt.Errorf("error creating connection: %v", err)},
+			})
+			b.addressIndex.reset()
+			return
 		}
 		b.subConns.Set(*curAddr, sd)
 	}

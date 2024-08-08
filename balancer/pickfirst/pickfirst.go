@@ -26,9 +26,11 @@ import (
 	"math/rand"
 
 	"google.golang.org/grpc/balancer"
+	_ "google.golang.org/grpc/balancer/pickfirst_leaf"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/envconfig"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
@@ -36,6 +38,9 @@ import (
 )
 
 func init() {
+	if envconfig.NewPickFirstEnabled {
+		return
+	}
 	balancer.Register(pickfirstBuilder{})
 	internal.ShuffleAddressListForTesting = func(n int, swap func(i, j int)) { rand.Shuffle(n, swap) }
 }
