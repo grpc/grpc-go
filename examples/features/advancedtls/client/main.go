@@ -40,9 +40,9 @@ import (
 
 const credRefreshInterval = 1 * time.Minute
 const serverAddr = "localhost"
-const goodServerPort string = "8885"
-const revokedServerPort string = "8884"
-const insecurePort string = "8883"
+const goodServerPort string = "50051"
+const revokedServerPort string = "50052"
+const insecurePort string = "50053"
 const message string = "Hello"
 
 // -- TLS --
