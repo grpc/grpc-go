@@ -24,10 +24,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
-	"slices"
-	"sync"
-	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -60,15 +56,25 @@ const (
 type pickfirstBuilder struct{}
 
 func (pickfirstBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
-	b := &pickfirstBalancer{cc: cc}
-	b.subConnList = newSubConnList(b)
-	b.subConnList.close()
+	b := &pickfirstBalancer{
+		cc:           cc,
+		addressIndex: newIndex(nil),
+		subConns:     map[string]*scData{},
+	}
 	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(logPrefix, b))
 	return b
 }
 
 func (pickfirstBuilder) Name() string {
 	return Name
+}
+
+func (pickfirstBuilder) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+	var cfg pfConfig
+	if err := json.Unmarshal(js, &cfg); err != nil {
+		return nil, fmt.Errorf("pickfirst: unable to unmarshal LB policy config: %s, error: %v", string(js), err)
+	}
+	return cfg, nil
 }
 
 type pfConfig struct {
@@ -80,361 +86,78 @@ type pfConfig struct {
 	ShuffleAddressList bool `json:"shuffleAddressList"`
 }
 
-// subConnList stores provides functions to connect to a list of addresses using
-// the pick-first algorithm.
-type subConnList struct {
-	subConns []*scWrapper
-	b        *pickfirstBalancer
-	// The most recent failure during the initial connection attempt over the
-	// entire sunConns list.
-	lastFailure error
-	// The number of transient failures seen while connecting.
-	transientFailuresCount int
-	// State updates are serialized by the clientConn, but the picker may attempt
-	// to read the state in parallel, so we use an atomic.
-	state atomic.Uint32
-	// connectingCh is used to signal the transition of the subConnList out of
-	// the connecting state.
-	connectingCh chan struct{}
-}
-
-// scWrapper keeps track of the current state of the subConn.
-type scWrapper struct {
+// scData keeps track of the current state of the subConn.
+type scData struct {
 	subConn balancer.SubConn
 	state   connectivity.State
-	addr    resolver.Address
-	// failureChan is used to communicate the failure when connection fails.
-	failureChan         chan error
-	hasFailedPreviously bool
+	addr    *resolver.Address
 }
 
-func newScWrapper(b *pickfirstBalancer, addr resolver.Address, listener func(state balancer.SubConnState)) (*scWrapper, error) {
-	scw := &scWrapper{
-		state:       connectivity.Idle,
-		addr:        addr,
-		failureChan: make(chan error, 1),
+func newScData(b *pickfirstBalancer, addr resolver.Address) (*scData, error) {
+	sd := &scData{
+		state: connectivity.Idle,
+		addr:  &addr,
 	}
 	sc, err := b.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{
-		StateListener: func(scs balancer.SubConnState) {
+		StateListener: func(state balancer.SubConnState) {
 			// Store the state and delegate.
-			scw.state = scs.ConnectivityState
-			listener(scs)
+			sd.state = state.ConnectivityState
+			b.updateSubConnState(sd, state)
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
-	scw.subConn = sc
-	return scw, nil
-}
-
-// newSubConnList creates a new list. A new list should be created only when we
-// want to start connecting to minimize creation of subConns.
-func newSubConnList(b *pickfirstBalancer) *subConnList {
-	sl := &subConnList{
-		b:            b,
-		connectingCh: make(chan struct{}),
-	}
-	sl.state.Store(subConnListConnecting)
-
-	for _, addr := range b.latestAddressList {
-		var scw *scWrapper
-		scw, err := newScWrapper(b, addr, func(state balancer.SubConnState) {
-			sl.stateListener(scw, state)
-		})
-		if err != nil {
-			if b.logger.V(2) {
-				b.logger.Infof("Ignoring failure, could not create a subConn for address %q due to error: %v", addr, err)
-			}
-			continue
-		}
-		if b.logger.V(2) {
-			b.logger.Infof("Created a subConn for address %q", addr)
-		}
-		sl.subConns = append(sl.subConns, scw)
-	}
-	return sl
-}
-
-func (sl *subConnList) stateListener(scw *scWrapper, state balancer.SubConnState) {
-	if sl.b.logger.V(2) {
-		sl.b.logger.Infof("Received SubConn state update: %p, %+v", scw, state)
-	}
-	if scw == sl.b.selectedSubConn {
-		// As we set the selected subConn only once it's ready, the only
-		// possible transitions are to IDLE and SHUTDOWN.
-		switch state.ConnectivityState {
-		case connectivity.Shutdown:
-		case connectivity.Idle:
-			sl.b.goIdle()
-		default:
-			sl.b.logger.Warningf("Ignoring unexpected transition of selected subConn %p to %v", &scw.subConn, state.ConnectivityState)
-		}
-		return
-	}
-	// If this list is already closed, ignore the update.
-	if sl.state.Load() != subConnListConnecting {
-		if sl.b.logger.V(2) {
-			sl.b.logger.Infof("Ignoring state update for non active subConn %p to %v", &scw.subConn, state.ConnectivityState)
-		}
-		return
-	}
-	if !scw.hasFailedPreviously {
-		// This subConn is attempting to connect for the first time, we're in the
-		// initial pass.
-		switch state.ConnectivityState {
-		case connectivity.TransientFailure:
-			if sl.b.logger.V(2) {
-				sl.b.logger.Infof("SubConn %p failed to connect due to error: %v", &scw.subConn, state.ConnectionError)
-			}
-			scw.hasFailedPreviously = true
-			sl.lastFailure = state.ConnectionError
-			sl.transientFailuresCount++
-			// If we've seen one failure from each subConn, the first pass ends
-			// and we can set the channel state to transient failure.
-			if sl.transientFailuresCount == len(sl.subConns) {
-				sl.b.logger.Infof("Received one failure from each subConn in list %p, waiting for any subConn to connect.", sl)
-				// Phase 1 is over, start phase 2.
-				sl.b.state = connectivity.TransientFailure
-				sl.b.cc.UpdateState(balancer.State{
-					ConnectivityState: connectivity.TransientFailure,
-					Picker:            &picker{err: sl.lastFailure},
-				})
-
-				// In phase 2, we attempt to connect to all the subConns in parallel.
-				// Connect to addresses that have already completed the back-off.
-				for idx := 0; idx < len(sl.subConns); idx++ {
-					sc := sl.subConns[idx]
-					if sc.state == connectivity.TransientFailure {
-						continue
-					}
-					sl.subConns[idx].subConn.Connect()
-				}
-			}
-			scw.failureChan <- state.ConnectionError
-		case connectivity.Ready:
-			// Cleanup and update the picker to use the subconn.
-			sl.selectSubConn(scw)
-		case connectivity.Connecting:
-			// Move the channel to connecting if this is the first subConn to
-			// start connecting.
-			if sl.b.state == connectivity.Idle {
-				sl.b.cc.UpdateState(balancer.State{
-					ConnectivityState: connectivity.Connecting,
-					Picker:            &picker{err: balancer.ErrNoSubConnAvailable},
-				})
-			}
-		default:
-			if sl.b.logger.V(2) {
-				sl.b.logger.Infof("Ignoring update for the subConn %p to state %v", &scw.subConn, state.ConnectivityState)
-			}
-		}
-		return
-	}
-
-	if sl.transientFailuresCount < len(sl.subConns) {
-		// This subConn has failed once, but other subConns are still connecting.
-		// Wait for other subConns to complete.
-		return
-	}
-
-	// We have completed the first phase.
-	switch state.ConnectivityState {
-	case connectivity.TransientFailure:
-		if sl.b.logger.V(2) {
-			sl.b.logger.Infof("SubConn %p failed to connect due to error: %v", &scw.subConn, state.ConnectionError)
-		}
-	case connectivity.Ready:
-		sl.selectSubConn(scw)
-	case connectivity.Idle:
-		// Trigger re-connection.
-		scw.subConn.Connect()
-	default:
-		if sl.b.logger.V(2) {
-			sl.b.logger.Infof("Ignoring update for the subConn %p to state %v", &scw.subConn, state.ConnectivityState)
-		}
-	}
-}
-
-func (sl *subConnList) selectSubConn(scw *scWrapper) {
-	if !sl.state.CompareAndSwap(subConnListConnecting, subConnListConnected) {
-		return
-	}
-	close(sl.connectingCh)
-	sl.b.logger.Infof("Selected subConn %p", &scw.subConn)
-	sl.b.unsetSelectedSubConn()
-	sl.b.selectedSubConn = scw
-	sl.b.state = connectivity.Ready
-	for _, sc := range sl.subConns {
-		if sc == sl.b.selectedSubConn {
-			continue
-		}
-		sc.subConn.Shutdown()
-	}
-	sl.b.cc.UpdateState(balancer.State{
-		ConnectivityState: connectivity.Ready,
-		Picker:            &picker{result: balancer.PickResult{SubConn: scw.subConn}},
-	})
-}
-
-func (sl *subConnList) close() {
-	prevState := sl.state.Swap(subConnListClosed)
-	if prevState == subConnListClosed {
-		return
-	}
-	if prevState == subConnListConnecting {
-		close(sl.connectingCh)
-	}
-	// Close all the subConns except the selected one. The selected subConn
-	// will be closed by the balancer.
-	for _, sc := range sl.subConns {
-		if sc == sl.b.selectedSubConn {
-			continue
-		}
-		sc.subConn.Shutdown()
-	}
-}
-
-// connect attempts to connect to subConns till it finds a healthy one.
-func (sl *subConnList) connect() {
-	// Attempt to connect to each subConn once.
-	for _, scw := range sl.subConns {
-		scw.subConn.Connect()
-		select {
-		case <-sl.connectingCh:
-			return
-		case err := <-scw.failureChan:
-			if err == nil {
-				// Connected successfully.
-				return
-			}
-		}
-	}
-}
-
-func (pickfirstBuilder) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	var cfg pfConfig
-	if err := json.Unmarshal(js, &cfg); err != nil {
-		return nil, fmt.Errorf("pickfirst: unable to unmarshal LB policy config: %s, error: %v", string(js), err)
-	}
-	return cfg, nil
+	sd.subConn = sc
+	return sd, nil
 }
 
 type pickfirstBalancer struct {
-	logger *internalgrpclog.PrefixLogger
-	state  connectivity.State
-	cc     balancer.ClientConn
-	// Pointer to the subConn list currently connecting. Always close the
-	// current list before replacing it to ensure resources are freed.
-	subConnList *subConnList
-	// A mutex to guard the swapping of subConnLists and it can be triggered
-	// concurrently by the idlePicker and resolver updates.
-	subConnListMu     sync.Mutex
-	selectedSubConn   *scWrapper
-	latestAddressList []resolver.Address
-	shuttingDown      bool
+	logger       *internalgrpclog.PrefixLogger
+	state        connectivity.State
+	cc           balancer.ClientConn
+	subConns     map[string]*scData
+	addressIndex index
+	firstPass    bool
+	firstErr     error
+	numTf        int
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
 	if b.logger.V(2) {
 		b.logger.Infof("Received error from the name resolver: %v", err)
 	}
-	if len(b.latestAddressList) == 0 {
-		// The picker will not change since the balancer does not currently
-		// report an error.
-		b.state = connectivity.TransientFailure
-	}
-
-	if b.state != connectivity.TransientFailure {
-		// The picker will not change since the balancer does not currently
-		// report an error.
+	if b.state == connectivity.Shutdown {
 		return
 	}
+	// The picker will not change since the balancer does not currently
+	// report an error.
+	if b.state != connectivity.TransientFailure {
+		return
+	}
+
+	for _, sd := range b.subConns {
+		sd.subConn.Shutdown()
+	}
+	for k := range b.subConns {
+		delete(b.subConns, k)
+	}
+	b.addressIndex.updateEndpointList(nil)
+	b.state = connectivity.TransientFailure
 	b.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.TransientFailure,
 		Picker:            &picker{err: fmt.Errorf("name resolver error: %v", err)},
 	})
 }
 
-func (b *pickfirstBalancer) unsetSelectedSubConn() {
-	if b.selectedSubConn != nil {
-		b.selectedSubConn.subConn.Shutdown()
-		b.selectedSubConn = nil
-	}
-}
-
-func (b *pickfirstBalancer) goIdle() {
-	b.unsetSelectedSubConn()
-	b.subConnList.close()
-
-	nextState := connectivity.Idle
-	if b.state == connectivity.TransientFailure {
-		// We stay in TransientFailure until we are Ready. See A62.
-		nextState = connectivity.TransientFailure
-	} else {
-		b.state = connectivity.Idle
-	}
-	b.cc.UpdateState(balancer.State{
-		ConnectivityState: nextState,
-		Picker: &idlePicker{
-			exitIdle: b.ExitIdle,
-		},
-	})
-}
-
-// refreshSubConnListLocked replaces the current subConnList with a newly created
-// one. The caller is responsible to close the existing list and ensure its
-// closed synchronously during a ClientConn update or a subConn state update.
-func (b *pickfirstBalancer) refreshSubConnListLocked() error {
-	subConnList := newSubConnList(b)
-	if len(subConnList.subConns) == 0 {
-		subConnList.close()
-		b.state = connectivity.TransientFailure
-		b.cc.UpdateState(balancer.State{
-			ConnectivityState: connectivity.TransientFailure,
-			Picker:            &picker{err: fmt.Errorf("empty address list")},
-		})
-		b.unsetSelectedSubConn()
-		return balancer.ErrBadResolverState
-	}
-
-	// Reset the previous subConnList to release resources.
-	if b.logger.V(2) {
-		b.logger.Infof("Closing older subConnList")
-	}
-	b.subConnList = subConnList
-	go subConnList.connect()
-	// Don't read any fields on subConnList after we start connecting as it will
-	// cause races with subConn state updates being handled by the stateListener.
-	return nil
-}
-
-func (b *pickfirstBalancer) connectUsingLatestAddrs() error {
-	b.subConnList.close()
-	b.subConnListMu.Lock()
-	if err := b.refreshSubConnListLocked(); err != nil {
-		b.subConnListMu.Unlock()
-		return err
-	}
-	b.subConnListMu.Unlock()
-
-	if b.state != connectivity.TransientFailure {
-		// We stay in TransientFailure until we are Ready. See A62.
-		b.cc.UpdateState(balancer.State{
-			ConnectivityState: connectivity.Connecting,
-			Picker:            &picker{err: balancer.ErrNoSubConnAvailable},
-		})
-	}
-	return nil
-}
-
 func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
+	if b.state == connectivity.Shutdown {
+		return fmt.Errorf("balancer is already closed")
+	}
 	if len(state.ResolverState.Addresses) == 0 && len(state.ResolverState.Endpoints) == 0 {
 		// Cleanup state pertaining to the previous resolver state.
-		b.unsetSelectedSubConn()
-		b.subConnList.close()
-		b.latestAddressList = nil
 		// Treat an empty address list like an error by calling b.ResolverError.
+		b.state = connectivity.TransientFailure
 		b.ResolverError(errors.New("produced zero addresses"))
 		return balancer.ErrBadResolverState
 	}
@@ -449,50 +172,85 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		b.logger.Infof("Received new config %s, resolver state %s", pretty.ToJSON(cfg), pretty.ToJSON(state.ResolverState))
 	}
 
-	var addrs []resolver.Address
-	if endpoints := state.ResolverState.Endpoints; len(endpoints) != 0 {
-		// Perform the optional shuffling described in gRFC A62. The shuffling will
-		// change the order of endpoints but not touch the order of the addresses
-		// within each endpoint. - A61
-		if cfg.ShuffleAddressList {
-			endpoints = append([]resolver.Endpoint{}, endpoints...)
-			internal.ShuffleAddressListForTesting.(func(int, func(int, int)))(len(endpoints), func(i, j int) { endpoints[i], endpoints[j] = endpoints[j], endpoints[i] })
-		}
+	newEndpoints := state.ResolverState.Endpoints
+	if len(newEndpoints) == 0 {
+		return fmt.Errorf("addresses are no longer supported, resolvers should produce endpoints instead")
+	}
 
-		// "Flatten the list by concatenating the ordered list of addresses for each
-		// of the endpoints, in order." - A61
-		for _, endpoint := range endpoints {
-			// "In the flattened list, interleave addresses from the two address
-			// families, as per RFC-8304 section 4." - A61
-			// TODO: support the above language.
-			addrs = append(addrs, endpoint.Addresses...)
+	// Since we have a new set of addresses, we are again at first pass
+	b.firstPass = true
+	b.firstErr = nil
+
+	newEndpoints = deDupAddresses(newEndpoints)
+
+	// Perform the optional shuffling described in gRFC A62. The shuffling will
+	// change the order of endpoints but not touch the order of the addresses
+	// within each endpoint. - A61
+	if cfg.ShuffleAddressList {
+		newEndpoints = append([]resolver.Endpoint{}, newEndpoints...)
+		internal.ShuffleAddressListForTesting.(func(int, func(int, int)))(len(newEndpoints), func(i, j int) { newEndpoints[i], newEndpoints[j] = newEndpoints[j], newEndpoints[i] })
+	}
+
+	if b.state == connectivity.Ready {
+		// If the previous ready subconn exists in new address list,
+		// keep this connection and don't create new subconns.
+		prevAddr, err := b.addressIndex.currentAddress()
+		if err != nil {
+			// This error should never happen when the state is READY if the
+			// index is managed correctly.
+			return fmt.Errorf("address index is in an invalid state: %v", err)
+		}
+		b.addressIndex.updateEndpointList(newEndpoints)
+		if b.addressIndex.seekTo(prevAddr) {
+			return nil
+		} else {
+			b.addressIndex.reset()
 		}
 	} else {
-		// Endpoints not set, process addresses until we migrate resolver
-		// emissions fully to Endpoints. The top channel does wrap emitted
-		// addresses with endpoints, however some balancers such as weighted
-		// target do not forward the corresponding correct endpoints down/split
-		// endpoints properly. Once all balancers correctly forward endpoints
-		// down, can delete this else conditional.
-		addrs = state.ResolverState.Addresses
-		if cfg.ShuffleAddressList {
-			addrs = append([]resolver.Address{}, addrs...)
-			rand.Shuffle(len(addrs), func(i, j int) { addrs[i], addrs[j] = addrs[j], addrs[i] })
+		b.addressIndex.updateEndpointList(newEndpoints)
+	}
+	// Remove old subConns that were not in new address list.
+	oldAddrs := map[string]bool{}
+	for k, _ := range b.subConns {
+		oldAddrs[k] = true
+	}
+
+	// Flatten the new endpoint addresses.
+	newAddrs := map[string]bool{}
+	for _, endpoint := range newEndpoints {
+		for _, addr := range endpoint.Addresses {
+			newAddrs[addrKey(&addr)] = true
 		}
 	}
 
-	b.latestAddressList = addrs
-	// If the selected subConn's address is present in the list, don't attempt
-	// to re-connect.
-	if b.selectedSubConn != nil && slices.ContainsFunc(addrs, func(addr resolver.Address) bool {
-		return addr.Equal(b.selectedSubConn.addr)
-	}) {
-		if b.logger.V(2) {
-			b.logger.Infof("Not attempting to re-connect since selected address %q is present in new address list", b.selectedSubConn.addr.String())
+	// Shut them down and remove them.
+	for oldAddr, _ := range oldAddrs {
+		if _, ok := newAddrs[oldAddr]; ok {
+			continue
 		}
-		return nil
+		b.subConns[oldAddr].subConn.Shutdown()
+		delete(b.subConns, oldAddr)
 	}
-	return b.connectUsingLatestAddrs()
+
+	if len(oldAddrs) == 0 || b.state == connectivity.Ready || b.state == connectivity.Connecting {
+		// Start connection attempt at first address.
+		b.state = connectivity.Connecting
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: connectivity.Connecting,
+			Picker:            &picker{err: balancer.ErrNoSubConnAvailable},
+		})
+		b.requestConnection()
+	} else if b.state == connectivity.Idle {
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: connectivity.Idle,
+			Picker: &idlePicker{
+				exitIdle: b.ExitIdle,
+			},
+		})
+	} else if b.state == connectivity.TransientFailure {
+		b.requestConnection()
+	}
+	return nil
 }
 
 // UpdateSubConnState is unused as a StateListener is always registered when
@@ -502,27 +260,207 @@ func (b *pickfirstBalancer) UpdateSubConnState(subConn balancer.SubConn, state b
 }
 
 func (b *pickfirstBalancer) Close() {
-	b.shuttingDown = true
-	b.unsetSelectedSubConn()
-	b.subConnList.close()
+	for _, sd := range b.subConns {
+		sd.subConn.Shutdown()
+	}
+	for k := range b.subConns {
+		delete(b.subConns, k)
+	}
+	b.state = connectivity.Shutdown
 }
 
 // ExitIdle moves the balancer out of idle state. It can be called concurrently
 // by the idlePicker and clientConn so access to variables should be synchronized.
 func (b *pickfirstBalancer) ExitIdle() {
-	b.subConnListMu.Lock()
-	defer b.subConnListMu.Unlock()
-	if b.subConnList.state.Load() != subConnListClosed {
-		// Already exited idle, nothing to do.
+	// TODO: Synchronize this.
+	b.requestConnection()
+}
+
+// deDupAddresses ensures that each address belongs to only one endpoint.
+func deDupAddresses(endpoints []resolver.Endpoint) []resolver.Endpoint {
+	seenAddrs := map[string]bool{}
+	newEndpoints := []resolver.Endpoint{}
+
+	for _, ep := range endpoints {
+		addrs := []resolver.Address{}
+		for _, addr := range ep.Addresses {
+			if _, ok := seenAddrs[addrKey(&addr)]; ok {
+				continue
+			}
+			addrs = append(addrs, addr)
+		}
+		if len(addrs) == 0 {
+			continue
+		}
+		newEndpoints = append(newEndpoints, resolver.Endpoint{
+			Addresses:  addrs,
+			Attributes: ep.Attributes,
+		})
+	}
+	return newEndpoints
+}
+
+// shutdownRemaining shuts down remaining subConns. Called when a subConn
+// becomes ready, which means that all other subConn must be shutdown.
+func (b *pickfirstBalancer) shutdownRemaining(selected *scData) {
+	for _, sd := range b.subConns {
+		if sd.subConn != selected.subConn {
+			sd.subConn.Shutdown()
+		}
+	}
+	for k := range b.subConns {
+		delete(b.subConns, k)
+	}
+	b.subConns[addrKey(selected.addr)] = selected
+}
+
+// requestConnection requests a connection to the next applicable address'
+// subcon, creating one if necessary. Schedules a connection to next address in list as well.
+// If the current channel has already attempted a connection, we attempt a connection
+// to the next address/subconn in our list.  We assume that NewSubConn will never
+// return an error.
+func (b *pickfirstBalancer) requestConnection() {
+	if !b.addressIndex.isValid() || b.state == connectivity.Shutdown {
 		return
 	}
-	// The current subConnList is still closed, create a new subConnList and
-	// start connecting.
-	if err := b.refreshSubConnListLocked(); errors.Is(err, balancer.ErrBadResolverState) {
-		// If creation of the subConnList fails, request for re-resolution to
-		// get a new list of addresses.
-		b.cc.ResolveNow(resolver.ResolveNowOptions{})
+	curAddr, err := b.addressIndex.currentAddress()
+	if err != nil {
+		// This should not never happen because we already check for validity and
+		// return early above.
 		return
+	}
+	sd, ok := b.subConns[addrKey(curAddr)]
+	if !ok {
+		sd, err = newScData(b, *curAddr)
+		if err != nil {
+			// This should never happen.
+			b.logger.Errorf("Failed to create a subConn for address %v: %v", curAddr.String(), err)
+			b.addressIndex.increment()
+			b.requestConnection()
+		}
+		b.subConns[addrKey(curAddr)] = sd
+	}
+
+	switch sd.state {
+	case connectivity.Idle:
+		sd.subConn.Connect()
+	case connectivity.TransientFailure:
+		if !b.addressIndex.increment() {
+			b.endFirstPass()
+		}
+		b.requestConnection()
+	case connectivity.Ready:
+		// Should never happen.
+		b.logger.Warningf("Requesting a connection even though we have a READY subconn")
+	}
+}
+
+func addrKey(addr *resolver.Address) string {
+	return fmt.Sprintf("%s-%s", addr.Addr, addr.Attributes)
+}
+
+func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubConnState) {
+	// Previously relevant subconns can still callback with state updates.
+	// To prevent pickers from returning these obsolete subconns, this logic
+	// is included to check if the current list of active subconns includes this
+	// subconn.
+	if activeSd, found := b.subConns[addrKey(sd.addr)]; !found || activeSd != sd {
+		return
+	}
+	if state.ConnectivityState == connectivity.Shutdown {
+		return
+	}
+
+	if state.ConnectivityState == connectivity.Ready {
+		b.shutdownRemaining(sd)
+		b.addressIndex.seekTo(sd.addr)
+		b.state = connectivity.Ready
+		b.firstErr = nil
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: connectivity.Ready,
+			Picker:            &picker{result: balancer.PickResult{SubConn: sd.subConn}},
+		})
+		return
+	}
+
+	// If we are transitioning from READY to IDLE, shutdown and re-connect when
+	// prompted.
+	if state.ConnectivityState == connectivity.Idle && b.state == connectivity.Ready {
+		b.state = connectivity.Idle
+		b.addressIndex.reset()
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: connectivity.Idle,
+			Picker: &idlePicker{
+				exitIdle: b.ExitIdle,
+			},
+		})
+		return
+	}
+
+	if b.firstPass {
+		switch state.ConnectivityState {
+		case connectivity.Connecting:
+			if b.state == connectivity.Idle {
+				b.cc.UpdateState(balancer.State{
+					ConnectivityState: connectivity.Connecting,
+					Picker:            &picker{err: balancer.ErrNoSubConnAvailable},
+				})
+			}
+		case connectivity.TransientFailure:
+			if b.firstErr == nil {
+				b.firstErr = state.ConnectionError
+			}
+			curAddr, err := b.addressIndex.currentAddress()
+			if err != nil {
+				// This is not expected since we end the first pass when we
+				// reach the end of the list.
+				b.logger.Errorf("Current index is invalid during first pass: %v", err)
+				return
+			}
+			if activeSd, found := b.subConns[addrKey(curAddr)]; !found || activeSd != sd {
+				return
+			}
+			if b.addressIndex.increment() {
+				b.requestConnection()
+				return
+			}
+			// End of the first pass.
+			b.endFirstPass()
+		}
+		return
+	}
+
+	// We have finished the first pass, keep re-connecting failing subconns.
+	switch state.ConnectivityState {
+	case connectivity.TransientFailure:
+		b.numTf += 1
+		// We request re-resolution when we've seen the same number of TFs as
+		// subconns. It could be that a subconn has seen multiple TFs due to
+		// differences in back-off durations, but this is a decent approximation.
+		if b.numTf >= len(b.subConns) {
+			b.numTf = 0
+			b.cc.ResolveNow(resolver.ResolveNowOptions{})
+		}
+	case connectivity.Idle:
+		sd.subConn.Connect()
+	}
+}
+
+func (b *pickfirstBalancer) endFirstPass() {
+	b.firstPass = false
+	b.numTf = 0
+	b.state = connectivity.TransientFailure
+	b.cc.UpdateState(balancer.State{
+		ConnectivityState: connectivity.TransientFailure,
+		Picker:            &picker{err: b.firstErr},
+	})
+	// Re-request resolution.
+	b.cc.ResolveNow(resolver.ResolveNowOptions{})
+	// Start re-connecting all the subconns that are already in IDLE.
+	for _, sd := range b.subConns {
+		if sd.state == connectivity.Idle {
+			sd.subConn.Connect()
+		}
 	}
 }
 
@@ -544,4 +482,76 @@ type idlePicker struct {
 func (i *idlePicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	i.exitIdle()
 	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+}
+
+// index is an Index as in 'i', the pointer to an entry. Not a "search index."
+// All updates should be synchronized.
+type index struct {
+	endpointList []resolver.Endpoint
+	endpointIdx  int
+	addrIdx      int
+}
+
+// newIndex is the constructor for index.
+func newIndex(endpointList []resolver.Endpoint) index {
+	return index{
+		endpointList: endpointList,
+	}
+}
+
+func (i *index) isValid() bool {
+	return i.endpointIdx < len(i.endpointList)
+}
+
+// increment moves to the next index in the address list. If at the last address
+// in the address list, moves to the next endpoint in the endpoint list.
+// This method returns false if it went off the list, true otherwise.
+func (i *index) increment() bool {
+	if !i.isValid() {
+		return false
+	}
+	ep := i.endpointList[i.endpointIdx]
+	i.addrIdx += 1
+	if i.addrIdx >= len(ep.Addresses) {
+		i.endpointIdx += 1
+		i.addrIdx = 0
+		return i.endpointIdx < len(i.endpointList)
+	}
+	return false
+}
+
+func (i *index) currentAddress() (*resolver.Address, error) {
+	if !i.isValid() {
+		return nil, fmt.Errorf("index is off the end of the address list")
+	}
+	return &i.endpointList[i.endpointIdx].Addresses[i.addrIdx], nil
+}
+
+func (i *index) reset() {
+	i.endpointIdx = 0
+	i.addrIdx = 0
+}
+
+func (i *index) updateEndpointList(endpointList []resolver.Endpoint) {
+	i.endpointList = endpointList
+	i.reset()
+}
+
+// seekTo returns false if the needle was not found and the current index was left unchanged.
+func (idx *index) seekTo(needle *resolver.Address) bool {
+	for i, endpoint := range idx.endpointList {
+		for j, addr := range endpoint.Addresses {
+			if !addr.Attributes.Equal(needle.Attributes) || addr.Addr != needle.Addr {
+				continue
+			}
+			idx.endpointIdx = i
+			idx.addrIdx = j
+			return true
+		}
+	}
+	return false
+}
+
+func (i *index) size() int {
+	return len(i.endpointList)
 }
