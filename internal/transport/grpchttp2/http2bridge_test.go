@@ -60,47 +60,40 @@ func readUint16(b []byte) uint16 {
 	return uint16(b[0])<<8 | uint16(b[1])
 }
 
-type wantHeader struct {
-	wantSize      int
-	wantFrameType FrameType
-	wantFlag      Flag
-	wantStreamID  uint32
-}
-
 // checkWrittenHeader takes a byte buffer representing a written frame header and
 // compares its values to the passed values.
-func checkWrittenHeader(gotHdr []byte, wantHdr wantHeader) []error {
+func checkWrittenHeader(gotHdr []byte, wantHdr FrameHeader) []error {
 	var errors []error
-	if gotSize := readUint24(gotHdr[0:3]); gotSize != wantHdr.wantSize {
-		errors = append(errors, fmt.Errorf("Size: got %d, want %d", gotSize, wantHdr.wantSize))
+	if gotSize := readUint24(gotHdr[0:3]); gotSize != int(wantHdr.Size) {
+		errors = append(errors, fmt.Errorf("Size: got %d, want %d", gotSize, wantHdr.Size))
 	}
-	if gotType := FrameType(gotHdr[3]); gotType != wantHdr.wantFrameType {
-		errors = append(errors, fmt.Errorf("Type: got %#x, want %#x", gotType, wantHdr.wantFrameType))
+	if gotType := FrameType(gotHdr[3]); gotType != wantHdr.Type {
+		errors = append(errors, fmt.Errorf("Type: got %#x, want %#x", gotType, wantHdr.Type))
 	}
-	if gotFlag := Flag(gotHdr[4]); gotFlag != wantHdr.wantFlag {
-		errors = append(errors, fmt.Errorf("Flags: got %#x, want %#x", gotFlag, wantHdr.wantFlag))
+	if gotFlag := Flag(gotHdr[4]); gotFlag != wantHdr.Flags {
+		errors = append(errors, fmt.Errorf("Flags: got %#x, want %#x", gotFlag, wantHdr.Flags))
 	}
-	if gotSID := readUint32(gotHdr[5:9]); gotSID != wantHdr.wantStreamID {
-		errors = append(errors, fmt.Errorf("StreamID: got %d, want %d", gotSID, wantHdr.wantStreamID))
+	if gotSID := readUint32(gotHdr[5:9]); gotSID != wantHdr.StreamID {
+		errors = append(errors, fmt.Errorf("StreamID: got %d, want %d", gotSID, wantHdr.StreamID))
 	}
 	return errors
 }
 
 // checkReadHeader takes a FrameHeader struct and compares its values to the
 // passed values.
-func checkReadHeader(gotHdr *FrameHeader, wantHdr wantHeader) []error {
+func checkReadHeader(gotHdr *FrameHeader, wantHdr FrameHeader) []error {
 	var errors []error
-	if gotHdr.Size != uint32(wantHdr.wantSize) {
-		errors = append(errors, fmt.Errorf("Size: got %d, want %d", gotHdr.Size, wantHdr.wantSize))
+	if gotHdr.Size != uint32(wantHdr.Size) {
+		errors = append(errors, fmt.Errorf("Size: got %d, want %d", gotHdr.Size, wantHdr.Size))
 	}
-	if gotHdr.Type != wantHdr.wantFrameType {
-		errors = append(errors, fmt.Errorf("Type: got %#x, want %#x", gotHdr.Type, wantHdr.wantFrameType))
+	if gotHdr.Type != wantHdr.Type {
+		errors = append(errors, fmt.Errorf("Type: got %#x, want %#x", gotHdr.Type, wantHdr.Type))
 	}
-	if gotHdr.Flags != wantHdr.wantFlag {
-		errors = append(errors, fmt.Errorf("Flags: got %#x, want %#x", gotHdr.Flags, wantHdr.wantFlag))
+	if gotHdr.Flags != wantHdr.Flags {
+		errors = append(errors, fmt.Errorf("Flags: got %#x, want %#x", gotHdr.Flags, wantHdr.Flags))
 	}
-	if gotHdr.StreamID != wantHdr.wantStreamID {
-		errors = append(errors, fmt.Errorf("StreamID: got %d, want %d", gotHdr.StreamID, wantHdr.wantStreamID))
+	if gotHdr.StreamID != wantHdr.StreamID {
+		errors = append(errors, fmt.Errorf("StreamID: got %d, want %d", gotHdr.StreamID, wantHdr.StreamID))
 	}
 	return errors
 }
@@ -109,6 +102,7 @@ func checkReadHeader(gotHdr *FrameHeader, wantHdr wantHeader) []error {
 func (s) TestBridge_ReadFrame_Data(t *testing.T) {
 	c := &testConn{}
 	recvData := "test data"
+	// Writing a Data Frame to the reading buf with recvData as payload.
 	c.rbuf = append(c.rbuf, 0, 0, byte(len(recvData)), byte(FrameTypeData), byte(FlagDataEndStream))
 	c.rbuf = appendUint32(c.rbuf, 1)
 	c.rbuf = append(c.rbuf, []byte(recvData)...)
@@ -120,11 +114,11 @@ func (s) TestBridge_ReadFrame_Data(t *testing.T) {
 	}
 
 	h := fr.Header()
-	wantHdr := wantHeader{
-		wantSize:      len(recvData),
-		wantFrameType: FrameTypeData,
-		wantFlag:      FlagDataEndStream,
-		wantStreamID:  1,
+	wantHdr := FrameHeader{
+		Size:     uint32(len(recvData)),
+		Type:     FrameTypeData,
+		Flags:    FlagDataEndStream,
+		StreamID: 1,
 	}
 	if errs := checkReadHeader(h, wantHdr); len(errs) > 0 {
 		t.Errorf("ReadFrame():\n%s", errors.Join(errs...))
@@ -139,6 +133,8 @@ func (s) TestBridge_ReadFrame_Data(t *testing.T) {
 // Tests and verifies that the framer correctly reads a RSTStream Frame.
 func (s) TestBridge_ReadFrame_RSTStream(t *testing.T) {
 	c := &testConn{}
+	// Writing a RSTStream Frame to the reading buf with ErrCodeProtocol as
+	// payload.
 	c.rbuf = append(c.rbuf, 0, 0, 4, byte(FrameTypeRSTStream), 0)
 	c.rbuf = appendUint32(c.rbuf, 1)
 	c.rbuf = appendUint32(c.rbuf, uint32(ErrCodeProtocol))
@@ -150,11 +146,11 @@ func (s) TestBridge_ReadFrame_RSTStream(t *testing.T) {
 	}
 
 	h := fr.Header()
-	wantHdr := wantHeader{
-		wantSize:      4,
-		wantFrameType: FrameTypeRSTStream,
-		wantFlag:      0,
-		wantStreamID:  1,
+	wantHdr := FrameHeader{
+		Size:     4,
+		Type:     FrameTypeRSTStream,
+		Flags:    0,
+		StreamID: 1,
 	}
 	if errs := checkReadHeader(h, wantHdr); len(errs) > 0 {
 		t.Errorf("ReadFrame():\n%s", errors.Join(errs...))
@@ -169,6 +165,7 @@ func (s) TestBridge_ReadFrame_RSTStream(t *testing.T) {
 func (s) TestBridge_ReadFrame_Settings(t *testing.T) {
 	c := &testConn{}
 	s := Setting{ID: SettingsHeaderTableSize, Value: 200}
+	// Writing a Settings Frame to the reading buf with s as payload.
 	c.rbuf = append(c.rbuf, 0, 0, 6, byte(FrameTypeSettings), 0)
 	c.rbuf = appendUint32(c.rbuf, 0)
 	c.rbuf = append(c.rbuf, byte(s.ID>>8), byte(s.ID))
@@ -181,11 +178,11 @@ func (s) TestBridge_ReadFrame_Settings(t *testing.T) {
 	}
 
 	h := fr.Header()
-	wantHdr := wantHeader{
-		wantSize:      6,
-		wantFrameType: FrameTypeSettings,
-		wantFlag:      0,
-		wantStreamID:  0,
+	wantHdr := FrameHeader{
+		Size:     6,
+		Type:     FrameTypeSettings,
+		Flags:    0,
+		StreamID: 0,
 	}
 	if errs := checkReadHeader(h, wantHdr); len(errs) > 0 {
 		t.Errorf("ReadFrame():\n%s", errors.Join(errs...))
@@ -204,6 +201,7 @@ func (s) TestBridge_ReadFrame_Settings(t *testing.T) {
 func (s) TestBridge_ReadFrame_Ping(t *testing.T) {
 	c := &testConn{}
 	d := []byte{1, 2, 3, 4, 5, 6, 7, 8}
+	// Writing a Ping Frame to the reading buf with d as payload.
 	c.rbuf = append(c.rbuf, 0, 0, 8, byte(FrameTypePing), 0)
 	c.rbuf = appendUint32(c.rbuf, 0)
 	c.rbuf = append(c.rbuf, d...)
@@ -215,11 +213,11 @@ func (s) TestBridge_ReadFrame_Ping(t *testing.T) {
 	}
 
 	h := fr.Header()
-	wantHdr := wantHeader{
-		wantSize:      8,
-		wantFrameType: FrameTypePing,
-		wantFlag:      0,
-		wantStreamID:  0,
+	wantHdr := FrameHeader{
+		Size:     8,
+		Type:     FrameTypePing,
+		Flags:    0,
+		StreamID: 0,
 	}
 	if errs := checkReadHeader(h, wantHdr); len(errs) > 0 {
 		t.Errorf("ReadFrame():\n%s", errors.Join(errs...))
@@ -240,6 +238,8 @@ func (s) TestBridge_ReadFrame_GoAway(t *testing.T) {
 	d := "debug_data"
 	// The length of data + 4 byte code + 4 byte streamID
 	ln := len(d) + 8
+	// Writing a GoAway Frame to the reading buf with d, ErrCodeFlowControl and
+	// streamID 2 as payload.
 	c.rbuf = append(c.rbuf, 0, 0, byte(ln), byte(FrameTypeGoAway), 0)
 	c.rbuf = appendUint32(c.rbuf, 0)
 	c.rbuf = appendUint32(c.rbuf, 2)
@@ -253,11 +253,11 @@ func (s) TestBridge_ReadFrame_GoAway(t *testing.T) {
 	}
 
 	h := fr.Header()
-	wantHdr := wantHeader{
-		wantSize:      ln,
-		wantFrameType: FrameTypeGoAway,
-		wantFlag:      0,
-		wantStreamID:  0,
+	wantHdr := FrameHeader{
+		Size:     uint32(ln),
+		Type:     FrameTypeGoAway,
+		Flags:    0,
+		StreamID: 0,
 	}
 	if errs := checkReadHeader(h, wantHdr); len(errs) > 0 {
 		t.Errorf("ReadFrame():\n%s", errors.Join(errs...))
@@ -279,6 +279,7 @@ func (s) TestBridge_ReadFrame_GoAway(t *testing.T) {
 // Tests and verifies that the framer correctly reads a WindowUpdate Frame.
 func (s) TestBridge_ReadFrame_WindowUpdate(t *testing.T) {
 	c := &testConn{}
+	// Writing a WindowUpdate Frame to the reading buf with 100 as payload.
 	c.rbuf = append(c.rbuf, 0, 0, 4, byte(FrameTypeWindowUpdate), 0)
 	c.rbuf = appendUint32(c.rbuf, 1)
 	c.rbuf = appendUint32(c.rbuf, 100)
@@ -290,11 +291,11 @@ func (s) TestBridge_ReadFrame_WindowUpdate(t *testing.T) {
 	}
 
 	h := fr.Header()
-	wantHdr := wantHeader{
-		wantSize:      4,
-		wantFrameType: FrameTypeWindowUpdate,
-		wantFlag:      0,
-		wantStreamID:  1,
+	wantHdr := FrameHeader{
+		Size:     4,
+		Type:     FrameTypeWindowUpdate,
+		Flags:    0,
+		StreamID: 1,
 	}
 	checkReadHeader(h, wantHdr)
 
@@ -320,12 +321,13 @@ func (s) TestBridge_ReadFrame_MetaHeaders(t *testing.T) {
 	half1 := c.wbuf[0 : len(c.wbuf)/2]
 	half2 := c.wbuf[len(c.wbuf)/2:]
 
+	// Writing a Headers Frame with half of the encoded headers
 	c.rbuf = append(c.rbuf, 0, 0, byte(len(half1)), byte(FrameTypeHeaders), 0)
 	c.rbuf = appendUint32(c.rbuf, 1)
-	// Copy half of the data written by the encoder into the reading buf
 	c.rbuf = append(c.rbuf, half1...)
 
-	// Add Continuation Frame to test merging
+	// Writing a Continuation Frame with the other half of the encoded headers
+	// to test merging.
 	c.rbuf = append(c.rbuf, 0, 0, byte(len(half2)), byte(FrameTypeContinuation), byte(FlagContinuationEndHeaders))
 	c.rbuf = appendUint32(c.rbuf, 1)
 	// Copy data written by the encoder into the reading buf
@@ -361,11 +363,11 @@ func (s) TestBridge_WriteData(t *testing.T) {
 	testBuf := [][]byte{[]byte("test"), []byte(" data")}
 	f := NewFramerBridge(c, c, 0, nil)
 	f.WriteData(1, false, testBuf...)
-	wantHdr := wantHeader{
-		wantSize:      len(wantData),
-		wantFrameType: FrameTypeData,
-		wantFlag:      0,
-		wantStreamID:  1,
+	wantHdr := FrameHeader{
+		Size:     uint32(len(wantData)),
+		Type:     FrameTypeData,
+		Flags:    0,
+		StreamID: 1,
 	}
 	if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
 		t.Errorf("WriteData():\n%s", errors.Join(errs...))
@@ -379,18 +381,19 @@ func (s) TestBridge_WriteData(t *testing.T) {
 // correctly written.
 func (s) TestBridge_WriteHeaders(t *testing.T) {
 	tests := []struct {
+		name       string
 		endStream  bool
 		endHeaders bool
 	}{
-		{endStream: false, endHeaders: false},
-		{endStream: true, endHeaders: false},
-		{endStream: false, endHeaders: true},
-		{endStream: true, endHeaders: true},
+		{name: "no flags", endStream: false, endHeaders: false},
+		{name: "endheaders", endStream: false, endHeaders: true},
+		{name: "endstream and endheaders", endStream: true, endHeaders: true},
+		{name: "endstream", endStream: true, endHeaders: false},
 	}
 	wantData := "test data"
 
 	for _, test := range tests {
-		t.Run(fmt.Sprintf("endStream=%v, endHeaders=%v", test.endStream, test.endHeaders), func(t *testing.T) {
+		t.Run(fmt.Sprintf(test.name, test.endStream, test.endHeaders), func(t *testing.T) {
 			c := &testConn{}
 			f := NewFramerBridge(c, c, 0, nil)
 
@@ -403,11 +406,11 @@ func (s) TestBridge_WriteHeaders(t *testing.T) {
 			if test.endHeaders {
 				wantFlags |= FlagHeadersEndHeaders
 			}
-			wantHdr := wantHeader{
-				wantSize:      len(wantData),
-				wantFrameType: FrameTypeHeaders,
-				wantFlag:      wantFlags,
-				wantStreamID:  1,
+			wantHdr := FrameHeader{
+				Size:     uint32(len(wantData)),
+				Type:     FrameTypeHeaders,
+				Flags:    wantFlags,
+				StreamID: 1,
 			}
 			if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
 				t.Errorf("WriteHeaders():\n%s", errors.Join(errs...))
@@ -427,11 +430,11 @@ func (s) TestBridge_WriteRSTStream(t *testing.T) {
 	f := NewFramerBridge(c, c, 0, nil)
 	f.WriteRSTStream(1, ErrCodeProtocol)
 
-	wantHdr := wantHeader{
-		wantSize:      4,
-		wantFrameType: FrameTypeRSTStream,
-		wantFlag:      0,
-		wantStreamID:  1,
+	wantHdr := FrameHeader{
+		Size:     4,
+		Type:     FrameTypeRSTStream,
+		Flags:    0,
+		StreamID: 1,
 	}
 	if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
 		t.Errorf("WriteRSTStream():\n%s", errors.Join(errs...))
@@ -447,11 +450,11 @@ func (s) TestBridge_WriteSettings(t *testing.T) {
 	f := NewFramerBridge(c, c, 0, nil)
 	f.WriteSettings(Setting{ID: SettingsHeaderTableSize, Value: 200})
 
-	wantHeader := wantHeader{
-		wantSize:      6,
-		wantFrameType: FrameTypeSettings,
-		wantFlag:      0,
-		wantStreamID:  0,
+	wantHeader := FrameHeader{
+		Size:     6,
+		Type:     FrameTypeSettings,
+		Flags:    0,
+		StreamID: 0,
 	}
 	if errs := checkWrittenHeader(c.wbuf[0:9], wantHeader); len(errs) > 0 {
 		t.Errorf("WriteSettings():\n%s", errors.Join(errs...))
@@ -472,11 +475,11 @@ func (s) TestBridge_WriteSettingsAck(t *testing.T) {
 	f := NewFramerBridge(c, c, 0, nil)
 	f.WriteSettingsAck()
 
-	wantHdr := wantHeader{
-		wantSize:      0,
-		wantFrameType: FrameTypeSettings,
-		wantFlag:      FlagSettingsAck,
-		wantStreamID:  0,
+	wantHdr := FrameHeader{
+		Size:     0,
+		Type:     FrameTypeSettings,
+		Flags:    FlagSettingsAck,
+		StreamID: 0,
 	}
 	if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
 		t.Errorf("WriteSettingsAck():\n%s", errors.Join(errs...))
@@ -499,11 +502,11 @@ func (s) TestBridge_WritePing(t *testing.T) {
 			if ack {
 				wantFlags |= FlagPingAck
 			}
-			wantHdr := wantHeader{
-				wantSize:      8,
-				wantFrameType: FrameTypePing,
-				wantFlag:      wantFlags,
-				wantStreamID:  0,
+			wantHdr := FrameHeader{
+				Size:     8,
+				Type:     FrameTypePing,
+				Flags:    wantFlags,
+				StreamID: 0,
 			}
 			if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
 				t.Errorf("WritePing():\n%s", errors.Join(errs...))
@@ -525,11 +528,11 @@ func (s) TestBridge_WriteGoAway(t *testing.T) {
 	f := NewFramerBridge(c, c, 0, nil)
 	f.WriteGoAway(2, ErrCodeFlowControl, []byte("debug_data"))
 
-	wantHdr := wantHeader{
-		wantSize:      18,
-		wantFrameType: FrameTypeGoAway,
-		wantFlag:      0,
-		wantStreamID:  0,
+	wantHdr := FrameHeader{
+		Size:     18,
+		Type:     FrameTypeGoAway,
+		Flags:    0,
+		StreamID: 0,
 	}
 	if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
 		t.Errorf("WriteGoAway():\n%s", errors.Join(errs...))
@@ -552,11 +555,11 @@ func (s) TestBridge_WriteWindowUpdate(t *testing.T) {
 	f := NewFramerBridge(c, c, 0, nil)
 	f.WriteWindowUpdate(1, 2)
 
-	wantHdr := wantHeader{
-		wantSize:      4,
-		wantFrameType: FrameTypeWindowUpdate,
-		wantFlag:      0,
-		wantStreamID:  1,
+	wantHdr := FrameHeader{
+		Size:     4,
+		Type:     FrameTypeWindowUpdate,
+		Flags:    0,
+		StreamID: 1,
 	}
 	if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
 		t.Errorf("WriteWindowUpdate():\n%s", errors.Join(errs...))
@@ -570,22 +573,28 @@ func (s) TestBridge_WriteWindowUpdate(t *testing.T) {
 // flag permutations.
 func (s) TestBridge_WriteContinuation(t *testing.T) {
 	wantData := "hdr block"
-	endHeaders := []bool{true, false}
+	endHeaders := []struct {
+		name       string
+		endHeaders bool
+	}{
+		{name: "no flags", endHeaders: false},
+		{name: "endheaders", endHeaders: true},
+	}
 
 	for _, test := range endHeaders {
-		t.Run(fmt.Sprintf("endHeaders=%v", test), func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			c := &testConn{}
 			f := NewFramerBridge(c, c, 0, nil)
-			f.WriteContinuation(1, test, []byte("hdr block"))
+			f.WriteContinuation(1, test.endHeaders, []byte("hdr block"))
 			var wantFlags Flag
-			if test {
+			if test.endHeaders {
 				wantFlags |= FlagContinuationEndHeaders
 			}
-			wantHdr := wantHeader{
-				wantSize:      len(wantData),
-				wantFrameType: FrameTypeContinuation,
-				wantFlag:      wantFlags,
-				wantStreamID:  1,
+			wantHdr := FrameHeader{
+				Size:     uint32(len(wantData)),
+				Type:     FrameTypeContinuation,
+				Flags:    wantFlags,
+				StreamID: 1,
 			}
 			if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
 				t.Errorf("WriteContinuation():\n%s", errors.Join(errs...))
