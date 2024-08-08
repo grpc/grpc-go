@@ -1061,7 +1061,7 @@ func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 		t.Fatal("timed out waiting for server2 to be contacted")
 	}
 
-	// Grab the addrConn for server 2 and call tryUpdateAddrs.
+    // Grab the addrConn and call tryUpdateAddrs.
 	var ac *addrConn
 	client.mu.Lock()
 	for clientAC := range client.conns {
