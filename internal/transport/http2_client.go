@@ -1009,7 +1009,6 @@ func (t *http2Client) Close(err error) {
 	}
 	t.mu.Unlock()
 
-	var st *status.Status
 	// Per HTTP/2 spec, a GOAWAY frame must be sent before closing the
 	// connection. See https://httpwg.org/specs/rfc7540.html#GOAWAY. It
 	// also waits for loopyWriter to be closed with a timer to avoid the
@@ -1019,24 +1018,24 @@ func (t *http2Client) Close(err error) {
 	timer := time.NewTimer(goAwayLoopyWriterTimeout)
 	defer timer.Stop()
 	select {
-	case <-t.writerDone:
-		// Append info about previous goaway's if there were any, since this
-		// may be important for understanding the root cause for this
-		// connection to be closed.
-		_, goAwayDebugMessage := t.GetGoAwayReason()
-		if len(goAwayDebugMessage) > 0 {
-			st = status.Newf(codes.Unavailable, "closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
-			err = st.Err()
-		} else {
-			st = status.New(codes.Unavailable, err.Error())
-		}
+	case <-t.writerDone: // success
 	case <-timer.C:
-		st = status.New(codes.Unavailable, err.Error())
 		t.logger.Infof("Failed to write a GOAWAY frame as part of connection close after %s. Giving up and closing the transport.", goAwayLoopyWriterTimeout)
 	}
 	t.cancel()
 	t.conn.Close()
 	channelz.RemoveEntry(t.channelz.ID)
+	// Append info about previous goaways if there were any, since this may be important
+	// for understanding the root cause for this connection to be closed.
+	_, goAwayDebugMessage := t.GetGoAwayReason()
+
+	var st *status.Status
+	if len(goAwayDebugMessage) > 0 {
+		st = status.Newf(codes.Unavailable, "closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
+		err = st.Err()
+	} else {
+		st = status.New(codes.Unavailable, err.Error())
+	}
 
 	// Notify all active streams.
 	for _, s := range streams {
