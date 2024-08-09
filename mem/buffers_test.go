@@ -33,10 +33,6 @@ const (
 	defaultTestShortTimeout = 100 * time.Millisecond
 )
 
-func init() {
-	mem.SetMagic(0)
-}
-
 type s struct {
 	grpctest.Tester
 }

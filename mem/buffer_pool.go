@@ -78,21 +78,6 @@ type tieredBufferPool struct {
 	fallbackPool simpleBufferPool
 }
 
-func (p *tieredBufferPool) Get(size int) []byte {
-	if size <= magic {
-		return make([]byte, size)
-	}
-	return p.getPool(size).Get(size)
-}
-
-func (p *tieredBufferPool) Put(buf *[]byte) {
-	c := cap(*buf)
-	if c <= magic {
-		return
-	}
-	p.getPool(cap(*buf)).Put(buf)
-}
-
 func (p *tieredBufferPool) getPool(size int) BufferPool {
 	poolIdx := sort.Search(len(p.sizedPools), func(i int) bool {
 		return p.sizedPools[i].defaultSize >= size
@@ -159,9 +144,7 @@ type simpleBufferPool struct {
 func (p *simpleBufferPool) Get(size int) []byte {
 	bs, ok := p.pool.Get().(*[]byte)
 	if ok && cap(*bs) >= size {
-		buf := (*bs)[:size]
-		clear(buf[:cap(buf)])
-		return buf
+		return (*bs)[:size]
 	}
 
 	// A buffer was pulled from the pool, but it is tool small. Put it back in

@@ -1149,10 +1149,11 @@ func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, 
 		channelz.Error(logger, s.channelz, "grpc: server failed to compress response: ", err)
 		return err
 	}
+	defer compData.Free()
 
-	hdr, data, payload, freePayload := msgHeader(data, compData, pf)
+	hdr, data, payload := msgHeader(data, compData, pf)
 	defer data.Free()
-	defer freePayload()
+	defer payload.Free()
 
 	dataLen := data.Len()
 	payloadLen := payload.Len()
@@ -1160,8 +1161,7 @@ func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, 
 	if payloadLen > s.opts.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", payloadLen, s.opts.maxSendMessageSize)
 	}
-	payload.Ref()
-	err = t.Write(stream, hdr, payload, opts)
+	err = t.Write(stream, hdr, payload.Ref(), opts)
 	if err == nil {
 		if len(s.opts.statsHandlers) != 0 {
 			for _, sh := range s.opts.statsHandlers {
@@ -1360,8 +1360,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 	}
 	df := func(v any) error {
 		defer d.Free()
-		d.Ref()
-		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
+		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d.Ref(), v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
 

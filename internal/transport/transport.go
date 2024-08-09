@@ -130,7 +130,6 @@ type recvBufferReader struct {
 	ctxDone     <-chan struct{} // cache of ctx.Done() (for performance).
 	recv        *recvBuffer
 	last        mem.Buffer // Stores the remaining data in the previous calls.
-	lastIdx     int
 	err         error
 }
 

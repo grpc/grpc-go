@@ -748,7 +748,7 @@ const (
 
 // msgHeader returns a 5-byte header for the message being transmitted and the
 // payload, which is compData if non-nil or data otherwise.
-func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, dataRef, payload mem.BufferSlice, freePayload func()) {
+func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, dataRef, payload mem.BufferSlice) {
 	hdr = make([]byte, headerLen)
 	hdr[0] = byte(pf)
 
@@ -756,16 +756,14 @@ func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, da
 	if pf == compressionMade {
 		length = uint32(compData.Len())
 		payload = compData
-		freePayload = compData.Free
 	} else {
 		length = uint32(data.Len())
 		payload = data
-		freePayload = data.Free
 	}
 
 	// Write length of payload into buf
 	binary.BigEndian.PutUint32(hdr[payloadLen:], length)
-	return hdr, data, payload, freePayload
+	return hdr, data, payload
 }
 
 func outPayload(client bool, msg any, dataLength, payloadLength int, t time.Time) *stats.OutPayload {

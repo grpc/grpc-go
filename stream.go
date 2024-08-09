@@ -903,13 +903,13 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, freePayload, err := prepareMsg(m, cs.codec, cs.cp, cs.comp, cs.cc.dopts.copts.BufferPool)
+	hdr, data, payload, err := prepareMsg(m, cs.codec, cs.cp, cs.comp, cs.cc.dopts.copts.BufferPool)
 	if err != nil {
 		return err
 	}
 
 	defer data.Free()
-	defer freePayload()
+	defer payload.Free()
 
 	dataLen := data.Len()
 	payloadLen := payload.Len()
@@ -918,9 +918,11 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payloadLen, *cs.callInfo.maxSendMessageSize)
 	}
 
+	// always take an extra ref in case data == payload (i.e. when the data isn't
+	// compressed). The original ref will always be freed by the deferred free above.
+	payloadRef := payload.Ref()
 	op := func(a *csAttempt) error {
-		payload.Ref()
-		return a.sendMsg(m, hdr, payload, dataLen, payloadLen)
+		return a.sendMsg(m, hdr, payloadRef.Ref(), dataLen, payloadLen)
 	}
 
 	// onSuccess is invoked when the op is captured for a subsequent retry. If the
@@ -929,11 +931,11 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	// immediately.
 	onSuccessCalled := false
 	err = cs.withRetry(op, func() {
-		cs.bufferForRetryLocked(len(hdr)+payloadLen, op, payload.Free)
+		cs.bufferForRetryLocked(len(hdr)+payloadLen, op, payloadRef.Free)
 		onSuccessCalled = true
 	})
 	if !onSuccessCalled {
-		payload.Free()
+		payloadRef.Free()
 	}
 	if len(cs.binlogs) != 0 && err == nil {
 		cm := &binarylog.ClientMessage{
@@ -1419,8 +1421,7 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payload.Len(), *as.callInfo.maxSendMessageSize)
 	}
 
-	payload.Ref()
-	if err := as.t.Write(as.s, hdr, payload, &transport.Options{Last: !as.desc.ClientStreams}); err != nil {
+	if err := as.t.Write(as.s, hdr, payload.Ref(), &transport.Options{Last: !as.desc.ClientStreams}); err != nil {
 		if !as.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
 			// because the generated code requires it.  finish is not called; RecvMsg()
@@ -1697,8 +1698,7 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	if payloadLen > ss.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payloadLen, ss.maxSendMessageSize)
 	}
-	payload.Ref()
-	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false}); err != nil {
+	if err := ss.t.Write(ss.s, hdr, payload.Ref(), &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
 	}
 
@@ -1807,23 +1807,21 @@ func MethodFromServerStream(stream ServerStream) (string, bool) {
 // prepareMsg returns the hdr, payload and data
 // using the compressors passed or using the
 // passed preparedmsg
-func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor, pool mem.BufferPool) (hdr []byte, data, payload mem.BufferSlice, freePayload func(), err error) {
+func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor, pool mem.BufferPool) (hdr []byte, data, payload mem.BufferSlice, err error) {
 	if preparedMsg, ok := m.(*PreparedMsg); ok {
-		preparedMsg.encodedData.Ref()
-		preparedMsg.payload.Ref()
-		return preparedMsg.hdr, preparedMsg.encodedData, preparedMsg.payload, preparedMsg.freePayload, nil
+		return preparedMsg.hdr, preparedMsg.encodedData.Ref(), preparedMsg.payload.Ref(), nil
 	}
 	// The input interface is not a prepared msg.
 	// Marshal and Compress the data at this point
 	data, err = encode(codec, m)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 	compData, pf, err := compress(data, cp, comp, pool)
 	if err != nil {
 		data.Free()
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
-	hdr, data, payload, freePayload = msgHeader(data, compData, pf)
-	return hdr, data, payload, freePayload, nil
+	hdr, data, payload = msgHeader(data, compData, pf)
+	return hdr, data, payload, nil
 }

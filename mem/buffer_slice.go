@@ -53,20 +53,6 @@ func (s BufferSlice) Len() int {
 	return length
 }
 
-// Ref invokes Buffer.Ref on each Buffer in the slice.
-func (s BufferSlice) Ref() {
-	for i := range s {
-		s[i].Ref()
-	}
-}
-
-// Free invokes Buffer.Free() on each Buffer in the slice.
-func (s BufferSlice) Free() {
-	for _, b := range s {
-		b.Free()
-	}
-}
-
 // CopyTo copies each of the underlying Buffer's data into the given buffer,
 // returning the number of bytes copied. Has the same semantics as the copy
 // builtin in that it will copy as many bytes as it can, stopping when either dst
@@ -97,8 +83,7 @@ func (s BufferSlice) Materialize() []byte {
 // do and simply returns said Buffer.
 func (s BufferSlice) MaterializeToBuffer(pool BufferPool) Buffer {
 	if len(s) == 1 {
-		s[0].Ref()
-		return s[0]
+		return s[0].Ref()
 	}
 	buf := pool.Get(s.Len())
 	s.CopyTo(buf)
@@ -108,9 +93,8 @@ func (s BufferSlice) MaterializeToBuffer(pool BufferPool) Buffer {
 // Reader returns a new Reader for the input slice after taking references to
 // each underlying buffer.
 func (s BufferSlice) Reader() *Reader {
-	s.Ref()
 	return &Reader{
-		data: s,
+		data: s.Ref(),
 		len:  s.Len(),
 	}
 }
