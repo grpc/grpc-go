@@ -253,15 +253,6 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 		connectivity.Idle,
 		connectivity.Connecting,
 	}
-	if envconfig.NewPickFirstEnabled {
-		want = []connectivity.State{
-			connectivity.Connecting,
-			connectivity.Ready,
-			connectivity.Idle,
-			connectivity.Shutdown, // Unselected subconn will shutdown.
-			connectivity.Connecting,
-		}
-	}
 	for i := 0; i < len(want); i++ {
 		select {
 		case <-time.After(defaultTestTimeout):
@@ -452,16 +443,6 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 		connectivity.Ready,
 		connectivity.Idle,
 		connectivity.Connecting,
-	}
-	if envconfig.NewPickFirstEnabled {
-		want = []connectivity.State{
-			connectivity.Connecting,
-			connectivity.Ready,
-			connectivity.Shutdown, // The second subConn is closed once the first one connects.
-			connectivity.Idle,
-			connectivity.Shutdown, // The subConn will be closed and pickfirst will run on the latest address list.
-			connectivity.Connecting,
-		}
 	}
 	for i := 0; i < len(want); i++ {
 		select {

@@ -850,6 +850,9 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 			cc := &testCCWrapper{ClientConn: bd.ClientConn}
 			bd.Data = balancer.Get(pickfirst.Name).Build(cc, bd.BuildOptions)
 		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			bal := bd.Data.(balancer.Balancer)
 			return bal.UpdateClientConnState(ccs)

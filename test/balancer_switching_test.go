@@ -472,6 +472,9 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 			pf := balancer.Get(pickfirst.Name)
 			bd.Data = pf.Build(bd.ClientConn, bd.BuildOptions)
 		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			bal := bd.Data.(balancer.Balancer)
 			close(ccUpdateCh)

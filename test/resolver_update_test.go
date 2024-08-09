@@ -162,6 +162,9 @@ func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
 			pf := balancer.Get(pickfirst.Name)
 			bd.Data = pf.Build(bd.ClientConn, bd.BuildOptions)
 		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			cfg := &wrappingBalancerConfig{}
 			if err := json.Unmarshal(lbCfg, cfg); err != nil {

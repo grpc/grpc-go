@@ -68,7 +68,6 @@ type pickfirstBuilder struct {
 }
 
 func (pickfirstBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
-    fmt.Printf("Building a pf balancer\n")
 	ctx, cancel := context.WithCancel(context.Background())
 	b := &pickfirstBalancer{
 		cc:               cc,
@@ -229,8 +228,6 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 
 	// Since we have a new set of addresses, we are again at first pass
 	b.firstPass = true
-	b.firstErr = nil
-
 	newEndpoints = deDupAddresses(newEndpoints)
 
 	// Perform the optional shuffling described in gRFC A62. The shuffling will
@@ -286,6 +283,7 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 	}
 
 	if oldAddrs.Len() == 0 || b.state == connectivity.Ready || b.state == connectivity.Connecting {
+		b.firstErr = nil
 		// Start connection attempt at first address.
 		b.state = connectivity.Connecting
 		b.cc.UpdateState(balancer.State{
@@ -294,6 +292,7 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 		})
 		b.requestConnection()
 	} else if b.state == connectivity.Idle {
+		b.firstErr = nil
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.Idle,
 			Picker: &idlePicker{
@@ -313,7 +312,6 @@ func (b *pickfirstBalancer) UpdateSubConnState(subConn balancer.SubConn, state b
 }
 
 func (b *pickfirstBalancer) Close() {
-	fmt.Printf("Arjan: Close called\n")
 	completion := make(chan struct{})
 	b.serializer.ScheduleOr(func(ctx context.Context) {
 		b.close(completion)
@@ -322,7 +320,6 @@ func (b *pickfirstBalancer) Close() {
 	})
 	<-completion
 	<-b.serializer.Done()
-	fmt.Printf("Arjan: serializer Close called\n")
 }
 
 func (b *pickfirstBalancer) close(completion chan struct{}) {
@@ -514,6 +511,10 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 	// We have finished the first pass, keep re-connecting failing subconns.
 	switch state.ConnectivityState {
 	case connectivity.TransientFailure:
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: connectivity.TransientFailure,
+			Picker:            &picker{err: state.ConnectionError},
+		})
 		b.numTf++
 		// We request re-resolution when we've seen the same number of TFs as
 		// subconns. It could be that a subconn has seen multiple TFs due to
