@@ -49,7 +49,7 @@ type TestMetricsRecorder struct {
 	data map[estats.Metric]float64
 }
 
-func NewTestMetricsRecorder(t *testing.T, metrics []string) *TestMetricsRecorder {
+func NewTestMetricsRecorder(t *testing.T) *TestMetricsRecorder {
 	tmr := &TestMetricsRecorder{
 		t: t,
 
@@ -60,10 +60,6 @@ func NewTestMetricsRecorder(t *testing.T, metrics []string) *TestMetricsRecorder
 		intGaugeCh:   testutils.NewChannelWithSize(10),
 
 		data: make(map[estats.Metric]float64),
-	}
-
-	for _, metric := range metrics {
-		tmr.data[estats.Metric(metric)] = 0
 	}
 
 	return tmr
@@ -98,9 +94,7 @@ func (r *TestMetricsRecorder) PollForDataForMetric(ctx context.Context, metricNa
 func (r *TestMetricsRecorder) ClearMetrics() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for metric := range r.data {
-		r.data[metric] = 0
-	}
+	r.data = make(map[estats.Metric]float64)
 }
 
 type MetricsData struct {

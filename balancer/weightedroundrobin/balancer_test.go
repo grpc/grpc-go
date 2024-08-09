@@ -224,7 +224,7 @@ func (s) TestWRRMetricsBasic(t *testing.T) {
 	srv := startServer(t, reportCall)
 	sc := svcConfig(t, testMetricsConfig)
 
-	mr := stats.NewTestMetricsRecorder(t, []string{"grpc.lb.wrr.rr_fallback", "grpc.lb.wrr.endpoint_weight_not_yet_usable", "grpc.lb.wrr.endpoint_weight_stale", "grpc.lb.wrr.endpoint_weights"})
+	mr := stats.NewTestMetricsRecorder(t)
 	if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc), grpc.WithStatsHandler(mr)); err != nil {
 		t.Fatalf("Error starting client: %v", err)
 	}

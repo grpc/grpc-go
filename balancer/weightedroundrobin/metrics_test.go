@@ -43,8 +43,8 @@ func (s) TestWRR_Metrics_SubConnWeight(t *testing.T) {
 		name                           string
 		weightExpirationPeriod         time.Duration
 		blackoutPeriod                 time.Duration
-		lastUpdatedSet                 bool
-		nonEmptySet                    bool
+		lastUpdated                    time.Time
+		nonEmpty                       time.Time
 		nowTime                        time.Time
 		endpointWeightStaleWant        float64
 		endpointWeightNotYetUsableWant float64
@@ -64,7 +64,7 @@ func (s) TestWRR_Metrics_SubConnWeight(t *testing.T) {
 		},
 		{
 			name:                           "weight expiration",
-			lastUpdatedSet:                 true,
+			lastUpdated:                    time.Now(),
 			weightExpirationPeriod:         2 * time.Second,
 			blackoutPeriod:                 time.Second,
 			nowTime:                        time.Now().Add(100 * time.Second),
@@ -74,7 +74,7 @@ func (s) TestWRR_Metrics_SubConnWeight(t *testing.T) {
 		},
 		{
 			name:                           "in blackout period",
-			lastUpdatedSet:                 true,
+			lastUpdated:                    time.Now(),
 			weightExpirationPeriod:         time.Minute,
 			blackoutPeriod:                 10 * time.Second,
 			nowTime:                        time.Now(),
@@ -84,8 +84,8 @@ func (s) TestWRR_Metrics_SubConnWeight(t *testing.T) {
 		},
 		{
 			name:                           "normal weight",
-			lastUpdatedSet:                 true,
-			nonEmptySet:                    true,
+			lastUpdated:                    time.Now(),
+			nonEmpty:                       time.Now(),
 			weightExpirationPeriod:         time.Minute,
 			blackoutPeriod:                 time.Second,
 			nowTime:                        time.Now().Add(10 * time.Second),
@@ -95,8 +95,8 @@ func (s) TestWRR_Metrics_SubConnWeight(t *testing.T) {
 		},
 		{
 			name:                           "weight expiration takes precdedence over blackout",
-			lastUpdatedSet:                 true,
-			nonEmptySet:                    true,
+			lastUpdated:                    time.Now(),
+			nonEmpty:                       time.Now(),
 			weightExpirationPeriod:         time.Second,
 			blackoutPeriod:                 time.Minute,
 			nowTime:                        time.Now().Add(10 * time.Second),
@@ -108,16 +108,12 @@ func (s) TestWRR_Metrics_SubConnWeight(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tmr := stats.NewTestMetricsRecorder(t, []string{"grpc.lb.wrr.rr_fallback", "grpc.lb.wrr.endpoint_weight_not_yet_usable", "grpc.lb.wrr.endpoint_weight_stale", "grpc.lb.wrr.endpoint_weights"})
+			tmr := stats.NewTestMetricsRecorder(t)
 			wsc := &weightedSubConn{
 				metricsRecorder: tmr,
 				weightVal:       3,
-			}
-			if test.lastUpdatedSet {
-				wsc.lastUpdated = time.Now()
-			}
-			if test.nonEmptySet {
-				wsc.nonEmptySince = time.Now()
+				lastUpdated:     test.lastUpdated,
+				nonEmptySince:   test.nonEmpty,
 			}
 			wsc.weight(test.nowTime, test.weightExpirationPeriod, test.blackoutPeriod, true)
 
@@ -134,7 +130,7 @@ func (s) TestWRR_Metrics_SubConnWeight(t *testing.T) {
 // with no weights. Both of these should emit a count metric for round robin
 // fallback.
 func (s) TestWRR_Metrics_Scheduler_RR_Fallback(t *testing.T) {
-	tmr := stats.NewTestMetricsRecorder(t, []string{"grpc.lb.wrr.rr_fallback", "grpc.lb.wrr.endpoint_weight_not_yet_usable", "grpc.lb.wrr.endpoint_weight_stale", "grpc.lb.wrr.endpoint_weights"})
+	tmr := stats.NewTestMetricsRecorder(t)
 	wsc := &weightedSubConn{
 		metricsRecorder: tmr,
 		weightVal:       0,
