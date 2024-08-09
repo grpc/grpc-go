@@ -26,19 +26,28 @@ import (
 	"google.golang.org/grpc/mem"
 )
 
-// FramerBridge is a struct that works as an adapter for the net/x/http2
-// Framer implementation to be able to work with the grpchttp2.Framer interface.
-// This type exists to give an opt-out feature for the new framer and it is
-// eventually going to be removed.
+// FramerBridge adapts the net/x/http2 Framer to satisfy the grpchttp2.Framer
+// interface.
+//
+// Note: This allows temporary use of the older framer and will be removed in
+// a future release after the new framer stabilizes.
 type FramerBridge struct {
 	framer *http2.Framer  // the underlying http2.Framer implementation to perform reads and writes.
 	pool   mem.BufferPool // a pool to reuse buffers when reading.
 }
 
-// NewFramerBridge creates a new framer by taking a writer and a reader,
-// alongside the maxHeaderListSize for the maximum size of the headers the
-// receiver is willing to accept from its peer. The underlying framer uses the
-// SetReuseFrames feature to avoid extra allocations.
+// NewFramerBridge creates an adaptor that wraps a http2.Framer in a
+// grpchttp2.Framer.
+//
+// Internally, it creates a http2.Framer that uses the provided io.Reader and
+// io.Writer, and is configured with a maximum header list size of
+// maxHeaderListSize.
+//
+// Frames returned by a call to the underlying http2.Framer's ReadFrame() method
+// need to be consumed before the next call to it. To overcome this restriction,
+// the data in a Frame returned by the http2.Framer's ReadFrame is copied into a
+// buffer from the given pool. If no pool is provided, a default pool provided
+// by the mem package is used.
 func NewFramerBridge(w io.Writer, r io.Reader, maxHeaderListSize uint32, pool mem.BufferPool) *FramerBridge {
 	fr := http2.NewFramer(w, r)
 	fr.SetReuseFrames()
@@ -56,7 +65,9 @@ func NewFramerBridge(w io.Writer, r io.Reader, maxHeaderListSize uint32, pool me
 }
 
 // ReadFrame reads a frame from the underlying http2.Framer and returns a
-// Frame defined in the grpchttp2 package.
+// Frame defined in the grpchttp2 package. This operation copies the data to a
+// buffer from the pool, making it safe to use even after another call to
+// ReadFrame.
 func (fr *FramerBridge) ReadFrame() (Frame, error) {
 	f, err := fr.framer.ReadFrame()
 	if err != nil {
@@ -75,12 +86,11 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 	case *http2.DataFrame:
 		buf := fr.pool.Get(int(hdr.Size))
 		copy(buf, f.Data())
-		df := &DataFrame{
+		return &DataFrame{
 			hdr:  hdr,
 			Data: buf,
-		}
-		df.free = func() { fr.pool.Put(buf) }
-		return df, nil
+			free: func() { fr.pool.Put(buf) },
+		}, nil
 	case *http2.RSTStreamFrame:
 		return &RSTStreamFrame{
 			hdr:  hdr,
@@ -102,24 +112,22 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 	case *http2.PingFrame:
 		buf := fr.pool.Get(int(hdr.Size))
 		copy(buf, f.Data[:])
-		pf := &PingFrame{
+		return &PingFrame{
 			hdr:  hdr,
 			Data: buf,
-		}
-		pf.free = func() { fr.pool.Put(buf) }
-		return pf, nil
+			free: func() { fr.pool.Put(buf) },
+		}, nil
 	case *http2.GoAwayFrame:
 		// Size of the frame minus the code and lastStreamID
 		buf := fr.pool.Get(int(hdr.Size) - 8)
 		copy(buf, f.DebugData())
-		gf := &GoAwayFrame{
+		return &GoAwayFrame{
 			hdr:          hdr,
 			LastStreamID: f.LastStreamID,
 			Code:         ErrCode(f.ErrCode),
 			DebugData:    buf,
-		}
-		gf.free = func() { fr.pool.Put(buf) }
-		return gf, nil
+			free:         func() { fr.pool.Put(buf) },
+		}, nil
 	case *http2.WindowUpdateFrame:
 		return &WindowUpdateFrame{
 			hdr: hdr,
@@ -134,31 +142,30 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 		buf := fr.pool.Get(int(hdr.Size))
 		huf := f.(*http2.UnknownFrame)
 		copy(buf, huf.Payload())
-		uf := &UnknownFrame{
+		return &UnknownFrame{
 			hdr:     hdr,
 			Payload: buf,
-		}
-		uf.free = func() { fr.pool.Put(buf) }
-		return uf, nil
+			free:    func() { fr.pool.Put(buf) },
+		}, nil
 	}
 }
 
 // WriteData writes a DATA Frame into the underlying writer.
 func (fr *FramerBridge) WriteData(streamID uint32, endStream bool, data ...[]byte) error {
-	var buf []byte
-	if len(data) != 1 {
-		tl := 0
-		for _, s := range data {
-			tl += len(s)
-		}
+	if len(data) == 1 {
+		return fr.framer.WriteData(streamID, endStream, data[0])
+	}
 
-		buf = fr.pool.Get(tl)[:0]
-		defer fr.pool.Put(buf)
-		for _, s := range data {
-			buf = append(buf, s...)
-		}
-	} else {
-		buf = data[0]
+	var buf []byte
+	tl := 0
+	for _, s := range data {
+		tl += len(s)
+	}
+
+	buf = fr.pool.Get(tl)[:0]
+	defer fr.pool.Put(buf)
+	for _, s := range data {
+		buf = append(buf, s...)
 	}
 
 	return fr.framer.WriteData(streamID, endStream, buf)
