@@ -2778,30 +2778,6 @@ func (hc *hangingConn) Write(b []byte) (n int, err error) {
 	return n, err
 }
 
-func (hc *hangingConn) Close() error {
-	return hc.Conn.Close()
-}
-
-func (hc *hangingConn) LocalAddr() net.Addr {
-	return hc.Conn.LocalAddr()
-}
-
-func (hc *hangingConn) RemoteAddr() net.Addr {
-	return hc.Conn.RemoteAddr()
-}
-
-func (hc *hangingConn) SetDeadline(t time.Time) error {
-	return hc.Conn.SetDeadline(t)
-}
-
-func (hc *hangingConn) SetReadDeadline(t time.Time) error {
-	return hc.Conn.SetReadDeadline(t)
-}
-
-func (hc *hangingConn) SetWriteDeadline(t time.Time) error {
-	return hc.Conn.SetWriteDeadline(t)
-}
-
 func hangingDialer(_ context.Context, addr string) (net.Conn, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
