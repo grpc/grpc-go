@@ -231,9 +231,9 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 
 			// shutdown all active backends except the target.
 			var targetAddr resolver.Address
-			for idx_i, idx := range tc.initialBackendIndexes {
+			for idxI, idx := range tc.initialBackendIndexes {
 				if idx == tc.initialTargetBackendIndex {
-					targetAddr = addrs[idx_i]
+					targetAddr = addrs[idxI]
 					continue
 				}
 				backends[idx].S.Stop()
@@ -243,7 +243,7 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 				t.Fatal(err)
 			}
 			bal := <-balChan
-			scs := bal.scStates
+			scs := bal.subConns()
 
 			if got, want := len(scs), len(tc.wantScStates); got != want {
 				t.Fatalf("len(subconns) = %d, want %d", got, want)
@@ -278,9 +278,9 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			r.UpdateState(resolver.State{Addresses: addrs})
 
 			// shutdown all active backends except the target.
-			for idx_i, idx := range tc.updatedBackendIndexes {
+			for idxI, idx := range tc.updatedBackendIndexes {
 				if idx == tc.updatedTargetBackendIndex {
-					targetAddr = addrs[idx_i]
+					targetAddr = addrs[idxI]
 					continue
 				}
 				backends[idx].S.Stop()
@@ -289,7 +289,7 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			if err := pickfirst.CheckRPCsToBackend(ctx, cc, targetAddr); err != nil {
 				t.Fatal(err)
 			}
-			scs = bal.scStates
+			scs = bal.subConns()
 
 			if got, want := len(scs), len(tc.wantScStatesPostUpdate); got != want {
 				t.Fatalf("len(subconns) = %d, want %d", got, want)

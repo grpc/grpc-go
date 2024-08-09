@@ -39,12 +39,6 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-const (
-	subConnListConnecting uint32 = iota
-	subConnListConnected
-	subConnListClosed
-)
-
 func init() {
 	balancer.Register(pickfirstBuilder{name: PickFirstLeafName})
 	if envconfig.NewPickFirstEnabled {
@@ -633,8 +627,4 @@ func (i *index) seekTo(needle *resolver.Address) bool {
 		}
 	}
 	return false
-}
-
-func (i *index) size() int {
-	return len(i.endpointList)
 }
