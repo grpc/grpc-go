@@ -39,6 +39,11 @@ import (
 	"google.golang.org/grpc/mem"
 )
 
+// FailTestsOnLeakedBuffers is a special flag that will cause tests to fail if
+// leaked buffers are detected, instead of simply logging them as an
+// informational failure.
+var FailTestsOnLeakedBuffers = false
+
 func init() {
 	defaultPool := mem.DefaultBufferPool()
 	globalPool.Store(&defaultPool)
@@ -73,21 +78,6 @@ func SetTrackingBufferPool(efer Errorfer) {
 		allocatedBuffers: make(map[*byte][]uintptr),
 	})
 	globalPool.Store(&newPool)
-}
-
-// DisableBufferLeakCheckTestFailure disables failing the test when a buffer leak
-// is detected. Only meant to be used to disable the buffer leak checker for
-// specific tests while still leaving the checker enabled on the remaining tests.
-// Reset when CheckTrackingBufferPool is invoked.
-func DisableBufferLeakCheckTestFailure() {
-	if !mem.PoolingEnabled {
-		return
-	}
-	p := (*globalPool.Load()).(*trackingBufferPool)
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	p.disableTestFailure = true
 }
 
 // CheckTrackingBufferPool undoes the effects of SetTrackingBufferPool, and fails
@@ -136,18 +126,17 @@ func CheckTrackingBufferPool() {
 		}
 		format := "%d allocated buffers never freed:\n%s"
 		args := []any{ut.count, trace.String()}
-		if p.disableTestFailure {
-			p.efer.Logf("WARNING "+format, args...)
-		} else {
+		if FailTestsOnLeakedBuffers {
 			p.efer.Errorf(format, args...)
+		} else {
+			p.efer.Logf("WARNING "+format, args...)
 		}
 	}
 }
 
 type trackingBufferPool struct {
-	pool               mem.BufferPool
-	efer               Errorfer
-	disableTestFailure bool
+	pool mem.BufferPool
+	efer Errorfer
 
 	lock             sync.Mutex
 	allocatedBuffers map[*byte][]uintptr

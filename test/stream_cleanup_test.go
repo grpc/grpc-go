@@ -26,7 +26,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/status"
 
@@ -35,10 +34,6 @@ import (
 )
 
 func (s) TestStreamCleanup(t *testing.T) {
-	// Disable the buffer leak check for this test as there are unresolved leaks when
-	// the stream is closed with an error.
-	leakcheck.DisableBufferLeakCheckTestFailure()
-
 	const initialWindowSize uint = 70 * 1024 // Must be higher than default 64K, ignored otherwise
 	const bodySize = 2 * initialWindowSize   // Something that is not going to fit in a single window
 	const callRecvMsgSize uint = 1           // The maximum message size the client can receive
