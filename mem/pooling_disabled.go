@@ -18,19 +18,14 @@
  *
  */
 
-// Package mem provides utilities that facilitate memory reuse in byte slices
-// that are used as buffers.
-//
-// # Experimental
-//
-// Notice: All APIs in this package are EXPERIMENTAL and may be changed or
-// removed in a later release.
 package mem
 
 import (
 	"fmt"
 	"unsafe"
 )
+
+const PoolingEnabled = false
 
 // NewBuffer creates a new Buffer from the given data, initializing the
 // reference counter to 1. The given free function is called when all references
@@ -60,8 +55,23 @@ func (s sliceBuffer) read(buf []byte) (int, Buffer) {
 	return n, s[n:]
 }
 
+// Ref invokes Buffer.Ref on each Buffer in the slice.
+func (s BufferSlice) Ref() BufferSlice {
+	return s
+}
+
+// Free invokes Buffer.Free() on each Buffer in the slice.
+func (s BufferSlice) Free() {}
+
 // String returns a string representation of the buffer. May be used for
 // debugging purposes.
 func (s sliceBuffer) String() string {
 	return fmt.Sprintf("mem.Buffer(%p, data: %p, length: %d)", unsafe.SliceData(s), unsafe.SliceData(s), len(s))
+}
+
+func (p *tieredBufferPool) Get(size int) []byte {
+	return make([]byte, size)
+}
+
+func (p *tieredBufferPool) Put(*[]byte) {
 }

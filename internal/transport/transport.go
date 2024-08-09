@@ -560,7 +560,7 @@ func (s *Stream) ReadHeader(header []byte) (err error) {
 			err = nil
 		}
 		if err != nil {
-			if len(header) > 0 && err == io.EOF {
+			if n > 0 && err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}
 			return err

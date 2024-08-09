@@ -18,13 +18,6 @@
  *
  */
 
-// Package mem provides utilities that facilitate memory reuse in byte slices
-// that are used as buffers.
-//
-// # Experimental
-//
-// Notice: All APIs in this package are EXPERIMENTAL and may be changed or
-// removed in a later release.
 package mem
 
 import (
@@ -32,6 +25,8 @@ import (
 	"sync"
 	"sync/atomic"
 )
+
+const PoolingEnabled = true
 
 var bufferObjectPool = sync.Pool{New: func() any {
 	return new(buffer)
@@ -75,7 +70,11 @@ func (b *buffer) Ref() Buffer {
 		panic("Cannot ref freed buffer")
 	}
 	b.refs.Add(1)
-	return b
+	newB := newBuffer()
+	newB.data = b.data
+	newB.refs = b.refs
+	newB.free = b.free
+	return newB
 }
 
 func (b *buffer) Free() {
@@ -133,4 +132,33 @@ func (b *buffer) read(buf []byte) (int, Buffer) {
 // debugging purposes.
 func (b *buffer) String() string {
 	return fmt.Sprintf("mem.Buffer(%p, data: %p, length: %d)", b, b.ReadOnlyData(), len(b.ReadOnlyData()))
+}
+
+// Ref invokes Buffer.Ref on each Buffer in the slice.
+func (s BufferSlice) Ref() BufferSlice {
+	out := make(BufferSlice, len(s))
+	for i, b := range s {
+		out[i] = b.Ref()
+	}
+	return out
+}
+
+// Free invokes Buffer.Free() on each Buffer in the slice.
+func (s BufferSlice) Free() {
+	// Do nothing if the slice is empty, or has already been freed.
+	if len(s) == 0 || s[0] == nil {
+		return
+	}
+	for _, b := range s {
+		b.Free()
+	}
+	clear(s)
+}
+
+func (p *tieredBufferPool) Get(size int) []byte {
+	return p.getPool(size).Get(size)
+}
+
+func (p *tieredBufferPool) Put(buf *[]byte) {
+	p.getPool(cap(*buf)).Put(buf)
 }

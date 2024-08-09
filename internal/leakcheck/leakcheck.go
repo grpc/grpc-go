@@ -64,6 +64,9 @@ func (b *swappableBufferPool) Put(buf *[]byte) {
 // then be invoked at the end of the test to validate that all buffers pulled
 // from the pool were returned.
 func SetTrackingBufferPool(efer Errorfer) {
+	if !mem.PoolingEnabled {
+		return
+	}
 	newPool := mem.BufferPool(&trackingBufferPool{
 		pool:             *globalPool.Load(),
 		efer:             efer,
@@ -77,6 +80,9 @@ func SetTrackingBufferPool(efer Errorfer) {
 // specific tests while still leaving the checker enabled on the remaining tests.
 // Reset when CheckTrackingBufferPool is invoked.
 func DisableBufferLeakCheckTestFailure() {
+	if !mem.PoolingEnabled {
+		return
+	}
 	p := (*globalPool.Load()).(*trackingBufferPool)
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -88,6 +94,9 @@ func DisableBufferLeakCheckTestFailure() {
 // unit tests if not all buffers were returned. It is invalid to invoke this
 // method without previously having invoked SetTrackingBufferPool.
 func CheckTrackingBufferPool() {
+	if !mem.PoolingEnabled {
+		return
+	}
 	p := (*globalPool.Load()).(*trackingBufferPool)
 	p.lock.Lock()
 	defer p.lock.Unlock()

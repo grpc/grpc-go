@@ -39,7 +39,7 @@ import (
 
 // TestServer_MaxHandlers ensures that no more than MaxConcurrentStreams server
 // handlers are active at one time.
-func (s) TestServer_MaxHandlers(t *testing.T) {
+func TestServer_MaxHandlers(t *testing.T) {
 	started := make(chan struct{})
 	blockCalls := grpcsync.NewEvent()
 
