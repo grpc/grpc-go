@@ -198,14 +198,13 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 			res, err := state.Picker.Pick(info)
 			if err != nil {
 				pr := errToPickResult(err)
-				rf := func() {
+				return res, func() {
+					if pr == "queue" {
+						// Don't record metrics for queued Picks.
+						return
+					}
 					targetPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, cpw.target, pr)
-				}
-				if pr == "queue" {
-					// Don't record metrics for queued Picks.
-					rf = func() {}
-				}
-				return res, rf, err
+				}, err
 			}
 
 			if res.Metadata == nil {
@@ -232,14 +231,13 @@ func (p *rlsPicker) useDefaultPickIfPossible(info balancer.PickInfo, errOnNoDefa
 		state := (*balancer.State)(atomic.LoadPointer(&p.defaultPolicy.state))
 		res, err := state.Picker.Pick(info)
 		pr := errToPickResult(err)
-		rf := func() {
+		return res, func() {
+			if pr == "queue" {
+				// Don't record metrics for queued Picks.
+				return
+			}
 			defaultTargetPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, p.defaultPolicy.target, pr)
-		}
-		if pr == "queue" {
-			// Don't record metrics for queued Picks.
-			rf = func() {}
-		}
-		return res, rf, err
+		}, err
 	}
 
 	return balancer.PickResult{}, func() {
