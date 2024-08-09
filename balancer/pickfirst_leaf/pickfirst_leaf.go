@@ -51,10 +51,11 @@ func init() {
 var logger = grpclog.Component("pick-first-leaf-lb")
 
 const (
-	// PickFirstLeafName is the name of the pick_first balancer.
+	// PickFirstLeafName is the name of the pick_first_leaf balancer.
 	PickFirstLeafName = "pick_first_leaf"
-	PickFirstName     = "pick_first"
-	logPrefix         = "[pick-first-leaf-lb %p] "
+	// PickFirstName is the name of the pick_first balancer.
+	PickFirstName = "pick_first"
+	logPrefix     = "[pick-first-leaf-lb %p] "
 )
 
 type pickfirstBuilder struct {
