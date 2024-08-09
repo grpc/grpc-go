@@ -513,7 +513,6 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 		// differences in back-off durations, but this is a decent approximation.
 		if b.numTf >= b.subConns.Len() {
 			b.numTf = 0
-			b.cc.ResolveNow(resolver.ResolveNowOptions{})
 		}
 	case connectivity.Idle:
 		sd.subConn.Connect()
@@ -528,8 +527,6 @@ func (b *pickfirstBalancer) endFirstPass() {
 		ConnectivityState: connectivity.TransientFailure,
 		Picker:            &picker{err: b.firstErr},
 	})
-	// Re-request resolution.
-	b.cc.ResolveNow(resolver.ResolveNowOptions{})
 	// Start re-connecting all the subconns that are already in IDLE.
 	for _, v := range b.subConns.Values() {
 		sd := v.(*scData)
