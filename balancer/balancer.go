@@ -329,7 +329,8 @@ type PickResult struct {
 	SubConn SubConn
 
 	// Done is called when the RPC is completed.  If the SubConn is not ready,
-	// this will be called with a nil parameter.  If the SubConn is not a valid
+	// this will be called with an empty DoneInfo: meaning that Pick did not
+	// error but no bytes were sent nor received.  If the SubConn is not a valid
 	// type, Done may not be called.  May be nil if the balancer does not wish
 	// to be notified when the RPC completes.
 	Done func(DoneInfo)
