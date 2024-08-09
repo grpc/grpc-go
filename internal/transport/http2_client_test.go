@@ -76,7 +76,7 @@ func dialerClientPrefaceLength(_ context.Context, addr string) (net.Conn, error)
 
 func (hc *framerWriteSettingsConn) Write(b []byte) (n int, err error) {
 	n, err = hc.Conn.Write(b)
-	//compare framer value
+	// Compare the number of bytes written with the framer value
 	if n == 9 {
 		return 0, errors.New("Framer write setting error")
 	}
@@ -94,7 +94,7 @@ func dialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error)
 func (hc *framerWriteWindowUpdateConn) Write(b []byte) (n int, err error) {
 
 	n, err = hc.Conn.Write(b)
-	// compare for windowupdate value
+	// Compare the number of bytes written with the windowupdate value
 	if n == 13 {
 		return 0, errors.New("Framer write windowupdate error")
 	}
