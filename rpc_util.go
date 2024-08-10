@@ -777,7 +777,7 @@ func outPayload(client bool, msg any, dataLength, payloadLength int, t time.Time
 	}
 }
 
-func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool) *status.Status {
+func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool, isServer bool) *status.Status {
 	switch pf {
 	case compressionNone:
 	case compressionMade:
@@ -785,7 +785,11 @@ func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool
 			return status.New(codes.Internal, "grpc: compressed flag set with identity or empty encoding")
 		}
 		if !haveCompressor {
-			return status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
+			if isServer {
+				return status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
+			} else {
+				return status.Newf(codes.Internal, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
+			}
 		}
 	default:
 		return status.Newf(codes.Internal, "grpc: received unexpected payload format %d", pf)
@@ -805,7 +809,12 @@ func (p *payloadInfo) free() {
 }
 
 // recvAndDecompress reads a message from the stream, decompressing it if necessary.
-func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor,
+//
+// Cancelling the returned cancel function releases the buffer back to the pool. So the caller should cancel as soon as
+// the buffer is no longer needed.
+// TODO: Refactor this function to reduce the number of arguments.
+// See: https://google.github.io/styleguide/go/best-practices.html#function-argument-lists
+func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, isServer bool,
 ) (out mem.BufferSlice, err error) {
 	pf, compressed, err := p.recvMsg(maxReceiveMessageSize)
 	if err != nil {
@@ -814,9 +823,9 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 
 	compressedLength := compressed.Len()
 
-	if st := checkRecvPayload(pf, s.RecvCompress(), compressor != nil || dc != nil); st != nil {
+	if st := checkRecvPayload(pf, s.RecvCompress(), compressor != nil || dc != nil, isServer); st != nil {
 		compressed.Free()
-		return nil, st.Err()
+		return nil, nil, st.Err()
 	}
 
 	var size int
@@ -899,8 +908,8 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 // For the two compressor parameters, both should not be set, but if they are,
 // dc takes precedence over compressor.
 // TODO(dfawley): wrap the old compressor/decompressor using the new API?
-func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m any, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor) error {
-	data, err := recvAndDecompress(p, s, dc, maxReceiveMessageSize, payInfo, compressor)
+func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m any, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, isServer bool) error {
+	data, err := recvAndDecompress(p, s, dc, maxReceiveMessageSize, payInfo, compressor, isServer)
 	if err != nil {
 		return err
 	}

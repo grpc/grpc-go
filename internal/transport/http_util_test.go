@@ -19,7 +19,10 @@
 package transport
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"reflect"
 	"testing"
 	"time"
@@ -211,6 +214,39 @@ func (s) TestParseDialTarget(t *testing.T) {
 		gotNet, gotAddr := parseDialTarget(test.target)
 		if gotNet != test.wantNet || gotAddr != test.wantAddr {
 			t.Errorf("parseDialTarget(%q) = %s, %s want %s, %s", test.target, gotNet, gotAddr, test.wantNet, test.wantAddr)
+		}
+	}
+}
+
+type badNetworkConn struct {
+	net.Conn
+}
+
+func (c *badNetworkConn) Write([]byte) (int, error) {
+	return 0, io.EOF
+}
+
+// This test ensures Write() on a broken network connection does not lead to
+// an infinite loop. See https://github.com/grpc/grpc-go/issues/7389 for more details.
+func (s) TestWriteBadConnection(t *testing.T) {
+	data := []byte("test_data")
+	// Configure the bufWriter with a batchsize that results in data being flushed
+	// to the underlying conn, midway through Write().
+	writeBufferSize := (len(data) - 1) / 2
+	writer := newBufWriter(&badNetworkConn{}, writeBufferSize, getWriteBufferPool(writeBufferSize))
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := writer.Write(data)
+		errCh <- err
+	}()
+
+	select {
+	case <-time.After(time.Second):
+		t.Fatalf("Write() did not return in time")
+	case err := <-errCh:
+		if !errors.Is(err, io.EOF) {
+			t.Fatalf("Write() = %v, want error presence = %v", err, io.EOF)
 		}
 	}
 }

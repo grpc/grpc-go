@@ -84,6 +84,39 @@ func (cc ChannelCreds) String() string {
 	return cc.Type + "-" + string(b)
 }
 
+// ServerConfigs represents a collection of server configurations.
+type ServerConfigs []*ServerConfig
+
+// Equal returns true if scs equals other.
+func (scs *ServerConfigs) Equal(other *ServerConfigs) bool {
+	if len(*scs) != len(*other) {
+		return false
+	}
+	for i := range *scs {
+		if !(*scs)[i].Equal((*other)[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// UnmarshalJSON takes the json data (a list of server configurations) and
+// unmarshals it to the struct.
+func (scs *ServerConfigs) UnmarshalJSON(data []byte) error {
+	servers := []*ServerConfig{}
+	if err := json.Unmarshal(data, &servers); err != nil {
+		return fmt.Errorf("xds: failed to JSON unmarshal server configurations during bootstrap: %v, config:\n%s", err, string(data))
+	}
+	// Only use the first server config if fallback support is disabled.
+	if !envconfig.XDSFallbackSupport {
+		if len(servers) > 1 {
+			servers = servers[:1]
+		}
+	}
+	*scs = servers
+	return nil
+}
+
 // Authority contains configuration for an xDS control plane authority.
 //
 // This type does not implement custom JSON marshal/unmarshal logic because it
@@ -104,7 +137,7 @@ type Authority struct {
 	// "xdstp://<authority_name>/envoy.config.listener.v3.Listener/%s".
 	ClientListenerResourceNameTemplate string `json:"client_listener_resource_name_template,omitempty"`
 	// XDSServers contains the list of server configurations for this authority.
-	XDSServers []*ServerConfig `json:"xds_servers,omitempty"`
+	XDSServers ServerConfigs `json:"xds_servers,omitempty"`
 }
 
 // Equal returns true if a equals other.
@@ -116,7 +149,7 @@ func (a *Authority) Equal(other *Authority) bool {
 		return false
 	case a.ClientListenerResourceNameTemplate != other.ClientListenerResourceNameTemplate:
 		return false
-	case !slices.EqualFunc(a.XDSServers, other.XDSServers, func(a, b *ServerConfig) bool { return a.Equal(b) }):
+	case !a.XDSServers.Equal(&other.XDSServers):
 		return false
 	}
 	return true
@@ -315,7 +348,7 @@ func ServerConfigForTesting(opts ServerConfigTestingOptions) (*ServerConfig, err
 // Config is the internal representation of the bootstrap configuration provided
 // to the xDS client.
 type Config struct {
-	xDSServers                                []*ServerConfig
+	xDSServers                                ServerConfigs
 	cpcs                                      map[string]certproviderNameAndConfig
 	serverListenerResourceNameTemplate        string
 	clientDefaultListenerResourceNameTemplate string
@@ -405,7 +438,7 @@ func (c *Config) Equal(other *Config) bool {
 		return true
 	case (c != nil) != (other != nil):
 		return false
-	case !slices.EqualFunc(c.xDSServers, other.xDSServers, func(a, b *ServerConfig) bool { return a.Equal(b) }):
+	case !c.xDSServers.Equal(&other.xDSServers):
 		return false
 	case !maps.EqualFunc(c.certProviderConfigs, other.certProviderConfigs, func(a, b *certprovider.BuildableConfig) bool { return a.String() == b.String() }):
 		return false
@@ -429,7 +462,7 @@ func (c *Config) String() string {
 
 // The following fields correspond 1:1 with the JSON schema for Config.
 type configJSON struct {
-	XDSServers                                []*ServerConfig                      `json:"xds_servers,omitempty"`
+	XDSServers                                ServerConfigs                        `json:"xds_servers,omitempty"`
 	CertificateProviders                      map[string]certproviderNameAndConfig `json:"certificate_providers,omitempty"`
 	ServerListenerResourceNameTemplate        string                               `json:"server_listener_resource_name_template,omitempty"`
 	ClientDefaultListenerResourceNameTemplate string                               `json:"client_default_listener_resource_name_template,omitempty"`

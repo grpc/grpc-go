@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
@@ -250,7 +251,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	// server and actually making an RPC ensures that the xDS client is
 	// configured properly, and when we dial with an unknown authority in the
 	// next step, we can be sure that the error we receive is legitimate.
-	managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
@@ -298,7 +299,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 // with an authority which is not specified in the bootstrap configuration. The
 // test verifies that RPCs fail with an appropriate error.
 func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
-	mgmtServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	// LDS is old style name.
 	// RDS is new style, with an unknown authority.

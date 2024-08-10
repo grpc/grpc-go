@@ -147,7 +147,7 @@ func (p *simpleBufferPool) Get(size int) []byte {
 		return (*bs)[:size]
 	}
 
-	// A buffer was pulled from the pool, but it is tool small. Put it back in
+	// A buffer was pulled from the pool, but it is too small. Put it back in
 	// the pool and create one large enough.
 	if ok {
 		p.pool.Put(bs)
