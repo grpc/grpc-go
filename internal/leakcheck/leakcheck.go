@@ -39,10 +39,13 @@ import (
 	"google.golang.org/grpc/mem"
 )
 
-// FailTestsOnLeakedBuffers is a special flag that will cause tests to fail if
+// failTestsOnLeakedBuffers is a special flag that will cause tests to fail if
 // leaked buffers are detected, instead of simply logging them as an
-// informational failure.
-var FailTestsOnLeakedBuffers = false
+// informational failure. This can be enabled with the "checkbuffers" compile
+// flag, e.g.:
+//
+//	go test -tags=checkbuffers
+var failTestsOnLeakedBuffers = false
 
 func init() {
 	defaultPool := mem.DefaultBufferPool()
@@ -126,7 +129,7 @@ func CheckTrackingBufferPool() {
 		}
 		format := "%d allocated buffers never freed:\n%s"
 		args := []any{ut.count, trace.String()}
-		if FailTestsOnLeakedBuffers {
+		if failTestsOnLeakedBuffers {
 			p.efer.Errorf(format, args...)
 		} else {
 			p.efer.Logf("WARNING "+format, args...)
