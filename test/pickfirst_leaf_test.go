@@ -129,6 +129,7 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 		postUpdateTargetBackendIndex int
 		wantPostUpdateScStates       []scStateExpectation
 		restartConnected             bool
+		wantConnStateTransitions     []connectivity.State
 	}{
 		{
 			name:                        "two_server_first_ready",
@@ -137,6 +138,10 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			preUpdateTargetBackendIndex: 0,
 			wantPreUpdateScStates: []scStateExpectation{
 				{State: connectivity.Ready, ServerIdx: 0},
+			},
+			wantConnStateTransitions: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.Ready,
 			},
 		},
 		{
@@ -148,6 +153,10 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 				{State: connectivity.Shutdown, ServerIdx: 0},
 				{State: connectivity.Ready, ServerIdx: 1},
 			},
+			wantConnStateTransitions: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.Ready,
+			},
 		},
 		{
 			name:                        "duplicate_address",
@@ -157,6 +166,10 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			wantPreUpdateScStates: []scStateExpectation{
 				{State: connectivity.Shutdown, ServerIdx: 0},
 				{State: connectivity.Ready, ServerIdx: 1},
+			},
+			wantConnStateTransitions: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.Ready,
 			},
 		},
 		{
@@ -176,6 +189,12 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 				{State: connectivity.Shutdown, ServerIdx: 2},
 				{State: connectivity.Ready, ServerIdx: 3},
 			},
+			wantConnStateTransitions: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.Ready,
+				connectivity.Connecting,
+				connectivity.Ready,
+			},
 		},
 		{
 			name:                        "active_backend_in_updated_list",
@@ -191,6 +210,10 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			wantPostUpdateScStates: []scStateExpectation{
 				{State: connectivity.Shutdown, ServerIdx: 0},
 				{State: connectivity.Ready, ServerIdx: 1},
+			},
+			wantConnStateTransitions: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.Ready,
 			},
 		},
 		{
@@ -209,6 +232,12 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 				{State: connectivity.Shutdown, ServerIdx: 1},
 				{State: connectivity.Ready, ServerIdx: 0},
 			},
+			wantConnStateTransitions: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.Ready,
+				connectivity.Connecting,
+				connectivity.Ready,
+			},
 		},
 		{
 			name:                        "identical_list",
@@ -225,6 +254,10 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 				{State: connectivity.Shutdown, ServerIdx: 0},
 				{State: connectivity.Ready, ServerIdx: 1},
 			},
+			wantConnStateTransitions: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.Ready,
+			},
 		},
 		{
 			name:                        "first_connected_idle_reconnect",
@@ -239,6 +272,13 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			postUpdateTargetBackendIndex: 0,
 			wantPostUpdateScStates: []scStateExpectation{
 				{State: connectivity.Ready, ServerIdx: 0},
+			},
+			wantConnStateTransitions: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.Ready,
+				connectivity.Idle,
+				connectivity.Connecting,
+				connectivity.Ready,
 			},
 		},
 		{
@@ -258,6 +298,13 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 				{State: connectivity.Ready, ServerIdx: 1},
 				{State: connectivity.Shutdown, ServerIdx: 0},
 			},
+			wantConnStateTransitions: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.Ready,
+				connectivity.Idle,
+				connectivity.Connecting,
+				connectivity.Ready,
+			},
 		},
 		{
 			name:                        "second_connected_idle_reconnect_first",
@@ -276,6 +323,13 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 				{State: connectivity.Shutdown, ServerIdx: 1},
 				{State: connectivity.Ready, ServerIdx: 0},
 			},
+			wantConnStateTransitions: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.Ready,
+				connectivity.Idle,
+				connectivity.Connecting,
+				connectivity.Ready,
+			},
 		},
 		{
 			name:                        "first_connected_idle_reconnect_second",
@@ -286,11 +340,18 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			wantPreUpdateScStates: []scStateExpectation{
 				{State: connectivity.Ready, ServerIdx: 0},
 			},
-			updatedBackendIndexes:     []int{0, 1},
+			updatedBackendIndexes:        []int{0, 1},
 			postUpdateTargetBackendIndex: 1,
 			wantPostUpdateScStates: []scStateExpectation{
 				{State: connectivity.Shutdown, ServerIdx: 0},
 				{State: connectivity.Ready, ServerIdx: 1},
+			},
+			wantConnStateTransitions: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.Ready,
+				connectivity.Idle,
+				connectivity.Connecting,
+				connectivity.Ready,
 			},
 		},
 	}
@@ -305,6 +366,12 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 				activeAddrs = append(activeAddrs, addrs[idx])
 			}
 			r.UpdateState(resolver.State{Addresses: activeAddrs})
+			bal := <-balChan
+			select {
+			case <-bal.resolverUpdateSeen:
+			case <-ctx.Done():
+				t.Fatalf("Context timed out waiting for resolve update to be processed")
+			}
 
 			// shutdown all active backends except the target.
 			var targetAddr resolver.Address
@@ -319,13 +386,15 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			if err := pickfirst.CheckRPCsToBackend(ctx, cc, targetAddr); err != nil {
 				t.Fatal(err)
 			}
-			bal := <-balChan
 
 			if diff := cmp.Diff(scStateExpectationToScState(tc.wantPreUpdateScStates, addrs), bal.subConns()); diff != "" {
 				t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
 			}
 
 			if len(tc.updatedBackendIndexes) == 0 {
+				if diff := cmp.Diff(tc.wantConnStateTransitions, bal.connStateTransitions()); diff != "" {
+					t.Errorf("balancer states mismatch (-want +got):\n%s", diff)
+				}
 				return
 			}
 
@@ -344,7 +413,13 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			for _, idx := range tc.updatedBackendIndexes {
 				activeAddrs = append(activeAddrs, addrs[idx])
 			}
+
 			r.UpdateState(resolver.State{Addresses: activeAddrs})
+			select {
+			case <-bal.resolverUpdateSeen:
+			case <-ctx.Done():
+				t.Fatalf("Context timed out waiting for resolve update to be processed")
+			}
 
 			// shutdown all active backends except the target.
 			for idxI, idx := range tc.updatedBackendIndexes {
@@ -362,6 +437,10 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			if diff := cmp.Diff(scStateExpectationToScState(tc.wantPostUpdateScStates, addrs), bal.subConns()); diff != "" {
 				t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
 			}
+
+			if diff := cmp.Diff(tc.wantConnStateTransitions, bal.connStateTransitions()); diff != "" {
+				t.Errorf("balancer states mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
@@ -369,8 +448,10 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 // stateStoringBalancer stores the state of the subconns being created.
 type stateStoringBalancer struct {
 	balancer.Balancer
-	mu       sync.Mutex
-	scStates []*scState
+	mu                 sync.Mutex
+	scStates           []*scState
+	stateTransitions   []connectivity.State
+	resolverUpdateSeen chan struct{}
 }
 
 func (b *stateStoringBalancer) Close() {
@@ -392,10 +473,18 @@ func (b *stateStoringBalancerBuilder) Name() string {
 }
 
 func (b *stateStoringBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	bal := &stateStoringBalancer{}
+	bal := &stateStoringBalancer{
+		resolverUpdateSeen: make(chan struct{}, 1),
+	}
 	bal.Balancer = balancer.Get(pickfirstleaf.PickFirstLeafName).Build(&stateStoringCCWrapper{cc, bal}, opts)
 	b.balancerChan <- bal
 	return bal
+}
+
+func (b *stateStoringBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
+	err := b.Balancer.UpdateClientConnState(state)
+	b.resolverUpdateSeen <- struct{}{}
+	return err
 }
 
 func (b *stateStoringBalancer) subConns() []scState {
@@ -412,6 +501,20 @@ func (b *stateStoringBalancer) addScState(state *scState) {
 	b.mu.Lock()
 	b.scStates = append(b.scStates, state)
 	b.mu.Unlock()
+}
+
+func (b *stateStoringBalancer) addConnState(state connectivity.State) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.stateTransitions) == 0 || state != b.stateTransitions[len(b.stateTransitions)-1] {
+		b.stateTransitions = append(b.stateTransitions, state)
+	}
+}
+
+func (b *stateStoringBalancer) connStateTransitions() []connectivity.State {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]connectivity.State{}, b.stateTransitions...)
 }
 
 type stateStoringCCWrapper struct {
@@ -433,6 +536,11 @@ func (ccw *stateStoringCCWrapper) NewSubConn(addrs []resolver.Address, opts bala
 		oldListener(s)
 	}
 	return ccw.ClientConn.NewSubConn(addrs, opts)
+}
+
+func (ccw *stateStoringCCWrapper) UpdateState(state balancer.State) {
+	ccw.b.addConnState(state.ConnectivityState)
+	ccw.ClientConn.UpdateState(state)
 }
 
 type scState struct {
