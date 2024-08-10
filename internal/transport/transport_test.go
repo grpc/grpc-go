@@ -430,7 +430,7 @@ func setUpServerOnly(t *testing.T, port int, sc *ServerConfig, ht hType) *server
 
 // isGreetingDone verifies that client-server setup is complete
 // for the test.
-var isGreetingsDone = atomic.Bool{}
+var isGreetingDone = atomic.Bool{}
 
 func setUp(t *testing.T, port int, ht hType, options ...ConnectOptions) (*server, *http2Client, func()) {
 	var copts = ConnectOptions{}
@@ -451,7 +451,7 @@ func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts 
 		cancel() // Do not cancel in success path.
 		t.Fatalf("failed to create transport: %v", connErr)
 	}
-	isGreetingsDone.Store(true)
+	isGreetingDone.Store(true)
 	return server, ct.(*http2Client), cancel
 }
 
@@ -2762,6 +2762,7 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 // or a timeout occurs.
 type hangingConn struct {
 	net.Conn
+	hangConn chan struct{}
 }
 
 func (hc *hangingConn) Read(b []byte) (n int, err error) {
@@ -2771,9 +2772,14 @@ func (hc *hangingConn) Read(b []byte) (n int, err error) {
 
 func (hc *hangingConn) Write(b []byte) (n int, err error) {
 	n, err = hc.Conn.Write(b)
-	if isGreetingsDone.Load() == true {
-		// Add a delay which is more than goAwayLoopyWriterTimeout
-		time.Sleep(2 * time.Second)
+	if isGreetingDone.Load() == true {
+		// Hang the Write for more than goAwayLoopyWriterTimeout
+		timer := time.NewTimer(time.Millisecond * 5)
+		defer timer.Stop()
+		select {
+		case <-hc.hangConn:
+		case <-timer.C:
+		}
 	}
 	return n, err
 }
@@ -2783,7 +2789,7 @@ func hangingDialer(_ context.Context, addr string) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &hangingConn{Conn: conn}, nil
+	return &hangingConn{Conn: conn, hangConn: make(chan struct{})}, nil
 }
 
 // Tests the scenario where a client transport is closed and writing of the
@@ -2795,12 +2801,12 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 	// always times out. It is equivalent of real network hang when conn
 	// write for goaway doesn't finish in specified deadline
 	origGoAwayLoopyTimeout := goAwayLoopyWriterTimeout
-	goAwayLoopyWriterTimeout = time.Second
+	goAwayLoopyWriterTimeout = time.Millisecond
 	defer func() {
 		goAwayLoopyWriterTimeout = origGoAwayLoopyTimeout
 	}()
 
-	isGreetingsDone = atomic.Bool{}
+	isGreetingDone.Store(false)
 
 	server, ct, cancel := setUp(t, 0, normal, ConnectOptions{Dialer: hangingDialer})
 	defer cancel()
