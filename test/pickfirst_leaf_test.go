@@ -24,6 +24,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	pickfirstleaf "google.golang.org/grpc/balancer/pickfirst_leaf"
@@ -93,6 +95,23 @@ func setupPickFirstLeaf(t *testing.T, backendCount int, opts ...grpc.DialOption)
 	return cc, r, backends
 }
 
+type scStateExpectation struct {
+	State     connectivity.State
+	ServerIdx int
+}
+
+func scStateExpectationToScState(in []scStateExpectation, serverAddrs []resolver.Address) []scState {
+	out := []scState{}
+	for _, exp := range in {
+		out = append(out, scState{
+			State: exp.State,
+			Addrs: []resolver.Address{serverAddrs[exp.ServerIdx]},
+		})
+	}
+	return out
+
+}
+
 // TestPickFirstLeaf_ResolverUpdate tests the behaviour of the new pick first
 // policy when servers are brought down and resolver updates are received.
 func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
@@ -101,139 +120,197 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 	balChan := make(chan *stateStoringBalancer, 1)
 	balancer.Register(&stateStoringBalancerBuilder{balancerChan: balChan})
 	tests := []struct {
-		name                      string
-		backendCount              int
-		initialBackendIndexes     []int
-		initialTargetBackendIndex int
-		wantScStates              []connectivity.State
-		updatedBackendIndexes     []int
-		updatedTargetBackendIndex int
-		wantScStatesPostUpdate    []connectivity.State
-		restartConnected          bool
+		name                         string
+		backendCount                 int
+		preUpdateBackendIndexes      []int
+		preUpdateTargetBackendIndex  int
+		wantPreUpdateScStates        []scStateExpectation
+		updatedBackendIndexes        []int
+		postUpdateTargetBackendIndex int
+		wantPostUpdateScStates       []scStateExpectation
+		restartConnected             bool
 	}{
 		{
-			name:                      "two_server_first_ready",
-			backendCount:              2,
-			initialBackendIndexes:     []int{0, 1},
-			initialTargetBackendIndex: 0,
-			wantScStates:              []connectivity.State{connectivity.Ready},
+			name:                        "two_server_first_ready",
+			backendCount:                2,
+			preUpdateBackendIndexes:     []int{0, 1},
+			preUpdateTargetBackendIndex: 0,
+			wantPreUpdateScStates: []scStateExpectation{
+				{State: connectivity.Ready, ServerIdx: 0},
+			},
 		},
 		{
-			name:                      "two_server_second_ready",
-			backendCount:              2,
-			initialBackendIndexes:     []int{0, 1},
-			initialTargetBackendIndex: 1,
-			wantScStates:              []connectivity.State{connectivity.Shutdown, connectivity.Ready},
+			name:                        "two_server_second_ready",
+			backendCount:                2,
+			preUpdateBackendIndexes:     []int{0, 1},
+			preUpdateTargetBackendIndex: 1,
+			wantPreUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Ready, ServerIdx: 1},
+			},
 		},
 		{
-			name:                      "duplicate_address",
-			backendCount:              2,
-			initialBackendIndexes:     []int{0, 0, 1},
-			initialTargetBackendIndex: 1,
-			wantScStates:              []connectivity.State{connectivity.Shutdown, connectivity.Ready},
+			name:                        "duplicate_address",
+			backendCount:                2,
+			preUpdateBackendIndexes:     []int{0, 0, 1},
+			preUpdateTargetBackendIndex: 1,
+			wantPreUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Ready, ServerIdx: 1},
+			},
 		},
 		{
-			name:                      "disjoint_updated_addresses",
-			backendCount:              4,
-			initialBackendIndexes:     []int{0, 1},
-			initialTargetBackendIndex: 1,
-			wantScStates:              []connectivity.State{connectivity.Shutdown, connectivity.Ready},
-			updatedBackendIndexes:     []int{2, 3},
-			updatedTargetBackendIndex: 3,
-			wantScStatesPostUpdate:    []connectivity.State{connectivity.Shutdown, connectivity.Shutdown, connectivity.Shutdown, connectivity.Ready},
+			name:                        "disjoint_updated_addresses",
+			backendCount:                4,
+			preUpdateBackendIndexes:     []int{0, 1},
+			preUpdateTargetBackendIndex: 1,
+			wantPreUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Ready, ServerIdx: 1},
+			},
+			updatedBackendIndexes:        []int{2, 3},
+			postUpdateTargetBackendIndex: 3,
+			wantPostUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Shutdown, ServerIdx: 1},
+				{State: connectivity.Shutdown, ServerIdx: 2},
+				{State: connectivity.Ready, ServerIdx: 3},
+			},
 		},
 		{
-			name:                      "active_backend_in_updated_list",
-			backendCount:              3,
-			initialBackendIndexes:     []int{0, 1},
-			initialTargetBackendIndex: 1,
-			wantScStates:              []connectivity.State{connectivity.Shutdown, connectivity.Ready},
-			updatedBackendIndexes:     []int{1, 2},
-			updatedTargetBackendIndex: 1,
-			wantScStatesPostUpdate:    []connectivity.State{connectivity.Shutdown, connectivity.Ready},
+			name:                        "active_backend_in_updated_list",
+			backendCount:                3,
+			preUpdateBackendIndexes:     []int{0, 1},
+			preUpdateTargetBackendIndex: 1,
+			wantPreUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Ready, ServerIdx: 1},
+			},
+			updatedBackendIndexes:        []int{1, 2},
+			postUpdateTargetBackendIndex: 1,
+			wantPostUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Ready, ServerIdx: 1},
+			},
 		},
 		{
-			name:                      "inactive_backend_in_updated_list",
-			backendCount:              3,
-			initialBackendIndexes:     []int{0, 1},
-			initialTargetBackendIndex: 1,
-			wantScStates:              []connectivity.State{connectivity.Shutdown, connectivity.Ready},
-			updatedBackendIndexes:     []int{0, 2},
-			updatedTargetBackendIndex: 0,
-			wantScStatesPostUpdate:    []connectivity.State{connectivity.Shutdown, connectivity.Shutdown, connectivity.Ready},
+			name:                        "inactive_backend_in_updated_list",
+			backendCount:                3,
+			preUpdateBackendIndexes:     []int{0, 1},
+			preUpdateTargetBackendIndex: 1,
+			wantPreUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Ready, ServerIdx: 1},
+			},
+			updatedBackendIndexes:        []int{0, 2},
+			postUpdateTargetBackendIndex: 0,
+			wantPostUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Shutdown, ServerIdx: 1},
+				{State: connectivity.Ready, ServerIdx: 0},
+			},
 		},
 		{
-			name:                      "identical_list",
-			backendCount:              2,
-			initialBackendIndexes:     []int{0, 1},
-			initialTargetBackendIndex: 1,
-			wantScStates:              []connectivity.State{connectivity.Shutdown, connectivity.Ready},
+			name:                        "identical_list",
+			backendCount:                2,
+			preUpdateBackendIndexes:     []int{0, 1},
+			preUpdateTargetBackendIndex: 1,
+			wantPreUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Ready, ServerIdx: 1},
+			},
+			updatedBackendIndexes:        []int{0, 1},
+			postUpdateTargetBackendIndex: 1,
+			wantPostUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Ready, ServerIdx: 1},
+			},
+		},
+		{
+			name:                        "first_connected_idle_reconnect",
+			backendCount:                2,
+			preUpdateBackendIndexes:     []int{0, 1},
+			preUpdateTargetBackendIndex: 0,
+			restartConnected:            true,
+			wantPreUpdateScStates: []scStateExpectation{
+				{State: connectivity.Ready, ServerIdx: 0},
+			},
+			updatedBackendIndexes:        []int{0, 1},
+			postUpdateTargetBackendIndex: 0,
+			wantPostUpdateScStates: []scStateExpectation{
+				{State: connectivity.Ready, ServerIdx: 0},
+			},
+		},
+		{
+			name:                        "second_connected_idle_reconnect",
+			backendCount:                2,
+			preUpdateBackendIndexes:     []int{0, 1},
+			preUpdateTargetBackendIndex: 1,
+			restartConnected:            true,
+			wantPreUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Ready, ServerIdx: 1},
+			},
+			updatedBackendIndexes:        []int{0, 1},
+			postUpdateTargetBackendIndex: 1,
+			wantPostUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Ready, ServerIdx: 1},
+				{State: connectivity.Shutdown, ServerIdx: 0},
+			},
+		},
+		{
+			name:                        "second_connected_idle_reconnect_first",
+			backendCount:                2,
+			preUpdateBackendIndexes:     []int{0, 1},
+			preUpdateTargetBackendIndex: 1,
+			restartConnected:            true,
+			wantPreUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Ready, ServerIdx: 1},
+			},
+			updatedBackendIndexes:        []int{0, 1},
+			postUpdateTargetBackendIndex: 0,
+			wantPostUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Shutdown, ServerIdx: 1},
+				{State: connectivity.Ready, ServerIdx: 0},
+			},
+		},
+		{
+			name:                        "first_connected_idle_reconnect_second",
+			backendCount:                2,
+			preUpdateBackendIndexes:     []int{0, 1},
+			preUpdateTargetBackendIndex: 0,
+			restartConnected:            true,
+			wantPreUpdateScStates: []scStateExpectation{
+				{State: connectivity.Ready, ServerIdx: 0},
+			},
 			updatedBackendIndexes:     []int{0, 1},
-			updatedTargetBackendIndex: 1,
-			wantScStatesPostUpdate:    []connectivity.State{connectivity.Shutdown, connectivity.Ready},
-		},
-		{
-			name:                      "first_connected_idle_reconnect",
-			backendCount:              2,
-			initialBackendIndexes:     []int{0, 1},
-			initialTargetBackendIndex: 0,
-			restartConnected:          true,
-			wantScStates:              []connectivity.State{connectivity.Ready},
-			updatedBackendIndexes:     []int{0, 1},
-			updatedTargetBackendIndex: 0,
-			wantScStatesPostUpdate:    []connectivity.State{connectivity.Ready},
-		},
-		{
-			name:                      "second_connected_idle_reconnect",
-			backendCount:              2,
-			initialBackendIndexes:     []int{0, 1},
-			initialTargetBackendIndex: 1,
-			restartConnected:          true,
-			wantScStates:              []connectivity.State{connectivity.Shutdown, connectivity.Ready},
-			updatedBackendIndexes:     []int{0, 1},
-			updatedTargetBackendIndex: 1,
-			wantScStatesPostUpdate:    []connectivity.State{connectivity.Shutdown, connectivity.Ready, connectivity.Shutdown},
-		},
-		{
-			name:                      "second_connected_idle_reconnect_first",
-			backendCount:              2,
-			initialBackendIndexes:     []int{0, 1},
-			initialTargetBackendIndex: 1,
-			restartConnected:          true,
-			wantScStates:              []connectivity.State{connectivity.Shutdown, connectivity.Ready},
-			updatedBackendIndexes:     []int{0, 1},
-			updatedTargetBackendIndex: 0,
-			wantScStatesPostUpdate:    []connectivity.State{connectivity.Shutdown, connectivity.Shutdown, connectivity.Ready},
-		},
-		{
-			name:                      "first_connected_idle_reconnect_second",
-			backendCount:              2,
-			initialBackendIndexes:     []int{0, 1},
-			initialTargetBackendIndex: 0,
-			restartConnected:          true,
-			wantScStates:              []connectivity.State{connectivity.Ready},
-			updatedBackendIndexes:     []int{0, 1},
-			updatedTargetBackendIndex: 1,
-			wantScStatesPostUpdate:    []connectivity.State{connectivity.Shutdown, connectivity.Ready},
+			postUpdateTargetBackendIndex: 1,
+			wantPostUpdateScStates: []scStateExpectation{
+				{State: connectivity.Shutdown, ServerIdx: 0},
+				{State: connectivity.Ready, ServerIdx: 1},
+			},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			cc, r, backends := setupPickFirstLeaf(t, tc.backendCount)
+			addrs := stubBackendsToResolverAddrs(backends)
 
-			activeBackends := []*stubserver.StubServer{}
-			for _, idx := range tc.initialBackendIndexes {
-				activeBackends = append(activeBackends, backends[idx])
+			activeAddrs := []resolver.Address{}
+			for _, idx := range tc.preUpdateBackendIndexes {
+				activeAddrs = append(activeAddrs, addrs[idx])
 			}
-			addrs := stubBackendsToResolverAddrs(activeBackends)
-			r.UpdateState(resolver.State{Addresses: addrs})
+			r.UpdateState(resolver.State{Addresses: activeAddrs})
 
 			// shutdown all active backends except the target.
 			var targetAddr resolver.Address
-			for idxI, idx := range tc.initialBackendIndexes {
-				if idx == tc.initialTargetBackendIndex {
-					targetAddr = addrs[idxI]
+			for idxI, idx := range tc.preUpdateBackendIndexes {
+				if idx == tc.preUpdateTargetBackendIndex {
+					targetAddr = activeAddrs[idxI]
 					continue
 				}
 				backends[idx].S.Stop()
@@ -243,16 +320,9 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 				t.Fatal(err)
 			}
 			bal := <-balChan
-			scs := bal.subConns()
 
-			if got, want := len(scs), len(tc.wantScStates); got != want {
-				t.Fatalf("len(subconns) = %d, want %d", got, want)
-			}
-
-			for idx := range scs {
-				if got, want := scs[idx].state, tc.wantScStates[idx]; got != want {
-					t.Errorf("subconn[%d].state = %v, want = %v", idx, got, want)
-				}
+			if diff := cmp.Diff(scStateExpectationToScState(tc.wantPreUpdateScStates, addrs), bal.subConns()); diff != "" {
+				t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
 			}
 
 			if len(tc.updatedBackendIndexes) == 0 {
@@ -261,7 +331,7 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 
 			// Restart all the backends.
 			for i, s := range backends {
-				if !tc.restartConnected && i == tc.initialTargetBackendIndex {
+				if !tc.restartConnected && i == tc.preUpdateTargetBackendIndex {
 					continue
 				}
 				s.S.Stop()
@@ -270,17 +340,16 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 				}
 			}
 
-			activeBackends = []*stubserver.StubServer{}
+			activeAddrs = []resolver.Address{}
 			for _, idx := range tc.updatedBackendIndexes {
-				activeBackends = append(activeBackends, backends[idx])
+				activeAddrs = append(activeAddrs, addrs[idx])
 			}
-			addrs = stubBackendsToResolverAddrs(activeBackends)
-			r.UpdateState(resolver.State{Addresses: addrs})
+			r.UpdateState(resolver.State{Addresses: activeAddrs})
 
 			// shutdown all active backends except the target.
 			for idxI, idx := range tc.updatedBackendIndexes {
-				if idx == tc.updatedTargetBackendIndex {
-					targetAddr = addrs[idxI]
+				if idx == tc.postUpdateTargetBackendIndex {
+					targetAddr = activeAddrs[idxI]
 					continue
 				}
 				backends[idx].S.Stop()
@@ -289,18 +358,10 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			if err := pickfirst.CheckRPCsToBackend(ctx, cc, targetAddr); err != nil {
 				t.Fatal(err)
 			}
-			scs = bal.subConns()
 
-			if got, want := len(scs), len(tc.wantScStatesPostUpdate); got != want {
-				t.Fatalf("len(subconns) = %d, want %d", got, want)
+			if diff := cmp.Diff(scStateExpectationToScState(tc.wantPostUpdateScStates, addrs), bal.subConns()); diff != "" {
+				t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
 			}
-
-			for idx := range scs {
-				if got, want := scs[idx].state, tc.wantScStatesPostUpdate[idx]; got != want {
-					t.Errorf("subconn[%d].state = %v, want = %v", idx, got, want)
-				}
-			}
-
 		})
 	}
 }
@@ -361,13 +422,13 @@ type stateStoringCCWrapper struct {
 func (ccw *stateStoringCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	oldListener := opts.StateListener
 	scs := &scState{
-		state: connectivity.Idle,
-		addrs: addrs,
+		State: connectivity.Idle,
+		Addrs: addrs,
 	}
 	ccw.b.addScState(scs)
 	opts.StateListener = func(s balancer.SubConnState) {
 		ccw.b.mu.Lock()
-		scs.state = s.ConnectivityState
+		scs.State = s.ConnectivityState
 		ccw.b.mu.Unlock()
 		oldListener(s)
 	}
@@ -375,6 +436,6 @@ func (ccw *stateStoringCCWrapper) NewSubConn(addrs []resolver.Address, opts bala
 }
 
 type scState struct {
-	state connectivity.State
-	addrs []resolver.Address
+	State connectivity.State
+	Addrs []resolver.Address
 }
