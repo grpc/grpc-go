@@ -22,6 +22,7 @@ package mem
 
 import (
 	"fmt"
+	"io"
 	"unsafe"
 )
 
@@ -62,6 +63,60 @@ func (s BufferSlice) Ref() BufferSlice {
 
 // Free invokes Buffer.Free() on each Buffer in the slice.
 func (s BufferSlice) Free() {}
+
+// Reader returns a new Reader for the input slice after taking references to
+// each underlying buffer.
+func (s BufferSlice) Reader() Reader {
+	switch len(s) {
+	case 0:
+		return (*rawReader)(nil)
+	case 1:
+		data := s[0].(sliceBuffer)
+		return (*rawReader)(&data)
+	default:
+		return &sliceReader{
+			data: s.Ref(),
+			len:  s.Len(),
+		}
+	}
+}
+
+type rawReader sliceBuffer
+
+func (r *rawReader) Read(p []byte) (n int, err error) {
+	if r == nil {
+		return 0, io.EOF
+	}
+
+	switch len(*r) {
+	case 0:
+		return 0, io.EOF
+	case len(p):
+		n = copy(p, *r)
+		*r = nil
+	default:
+		n = copy(p, *r)
+		*r = (*r)[n:]
+	}
+	return n, nil
+}
+
+func (r *rawReader) ReadByte() (byte, error) {
+	var b [1]byte
+	_, err := r.Read(b[:])
+	return b[0], err
+}
+
+func (r *rawReader) Close() error {
+	return nil
+}
+
+func (r *rawReader) Remaining() int {
+	if r == nil {
+		return 0
+	}
+	return len(*r)
+}
 
 // String returns a string representation of the buffer. May be used for
 // debugging purposes.

@@ -149,7 +149,7 @@ type dataFrame struct {
 	streamID  uint32
 	endStream bool
 	h         []byte
-	reader    *mem.Reader
+	reader    mem.Reader
 	// onEachWrite is called every time
 	// a part of data is written out.
 	onEachWrite func()

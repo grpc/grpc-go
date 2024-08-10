@@ -155,6 +155,15 @@ func (s BufferSlice) Free() {
 	clear(s)
 }
 
+// Reader returns a new Reader for the input slice after taking references to
+// each underlying buffer.
+func (s BufferSlice) Reader() Reader {
+	return &sliceReader{
+		data: s.Ref(),
+		len:  s.Len(),
+	}
+}
+
 func (p *tieredBufferPool) Get(size int) []byte {
 	return p.getPool(size).Get(size)
 }
