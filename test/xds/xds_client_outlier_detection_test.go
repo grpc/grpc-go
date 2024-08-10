@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/peer"
@@ -50,7 +51,7 @@ import (
 // Detection balancer. This test verifies that an RPC is able to proceed
 // normally with this configuration.
 func (s) TestOutlierDetection_NoopConfig(t *testing.T) {
-	managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	server := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
@@ -161,7 +162,7 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 // the unhealthy upstream is ejected, RPC's should regularly round robin across
 // all three upstreams.
 func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
-	managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	// Working backend 1.
 	backend1 := stubserver.StartTestService(t, nil)
@@ -242,7 +243,7 @@ func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
 // Detection present in the CDS update, but with SuccessRateEjection unset, and
 // asserts that Outlier Detection is turned on and ejects upstreams.
 func (s) TestOutlierDetectionXDSDefaultOn(t *testing.T) {
-	managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	// Working backend 1.
 	backend1 := stubserver.StartTestService(t, nil)

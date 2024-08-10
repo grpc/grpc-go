@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -41,7 +42,7 @@ func (s) TestClientSideRetry(t *testing.T) {
 	ctr := 0
 	errs := []codes.Code{codes.ResourceExhausted}
 
-	managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	server := stubserver.StartTestService(t, &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {

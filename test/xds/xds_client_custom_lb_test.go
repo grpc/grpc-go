@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/resolver"
 
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
@@ -222,7 +223,7 @@ func (s) TestWrrLocality(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Start an xDS management server.
-			managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+			managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 			routeConfigName := "route-" + serviceName
 			clusterName := "cluster-" + serviceName

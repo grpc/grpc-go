@@ -144,8 +144,8 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 
 	// Create two stats.Handlers which also implement MetricsRecorder, configure
 	// one as a global dial option and one as a local dial option.
-	mr1 := stats.NewTestMetricsRecorder(t, []string{})
-	mr2 := stats.NewTestMetricsRecorder(t, []string{})
+	mr1 := stats.NewTestMetricsRecorder(t)
+	mr2 := stats.NewTestMetricsRecorder(t)
 
 	defer internal.ClearGlobalDialOptions()
 	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(grpc.WithStatsHandler(mr1))
