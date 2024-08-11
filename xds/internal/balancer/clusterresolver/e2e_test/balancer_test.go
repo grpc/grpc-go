@@ -449,7 +449,7 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 
 // Test verifies that LB waits for child policy configuration update
 // inline on receipt of configuration update.
-func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
+func (s) TestChildPoliciesConfigUpdatedInline(t *testing.T) {
 	// Override the newConfigHook to ensure picker was updated.
 	configUpdated := make(chan struct{})
 	origNewConfigHook := clusterresolver.NewConfigHook
@@ -464,7 +464,6 @@ func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 
 	// Start an xDS management server with the above restartable listener, and
 	// push a channel when the stream is closed.
-	//streamClosedCh := make(chan struct{}, 1)
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener: lis,
 	})
