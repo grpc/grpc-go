@@ -32,6 +32,10 @@ var bufferObjectPool = sync.Pool{New: func() any {
 	return new(buffer)
 }}
 
+var refObjectPool = sync.Pool{New: func() any {
+	return new(atomic.Int32)
+}}
+
 type buffer struct {
 	origData *[]byte
 	data     []byte
@@ -53,7 +57,7 @@ func NewBuffer(data *[]byte, pool BufferPool) Buffer {
 	b.origData = data
 	b.data = *data
 	b.pool = pool
-	b.refs = new(atomic.Int32)
+	b.refs = refObjectPool.Get().(*atomic.Int32)
 	b.refs.Add(1)
 	return b
 }
@@ -101,6 +105,7 @@ func (b *buffer) Free() {
 
 	b.origData = nil
 	b.data = nil
+	refObjectPool.Put(b.refs)
 	b.refs = nil
 	b.pool = nil
 	bufferObjectPool.Put(b)
