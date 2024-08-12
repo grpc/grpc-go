@@ -27,6 +27,11 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
+const IntendedTestCaseString = "This is a test case string"
+
+// ClientPreface is the HTTP/2 client preface string.
+var ClientPreface = []byte("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
+
 type clientPrefaceConn struct {
 	net.Conn
 }
@@ -44,7 +49,15 @@ type framerWindowUpdateConn struct {
 }
 
 func (cp *clientPrefaceConn) Write(b []byte) (n int, err error) {
-	return 0, errors.New("preface write error")
+	if string(b) == IntendedTestCaseString {
+		return 0, errors.New("intended test case string detected: forced write error")
+	}
+
+	if len(b) >= len(ClientPreface) && string(b[:len(ClientPreface)]) == string(ClientPreface) {
+		return 0, errors.New("preface write error")
+	}
+	// Normally write the bytes if they don't match the ClientPreface
+	return cp.Conn.Write(b)
 }
 
 func (cp *clientPrefaceConn) Close() error {
@@ -74,13 +87,17 @@ func dialerClientPrefaceLength(_ context.Context, addr string) (net.Conn, error)
 }
 
 func (fws *framerWriteSettingsConn) Write(b []byte) (n int, err error) {
+
+	if string(b) == IntendedTestCaseString {
+		return 0, errors.New("intended test case string detected: forced write error")
+	}
 	framerValue := 9
 	n, err = fws.Conn.Write(b)
-
 	// Compare the number of bytes written with the framer value
 	if n == framerValue {
 		return 0, errors.New("Framer write setting error")
 	}
+
 	return n, err
 }
 
@@ -93,10 +110,14 @@ func dialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error)
 }
 
 func (fwu *framerWindowUpdateConn) Write(b []byte) (n int, err error) {
+	if string(b) == IntendedTestCaseString {
+		return 0, errors.New("intended test case string detected: forced write error")
+	}
+
 	// Simulate a WINDOW_UPDATE frame's value (window size in bytes)
 	windowUpdateValue := 13
-
 	n, err = fwu.Conn.Write(b)
+
 	// Compare the number of bytes written with the WINDOW_UPDATE value
 	if n == windowUpdateValue {
 		return 0, errors.New("Framer write windowupdate error")
