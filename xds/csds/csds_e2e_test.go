@@ -224,12 +224,16 @@ func startCSDSClientStream(ctx context.Context, t *testing.T, serverAddr string)
 // we need to write to their wait channel four times. Also, we have to spawn
 // goroutines to write to these channels because we have no control over the
 // order of invocation of resource's watch callbacks.
-func unblockResourceWatchers(t *testing.T, listenerWatcherWaitCh, routeConfigWatcherWaitCh, clusterWatcherWaitCh, endpointsWatcherWaitCh chan struct{}) {
+func unblockResourceWatchers(ctx context.Context, t *testing.T, listenerWatcherWaitCh, routeConfigWatcherWaitCh, clusterWatcherWaitCh, endpointsWatcherWaitCh chan struct{}) {
 	t.Helper()
 	for _, w := range []chan struct{}{listenerWatcherWaitCh, routeConfigWatcherWaitCh, clusterWatcherWaitCh, endpointsWatcherWaitCh} {
 		go func(w chan struct{}) {
 			for i := 0; i < 4; i++ {
-				w <- struct{}{}
+				select {
+				case <-ctx.Done():
+					return
+				case w <- struct{}{}:
+				}
 			}
 		}(w)
 	}
@@ -403,7 +407,7 @@ func (s) TestCSDS(t *testing.T) {
 	}
 
 	// Unblock the resource watchers.
-	unblockResourceWatchers(t, listenerWatcher.waitCh, routeConfigWatcher.waitCh, clusterWatcher.waitCh, endpointsWatcher.waitCh)
+	unblockResourceWatchers(ctx, t, listenerWatcher.waitCh, routeConfigWatcher.waitCh, clusterWatcher.waitCh, endpointsWatcher.waitCh)
 
 	// Verify that the xDS client reports the resources as being in "ACKed"
 	// state, and in version "1".
@@ -453,7 +457,7 @@ func (s) TestCSDS(t *testing.T) {
 	}
 
 	// Unblock the resource watchers once more.
-	unblockResourceWatchers(t, listenerWatcher.waitCh, routeConfigWatcher.waitCh, clusterWatcher.waitCh, endpointsWatcher.waitCh)
+	unblockResourceWatchers(ctx, t, listenerWatcher.waitCh, routeConfigWatcher.waitCh, clusterWatcher.waitCh, endpointsWatcher.waitCh)
 
 	// Verify that the xDS client reports the first resource of each type as
 	// being in "NACKed" state, and the second resource of each type to be in
