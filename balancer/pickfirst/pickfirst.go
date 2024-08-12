@@ -103,7 +103,11 @@ func (b *pickfirstBalancer) ResolverError(err error) {
 	})
 }
 
+// Shuffler is an interface that allows shuffling of the address list for testing purposes.
+// It provides a method to shuffle the order of addresses in the list using a given swap function.
 type Shuffler interface {
+	// ShuffleAddressListForTesting shuffles the order of n addresses in the list.
+	// The swap function is used to swap the elements at indices i and j.
 	ShuffleAddressListForTesting(n int, swap func(i, j int))
 }
 
