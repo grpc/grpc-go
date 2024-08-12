@@ -213,9 +213,11 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 
 	newEndpoints := state.ResolverState.Endpoints
 	if len(newEndpoints) == 0 {
+		newEndpoints = make([]resolver.Endpoint, len(state.ResolverState.Addresses))
 		// Convert addresses to endpoints.
-		for _, addr := range state.ResolverState.Addresses {
-			newEndpoints = append(newEndpoints, resolver.Endpoint{Addresses: []resolver.Address{addr}})
+		for i, a := range state.ResolverState.Addresses {
+			newEndpoints[i].Attributes = a.BalancerAttributes
+			newEndpoints[i].Addresses = []resolver.Address{a}
 		}
 	}
 
