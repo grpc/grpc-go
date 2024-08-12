@@ -331,19 +331,17 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	b.stateMu.Unlock()
 	<-done
 
+	// We cannot do cache operations above because `cacheMu` needs to be grabbed
+	// before `stateMu` if we are to hold both locks at the same time.
+	b.cacheMu.Lock()
+	b.dataCache.updateRLSServerTarget(newCfg.lookupService)
 	if resizeCache {
 		// If the new config changes reduces the size of the data cache, we
 		// might have to evict entries to get the cache size down to the newly
 		// specified size.
-		//
-		// And we cannot do this operation above (where we compute the
-		// `resizeCache` boolean) because `cacheMu` needs to be grabbed before
-		// `stateMu` if we are to hold both locks at the same time.
-		b.cacheMu.Lock()
-		b.dataCache.updateRLSServerTarget(newCfg.lookupService)
 		b.dataCache.resize(newCfg.cacheSizeBytes)
-		b.cacheMu.Unlock()
 	}
+	b.cacheMu.Unlock()
 	return nil
 }
 
