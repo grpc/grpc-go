@@ -48,9 +48,15 @@ import (
 
 type noopListenerWatcher struct{}
 
-func (noopListenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData) {}
-func (noopListenerWatcher) OnError(err error)                                 {}
-func (noopListenerWatcher) OnResourceDoesNotExist()                           {}
+func (noopListenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, done xdsresource.DoneNotifier) {
+	done.OnDone()
+}
+func (noopListenerWatcher) OnError(err error, done xdsresource.DoneNotifier) {
+	done.OnDone()
+}
+func (noopListenerWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
+	done.OnDone()
+}
 
 type listenerUpdateErrTuple struct {
 	update xdsresource.ListenerUpdate
@@ -65,20 +71,23 @@ func newListenerWatcher() *listenerWatcher {
 	return &listenerWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (cw *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData) {
+func (cw *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, done xdsresource.DoneNotifier) {
 	cw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
+	done.OnDone()
 }
 
-func (cw *listenerWatcher) OnError(err error) {
+func (cw *listenerWatcher) OnError(err error, done xdsresource.DoneNotifier) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
 	cw.updateCh.Replace(listenerUpdateErrTuple{err: err})
+	done.OnDone()
 }
 
-func (cw *listenerWatcher) OnResourceDoesNotExist() {
+func (cw *listenerWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
 	cw.updateCh.Replace(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
+	done.OnDone()
 }
 
 // badListenerResource returns a listener resource for the given name which does

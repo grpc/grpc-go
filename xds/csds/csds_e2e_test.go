@@ -71,27 +71,51 @@ func Test(t *testing.T) {
 
 type unimplementedListenerWatcher struct{}
 
-func (unimplementedListenerWatcher) OnUpdate(*xdsresource.ListenerResourceData) {}
-func (unimplementedListenerWatcher) OnError(error)                              {}
-func (unimplementedListenerWatcher) OnResourceDoesNotExist()                    {}
+func (unimplementedListenerWatcher) OnUpdate(_ *xdsresource.ListenerResourceData, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (unimplementedListenerWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (unimplementedListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
 
 type unimplementedRouteConfigWatcher struct{}
 
-func (unimplementedRouteConfigWatcher) OnUpdate(*xdsresource.RouteConfigResourceData) {}
-func (unimplementedRouteConfigWatcher) OnError(error)                                 {}
-func (unimplementedRouteConfigWatcher) OnResourceDoesNotExist()                       {}
+func (unimplementedRouteConfigWatcher) OnUpdate(_ *xdsresource.RouteConfigResourceData, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (unimplementedRouteConfigWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (unimplementedRouteConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
 
 type unimplementedClusterWatcher struct{}
 
-func (unimplementedClusterWatcher) OnUpdate(*xdsresource.ClusterResourceData) {}
-func (unimplementedClusterWatcher) OnError(error)                             {}
-func (unimplementedClusterWatcher) OnResourceDoesNotExist()                   {}
+func (unimplementedClusterWatcher) OnUpdate(_ *xdsresource.ClusterResourceData, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (unimplementedClusterWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (unimplementedClusterWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
 
 type unimplementedEndpointsWatcher struct{}
 
-func (unimplementedEndpointsWatcher) OnUpdate(*xdsresource.EndpointsResourceData) {}
-func (unimplementedEndpointsWatcher) OnError(error)                               {}
-func (unimplementedEndpointsWatcher) OnResourceDoesNotExist()                     {}
+func (unimplementedEndpointsWatcher) OnUpdate(_ *xdsresource.EndpointsResourceData, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (unimplementedEndpointsWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (unimplementedEndpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
 
 // Creates a gRPC server and starts serving a CSDS service implementation on it.
 // Returns the address of the newly created gRPC server.
