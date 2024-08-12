@@ -172,7 +172,7 @@ func (x *GenericClientStream[Req, Res]) CloseAndRecv() (*Res, error) {
 }
 
 // GenericServerStream implements the ServerStreamingServer, ClientStreamingServer,
-// and BidiStreamingServer interfaces.  It is used in generated code.
+// and BidiStreamingServer interfaces. It is used in generated code.
 type GenericServerStream[Req any, Res any] struct {
 	ServerStream
 }
