@@ -410,7 +410,6 @@ func (s) TestCSDS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Unblock the resource watchers.
 	unblockResourceWatchers(ctx, t, listenerWatcher.triggerOnDoneCh, routeConfigWatcher.triggerOnDoneCh, clusterWatcher.triggerOnDoneCh, endpointsWatcher.triggerOnDoneCh)
 
 	// Verify that the xDS client reports the resources as being in "ACKed"
@@ -460,7 +459,6 @@ func (s) TestCSDS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Unblock the resource watchers once more.
 	unblockResourceWatchers(ctx, t, listenerWatcher.triggerOnDoneCh, routeConfigWatcher.triggerOnDoneCh, clusterWatcher.triggerOnDoneCh, endpointsWatcher.triggerOnDoneCh)
 
 	// Verify that the xDS client reports the first resource of each type as
