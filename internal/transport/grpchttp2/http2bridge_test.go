@@ -19,7 +19,6 @@
 package grpchttp2
 
 import (
-	"errors"
 	"fmt"
 	"testing"
 
@@ -61,23 +60,14 @@ func readUint16(b []byte) uint16 {
 	return uint16(b[0])<<8 | uint16(b[1])
 }
 
-// checkWrittenHeader takes a byte buffer representing a written frame header and
-// compares its values to the passed values.
-func checkWrittenHeader(gotHdr []byte, wantHdr *FrameHeader) []error {
-	var errors []error
-	if gotSize := readUint24(gotHdr[0:3]); gotSize != int(wantHdr.Size) {
-		errors = append(errors, fmt.Errorf("Size: got %d, want %d", gotSize, wantHdr.Size))
-	}
-	if gotType := FrameType(gotHdr[3]); gotType != wantHdr.Type {
-		errors = append(errors, fmt.Errorf("Type: got %#x, want %#x", gotType, wantHdr.Type))
-	}
-	if gotFlag := Flag(gotHdr[4]); gotFlag != wantHdr.Flags {
-		errors = append(errors, fmt.Errorf("Flags: got %#x, want %#x", gotFlag, wantHdr.Flags))
-	}
-	if gotSID := readUint32(gotHdr[5:9]); gotSID != wantHdr.StreamID {
-		errors = append(errors, fmt.Errorf("StreamID: got %d, want %d", gotSID, wantHdr.StreamID))
-	}
-	return errors
+// checkWrittenHeader takes a byte buffer representing a written frame header
+// and returns its parsed values.
+func parseWrittenHeader(buf []byte) *FrameHeader {
+	size := uint32(readUint24(buf[0:3]))
+	t := FrameType(buf[3])
+	flags := Flag(buf[4])
+	sID := readUint32(buf[5:])
+	return &FrameHeader{Size: size, Type: t, Flags: flags, StreamID: sID}
 }
 
 // Tests and verifies that the framer correctly reads a Data Frame.
@@ -103,7 +93,7 @@ func (s) TestBridge_ReadFrame_Data(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(fr.Header(), wantHdr); diff != "" {
-		t.Errorf("ReadFrame(): %s", diff)
+		t.Errorf("ReadFrame() (-got, +want): %s", diff)
 	}
 
 	df := fr.(*DataFrame)
@@ -135,7 +125,7 @@ func (s) TestBridge_ReadFrame_RSTStream(t *testing.T) {
 		StreamID: 1,
 	}
 	if diff := cmp.Diff(fr.Header(), wantHdr); diff != "" {
-		t.Errorf("ReadFrame(): %s", diff)
+		t.Errorf("ReadFrame() (-got, +want): %s", diff)
 	}
 	rf := fr.(*RSTStreamFrame)
 	if rf.Code != ErrCodeProtocol {
@@ -166,7 +156,7 @@ func (s) TestBridge_ReadFrame_Settings(t *testing.T) {
 		StreamID: 0,
 	}
 	if diff := cmp.Diff(fr.Header(), wantHdr); diff != "" {
-		t.Errorf("ReadFrame(): %s", diff)
+		t.Errorf("ReadFrame() (-got, +want): %s", diff)
 	}
 
 	sf := fr.(*SettingsFrame)
@@ -200,7 +190,7 @@ func (s) TestBridge_ReadFrame_Ping(t *testing.T) {
 		StreamID: 0,
 	}
 	if diff := cmp.Diff(fr.Header(), wantHdr); diff != "" {
-		t.Errorf("ReadFrame(): %s", diff)
+		t.Errorf("ReadFrame() (-got, +want): %s", diff)
 	}
 
 	pf := fr.(*PingFrame)
@@ -239,7 +229,7 @@ func (s) TestBridge_ReadFrame_GoAway(t *testing.T) {
 		StreamID: 0,
 	}
 	if diff := cmp.Diff(fr.Header(), wantHdr); diff != "" {
-		t.Errorf("ReadFrame(): %s", diff)
+		t.Errorf("ReadFrame() (-got, +want): %s", diff)
 	}
 
 	gf := fr.(*GoAwayFrame)
@@ -276,7 +266,7 @@ func (s) TestBridge_ReadFrame_WindowUpdate(t *testing.T) {
 		StreamID: 1,
 	}
 	if diff := cmp.Diff(fr.Header(), wantHdr); diff != "" {
-		t.Errorf("ReadFrame(): %s", diff)
+		t.Errorf("ReadFrame() (-got, +want): %s", diff)
 	}
 
 	wf := fr.(*WindowUpdateFrame)
@@ -359,7 +349,7 @@ func (s) TestBridge_ReadFrame_UnknownFrame(t *testing.T) {
 		StreamID: 1,
 	}
 	if diff := cmp.Diff(fr.Header(), wantHdr); diff != "" {
-		t.Errorf("ReadFrame(): %s", diff)
+		t.Errorf("ReadFrame() (-got, +want): %s", diff)
 	}
 
 	uf, ok := fr.(*UnknownFrame)
@@ -373,7 +363,7 @@ func (s) TestBridge_ReadFrame_UnknownFrame(t *testing.T) {
 }
 
 // Tests and verifies that a Data Frame is correctly written.
-func (s) TestBridge_WriteData(t *testing.T) {
+func (s) TestBridge_WriteData_MultipleSlices(t *testing.T) {
 	c := &testConn{}
 	testBuf := [][]byte{[]byte("test"), []byte(" data")}
 	f := NewFramerBridge(c, c, 0, nil)
@@ -386,9 +376,34 @@ func (s) TestBridge_WriteData(t *testing.T) {
 		Flags:    0,
 		StreamID: 1,
 	}
-	if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
-		t.Errorf("WriteData():\n%s", errors.Join(errs...))
+	gotHdr := parseWrittenHeader(c.wbuf[:9])
+	if diff := cmp.Diff(gotHdr, wantHdr); diff != "" {
+		t.Errorf("WriteData() (-got, +want): %s", diff)
 	}
+
+	if string(c.wbuf[9:]) != wantData {
+		t.Errorf("WriteData(): Data: got %q, want %q", string(c.wbuf[9:]), wantData)
+	}
+}
+
+func (s) TestBridge_WriteData_OneSlice(t *testing.T) {
+	c := &testConn{}
+	testBuf := [][]byte{[]byte("test data")}
+	f := NewFramerBridge(c, c, 0, nil)
+	f.WriteData(1, false, testBuf...)
+
+	wantData := "test data"
+	wantHdr := &FrameHeader{
+		Size:     uint32(len(wantData)),
+		Type:     FrameTypeData,
+		Flags:    0,
+		StreamID: 1,
+	}
+	gotHdr := parseWrittenHeader(c.wbuf[:9])
+	if diff := cmp.Diff(gotHdr, wantHdr); diff != "" {
+		t.Errorf("WriteData() (-got, +want): %s", diff)
+	}
+
 	if string(c.wbuf[9:]) != wantData {
 		t.Errorf("WriteData(): Data: got %q, want %q", string(c.wbuf[9:]), wantData)
 	}
@@ -429,9 +444,11 @@ func (s) TestBridge_WriteHeaders(t *testing.T) {
 				Flags:    wantFlags,
 				StreamID: 1,
 			}
-			if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
-				t.Errorf("WriteHeaders():\n%s", errors.Join(errs...))
+			gotHdr := parseWrittenHeader(c.wbuf[:9])
+			if diff := cmp.Diff(gotHdr, wantHdr); diff != "" {
+				t.Errorf("WriteHeaders() (-got, +want): %s", diff)
 			}
+
 			if data := string(c.wbuf[9:]); data != wantData {
 				t.Errorf("WriteHeaders(): Data: got %q, want %q", data, wantData)
 			}
@@ -452,9 +469,11 @@ func (s) TestBridge_WriteRSTStream(t *testing.T) {
 		Flags:    0,
 		StreamID: 1,
 	}
-	if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
-		t.Errorf("WriteRSTStream():\n%s", errors.Join(errs...))
+	gotHdr := parseWrittenHeader(c.wbuf[:9])
+	if diff := cmp.Diff(gotHdr, wantHdr); diff != "" {
+		t.Errorf("WriteRSTStream() (-got, +want): %s", diff)
 	}
+
 	if errCode := readUint32(c.wbuf[9:13]); errCode != uint32(ErrCodeProtocol) {
 		t.Errorf("WriteRSTStream(): SettingID: got %d, want %d", errCode, ErrCodeProtocol)
 	}
@@ -466,14 +485,15 @@ func (s) TestBridge_WriteSettings(t *testing.T) {
 	f := NewFramerBridge(c, c, 0, nil)
 	f.WriteSettings(Setting{ID: SettingsHeaderTableSize, Value: 200})
 
-	wantHeader := &FrameHeader{
+	wantHdr := &FrameHeader{
 		Size:     6,
 		Type:     FrameTypeSettings,
 		Flags:    0,
 		StreamID: 0,
 	}
-	if errs := checkWrittenHeader(c.wbuf[0:9], wantHeader); len(errs) > 0 {
-		t.Errorf("WriteSettings():\n%s", errors.Join(errs...))
+	gotHdr := parseWrittenHeader(c.wbuf[:9])
+	if diff := cmp.Diff(gotHdr, wantHdr); diff != "" {
+		t.Errorf("WriteSettings() (-got, +want): %s", diff)
 	}
 
 	if settingID := readUint16(c.wbuf[9:11]); settingID != uint16(SettingsHeaderTableSize) {
@@ -497,9 +517,11 @@ func (s) TestBridge_WriteSettingsAck(t *testing.T) {
 		Flags:    FlagSettingsAck,
 		StreamID: 0,
 	}
-	if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
-		t.Errorf("WriteSettingsAck():\n%s", errors.Join(errs...))
+	gotHdr := parseWrittenHeader(c.wbuf[:9])
+	if diff := cmp.Diff(gotHdr, wantHdr); diff != "" {
+		t.Errorf("WriteSettingsAck() (-got, +want): %s", diff)
 	}
+
 }
 
 // Tests and verifies that a Ping Frame is correctly written with its flag
@@ -524,9 +546,11 @@ func (s) TestBridge_WritePing(t *testing.T) {
 				Flags:    wantFlags,
 				StreamID: 0,
 			}
-			if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
-				t.Errorf("WritePing():\n%s", errors.Join(errs...))
+			gotHdr := parseWrittenHeader(c.wbuf[:9])
+			if diff := cmp.Diff(gotHdr, wantHdr); diff != "" {
+				t.Errorf("WritePing() (-got, +want): %s", diff)
 			}
+
 			data := c.wbuf[9:]
 			for i := range data {
 				if data[i] != wantData[i] {
@@ -550,8 +574,9 @@ func (s) TestBridge_WriteGoAway(t *testing.T) {
 		Flags:    0,
 		StreamID: 0,
 	}
-	if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
-		t.Errorf("WriteGoAway():\n%s", errors.Join(errs...))
+	gotHdr := parseWrittenHeader(c.wbuf[:9])
+	if diff := cmp.Diff(gotHdr, wantHdr); diff != "" {
+		t.Errorf("WriteGoAway() (-got, +want): %s", diff)
 	}
 
 	if lastStream := readUint32(c.wbuf[9:13]); lastStream != 2 {
@@ -577,9 +602,11 @@ func (s) TestBridge_WriteWindowUpdate(t *testing.T) {
 		Flags:    0,
 		StreamID: 1,
 	}
-	if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
-		t.Errorf("WriteWindowUpdate():\n%s", errors.Join(errs...))
+	gotHdr := parseWrittenHeader(c.wbuf[:9])
+	if diff := cmp.Diff(gotHdr, wantHdr); diff != "" {
+		t.Errorf("WriteWindowUpdate() (-got, +want): %s", diff)
 	}
+
 	if inc := readUint32(c.wbuf[9:13]); inc != 2 {
 		t.Errorf("WriteWindowUpdate(): Inc: got %d, want %d", inc, 2)
 	}
@@ -612,9 +639,11 @@ func (s) TestBridge_WriteContinuation(t *testing.T) {
 				Flags:    wantFlags,
 				StreamID: 1,
 			}
-			if errs := checkWrittenHeader(c.wbuf[0:9], wantHdr); len(errs) > 0 {
-				t.Errorf("WriteContinuation():\n%s", errors.Join(errs...))
+			gotHdr := parseWrittenHeader(c.wbuf[:9])
+			if diff := cmp.Diff(gotHdr, wantHdr); diff != "" {
+				t.Errorf("WriteContinuation() (-got, +want): %s", diff)
 			}
+
 			if data := string(c.wbuf[9:]); data != wantData {
 				t.Errorf("WriteContinuation(): Data: got %q, want %q", data, wantData)
 			}
