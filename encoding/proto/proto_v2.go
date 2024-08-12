@@ -48,7 +48,7 @@ func (c *codecV2) Marshal(v any) (mem.BufferSlice, error) {
 		pool.Put(buf)
 		return nil, err
 	}
-	return mem.BufferSlice{mem.NewBuffer(buf, pool.Put)}, nil
+	return mem.BufferSlice{mem.NewBuffer(buf, pool)}, nil
 }
 
 func (c *codecV2) Unmarshal(data mem.BufferSlice, v any) (err error) {

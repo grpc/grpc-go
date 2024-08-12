@@ -34,7 +34,7 @@ const PoolingEnabled = false
 // to the returned Buffer are released.
 //
 // Note that the backing array of the given data is not copied.
-func NewBuffer(data *[]byte, free func(*[]byte)) Buffer {
+func NewBuffer(data *[]byte, pool BufferPool) Buffer {
 	return sliceBuffer(*data)
 }
 

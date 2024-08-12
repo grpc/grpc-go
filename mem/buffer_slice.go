@@ -87,7 +87,7 @@ func (s BufferSlice) MaterializeToBuffer(pool BufferPool) Buffer {
 	}
 	buf := pool.Get(s.Len())
 	s.CopyTo(*buf)
-	return NewBuffer(buf, pool.Put)
+	return NewBuffer(buf, pool)
 }
 
 // Reader exposes a BufferSlice's data as an io.Reader, allowing it to interface

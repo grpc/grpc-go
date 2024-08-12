@@ -36,7 +36,7 @@ type buffer struct {
 	origData *[]byte
 	data     []byte
 	refs     *atomic.Int32
-	free     func(*[]byte)
+	pool     BufferPool
 }
 
 func newBuffer() *buffer {
@@ -48,11 +48,11 @@ func newBuffer() *buffer {
 // to the returned Buffer are released.
 //
 // Note that the backing array of the given data is not copied.
-func NewBuffer(data *[]byte, onFree func(*[]byte)) Buffer {
+func NewBuffer(data *[]byte, pool BufferPool) Buffer {
 	b := newBuffer()
 	b.origData = data
 	b.data = *data
-	b.free = onFree
+	b.pool = pool
 	b.refs = new(atomic.Int32)
 	b.refs.Add(1)
 	return b
@@ -67,7 +67,7 @@ func NewBuffer(data *[]byte, onFree func(*[]byte)) Buffer {
 func Copy(data []byte, pool BufferPool) Buffer {
 	buf := pool.Get(len(data))
 	copy(*buf, data)
-	return NewBuffer(buf, pool.Put)
+	return NewBuffer(buf, pool)
 }
 
 func (b *buffer) ReadOnlyData() []byte {
@@ -86,7 +86,7 @@ func (b *buffer) Ref() Buffer {
 	newB.origData = b.origData
 	newB.data = b.data
 	newB.refs = b.refs
-	newB.free = b.free
+	newB.pool = b.pool
 	return newB
 }
 
@@ -95,14 +95,14 @@ func (b *buffer) Free() {
 		panic("Cannot free freed buffer")
 	}
 
-	if b.refs.Add(-1) == 0 && b.free != nil {
-		b.free(b.origData)
+	if b.refs.Add(-1) == 0 && b.pool != nil {
+		b.pool.Put(b.origData)
 	}
 
 	b.origData = nil
 	b.data = nil
 	b.refs = nil
-	b.free = nil
+	b.pool = nil
 	bufferObjectPool.Put(b)
 }
 
@@ -120,7 +120,7 @@ func (b *buffer) split(n int) (Buffer, Buffer) {
 	split.origData = b.origData
 	split.data = b.data[n:]
 	split.refs = b.refs
-	split.free = b.free
+	split.pool = b.pool
 
 	b.data = b.data[:n]
 

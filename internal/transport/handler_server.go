@@ -431,7 +431,7 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 			n, err := req.Body.Read(*buf)
 			if n > 0 {
 				*buf = (*buf)[:n]
-				s.buf.put(recvMsg{buffer: mem.NewBuffer(buf, ht.bufferPool.Put)})
+				s.buf.put(recvMsg{buffer: mem.NewBuffer(buf, ht.bufferPool)})
 			} else {
 				ht.bufferPool.Put(buf)
 			}
