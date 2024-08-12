@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -65,56 +64,113 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// The following watcher implementations are no-ops since we don't really care
-// about the callback received by these watchers in the test. We only care
-// whether CSDS reports the expected state.
+// The following watcher implementations are no-ops in the sense that they don't
+// validate or use the received updates from the xDS client. In this test, we
+// only care whether CSDS reports the expected state.
+//
+// Note: These watchers do use the ADS stream level flow control supported by
+// the xDS client. The watch callbacks block on a wait channel that is written
+// to by the test, before invoking the onDone callback. This is particularly
+// useful when a resource is NACKed, because the go-control-plane management
+// server continuously resends the same resource in this case, and applying flow
+// control from these watchers ensures that xDS client does not spend all of its
+// time receiving and NACKing updates from the maangement server. This was
+// indeed the case on arm64 (before we had support for ADS stream level flow
+// control), and was causing CSDS to not receive any updates in this case.
 
-type unimplementedListenerWatcher struct{}
-
-func (unimplementedListenerWatcher) OnUpdate(_ *xdsresource.ListenerResourceData, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
-}
-func (unimplementedListenerWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
-}
-func (unimplementedListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
-}
-
-type unimplementedRouteConfigWatcher struct{}
-
-func (unimplementedRouteConfigWatcher) OnUpdate(_ *xdsresource.RouteConfigResourceData, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
-}
-func (unimplementedRouteConfigWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
-}
-func (unimplementedRouteConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func blockAndDone(testDoneCh <-chan struct{}, waitCh chan struct{}, onDone xdsresource.DoneNotifier) {
+	select {
+	case <-testDoneCh:
+	case <-waitCh:
+		onDone.OnDone()
+	}
 }
 
-type unimplementedClusterWatcher struct{}
-
-func (unimplementedClusterWatcher) OnUpdate(_ *xdsresource.ClusterResourceData, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
-}
-func (unimplementedClusterWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
-}
-func (unimplementedClusterWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+type blockingListenerWatcher struct {
+	testDoneCh <-chan struct{} // Closed when the test is done.
+	waitCh     chan struct{}   // Written to by the test to unblock the watch callback.
 }
 
-type unimplementedEndpointsWatcher struct{}
+func newBlockingListenerWatcher(doneCh <-chan struct{}) *blockingListenerWatcher {
+	return &blockingListenerWatcher{
+		testDoneCh: doneCh,
+		waitCh:     make(chan struct{}, 1),
+	}
+}
 
-func (unimplementedEndpointsWatcher) OnUpdate(_ *xdsresource.EndpointsResourceData, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (w *blockingListenerWatcher) OnUpdate(_ *xdsresource.ListenerResourceData, onDone xdsresource.DoneNotifier) {
+	blockAndDone(w.testDoneCh, w.waitCh, onDone)
 }
-func (unimplementedEndpointsWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (w *blockingListenerWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
+	blockAndDone(w.testDoneCh, w.waitCh, onDone)
 }
-func (unimplementedEndpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (w *blockingListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
+	blockAndDone(w.testDoneCh, w.waitCh, onDone)
+}
+
+type blockingRouteConfigWatcher struct {
+	testDoneCh <-chan struct{} // Closed when the test is done.
+	waitCh     chan struct{}   // Written to by the test to unblock the watch callback.
+}
+
+func newBlockingRouteConfigWatcher(doneCh <-chan struct{}) *blockingRouteConfigWatcher {
+	return &blockingRouteConfigWatcher{
+		testDoneCh: doneCh,
+		waitCh:     make(chan struct{}, 1),
+	}
+}
+
+func (w *blockingRouteConfigWatcher) OnUpdate(_ *xdsresource.RouteConfigResourceData, onDone xdsresource.DoneNotifier) {
+	blockAndDone(w.testDoneCh, w.waitCh, onDone)
+}
+func (w *blockingRouteConfigWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
+	blockAndDone(w.testDoneCh, w.waitCh, onDone)
+}
+func (w *blockingRouteConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
+	blockAndDone(w.testDoneCh, w.waitCh, onDone)
+}
+
+type blockingClusterWatcher struct {
+	testDoneCh <-chan struct{} // Closed when the test is done.
+	waitCh     chan struct{}   // Written to by the test to unblock the watch callback.
+}
+
+func newBlockingClusterWatcher(doneCh <-chan struct{}) *blockingClusterWatcher {
+	return &blockingClusterWatcher{
+		testDoneCh: doneCh,
+		waitCh:     make(chan struct{}, 1),
+	}
+}
+func (w *blockingClusterWatcher) OnUpdate(_ *xdsresource.ClusterResourceData, onDone xdsresource.DoneNotifier) {
+	blockAndDone(w.testDoneCh, w.waitCh, onDone)
+}
+func (w *blockingClusterWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
+	blockAndDone(w.testDoneCh, w.waitCh, onDone)
+}
+func (w *blockingClusterWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
+	blockAndDone(w.testDoneCh, w.waitCh, onDone)
+}
+
+type blockingEndpointsWatcher struct {
+	testDoneCh <-chan struct{} // Closed when the test is done.
+	waitCh     chan struct{}   // Written to by the test to unblock the watch callback.
+}
+
+func newBlockingEndpointsWatcher(doneCh <-chan struct{}) *blockingEndpointsWatcher {
+	return &blockingEndpointsWatcher{
+		testDoneCh: doneCh,
+		waitCh:     make(chan struct{}, 1),
+	}
+}
+
+func (w *blockingEndpointsWatcher) OnUpdate(_ *xdsresource.EndpointsResourceData, onDone xdsresource.DoneNotifier) {
+	blockAndDone(w.testDoneCh, w.waitCh, onDone)
+}
+func (w *blockingEndpointsWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
+	blockAndDone(w.testDoneCh, w.waitCh, onDone)
+}
+func (w *blockingEndpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
+	blockAndDone(w.testDoneCh, w.waitCh, onDone)
 }
 
 // Creates a gRPC server and starts serving a CSDS service implementation on it.
@@ -163,6 +219,22 @@ func startCSDSClientStream(ctx context.Context, t *testing.T, serverAddr string)
 	return stream
 }
 
+// Unblock the resource watchers. Since we use the same resource watchers
+// for both xDS clients and each of them watches two resources of each type,
+// we need to write to their wait channel four times. Also, we have to spawn
+// goroutines to write to these channels because we have no control over the
+// order of invocation of resource's watch callbacks.
+func unblockResourceWatchers(t *testing.T, listenerWatcherWaitCh, routeConfigWatcherWaitCh, clusterWatcherWaitCh, endpointsWatcherWaitCh chan struct{}) {
+	t.Helper()
+	for _, w := range []chan struct{}{listenerWatcherWaitCh, routeConfigWatcherWaitCh, clusterWatcherWaitCh, endpointsWatcherWaitCh} {
+		go func(w chan struct{}) {
+			for i := 0; i < 4; i++ {
+				w <- struct{}{}
+			}
+		}(w)
+	}
+}
+
 // Tests CSDS functionality. The test performs the following:
 //   - Spins up a management server and creates two xDS clients talking to it.
 //   - Registers a set of watches on the xDS clients, and verifies that the CSDS
@@ -177,14 +249,6 @@ func startCSDSClientStream(ctx context.Context, t *testing.T, serverAddr string)
 // For all of the above operations, the test also verifies that the client_scope
 // field in the CSDS response is populated appropriately.
 func (s) TestCSDS(t *testing.T) {
-	// TODO(easwars): Once https://github.com/grpc/grpc/issues/34099 is fixed
-	// for grpc-go, use resource watchers which are able to control how much we
-	// read from the management server, and thereby allowing this test to not
-	// starve in the presence of constant updates from the management server.
-	if runtime.GOARCH == "arm64" {
-		t.Skip("Skipping test on arm64 due to https://github.com/envoyproxy/go-control-plane/issues/962")
-	}
-
 	// Spin up a xDS management server on a local port.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
@@ -274,19 +338,25 @@ func (s) TestCSDS(t *testing.T) {
 		endpointAnys[i] = testutils.MarshalAny(t, endpoints[i])
 	}
 
+	// Create the blocking resource watchers.
+	listenerWatcher := newBlockingListenerWatcher(ctx.Done())
+	routeConfigWatcher := newBlockingRouteConfigWatcher(ctx.Done())
+	clusterWatcher := newBlockingClusterWatcher(ctx.Done())
+	endpointsWatcher := newBlockingEndpointsWatcher(ctx.Done())
+
 	// Register watches on the xDS clients for two resources of each type.
 	for _, xdsC := range []xdsclient.XDSClient{xdsClient1, xdsClient2} {
 		for _, target := range ldsTargets {
-			xdsresource.WatchListener(xdsC, target, unimplementedListenerWatcher{})
+			xdsresource.WatchListener(xdsC, target, listenerWatcher)
 		}
 		for _, target := range rdsTargets {
-			xdsresource.WatchRouteConfig(xdsC, target, unimplementedRouteConfigWatcher{})
+			xdsresource.WatchRouteConfig(xdsC, target, routeConfigWatcher)
 		}
 		for _, target := range cdsTargets {
-			xdsresource.WatchCluster(xdsC, target, unimplementedClusterWatcher{})
+			xdsresource.WatchCluster(xdsC, target, clusterWatcher)
 		}
 		for _, target := range edsTargets {
-			xdsresource.WatchEndpoints(xdsC, target, unimplementedEndpointsWatcher{})
+			xdsresource.WatchEndpoints(xdsC, target, endpointsWatcher)
 		}
 	}
 
@@ -331,6 +401,9 @@ func (s) TestCSDS(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+
+	// Unblock the resource watchers.
+	unblockResourceWatchers(t, listenerWatcher.waitCh, routeConfigWatcher.waitCh, clusterWatcher.waitCh, endpointsWatcher.waitCh)
 
 	// Verify that the xDS client reports the resources as being in "ACKed"
 	// state, and in version "1".
@@ -378,6 +451,9 @@ func (s) TestCSDS(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+
+	// Unblock the resource watchers once more.
+	unblockResourceWatchers(t, listenerWatcher.waitCh, routeConfigWatcher.waitCh, clusterWatcher.waitCh, endpointsWatcher.waitCh)
 
 	// Verify that the xDS client reports the first resource of each type as
 	// being in "NACKed" state, and the second resource of each type to be in
