@@ -53,12 +53,12 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-type SearchResponseV3State int32
+type SearchResponseV3_State int32
 
 const (
-	SearchResponseV3UNKNOWN SearchResponseV3State = 0
-	SearchResponseV3FRESH   SearchResponseV3State = 1
-	SearchResponseV3STALE   SearchResponseV3State = 2
+	SearchResponseV3_UNKNOWN SearchResponseV3_State = 0
+	SearchResponseV3_FRESH   SearchResponseV3_State = 1
+	SearchResponseV3_STALE   SearchResponseV3_State = 2
 )
 
 var SearchResponseV3_State_name = map[int32]string{
@@ -72,14 +72,14 @@ var SearchResponseV3_State_value = map[string]int32{
 	"STALE":   2,
 }
 
-func (x SearchResponseV3State) String() string {
+func (x SearchResponseV3_State) String() string {
 	return proto.EnumName(SearchResponseV3_State_name, int32(x))
 }
-func (SearchResponseV3State) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{0, 0} }
+func (SearchResponseV3_State) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{0, 0} }
 
 type SearchResponseV3 struct {
 	Results []*SearchResponseV3_Result `protobuf:"bytes,1,rep,name=results" json:"results,omitempty"`
-	State   SearchResponseV3State     `protobuf:"varint,2,opt,name=state,enum=grpc.testingv3.SearchResponseV3_State" json:"state,omitempty"`
+	State   SearchResponseV3_State     `protobuf:"varint,2,opt,name=state,enum=grpc.testingv3.SearchResponseV3_State" json:"state,omitempty"`
 }
 
 func (m *SearchResponseV3) Reset()                    { *m = SearchResponseV3{} }
@@ -94,11 +94,11 @@ func (m *SearchResponseV3) GetResults() []*SearchResponseV3_Result {
 	return nil
 }
 
-func (m *SearchResponseV3) GetState() SearchResponseV3State {
+func (m *SearchResponseV3) GetState() SearchResponseV3_State {
 	if m != nil {
 		return m.State
 	}
-	return SearchResponseV3UNKNOWN
+	return SearchResponseV3_UNKNOWN
 }
 
 type SearchResponseV3_Result struct {
