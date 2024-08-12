@@ -27,6 +27,10 @@ import (
 	"google.golang.org/grpc/mem"
 )
 
+func newBuffer(data []byte, onFree func(*[]byte)) mem.Buffer {
+	return mem.NewBuffer(&data, onFree)
+}
+
 func (s) TestBufferSlice_Len(t *testing.T) {
 	tests := []struct {
 		name string
@@ -40,15 +44,15 @@ func (s) TestBufferSlice_Len(t *testing.T) {
 		},
 		{
 			name: "single",
-			in:   mem.BufferSlice{mem.NewBuffer([]byte("abcd"), nil)},
+			in:   mem.BufferSlice{newBuffer([]byte("abcd"), nil)},
 			want: 4,
 		},
 		{
 			name: "multiple",
 			in: mem.BufferSlice{
-				mem.NewBuffer([]byte("abcd"), nil),
-				mem.NewBuffer([]byte("abcd"), nil),
-				mem.NewBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
 			},
 			want: 12,
 		},
@@ -65,8 +69,8 @@ func (s) TestBufferSlice_Len(t *testing.T) {
 func (s) TestBufferSlice_Ref(t *testing.T) {
 	// Create a new buffer slice and a reference to it.
 	bs := mem.BufferSlice{
-		mem.NewBuffer([]byte("abcd"), nil),
-		mem.NewBuffer([]byte("abcd"), nil),
+		newBuffer([]byte("abcd"), nil),
+		newBuffer([]byte("abcd"), nil),
 	}
 	bsRef := bs.Ref()
 
@@ -89,16 +93,16 @@ func (s) TestBufferSlice_MaterializeToBuffer(t *testing.T) {
 	}{
 		{
 			name:     "single",
-			in:       mem.BufferSlice{mem.NewBuffer([]byte("abcd"), nil)},
+			in:       mem.BufferSlice{newBuffer([]byte("abcd"), nil)},
 			pool:     nil, // MaterializeToBuffer should not use the pool in this case.
 			wantData: []byte("abcd"),
 		},
 		{
 			name: "multiple",
 			in: mem.BufferSlice{
-				mem.NewBuffer([]byte("abcd"), nil),
-				mem.NewBuffer([]byte("abcd"), nil),
-				mem.NewBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
 			},
 			pool:     mem.DefaultBufferPool(),
 			wantData: []byte("abcdabcdabcd"),
@@ -117,9 +121,9 @@ func (s) TestBufferSlice_MaterializeToBuffer(t *testing.T) {
 
 func (s) TestBufferSlice_Reader(t *testing.T) {
 	bs := mem.BufferSlice{
-		mem.NewBuffer([]byte("abcd"), nil),
-		mem.NewBuffer([]byte("abcd"), nil),
-		mem.NewBuffer([]byte("abcd"), nil),
+		newBuffer([]byte("abcd"), nil),
+		newBuffer([]byte("abcd"), nil),
+		newBuffer([]byte("abcd"), nil),
 	}
 	wantData := []byte("abcdabcdabcd")
 

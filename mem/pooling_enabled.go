@@ -33,9 +33,10 @@ var bufferObjectPool = sync.Pool{New: func() any {
 }}
 
 type buffer struct {
-	data []byte
-	refs *atomic.Int32
-	free func()
+	origData *[]byte
+	data     []byte
+	refs     *atomic.Int32
+	free     func(*[]byte)
 }
 
 func newBuffer() *buffer {
@@ -47,15 +48,26 @@ func newBuffer() *buffer {
 // to the returned Buffer are released.
 //
 // Note that the backing array of the given data is not copied.
-func NewBuffer(data []byte, onFree func(*[]byte)) Buffer {
+func NewBuffer(data *[]byte, onFree func(*[]byte)) Buffer {
 	b := newBuffer()
-	b.data = data
+	b.origData = data
+	b.data = *data
+	b.free = onFree
 	b.refs = new(atomic.Int32)
-	if onFree != nil {
-		b.free = func() { onFree(&data) }
-	}
 	b.refs.Add(1)
 	return b
+}
+
+// Copy creates a new Buffer from the given data, initializing the reference
+// counter to 1.
+//
+// It acquires a []byte from the given pool and copies over the backing array
+// of the given data. The []byte acquired from the pool is returned to the
+// pool when all references to the returned Buffer are released.
+func Copy(data []byte, pool BufferPool) Buffer {
+	buf := pool.Get(len(data))
+	copy(*buf, data)
+	return NewBuffer(buf, pool.Put)
 }
 
 func (b *buffer) ReadOnlyData() []byte {
@@ -71,6 +83,7 @@ func (b *buffer) Ref() Buffer {
 	}
 	b.refs.Add(1)
 	newB := newBuffer()
+	newB.origData = b.origData
 	newB.data = b.data
 	newB.refs = b.refs
 	newB.free = b.free
@@ -82,11 +95,11 @@ func (b *buffer) Free() {
 		panic("Cannot free freed buffer")
 	}
 
-	refs := b.refs.Add(-1)
-	if refs == 0 && b.free != nil {
-		b.free()
+	if b.refs.Add(-1) == 0 && b.free != nil {
+		b.free(b.origData)
 	}
 
+	b.origData = nil
 	b.data = nil
 	b.refs = nil
 	b.free = nil
@@ -104,6 +117,7 @@ func (b *buffer) split(n int) (Buffer, Buffer) {
 
 	b.refs.Add(1)
 	split := newBuffer()
+	split.origData = b.origData
 	split.data = b.data[n:]
 	split.refs = b.refs
 	split.free = b.free
@@ -164,7 +178,7 @@ func (s BufferSlice) Reader() Reader {
 	}
 }
 
-func (p *tieredBufferPool) Get(size int) []byte {
+func (p *tieredBufferPool) Get(size int) *[]byte {
 	return p.getPool(size).Get(size)
 }
 

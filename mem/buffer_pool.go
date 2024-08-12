@@ -29,7 +29,7 @@ import (
 // decreased memory allocation.
 type BufferPool interface {
 	// Get returns a buffer with specified length from the pool.
-	Get(length int) []byte
+	Get(length int) *[]byte
 
 	// Put returns a buffer to the pool.
 	Put(*[]byte)
@@ -103,10 +103,12 @@ type sizedBufferPool struct {
 	defaultSize int
 }
 
-func (p *sizedBufferPool) Get(size int) []byte {
-	buf := *p.pool.Get().(*[]byte)
-	clear(buf[:cap(buf)])
-	return buf[:size]
+func (p *sizedBufferPool) Get(size int) *[]byte {
+	buf := p.pool.Get().(*[]byte)
+	b := *buf
+	clear(b[:cap(b)])
+	*buf = b[:size]
+	return buf
 }
 
 func (p *sizedBufferPool) Put(buf *[]byte) {
@@ -141,10 +143,11 @@ type simpleBufferPool struct {
 	pool sync.Pool
 }
 
-func (p *simpleBufferPool) Get(size int) []byte {
+func (p *simpleBufferPool) Get(size int) *[]byte {
 	bs, ok := p.pool.Get().(*[]byte)
 	if ok && cap(*bs) >= size {
-		return (*bs)[:size]
+		*bs = (*bs)[:size]
+		return bs
 	}
 
 	// A buffer was pulled from the pool, but it is too small. Put it back in
@@ -153,7 +156,8 @@ func (p *simpleBufferPool) Get(size int) []byte {
 		p.pool.Put(bs)
 	}
 
-	return make([]byte, size)
+	b := make([]byte, size)
+	return &b
 }
 
 func (p *simpleBufferPool) Put(buf *[]byte) {
@@ -166,8 +170,9 @@ var _ BufferPool = NopBufferPool{}
 type NopBufferPool struct{}
 
 // Get returns a buffer with specified length from the pool.
-func (NopBufferPool) Get(length int) []byte {
-	return make([]byte, length)
+func (NopBufferPool) Get(length int) *[]byte {
+	b := make([]byte, length)
+	return &b
 }
 
 // Put returns a buffer to the pool.

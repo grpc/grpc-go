@@ -86,7 +86,7 @@ func (s BufferSlice) MaterializeToBuffer(pool BufferPool) Buffer {
 		return s[0].Ref()
 	}
 	buf := pool.Get(s.Len())
-	s.CopyTo(buf)
+	s.CopyTo(*buf)
 	return NewBuffer(buf, pool.Put)
 }
 

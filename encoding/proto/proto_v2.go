@@ -44,8 +44,8 @@ func (c *codecV2) Marshal(v any) (mem.BufferSlice, error) {
 
 	pool := mem.DefaultBufferPool()
 	buf := pool.Get(proto.Size(vv))
-	if _, err := (proto.MarshalOptions{}).MarshalAppend(buf[:0], vv); err != nil {
-		pool.Put(&buf)
+	if _, err := (proto.MarshalOptions{}).MarshalAppend((*buf)[:0], vv); err != nil {
+		pool.Put(buf)
 		return nil, err
 	}
 	return mem.BufferSlice{mem.NewBuffer(buf, pool.Put)}, nil

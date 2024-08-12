@@ -24,8 +24,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+	"unsafe"
 
-	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/mem"
 )
 
@@ -41,7 +41,7 @@ func (s) TestBuffer_NewBufferAndFree(t *testing.T) {
 		freed = true
 	}
 
-	buf := mem.NewBuffer([]byte(data), freeF)
+	buf := newBuffer([]byte(data), freeF)
 	if got := buf.ReadOnlyData(); !bytes.Equal(got, []byte(data)) {
 		t.Fatalf("Buffer contains data %s, want %s", string(got), string(data))
 	}
@@ -66,7 +66,7 @@ func (s) TestBuffer_NewBufferRefAndFree(t *testing.T) {
 		freed = true
 	}
 
-	buf := mem.NewBuffer([]byte(data), freeF)
+	buf := newBuffer([]byte(data), freeF)
 	if got := buf.ReadOnlyData(); !bytes.Equal(got, []byte(data)) {
 		t.Fatalf("Buffer contains data %s, want %s", string(got), string(data))
 	}
@@ -91,7 +91,7 @@ func (s) TestBuffer_NewBufferRefAndFree(t *testing.T) {
 }
 
 func (s) TestBuffer_FreeAfterFree(t *testing.T) {
-	buf := mem.NewBuffer([]byte("abcd"), nil)
+	buf := newBuffer([]byte("abcd"), nil)
 	if buf.Len() != 4 {
 		t.Fatalf("Buffer length is %d, want 4", buf.Len())
 	}
@@ -165,7 +165,7 @@ func (s) TestBuffer_CopyRefAndFree(t *testing.T) {
 
 func (s) TestBuffer_ReadOnlyDataAfterFree(t *testing.T) {
 	// Verify that reading before freeing does not panic.
-	buf := mem.NewBuffer([]byte("abcd"), nil)
+	buf := newBuffer([]byte("abcd"), nil)
 	buf.ReadOnlyData()
 
 	buf.Free()
@@ -175,7 +175,7 @@ func (s) TestBuffer_ReadOnlyDataAfterFree(t *testing.T) {
 
 func (s) TestBuffer_RefAfterFree(t *testing.T) {
 	// Verify that acquiring a ref before freeing does not panic.
-	buf := mem.NewBuffer([]byte("abcd"), nil)
+	buf := newBuffer([]byte("abcd"), nil)
 	bufRef := buf.Ref()
 	defer bufRef.Free()
 
@@ -186,7 +186,7 @@ func (s) TestBuffer_RefAfterFree(t *testing.T) {
 
 func (s) TestBuffer_SplitAfterFree(t *testing.T) {
 	// Verify that splitting before freeing does not panic.
-	buf := mem.NewBuffer([]byte("abcd"), nil)
+	buf := newBuffer([]byte("abcd"), nil)
 	buf, bufSplit := mem.SplitUnsafe(buf, 2)
 	defer bufSplit.Free()
 
@@ -208,11 +208,11 @@ func (s) TestBufferPool(t *testing.T) {
 	for _, p := range pools {
 		for _, l := range testSizes {
 			bs := p.Get(l)
-			if len(bs) != l {
-				t.Fatalf("Get(%d) returned buffer of length %d, want %d", l, len(bs), l)
+			if len(*bs) != l {
+				t.Fatalf("Get(%d) returned buffer of length %d, want %d", l, len(*bs), l)
 			}
 
-			p.Put(&bs)
+			p.Put(bs)
 		}
 	}
 }
@@ -222,19 +222,19 @@ func (s) TestBufferPoolClears(t *testing.T) {
 
 	for {
 		buf1 := pool.Get(4)
-		copy(buf1, "1234")
-		pool.Put(&buf1)
+		copy(*buf1, "1234")
+		pool.Put(buf1)
 
 		buf2 := pool.Get(4)
-		if &buf1[0] != &buf2[0] {
-			pool.Put(&buf2)
+		if unsafe.SliceData(*buf1) != unsafe.SliceData(*buf2) {
+			pool.Put(buf2)
 			// This test is only relevant if a buffer is reused, otherwise try again. This
 			// can happen if a GC pause happens between putting the buffer back in the pool
 			// and getting a new one.
 			continue
 		}
 
-		if !cmp.Equal(buf1, make([]byte, 4)) {
+		if !bytes.Equal(*buf1, make([]byte, 4)) {
 			t.Fatalf("buffer not cleared")
 		}
 		break
@@ -244,8 +244,8 @@ func (s) TestBufferPoolClears(t *testing.T) {
 func (s) TestBufferPoolIgnoresShortBuffers(t *testing.T) {
 	pool := mem.NewTieredBufferPool(10, 20)
 	buf := pool.Get(1)
-	if cap(buf) != 10 {
-		t.Fatalf("Get(1) returned buffer with capacity: %d, want 10", cap(buf))
+	if cap(*buf) != 10 {
+		t.Fatalf("Get(1) returned buffer with capacity: %d, want 10", cap(*buf))
 	}
 
 	// Insert a short buffer into the pool, which is currently empty.

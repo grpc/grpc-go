@@ -428,11 +428,12 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 
 		for {
 			buf := ht.bufferPool.Get(http2MaxFrameLen)
-			n, err := req.Body.Read(buf)
+			n, err := req.Body.Read(*buf)
 			if n > 0 {
-				s.buf.put(recvMsg{buffer: mem.NewBuffer(buf[:n], ht.bufferPool.Put)})
+				*buf = (*buf)[:n]
+				s.buf.put(recvMsg{buffer: mem.NewBuffer(buf, ht.bufferPool.Put)})
 			} else {
-				ht.bufferPool.Put(&buf)
+				ht.bufferPool.Put(buf)
 			}
 			if err != nil {
 				s.buf.put(recvMsg{err: mapRecvMsgError(err)})

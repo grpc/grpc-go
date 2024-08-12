@@ -46,8 +46,9 @@ type testBufferPool struct {
 	putCh chan []byte
 }
 
-func (t *testBufferPool) Get(length int) []byte {
-	return make([]byte, length)
+func (t *testBufferPool) Get(length int) *[]byte {
+	data := make([]byte, length)
+	return &data
 }
 
 func (t *testBufferPool) Put(data *[]byte) {
@@ -62,7 +63,7 @@ func (s) TestBuffer_Split(t *testing.T) {
 	ready := false
 	freed := false
 	data := []byte{1, 2, 3, 4}
-	buf := mem.NewBuffer(data, func(bytes *[]byte) {
+	buf := mem.NewBuffer(&data, func(bytes *[]byte) {
 		if !ready {
 			t.Fatalf("Freed too early")
 		}

@@ -975,10 +975,10 @@ func (l *loopyWriter) processData() (bool, error) {
 	remainingBytes := len(dataItem.h) + dataItem.reader.Remaining() - hSize - dSize
 	size := hSize + dSize
 
-	var buf []byte
+	var buf *[]byte
 
 	if hSize != 0 && dSize == 0 {
-		buf = dataItem.h
+		buf = &dataItem.h
 	} else {
 		// Note: this is only necessary because the http2.Framer does not support
 		// partially writing a frame, so the sequence must be materialized into a buffer.
@@ -990,10 +990,10 @@ func (l *loopyWriter) processData() (bool, error) {
 			pool = mem.DefaultBufferPool()
 		}
 		buf = pool.Get(size)
-		defer pool.Put(&buf)
+		defer pool.Put(buf)
 
-		copy(buf[:hSize], dataItem.h)
-		_, _ = dataItem.reader.Read(buf[hSize:])
+		copy((*buf)[:hSize], dataItem.h)
+		_, _ = dataItem.reader.Read((*buf)[hSize:])
 	}
 
 	// Now that outgoing flow controls are checked we can replenish str's write quota
@@ -1006,7 +1006,7 @@ func (l *loopyWriter) processData() (bool, error) {
 	if dataItem.onEachWrite != nil {
 		dataItem.onEachWrite()
 	}
-	if err := l.framer.fr.WriteData(dataItem.streamID, endStream, buf[:size]); err != nil {
+	if err := l.framer.fr.WriteData(dataItem.streamID, endStream, (*buf)[:size]); err != nil {
 		return false, err
 	}
 	str.bytesOutStanding += size

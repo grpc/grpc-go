@@ -825,7 +825,7 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 
 	if st := checkRecvPayload(pf, s.RecvCompress(), compressor != nil || dc != nil, isServer); st != nil {
 		compressed.Free()
-		return nil, nil, st.Err()
+		return nil, st.Err()
 	}
 
 	var size int
@@ -838,7 +838,7 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 			var uncompressedBuf []byte
 			uncompressedBuf, err = dc.Do(compressed.Reader())
 			if err == nil {
-				out = mem.BufferSlice{mem.NewBuffer(uncompressedBuf, nil)}
+				out = mem.BufferSlice{mem.NewBuffer(&uncompressedBuf, nil)}
 			}
 			size = len(uncompressedBuf)
 		} else {
@@ -859,8 +859,7 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 
 	if payInfo != nil {
 		payInfo.compressedLength = compressedLength
-		out.Ref()
-		payInfo.uncompressedBytes = out
+		payInfo.uncompressedBytes = out.Ref()
 	}
 
 	return out, nil

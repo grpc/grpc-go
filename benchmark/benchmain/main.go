@@ -156,27 +156,29 @@ const (
 
 var useNopBufferPool atomic.Bool
 
-type swappableBufferPool struct{}
+type swappableBufferPool struct {
+	mem.BufferPool
+}
 
-func (swappableBufferPool) Get(length int) []byte {
+func (p swappableBufferPool) Get(length int) *[]byte {
 	var pool mem.BufferPool
 	if useNopBufferPool.Load() {
 		pool = mem.NopBufferPool{}
 	} else {
-		pool = mem.DefaultBufferPool()
+		pool = p.BufferPool
 	}
 	return pool.Get(length)
 }
 
-func (swappableBufferPool) Put(i *[]byte) {
+func (p swappableBufferPool) Put(i *[]byte) {
 	if useNopBufferPool.Load() {
 		return
 	}
-	mem.DefaultBufferPool().Put(i)
+	p.BufferPool.Put(i)
 }
 
 func init() {
-	internal.SetDefaultBufferPoolForTesting.(func(mem.BufferPool))(swappableBufferPool{})
+	internal.SetDefaultBufferPoolForTesting.(func(mem.BufferPool))(swappableBufferPool{mem.DefaultBufferPool()})
 }
 
 var (
@@ -380,8 +382,6 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 	switch bf.RecvBufferPool {
 	case recvBufferPoolNil:
 		useNopBufferPool.Store(true)
-		//opts = append(opts, experimental.WithBufferPool(mem.NopBufferPool{}))
-		//sopts = append(sopts, experimental.BufferPool(mem.NopBufferPool{}))
 	case recvBufferPoolSimple:
 		// Do nothing as buffering is enabled by default.
 	default:

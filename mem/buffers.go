@@ -52,17 +52,17 @@ type Buffer interface {
 	read(buf []byte) (int, Buffer)
 }
 
-// Copy creates a new Buffer from the given data, initializing the reference
-// counter to 1.
-//
-// It acquires a []byte from the given pool and copies over the backing array
-// of the given data. The []byte acquired from the pool is returned to the
-// pool when all references to the returned Buffer are released.
-func Copy(data []byte, pool BufferPool) Buffer {
-	buf := pool.Get(len(data))
-	copy(buf, data)
-	return NewBuffer(buf, pool.Put)
-}
+//// Copy creates a new Buffer from the given data, initializing the reference
+//// counter to 1.
+////
+//// It acquires a []byte from the given pool and copies over the backing array
+//// of the given data. The []byte acquired from the pool is returned to the
+//// pool when all references to the returned Buffer are released.
+//func Copy(data []byte, pool BufferPool) Buffer {
+//	buf := pool.Get(len(data))
+//	copy(buf, data)
+//	return NewBuffer(buf, pool)
+//}
 
 func ReadUnsafe(dst []byte, buf Buffer) (int, Buffer) {
 	return buf.read(dst)

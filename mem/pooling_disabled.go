@@ -23,6 +23,7 @@ package mem
 import (
 	"fmt"
 	"io"
+	"slices"
 	"unsafe"
 )
 
@@ -33,8 +34,18 @@ const PoolingEnabled = false
 // to the returned Buffer are released.
 //
 // Note that the backing array of the given data is not copied.
-func NewBuffer(data []byte, onFree func(*[]byte)) Buffer {
-	return sliceBuffer(data)
+func NewBuffer(data *[]byte, free func(*[]byte)) Buffer {
+	return sliceBuffer(*data)
+}
+
+// Copy creates a new Buffer from the given data, initializing the reference
+// counter to 1.
+//
+// It acquires a []byte from the given pool and copies over the backing array
+// of the given data. The []byte acquired from the pool is returned to the
+// pool when all references to the returned Buffer are released.
+func Copy(data []byte, pool BufferPool) Buffer {
+	return sliceBuffer(slices.Clone(data))
 }
 
 type sliceBuffer []byte
@@ -71,7 +82,7 @@ func (s BufferSlice) Reader() Reader {
 	case 0:
 		return (*rawReader)(nil)
 	case 1:
-		data := s[0].(sliceBuffer)
+		data := s[0].ReadOnlyData()
 		return (*rawReader)(&data)
 	default:
 		return &sliceReader{
@@ -124,8 +135,9 @@ func (s sliceBuffer) String() string {
 	return fmt.Sprintf("mem.Buffer(%p, data: %p, length: %d)", unsafe.SliceData(s), unsafe.SliceData(s), len(s))
 }
 
-func (p *tieredBufferPool) Get(size int) []byte {
-	return make([]byte, size)
+func (p *tieredBufferPool) Get(size int) *[]byte {
+	b := make([]byte, size)
+	return &b
 }
 
 func (p *tieredBufferPool) Put(*[]byte) {

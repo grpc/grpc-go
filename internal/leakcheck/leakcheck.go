@@ -33,7 +33,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/mem"
@@ -59,7 +58,7 @@ type swappableBufferPool struct {
 	atomic.Pointer[mem.BufferPool]
 }
 
-func (b *swappableBufferPool) Get(length int) []byte {
+func (b *swappableBufferPool) Get(length int) *[]byte {
 	return (*b.Load()).Get(length)
 }
 
@@ -78,7 +77,7 @@ func SetTrackingBufferPool(efer Errorfer) {
 	newPool := mem.BufferPool(&trackingBufferPool{
 		pool:             *globalPool.Load(),
 		efer:             efer,
-		allocatedBuffers: make(map[*byte][]uintptr),
+		allocatedBuffers: make(map[*[]byte][]uintptr),
 	})
 	globalPool.Store(&newPool)
 }
@@ -142,15 +141,12 @@ type trackingBufferPool struct {
 	efer Errorfer
 
 	lock             sync.Mutex
-	allocatedBuffers map[*byte][]uintptr
+	allocatedBuffers map[*[]byte][]uintptr
 }
 
-func (p *trackingBufferPool) Get(length int) []byte {
+func (p *trackingBufferPool) Get(length int) *[]byte {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	if length == 0 {
-		return nil
-	}
 
 	buf := p.pool.Get(length)
 
@@ -165,7 +161,7 @@ func (p *trackingBufferPool) Get(length int) []byte {
 		}
 		skip += len(stackBuf)
 	}
-	p.allocatedBuffers[unsafe.SliceData(buf)] = stack
+	p.allocatedBuffers[buf] = stack
 
 	return buf
 }
@@ -178,11 +174,10 @@ func (p *trackingBufferPool) Put(buf *[]byte) {
 		return
 	}
 
-	key := unsafe.SliceData(*buf)
-	if _, ok := p.allocatedBuffers[key]; !ok {
+	if _, ok := p.allocatedBuffers[buf]; !ok {
 		p.efer.Errorf("Unknown buffer freed:\n%s", string(debug.Stack()))
 	} else {
-		delete(p.allocatedBuffers, key)
+		delete(p.allocatedBuffers, buf)
 	}
 	p.pool.Put(buf)
 }
