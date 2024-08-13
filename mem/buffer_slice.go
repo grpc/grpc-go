@@ -53,29 +53,18 @@ func (s BufferSlice) Len() int {
 	return length
 }
 
-// Ref returns a new BufferSlice containing a new reference of each Buffer in the
-// input slice.
-func (s BufferSlice) Ref() BufferSlice {
-	out := make(BufferSlice, len(s))
-	for i, b := range s {
-		out[i] = b.Ref()
+// Ref invokes Ref on each buffer in the slice.
+func (s BufferSlice) Ref() {
+	for _, b := range s {
+		b.Ref()
 	}
-	return out
 }
 
 // Free invokes Buffer.Free() on each Buffer in the slice.
 func (s BufferSlice) Free() {
-	// Do nothing if the slice is empty
-	if len(s) == 0 {
-		return
-	}
-	if s[0] == nil {
-		panic("Double slice free")
-	}
 	for _, b := range s {
 		b.Free()
 	}
-	clear(s)
 }
 
 // CopyTo copies each of the underlying Buffer's data into the given buffer,
@@ -108,7 +97,8 @@ func (s BufferSlice) Materialize() []byte {
 // do and simply returns said Buffer.
 func (s BufferSlice) MaterializeToBuffer(pool BufferPool) Buffer {
 	if len(s) == 1 {
-		return s[0].Ref()
+		s[0].Ref()
+		return s[0]
 	}
 	sLen := s.Len()
 	if sLen == 0 {

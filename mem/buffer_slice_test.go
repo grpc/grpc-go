@@ -72,12 +72,12 @@ func (s) TestBufferSlice_Ref(t *testing.T) {
 		newBuffer([]byte("abcd"), nil),
 		newBuffer([]byte("abcd"), nil),
 	}
-	bsRef := bs.Ref()
+	bs.Ref()
 
 	// Free the original buffer slice and verify that the reference can still
 	// read data from it.
 	bs.Free()
-	got := bsRef.Materialize()
+	got := bs.Materialize()
 	want := []byte("abcdabcd")
 	if !bytes.Equal(got, want) {
 		t.Errorf("BufferSlice.Materialize() = %s, want %s", string(got), string(want))

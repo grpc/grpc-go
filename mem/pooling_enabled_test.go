@@ -70,8 +70,8 @@ func (s) TestBuffer_NewBufferRefAndFree(t *testing.T) {
 		t.Fatalf("Buffer contains data %s, want %s", string(got), string(data))
 	}
 
-	bufRef := buf.Ref()
-	if got := bufRef.ReadOnlyData(); !bytes.Equal(got, []byte(data)) {
+	buf.Ref()
+	if got := buf.ReadOnlyData(); !bytes.Equal(got, []byte(data)) {
 		t.Fatalf("New reference to the Buffer contains data %s, want %s", string(got), string(data))
 	}
 
@@ -83,7 +83,7 @@ func (s) TestBuffer_NewBufferRefAndFree(t *testing.T) {
 	}
 
 	// Verify that the free function is invoked when all references are freed.
-	bufRef.Free()
+	buf.Free()
 	if !freed {
 		t.Fatalf("Buffer not freed")
 	}
@@ -156,8 +156,8 @@ func (s) TestBuffer_CopyRefAndFree(t *testing.T) {
 		t.Fatalf("Buffer contains data %s, want %s", string(got), string(data))
 	}
 
-	bufRef := buf.Ref()
-	if got := bufRef.ReadOnlyData(); !bytes.Equal(got, []byte(data)) {
+	buf.Ref()
+	if got := buf.ReadOnlyData(); !bytes.Equal(got, []byte(data)) {
 		t.Fatalf("New reference to the Buffer contains data %s, want %s", string(got), string(data))
 	}
 
@@ -169,7 +169,7 @@ func (s) TestBuffer_CopyRefAndFree(t *testing.T) {
 	}
 
 	// Verify that the free function is invoked when all references are freed.
-	bufRef.Free()
+	buf.Free()
 	if testPool.data != nil {
 		t.Fatalf("Free never called")
 	}
@@ -188,9 +188,11 @@ func (s) TestBuffer_ReadOnlyDataAfterFree(t *testing.T) {
 func (s) TestBuffer_RefAfterFree(t *testing.T) {
 	// Verify that acquiring a ref before freeing does not panic.
 	buf := newBuffer([]byte("abcd"), mem.NopBufferPool{})
-	bufRef := buf.Ref()
-	defer bufRef.Free()
+	buf.Ref()
 
+	// This first call should not panc and bring the ref counter down to 1
+	buf.Free()
+	// This second call actually frees the buffer
 	buf.Free()
 	defer checkForPanic(t, "Cannot ref freed buffer")
 	buf.Ref()

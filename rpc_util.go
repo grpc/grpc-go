@@ -863,7 +863,8 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 
 	if payInfo != nil {
 		payInfo.compressedLength = compressedLength
-		payInfo.uncompressedBytes = out.Ref()
+		out.Ref()
+		payInfo.uncompressedBytes = out
 	}
 
 	return out, nil

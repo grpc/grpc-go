@@ -40,25 +40,6 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// testBufferPool is a buffer pool that makes new buffer without pooling, and
-// notifies on a channel that a buffer was returned to the pool.
-type testBufferPool struct {
-	putCh chan []byte
-}
-
-func (t *testBufferPool) Get(length int) *[]byte {
-	data := make([]byte, length)
-	return &data
-}
-
-func (t *testBufferPool) Put(data *[]byte) {
-	t.putCh <- *data
-}
-
-//func newTestBufferPool() *testBufferPool {
-//	return &testBufferPool{putCh: make(chan []byte, 1)}
-//}
-
 type poolFunc func(*[]byte)
 
 func (p poolFunc) Get(length int) *[]byte {
@@ -86,15 +67,9 @@ func (s) TestBuffer_Split(t *testing.T) {
 		}
 	}
 
-	// Take a ref of the original buffer
-	ref1 := buf.Ref()
-
 	buf, split1 := mem.SplitUnsafe(buf, 2)
 	checkBufData(buf, data[:2])
 	checkBufData(split1, data[2:])
-	// Check that even though buf was split, the reference wasn't modified
-	checkBufData(ref1, data)
-	ref1.Free()
 
 	// Check that splitting the buffer more than once works as intended.
 	split1, split2 := mem.SplitUnsafe(split1, 1)
@@ -123,7 +98,7 @@ func checkForPanic(t *testing.T, wantErr string) {
 	if r == nil {
 		t.Fatalf("Use after free did not panic")
 	}
-	if r.(string) != wantErr {
+	if msg, ok := r.(string); !ok || msg != wantErr {
 		t.Fatalf("panic called with %v, want %s", r, wantErr)
 	}
 }

@@ -1165,7 +1165,8 @@ func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, 
 	if payloadLen > s.opts.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", payloadLen, s.opts.maxSendMessageSize)
 	}
-	err = t.Write(stream, hdr, payload.Ref(), opts)
+	payload.Ref()
+	err = t.Write(stream, hdr, payload, opts)
 	if err == nil {
 		if len(s.opts.statsHandlers) != 0 {
 			for _, sh := range s.opts.statsHandlers {
@@ -1364,7 +1365,8 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 	}
 	df := func(v any) error {
 		defer d.Free()
-		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d.Ref(), v); err != nil {
+		d.Ref()
+		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
 

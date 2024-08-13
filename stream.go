@@ -926,9 +926,10 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 
 	// always take an extra ref in case data == payload (i.e. when the data isn't
 	// compressed). The original ref will always be freed by the deferred free above.
-	payloadRef := payload.Ref()
+	payload.Ref()
 	op := func(a *csAttempt) error {
-		return a.sendMsg(m, hdr, payloadRef.Ref(), dataLen, payloadLen)
+		payload.Ref()
+		return a.sendMsg(m, hdr, payload, dataLen, payloadLen)
 	}
 
 	// onSuccess is invoked when the op is captured for a subsequent retry. If the
@@ -937,11 +938,11 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	// immediately.
 	onSuccessCalled := false
 	err = cs.withRetry(op, func() {
-		cs.bufferForRetryLocked(len(hdr)+payloadLen, op, payloadRef.Free)
+		cs.bufferForRetryLocked(len(hdr)+payloadLen, op, payload.Free)
 		onSuccessCalled = true
 	})
 	if !onSuccessCalled {
-		payloadRef.Free()
+		payload.Free()
 	}
 	if len(cs.binlogs) != 0 && err == nil {
 		cm := &binarylog.ClientMessage{
@@ -1419,6 +1420,8 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 
 	defer func() {
 		data.Free()
+		// only free payload if compression was made, and therefore it is a different set
+		// of buffers from data.
 		if pf.isCompressed() {
 			payload.Free()
 		}
@@ -1429,7 +1432,8 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payload.Len(), *as.callInfo.maxSendMessageSize)
 	}
 
-	if err := as.t.Write(as.s, hdr, payload.Ref(), &transport.Options{Last: !as.desc.ClientStreams}); err != nil {
+	payload.Ref()
+	if err := as.t.Write(as.s, hdr, payload, &transport.Options{Last: !as.desc.ClientStreams}); err != nil {
 		if !as.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
 			// because the generated code requires it.  finish is not called; RecvMsg()
@@ -1696,6 +1700,8 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 
 	defer func() {
 		data.Free()
+		// only free payload if compression was made, and therefore it is a different set
+		// of buffers from data.
 		if pf.isCompressed() {
 			payload.Free()
 		}
@@ -1708,7 +1714,8 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	if payloadLen > ss.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payloadLen, ss.maxSendMessageSize)
 	}
-	if err := ss.t.Write(ss.s, hdr, payload.Ref(), &transport.Options{Last: false}); err != nil {
+	payload.Ref()
+	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
 	}
 

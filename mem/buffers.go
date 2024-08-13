@@ -41,7 +41,7 @@ type Buffer interface {
 	// behavior to modify the contents of this slice in any way.
 	ReadOnlyData() []byte
 	// Ref increases the reference counter for this Buffer.
-	Ref() Buffer
+	Ref()
 	// Free decrements this Buffer's reference counter and frees the underlying
 	// byte slice if the counter reaches 0 as a result of this call.
 	Free()
@@ -69,10 +69,7 @@ func (e emptyBuffer) ReadOnlyData() []byte {
 	return nil
 }
 
-func (e emptyBuffer) Ref() Buffer {
-	return e
-}
-
+func (e emptyBuffer) Ref()  {}
 func (e emptyBuffer) Free() {}
 
 func (e emptyBuffer) Len() int {
@@ -90,7 +87,7 @@ func (e emptyBuffer) read(buf []byte) (int, Buffer) {
 type sliceBuffer []byte
 
 func (s sliceBuffer) ReadOnlyData() []byte { return s }
-func (s sliceBuffer) Ref() Buffer          { return s }
+func (s sliceBuffer) Ref()                 {}
 func (s sliceBuffer) Free()                {}
 func (s sliceBuffer) Len() int             { return len(s) }
 

@@ -79,7 +79,7 @@ func (p *PreparedMsg) Encode(s Stream, msg any) error {
 		compData = mem.BufferSlice{mem.NewBuffer(&materializedCompData, nil)}
 	}
 
-	p.hdr, p.payload = msgHeader(data, compData, p.pf)
+	p.hdr, p.payload = msgHeader(p.encodedData, compData, p.pf)
 
 	return nil
 }

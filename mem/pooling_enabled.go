@@ -51,7 +51,8 @@ func newBuffer() *buffer {
 // counter to 1. The data will then be returned to the given pool when all
 // references to the returned Buffer are released. As a special case to avoid
 // additional allocations, if the given buffer pool is nil, the returned buffer
-// will be a "no-op" Buffer where invoking Buffer.Free() does nothing.
+// will be a "no-op" Buffer where invoking Buffer.Free() does nothing and the
+// underlying data is never freed.
 //
 // Note that the backing array of the given data is not copied.
 func NewBuffer(data *[]byte, pool BufferPool) Buffer {
@@ -86,17 +87,11 @@ func (b *buffer) ReadOnlyData() []byte {
 	return b.data
 }
 
-func (b *buffer) Ref() Buffer {
+func (b *buffer) Ref() {
 	if b.refs == nil {
 		panic("Cannot ref freed buffer")
 	}
 	b.refs.Add(1)
-	newB := newBuffer()
-	newB.origData = b.origData
-	newB.data = b.data
-	newB.refs = b.refs
-	newB.pool = b.pool
-	return newB
 }
 
 func (b *buffer) Free() {
@@ -104,16 +99,24 @@ func (b *buffer) Free() {
 		panic("Cannot free freed buffer")
 	}
 
-	if b.refs.Add(-1) == 0 && b.pool != nil {
-		b.pool.Put(b.origData)
-		refObjectPool.Put(b.refs)
-	}
+	refs := b.refs.Add(-1)
+	switch {
+	case refs > 0:
+		return
+	case refs == 0:
+		if b.pool != nil {
+			b.pool.Put(b.origData)
+		}
 
-	b.origData = nil
-	b.data = nil
-	b.refs = nil
-	b.pool = nil
-	bufferObjectPool.Put(b)
+		refObjectPool.Put(b.refs)
+		b.origData = nil
+		b.data = nil
+		b.refs = nil
+		b.pool = nil
+		bufferObjectPool.Put(b)
+	default:
+		panic("Cannot free freed buffer")
+	}
 }
 
 func (b *buffer) Len() int {
@@ -161,8 +164,9 @@ func (b *buffer) String() string {
 // Reader returns a new Reader for the input slice after taking references to
 // each underlying buffer.
 func (s BufferSlice) Reader() Reader {
+	s.Ref()
 	return &sliceReader{
-		data: s.Ref(),
+		data: s,
 		len:  s.Len(),
 	}
 }
