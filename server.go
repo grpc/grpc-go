@@ -1149,11 +1149,15 @@ func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, 
 		channelz.Error(logger, s.channelz, "grpc: server failed to compress response: ", err)
 		return err
 	}
-	defer compData.Free()
 
-	hdr, data, payload := msgHeader(data, compData, pf)
-	defer data.Free()
-	defer payload.Free()
+	hdr, payload := msgHeader(data, compData, pf)
+
+	defer func() {
+		compData.Free()
+		data.Free()
+		// payload does not need to be freed here, it is either data or compData, both of
+		// which are already freed.
+	}()
 
 	dataLen := data.Len()
 	payloadLen := payload.Len()

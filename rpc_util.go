@@ -617,6 +617,10 @@ const (
 	compressionMade payloadFormat = 1 // compressed
 )
 
+func (pf payloadFormat) isCompressed() bool {
+	return pf == compressionMade
+}
+
 type streamReader interface {
 	ReadHeader(header []byte) error
 	Read(n int) (mem.BufferSlice, error)
@@ -748,12 +752,12 @@ const (
 
 // msgHeader returns a 5-byte header for the message being transmitted and the
 // payload, which is compData if non-nil or data otherwise.
-func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, dataRef, payload mem.BufferSlice) {
+func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, payload mem.BufferSlice) {
 	hdr = make([]byte, headerLen)
 	hdr[0] = byte(pf)
 
 	var length uint32
-	if pf == compressionMade {
+	if pf.isCompressed() {
 		length = uint32(compData.Len())
 		payload = compData
 	} else {
@@ -763,7 +767,7 @@ func msgHeader(data, compData mem.BufferSlice, pf payloadFormat) (hdr []byte, da
 
 	// Write length of payload into buf
 	binary.BigEndian.PutUint32(hdr[payloadLen:], length)
-	return hdr, data, payload
+	return hdr, payload
 }
 
 func outPayload(client bool, msg any, dataLength, payloadLength int, t time.Time) *stats.OutPayload {
@@ -829,7 +833,7 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 	}
 
 	var size int
-	if pf == compressionMade {
+	if pf.isCompressed() {
 		defer compressed.Free()
 
 		// To match legacy behavior, if the decompressor is set by WithDecompressor or RPCDecompressor,

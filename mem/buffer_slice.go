@@ -53,6 +53,31 @@ func (s BufferSlice) Len() int {
 	return length
 }
 
+// Ref returns a new BufferSlice containing a new reference of each Buffer in the
+// input slice.
+func (s BufferSlice) Ref() BufferSlice {
+	out := make(BufferSlice, len(s))
+	for i, b := range s {
+		out[i] = b.Ref()
+	}
+	return out
+}
+
+// Free invokes Buffer.Free() on each Buffer in the slice.
+func (s BufferSlice) Free() {
+	// Do nothing if the slice is empty
+	if len(s) == 0 {
+		return
+	}
+	if s[0] == nil {
+		panic("Double slice free")
+	}
+	for _, b := range s {
+		b.Free()
+	}
+	clear(s)
+}
+
 // CopyTo copies each of the underlying Buffer's data into the given buffer,
 // returning the number of bytes copied. Has the same semantics as the copy
 // builtin in that it will copy as many bytes as it can, stopping when either dst

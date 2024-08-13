@@ -86,3 +86,22 @@ func (e emptyBuffer) split(n int) (left, right Buffer) {
 func (e emptyBuffer) read(buf []byte) (int, Buffer) {
 	return 0, e
 }
+
+type sliceBuffer []byte
+
+func (s sliceBuffer) ReadOnlyData() []byte { return s }
+func (s sliceBuffer) Ref() Buffer          { return s }
+func (s sliceBuffer) Free()                {}
+func (s sliceBuffer) Len() int             { return len(s) }
+
+func (s sliceBuffer) split(n int) (left, right Buffer) {
+	return s[:n], s[n:]
+}
+
+func (s sliceBuffer) read(buf []byte) (int, Buffer) {
+	n := copy(buf, s)
+	if n == len(s) {
+		return n, nil
+	}
+	return n, s[n:]
+}

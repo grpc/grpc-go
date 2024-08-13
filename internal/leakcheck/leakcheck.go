@@ -137,7 +137,9 @@ func CheckTrackingBufferPool() {
 		}
 	}
 
-	p.efer.Logf("%f%% of buffers never freed", float64(totalLeakedBuffers)/float64(p.bufferCount))
+	if totalLeakedBuffers > 0 {
+		p.efer.Logf("%g%% of buffers never freed", float64(totalLeakedBuffers)/float64(p.bufferCount))
+	}
 }
 
 type trackingBufferPool struct {

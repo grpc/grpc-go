@@ -142,7 +142,7 @@ func (s) TestEncode(t *testing.T) {
 			t.Errorf("encode(_, %v) = %v, %v; want %v, %v", test.msg, data, err, test.data, test.err)
 			continue
 		}
-		if hdr, _, _ := msgHeader(data, nil, compressionNone); !bytes.Equal(hdr, test.hdr) {
+		if hdr, _ := msgHeader(data, nil, compressionNone); !bytes.Equal(hdr, test.hdr) {
 			t.Errorf("msgHeader(%v, false) = %v; want %v", data, hdr, test.hdr)
 		}
 	}

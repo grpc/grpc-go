@@ -90,7 +90,7 @@ func (s) TestBuffer_NewBufferRefAndFree(t *testing.T) {
 }
 
 func (s) TestBuffer_FreeAfterFree(t *testing.T) {
-	buf := newBuffer([]byte("abcd"), nil)
+	buf := newBuffer([]byte("abcd"), mem.NopBufferPool{})
 	if buf.Len() != 4 {
 		t.Fatalf("Buffer length is %d, want 4", buf.Len())
 	}
@@ -177,7 +177,7 @@ func (s) TestBuffer_CopyRefAndFree(t *testing.T) {
 
 func (s) TestBuffer_ReadOnlyDataAfterFree(t *testing.T) {
 	// Verify that reading before freeing does not panic.
-	buf := newBuffer([]byte("abcd"), nil)
+	buf := newBuffer([]byte("abcd"), mem.NopBufferPool{})
 	buf.ReadOnlyData()
 
 	buf.Free()
@@ -187,7 +187,7 @@ func (s) TestBuffer_ReadOnlyDataAfterFree(t *testing.T) {
 
 func (s) TestBuffer_RefAfterFree(t *testing.T) {
 	// Verify that acquiring a ref before freeing does not panic.
-	buf := newBuffer([]byte("abcd"), nil)
+	buf := newBuffer([]byte("abcd"), mem.NopBufferPool{})
 	bufRef := buf.Ref()
 	defer bufRef.Free()
 
@@ -198,7 +198,7 @@ func (s) TestBuffer_RefAfterFree(t *testing.T) {
 
 func (s) TestBuffer_SplitAfterFree(t *testing.T) {
 	// Verify that splitting before freeing does not panic.
-	buf := newBuffer([]byte("abcd"), nil)
+	buf := newBuffer([]byte("abcd"), mem.NopBufferPool{})
 	buf, bufSplit := mem.SplitUnsafe(buf, 2)
 	defer bufSplit.Free()
 

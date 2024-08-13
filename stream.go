@@ -903,14 +903,18 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, err := prepareMsg(m, cs.codec, cs.cp, cs.comp, cs.cc.dopts.copts.BufferPool)
+	hdr, data, payload, pf, err := prepareMsg(m, cs.codec, cs.cp, cs.comp, cs.cc.dopts.copts.BufferPool)
 	if err != nil {
 		return err
 	}
 
 	defer func() {
 		data.Free()
-		payload.Free()
+		// only free payload if compression was made, and therefore it is a different set
+		// of buffers from data.
+		if pf.isCompressed() {
+			payload.Free()
+		}
 	}()
 
 	dataLen := data.Len()
@@ -1408,13 +1412,17 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, err := prepareMsg(m, as.codec, as.cp, as.comp, as.ac.dopts.copts.BufferPool)
+	hdr, data, payload, pf, err := prepareMsg(m, as.codec, as.cp, as.comp, as.ac.dopts.copts.BufferPool)
 	if err != nil {
 		return err
 	}
 
-	defer data.Free()
-	defer payload.Free()
+	defer func() {
+		data.Free()
+		if pf.isCompressed() {
+			payload.Free()
+		}
+	}()
 
 	// TODO(dfawley): should we be checking len(data) instead?
 	if payload.Len() > *as.callInfo.maxSendMessageSize {
@@ -1681,13 +1689,17 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, err := prepareMsg(m, ss.codec, ss.cp, ss.comp, ss.p.bufferPool)
+	hdr, data, payload, pf, err := prepareMsg(m, ss.codec, ss.cp, ss.comp, ss.p.bufferPool)
 	if err != nil {
 		return err
 	}
 
-	defer data.Free()
-	defer payload.Free()
+	defer func() {
+		data.Free()
+		if pf.isCompressed() {
+			payload.Free()
+		}
+	}()
 
 	dataLen := data.Len()
 	payloadLen := payload.Len()
@@ -1802,24 +1814,26 @@ func MethodFromServerStream(stream ServerStream) (string, bool) {
 	return Method(stream.Context())
 }
 
-// prepareMsg returns the hdr, payload and data
-// using the compressors passed or using the
-// passed preparedmsg
-func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor, pool mem.BufferPool) (hdr []byte, data, payload mem.BufferSlice, err error) {
+// prepareMsg returns the hdr, payload and data using the compressors passed or
+// using the passed preparedmsg. The returned boolean indicates whether
+// compression was made and therefore whether the payload needs to be freed in
+// addition to the returned data. Freeing the payload if the returned boolean is
+// false can lead to undefined behavior.
+func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor, pool mem.BufferPool) (hdr []byte, data, payload mem.BufferSlice, pf payloadFormat, err error) {
 	if preparedMsg, ok := m.(*PreparedMsg); ok {
-		return preparedMsg.hdr, preparedMsg.encodedData.Ref(), preparedMsg.payload.Ref(), nil
+		return preparedMsg.hdr, preparedMsg.encodedData, preparedMsg.payload, preparedMsg.pf, nil
 	}
 	// The input interface is not a prepared msg.
 	// Marshal and Compress the data at this point
 	data, err = encode(codec, m)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, 0, err
 	}
 	compData, pf, err := compress(data, cp, comp, pool)
 	if err != nil {
 		data.Free()
-		return nil, nil, nil, err
+		return nil, nil, nil, 0, err
 	}
-	hdr, data, payload = msgHeader(data, compData, pf)
-	return hdr, data, payload, nil
+	hdr, payload = msgHeader(data, compData, pf)
+	return hdr, data, payload, pf, nil
 }

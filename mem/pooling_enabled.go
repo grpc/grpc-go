@@ -47,12 +47,17 @@ func newBuffer() *buffer {
 	return bufferObjectPool.Get().(*buffer)
 }
 
-// NewBuffer creates a new Buffer from the given data, initializing the
-// reference counter to 1. The given free function is called when all references
-// to the returned Buffer are released.
+// NewBuffer creates a new Buffer from the given data, initializing the reference
+// counter to 1. The data will then be returned to the given pool when all
+// references to the returned Buffer are released. As a special case to avoid
+// additional allocations, if the given buffer pool is nil, the returned buffer
+// will be a "no-op" Buffer where invoking Buffer.Free() does nothing.
 //
 // Note that the backing array of the given data is not copied.
 func NewBuffer(data *[]byte, pool BufferPool) Buffer {
+	if pool == nil {
+		return (sliceBuffer)(*data)
+	}
 	b := newBuffer()
 	b.origData = data
 	b.data = *data
@@ -151,30 +156,6 @@ func (b *buffer) read(buf []byte) (int, Buffer) {
 // debugging purposes.
 func (b *buffer) String() string {
 	return fmt.Sprintf("mem.Buffer(%p, data: %p, length: %d)", b, b.ReadOnlyData(), len(b.ReadOnlyData()))
-}
-
-// Ref invokes Buffer.Ref on each Buffer in the slice.
-func (s BufferSlice) Ref() BufferSlice {
-	out := make(BufferSlice, len(s))
-	for i, b := range s {
-		out[i] = b.Ref()
-	}
-	return out
-}
-
-// Free invokes Buffer.Free() on each Buffer in the slice.
-func (s BufferSlice) Free() {
-	// Do nothing if the slice is empty
-	if len(s) == 0 {
-		return
-	}
-	if s[0] == nil {
-		panic("Double slice free")
-	}
-	for _, b := range s {
-		b.Free()
-	}
-	clear(s)
 }
 
 // Reader returns a new Reader for the input slice after taking references to
