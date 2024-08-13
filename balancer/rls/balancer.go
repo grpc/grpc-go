@@ -30,6 +30,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
@@ -74,10 +75,30 @@ var (
 
 	// Following functions are no-ops in actual code, but can be overridden in
 	// tests to give tests visibility into exactly when certain events happen.
-	clientConnUpdateHook = func() {}
-	dataCachePurgeHook   = func() {}
-	resetBackoffHook     = func() {}
-	newPickerHook        = func() {}
+	clientConnUpdateHook     = func() {}
+	dataCachePurgeHook       = func() {}
+	resetBackoffHook         = func() {}
+	defaultTargetPicksMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.lb.rls.default_target_picks",
+		Description: "EXPERIMENTAL. Number of LB picks sent to the default target.",
+		Unit:        "pick",
+		Labels:      []string{"grpc.target", "grpc.lb.rls.server_target", "grpc.lb.rls.data_plane_target", "grpc.lb.pick_result"},
+		Default:     false,
+	})
+	targetPicksMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.lb.rls.target_picks",
+		Description: "EXPERIMENTAL. Number of LB picks sent to each RLS target. Note that if the default target is also returned by the RLS server, RPCs sent to that target from the cache will be counted in this metric, not in grpc.rls.default_target_picks.",
+		Unit:        "pick",
+		Labels:      []string{"grpc.target", "grpc.lb.rls.server_target", "grpc.lb.rls.data_plane_target", "grpc.lb.pick_result"},
+		Default:     false,
+	})
+	failedPicksMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.lb.rls.failed_picks",
+		Description: "EXPERIMENTAL. Number of LB picks failed due to either a failed RLS request or the RLS channel being throttled.",
+		Unit:        "pick",
+		Labels:      []string{"grpc.target", "grpc.lb.rls.server_target"},
+		Default:     false,
+	})
 )
 
 func init() {
@@ -286,14 +307,7 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 
 	// Update the copy of the config in the LB policy before releasing the lock.
 	b.lbCfg = newCfg
-
-	// Enqueue an event which will notify us when the above update has been
-	// propagated to all child policies, and the child policies have all
-	// processed their updates, and we have sent a picker update.
-	done := make(chan struct{})
-	b.updateCh.Put(resumePickerUpdates{done: done})
 	b.stateMu.Unlock()
-	<-done
 
 	if resizeCache {
 		// If the new config changes reduces the size of the data cache, we
@@ -306,11 +320,17 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		// `resizeCache` boolean) because `cacheMu` needs to be grabbed before
 		// `stateMu` if we are to hold both locks at the same time.
 		b.cacheMu.Lock()
-		if b.dataCache.resize(newCfg.cacheSizeBytes) {
-			b.sendNewPickerLocked()
-		}
+		b.dataCache.resize(newCfg.cacheSizeBytes)
 		b.cacheMu.Unlock()
 	}
+	b.stateMu.Lock()
+	// Enqueue an event which will notify us when the above update has been
+	// propagated to all child policies, and the child policies have all
+	// processed their updates, and we have sent a picker update.
+	done := make(chan struct{})
+	b.updateCh.Put(resumePickerUpdates{done: done})
+	b.stateMu.Unlock()
+	<-done
 	return nil
 }
 
@@ -495,25 +515,29 @@ func (b *rlsBalancer) sendNewPickerLocked() {
 	if b.defaultPolicy != nil {
 		b.defaultPolicy.acquireRef()
 	}
+
 	picker := &rlsPicker{
-		kbm:           b.lbCfg.kbMap,
-		origEndpoint:  b.bopts.Target.Endpoint(),
-		lb:            b,
-		defaultPolicy: b.defaultPolicy,
-		ctrlCh:        b.ctrlCh,
-		maxAge:        b.lbCfg.maxAge,
-		staleAge:      b.lbCfg.staleAge,
-		bg:            b.bg,
+		kbm:             b.lbCfg.kbMap,
+		origEndpoint:    b.bopts.Target.Endpoint(),
+		lb:              b,
+		defaultPolicy:   b.defaultPolicy,
+		ctrlCh:          b.ctrlCh,
+		maxAge:          b.lbCfg.maxAge,
+		staleAge:        b.lbCfg.staleAge,
+		bg:              b.bg,
+		rlsServerTarget: b.lbCfg.lookupService,
+		grpcTarget:      b.bopts.Target.String(),
+		metricsRecorder: b.bopts.MetricsRecorder,
 	}
 	picker.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-picker %p] ", picker))
 	state := balancer.State{
 		ConnectivityState: aggregatedState,
 		Picker:            picker,
 	}
+
 	if !b.inhibitPickerUpdates {
 		b.logger.Infof("New balancer.State: %+v", state)
 		b.cc.UpdateState(state)
-		newPickerHook()
 	} else {
 		b.logger.Infof("Delaying picker update: %+v", state)
 	}
