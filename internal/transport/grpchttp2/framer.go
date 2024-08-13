@@ -21,6 +21,8 @@ package grpchttp2
 
 import "golang.org/x/net/http2/hpack"
 
+const initHeaderTableSize = 4096 // Default HTTP/2 header table size.
+
 // FrameType represents the type of an HTTP/2 Frame.
 // See [Frame Type].
 //
@@ -54,6 +56,12 @@ const (
 	FlagPingAck                Flag = 0x1
 	FlagContinuationEndHeaders Flag = 0x4
 )
+
+// IsSet returns a boolean indicating whether the passed flag is set on this
+// flag instance.
+func (f Flag) IsSet(flag Flag) bool {
+	return f&flag != 0
+}
 
 // Setting represents the id and value pair of an HTTP/2 setting.
 // See [Setting Format].
@@ -105,6 +113,7 @@ type FrameHeader struct {
 //
 // Each concrete Frame type defined below implements the Frame interface.
 type Frame interface {
+	// Header returns the HTTP/2 9 byte header from the current Frame.
 	Header() *FrameHeader
 	// Free frees the underlying buffer if present so it can be reused by the
 	// framer.
@@ -258,6 +267,9 @@ func (f *WindowUpdateFrame) Header() *FrameHeader {
 	return f.hdr
 }
 
+// Free is a no-op for WindowUpdateFrame.
+func (f *WindowUpdateFrame) Free() {}
+
 // ContinuationFrame is the representation of a [CONTINUATION Frame]. The
 // CONTINUATION frame is used to continue a sequence of header block fragments.
 //
@@ -301,6 +313,26 @@ func (f *MetaHeadersFrame) Header() *FrameHeader {
 
 // Free is a no-op for MetaHeadersFrame.
 func (f *MetaHeadersFrame) Free() {}
+
+// UnknownFrame is a struct that is returned when the framer encounters an
+// unsupported frame.
+type UnknownFrame struct {
+	hdr     *FrameHeader
+	Payload []byte
+	free    func()
+}
+
+// Header returns the 9 byte HTTP/2 header for this frame.
+func (f *UnknownFrame) Header() *FrameHeader {
+	return f.hdr
+}
+
+// Free frees the underlying data in the frame.
+func (f *UnknownFrame) Free() {
+	if f.free != nil {
+		f.free()
+	}
+}
 
 // Framer encapsulates the functionality to read and write HTTP/2 frames.
 type Framer interface {
