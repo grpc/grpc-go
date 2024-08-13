@@ -129,6 +129,11 @@ func Println(args ...any) {
 }
 
 // InfoDepth logs to the INFO log at the specified depth.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func InfoDepth(depth int, args ...any) {
 	if internal.DepthLoggerV2Impl != nil {
 		internal.DepthLoggerV2Impl.InfoDepth(depth, args...)
@@ -138,6 +143,11 @@ func InfoDepth(depth int, args ...any) {
 }
 
 // WarningDepth logs to the WARNING log at the specified depth.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func WarningDepth(depth int, args ...any) {
 	if internal.DepthLoggerV2Impl != nil {
 		internal.DepthLoggerV2Impl.WarningDepth(depth, args...)
@@ -147,6 +157,11 @@ func WarningDepth(depth int, args ...any) {
 }
 
 // ErrorDepth logs to the ERROR log at the specified depth.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func ErrorDepth(depth int, args ...any) {
 	if internal.DepthLoggerV2Impl != nil {
 		internal.DepthLoggerV2Impl.ErrorDepth(depth, args...)
@@ -156,6 +171,11 @@ func ErrorDepth(depth int, args ...any) {
 }
 
 // FatalDepth logs to the FATAL log at the specified depth.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func FatalDepth(depth int, args ...any) {
 	if internal.DepthLoggerV2Impl != nil {
 		internal.DepthLoggerV2Impl.FatalDepth(depth, args...)
