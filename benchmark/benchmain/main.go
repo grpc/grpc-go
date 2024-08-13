@@ -65,6 +65,7 @@ import (
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
@@ -301,13 +302,8 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 		)
 	}
 	if bf.ModeCompressor == compModeGzip {
-		sopts = append(sopts,
-			grpc.RPCCompressor(grpc.NewGZIPCompressor()),
-			grpc.RPCDecompressor(grpc.NewGZIPDecompressor()),
-		)
 		opts = append(opts,
-			grpc.WithCompressor(grpc.NewGZIPCompressor()),
-			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
+			grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
 		)
 	}
 	if bf.EnableKeepalive {
