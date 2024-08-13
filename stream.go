@@ -1121,14 +1121,12 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 	}
 	// Special handling for non-server-stream rpcs.
 	// This recv expects EOF or errors, so we don't collect inPayload.
-	err = recv(a.p, cs.codec, a.s, a.dc, m, *cs.callInfo.maxReceiveMessageSize, nil, a.decomp, false)
-	if err == nil {
-		return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
-	}
-	if err == io.EOF {
+	if err := recv(a.p, cs.codec, a.s, a.dc, m, *cs.callInfo.maxReceiveMessageSize, nil, a.decomp, false); err == io.EOF {
 		return a.s.Status().Err() // non-server streaming Recv returns nil on success
+	} else if err != nil {
+		return toRPCErr(err)
 	}
-	return toRPCErr(err)
+	return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 }
 
 func (a *csAttempt) finish(err error) {
@@ -1442,14 +1440,12 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 
 	// Special handling for non-server-stream rpcs.
 	// This recv expects EOF or errors, so we don't collect inPayload.
-	err = recv(as.p, as.codec, as.s, as.dc, m, *as.callInfo.maxReceiveMessageSize, nil, as.decomp, false)
-	if err == nil {
-		return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
-	}
-	if err == io.EOF {
+	if err := recv(as.p, as.codec, as.s, as.dc, m, *as.callInfo.maxReceiveMessageSize, nil, as.decomp, false); err == io.EOF {
 		return as.s.Status().Err() // non-server streaming Recv returns nil on success
+	} else if err != nil {
+		return toRPCErr(err)
 	}
-	return toRPCErr(err)
+	return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 }
 
 func (as *addrConnStream) finish(err error) {
