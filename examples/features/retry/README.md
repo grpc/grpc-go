@@ -41,7 +41,6 @@ RetryableStatusCodes: Retry only when receiving these status codes.
             "methodConfig": [{
                 // config per method or all methods under service
                 "name": [{"service": "grpc.examples.echo.Echo"}],
-                "waitForReady": true,
 
                 "retryPolicy": {
                     "MaxAttempts": 4,

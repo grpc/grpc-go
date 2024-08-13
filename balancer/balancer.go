@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
@@ -256,6 +257,10 @@ type BuildOptions struct {
 	// same resolver.Target as passed to the resolver. See the documentation for
 	// the resolver.Target type for details about what it contains.
 	Target resolver.Target
+	// MetricsRecorder is the metrics recorder that balancers can use to record
+	// metrics. Balancer implementations which do not register metrics on
+	// metrics registry and record on them can ignore this field.
+	MetricsRecorder estats.MetricsRecorder
 }
 
 // Builder creates a balancer.

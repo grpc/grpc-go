@@ -30,7 +30,8 @@ if [[ "$1" = "-install" ]]; then
   go install \
     golang.org/x/tools/cmd/goimports \
     honnef.co/go/tools/cmd/staticcheck \
-    github.com/client9/misspell/cmd/misspell
+    github.com/client9/misspell/cmd/misspell \
+    github.com/mgechev/revive
   popd
   exit 0
 elif [[ "$#" -ne 0 ]]; then
@@ -90,7 +91,7 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   go mod tidy -compat=1.21
   git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
- 
+
   # - Collection of static analysis checks
   SC_OUT="$(mktemp)"
   staticcheck -go 1.21 -checks 'all' ./... >"${SC_OUT}" || true
@@ -166,5 +167,13 @@ GetValidationContextCertificateProviderInstance
 XXXXX PleaseIgnoreUnused'
   popd
 done
+
+# Collection of revive linter analysis checks
+REV_OUT="$(mktemp)"
+revive -formatter plain ./... >"${REV_OUT}" || true
+
+# Error for anything other than unused-parameter linter check and in generated code.
+# TODO: Remove `|| true` to unskip linter failures once existing issues are fixed.
+(noret_grep -v "unused-parameter" "${REV_OUT}" | not grep -v "\.pb\.go:") || true
 
 echo SUCCESS

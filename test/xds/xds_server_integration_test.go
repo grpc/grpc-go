@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
@@ -143,7 +144,7 @@ func hostPortFromListener(lis net.Listener) (string, uint32, error) {
 //     the client and the server. This results in both of them using the
 //     configured fallback credentials (which is insecure creds in this case).
 func (s) TestServerSideXDS_Fallback(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, xdsResolver := setupManagementServerAndResolver(t)
+	managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
 	defer cleanup2()
@@ -224,7 +225,7 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			managementServer, nodeID, bootstrapContents, xdsResolver := setupManagementServerAndResolver(t)
+			managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
 			lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
 			defer cleanup2()
 

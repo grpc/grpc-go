@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/idle"
 	iresolver "google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
@@ -195,8 +196,11 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	cc.csMgr = newConnectivityStateManager(cc.ctx, cc.channelz)
 	cc.pickerWrapper = newPickerWrapper(cc.dopts.copts.StatsHandlers)
 
+	cc.metricsRecorderList = stats.NewMetricsRecorderList(cc.dopts.copts.StatsHandlers)
+
 	cc.initIdleStateLocked() // Safe to call without the lock, since nothing else has a reference to cc.
 	cc.idlenessMgr = idle.NewManager((*idler)(cc), cc.dopts.idleTimeout)
+
 	return cc, nil
 }
 
@@ -591,13 +595,14 @@ type ClientConn struct {
 	cancel context.CancelFunc // Cancelled on close.
 
 	// The following are initialized at dial time, and are read-only after that.
-	target          string            // User's dial target.
-	parsedTarget    resolver.Target   // See initParsedTargetAndResolverBuilder().
-	authority       string            // See initAuthority().
-	dopts           dialOptions       // Default and user specified dial options.
-	channelz        *channelz.Channel // Channelz object.
-	resolverBuilder resolver.Builder  // See initParsedTargetAndResolverBuilder().
-	idlenessMgr     *idle.Manager
+	target              string            // User's dial target.
+	parsedTarget        resolver.Target   // See initParsedTargetAndResolverBuilder().
+	authority           string            // See initAuthority().
+	dopts               dialOptions       // Default and user specified dial options.
+	channelz            *channelz.Channel // Channelz object.
+	resolverBuilder     resolver.Builder  // See initParsedTargetAndResolverBuilder().
+	idlenessMgr         *idle.Manager
+	metricsRecorderList *stats.MetricsRecorderList
 
 	// The following provide their own synchronization, and therefore don't
 	// require cc.mu to be held to access them.
@@ -627,11 +632,6 @@ type ClientConn struct {
 
 // WaitForStateChange waits until the connectivity.State of ClientConn changes from sourceState or
 // ctx expires. A true value is returned in former case and false in latter.
-//
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
 func (cc *ClientConn) WaitForStateChange(ctx context.Context, sourceState connectivity.State) bool {
 	ch := cc.csMgr.getNotifyChan()
 	if cc.csMgr.getState() != sourceState {
@@ -646,11 +646,6 @@ func (cc *ClientConn) WaitForStateChange(ctx context.Context, sourceState connec
 }
 
 // GetState returns the connectivity.State of ClientConn.
-//
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-// release.
 func (cc *ClientConn) GetState() connectivity.State {
 	return cc.csMgr.getState()
 }

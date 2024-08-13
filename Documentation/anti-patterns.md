@@ -30,7 +30,7 @@ to create _a_ connection which may need to be recreated if it is lost.
 
 `grpc.Dial` uses "passthrough" as the default name resolver for backward
 compatibility while `grpc.NewClient` uses "dns" as its default name resolver.
-This subtle diffrence is important to legacy systems that also specified a
+This subtle difference is important to legacy systems that also specified a
 custom dialer and expected it to receive the target string directly.
 
 For these reasons, using `grpc.Dial` is discouraged.  Even though it is marked
@@ -62,10 +62,10 @@ the RPC was sent to a server.
 
 Some users of `Dial` use it as a way to validate the configuration of their
 system.  If you wish to maintain this behavior but migrate to `NewClient`, you
-can call `State` and `WaitForStateChange` until the channel is connected.
-However, if this fails, it does not mean that your configuration was bad - it
-could also mean the service is not reachable by the client due to connectivity
-reasons.
+can call `GetState`, then `Connect` if the state is `Idle` and
+`WaitForStateChange` until the channel is connected.  However, if this fails,
+it does not mean that your configuration was bad - it could also mean the
+service is not reachable by the client due to connectivity reasons.
 
 ## Best practices for error handling in gRPC
 
