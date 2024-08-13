@@ -58,8 +58,9 @@ func (s BufferSlice) Reader() Reader {
 		data := s[0].ReadOnlyData()
 		return (*rawReader)(&data)
 	default:
+		s.Ref()
 		return &sliceReader{
-			data: s.Ref(),
+			data: s,
 			len:  s.Len(),
 		}
 	}
