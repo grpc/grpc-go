@@ -225,7 +225,6 @@ func (b *ringhashBalancer) updateAddresses(addrs []resolver.Address) bool {
 	addrsSet := resolver.NewAddressMap()
 
 	b.orderedSubConns = b.orderedSubConns[:0] // reuse the underlying array.
-	b.lastInternallyTriggeredSCIndex = 0
 
 	for _, addr := range addrs {
 		addrsSet.Set(addr, true)
@@ -258,10 +257,10 @@ func (b *ringhashBalancer) updateAddresses(addrs []resolver.Address) bool {
 			// since *only* the weight attribute has changed, and that does not affect
 			// subConn uniqueness.
 			scInfo := val.(*subConn)
+			b.orderedSubConns = append(b.orderedSubConns, scInfo)
 			if oldWeight := scInfo.weight; oldWeight != newWeight {
 				scInfo.weight = newWeight
 				b.subConns.Set(addr, scInfo)
-				b.orderedSubConns = append(b.orderedSubConns, scInfo)
 				// Return true to force recreation of the ring.
 				addrsUpdated = true
 			}
@@ -278,6 +277,9 @@ func (b *ringhashBalancer) updateAddresses(addrs []resolver.Address) bool {
 			// Keep the state of this sc in b.scStates until sc's state becomes Shutdown.
 			// The entry will be deleted in updateSubConnState.
 		}
+	}
+	if addrsUpdated {
+		b.lastInternallyTriggeredSCIndex = 0
 	}
 	return addrsUpdated
 }
