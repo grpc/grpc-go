@@ -1183,12 +1183,12 @@ func (a *csAttempt) finish(err error) {
 	a.mu.Unlock()
 }
 
-// newClientStream creates a ClientStream with the specified transport, on the
+// newNonRetryClientStream creates a ClientStream with the specified transport, on the
 // given addrConn.
 //
 // It's expected that the given transport is either the same one in addrConn, or
 // is already closed. To avoid race, transport is specified separately, instead
-// of using ac.transpot.
+// of using ac.transport.
 //
 // Main difference between this and ClientConn.NewStream:
 // - no retry

@@ -622,7 +622,7 @@ func recvBufferPool(bufferPool SharedBufferPool) ServerOption {
 // workload (assuming a QPS of a few thousand requests/sec).
 const serverWorkerResetThreshold = 1 << 16
 
-// serverWorkers blocks on a *transport.Stream channel forever and waits for
+// serverWorker blocks on a *transport.Stream channel forever and waits for
 // data to be fed by serveStreams. This allows multiple requests to be
 // processed by the same goroutine, removing the need for expensive stack
 // re-allocations (see the runtime.morestack problem [1]).
