@@ -129,11 +129,10 @@ const (
 	workloadsUnconstrained = "unconstrained"
 	workloadsAll           = "all"
 	// Compression modes.
-	compModeOff    = "off"
-	compModeGzip   = "gzip"
-	compModeGzipV2 = "gzipV2"
-	compModeNop    = "nop"
-	compModeAll    = "all"
+	compModeOff  = "off"
+	compModeGzip = "gzip"
+	compModeNop  = "nop"
+	compModeAll  = "all"
 	// Toggle modes.
 	toggleModeOff  = "off"
 	toggleModeOn   = "on"
@@ -183,7 +182,7 @@ func init() {
 
 var (
 	allWorkloads              = []string{workloadsUnary, workloadsStreaming, workloadsUnconstrained, workloadsAll}
-	allCompModes              = []string{compModeOff, compModeGzip, compModeGzipV2, compModeNop, compModeAll}
+	allCompModes              = []string{compModeOff, compModeGzip, compModeNop, compModeAll}
 	allToggleModes            = []string{toggleModeOff, toggleModeOn, toggleModeBoth}
 	allNetworkModes           = []string{networkModeNone, networkModeLocal, networkModeLAN, networkModeWAN, networkLongHaul}
 	allRecvBufferPools        = []string{recvBufferPoolNil, recvBufferPoolSimple, recvBufferPoolAll}
@@ -330,16 +329,6 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 		)
 	}
 	if bf.ModeCompressor == compModeGzip {
-		sopts = append(sopts,
-			grpc.RPCCompressor(grpc.NewGZIPCompressor()),
-			grpc.RPCDecompressor(grpc.NewGZIPDecompressor()),
-		)
-		opts = append(opts,
-			grpc.WithCompressor(grpc.NewGZIPCompressor()),
-			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
-		)
-	}
-	if bf.ModeCompressor == compModeGzipV2 {
 		opts = append(opts,
 			grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
 		)
@@ -908,10 +897,10 @@ func setToggleMode(val string) []bool {
 
 func setCompressorMode(val string) []string {
 	switch val {
-	case compModeNop, compModeGzip, compModeGzipV2, compModeOff:
+	case compModeNop, compModeGzip, compModeOff:
 		return []string{val}
 	case compModeAll:
-		return []string{compModeNop, compModeGzip, compModeGzipV2, compModeOff}
+		return []string{compModeNop, compModeGzip, compModeOff}
 	default:
 		// This should never happen because a wrong value passed to this flag would
 		// be caught during flag.Parse().

@@ -101,7 +101,7 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 	nodeID := uuid.New().String()
 	tr, err := transport.New(transport.Options{
 		ServerCfg:     serverCfg,
-		OnRecvHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
+		OnRecvHandler: func(transport.ResourceUpdate, *transport.ADSFlowControl) error { return nil }, // No data model layer validation.
 		OnErrorHandler: func(err error) {
 			select {
 			case streamErrCh <- err:
@@ -262,7 +262,7 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 	// we can pass a no-op data model layer implementation.
 	tr, err := transport.New(transport.Options{
 		ServerCfg:     serverCfg,
-		OnRecvHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
+		OnRecvHandler: func(transport.ResourceUpdate, *transport.ADSFlowControl) error { return nil }, // No data model layer validation.
 		OnErrorHandler: func(err error) {
 			select {
 			case streamErrCh <- err:
@@ -394,10 +394,10 @@ func (s) TestTransport_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	nodeID := uuid.New().String()
 	tr, err := transport.New(transport.Options{
 		ServerCfg:      serverCfg,
-		OnRecvHandler:  func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
-		OnErrorHandler: func(error) {},                                      // No stream error handling.
-		OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No on send handler
-		Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.
+		OnRecvHandler:  func(transport.ResourceUpdate, *transport.ADSFlowControl) error { return nil }, // No data model layer validation.
+		OnErrorHandler: func(error) {},                                                                 // No stream error handling.
+		OnSendHandler:  func(*transport.ResourceSendInfo) {},                                           // No on send handler
+		Backoff:        func(int) time.Duration { return time.Duration(0) },                            // No backoff.
 		NodeProto:      &v3corepb.Node{Id: nodeID},
 	})
 	if err != nil {
