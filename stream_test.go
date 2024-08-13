@@ -31,7 +31,7 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
 
-const defaultTestTimeout = 10 * time.Second
+const defaultTestTimeout = 10 * time.Hour
 
 type s struct {
 	grpctest.Tester

@@ -85,7 +85,11 @@ func (s BufferSlice) MaterializeToBuffer(pool BufferPool) Buffer {
 	if len(s) == 1 {
 		return s[0].Ref()
 	}
-	buf := pool.Get(s.Len())
+	sLen := s.Len()
+	if sLen == 0 {
+		return emptyBuffer{}
+	}
+	buf := pool.Get(sLen)
 	s.CopyTo(*buf)
 	return NewBuffer(buf, pool)
 }

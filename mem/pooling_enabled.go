@@ -101,11 +101,11 @@ func (b *buffer) Free() {
 
 	if b.refs.Add(-1) == 0 && b.pool != nil {
 		b.pool.Put(b.origData)
+		refObjectPool.Put(b.refs)
 	}
 
 	b.origData = nil
 	b.data = nil
-	refObjectPool.Put(b.refs)
 	b.refs = nil
 	b.pool = nil
 	bufferObjectPool.Put(b)
@@ -164,9 +164,12 @@ func (s BufferSlice) Ref() BufferSlice {
 
 // Free invokes Buffer.Free() on each Buffer in the slice.
 func (s BufferSlice) Free() {
-	// Do nothing if the slice is empty, or has already been freed.
-	if len(s) == 0 || s[0] == nil {
+	// Do nothing if the slice is empty
+	if len(s) == 0 {
 		return
+	}
+	if s[0] == nil {
+		panic("Double slice free")
 	}
 	for _, b := range s {
 		b.Free()

@@ -908,8 +908,10 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 		return err
 	}
 
-	defer data.Free()
-	defer payload.Free()
+	defer func() {
+		data.Free()
+		payload.Free()
+	}()
 
 	dataLen := data.Len()
 	payloadLen := payload.Len()

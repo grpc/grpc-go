@@ -55,20 +55,30 @@ func (t *testBufferPool) Put(data *[]byte) {
 	t.putCh <- *data
 }
 
-func newTestBufferPool() *testBufferPool {
-	return &testBufferPool{putCh: make(chan []byte, 1)}
+//func newTestBufferPool() *testBufferPool {
+//	return &testBufferPool{putCh: make(chan []byte, 1)}
+//}
+
+type poolFunc func(*[]byte)
+
+func (p poolFunc) Get(length int) *[]byte {
+	panic("Get should never be called")
+}
+
+func (p poolFunc) Put(i *[]byte) {
+	p(i)
 }
 
 func (s) TestBuffer_Split(t *testing.T) {
 	ready := false
 	freed := false
 	data := []byte{1, 2, 3, 4}
-	buf := mem.NewBuffer(&data, func(bytes *[]byte) {
+	buf := mem.NewBuffer(&data, poolFunc(func(bytes *[]byte) {
 		if !ready {
 			t.Fatalf("Freed too early")
 		}
 		freed = true
-	})
+	}))
 	checkBufData := func(b mem.Buffer, expected []byte) {
 		t.Helper()
 		if !bytes.Equal(b.ReadOnlyData(), expected) {

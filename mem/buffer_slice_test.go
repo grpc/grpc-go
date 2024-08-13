@@ -27,8 +27,8 @@ import (
 	"google.golang.org/grpc/mem"
 )
 
-func newBuffer(data []byte, onFree func(*[]byte)) mem.Buffer {
-	return mem.NewBuffer(&data, onFree)
+func newBuffer(data []byte, pool mem.BufferPool) mem.Buffer {
+	return mem.NewBuffer(&data, pool)
 }
 
 func (s) TestBufferSlice_Len(t *testing.T) {
@@ -110,6 +110,7 @@ func (s) TestBufferSlice_MaterializeToBuffer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			defer tt.in.Free()
 			got := tt.in.MaterializeToBuffer(tt.pool)
 			defer got.Free()
 			if !bytes.Equal(got.ReadOnlyData(), tt.wantData) {

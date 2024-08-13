@@ -66,7 +66,7 @@ func (b *swappableBufferPool) Put(buf *[]byte) {
 	(*b.Load()).Put(buf)
 }
 
-// SetTrackingBufferPool upgrades the default buffer pool in the mem package to
+// SetTrackingBufferPool replaces the default buffer pool in the mem package to
 // one that tracks where buffers are allocated. CheckTrackingBufferPool should
 // then be invoked at the end of the test to validate that all buffers pulled
 // from the pool were returned.
@@ -100,6 +100,7 @@ func CheckTrackingBufferPool() {
 		count int
 	}
 
+	var totalLeakedBuffers int
 	var uniqueTraces []uniqueTrace
 	for _, stack := range p.allocatedBuffers {
 		idx, ok := slices.BinarySearchFunc(uniqueTraces, stack, func(trace uniqueTrace, stack []uintptr) int {
@@ -109,6 +110,7 @@ func CheckTrackingBufferPool() {
 			uniqueTraces = slices.Insert(uniqueTraces, idx, uniqueTrace{stack: stack})
 		}
 		uniqueTraces[idx].count++
+		totalLeakedBuffers++
 	}
 
 	for _, ut := range uniqueTraces {
@@ -134,6 +136,8 @@ func CheckTrackingBufferPool() {
 			p.efer.Logf("WARNING "+format, args...)
 		}
 	}
+
+	p.efer.Logf("%f%% of buffers never freed", float64(totalLeakedBuffers)/float64(p.bufferCount))
 }
 
 type trackingBufferPool struct {
@@ -141,12 +145,15 @@ type trackingBufferPool struct {
 	efer Errorfer
 
 	lock             sync.Mutex
+	bufferCount      int
 	allocatedBuffers map[*[]byte][]uintptr
 }
 
 func (p *trackingBufferPool) Get(length int) *[]byte {
 	p.lock.Lock()
 	defer p.lock.Unlock()
+
+	p.bufferCount++
 
 	buf := p.pool.Get(length)
 
@@ -169,10 +176,6 @@ func (p *trackingBufferPool) Get(length int) *[]byte {
 func (p *trackingBufferPool) Put(buf *[]byte) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-
-	if len(*buf) == 0 {
-		return
-	}
 
 	if _, ok := p.allocatedBuffers[buf]; !ok {
 		p.efer.Errorf("Unknown buffer freed:\n%s", string(debug.Stack()))

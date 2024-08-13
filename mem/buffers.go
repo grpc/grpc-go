@@ -52,18 +52,6 @@ type Buffer interface {
 	read(buf []byte) (int, Buffer)
 }
 
-//// Copy creates a new Buffer from the given data, initializing the reference
-//// counter to 1.
-////
-//// It acquires a []byte from the given pool and copies over the backing array
-//// of the given data. The []byte acquired from the pool is returned to the
-//// pool when all references to the returned Buffer are released.
-//func Copy(data []byte, pool BufferPool) Buffer {
-//	buf := pool.Get(len(data))
-//	copy(buf, data)
-//	return NewBuffer(buf, pool)
-//}
-
 func ReadUnsafe(dst []byte, buf Buffer) (int, Buffer) {
 	return buf.read(dst)
 }
@@ -73,4 +61,28 @@ func ReadUnsafe(dst []byte, buf Buffer) (int, Buffer) {
 // just like a normal reference acquired using Ref().
 func SplitUnsafe(buf Buffer, n int) (left, right Buffer) {
 	return buf.split(n)
+}
+
+type emptyBuffer struct{}
+
+func (e emptyBuffer) ReadOnlyData() []byte {
+	return nil
+}
+
+func (e emptyBuffer) Ref() Buffer {
+	return e
+}
+
+func (e emptyBuffer) Free() {}
+
+func (e emptyBuffer) Len() int {
+	return 0
+}
+
+func (e emptyBuffer) split(n int) (left, right Buffer) {
+	return e, e
+}
+
+func (e emptyBuffer) read(buf []byte) (int, Buffer) {
+	return 0, e
 }

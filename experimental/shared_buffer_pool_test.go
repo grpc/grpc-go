@@ -201,8 +201,9 @@ type checkBufferPool struct {
 	puts [][]byte
 }
 
-func (p *checkBufferPool) Get(size int) []byte {
-	return make([]byte, size)
+func (p *checkBufferPool) Get(size int) *[]byte {
+	b := make([]byte, size)
+	return &b
 }
 
 func (p *checkBufferPool) Put(bs *[]byte) {
