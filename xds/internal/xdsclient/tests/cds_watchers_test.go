@@ -43,9 +43,15 @@ import (
 
 type noopClusterWatcher struct{}
 
-func (noopClusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData) {}
-func (noopClusterWatcher) OnError(err error)                                {}
-func (noopClusterWatcher) OnResourceDoesNotExist()                          {}
+func (noopClusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData, done xdsresource.DoneNotifier) {
+	done.OnDone()
+}
+func (noopClusterWatcher) OnError(err error, done xdsresource.DoneNotifier) {
+	done.OnDone()
+}
+func (noopClusterWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
+	done.OnDone()
+}
 
 type clusterUpdateErrTuple struct {
 	update xdsresource.ClusterUpdate
@@ -60,20 +66,23 @@ func newClusterWatcher() *clusterWatcher {
 	return &clusterWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (cw *clusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData) {
+func (cw *clusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData, done xdsresource.DoneNotifier) {
 	cw.updateCh.Send(clusterUpdateErrTuple{update: update.Resource})
+	done.OnDone()
 }
 
-func (cw *clusterWatcher) OnError(err error) {
+func (cw *clusterWatcher) OnError(err error, done xdsresource.DoneNotifier) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
 	cw.updateCh.Replace(clusterUpdateErrTuple{err: err})
+	done.OnDone()
 }
 
-func (cw *clusterWatcher) OnResourceDoesNotExist() {
+func (cw *clusterWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
 	cw.updateCh.Replace(clusterUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response")})
+	done.OnDone()
 }
 
 // badClusterResource returns a cluster resource for the given name which

@@ -53,7 +53,7 @@ func (s) TestNew(t *testing.T) {
 			opts: transport.Options{
 				ServerCfg:     serverCfg,
 				NodeProto:     &v3corepb.Node{},
-				OnRecvHandler: func(transport.ResourceUpdate) error { return nil },
+				OnRecvHandler: func(transport.ResourceUpdate, *transport.ADSFlowControl) error { return nil },
 				OnSendHandler: func(*transport.ResourceSendInfo) {},
 			},
 			wantErrStr: "missing OnError callback handler when creating a new transport",
@@ -64,7 +64,7 @@ func (s) TestNew(t *testing.T) {
 			opts: transport.Options{
 				ServerCfg:      serverCfg,
 				NodeProto:      &v3corepb.Node{},
-				OnRecvHandler:  func(transport.ResourceUpdate) error { return nil },
+				OnRecvHandler:  func(transport.ResourceUpdate, *transport.ADSFlowControl) error { return nil },
 				OnErrorHandler: func(error) {},
 			},
 			wantErrStr: "missing OnSend callback handler when creating a new transport",
@@ -74,7 +74,7 @@ func (s) TestNew(t *testing.T) {
 			opts: transport.Options{
 				ServerCfg:      serverCfg,
 				NodeProto:      &v3corepb.Node{},
-				OnRecvHandler:  func(transport.ResourceUpdate) error { return nil },
+				OnRecvHandler:  func(transport.ResourceUpdate, *transport.ADSFlowControl) error { return nil },
 				OnErrorHandler: func(error) {},
 				OnSendHandler:  func(*transport.ResourceSendInfo) {},
 			},

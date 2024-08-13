@@ -42,7 +42,6 @@ func CreateBootstrapFileForTesting(t *testing.T, bootstrapContents []byte) {
 	if err := os.WriteFile(f.Name(), bootstrapContents, 0644); err != nil {
 		t.Fatalf("Failed to created bootstrap file: %v", err)
 	}
-	t.Logf("Created bootstrap file at %q with contents: %s\n", f.Name(), bootstrapContents)
 
 	origBootstrapFileName := envconfig.XDSBootstrapFileName
 	envconfig.XDSBootstrapFileName = f.Name()

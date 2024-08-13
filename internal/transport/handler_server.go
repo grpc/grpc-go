@@ -244,6 +244,7 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) erro
 		}
 
 		s.hdrMu.Lock()
+		defer s.hdrMu.Unlock()
 		if p := st.Proto(); p != nil && len(p.Details) > 0 {
 			delete(s.trailer, grpcStatusDetailsBinHeader)
 			stBytes, err := proto.Marshal(p)
@@ -268,7 +269,6 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) erro
 				}
 			}
 		}
-		s.hdrMu.Unlock()
 	})
 
 	if err == nil { // transport has not been closed

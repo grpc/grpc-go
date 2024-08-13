@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
 
@@ -55,7 +56,7 @@ var (
 // dynamically, and subsequent RPC's on that connection should start failing
 // with status code UNAVAILABLE.
 func (s) TestServeLDSRDS(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, _ := setupManagementServerAndResolver(t)
+	managementServer, nodeID, bootstrapContents, _ := setup.ManagementServerAndResolver(t)
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -165,7 +166,7 @@ func waitForFailedRPCWithStatus(ctx context.Context, t *testing.T, cc *grpc.Clie
 // serving, successfully Accept Connections, and fail at the L7 level with a
 // certain error message.
 func (s) TestRDSNack(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, _ := setupManagementServerAndResolver(t)
+	managementServer, nodeID, bootstrapContents, _ := setup.ManagementServerAndResolver(t)
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
@@ -235,7 +236,7 @@ func (s) TestRDSNack(t *testing.T) {
 // RPC's will match to). This configuration should eventually be represented in
 // the Server's state, and RPCs should proceed successfully.
 func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, _ := setupManagementServerAndResolver(t)
+	managementServer, nodeID, bootstrapContents, _ := setup.ManagementServerAndResolver(t)
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)

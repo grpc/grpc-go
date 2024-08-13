@@ -49,7 +49,7 @@ var (
 
 	// A simple update handler for listener resources which validates only the
 	// `use_original_dst` field.
-	dataModelValidator = func(update transport.ResourceUpdate) error {
+	dataModelValidator = func(update transport.ResourceUpdate, _ *transport.ADSFlowControl) error {
 		for _, r := range update.Resources {
 			inner := &v3discoverypb.Resource{}
 			if err := proto.Unmarshal(r.GetValue(), inner); err != nil {

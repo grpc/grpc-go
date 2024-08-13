@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -60,7 +61,7 @@ import (
 // used on the client.
 func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Success(t *testing.T) {
 	// Spin up an xDS management server.
-	mgmtServer, nodeID, _, resolverBuilder := setupManagementServerAndResolver(t)
+	mgmtServer, nodeID, _, resolverBuilder := setup.ManagementServerAndResolver(t)
 
 	// Spin up a test backend.
 	server := stubserver.StartTestService(t, nil)
