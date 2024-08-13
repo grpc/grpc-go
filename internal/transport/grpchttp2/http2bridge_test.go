@@ -60,7 +60,7 @@ func readUint16(b []byte) uint16 {
 	return uint16(b[0])<<8 | uint16(b[1])
 }
 
-// checkWrittenHeader takes a byte buffer representing a written frame header
+// parseWrittenHeader takes a byte buffer representing a written frame header
 // and returns its parsed values.
 func parseWrittenHeader(buf []byte) *FrameHeader {
 	size := uint32(readUint24(buf[0:3]))

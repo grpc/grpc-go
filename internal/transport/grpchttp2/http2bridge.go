@@ -140,8 +140,8 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 		}, nil
 	default:
 		buf := fr.pool.Get(int(hdr.Size))
-		huf := f.(*http2.UnknownFrame)
-		copy(buf, huf.Payload())
+		uf := f.(*http2.UnknownFrame)
+		copy(buf, uf.Payload())
 		return &UnknownFrame{
 			hdr:     hdr,
 			Payload: buf,
