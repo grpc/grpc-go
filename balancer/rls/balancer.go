@@ -75,9 +75,10 @@ var (
 
 	// Following functions are no-ops in actual code, but can be overridden in
 	// tests to give tests visibility into exactly when certain events happen.
-	clientConnUpdateHook     = func() {}
-	dataCachePurgeHook       = func() {}
-	resetBackoffHook         = func() {}
+	clientConnUpdateHook = func() {}
+	dataCachePurgeHook   = func() {}
+	resetBackoffHook     = func() {}
+
 	defaultTargetPicksMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:        "grpc.lb.rls.default_target_picks",
 		Description: "EXPERIMENTAL. Number of LB picks sent to the default target.",
@@ -175,7 +176,7 @@ type rlsBalancer struct {
 	// default child policy wrapper when a new picker is created. See
 	// sendNewPickerLocked() for details.
 	lastPicker *rlsPicker
-	// Set during CoUpdateConnState when pushing updates to child policies.
+	// Set during UpdateClientConnState when pushing updates to child policies.
 	// Prevents state updates from child policies causing new pickers to be sent
 	// up the channel. Cleared after all child policies have processed the
 	// updates sent to them, after which a new picker is sent up the channel.
