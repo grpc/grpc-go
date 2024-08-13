@@ -44,7 +44,7 @@ func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, 
 
 	if err := c.resourceTypes.maybeRegister(rType); err != nil {
 		logger.Warningf("Watch registered for name %q of type %q which is already registered", rType.TypeName(), resourceName)
-		c.serializer.Schedule(func(context.Context) { watcher.OnError(err) })
+		c.serializer.TrySchedule(func(context.Context) { watcher.OnError(err, xdsresource.NopDoneNotifier{}) })
 		return func() {}
 	}
 
@@ -54,7 +54,7 @@ func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, 
 	a, unref, err := c.findAuthority(n)
 	if err != nil {
 		logger.Warningf("Watch registered for name %q of type %q, authority %q is not found", rType.TypeName(), resourceName, n.Authority)
-		c.serializer.Schedule(func(context.Context) { watcher.OnError(err) })
+		c.serializer.TrySchedule(func(context.Context) { watcher.OnError(err, xdsresource.NopDoneNotifier{}) })
 		return func() {}
 	}
 	cancelF := a.watchResource(rType, n.String(), watcher)
@@ -96,7 +96,6 @@ func (r *resourceTypeRegistry) maybeRegister(rType xdsresource.Type) error {
 }
 
 func (c *clientImpl) triggerResourceNotFoundForTesting(rType xdsresource.Type, resourceName string) error {
-	// Return early if the client is already closed.
 	if c == nil || c.done.HasFired() {
 		return fmt.Errorf("attempt to trigger resource-not-found-error for resource %q of type %q, but client is closed", rType.TypeName(), resourceName)
 	}

@@ -19,6 +19,7 @@
 package advancedtls
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -28,7 +29,7 @@ import (
 	"os"
 	"testing"
 
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/grpctest"
@@ -149,20 +150,6 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 	}
 }
 
-// TODO(gtcooke94) Remove when deprecated `VType` is removed. This doesn't fit nicely into other table tests since it is setting a deprecated option.
-// Set VerificationType via the deprecated VType. Make sure it cascades to
-// VerificationType. This should error because one cannot skip default
-// verification and provide no root credentials",
-func (s) TestClientOptionsWithDeprecatedVType(t *testing.T) {
-	clientOptions := &Options{
-		VType: SkipVerification,
-	}
-	_, err := clientOptions.clientConfig()
-	if err == nil {
-		t.Fatalf("ClientOptions{%v}.config() returns no err, wantErr != nil", clientOptions)
-	}
-}
-
 func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 	tests := []struct {
 		desc                   string
@@ -171,6 +158,7 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 		RootOptions            RootCertificateOptions
 		MinVersion             uint16
 		MaxVersion             uint16
+		cipherSuites           []uint16
 	}{
 		{
 			desc:                   "Use system default if no fields in RootCertificateOptions is specified",
@@ -188,6 +176,15 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 			MinVersion: tls.VersionTLS12,
 			MaxVersion: tls.VersionTLS13,
 		},
+		{
+			desc: "Ciphersuite plumbing through client options",
+			cipherSuites: []uint16{
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
@@ -198,6 +195,7 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 				RootOptions:      test.RootOptions,
 				MinTLSVersion:    test.MinVersion,
 				MaxTLSVersion:    test.MaxVersion,
+				CipherSuites:     test.cipherSuites,
 			}
 			clientConfig, err := clientOptions.clientConfig()
 			if err != nil {
@@ -228,6 +226,9 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 				if clientConfig.MaxVersion != tls.VersionTLS13 {
 					t.Fatalf("Default max tls version not set correctly")
 				}
+			}
+			if diff := cmp.Diff(clientConfig.CipherSuites, test.cipherSuites); diff != "" {
+				t.Errorf("cipherSuites diff (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -304,20 +305,6 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 	}
 }
 
-// TODO(gtcooke94) Remove when deprecated `VType` is removed. This doesn't fit nicely into other table tests since it is setting a deprecated option.
-// Set VerificationType via the deprecated VType. Make sure it cascades to
-// VerificationType. This should error because one cannot skip default
-// verification and provide no root credentials",
-func (s) TestServerOptionsWithDeprecatedVType(t *testing.T) {
-	serverOptions := &Options{
-		VType: SkipVerification,
-	}
-	_, err := serverOptions.serverConfig()
-	if err == nil {
-		t.Fatalf("ClientOptions{%v}.config() returns no err, wantErr != nil", serverOptions)
-	}
-}
-
 func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 	tests := []struct {
 		desc                   string
@@ -327,6 +314,7 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 		RootOptions            RootCertificateOptions
 		MinVersion             uint16
 		MaxVersion             uint16
+		cipherSuites           []uint16
 	}{
 		{
 			desc:                   "Use system default if no fields in RootCertificateOptions is specified",
@@ -351,6 +339,21 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 			MinVersion: tls.VersionTLS12,
 			MaxVersion: tls.VersionTLS13,
 		},
+		{
+			desc: "Ciphersuite plumbing through server options",
+			IdentityOptions: IdentityCertificateOptions{
+				Certificates: []tls.Certificate{},
+			},
+			RootOptions: RootCertificateOptions{
+				RootCertificates: x509.NewCertPool(),
+			},
+			cipherSuites: []uint16{
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
@@ -362,6 +365,7 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 				RootOptions:       test.RootOptions,
 				MinTLSVersion:     test.MinVersion,
 				MaxTLSVersion:     test.MaxVersion,
+				CipherSuites:      test.cipherSuites,
 			}
 			serverConfig, err := serverOptions.serverConfig()
 			if err != nil {
@@ -375,6 +379,9 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 					t.Fatalf("Failed to assign system-provided certificates on the server side.")
 				}
 			}
+			if diff := cmp.Diff(serverConfig.CipherSuites, test.cipherSuites); diff != "" {
+				t.Errorf("cipherSuites diff (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
@@ -386,10 +393,6 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	}
 	getRootCertificatesForClient := func(params *ConnectionInfo) (*RootCertificates, error) {
 		return &RootCertificates{TrustCerts: cs.ClientTrust1}, nil
-	}
-
-	getRootCertificatesForClientDeprecatedTypes := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
-		return &GetRootCAsResults{TrustCerts: cs.ClientTrust1}, nil
 	}
 
 	clientVerifyFuncGood := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
@@ -444,10 +447,6 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		}
 	}
 
-	cache, err := lru.New(5)
-	if err != nil {
-		t.Fatalf("lru.New: err = %v", err)
-	}
 	for _, test := range []struct {
 		desc                       string
 		clientCert                 []tls.Certificate
@@ -508,20 +507,6 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverCert:                 []tls.Certificate{cs.ServerCert1},
 			serverVerificationType:     CertVerification,
 			serverExpectError:          true,
-		},
-		// Client: set clientGetRoot with deprecated types, clientVerifyFunc and
-		// clientCert Server: set serverRoot and serverCert with mutual TLS on
-		// Expected Behavior: success
-		{
-			desc:                   "Client sets peer cert, reload root function with deprecatd types with verifyFuncGood; server sets peer cert and root cert; mutualTLS",
-			clientCert:             []tls.Certificate{cs.ClientCert1},
-			clientGetRoot:          getRootCertificatesForClientDeprecatedTypes,
-			clientVerifyFunc:       clientVerifyFuncGood,
-			clientVerificationType: CertVerification,
-			serverMutualTLS:        true,
-			serverCert:             []tls.Certificate{cs.ServerCert1},
-			serverRoot:             cs.ServerTrust1,
-			serverVerificationType: CertVerification,
 		},
 		// Client: set clientGetRoot, clientVerifyFunc and clientCert
 		// Server: set serverRoot and serverCert with mutual TLS on
@@ -771,36 +756,12 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// Server: set valid credentials with the revocation config
 		// Expected Behavior: success, because none of the certificate chains sent in the connection are revoked
 		{
-			desc:                   "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; mutualTLS",
-			clientCert:             []tls.Certificate{cs.ClientCert1},
-			clientGetRoot:          getRootCertificatesForClient,
-			clientVerifyFunc:       clientVerifyFuncGood,
-			clientVerificationType: CertVerification,
-			clientRevocationOptions: &RevocationOptions{
-				RootDir:          testdata.Path("crl"),
-				DenyUndetermined: false,
-				Cache:            cache,
-			},
-			serverMutualTLS:        true,
-			serverCert:             []tls.Certificate{cs.ServerCert1},
-			serverGetRoot:          getRootCertificatesForServer,
-			serverVerificationType: CertVerification,
-			serverRevocationOptions: &RevocationOptions{
-				RootDir:          testdata.Path("crl"),
-				DenyUndetermined: false,
-				Cache:            cache,
-			},
-		},
-		// Client: set valid credentials with the revocation config
-		// Server: set valid credentials with the revocation config
-		// Expected Behavior: success, because none of the certificate chains sent in the connection are revoked
-		{
 			desc:                    "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; Client uses CRL; mutualTLS",
 			clientCert:              []tls.Certificate{cs.ClientCertForCRL},
 			clientGetRoot:           getRootCertificatesForClientCRL,
 			clientVerifyFunc:        clientVerifyFuncGood,
 			clientVerificationType:  CertVerification,
-			clientRevocationOptions: makeStaticCRLRevocationOptions(testdata.Path("crl/provider_crl_empty.pem"), true),
+			clientRevocationOptions: makeStaticCRLRevocationOptions(testdata.Path("crl/provider_crl_empty.pem"), false),
 			serverMutualTLS:         true,
 			serverCert:              []tls.Certificate{cs.ServerCertForCRL},
 			serverGetRoot:           getRootCertificatesForServerCRL,
@@ -933,6 +894,76 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				t.Fatalf("c.ClientHandshake(_, %v, _) = %v, want %v.", lisAddr,
 					clientAuthInfo, serverAuthInfo)
 			}
+			serverVerifiedChains := serverAuthInfo.(credentials.TLSInfo).State.VerifiedChains
+			if test.serverMutualTLS && !test.serverExpectError {
+				if len(serverVerifiedChains) == 0 {
+					t.Fatalf("server verified chains is empty")
+				}
+				var clientCert *tls.Certificate
+				if len(test.clientCert) > 0 {
+					clientCert = &test.clientCert[0]
+				} else if test.clientGetCert != nil {
+					cert, _ := test.clientGetCert(&tls.CertificateRequestInfo{})
+					clientCert = cert
+				} else if test.clientIdentityProvider != nil {
+					km, _ := test.clientIdentityProvider.KeyMaterial(context.TODO())
+					clientCert = &km.Certs[0]
+				}
+				if !bytes.Equal((*serverVerifiedChains[0][0]).Raw, clientCert.Certificate[0]) {
+					t.Fatal("server verifiedChains leaf cert doesn't match client cert")
+				}
+
+				var serverRoot *x509.CertPool
+				if test.serverRoot != nil {
+					serverRoot = test.serverRoot
+				} else if test.serverGetRoot != nil {
+					result, _ := test.serverGetRoot(&ConnectionInfo{})
+					serverRoot = result.TrustCerts
+				} else if test.serverRootProvider != nil {
+					km, _ := test.serverRootProvider.KeyMaterial(context.TODO())
+					serverRoot = km.Roots
+				}
+				serverVerifiedChainsCp := x509.NewCertPool()
+				serverVerifiedChainsCp.AddCert(serverVerifiedChains[0][len(serverVerifiedChains[0])-1])
+				if !serverVerifiedChainsCp.Equal(serverRoot) {
+					t.Fatalf("server verified chain hierarchy doesn't match")
+				}
+			}
+			clientVerifiedChains := clientAuthInfo.(credentials.TLSInfo).State.VerifiedChains
+			if test.serverMutualTLS && !test.clientExpectHandshakeError {
+				if len(clientVerifiedChains) == 0 {
+					t.Fatalf("client verified chains is empty")
+				}
+				var serverCert *tls.Certificate
+				if len(test.serverCert) > 0 {
+					serverCert = &test.serverCert[0]
+				} else if test.serverGetCert != nil {
+					cert, _ := test.serverGetCert(&tls.ClientHelloInfo{})
+					serverCert = cert[0]
+				} else if test.serverIdentityProvider != nil {
+					km, _ := test.serverIdentityProvider.KeyMaterial(context.TODO())
+					serverCert = &km.Certs[0]
+				}
+				if !bytes.Equal((*clientVerifiedChains[0][0]).Raw, serverCert.Certificate[0]) {
+					t.Fatal("client verifiedChains leaf cert doesn't match server cert")
+				}
+
+				var clientRoot *x509.CertPool
+				if test.clientRoot != nil {
+					clientRoot = test.clientRoot
+				} else if test.clientGetRoot != nil {
+					result, _ := test.clientGetRoot(&ConnectionInfo{})
+					clientRoot = result.TrustCerts
+				} else if test.clientRootProvider != nil {
+					km, _ := test.clientRootProvider.KeyMaterial(context.TODO())
+					clientRoot = km.Roots
+				}
+				clientVerifiedChainsCp := x509.NewCertPool()
+				clientVerifiedChainsCp.AddCert(clientVerifiedChains[0][len(clientVerifiedChains[0])-1])
+				if !clientVerifiedChainsCp.Equal(clientRoot) {
+					t.Fatalf("client verified chain hierarchy doesn't match")
+				}
+			}
 		})
 	}
 }
@@ -1020,7 +1051,7 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 			}
 			pointFormatUncompressed := uint8(0)
 			clientHello := &tls.ClientHelloInfo{
-				CipherSuites:      []uint16{tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA},
+				CipherSuites:      []uint16{tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA},
 				ServerName:        test.serverName,
 				SupportedCurves:   []tls.CurveID{tls.CurveP256},
 				SupportedPoints:   []uint8{pointFormatUncompressed},

@@ -21,6 +21,7 @@ package xdsclient_test
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -33,7 +34,6 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
@@ -41,6 +41,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
@@ -48,6 +49,7 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
 )
@@ -63,21 +65,41 @@ func startFakeManagementServer(t *testing.T) (*fakeserver.Server, func()) {
 	return fs, sCleanup
 }
 
-func compareUpdateMetadata(ctx context.Context, dumpFunc func() map[string]xdsresource.UpdateWithMD, want map[string]xdsresource.UpdateWithMD) error {
+func compareUpdateMetadata(ctx context.Context, dumpFunc func() *v3statuspb.ClientStatusResponse, want []*v3statuspb.ClientConfig_GenericXdsConfig) error {
+	var cmpOpts = cmp.Options{
+		cmp.Transformer("sort", func(in []*v3statuspb.ClientConfig_GenericXdsConfig) []*v3statuspb.ClientConfig_GenericXdsConfig {
+			out := append([]*v3statuspb.ClientConfig_GenericXdsConfig(nil), in...)
+			sort.Slice(out, func(i, j int) bool {
+				a, b := out[i], out[j]
+				if a == nil {
+					return true
+				}
+				if b == nil {
+					return false
+				}
+				if strings.Compare(a.TypeUrl, b.TypeUrl) == 0 {
+					return strings.Compare(a.Name, b.Name) < 0
+				}
+				return strings.Compare(a.TypeUrl, b.TypeUrl) < 0
+			})
+			return out
+		}),
+		protocmp.Transform(),
+		protocmp.IgnoreFields((*v3statuspb.ClientConfig_GenericXdsConfig)(nil), "last_updated"),
+		protocmp.IgnoreFields((*v3adminpb.UpdateFailureState)(nil), "last_update_attempt", "details"),
+	}
+
 	var lastErr error
 	for ; ctx.Err() == nil; <-time.After(100 * time.Millisecond) {
-		cmpOpts := cmp.Options{
-			cmpopts.EquateEmpty(),
-			cmp.Comparer(func(a, b time.Time) bool { return true }),
-			cmpopts.EquateErrors(),
-			protocmp.Transform(),
+		var got []*v3statuspb.ClientConfig_GenericXdsConfig
+		for _, cfg := range dumpFunc().GetConfig() {
+			got = append(got, cfg.GetGenericXdsConfigs()...)
 		}
-		gotUpdateMetadata := dumpFunc()
-		diff := cmp.Diff(want, gotUpdateMetadata, cmpOpts)
+		diff := cmp.Diff(want, got, cmpOpts)
 		if diff == "" {
 			return nil
 		}
-		lastErr = fmt.Errorf("unexpected diff in metadata, diff (-want +got):\n%s\n want: %+v\n got: %+v", diff, want, gotUpdateMetadata)
+		lastErr = fmt.Errorf("unexpected diff in metadata, diff (-want +got):\n%s\n want: %+v\n got: %+v", diff, want, got)
 	}
 	return fmt.Errorf("timeout when waiting for expected update metadata: %v", lastErr)
 }
@@ -124,7 +146,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 		managementServerResponse *v3discoverypb.DiscoveryResponse
 		wantUpdate               xdsresource.ListenerUpdate
 		wantErr                  string
-		wantUpdateMetadata       map[string]xdsresource.UpdateWithMD
+		wantGenericXDSConfig     []*v3statuspb.ClientConfig_GenericXdsConfig
 	}{
 		{
 			desc:         "badly-marshaled-response",
@@ -138,8 +160,12 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				}},
 			},
 			wantErr: "Listener not found in received response",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_DOES_NOT_EXIST,
+				},
 			},
 		},
 		{
@@ -150,8 +176,12 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 			},
 			wantErr: "Listener not found in received response",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_DOES_NOT_EXIST,
+				},
 			},
 		},
 		{
@@ -163,8 +193,12 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, &v3routepb.RouteConfiguration{})},
 			},
 			wantErr: "Listener not found in received response",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_DOES_NOT_EXIST,
+				},
 			},
 		},
 		{
@@ -181,14 +215,15 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				},
 			},
 			wantErr: "no RouteSpecifier",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{
-					Status: xdsresource.ServiceStatusNACKed,
-					ErrState: &xdsresource.UpdateErrorMetadata{
-						Version: "1",
-						Err:     cmpopts.AnyError,
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_NACKED,
+					ErrorState: &v3adminpb.UpdateFailureState{
+						VersionInfo: "1",
 					},
-				}},
+				},
 			},
 		},
 		{
@@ -203,10 +238,13 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				RouteConfigName: "route-configuration-name",
 				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 			},
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {
-					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(t, resource1),
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+					VersionInfo:  "1",
+					XdsConfig:    testutils.MarshalAny(t, resource1),
 				},
 			},
 		},
@@ -222,10 +260,13 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				RouteConfigName: "route-configuration-name",
 				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 			},
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {
-					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(t, resource1),
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+					VersionInfo:  "1",
+					XdsConfig:    testutils.MarshalAny(t, resource1),
 				},
 			},
 		},
@@ -241,12 +282,14 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-				XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
-				NodeProto: &v3corepb.Node{Id: nodeID},
-			}, defaultTestWatchExpiryTimeout, time.Duration(0))
+			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:               t.Name(),
+				Contents:           bc,
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
-				t.Fatalf("failed to create xds client: %v", err)
+				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
 			defer close()
 			t.Logf("Created xDS client to %s", mgmtServer.Address)
@@ -265,13 +308,20 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("Timeout when waiting for discovery request at the management server: %v", ctx)
 			}
 			wantReq := &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
-				Node:          &v3corepb.Node{Id: nodeID},
+				Node: &v3corepb.Node{
+					Id:            nodeID,
+					UserAgentName: "gRPC Go",
+					ClientFeatures: []string{
+						"envoy.lb.does_not_support_overprovisioning",
+						"xds.config.resource-in-sotw",
+					},
+				},
 				ResourceNames: []string{test.resourceName},
 				TypeUrl:       "type.googleapis.com/envoy.config.listener.v3.Listener",
 			}}
 			gotReq := val.(*fakeserver.Request)
-			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
-				t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform(), protocmp.IgnoreFields(&v3corepb.Node{}, "user_agent_version")); diff != "" {
+				t.Fatalf("Discovery request received with unexpected diff (-got +want):\n%s\n got: %+v, want: %+v", diff, gotReq, wantReq)
 			}
 			t.Logf("Discovery request received at management server")
 
@@ -300,10 +350,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, func() map[string]xdsresource.UpdateWithMD {
-				dump := client.DumpResources()
-				return dump["type.googleapis.com/envoy.config.listener.v3.Listener"]
-			}, test.wantUpdateMetadata); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -351,7 +398,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 		managementServerResponse *v3discoverypb.DiscoveryResponse
 		wantUpdate               xdsresource.RouteConfigUpdate
 		wantErr                  string
-		wantUpdateMetadata       map[string]xdsresource.UpdateWithMD
+		wantGenericXDSConfig     []*v3statuspb.ClientConfig_GenericXdsConfig
 	}{
 		// The first three tests involve scenarios where the response fails
 		// protobuf deserialization (because it contains an invalid data or type
@@ -373,8 +420,12 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 				}},
 			},
 			wantErr: "RouteConfiguration not found in received response",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_DOES_NOT_EXIST,
+				},
 			},
 		},
 		{
@@ -385,8 +436,12 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 			},
 			wantErr: "RouteConfiguration not found in received response",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_DOES_NOT_EXIST,
+				},
 			},
 		},
 		{
@@ -398,8 +453,12 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, &v3clusterpb.Cluster{})},
 			},
 			wantErr: "RouteConfiguration not found in received response",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_DOES_NOT_EXIST,
+				},
 			},
 		},
 		{
@@ -424,14 +483,15 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 				})},
 			},
 			wantErr: "received route is invalid: retry_policy.num_retries = 0; must be >= 1",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{
-					Status: xdsresource.ServiceStatusNACKed,
-					ErrState: &xdsresource.UpdateErrorMetadata{
-						Version: "1",
-						Err:     cmpopts.AnyError,
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_NACKED,
+					ErrorState: &v3adminpb.UpdateFailureState{
+						VersionInfo: "1",
 					},
-				}},
+				},
 			},
 		},
 		{
@@ -452,10 +512,13 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 					},
 				},
 			},
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {
-					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(t, resource1),
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+					VersionInfo:  "1",
+					XdsConfig:    testutils.MarshalAny(t, resource1),
 				},
 			},
 		},
@@ -477,10 +540,13 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 					},
 				},
 			},
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {
-					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(t, resource1),
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+					VersionInfo:  "1",
+					XdsConfig:    testutils.MarshalAny(t, resource1),
 				},
 			},
 		},
@@ -495,12 +561,14 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-				XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
-				NodeProto: &v3corepb.Node{Id: nodeID},
-			}, defaultTestWatchExpiryTimeout, time.Duration(0))
+			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:               t.Name(),
+				Contents:           bc,
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
-				t.Fatalf("failed to create xds client: %v", err)
+				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
 			defer close()
 			t.Logf("Created xDS client to %s", mgmtServer.Address)
@@ -519,13 +587,20 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("Timeout when waiting for discovery request at the management server: %v", ctx)
 			}
 			wantReq := &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
-				Node:          &v3corepb.Node{Id: nodeID},
+				Node: &v3corepb.Node{
+					Id:            nodeID,
+					UserAgentName: "gRPC Go",
+					ClientFeatures: []string{
+						"envoy.lb.does_not_support_overprovisioning",
+						"xds.config.resource-in-sotw",
+					},
+				},
 				ResourceNames: []string{test.resourceName},
 				TypeUrl:       "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
 			}}
 			gotReq := val.(*fakeserver.Request)
-			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
-				t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform(), protocmp.IgnoreFields(&v3corepb.Node{}, "user_agent_version")); diff != "" {
+				t.Fatalf("Discovery request received with unexpected diff (-got +want):\n%s\n got: %+v, want: %+v", diff, gotReq, wantReq)
 			}
 			t.Logf("Discovery request received at management server")
 
@@ -553,10 +628,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, func() map[string]xdsresource.UpdateWithMD {
-				dump := client.DumpResources()
-				return dump["type.googleapis.com/envoy.config.route.v3.RouteConfiguration"]
-			}, test.wantUpdateMetadata); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -586,7 +658,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 		managementServerResponse *v3discoverypb.DiscoveryResponse
 		wantUpdate               xdsresource.ClusterUpdate
 		wantErr                  string
-		wantUpdateMetadata       map[string]xdsresource.UpdateWithMD
+		wantGenericXDSConfig     []*v3statuspb.ClientConfig_GenericXdsConfig
 	}{
 		{
 			desc:         "badly-marshaled-response",
@@ -600,8 +672,12 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				}},
 			},
 			wantErr: "Cluster not found in received response",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_DOES_NOT_EXIST,
+				},
 			},
 		},
 		{
@@ -612,8 +688,12 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 			},
 			wantErr: "Cluster not found in received response",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_DOES_NOT_EXIST,
+				},
 			},
 		},
 		{
@@ -625,8 +705,12 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, &v3endpointpb.ClusterLoadAssignment{})},
 			},
 			wantErr: "Cluster not found in received response",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_DOES_NOT_EXIST,
+				},
 			},
 		},
 		{
@@ -650,14 +734,15 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				})},
 			},
 			wantErr: "unexpected lbPolicy MAGLEV",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{
-					Status: xdsresource.ServiceStatusNACKed,
-					ErrState: &xdsresource.UpdateErrorMetadata{
-						Version: "1",
-						Err:     cmpopts.AnyError,
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_NACKED,
+					ErrorState: &v3adminpb.UpdateFailureState{
+						VersionInfo: "1",
 					},
-				}},
+				},
 			},
 		},
 		{
@@ -672,10 +757,13 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				ClusterName:    "resource-name-1",
 				EDSServiceName: "eds-service-name",
 			},
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {
-					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(t, resource1),
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+					VersionInfo:  "1",
+					XdsConfig:    testutils.MarshalAny(t, resource1),
 				},
 			},
 		},
@@ -691,10 +779,13 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				ClusterName:    "resource-name-1",
 				EDSServiceName: "eds-service-name",
 			},
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {
-					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(t, resource1),
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+					VersionInfo:  "1",
+					XdsConfig:    testutils.MarshalAny(t, resource1),
 				},
 			},
 		},
@@ -710,12 +801,14 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-				XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
-				NodeProto: &v3corepb.Node{Id: nodeID},
-			}, defaultTestWatchExpiryTimeout, time.Duration(0))
+			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:               t.Name(),
+				Contents:           bc,
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
-				t.Fatalf("failed to create xds client: %v", err)
+				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
 			defer close()
 			t.Logf("Created xDS client to %s", mgmtServer.Address)
@@ -734,13 +827,20 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("Timeout when waiting for discovery request at the management server: %v", ctx)
 			}
 			wantReq := &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
-				Node:          &v3corepb.Node{Id: nodeID},
+				Node: &v3corepb.Node{
+					Id:            nodeID,
+					UserAgentName: "gRPC Go",
+					ClientFeatures: []string{
+						"envoy.lb.does_not_support_overprovisioning",
+						"xds.config.resource-in-sotw",
+					},
+				},
 				ResourceNames: []string{test.resourceName},
 				TypeUrl:       "type.googleapis.com/envoy.config.cluster.v3.Cluster",
 			}}
 			gotReq := val.(*fakeserver.Request)
-			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
-				t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform(), protocmp.IgnoreFields(&v3corepb.Node{}, "user_agent_version")); diff != "" {
+				t.Fatalf("Discovery request received with unexpected diff (-got +want):\n%s\n got: %+v, want: %+v", diff, gotReq, wantReq)
 			}
 			t.Logf("Discovery request received at management server")
 
@@ -769,19 +869,20 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			// server at that point, hence we do it here before verifying the
 			// received update.
 			if test.wantErr == "" {
-				test.wantUpdate.LRSServerConfig = xdstestutils.ServerConfigForAddress(t, mgmtServer.Address)
+				serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fmt.Sprintf("passthrough:///%s", mgmtServer.Address)})
+				if err != nil {
+					t.Fatalf("Failed to create server config for testing: %v", err)
+				}
+				test.wantUpdate.LRSServerConfig = serverCfg
 			}
 			cmpOpts := []cmp.Option{
 				cmpopts.EquateEmpty(),
-				cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy"),
+				cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy", "TelemetryLabels"),
 			}
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, func() map[string]xdsresource.UpdateWithMD {
-				dump := client.DumpResources()
-				return dump["type.googleapis.com/envoy.config.cluster.v3.Cluster"]
-			}, test.wantUpdateMetadata); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -859,7 +960,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 		managementServerResponse *v3discoverypb.DiscoveryResponse
 		wantUpdate               xdsresource.EndpointsUpdate
 		wantErr                  string
-		wantUpdateMetadata       map[string]xdsresource.UpdateWithMD
+		wantGenericXDSConfig     []*v3statuspb.ClientConfig_GenericXdsConfig
 	}{
 		// The first three tests involve scenarios where the response fails
 		// protobuf deserialization (because it contains an invalid data or type
@@ -881,8 +982,12 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				}},
 			},
 			wantErr: "Endpoints not found in received response",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_DOES_NOT_EXIST,
+				},
 			},
 		},
 		{
@@ -893,8 +998,12 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 			},
 			wantErr: "Endpoints not found in received response",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_DOES_NOT_EXIST,
+				},
 			},
 		},
 		{
@@ -906,8 +1015,12 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, &v3listenerpb.Listener{})},
 			},
 			wantErr: "Endpoints not found in received response",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_DOES_NOT_EXIST,
+				},
 			},
 		},
 		{
@@ -949,14 +1062,15 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				},
 			},
 			wantErr: "EDS response contains an endpoint with zero weight",
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{
-					Status: xdsresource.ServiceStatusNACKed,
-					ErrState: &xdsresource.UpdateErrorMetadata{
-						Version: "1",
-						Err:     cmpopts.AnyError,
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_NACKED,
+					ErrorState: &v3adminpb.UpdateFailureState{
+						VersionInfo: "1",
 					},
-				}},
+				},
 			},
 		},
 		{
@@ -983,10 +1097,13 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 					},
 				},
 			},
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {
-					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(t, resource1),
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+					VersionInfo:  "1",
+					XdsConfig:    testutils.MarshalAny(t, resource1),
 				},
 			},
 		},
@@ -1014,10 +1131,13 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 					},
 				},
 			},
-			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {
-					MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: "1"},
-					Raw: testutils.MarshalAny(t, resource1),
+			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
+				{
+					TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+					Name:         resourceName1,
+					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+					VersionInfo:  "1",
+					XdsConfig:    testutils.MarshalAny(t, resource1),
 				},
 			},
 		},
@@ -1033,12 +1153,14 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-				XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
-				NodeProto: &v3corepb.Node{Id: nodeID},
-			}, defaultTestWatchExpiryTimeout, time.Duration(0))
+			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:               t.Name(),
+				Contents:           bc,
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
-				t.Fatalf("failed to create xds client: %v", err)
+				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
 			defer close()
 			t.Logf("Created xDS client to %s", mgmtServer.Address)
@@ -1057,13 +1179,20 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("Timeout when waiting for discovery request at the management server: %v", ctx)
 			}
 			wantReq := &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
-				Node:          &v3corepb.Node{Id: nodeID},
+				Node: &v3corepb.Node{
+					Id:            nodeID,
+					UserAgentName: "gRPC Go",
+					ClientFeatures: []string{
+						"envoy.lb.does_not_support_overprovisioning",
+						"xds.config.resource-in-sotw",
+					},
+				},
 				ResourceNames: []string{test.resourceName},
 				TypeUrl:       "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
 			}}
 			gotReq := val.(*fakeserver.Request)
-			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
-				t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform(), protocmp.IgnoreFields(&v3corepb.Node{}, "user_agent_version")); diff != "" {
+				t.Fatalf("Discovery request received with unexpected diff (-got +want):\n%s\n got: %+v, want: %+v", diff, gotReq, wantReq)
 			}
 			t.Logf("Discovery request received at management server")
 
@@ -1091,10 +1220,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, func() map[string]xdsresource.UpdateWithMD {
-				dump := client.DumpResources()
-				return dump["type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment"]
-			}, test.wantUpdateMetadata); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})

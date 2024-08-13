@@ -289,18 +289,22 @@ func (l *outStreamList) dequeue() *outStream {
 }
 
 // controlBuffer is a way to pass information to loopy.
-// Information is passed as specific struct types called control frames.
-// A control frame not only represents data, messages or headers to be sent out
-// but can also be used to instruct loopy to update its internal state.
-// It shouldn't be confused with an HTTP2 frame, although some of the control frames
-// like dataFrame and headerFrame do go out on wire as HTTP2 frames.
+//
+// Information is passed as specific struct types called control frames. A
+// control frame not only represents data, messages or headers to be sent out
+// but can also be used to instruct loopy to update its internal state. It
+// shouldn't be confused with an HTTP2 frame, although some of the control
+// frames like dataFrame and headerFrame do go out on wire as HTTP2 frames.
 type controlBuffer struct {
-	ch              chan struct{}
-	done            <-chan struct{}
+	wakeupCh chan struct{}   // Unblocks readers waiting for something to read.
+	done     <-chan struct{} // Closed when the transport is done.
+
+	// Mutex guards all the fields below, except trfChan which can be read
+	// atomically without holding mu.
 	mu              sync.Mutex
-	consumerWaiting bool
-	list            *itemList
-	err             error
+	consumerWaiting bool      // True when readers are blocked waiting for new data.
+	closed          bool      // True when the controlbuf is finished.
+	list            *itemList // List of queued control frames.
 
 	// transportResponseFrames counts the number of queued items that represent
 	// the response of an action initiated by the peer.  trfChan is created
@@ -308,47 +312,59 @@ type controlBuffer struct {
 	// closed and nilled when transportResponseFrames drops below the
 	// threshold.  Both fields are protected by mu.
 	transportResponseFrames int
-	trfChan                 atomic.Value // chan struct{}
+	trfChan                 atomic.Pointer[chan struct{}]
 }
 
 func newControlBuffer(done <-chan struct{}) *controlBuffer {
 	return &controlBuffer{
-		ch:   make(chan struct{}, 1),
-		list: &itemList{},
-		done: done,
+		wakeupCh: make(chan struct{}, 1),
+		list:     &itemList{},
+		done:     done,
 	}
 }
 
-// throttle blocks if there are too many incomingSettings/cleanupStreams in the
-// controlbuf.
+// throttle blocks if there are too many frames in the control buf that
+// represent the response of an action initiated by the peer, like
+// incomingSettings cleanupStreams etc.
 func (c *controlBuffer) throttle() {
-	ch, _ := c.trfChan.Load().(chan struct{})
-	if ch != nil {
+	if ch := c.trfChan.Load(); ch != nil {
 		select {
-		case <-ch:
+		case <-(*ch):
 		case <-c.done:
 		}
 	}
 }
 
+// put adds an item to the controlbuf.
 func (c *controlBuffer) put(it cbItem) error {
 	_, err := c.executeAndPut(nil, it)
 	return err
 }
 
+// executeAndPut runs f, and if the return value is true, adds the given item to
+// the controlbuf. The item could be nil, in which case, this method simply
+// executes f and does not add the item to the controlbuf.
+//
+// The first return value indicates whether the item was successfully added to
+// the control buffer. A non-nil error, specifically ErrConnClosing, is returned
+// if the control buffer is already closed.
 func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
-	var wakeUp bool
 	c.mu.Lock()
-	if c.err != nil {
-		c.mu.Unlock()
-		return false, c.err
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return false, ErrConnClosing
 	}
 	if f != nil {
 		if !f() { // f wasn't successful
-			c.mu.Unlock()
 			return false, nil
 		}
 	}
+	if it == nil {
+		return true, nil
+	}
+
+	var wakeUp bool
 	if c.consumerWaiting {
 		wakeUp = true
 		c.consumerWaiting = false
@@ -359,77 +375,81 @@ func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
 		if c.transportResponseFrames == maxQueuedTransportResponseFrames {
 			// We are adding the frame that puts us over the threshold; create
 			// a throttling channel.
-			c.trfChan.Store(make(chan struct{}))
+			ch := make(chan struct{})
+			c.trfChan.Store(&ch)
 		}
 	}
-	c.mu.Unlock()
 	if wakeUp {
 		select {
-		case c.ch <- struct{}{}:
+		case c.wakeupCh <- struct{}{}:
 		default:
 		}
 	}
 	return true, nil
 }
 
-// Note argument f should never be nil.
-func (c *controlBuffer) execute(f func(it any) bool, it any) (bool, error) {
-	c.mu.Lock()
-	if c.err != nil {
-		c.mu.Unlock()
-		return false, c.err
-	}
-	if !f(it) { // f wasn't successful
-		c.mu.Unlock()
-		return false, nil
-	}
-	c.mu.Unlock()
-	return true, nil
-}
-
+// get returns the next control frame from the control buffer. If block is true
+// **and** there are no control frames in the control buffer, the call blocks
+// until one of the conditions is met: there is a frame to return or the
+// transport is closed.
 func (c *controlBuffer) get(block bool) (any, error) {
 	for {
 		c.mu.Lock()
-		if c.err != nil {
+		frame, err := c.getOnceLocked()
+		if frame != nil || err != nil || !block {
+			// If we read a frame or an error, we can return to the caller. The
+			// call to getOnceLocked() returns a nil frame and a nil error if
+			// there is nothing to read, and in that case, if the caller asked
+			// us not to block, we can return now as well.
 			c.mu.Unlock()
-			return nil, c.err
-		}
-		if !c.list.isEmpty() {
-			h := c.list.dequeue().(cbItem)
-			if h.isTransportResponseFrame() {
-				if c.transportResponseFrames == maxQueuedTransportResponseFrames {
-					// We are removing the frame that put us over the
-					// threshold; close and clear the throttling channel.
-					ch := c.trfChan.Load().(chan struct{})
-					close(ch)
-					c.trfChan.Store((chan struct{})(nil))
-				}
-				c.transportResponseFrames--
-			}
-			c.mu.Unlock()
-			return h, nil
-		}
-		if !block {
-			c.mu.Unlock()
-			return nil, nil
+			return frame, err
 		}
 		c.consumerWaiting = true
 		c.mu.Unlock()
+
+		// Release the lock above and wait to be woken up.
 		select {
-		case <-c.ch:
+		case <-c.wakeupCh:
 		case <-c.done:
 			return nil, errors.New("transport closed by client")
 		}
 	}
 }
 
+// Callers must not use this method, but should instead use get().
+//
+// Caller must hold c.mu.
+func (c *controlBuffer) getOnceLocked() (any, error) {
+	if c.closed {
+		return false, ErrConnClosing
+	}
+	if c.list.isEmpty() {
+		return nil, nil
+	}
+	h := c.list.dequeue().(cbItem)
+	if h.isTransportResponseFrame() {
+		if c.transportResponseFrames == maxQueuedTransportResponseFrames {
+			// We are removing the frame that put us over the
+			// threshold; close and clear the throttling channel.
+			ch := c.trfChan.Swap(nil)
+			close(*ch)
+		}
+		c.transportResponseFrames--
+	}
+	return h, nil
+}
+
+// finish closes the control buffer, cleaning up any streams that have queued
+// header frames. Once this method returns, no more frames can be added to the
+// control buffer, and attempts to do so will return ErrConnClosing.
 func (c *controlBuffer) finish() {
 	c.mu.Lock()
-	if c.err != nil {
-		c.mu.Unlock()
+	defer c.mu.Unlock()
+
+	if c.closed {
 		return
 	}
-	c.err = ErrConnClosing
+	c.closed = true
 	// There may be headers for streams in the control buffer.
 	// These streams need to be cleaned out since the transport
 	// is still not aware of these yet.
@@ -442,15 +462,14 @@ func (c *controlBuffer) finish() {
 			hdr.onOrphaned(ErrConnClosing)
 		}
 	}
+
 	// In case throttle() is currently in flight, it needs to be unblocked.
 	// Otherwise, the transport may not close, since the transport is closed by
 	// the reader encountering the connection error.
-	ch, _ := c.trfChan.Load().(chan struct{})
+	ch := c.trfChan.Swap(nil)
 	if ch != nil {
-		close(ch)
+		close(*ch)
 	}
-	c.trfChan.Store((chan struct{})(nil))
-	c.mu.Unlock()
 }
 
 type side int

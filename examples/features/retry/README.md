@@ -41,7 +41,6 @@ RetryableStatusCodes: Retry only when receiving these status codes.
             "methodConfig": [{
                 // config per method or all methods under service
                 "name": [{"service": "grpc.examples.echo.Echo"}],
-                "waitForReady": true,
 
                 "retryPolicy": {
                     "MaxAttempts": 4,
@@ -58,8 +57,8 @@ RetryableStatusCodes: Retry only when receiving these status codes.
 ### Providing the retry policy as a DialOption
 
 To use the above service config, pass it with `grpc.WithDefaultServiceConfig` to
-`grpc.Dial`.
+`grpc.NewClient`.
 
 ```go
-conn, err := grpc.Dial(ctx,grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(retryPolicy))
+conn, err := grpc.NewClient(ctx,grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(retryPolicy))
 ```

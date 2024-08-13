@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"net"
 	"net/http"
 	"strconv"
@@ -43,7 +44,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
@@ -1089,7 +1089,9 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		onWrite:   t.setResetPingStrikes,
 	}
 
-	success, err := t.controlBuf.execute(t.checkForHeaderListSize, trailingHeader)
+	success, err := t.controlBuf.executeAndPut(func() bool {
+		return t.checkForHeaderListSize(trailingHeader)
+	}, nil)
 	if !success {
 		if err != nil {
 			return err
@@ -1440,7 +1442,7 @@ func getJitter(v time.Duration) time.Duration {
 	}
 	// Generate a jitter between +/- 10% of the value.
 	r := int64(v / 10)
-	j := grpcrand.Int63n(2*r) - r
+	j := rand.Int63n(2*r) - r
 	return time.Duration(j)
 }
 

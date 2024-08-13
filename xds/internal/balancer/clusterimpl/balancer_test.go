@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -59,17 +60,8 @@ const (
 )
 
 var (
-	testBackendAddrs = []resolver.Address{
-		{Addr: "1.1.1.1:1"},
-	}
-	testLRSServerConfig = &bootstrap.ServerConfig{
-		ServerURI: "trafficdirector.googleapis.com:443",
-		Creds: bootstrap.ChannelCreds{
-			Type: "google_default",
-		},
-	}
-
-	cmpOpts = cmp.Options{
+	testBackendAddrs = []resolver.Address{{Addr: "1.1.1.1:1"}}
+	cmpOpts          = cmp.Options{
 		cmpopts.EquateEmpty(),
 		cmpopts.IgnoreFields(load.Data{}, "ReportInterval"),
 	}
@@ -107,6 +99,13 @@ func (s) TestDropByCategory(t *testing.T) {
 		dropNumerator   = 1
 		dropDenominator = 2
 	)
+	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:          "trafficdirector.googleapis.com:443",
+		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
@@ -262,6 +261,13 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 	defer b.Close()
 
 	var maxRequest uint32 = 50
+	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:          "trafficdirector.googleapis.com:443",
+		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
@@ -592,6 +598,13 @@ func (s) TestLoadReporting(t *testing.T) {
 	for i, a := range testBackendAddrs {
 		addrs[i] = xdsinternal.SetLocalityID(a, testLocality)
 	}
+	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:          "trafficdirector.googleapis.com:443",
+		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
 		BalancerConfig: &LBConfig{
@@ -625,7 +638,10 @@ func (s) TestLoadReporting(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	scs := balancer.SubConnState{ConnectivityState: connectivity.Ready}
+	sca := internal.SetConnectedAddress.(func(*balancer.SubConnState, resolver.Address))
+	sca(&scs, addrs[0])
+	sc1.UpdateState(scs)
 	// Test pick with one backend.
 	const successCount = 5
 	const errorCount = 5
@@ -715,6 +731,13 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 	for i, a := range testBackendAddrs {
 		addrs[i] = xdsinternal.SetLocalityID(a, testLocality)
 	}
+	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:          "trafficdirector.googleapis.com:443",
+		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
 		BalancerConfig: &LBConfig{
@@ -740,12 +763,14 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got.Server, testLRSServerConfig)
 	}
 
-	testLRSServerConfig2 := &bootstrap.ServerConfig{
-		ServerURI: "trafficdirector-another.googleapis.com:443",
-		Creds: bootstrap.ChannelCreds{
-			Type: "google_default",
-		},
+	testLRSServerConfig2, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:          "trafficdirector-another.googleapis.com:443",
+		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
+
 	// Update LRS server to a different name.
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),

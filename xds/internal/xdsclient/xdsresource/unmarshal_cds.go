@@ -89,16 +89,25 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serv
 			if fields := val.GetFields(); fields != nil {
 				if val, ok := fields["service_name"]; ok {
 					if _, ok := val.GetKind().(*structpb.Value_StringValue); ok {
-						telemetryLabels["service_name"] = val.GetStringValue()
+						telemetryLabels["csm.service_name"] = val.GetStringValue()
 					}
 				}
 				if val, ok := fields["service_namespace"]; ok {
 					if _, ok := val.GetKind().(*structpb.Value_StringValue); ok {
-						telemetryLabels["service_namespace"] = val.GetStringValue()
+						telemetryLabels["csm.service_namespace_name"] = val.GetStringValue()
 					}
 				}
 			}
 		}
+	}
+	// "The values for the service labels csm.service_name and
+	// csm.service_namespace_name come from xDS, “unknown” if not present." -
+	// CSM Design.
+	if _, ok := telemetryLabels["csm.service_name"]; !ok {
+		telemetryLabels["csm.service_name"] = "unknown"
+	}
+	if _, ok := telemetryLabels["csm.service_namespace_name"]; !ok {
+		telemetryLabels["csm.service_namespace_name"] = "unknown"
 	}
 
 	var lbPolicy json.RawMessage

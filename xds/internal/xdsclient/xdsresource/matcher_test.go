@@ -19,10 +19,10 @@ package xdsresource
 
 import (
 	"context"
+	"math/rand"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/matcher"
@@ -119,7 +119,7 @@ func (s) TestFractionMatcherMatch(t *testing.T) {
 	const fraction = 500000
 	fm := newFractionMatcher(fraction)
 	defer func() {
-		RandInt63n = grpcrand.Int63n
+		RandInt63n = rand.Int63n
 	}()
 
 	// rand > fraction, should return false.

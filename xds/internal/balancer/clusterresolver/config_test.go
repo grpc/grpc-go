@@ -171,14 +171,14 @@ const (
 }`
 )
 
-var testLRSServerConfig = &bootstrap.ServerConfig{
-	ServerURI: "trafficdirector.googleapis.com:443",
-	Creds: bootstrap.ChannelCreds{
-		Type: "google_default",
-	},
-}
-
 func TestParseConfig(t *testing.T) {
+	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:          "trafficdirector.googleapis.com:443",
+		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
 	tests := []struct {
 		name    string
 		js      string

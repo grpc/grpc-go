@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -175,12 +175,17 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 			t.Logf("Started xDS management server on %s", mgmtServer.Address)
 			mgmtServer.XDSResponseChan <- &fakeserver.Response{Resp: test.managementServerResponse}
 
+			serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
+			if err != nil {
+				t.Fatalf("Failed to create server config for testing: %v", err)
+			}
+
 			// Create a new transport.
 			resourcesCh := testutils.NewChannel()
 			tr, err := transport.New(transport.Options{
-				ServerCfg: *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
+				ServerCfg: serverCfg,
 				// No validation. Simply push received resources on a channel.
-				OnRecvHandler: func(update transport.ResourceUpdate) error {
+				OnRecvHandler: func(update transport.ResourceUpdate, _ *transport.ADSFlowControl) error {
 					resourcesCh.Send(&resourcesWithTypeURL{
 						resources: update.Resources,
 						url:       update.URL,
@@ -226,12 +231,15 @@ func (s) TestEmptyListenerResourceOnStreamRestart(t *testing.T) {
 	mgmtServer, cleanup := startFakeManagementServer(t)
 	defer cleanup()
 	t.Logf("Started xDS management server on %s", mgmtServer.Address)
+
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
 	nodeProto := &v3corepb.Node{Id: uuid.New().String()}
 	tr, err := transport.New(transport.Options{
-		ServerCfg: *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
-		OnRecvHandler: func(update transport.ResourceUpdate) error {
-			return nil
-		},
+		ServerCfg:      serverCfg,
+		OnRecvHandler:  func(transport.ResourceUpdate, *transport.ADSFlowControl) error { return nil },
 		OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No onSend handling.
 		OnErrorHandler: func(error) {},                                      // No stream error handling.
 		Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.
@@ -314,12 +322,15 @@ func (s) TestEmptyClusterResourceOnStreamRestartWithListener(t *testing.T) {
 	mgmtServer, cleanup := startFakeManagementServer(t)
 	defer cleanup()
 	t.Logf("Started xDS management server on %s", mgmtServer.Address)
+
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
 	nodeProto := &v3corepb.Node{Id: uuid.New().String()}
 	tr, err := transport.New(transport.Options{
-		ServerCfg: *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
-		OnRecvHandler: func(update transport.ResourceUpdate) error {
-			return nil
-		},
+		ServerCfg:      serverCfg,
+		OnRecvHandler:  func(transport.ResourceUpdate, *transport.ADSFlowControl) error { return nil },
 		OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No onSend handling.
 		OnErrorHandler: func(error) {},                                      // No stream error handling.
 		Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.

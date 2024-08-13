@@ -46,10 +46,6 @@ type XDSClient interface {
 	// the watcher is canceled. Callers need to handle this case.
 	WatchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) (cancel func())
 
-	// DumpResources returns the status of the xDS resources. Returns a map of
-	// resource type URLs to a map of resource names to resource state.
-	DumpResources() map[string]map[string]xdsresource.UpdateWithMD
-
 	ReportLoad(*bootstrap.ServerConfig) (*load.Store, func())
 
 	BootstrapConfig() *bootstrap.Config

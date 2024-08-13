@@ -189,5 +189,5 @@ func BenchmarkRandomWRRNext(b *testing.B) {
 
 func init() {
 	r := rand.New(rand.NewSource(0))
-	grpcrandInt63n = r.Int63n
+	randInt63n = r.Int63n
 }

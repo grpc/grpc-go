@@ -28,6 +28,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz"
@@ -76,10 +77,13 @@ const (
 		"deny_rules": []
 	}
 	`
+	authzOptStatic      = "static"
+	authzOptFileWatcher = "filewatcher"
 )
 
 var (
-	port = flag.Int("port", 50051, "the port to serve on")
+	port     = flag.Int("port", 50051, "the port to serve on")
+	authzOpt = flag.String("authz-option", authzOptStatic, "the authz option (static or filewatcher)")
 
 	errMissingMetadata = status.Errorf(codes.InvalidArgument, "missing metadata")
 )
@@ -186,6 +190,10 @@ func authStreamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServe
 func main() {
 	flag.Parse()
 
+	if *authzOpt != authzOptStatic && *authzOpt != authzOptFileWatcher {
+		log.Fatalf("Invalid authz option: %s", *authzOpt)
+	}
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("Listening on local port %q: %v", *port, err)
@@ -197,14 +205,28 @@ func main() {
 		log.Fatalf("Loading credentials: %v", err)
 	}
 
-	// Create an authorization interceptor using a static policy.
-	staticInteceptor, err := authz.NewStatic(authzPolicy)
-	if err != nil {
-		log.Fatalf("Creating a static authz interceptor: %v", err)
+	// Create authorization interceptors according to the authz-option command-line flag.
+	var unaryAuthzInterceptor grpc.UnaryServerInterceptor
+	var streamAuthzInterceptor grpc.StreamServerInterceptor
+	if *authzOpt == authzOptStatic {
+		// Create an authorization interceptor using a static policy.
+		staticInterceptor, err := authz.NewStatic(authzPolicy)
+		if err != nil {
+			log.Fatalf("Creating a static authz interceptor: %v", err)
+		}
+		unaryAuthzInterceptor, streamAuthzInterceptor = staticInterceptor.UnaryInterceptor, staticInterceptor.StreamInterceptor
+	} else if *authzOpt == authzOptFileWatcher {
+		// Create an authorization interceptor by watching a policy file.
+		fileWatcherInterceptor, err := authz.NewFileWatcher(data.Path("rbac/policy.json"), 100*time.Millisecond)
+		if err != nil {
+			log.Fatalf("Creating a file watcher authz interceptor: %v", err)
+		}
+		unaryAuthzInterceptor, streamAuthzInterceptor = fileWatcherInterceptor.UnaryInterceptor, fileWatcherInterceptor.StreamInterceptor
 	}
-	unaryInts := grpc.ChainUnaryInterceptor(authUnaryInterceptor, staticInteceptor.UnaryInterceptor)
-	streamInts := grpc.ChainStreamInterceptor(authStreamInterceptor, staticInteceptor.StreamInterceptor)
-	s := grpc.NewServer(grpc.Creds(creds), unaryInts, streamInts)
+
+	unaryInterceptors := grpc.ChainUnaryInterceptor(authUnaryInterceptor, unaryAuthzInterceptor)
+	streamInterceptors := grpc.ChainStreamInterceptor(authStreamInterceptor, streamAuthzInterceptor)
+	s := grpc.NewServer(grpc.Creds(creds), unaryInterceptors, streamInterceptors)
 
 	// Register EchoServer on the server.
 	pb.RegisterEchoServer(s, &server{})

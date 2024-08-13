@@ -1,10 +1,10 @@
-#!/bin/bash 
+#!/bin/bash
 
 set -ex  # Exit on error; debugging enabled.
 set -o pipefail  # Fail a pipe if any sub-command fails.
 
 # - Source them sweet sweet helpers.
-source "$(dirname $0)/vet-common.sh"
+source "$(dirname $0)/common.sh"
 
 # - Check to make sure it's safe to modify the user's git repo.
 git status --porcelain | fail_on_output
@@ -20,18 +20,11 @@ trap cleanup EXIT
 # consistent with the place where all binaries installed by scripts in this repo
 # go.)
 if [[ "$1" = "-install" ]]; then
-  if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
-    PROTOBUF_VERSION=25.2 # Shows up in pb.go files as v4.22.0
-    PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
-    pushd /home/runner/go
-      wget https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/${PROTOC_FILENAME}
-      unzip ${PROTOC_FILENAME}
-      protoc --version # Check that the binary works.
-    popd
-  else 
-    # TODO: replace with install protoc when https://github.com/grpc/grpc-go/pull/7064 is merged.
-    die "-install currently intended for use in CI only."
-  fi
+    if [[ "${GITHUB_ACTIONS}" = "true" ]]; then
+      source ./scripts/install-protoc.sh "/home/runner/go"
+    else
+      die "run protoc installer https://github.com/grpc/grpc-go/blob/master/scripts/install-protoc.sh"
+    fi
   echo SUCCESS
   exit 0
 elif [[ "$#" -ne 0 ]]; then

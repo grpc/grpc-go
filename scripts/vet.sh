@@ -3,7 +3,7 @@
 set -ex         # Exit on error; debugging enabled.
 set -o pipefail # Fail a pipe if any sub-command fails.
 
-source "$(dirname $0)/vet-common.sh"
+source "$(dirname $0)/common.sh"
 
 # Check to make sure it's safe to modify the user's git repo.
 git status --porcelain | fail_on_output
@@ -30,7 +30,8 @@ if [[ "$1" = "-install" ]]; then
   go install \
     golang.org/x/tools/cmd/goimports \
     honnef.co/go/tools/cmd/staticcheck \
-    github.com/client9/misspell/cmd/misspell
+    github.com/client9/misspell/cmd/misspell \
+    github.com/mgechev/revive
   popd
   exit 0
 elif [[ "$#" -ne 0 ]]; then
@@ -43,35 +44,38 @@ fi
 (grep -L "DO NOT EDIT" $(git grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)" -- '*.go') || true) | fail_on_output
 
 # - Make sure all tests in grpc and grpc/test use leakcheck via Teardown.
-not grep 'func Test[^(]' *_test.go
-not grep 'func Test[^(]' test/*.go
+not grep 'func Test[^(]' -- *_test.go
+not grep 'func Test[^(]' -- test/*.go
 
 # - Check for typos in test function names
-git grep --quiet 'func (s) ' -- "*_test.go" | not grep -v 'func (s) Test'
-git grep --quiet 'func [A-Z]' -- "*_test.go" | not grep -v 'func Test\|Benchmark\|Example'
+git grep 'func (s) ' -- "*_test.go" | not grep -v 'func (s) Test'
+git grep 'func [A-Z]' -- "*_test.go" | not grep -v 'func Test\|Benchmark\|Example'
 
 # - Do not use time.After except in tests.  It has the potential to leak the
 #   timer since there is no way to stop it early.
-git grep --quiet -l 'time.After(' -- "*.go" | not grep -v '_test.go\|test_utils\|testutils'
-
-# - Do not import math/rand for real library code.  Use internal/grpcrand for
-#   thread safety.
-git grep --quiet -l '"math/rand"' -- "*.go" 2>&1 | not grep -v '^examples\|^interop/stress\|grpcrand\|^benchmark\|wrr_test'
+git grep -l 'time.After(' -- "*.go" | not grep -v '_test.go\|test_utils\|testutils'
 
 # - Do not use "interface{}"; use "any" instead.
-git grep --quiet -l 'interface{}' -- "*.go" 2>&1 | not grep -v '\.pb\.go\|protoc-gen-go-grpc\|grpc_testing_not_regenerate'
+git grep -l 'interface{}' -- "*.go" 2>&1 | not grep -v '\.pb\.go\|protoc-gen-go-grpc\|grpc_testing_not_regenerate'
 
 # - Do not call grpclog directly. Use grpclog.Component instead.
-git grep --quiet -l -e 'grpclog.I' --or -e 'grpclog.W' --or -e 'grpclog.E' --or -e 'grpclog.F' --or -e 'grpclog.V' -- "*.go" | not grep -v '^grpclog/component.go\|^internal/grpctest/tlogger_test.go'
+git grep -l -e 'grpclog.I' --or -e 'grpclog.W' --or -e 'grpclog.E' --or -e 'grpclog.F' --or -e 'grpclog.V' -- "*.go" | not grep -v '^grpclog/component.go\|^internal/grpctest/tlogger_test.go'
 
 # - Ensure that the deprecated protobuf dependency is not used.
-not git grep --quiet "\"github.com/golang/protobuf/*" -- "*.go" ':(exclude)reflection/test/grpc_testing_not_regenerate/*'
+not git grep "\"github.com/golang/protobuf/*" -- "*.go" ':(exclude)reflection/test/grpc_testing_not_regenerate/*'
 
 # - Ensure all usages of grpc_testing package are renamed when importing.
-not git grep --quiet "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" -- "*.go"
+not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" -- "*.go"
 
 # - Ensure all xds proto imports are renamed to *pb or *grpc.
-git grep --quiet '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.pb.go' | not grep -v 'pb "\|grpc "'
+git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.pb.go' | not grep -v 'pb "\|grpc "'
+
+# - Ensure all context usages are done with timeout.
+# Context tests under benchmark are excluded as they are testing the performance of context.Background() and context.TODO().
+# TODO: Remove the exclusions once the tests are updated to use context.WithTimeout().
+# See https://github.com/grpc/grpc-go/issues/7304
+git grep -e 'context.Background()' --or -e 'context.TODO()' -- "*_test.go" | grep -v "benchmark/primitives/context_test.go" | grep -v "credential
+s/google" | grep -v "internal/transport/" | grep -v "xds/internal/" | grep -v "security/advancedtls" | grep -v 'context.WithTimeout(' | not grep -v 'context.WithCancel('
 
 misspell -error .
 
@@ -84,13 +88,13 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   gofmt -s -d -l . 2>&1 | fail_on_output
   goimports -l . 2>&1 | not grep -vE "\.pb\.go"
 
-  go mod tidy -compat=1.19
+  go mod tidy -compat=1.21
   git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
-  
+
   # - Collection of static analysis checks
   SC_OUT="$(mktemp)"
-  staticcheck -go 1.19 -checks 'all' ./... >"${SC_OUT}" || true
+  staticcheck -go 1.21 -checks 'all' ./... >"${SC_OUT}" || true
 
   # Error for anything other than checks that need exclusions.
   noret_grep -v "(ST1000)" "${SC_OUT}" | noret_grep -v "(SA1019)" | noret_grep -v "(ST1003)" | noret_grep -v "(ST1019)\|\(other import of\)" | not grep -v "(SA4000)"
@@ -118,7 +122,7 @@ XXXXX PleaseIgnoreUnused'
 
   # Ignore a false positive when operands have side affectes.
   # TODO(https://github.com/dominikh/go-tools/issues/54): Remove this once the issue is fixed in staticcheck.
-  noret_grep "(SA4000)" "${SC_OUT}" | not grep -ev "crl.go:\d*:\d*: identical expressions on the left and right side of the '||' operator (SA4000)"
+  noret_grep "(SA4000)" "${SC_OUT}" | not grep -v -e "crl.go:[0-9]\+:[0-9]\+: identical expressions on the left and right side of the '||' operator (SA4000)"
 
   # Only ignore the following deprecated types/fields/functions and exclude
   # generated code.
@@ -163,5 +167,13 @@ GetValidationContextCertificateProviderInstance
 XXXXX PleaseIgnoreUnused'
   popd
 done
+
+# Collection of revive linter analysis checks
+REV_OUT="$(mktemp)"
+revive -formatter plain ./... >"${REV_OUT}" || true
+
+# Error for anything other than unused-parameter linter check and in generated code.
+# TODO: Remove `|| true` to unskip linter failures once existing issues are fixed.
+(noret_grep -v "unused-parameter" "${REV_OUT}" | not grep -v "\.pb\.go:") || true
 
 echo SUCCESS

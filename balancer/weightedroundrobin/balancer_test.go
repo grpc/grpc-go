@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
+	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -75,6 +76,14 @@ var (
 	}
 	oobConfig = iwrr.LBConfig{
 		EnableOOBLoadReport:     boolp(true),
+		OOBReportingPeriod:      stringp("0.005s"),
+		BlackoutPeriod:          stringp("0s"),
+		WeightExpirationPeriod:  stringp("60s"),
+		WeightUpdatePeriod:      stringp(".050s"),
+		ErrorUtilizationPenalty: float64p(0),
+	}
+	testMetricsConfig = iwrr.LBConfig{
+		EnableOOBLoadReport:     boolp(false),
 		OOBReportingPeriod:      stringp("0.005s"),
 		BlackoutPeriod:          stringp("0s"),
 		WeightExpirationPeriod:  stringp("60s"),
@@ -194,6 +203,43 @@ func (s) TestBalancer_OneAddress(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestWRRMetricsBasic tests metrics emitted from the WRR balancer. It
+// configures a weighted round robin balancer as the top level balancer of a
+// ClientConn, and configures a fake stats handler on the ClientConn to receive
+// metrics. It verifies stats emitted from the Weighted Round Robin Balancer on
+// balancer startup case which triggers the first picker and scheduler update
+// before any load reports are received.
+//
+// Note that this test and others, metrics emission asssertions are a snapshot
+// of the most recently emitted metrics. This is due to the nondeterminism of
+// scheduler updates with respect to test bodies, so the assertions made are
+// from the most recently synced state of the system (picker/scheduler) from the
+// test body.
+func (s) TestWRRMetricsBasic(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv := startServer(t, reportCall)
+	sc := svcConfig(t, testMetricsConfig)
+
+	mr := stats.NewTestMetricsRecorder(t)
+	if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc), grpc.WithStatsHandler(mr)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+	srv.callMetrics.SetQPS(float64(1))
+
+	if _, err := srv.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("Error from EmptyCall: %v", err)
+	}
+
+	mr.AssertDataForMetric("grpc.lb.wrr.rr_fallback", 1)           // Falls back because only one SubConn.
+	mr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_stale", 0) // The endpoint weight has not expired so this is 0 (never emitted).
+	mr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_not_yet_usable", 1)
+	// Unusable, so no endpoint weight. Due to only one SubConn, this will never
+	// update the weight. Thus, this will stay 0.
+	mr.AssertDataForMetric("grpc.lb.wrr.endpoint_weights", 0)
 }
 
 // Tests two addresses with ORCA reporting disabled (should fall back to pure

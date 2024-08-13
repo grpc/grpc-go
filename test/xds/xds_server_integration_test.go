@@ -26,12 +26,16 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
 
@@ -140,8 +144,7 @@ func hostPortFromListener(lis net.Listener) (string, uint32, error) {
 //     the client and the server. This results in both of them using the
 //     configured fallback credentials (which is insecure creds in this case).
 func (s) TestServerSideXDS_Fallback(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup1()
+	managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
 	defer cleanup2()
@@ -184,7 +187,7 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 	}
 
 	// Create a ClientConn with the xds scheme and make a successful RPC.
-	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(resolver))
+	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -222,9 +225,7 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-			defer cleanup1()
-
+			managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
 			lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
 			defer cleanup2()
 
@@ -269,7 +270,7 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 			}
 
 			// Create a ClientConn with the xds scheme and make an RPC.
-			cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(resolver))
+			cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolver))
 			if err != nil {
 				t.Fatalf("failed to dial local test server: %v", err)
 			}
@@ -292,8 +293,21 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 // configuration pointing to the use of the file_watcher plugin and we verify
 // that the same client is now able to successfully make an RPC.
 func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup1()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	var xdsResolver resolver.Builder
+	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
+		var err error
+		xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+		if err != nil {
+			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		}
+	}
 
 	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
 	defer cleanup2()
@@ -337,7 +351,7 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	}
 
 	// Create a ClientConn with the xds scheme and make a successful RPC.
-	xdsCC, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(xdsCreds), grpc.WithResolvers(resolver))
+	xdsCC, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(xdsCreds), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -350,7 +364,7 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 
 	// Create a ClientConn with TLS creds. This should fail since the server is
 	// using fallback credentials which in this case in insecure creds.
-	tlsCreds := e2e.CreateClientTLSCredentials(t)
+	tlsCreds := testutils.CreateClientTLSCredentials(t)
 	tlsCC, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithTransportCredentials(tlsCreds))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)

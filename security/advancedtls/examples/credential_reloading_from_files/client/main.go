@@ -72,7 +72,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("pemfile.NewProvider(%v) failed: %v", rootOptions, err)
 	}
-	options := &advancedtls.ClientOptions{
+	options := &advancedtls.Options{
 		IdentityOptions: advancedtls.IdentityCertificateOptions{
 			IdentityProvider: identityProvider,
 		},

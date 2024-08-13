@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -31,25 +30,20 @@ import (
 // TestNew covers that New() returns an error if the input *ServerConfig
 // contains invalid content.
 func (s) TestNew(t *testing.T) {
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: "server-address"})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
+
 	tests := []struct {
 		name       string
 		opts       transport.Options
 		wantErrStr string
 	}{
 		{
-			name:       "missing server URI",
-			opts:       transport.Options{ServerCfg: bootstrap.ServerConfig{}},
-			wantErrStr: "missing server URI when creating a new transport",
-		},
-		{
-			name:       "missing credentials",
-			opts:       transport.Options{ServerCfg: bootstrap.ServerConfig{ServerURI: "server-address"}},
-			wantErrStr: "missing credentials when creating a new transport",
-		},
-		{
 			name: "missing onRecv handler",
 			opts: transport.Options{
-				ServerCfg: *testutils.ServerConfigForAddress(t, "server-address"),
+				ServerCfg: serverCfg,
 				NodeProto: &v3corepb.Node{},
 			},
 			wantErrStr: "missing OnRecv callback handler when creating a new transport",
@@ -57,9 +51,9 @@ func (s) TestNew(t *testing.T) {
 		{
 			name: "missing onError handler",
 			opts: transport.Options{
-				ServerCfg:     *testutils.ServerConfigForAddress(t, "server-address"),
+				ServerCfg:     serverCfg,
 				NodeProto:     &v3corepb.Node{},
-				OnRecvHandler: func(transport.ResourceUpdate) error { return nil },
+				OnRecvHandler: func(transport.ResourceUpdate, *transport.ADSFlowControl) error { return nil },
 				OnSendHandler: func(*transport.ResourceSendInfo) {},
 			},
 			wantErrStr: "missing OnError callback handler when creating a new transport",
@@ -68,9 +62,9 @@ func (s) TestNew(t *testing.T) {
 		{
 			name: "missing onSend handler",
 			opts: transport.Options{
-				ServerCfg:      *testutils.ServerConfigForAddress(t, "server-address"),
+				ServerCfg:      serverCfg,
 				NodeProto:      &v3corepb.Node{},
-				OnRecvHandler:  func(transport.ResourceUpdate) error { return nil },
+				OnRecvHandler:  func(transport.ResourceUpdate, *transport.ADSFlowControl) error { return nil },
 				OnErrorHandler: func(error) {},
 			},
 			wantErrStr: "missing OnSend callback handler when creating a new transport",
@@ -78,9 +72,9 @@ func (s) TestNew(t *testing.T) {
 		{
 			name: "happy case",
 			opts: transport.Options{
-				ServerCfg:      *testutils.ServerConfigForAddress(t, "server-address"),
+				ServerCfg:      serverCfg,
 				NodeProto:      &v3corepb.Node{},
-				OnRecvHandler:  func(transport.ResourceUpdate) error { return nil },
+				OnRecvHandler:  func(transport.ResourceUpdate, *transport.ADSFlowControl) error { return nil },
 				OnErrorHandler: func(error) {},
 				OnSendHandler:  func(*transport.ResourceSendInfo) {},
 			},

@@ -271,17 +271,13 @@ func (o PeerCallOption) after(c *callInfo, attempt *csAttempt) {
 	}
 }
 
-// WaitForReady configures the action to take when an RPC is attempted on broken
-// connections or unreachable servers. If waitForReady is false and the
-// connection is in the TRANSIENT_FAILURE state, the RPC will fail
-// immediately. Otherwise, the RPC client will block the call until a
-// connection is available (or the call is canceled or times out) and will
-// retry the call if it fails due to a transient error.  gRPC will not retry if
-// data was written to the wire unless the server indicates it did not process
-// the data.  Please refer to
-// https://github.com/grpc/grpc/blob/master/doc/wait-for-ready.md.
+// WaitForReady configures the RPC's behavior when the client is in
+// TRANSIENT_FAILURE, which occurs when all addresses fail to connect.  If
+// waitForReady is false, the RPC will fail immediately.  Otherwise, the client
+// will wait until a connection becomes available or the RPC's deadline is
+// reached.
 //
-// By default, RPCs don't "wait for ready".
+// By default, RPCs do not "wait for ready".
 func WaitForReady(waitForReady bool) CallOption {
 	return FailFastCallOption{FailFast: !waitForReady}
 }
@@ -723,7 +719,7 @@ func outPayload(client bool, msg any, data, payload []byte, t time.Time) *stats.
 	}
 }
 
-func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool) *status.Status {
+func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool, isServer bool) *status.Status {
 	switch pf {
 	case compressionNone:
 	case compressionMade:
@@ -731,7 +727,11 @@ func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool
 			return status.New(codes.Internal, "grpc: compressed flag set with identity or empty encoding")
 		}
 		if !haveCompressor {
-			return status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
+			if isServer {
+				return status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
+			} else {
+				return status.Newf(codes.Internal, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
+			}
 		}
 	default:
 		return status.Newf(codes.Internal, "grpc: received unexpected payload format %d", pf)
@@ -748,14 +748,16 @@ type payloadInfo struct {
 //
 // Cancelling the returned cancel function releases the buffer back to the pool. So the caller should cancel as soon as
 // the buffer is no longer needed.
-func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor,
+// TODO: Refactor this function to reduce the number of arguments.
+// See: https://google.github.io/styleguide/go/best-practices.html#function-argument-lists
+func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, isServer bool,
 ) (uncompressedBuf []byte, cancel func(), err error) {
 	pf, compressedBuf, err := p.recvMsg(maxReceiveMessageSize)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if st := checkRecvPayload(pf, s.RecvCompress(), compressor != nil || dc != nil); st != nil {
+	if st := checkRecvPayload(pf, s.RecvCompress(), compressor != nil || dc != nil, isServer); st != nil {
 		return nil, nil, st.Err()
 	}
 
@@ -829,8 +831,8 @@ func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize 
 // For the two compressor parameters, both should not be set, but if they are,
 // dc takes precedence over compressor.
 // TODO(dfawley): wrap the old compressor/decompressor using the new API?
-func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m any, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor) error {
-	buf, cancel, err := recvAndDecompress(p, s, dc, maxReceiveMessageSize, payInfo, compressor)
+func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m any, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, isServer bool) error {
+	buf, cancel, err := recvAndDecompress(p, s, dc, maxReceiveMessageSize, payInfo, compressor, isServer)
 	if err != nil {
 		return err
 	}

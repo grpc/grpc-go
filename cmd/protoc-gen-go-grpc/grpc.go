@@ -84,9 +84,12 @@ func (serviceGenerateHelper) generateUnimplementedServerType(gen *protogen.Plugi
 		mustOrShould = "should"
 	}
 	// Server Unimplemented struct for forward compatibility.
-	g.P("// Unimplemented", serverType, " ", mustOrShould, " be embedded to have forward compatible implementations.")
-	g.P("type Unimplemented", serverType, " struct {")
-	g.P("}")
+	g.P("// Unimplemented", serverType, " ", mustOrShould, " be embedded to have")
+	g.P("// forward compatible implementations.")
+	g.P("//")
+	g.P("// NOTE: this should be embedded by value instead of pointer to avoid a nil")
+	g.P("// pointer dereference when methods are called.")
+	g.P("type Unimplemented", serverType, " struct {}")
 	g.P()
 	for _, method := range service.Methods {
 		nilArg := ""
@@ -100,6 +103,7 @@ func (serviceGenerateHelper) generateUnimplementedServerType(gen *protogen.Plugi
 	if *requireUnimplemented {
 		g.P("func (Unimplemented", serverType, ") mustEmbedUnimplemented", serverType, "() {}")
 	}
+	g.P("func (Unimplemented", serverType, ") testEmbeddedByValue() {}")
 	g.P()
 }
 
@@ -187,6 +191,17 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	}
 }
 
+// genServiceComments copies the comments from the RPC proto definitions
+// to the corresponding generated interface file.
+func genServiceComments(g *protogen.GeneratedFile, service *protogen.Service) {
+	if service.Comments.Leading != "" {
+		// Add empty comment line to attach this service's comments to
+		// the godoc comments previously output for all services.
+		g.P("//")
+		g.P(strings.TrimSpace(service.Comments.Leading.String()))
+	}
+}
+
 func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
 	// Full methods constants.
 	helper.genFullMethods(g, service)
@@ -197,6 +212,9 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	g.P("// ", clientName, " is the client API for ", service.GoName, " service.")
 	g.P("//")
 	g.P("// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.")
+
+	// Copy comments from proto file.
+	genServiceComments(g, service)
 
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 		g.P("//")
@@ -250,7 +268,11 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	serverType := service.GoName + "Server"
 	g.P("// ", serverType, " is the server API for ", service.GoName, " service.")
 	g.P("// All implementations ", mustOrShould, " embed Unimplemented", serverType)
-	g.P("// for forward compatibility")
+	g.P("// for forward compatibility.")
+
+	// Copy comments from proto file.
+	genServiceComments(g, service)
+
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 		g.P("//")
 		g.P(deprecationComment)
@@ -288,6 +310,13 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	}
 	serviceDescVar := service.GoName + "_ServiceDesc"
 	g.P("func Register", service.GoName, "Server(s ", grpcPackage.Ident("ServiceRegistrar"), ", srv ", serverType, ") {")
+	g.P("// If the following call panics, it indicates Unimplemented", serverType, " was")
+	g.P("// embedded by pointer and is nil.  This will cause panics if an")
+	g.P("// unimplemented method is ever invoked, so we test this at initialization")
+	g.P("// time to prevent it from happening at runtime later due to I/O.")
+	g.P("if t, ok := srv.(interface { testEmbeddedByValue() }); ok {")
+	g.P("t.testEmbeddedByValue()")
+	g.P("}")
 	g.P("s.RegisterService(&", serviceDescVar, `, srv)`)
 	g.P("}")
 	g.P()

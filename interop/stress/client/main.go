@@ -126,7 +126,6 @@ func newWeightedRandomTestSelector(tests []testCaseWithWeight) *weightedRandomTe
 	for _, t := range tests {
 		totalWeight += t.weight
 	}
-	rand.Seed(time.Now().UnixNano())
 	return &weightedRandomTestSelector{tests, totalWeight}
 }
 
