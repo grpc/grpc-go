@@ -185,14 +185,12 @@ func (r *TestMetricsRecorder) HandleConn(context.Context, stats.ConnStats) {}
 // nil panics.
 type NoopMetricsRecorder struct{}
 
-func (r *NoopMetricsRecorder) RecordInt64Count(_ *estats.Int64CountHandle, _ int64, _ ...string) {}
+func (r *NoopMetricsRecorder) RecordInt64Count(*estats.Int64CountHandle, int64, ...string) {}
 
-func (r *NoopMetricsRecorder) RecordFloat64Count(_ *estats.Float64CountHandle, _ float64, _ ...string) {
-}
+func (r *NoopMetricsRecorder) RecordFloat64Count(*estats.Float64CountHandle, float64, ...string) {}
 
-func (r *NoopMetricsRecorder) RecordInt64Histo(_ *estats.Int64HistoHandle, _ int64, _ ...string) {}
+func (r *NoopMetricsRecorder) RecordInt64Histo(*estats.Int64HistoHandle, int64, ...string) {}
 
-func (r *NoopMetricsRecorder) RecordFloat64Histo(_ *estats.Float64HistoHandle, _ float64, _ ...string) {
-}
+func (r *NoopMetricsRecorder) RecordFloat64Histo(*estats.Float64HistoHandle, float64, ...string) {}
 
-func (r *NoopMetricsRecorder) RecordInt64Gauge(_ *estats.Int64GaugeHandle, _ int64, _ ...string) {}
+func (r *NoopMetricsRecorder) RecordInt64Gauge(*estats.Int64GaugeHandle, int64, ...string) {}
