@@ -318,7 +318,7 @@ func (b *pickfirstBalancer) ExitIdle() {
 	})
 }
 
-// exitIdle starts a conection attempt if not already started.
+// exitIdle starts a connection attempt if not already started.
 // Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) exitIdle() {
 	b.requestConnection()
