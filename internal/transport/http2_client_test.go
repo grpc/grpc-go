@@ -31,6 +31,10 @@ import (
 // ClientPreface is the HTTP/2 client preface string.
 var ClientPreface = []byte(http2.ClientPreface)
 
+var framerWindowUpdateString = "This is a framer window update test case string"
+
+var framerWriteSettingsString = "This is a framer write setting test case string"
+
 type clientPrefaceConn struct {
 	net.Conn
 }
@@ -88,17 +92,17 @@ func dialerClientPrefaceLength(_ context.Context, addr string) (net.Conn, error)
 }
 
 func (fws *framerWriteSettingsConn) Write(b []byte) (n int, err error) {
-	if string(b) != string(ClientPreface) {
-		framerValue := 9
-		n, err = fws.Conn.Write(b)
-		// Compare the number of bytes written with the framer value
-		if n == framerValue {
-			return 0, errors.New("Framer write setting error")
-		}
-
-		return n, err
+	if string(b) == framerWriteSettingsString {
+		return 0, errors.New("intended test case string detected: forced write error")
 	}
-	return fws.Conn.Write(b)
+	framerValue := 9
+	n, err = fws.Conn.Write(b)
+	// Compare the number of bytes written with the framer value
+	if n == framerValue {
+		return 0, errors.New("Framer write setting error")
+	}
+
+	return n, err
 }
 
 func dialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error) {
@@ -110,19 +114,18 @@ func dialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error)
 }
 
 func (fwu *framerWindowUpdateConn) Write(b []byte) (n int, err error) {
-	if string(b) != string(ClientPreface) {
-		// Simulate a WINDOW_UPDATE frame's value (window size in bytes)
-		windowUpdateValue := 13
-		n, err = fwu.Conn.Write(b)
-
-		// Compare the number of bytes written with the WINDOW_UPDATE value
-		if n == windowUpdateValue {
-			return 0, errors.New("Framer write windowupdate error")
-		}
-		return n, err
+	if string(b) == framerWindowUpdateString {
+		return 0, errors.New("intended test case string detected: forced write error")
 	}
-	return fwu.Conn.Write(b)
+	// Simulate a WINDOW_UPDATE frame's value (window size in bytes)
+	windowUpdateValue := 13
+	n, err = fwu.Conn.Write(b)
 
+	// Compare the number of bytes written with the WINDOW_UPDATE value
+	if n == windowUpdateValue {
+		return 0, errors.New("Framer write windowupdate error")
+	}
+	return n, err
 }
 
 func dialerFramerWriteWindowUpdate(_ context.Context, addr string) (net.Conn, error) {
@@ -175,10 +178,9 @@ func (s) TestNewHTTP2ClientTarget(t *testing.T) {
 			_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, test.opts, func(GoAwayReason) {})
 			if err == nil {
 				t.Errorf("Expected an error, but got nil")
-			} else {
-				if err.Error() != test.expected {
-					t.Fatalf("TestNewHTTP2ClientTarget() = %s, want %s", err.Error(), test.expected)
-				}
+			}
+			if err.Error() != test.expected {
+				t.Fatalf("TestNewHTTP2ClientTarget() = %s, want %s", err.Error(), test.expected)
 			}
 		})
 	}
