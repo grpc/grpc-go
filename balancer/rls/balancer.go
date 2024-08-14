@@ -324,13 +324,11 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		b.dataCache.resize(newCfg.cacheSizeBytes)
 		b.cacheMu.Unlock()
 	}
-	b.stateMu.Lock()
 	// Enqueue an event which will notify us when the above update has been
 	// propagated to all child policies, and the child policies have all
 	// processed their updates, and we have sent a picker update.
 	done := make(chan struct{})
 	b.updateCh.Put(resumePickerUpdates{done: done})
-	b.stateMu.Unlock()
 	<-done
 	return nil
 }
