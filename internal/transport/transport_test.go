@@ -2753,13 +2753,13 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 // signaled or a timeout occurs.
 type hangingConn struct {
 	net.Conn
-	hangConn       chan struct{}
-	isGreetingDone *atomic.Bool
+	hangConn     chan struct{}
+	startHanging *atomic.Bool
 }
 
 func (hc *hangingConn) Write(b []byte) (n int, err error) {
 	n, err = hc.Conn.Write(b)
-	if hc.isGreetingDone.Load() == true {
+	if hc.startHanging.Load() == true {
 		// Hang the Write for more than goAwayLoopyWriterTimeout
 		timer := time.NewTimer(time.Millisecond * 5)
 		defer timer.Stop()
@@ -2795,8 +2795,7 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		isGreetingDone.Store(false)
-		return &hangingConn{Conn: conn, hangConn: make(chan struct{}), isGreetingDone: isGreetingDone}, nil
+		return &hangingConn{Conn: conn, hangConn: make(chan struct{}), startHanging: isGreetingDone}, nil
 	}
 	copts := ConnectOptions{Dialer: dialer}
 	copts.ChannelzParent = channelzSubChannel(t)
