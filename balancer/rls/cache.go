@@ -180,7 +180,7 @@ type dataCache struct {
 }
 
 func newDataCache(size int64, logger *internalgrpclog.PrefixLogger, metricsRecorder estats.MetricsRecorder, grpcTarget string) *dataCache {
-	dc := &dataCache{
+	return &dataCache{
 		maxSize:         size,
 		keys:            newLRU(),
 		entries:         make(map[cacheKey]*cacheEntry),
@@ -190,9 +190,6 @@ func newDataCache(size int64, logger *internalgrpclog.PrefixLogger, metricsRecor
 		uuid:            uuid.New().String(),
 		metricsRecorder: metricsRecorder,
 	}
-	cacheSizeMetric.Record(dc.metricsRecorder, 0, grpcTarget, "", dc.uuid)
-	cacheEntriesMetric.Record(dc.metricsRecorder, 0, grpcTarget, "", dc.uuid)
-	return dc
 }
 
 // updateRLSServerTarget updates the RLS Server Target the RLS Balancer is
@@ -330,6 +327,8 @@ func (dc *dataCache) addEntry(key cacheKey, entry *cacheEntry) (backoffCancelled
 	if dc.currentSize > dc.maxSize {
 		backoffCancelled = dc.resize(dc.maxSize)
 	}
+	cacheSizeMetric.Record(dc.metricsRecorder, dc.currentSize, dc.grpcTarget, dc.rlsServerTarget, dc.uuid)
+	cacheEntriesMetric.Record(dc.metricsRecorder, int64(len(dc.entries)), dc.grpcTarget, dc.rlsServerTarget, dc.uuid)
 	return backoffCancelled, true
 }
 
