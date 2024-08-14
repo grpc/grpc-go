@@ -20,9 +20,9 @@ package grpc
 
 // ServerStreamingClient represents the client side of a server-streaming (one
 // request, many responses) RPC. It is generic over the type of the response
-// message. If an error occurs on the stream, it will be returned as an instance
-// of the status package. Refer to the status package documentation for more
-// details. It is used in generated code.
+// message. It is used in generated code.
+// If an error occurs on the stream, it will be returned as an instance of the status
+// package. Refer to the status package documentation for more details.
 type ServerStreamingClient[Res any] interface {
 	// Recv receives the next message from the server. The client can repeatedly
 	// call Recv to read messages from the server-to-client response stream. Recv
@@ -33,22 +33,24 @@ type ServerStreamingClient[Res any] interface {
 
 // ServerStreamingServer represents the server side of a server-streaming (one
 // request, many responses) RPC. It is generic over the type of the response
-// message. If an error occurs on the stream, it will be returned as an instance
-// of the status package. Refer to the status package documentation for more
-// details. End-of-stream for the server-to-client stream is indicated by the
-// return of the handler method. It is used in generated code.
+// message. It is used in generated code.
+// If an error occurs on the stream, it will be returned as an instance of the status
+// package. Refer to the status package documentation for more details.
+// End-of-stream for the server-to-client stream is indicated by the return of
+// the handler method.
 type ServerStreamingServer[Res any] interface {
-	// Send can send a stream of messages to the client. It may be called multiple
-	// times to send multiple messages.
+	// Send can send a stream of messages to the client. Server handler may call
+	// Send multiple times to send multiple messages to the client.
 	Send(*Res) error
 	ServerStream
 }
 
 // ClientStreamingClient represents the client side of a client-streaming (many
 // requests, one response) RPC. It is generic over both the type of the request
-// message stream and the type of the unary response message. If an error occurs
-// on the stream, it will be returned as an instance of the status package. Refer
-// to the status package documentation for more details. It is used in generated code.
+// message stream and the type of the unary response message. It is used in
+// generated code.
+// If an error occurs on the stream, it will be returned as an instance of the
+// status package. Refer to the status package documentation for more details.
 type ClientStreamingClient[Req any, Res any] interface {
 	// Send sends a request message to the server. The client can repeatedly call
 	// Send to send messages as part of the client-to-server request stream.
@@ -63,9 +65,10 @@ type ClientStreamingClient[Req any, Res any] interface {
 
 // ClientStreamingServer represents the server side of a client-streaming (many
 // requests, one response) RPC. It is generic over both the type of the request
-// message stream and the type of the unary response message. If an error occurs
-// on the stream, it will be returned as an instance of the status package. Refer
-// to the status package documentation for more details. It is used in generated code.
+// message stream and the type of the unary response message. It is used in
+// generated code.
+// If an error occurs on the stream, it will be returned as an instance of the
+// status package. Refer to the status package documentation for more details.
 type ClientStreamingServer[Req any, Res any] interface {
 	// Recv reads a request message from the client. This method can be called
 	// repeatedly to receive the full stream of messages from the client. Recv returns
@@ -81,11 +84,12 @@ type ClientStreamingServer[Req any, Res any] interface {
 
 // BidiStreamingClient represents the client side of a bidirectional-streaming
 // (many requests, many responses) RPC. It is generic over both the type of the
-// request message stream and the type of the response message stream. If an
-// error occurs on the stream, it will be returned as an instance of the status
-// package. Refer to the status package documentation for more details. End-of-stream
-// for the client-to-server stream can be indicated by calling the CloseSend method.
-// It is used in generated code.
+// request message stream and the type of the response message stream. It is
+// used in generated code.
+// If an error occurs on the stream, it will be returned as an instance of the
+// status package. Refer to the status package documentation for more details.
+// End-of-stream for the client-to-server stream can be indicated by calling
+// the CloseSend method.
 type BidiStreamingClient[Req any, Res any] interface {
 	// Send sends a message to the server. This method can be called repeatedly
 	// to send messages as part of the client-to-server request stream.
@@ -100,10 +104,11 @@ type BidiStreamingClient[Req any, Res any] interface {
 
 // BidiStreamingServer represents the server side of a bidirectional-streaming
 // (many requests, many responses) RPC. It is generic over both the type of the
-// request message stream and the type of the response message stream.  If an
-// error occurs on the stream, it will be returned as an instance of the status
-// package. Refer to the status package documentation for more details. It is
+// request message stream and the type of the response message stream. It is
 // used in generated code.
+// If an error occurs on the stream, it will be returned as an instance of the status
+// package. Refer to the status package documentation for more details.
+// The end of the response stream is indicated by the return of the bidi method handler.
 type BidiStreamingServer[Req any, Res any] interface {
 	// Recv receives a request message from the client. The server-side handler can
 	// repeatedly call Recv to read the request message stream. Recv returns (nil, io.EOF)
@@ -111,8 +116,7 @@ type BidiStreamingServer[Req any, Res any] interface {
 	Recv() (*Req, error)
 
 	// Send sends a response message to the client. The server-side handler can
-	// repeatedly call Send to write to the server-to-client message stream. The end
-	// of the response stream is indicated by the return of the bidi method handler.
+	// repeatedly call Send to write to the server-to-client message stream.
 	Send(*Res) error
 	ServerStream
 }
