@@ -21,16 +21,10 @@ package mem_test
 import (
 	"bytes"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/mem"
-)
-
-const (
-	defaultTestTimeout      = 5 * time.Second
-	defaultTestShortTimeout = 100 * time.Millisecond
 )
 
 type s struct {
