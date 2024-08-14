@@ -211,8 +211,8 @@ func (s) TestBuffer_SplitAfterFree(t *testing.T) {
 	// Verify that splitting before freeing does not panic.
 	buf := newBuffer([]byte("abcd"), mem.NopBufferPool{})
 	buf, bufSplit := mem.SplitUnsafe(buf, 2)
-	defer bufSplit.Free()
 
+	bufSplit.Free()
 	buf.Free()
 	defer checkForPanic(t, "Cannot split freed buffer")
 	mem.SplitUnsafe(buf, 2)

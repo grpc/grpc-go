@@ -162,6 +162,7 @@ func (fr *FramerBridge) WriteData(streamID uint32, endStream bool, data ...[]byt
 	}
 
 	buf := fr.pool.Get(tl)
+	*buf = (*buf)[:0]
 	defer fr.pool.Put(buf)
 	for _, s := range data {
 		*buf = append(*buf, s...)
