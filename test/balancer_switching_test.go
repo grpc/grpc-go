@@ -334,7 +334,7 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 	// apply the grpclb policy. But since grpclb is not registered, it should
 	// fallback to the default LB policy which is pick_first. The ClientConn is
 	// also expected to filter out the grpclb address when sending the addresses
-	// list fo pick_first.
+	// list for pick_first.
 	grpclbAddr := []resolver.Address{{Addr: "non-existent-grpclb-server-address"}}
 	grpclbConfig := parseServiceConfig(t, r, `{"loadBalancingPolicy": "grpclb"}`)
 	state := resolver.State{ServiceConfig: grpclbConfig, Addresses: addrs}

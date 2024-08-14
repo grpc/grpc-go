@@ -188,7 +188,7 @@ for example in ${EXAMPLES[@]}; do
         $(cat $CLIENT_LOG)
         "
     else
-        pass "client successfully communitcated with server"
+        pass "client successfully communicated with server"
     fi
 
     # Check server log for expected output if expecting an

@@ -596,7 +596,7 @@ func (a *authority) triggerResourceNotFoundForTesting(rType xdsresource.Type, re
 
 // sendDiscoveryRequestLocked sends a discovery request for the specified
 // resource type and resource names. Even though this method does not directly
-// access the resource cache, it is important that `resourcesMu` be beld when
+// access the resource cache, it is important that `resourcesMu` be held when
 // calling this method to ensure that a consistent snapshot of resource names is
 // being requested.
 func (a *authority) sendDiscoveryRequestLocked(rType xdsresource.Type, resources map[string]*resourceState) {

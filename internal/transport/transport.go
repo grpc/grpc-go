@@ -456,7 +456,7 @@ func (s *Stream) TrailersOnly() bool {
 	return s.noHeaders
 }
 
-// Trailer returns the cached trailer metedata. Note that if it is not called
+// Trailer returns the cached trailer metadata. Note that if it is not called
 // after the entire stream is done, it could return an empty MD. Client
 // side only.
 // It can be safely read only after stream has ended that is either read
@@ -598,7 +598,7 @@ func (s *Stream) Read(n int) (data mem.BufferSlice, err error) {
 	return data, nil
 }
 
-// tranportReader reads all the data available for this Stream from the transport and
+// transportReader reads all the data available for this Stream from the transport and
 // passes them into the decoder, which converts them into a gRPC message stream.
 // The error is io.EOF when the stream is done or another non-nil error if
 // the stream broke.
@@ -904,7 +904,7 @@ var (
 	// connection is draining. This could be caused by goaway or balancer
 	// removing the address.
 	errStreamDrain = status.Error(codes.Unavailable, "the connection is draining")
-	// errStreamDone is returned from write at the client side to indiacte application
+	// errStreamDone is returned from write at the client side to indicate application
 	// layer of an error.
 	errStreamDone = errors.New("the stream is done")
 	// StatusGoAway indicates that the server sent a GOAWAY that included this

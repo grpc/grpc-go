@@ -548,7 +548,7 @@ func (s) TestCZServerListenSocketDeletion(t *testing.T) {
 	s.Stop()
 }
 
-func (s) TestCZRecusivelyDeletionOfEntry(t *testing.T) {
+func (s) TestCZRecursiveDeletionOfEntry(t *testing.T) {
 	//           +--+TopChan+---+
 	//           |              |
 	//           v              v
@@ -1525,7 +1525,7 @@ func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
 		trace := tcs[0].Trace()
 		for _, e := range trace.Events {
 			if e.RefID == nestedConn && e.RefType != channelz.RefChannel {
-				return false, fmt.Errorf("nested channel trace event shoud have RefChannel as RefType")
+				return false, fmt.Errorf("nested channel trace event should have RefChannel as RefType")
 			}
 		}
 		ncm := channelz.GetChannel(nestedConn)
@@ -1608,7 +1608,7 @@ func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 		trace := tcs[0].Trace()
 		for _, e := range trace.Events {
 			if e.RefID == subConn && e.RefType != channelz.RefSubChannel {
-				return false, fmt.Errorf("subchannel trace event shoud have RefType to be RefSubChannel")
+				return false, fmt.Errorf("subchannel trace event should have RefType to be RefSubChannel")
 			}
 		}
 		scm := channelz.GetSubChannel(subConn)
@@ -1989,7 +1989,7 @@ func (s) TestCZChannelConnectivityState(t *testing.T) {
 
 		// example:
 		// Channel Created
-		// Adressses resolved (from empty address state): "localhost:40467"
+		// Addresses resolved (from empty address state): "localhost:40467"
 		// SubChannel (id: 4[]) Created
 		// Channel's connectivity state changed to CONNECTING
 		// Channel's connectivity state changed to READY

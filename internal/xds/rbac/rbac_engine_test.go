@@ -319,7 +319,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 			},
 		},
 		{
-			name: "MatcherToNotPrinicipal",
+			name: "MatcherToNotPrincipal",
 			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
@@ -336,7 +336,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 				},
 			},
 		},
-		// PrinicpalProductViewer tests the construction of a chained engine
+		// PrincipalProductViewer tests the construction of a chained engine
 		// with a policy that allows any downstream to send a GET request on a
 		// certain path.
 		{

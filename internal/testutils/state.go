@@ -37,7 +37,7 @@ type StateChanger interface {
 }
 
 // StayConnected makes sc stay connected by repeatedly calling sc.Connect()
-// until the state becomes Shutdown or until ithe context expires.
+// until the state becomes Shutdown or until the context expires.
 func StayConnected(ctx context.Context, sc StateChanger) {
 	for {
 		state := sc.GetState()

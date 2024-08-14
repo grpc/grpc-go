@@ -63,7 +63,7 @@ const (
 	// is required. Only the server presents an identity certificate in this
 	// configuration.
 	SecurityLevelTLS
-	// SecurityLevelMTLS is used when security ocnfiguration corresponding to
+	// SecurityLevelMTLS is used when security configuration corresponding to
 	// mTLS is required. Both client and server present identity certificates in
 	// this configuration.
 	SecurityLevelMTLS
@@ -789,7 +789,7 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 
 // DefaultServerListenerWithRouteConfigName returns a basic xds Listener
 // resource to be used on the server side. The returned Listener resource
-// contains a RouteCongiguration resource name that needs to be resolved.
+// contains a RouteConfiguration resource name that needs to be resolved.
 func DefaultServerListenerWithRouteConfigName(host string, port uint32, secLevel SecurityLevel, routeName string) *v3listenerpb.Listener {
 	return defaultServerListenerCommon(host, port, secLevel, routeName, false)
 }
