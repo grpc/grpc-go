@@ -86,7 +86,7 @@ func init() {
 var statusOK = status.New(codes.OK, "")
 var logger = grpclog.Component("core")
 
-type methodHandler func(ctx context.Context, srv any, dec func(any) error, interceptor UnaryServerInterceptor) (any, error)
+type methodHandler func(srv any, ctx context.Context, dec func(any) error, interceptor UnaryServerInterceptor) (any, error)
 
 // MethodDesc represents an RPC service's method specification.
 type MethodDesc struct {
@@ -1376,7 +1376,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 		return nil
 	}
 	ctx = NewContextWithServerTransportStream(ctx, stream)
-	reply, appErr := md.Handler(ctx, info.serviceImpl, df, s.opts.unaryInt)
+	reply, appErr := md.Handler(info.serviceImpl, ctx, df, s.opts.unaryInt)
 	if appErr != nil {
 		appStatus, ok := status.FromError(appErr)
 		if !ok {
