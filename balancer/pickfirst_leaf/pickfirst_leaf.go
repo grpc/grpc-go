@@ -197,8 +197,6 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 		b.resolverError(errors.New("produced zero addresses"))
 		return balancer.ErrBadResolverState
 	}
-	// We don't have to guard this block with the env var because ParseConfig
-	// already does so.
 	cfg, ok := state.BalancerConfig.(pfConfig)
 	if state.BalancerConfig != nil && !ok {
 		return fmt.Errorf("pickfirst: received illegal BalancerConfig (type %T): %v", state.BalancerConfig, state.BalancerConfig)
