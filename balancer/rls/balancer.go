@@ -79,6 +79,20 @@ var (
 	dataCachePurgeHook   = func() {}
 	resetBackoffHook     = func() {}
 
+	cacheEntriesMetric = estats.RegisterInt64Gauge(estats.MetricDescriptor{
+		Name:        "grpc.lb.rls.cache_entries",
+		Description: "EXPERIMENTAL. Number of entries in the RLS cache.",
+		Unit:        "entry",
+		Labels:      []string{"grpc.target", "grpc.lb.rls.server_target", "grpc.lb.rls.instance_uuid"},
+		Default:     false,
+	})
+	cacheSizeMetric = estats.RegisterInt64Gauge(estats.MetricDescriptor{
+		Name:        "grpc.lb.rls.cache_size",
+		Description: "EXPERIMENTAL. The current size of the RLS cache.",
+		Unit:        "By",
+		Labels:      []string{"grpc.target", "grpc.lb.rls.server_target", "grpc.lb.rls.instance_uuid"},
+		Default:     false,
+	})
 	defaultTargetPicksMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:        "grpc.lb.rls.default_target_picks",
 		Description: "EXPERIMENTAL. Number of LB picks sent to the default target.",
@@ -126,7 +140,7 @@ func (rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 		updateCh:           buffer.NewUnbounded(),
 	}
 	lb.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-experimental-lb %p] ", lb))
-	lb.dataCache = newDataCache(maxCacheSize, lb.logger)
+	lb.dataCache = newDataCache(maxCacheSize, lb.logger, opts.MetricsRecorder, opts.Target.String())
 	lb.bg = balancergroup.New(balancergroup.Options{
 		CC:                      cc,
 		BuildOpts:               opts,
@@ -317,18 +331,17 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	b.stateMu.Unlock()
 	<-done
 
+	// We cannot do cache operations above because `cacheMu` needs to be grabbed
+	// before `stateMu` if we are to hold both locks at the same time.
+	b.cacheMu.Lock()
+	b.dataCache.updateRLSServerTarget(newCfg.lookupService)
 	if resizeCache {
 		// If the new config changes reduces the size of the data cache, we
 		// might have to evict entries to get the cache size down to the newly
 		// specified size.
-		//
-		// And we cannot do this operation above (where we compute the
-		// `resizeCache` boolean) because `cacheMu` needs to be grabbed before
-		// `stateMu` if we are to hold both locks at the same time.
-		b.cacheMu.Lock()
 		b.dataCache.resize(newCfg.cacheSizeBytes)
-		b.cacheMu.Unlock()
 	}
+	b.cacheMu.Unlock()
 	return nil
 }
 
