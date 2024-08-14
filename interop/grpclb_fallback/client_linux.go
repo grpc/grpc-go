@@ -132,7 +132,7 @@ func waitForFallbackAndDoRPCs(client testgrpc.TestServiceClient, fallbackDeadlin
 	for time.Now().Before(fallbackDeadline) {
 		g := doRPCAndGetPath(client, 20*time.Second)
 		if g == testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
-			infoLog.Println("Made one successul RPC to a fallback. Now expect the same for the rest.")
+			infoLog.Println("Made one successful RPC to a fallback. Now expect the same for the rest.")
 			fellBack = true
 			break
 		} else if g == testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {

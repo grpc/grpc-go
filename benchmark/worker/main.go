@@ -141,7 +141,7 @@ func (s *workerServer) RunClient(stream testgrpc.WorkerService_RunClientServer) 
 	var bc *benchmarkClient
 	defer func() {
 		// Shut down benchmark client when stream ends.
-		logger.Infof("shuting down benchmark client")
+		logger.Infof("shutting down benchmark client")
 		if bc != nil {
 			bc.shutdown()
 		}
@@ -160,7 +160,7 @@ func (s *workerServer) RunClient(stream testgrpc.WorkerService_RunClientServer) 
 		case *testpb.ClientArgs_Setup:
 			logger.Infof("client setup received:")
 			if bc != nil {
-				logger.Infof("client setup received when client already exists, shuting down the existing client")
+				logger.Infof("client setup received when client already exists, shutting down the existing client")
 				bc.shutdown()
 			}
 			bc, err = startBenchmarkClient(t.Setup)

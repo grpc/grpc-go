@@ -65,7 +65,7 @@ type Network struct {
 var (
 	//Local simulates local network.
 	Local = Network{0, 0, 0}
-	//LAN simulates local area network network.
+	//LAN simulates local area network.
 	LAN = Network{100 * 1024, 2 * time.Millisecond, 1500}
 	//WAN simulates wide area network.
 	WAN = Network{20 * 1024, 30 * time.Millisecond, 1500}

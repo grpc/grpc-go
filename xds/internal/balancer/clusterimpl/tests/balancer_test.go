@@ -70,7 +70,7 @@ func Test(t *testing.T) {
 // TestConfigUpdateWithSameLoadReportingServerConfig tests the scenario where
 // the clusterimpl LB policy receives a config update with no change in the load
 // reporting server configuration. The test verifies that the existing load
-// repoting stream is not terminated and that a new load reporting stream is not
+// reporting stream is not terminated and that a new load reporting stream is not
 // created.
 func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 	// Create an xDS management server that serves ADS and LRS requests.

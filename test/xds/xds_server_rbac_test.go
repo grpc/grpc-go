@@ -595,7 +595,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 		// This test tests that an RBAC Config with Action.LOG configured allows
 		// every RPC through. This maps to the line "At this time, if the
 		// RBAC.action is Action.LOG then the policy will be completely ignored,
-		// as if RBAC was not configurated." from A41
+		// as if RBAC was not configured." from A41
 		{
 			name: "action-log",
 			rbacCfg: &rpb.RBAC{

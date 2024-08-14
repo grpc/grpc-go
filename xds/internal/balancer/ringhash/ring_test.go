@@ -55,7 +55,7 @@ func (s) TestRingNew(t *testing.T) {
 				r := newRing(testSubConnMap, min, max, nil)
 				totalCount := len(r.items)
 				if totalCount < int(min) || totalCount > int(max) {
-					t.Fatalf("unexpect size %v, want min %v, max %v", totalCount, min, max)
+					t.Fatalf("unexpected size %v, want min %v, max %v", totalCount, min, max)
 				}
 				for _, a := range testAddrs {
 					var count int

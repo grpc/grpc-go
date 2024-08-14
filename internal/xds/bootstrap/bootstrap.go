@@ -513,7 +513,7 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 		}
 		bc, err := parser.ParseConfig(nameAndConfig.Config)
 		if err != nil {
-			return fmt.Errorf("xds: config parsing for certifcate provider plugin %q failed during bootstrap: %v", name, err)
+			return fmt.Errorf("xds: config parsing for certificate provider plugin %q failed during bootstrap: %v", name, err)
 		}
 		cpcCfgs[instance] = bc
 	}

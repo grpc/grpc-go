@@ -120,7 +120,7 @@ XXXXX PleaseIgnoreUnused'
   # Error for any package comments not in generated code.
   noret_grep "(ST1000)" "${SC_OUT}" | not grep -v "\.pb\.go:"
 
-  # Ignore a false positive when operands have side affectes.
+  # Ignore a false positive when operands have side affects.
   # TODO(https://github.com/dominikh/go-tools/issues/54): Remove this once the issue is fixed in staticcheck.
   noret_grep "(SA4000)" "${SC_OUT}" | not grep -v -e "crl.go:[0-9]\+:[0-9]\+: identical expressions on the left and right side of the '||' operator (SA4000)"
 

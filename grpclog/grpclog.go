@@ -103,7 +103,7 @@ func Fatalf(format string, args ...any) {
 }
 
 // Fatalln logs to the FATAL log. Arguments are handled in the manner of fmt.Println.
-// It calle os.Exit()) with exit code 1.
+// It calls os.Exit() with exit code 1.
 func Fatalln(args ...any) {
 	grpclog.Logger.Fatalln(args...)
 	// Make sure fatal logs will exit.

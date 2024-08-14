@@ -136,7 +136,7 @@ func newTestBufferPool() *testBufferPool {
 
 // Tests that a buffer created with Copy, which when later freed, returns the underlying
 // byte slice to the buffer pool.
-func (s) TestBufer_CopyAndFree(t *testing.T) {
+func (s) TestBuffer_CopyAndFree(t *testing.T) {
 	data := "abcd"
 	testPool := newTestBufferPool()
 

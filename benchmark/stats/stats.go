@@ -293,7 +293,7 @@ type RunData struct {
 	Fiftieth time.Duration
 	// Ninetieth is the 90th percentile latency.
 	Ninetieth time.Duration
-	// Ninetyninth is the 99th percentile latency.
+	// NinetyNinth is the 99th percentile latency.
 	NinetyNinth time.Duration
 	// Average is the average latency.
 	Average time.Duration

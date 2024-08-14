@@ -718,7 +718,7 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 		t.Fatalf("%v.NewStream(_, _) = _, %v, want _, <nil>", ct, err)
 		return
 	}
-	// Wait for server's handerler to be initialized
+	// Wait for server's handler to be initialized
 	select {
 	case <-ready:
 	case <-ctx.Done():
@@ -870,7 +870,7 @@ func (s) TestLargeMessageSuspension(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open stream: %v", err)
 	}
-	// Launch a goroutine simillar to the stream monitoring goroutine in
+	// Launch a goroutine similar to the stream monitoring goroutine in
 	// stream.go to keep track of context timeout and call CloseStream.
 	go func() {
 		<-ctx.Done()
@@ -1315,7 +1315,7 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 		}
 	}()
 
-	// Test context cancelation.
+	// Test context cancellation.
 	timeBefore := time.Now()
 	connectCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	time.AfterFunc(100*time.Millisecond, cancel)
@@ -1328,7 +1328,7 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 	}
 	t.Logf("NewClientTransport() = _, %v", err)
 	if time.Since(timeBefore) > 3*time.Second {
-		t.Fatalf("NewClientTransport returned > 2.9s after context cancelation")
+		t.Fatalf("NewClientTransport returned > 2.9s after context cancellation")
 	}
 
 	// Test context deadline.

@@ -150,7 +150,7 @@ func (s) TestClientSideFederation(t *testing.T) {
 // supported with new xdstp style names for LDS only while using the old style
 // for other resources. This test in addition also checks that when service name
 // contains escapable characters, we "fully" encode it for looking up
-// VirtualHosts in xDS RouteConfigurtion.
+// VirtualHosts in xDS RouteConfiguration.
 func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 	// Start a management server as a sophisticated authority.
 	const authority = "traffic-manager.xds.notgoogleapis.com"

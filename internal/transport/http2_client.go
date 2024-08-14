@@ -229,7 +229,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		}
 	}(conn)
 
-	// The following defer and goroutine monitor the connectCtx for cancelation
+	// The following defer and goroutine monitor the connectCtx for cancellation
 	// and deadline.  On context expiration, the connection is hard closed and
 	// this function will naturally fail as a result.  Otherwise, the defer
 	// waits for the goroutine to exit to prevent the context from being
@@ -1222,7 +1222,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	if statusCode == codes.Canceled {
 		if d, ok := s.ctx.Deadline(); ok && !d.After(time.Now()) {
 			// Our deadline was already exceeded, and that was likely the cause
-			// of this cancelation.  Alter the status code accordingly.
+			// of this cancellation.  Alter the status code accordingly.
 			statusCode = codes.DeadlineExceeded
 		}
 	}
@@ -1307,7 +1307,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	id := f.LastStreamID
 	if id > 0 && id%2 == 0 {
 		t.mu.Unlock()
-		t.Close(connectionErrorf(true, nil, "received goaway with non-zero even-numbered numbered stream id: %v", id))
+		t.Close(connectionErrorf(true, nil, "received goaway with non-zero even-numbered stream id: %v", id))
 		return
 	}
 	// A client can receive multiple GoAways from the server (see
