@@ -17,7 +17,7 @@
  */
 
 // Package pickfirstleaf contains the pick_first load balancing policy which
-// will be the universal leaf policy after Dual Stack changes are implemented.
+// will be the universal leaf policy after dualstack changes are implemented.
 package pickfirstleaf
 
 import (
@@ -40,43 +40,43 @@ import (
 )
 
 func init() {
-	balancer.Register(pickfirstBuilder{name: PickFirstLeafName})
 	if envconfig.NewPickFirstEnabled {
-		// Register as the default pickfirst balancer also.
 		internal.ShuffleAddressListForTesting = func(n int, swap func(i, j int)) { rand.Shuffle(n, swap) }
-		balancer.Register(pickfirstBuilder{name: PickFirstName})
+		// Register as the default pick_first balancer.
+		PickFirstLeafName = "pick_first"
 	}
+	balancer.Register(pickfirstBuilder{})
 }
 
-var logger = grpclog.Component("pick-first-leaf-lb")
-
-const (
+var (
+	logger            = grpclog.Component("pick-first-leaf-lb")
+	errBalancerClosed = fmt.Errorf("pickfirst: LB policy is closed")
 	// PickFirstLeafName is the name of the pick_first_leaf balancer.
+	// Can be changed in init() if this balancer is to be registered as the default
+	// pickfirst.
 	PickFirstLeafName = "pick_first_leaf"
-	// PickFirstName is the name of the pick_first balancer.
-	PickFirstName = "pick_first"
-	logPrefix     = "[pick-first-leaf-lb %p] "
 )
 
-type pickfirstBuilder struct {
-	name string
-}
+const logPrefix = "[pick-first-leaf-lb %p] "
+
+type pickfirstBuilder struct{}
 
 func (pickfirstBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	ctx, cancel := context.WithCancel(context.Background())
 	b := &pickfirstBalancer{
 		cc:               cc,
-		addressIndex:     newIndex(nil),
+		addressIndex:     addressList{},
 		subConns:         resolver.NewAddressMap(),
-		serializer:       *grpcsync.NewCallbackSerializer(ctx),
+		serializer:       grpcsync.NewCallbackSerializer(ctx),
 		serializerCancel: cancel,
+		state:            connectivity.Idle,
 	}
 	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(logPrefix, b))
 	return b
 }
 
 func (b pickfirstBuilder) Name() string {
-	return b.name
+	return PickFirstLeafName
 }
 
 func (pickfirstBuilder) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
@@ -100,13 +100,13 @@ type pfConfig struct {
 type scData struct {
 	subConn balancer.SubConn
 	state   connectivity.State
-	addr    *resolver.Address
+	addr    resolver.Address
 }
 
-func newScData(b *pickfirstBalancer, addr resolver.Address) (*scData, error) {
+func newSCData(b *pickfirstBalancer, addr resolver.Address) (*scData, error) {
 	sd := &scData{
 		state: connectivity.Idle,
-		addr:  &addr,
+		addr:  addr,
 	}
 	sc, err := b.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{
 		StateListener: func(state balancer.SubConnState) {
@@ -125,30 +125,31 @@ func newScData(b *pickfirstBalancer, addr resolver.Address) (*scData, error) {
 }
 
 type pickfirstBalancer struct {
-	logger       *internalgrpclog.PrefixLogger
-	state        connectivity.State
-	cc           balancer.ClientConn
-	subConns     *resolver.AddressMap
-	addressIndex index
-	firstPass    bool
-	firstErr     error
-	numTf        int
-	// A serializer is used to ensure synchronization from updates triggered
-	// due to the idle picker in addition to the already serialized resolver,
+	// The following fields are initialized at build time and read-only after
+	// that and therefore do not need to be guarded by a mutex.
+	logger *internalgrpclog.PrefixLogger
+	cc     balancer.ClientConn
+
+	// The serializer and its cancel func are initialized at build time, and the
+	// rest of the fields here are only accessed from serializer callbacks (or
+	// from balancer.Balancer methods, which themselves are guaranteed to be
+	// mutually exclusive) and hence do not need to be guarded by a mutex.
+	// The serializer is used to ensure synchronization of updates triggered
+	// from the idle picker and the already serialized resolver,
 	// subconn state updates.
-	serializer       grpcsync.CallbackSerializer
+	serializer       *grpcsync.CallbackSerializer
 	serializerCancel func()
+	state            connectivity.State
+	subConns         *resolver.AddressMap // scData for active subonns mapped by address.
+	addressIndex     addressList
+	firstPass        bool
+	firstErr         error
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
-	ch := make(chan struct{})
-	b.serializer.ScheduleOr(func(ctx context.Context) {
+	b.serializer.TrySchedule(func(_ context.Context) {
 		b.resolverError(err)
-		close(ch)
-	}, func() {
-		close(ch)
 	})
-	<-ch
 }
 
 func (b *pickfirstBalancer) resolverError(err error) {
@@ -164,14 +165,8 @@ func (b *pickfirstBalancer) resolverError(err error) {
 		return
 	}
 
-	for _, sd := range b.subConns.Values() {
-		sd.(*scData).subConn.Shutdown()
-	}
-	for _, k := range b.subConns.Keys() {
-		b.subConns.Delete(k)
-	}
+	b.closeSubConns()
 	b.addressIndex.updateEndpointList(nil)
-	b.state = connectivity.TransientFailure
 	b.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.TransientFailure,
 		Picker:            &picker{err: fmt.Errorf("name resolver error: %v", err)},
@@ -184,14 +179,16 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		err := b.updateClientConnState(state)
 		errCh <- err
 	}, func() {
-		close(errCh)
+		errCh <- errBalancerClosed
 	})
 	return <-errCh
 }
 
+// updateClientConnState handles clientConn state changes.
+// Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState) error {
 	if b.state == connectivity.Shutdown {
-		return fmt.Errorf("balancer is already closed")
+		return errBalancerClosed
 	}
 	if len(state.ResolverState.Addresses) == 0 && len(state.ResolverState.Endpoints) == 0 {
 		// Cleanup state pertaining to the previous resolver state.
@@ -218,10 +215,12 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 		for i, a := range state.ResolverState.Addresses {
 			newEndpoints[i].Attributes = a.BalancerAttributes
 			newEndpoints[i].Addresses = []resolver.Address{a}
+			// We can't remove address attributes here since xds packages use
+			// them to store locality metadata.
 		}
 	}
 
-	// Since we have a new set of addresses, we are again at first pass
+	// Since we have a new set of addresses, we are again at first pass.
 	b.firstPass = true
 	newEndpoints = deDupAddresses(newEndpoints)
 
@@ -236,17 +235,11 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 	if b.state == connectivity.Ready {
 		// If the previous ready subconn exists in new address list,
 		// keep this connection and don't create new subconns.
-		prevAddr, err := b.addressIndex.currentAddress()
-		if err != nil {
-			// This error should never happen when the state is READY if the
-			// index is managed correctly.
-			return fmt.Errorf("address index is in an invalid state: %v", err)
-		}
+		prevAddr := b.addressIndex.currentAddress()
 		b.addressIndex.updateEndpointList(newEndpoints)
 		if b.addressIndex.seekTo(prevAddr) {
 			return nil
 		}
-		b.addressIndex.reset()
 	} else {
 		b.addressIndex.updateEndpointList(newEndpoints)
 	}
@@ -275,7 +268,9 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 		b.subConns.Delete(oldAddr)
 	}
 
-	if oldAddrs.Len() == 0 || b.state == connectivity.Ready || b.state == connectivity.Connecting {
+	// If its the first resolver update or the balancer was already READY or
+	// or CONNECTING, enter CONNECTING.
+	if b.state == connectivity.Ready || b.state == connectivity.Connecting || oldAddrs.Len() == 0 {
 		b.firstErr = nil
 		// Start connection attempt at first address.
 		b.state = connectivity.Connecting
@@ -288,9 +283,7 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 		b.firstErr = nil
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.Idle,
-			Picker: &idlePicker{
-				exitIdle: b.ExitIdle,
-			},
+			Picker:            &idlePicker{exitIdle: b.ExitIdle},
 		})
 	} else if b.state == connectivity.TransientFailure {
 		b.requestConnection()
@@ -305,44 +298,41 @@ func (b *pickfirstBalancer) UpdateSubConnState(subConn balancer.SubConn, state b
 }
 
 func (b *pickfirstBalancer) Close() {
-	ch := make(chan struct{})
-	b.serializer.ScheduleOr(func(ctx context.Context) {
+	b.serializer.TrySchedule(func(_ context.Context) {
 		b.close()
-		close(ch)
-	}, func() {
-		b.close()
-		close(ch)
 	})
-	<-ch
 	<-b.serializer.Done()
 }
 
+// close closes the balancer.
+// Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) close() {
 	b.serializerCancel()
-	for _, sd := range b.subConns.Values() {
-		sd.(*scData).subConn.Shutdown()
-	}
-	for _, k := range b.subConns.Keys() {
-		b.subConns.Delete(k)
-	}
+	b.closeSubConns()
 	b.state = connectivity.Shutdown
 }
 
 // ExitIdle moves the balancer out of idle state. It can be called concurrently
 // by the idlePicker and clientConn so access to variables should be synchronized.
 func (b *pickfirstBalancer) ExitIdle() {
-	ch := make(chan struct{})
-	b.serializer.ScheduleOr(func(ctx context.Context) {
+	b.serializer.TrySchedule(func(_ context.Context) {
 		b.exitIdle()
-		close(ch)
-	}, func() {
-		close(ch)
 	})
-	<-ch
 }
 
+// exitIdle starts a conection attempt if not already started.
+// Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) exitIdle() {
 	b.requestConnection()
+}
+
+func (b *pickfirstBalancer) closeSubConns() {
+	for _, sd := range b.subConns.Values() {
+		sd.(*scData).subConn.Shutdown()
+	}
+	for _, k := range b.subConns.Keys() {
+		b.subConns.Delete(k)
+	}
 }
 
 // deDupAddresses ensures that each address belongs to only one endpoint.
@@ -381,7 +371,7 @@ func (b *pickfirstBalancer) shutdownRemaining(selected *scData) {
 	for _, k := range b.subConns.Keys() {
 		b.subConns.Delete(k)
 	}
-	b.subConns.Set(*selected.addr, selected)
+	b.subConns.Set(selected.addr, selected)
 }
 
 // requestConnection requests a connection to the next applicable address'
@@ -393,27 +383,25 @@ func (b *pickfirstBalancer) requestConnection() {
 	if !b.addressIndex.isValid() || b.state == connectivity.Shutdown {
 		return
 	}
-	curAddr, err := b.addressIndex.currentAddress()
-	if err != nil {
-		// This should not never happen because we already check for validity and
-		// return early above.
-		return
-	}
-	sd, ok := b.subConns.Get(*curAddr)
+	curAddr := b.addressIndex.currentAddress()
+	sd, ok := b.subConns.Get(curAddr)
 	if !ok {
-		sd, err = newScData(b, *curAddr)
+		sd, err := newSCData(b, curAddr)
 		if err != nil {
 			// This should never happen.
 			b.logger.Warningf("Failed to create a subConn for address %v: %v", curAddr.String(), err)
 			b.state = connectivity.TransientFailure
+			b.addressIndex.reset()
 			b.cc.UpdateState(balancer.State{
 				ConnectivityState: connectivity.TransientFailure,
-				Picker:            &picker{err: fmt.Errorf("error creating connection: %v", err)},
+				// Return an idle picker so that the clientConn doesn't remain
+				// stuck in TRANSIENT_FAILURE and attempts to re-connect the
+				// next time picker.Pick is called.
+				Picker: &idlePicker{exitIdle: b.ExitIdle},
 			})
-			b.addressIndex.reset()
 			return
 		}
-		b.subConns.Set(*curAddr, sd)
+		b.subConns.Set(curAddr, sd)
 	}
 
 	scd := sd.(*scData)
@@ -427,16 +415,18 @@ func (b *pickfirstBalancer) requestConnection() {
 		b.requestConnection()
 	case connectivity.Ready:
 		// Should never happen.
-		b.logger.Warningf("Requesting a connection even though we have a READY subconn")
+		b.logger.Errorf("Requesting a connection even though we have a READY subconn")
 	}
 }
 
+// updateSubConnState handles subConn state updates.
+// Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubConnState) {
 	// Previously relevant subconns can still callback with state updates.
 	// To prevent pickers from returning these obsolete subconns, this logic
 	// is included to check if the current list of active subconns includes this
 	// subconn.
-	if activeSd, found := b.subConns.Get(*sd.addr); !found || activeSd != sd {
+	if activeSd, found := b.subConns.Get(sd.addr); !found || activeSd != sd {
 		return
 	}
 	if state.ConnectivityState == connectivity.Shutdown {
@@ -455,16 +445,16 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 		return
 	}
 
-	// If we are transitioning from READY to IDLE, shutdown and re-connect when
+	// If we are transitioning from READY to IDLE, reset index and re-connect when
 	// prompted.
-	if state.ConnectivityState == connectivity.Idle && b.state == connectivity.Ready {
+	if b.state == connectivity.Ready && state.ConnectivityState == connectivity.Idle {
+		// Once a transport fails, we enter idle and start from the first address
+		// when the picker is used.
 		b.state = connectivity.Idle
 		b.addressIndex.reset()
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.Idle,
-			Picker: &idlePicker{
-				exitIdle: b.ExitIdle,
-			},
+			Picker:            &idlePicker{exitIdle: b.ExitIdle},
 		})
 		return
 	}
@@ -472,6 +462,10 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 	if b.firstPass {
 		switch state.ConnectivityState {
 		case connectivity.Connecting:
+			// We can be in either IDLE, CONNECTING or TRANSIENT_FAILURE.
+			// If we're in TRANSIENT_FAILURE, we stay in TRANSIENT_FAILURE until
+			// we're READY. See A62.
+			// If we're already in CONNECTING, no update is needed.
 			if b.state == connectivity.Idle {
 				b.cc.UpdateState(balancer.State{
 					ConnectivityState: connectivity.Connecting,
@@ -482,14 +476,11 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 			if b.firstErr == nil {
 				b.firstErr = state.ConnectionError
 			}
-			curAddr, err := b.addressIndex.currentAddress()
-			if err != nil {
-				// This is not expected since we end the first pass when we
-				// reach the end of the list.
-				b.logger.Errorf("Current index is invalid during first pass: %v", err)
-				return
-			}
-			if activeSd, found := b.subConns.Get(*curAddr); !found || activeSd != sd {
+			// Since we're re-using common subconns while handling resolver updates,
+			// we could receive an out of turn TRANSIENT_FAILURE from a pass
+			// over the previous address list. We ignore such updates.
+			curAddr := b.addressIndex.currentAddress()
+			if activeSd, found := b.subConns.Get(curAddr); !found || activeSd != sd {
 				return
 			}
 			if b.addressIndex.increment() {
@@ -509,13 +500,8 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 			ConnectivityState: connectivity.TransientFailure,
 			Picker:            &picker{err: state.ConnectionError},
 		})
-		b.numTf++
-		// We request re-resolution when we've seen the same number of TFs as
-		// subconns. It could be that a subconn has seen multiple TFs due to
-		// differences in back-off durations, but this is a decent approximation.
-		if b.numTf >= b.subConns.Len() {
-			b.numTf = 0
-		}
+		// We don't need to request re-resolution since the subconn already does
+		// that before reporting TRANSIENT_FAILURE.
 	case connectivity.Idle:
 		sd.subConn.Connect()
 	}
@@ -523,7 +509,6 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 
 func (b *pickfirstBalancer) endFirstPass() {
 	b.firstPass = false
-	b.numTf = 0
 	b.state = connectivity.TransientFailure
 	b.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.TransientFailure,
@@ -558,70 +543,69 @@ func (i *idlePicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }
 
-// index is an Index as in 'i', the pointer to an entry. Not a "search index."
-// All updates should be synchronized.
-type index struct {
-	endpointList []resolver.Endpoint
-	endpointIdx  int
-	addrIdx      int
+// addressList manages sequentially iterating over addresses present in a list of
+// endpoints. It provides a 1 dimensional view of the addresses present in the
+// endpoints.
+// This type is not safe for concurrent access.
+type addressList struct {
+	addresses []resolver.Address
+	idx       int
 }
 
-// newIndex is the constructor for index.
-func newIndex(endpointList []resolver.Endpoint) index {
-	return index{
-		endpointList: endpointList,
-	}
-}
-
-func (i *index) isValid() bool {
-	return i.endpointIdx < len(i.endpointList)
+func (al *addressList) isValid() bool {
+	return al.idx < len(al.addresses)
 }
 
 // increment moves to the next index in the address list. If at the last address
 // in the address list, moves to the next endpoint in the endpoint list.
 // This method returns false if it went off the list, true otherwise.
-func (i *index) increment() bool {
-	if !i.isValid() {
+func (al *addressList) increment() bool {
+	if !al.isValid() {
 		return false
 	}
-	ep := i.endpointList[i.endpointIdx]
-	i.addrIdx++
-	if i.addrIdx >= len(ep.Addresses) {
-		i.endpointIdx++
-		i.addrIdx = 0
-		return i.endpointIdx < len(i.endpointList)
+	al.idx++
+	return al.idx < len(al.addresses)
+}
+
+func (al *addressList) currentAddress() resolver.Address {
+	if !al.isValid() {
+		panic("pickfirst: index is off the end of the address list")
 	}
-	return false
+	return al.addresses[al.idx]
 }
 
-func (i *index) currentAddress() (*resolver.Address, error) {
-	if !i.isValid() {
-		return nil, fmt.Errorf("index is off the end of the address list")
+func (al *addressList) reset() {
+	al.idx = 0
+}
+
+func (al *addressList) updateEndpointList(endpoints []resolver.Endpoint) {
+	// Flatten the addresses.
+	addrs := []resolver.Address{}
+	for _, e := range endpoints {
+		addrs = append(addrs, e.Addresses...)
 	}
-	return &i.endpointList[i.endpointIdx].Addresses[i.addrIdx], nil
-}
-
-func (i *index) reset() {
-	i.endpointIdx = 0
-	i.addrIdx = 0
-}
-
-func (i *index) updateEndpointList(endpointList []resolver.Endpoint) {
-	i.endpointList = endpointList
-	i.reset()
+	al.addresses = addrs
+	al.reset()
 }
 
 // seekTo returns false if the needle was not found and the current index was left unchanged.
-func (i *index) seekTo(needle *resolver.Address) bool {
-	for ei, endpoint := range i.endpointList {
-		for ai, addr := range endpoint.Addresses {
-			if !addr.Attributes.Equal(needle.Attributes) || addr.Addr != needle.Addr {
-				continue
-			}
-			i.endpointIdx = ei
-			i.addrIdx = ai
-			return true
+func (al *addressList) seekTo(needle resolver.Address) bool {
+	for ai, addr := range al.addresses {
+		if !equalAddressIgnoringBalAttributes(&addr, &needle) {
+			continue
 		}
+		al.idx = ai
+		return true
 	}
 	return false
+}
+
+// equalAddressIgnoringBalAttributes returns true is a and b are considered equal.
+// This is different from the Equal method on the resolver.Address type which
+// considers all fields to determine equality. Here, we only consider fields
+// that are meaningful to the subconn.
+func equalAddressIgnoringBalAttributes(a, b *resolver.Address) bool {
+	return a.Addr == b.Addr && a.ServerName == b.ServerName &&
+		a.Attributes.Equal(b.Attributes) &&
+		a.Metadata == b.Metadata
 }

@@ -445,6 +445,63 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 	}
 }
 
+func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	balChan := make(chan *stateStoringBalancer, 1)
+	balancer.Register(&stateStoringBalancerBuilder{balancerChan: balChan})
+	cc, r, backends := setupPickFirstLeaf(t, 1)
+	addrs := stubBackendsToResolverAddrs(backends)
+
+	r.UpdateState(resolver.State{Addresses: addrs})
+	bal := <-balChan
+	select {
+	case <-bal.resolverUpdateSeen:
+	case <-ctx.Done():
+		t.Fatalf("Context timed out waiting for resolve update to be processed")
+	}
+
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
+		t.Fatal(err)
+	}
+
+	r.UpdateState(resolver.State{})
+	select {
+	case <-bal.resolverUpdateSeen:
+	case <-ctx.Done():
+		t.Fatalf("Context timed out waiting for resolve update to be processed")
+	}
+
+	// The balancer should have entered transient failure.
+	// It should transition to CONNECTING from TRANSIENT_FAILURE as sticky TF
+	// only applies when the initial TF is reported due to connection failures
+	// and not bad resolver states.
+	r.UpdateState(resolver.State{Addresses: addrs})
+	select {
+	case <-bal.resolverUpdateSeen:
+	case <-ctx.Done():
+		t.Fatalf("Context timed out waiting for resolve update to be processed")
+	}
+
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
+		t.Fatal(err)
+	}
+
+	wantTransitions := []connectivity.State{
+		// From first resolver update.
+		connectivity.Connecting,
+		connectivity.Ready,
+		// From second update.
+		connectivity.TransientFailure,
+		// From third update.
+		connectivity.Ready,
+	}
+
+	if diff := cmp.Diff(wantTransitions, bal.connStateTransitions()); diff != "" {
+		t.Errorf("balancer states mismatch (-want +got):\n%s", diff)
+	}
+}
+
 // stateStoringBalancer stores the state of the subconns being created.
 type stateStoringBalancer struct {
 	balancer.Balancer
