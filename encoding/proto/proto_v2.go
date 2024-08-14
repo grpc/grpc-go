@@ -36,19 +36,30 @@ type codecV2 struct{}
 
 var _ encoding.CodecV2 = (*codecV2)(nil)
 
-func (c *codecV2) Marshal(v any) (mem.BufferSlice, error) {
+func (c *codecV2) Marshal(v any) (data mem.BufferSlice, err error) {
 	vv := messageV2Of(v)
 	if vv == nil {
 		return nil, fmt.Errorf("proto: failed to marshal, message is %T, want proto.Message", v)
 	}
 
-	pool := mem.DefaultBufferPool()
-	buf := pool.Get(proto.Size(vv))
-	if _, err := (proto.MarshalOptions{}).MarshalAppend((*buf)[:0], vv); err != nil {
-		pool.Put(buf)
-		return nil, err
+	size := proto.Size(vv)
+	if mem.IsBelowBufferPoolingThreshold(size) {
+		buf, err := proto.Marshal(vv)
+		if err != nil {
+			return nil, err
+		}
+		data = append(data, mem.SliceBuffer(buf))
+	} else {
+		pool := mem.DefaultBufferPool()
+		buf := pool.Get(size)
+		if _, err := (proto.MarshalOptions{}).MarshalAppend((*buf)[:0], vv); err != nil {
+			pool.Put(buf)
+			return nil, err
+		}
+		data = append(data, mem.NewBuffer(buf, pool))
 	}
-	return mem.BufferSlice{mem.NewBuffer(buf, pool)}, nil
+
+	return data, nil
 }
 
 func (c *codecV2) Unmarshal(data mem.BufferSlice, v any) (err error) {

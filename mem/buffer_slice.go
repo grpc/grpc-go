@@ -109,6 +109,16 @@ func (s BufferSlice) MaterializeToBuffer(pool BufferPool) Buffer {
 	return NewBuffer(buf, pool)
 }
 
+// Reader returns a new Reader for the input slice after taking references to
+// each underlying buffer.
+func (s BufferSlice) Reader() Reader {
+	s.Ref()
+	return &sliceReader{
+		data: s,
+		len:  s.Len(),
+	}
+}
+
 // Reader exposes a BufferSlice's data as an io.Reader, allowing it to interface
 // with other parts systems. It also provides an additional convenience method
 // Remaining(), which returns the number of unread bytes remaining in the slice.

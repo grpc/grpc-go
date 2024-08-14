@@ -48,7 +48,13 @@ var defaultBufferPool BufferPool
 func init() {
 	defaultBufferPool = NewTieredBufferPool(defaultBufferPoolSizes...)
 
-	internal.SetDefaultBufferPoolForTesting = func(pool BufferPool) { defaultBufferPool = pool }
+	internal.SetDefaultBufferPoolForTesting = func(pool BufferPool) {
+		defaultBufferPool = pool
+	}
+
+	internal.SetBufferPoolingThresholdForTesting = func(threshold int) {
+		bufferPoolingThreshold = threshold
+	}
 }
 
 // DefaultBufferPool returns the current default buffer pool. It is a BufferPool
@@ -76,6 +82,14 @@ func NewTieredBufferPool(poolSizes ...int) BufferPool {
 type tieredBufferPool struct {
 	sizedPools   []*sizedBufferPool
 	fallbackPool simpleBufferPool
+}
+
+func (p *tieredBufferPool) Get(size int) *[]byte {
+	return p.getPool(size).Get(size)
+}
+
+func (p *tieredBufferPool) Put(buf *[]byte) {
+	p.getPool(cap(*buf)).Put(buf)
 }
 
 func (p *tieredBufferPool) getPool(size int) BufferPool {
