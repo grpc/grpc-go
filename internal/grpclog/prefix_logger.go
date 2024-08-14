@@ -67,10 +67,10 @@ func (pl *PrefixLogger) Errorf(format string, args ...any) {
 
 // V reports whether verbosity level l is at least the requested verbose level.
 func (pl *PrefixLogger) V(l int) bool {
-	if pl == nil {
-		return true
+	if pl != nil {
+		return pl.logger.V(l)
 	}
-	return pl.logger.V(l)
+	return true
 }
 
 // NewPrefixLogger creates a prefix logger with the given prefix.

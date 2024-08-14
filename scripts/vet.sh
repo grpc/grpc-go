@@ -124,6 +124,13 @@ XXXXX PleaseIgnoreUnused'
   # TODO(https://github.com/dominikh/go-tools/issues/54): Remove this once the issue is fixed in staticcheck.
   noret_grep "(SA4000)" "${SC_OUT}" | not grep -v -e "crl.go:[0-9]\+:[0-9]\+: identical expressions on the left and right side of the '||' operator (SA4000)"
 
+  # Usage of the deprecated Logger interface from prefix_logger.go is the only
+  # allowed one. If any other files use the deprecated interface, this check
+  # will fails. Also, note that this same deprecation notice is also added to
+  # the list of ignored notices down below to allow for the usage in
+  # prefix_logger.go to not case vet failure.
+  noret_grep "(SA1019)" "${SC_OUT}" | noret_grep "internal.Logger is deprecated:" | not grep -v -e "grpclog/logger.go"
+
   # Only ignore the following deprecated types/fields/functions and exclude
   # generated code.
   noret_grep "(SA1019)" "${SC_OUT}" | not grep -Fv 'XXXXX PleaseIgnoreUnused
@@ -140,6 +147,7 @@ XXXXX gRPC internal usage deprecation errors:
 : v1alphareflectionpb.
 BalancerAttributes is deprecated:
 CredsBundle is deprecated:
+internal.Logger is deprecated:
 Metadata is deprecated: use Attributes instead.
 NewSubConn is deprecated:
 OverrideServerName is deprecated:
@@ -149,7 +157,6 @@ Target is deprecated: Use the Target field in the BuildOptions instead.
 UpdateAddresses is deprecated:
 UpdateSubConnState is deprecated:
 balancer.ErrTransientFailure is deprecated:
-internal.Logger is deprecated:
 grpc/reflection/v1alpha/reflection.proto
 SwitchTo is deprecated:
 XXXXX xDS deprecated fields we support
