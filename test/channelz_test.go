@@ -152,8 +152,6 @@ func (s) TestCZGetSubChannel(t *testing.T) {
 			return false, fmt.Errorf("there should be one subchannel, not %d", len(scs))
 		}
 		var scid int64
-		for scid = range scs {
-		}
 		sc := channelz.GetSubChannel(scid)
 		if sc == nil {
 			return false, fmt.Errorf("subchannel with id %v is nil", scid)
@@ -232,8 +230,6 @@ func (s) TestCZGetSocket(t *testing.T) {
 			return false, fmt.Errorf("len(skts) = %v; want %v", got, want)
 		}
 		var sktID int64
-		for sktID = range skts {
-		}
 
 		skt := channelz.GetSocket(sktID)
 		if skt == nil {

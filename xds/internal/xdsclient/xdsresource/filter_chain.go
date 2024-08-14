@@ -536,12 +536,12 @@ func (fcm *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain
 	if name := ts.GetName(); name != transportSocketName {
 		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
 	}
-	any := ts.GetTypedConfig()
-	if any == nil || any.TypeUrl != version.V3DownstreamTLSContextURL {
-		return nil, fmt.Errorf("transport_socket field has unexpected typeURL: %s", any.TypeUrl)
+	typedConfig := ts.GetTypedConfig()
+	if typedConfig == nil || typedConfig.TypeUrl != version.V3DownstreamTLSContextURL {
+		return nil, fmt.Errorf("transport_socket field has unexpected typeURL: %s", typedConfig.TypeUrl)
 	}
 	downstreamCtx := &v3tlspb.DownstreamTlsContext{}
-	if err := proto.Unmarshal(any.GetValue(), downstreamCtx); err != nil {
+	if err := proto.Unmarshal(typedConfig.GetValue(), downstreamCtx); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal DownstreamTlsContext in LDS response: %v", err)
 	}
 	if downstreamCtx.GetRequireSni().GetValue() {

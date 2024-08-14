@@ -1266,7 +1266,12 @@ func (ccw *stateRecordingCCWrapper) NewSubConn(addrs []resolver.Address, opts ba
 // accepted in a timely fashion.
 func keepReading(conn net.Conn) {
 	buf := make([]byte, 1024)
-	for _, err := conn.Read(buf); err == nil; _, err = conn.Read(buf) {
+	for {
+		_, err := conn.Read(buf)
+		if err != nil {
+			// Connection is dead or closed; exit the loop.
+			return
+		}
 	}
 }
 
