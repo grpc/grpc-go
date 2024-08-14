@@ -24,7 +24,6 @@ import (
 	"io"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -32,7 +31,6 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
@@ -66,33 +64,70 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// The following watcher implementations are no-ops in the sense that they don't
-// validate or use the received updates from the xDS client. In this test, we
-// only care whether CSDS reports the expected state.
-//
-// Note: These watchers write the onDone callback on to a channel for the test
-// to invoke them when it wants to unblock the next read on the ADS stream in
-// the xDS client. This is particularly useful when a resource is NACKed,
-// because the go-control-plane management server continuously resends the same
-// resource in this case, and applying flow control from these watchers ensures
-// that xDS client does not spend all of its time receiving and NACKing updates
-// from the management server. This was indeed the case on arm64 (before we had
-// support for ADS stream level flow control), and was causing CSDS to not
-// receive any updates from the xDS client.
+// The following watcher implementations are no-ops since we don't really care
+// about the callback received by these watchers in the test. We only care
+// whether CSDS reports the expected state.
 
-// timeBoundedWrite attempts to writes the onDone callback on the onDone
-// channel. It returns when it can successfully write to the channel or when the
-// test is done, which is signalled by testDoneCh being closed.
-func timeBoundedWrite(testCtxDone <-chan struct{}, onDoneCh chan xdsresource.DoneNotifier, onDone xdsresource.DoneNotifier) {
-	select {
-	case <-testCtxDone:
-	case onDoneCh <- onDone:
-	}
+type nopListenerWatcher struct{}
+
+func (nopListenerWatcher) OnUpdate(_ *xdsresource.ListenerResourceData, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (nopListenerWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (nopListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
 }
 
+type nopRouteConfigWatcher struct{}
+
+func (nopRouteConfigWatcher) OnUpdate(_ *xdsresource.RouteConfigResourceData, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (nopRouteConfigWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (nopRouteConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+
+type nopClusterWatcher struct{}
+
+func (nopClusterWatcher) OnUpdate(_ *xdsresource.ClusterResourceData, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (nopClusterWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (nopClusterWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+
+type nopEndpointsWatcher struct{}
+
+func (nopEndpointsWatcher) OnUpdate(_ *xdsresource.EndpointsResourceData, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (nopEndpointsWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+func (nopEndpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
+	onDone.OnDone()
+}
+
+// This watcher writes the onDone callback on to a channel for the test to
+// invoke it when it wants to unblock the next read on the ADS stream in the xDS
+// client. This is particularly useful when a resource is NACKed, because the
+// go-control-plane management server continuously resends the same resource in
+// this case, and applying flow control from these watchers ensures that xDS
+// client does not spend all of its time receiving and NACKing updates from the
+// management server. This was indeed the case on arm64 (before we had support
+// for ADS stream level flow control), and was causing CSDS to not receive any
+// updates from the xDS client.
 type blockingListenerWatcher struct {
-	testCtxDone <-chan struct{}
-	onDoneCh    chan xdsresource.DoneNotifier
+	testCtxDone <-chan struct{}               // Closed when the test is done.
+	onDoneCh    chan xdsresource.DoneNotifier // Channel to write the onDone callback to.
 }
 
 func newBlockingListenerWatcher(testCtxDone <-chan struct{}) *blockingListenerWatcher {
@@ -103,86 +138,23 @@ func newBlockingListenerWatcher(testCtxDone <-chan struct{}) *blockingListenerWa
 }
 
 func (w *blockingListenerWatcher) OnUpdate(_ *xdsresource.ListenerResourceData, onDone xdsresource.DoneNotifier) {
-	grpclog.Infof("easwars: received listener update")
-	timeBoundedWrite(w.testCtxDone, w.onDoneCh, onDone)
+	writeOnDone(w.testCtxDone, w.onDoneCh, onDone)
 }
 func (w *blockingListenerWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
-	grpclog.Infof("easwars: received listener error")
-	timeBoundedWrite(w.testCtxDone, w.onDoneCh, onDone)
+	writeOnDone(w.testCtxDone, w.onDoneCh, onDone)
 }
 func (w *blockingListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	timeBoundedWrite(w.testCtxDone, w.onDoneCh, onDone)
+	writeOnDone(w.testCtxDone, w.onDoneCh, onDone)
 }
 
-type blockingRouteConfigWatcher struct {
-	testCtxDone <-chan struct{}
-	onDoneCh    chan xdsresource.DoneNotifier
-}
-
-func newBlockingRouteConfigWatcher(testCtxDone <-chan struct{}) *blockingRouteConfigWatcher {
-	return &blockingRouteConfigWatcher{
-		testCtxDone: testCtxDone,
-		onDoneCh:    make(chan xdsresource.DoneNotifier, 1),
+// writeOnDone attempts to writes the onDone callback on the onDone
+// channel. It returns when it can successfully write to the channel or when the
+// test is done, which is signalled by testCtxDone being closed.
+func writeOnDone(testCtxDone <-chan struct{}, onDoneCh chan xdsresource.DoneNotifier, onDone xdsresource.DoneNotifier) {
+	select {
+	case <-testCtxDone:
+	case onDoneCh <- onDone:
 	}
-}
-
-func (w *blockingRouteConfigWatcher) OnUpdate(_ *xdsresource.RouteConfigResourceData, onDone xdsresource.DoneNotifier) {
-	grpclog.Infof("easwars: received route config update")
-	timeBoundedWrite(w.testCtxDone, w.onDoneCh, onDone)
-}
-func (w *blockingRouteConfigWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
-	grpclog.Infof("easwars: received route config error")
-	timeBoundedWrite(w.testCtxDone, w.onDoneCh, onDone)
-}
-func (w *blockingRouteConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	timeBoundedWrite(w.testCtxDone, w.onDoneCh, onDone)
-}
-
-type blockingClusterWatcher struct {
-	testCtxDone <-chan struct{}
-	onDoneCh    chan xdsresource.DoneNotifier
-}
-
-func newBlockingClusterWatcher(testCtxDone <-chan struct{}) *blockingClusterWatcher {
-	return &blockingClusterWatcher{
-		testCtxDone: testCtxDone,
-		onDoneCh:    make(chan xdsresource.DoneNotifier, 1),
-	}
-}
-func (w *blockingClusterWatcher) OnUpdate(_ *xdsresource.ClusterResourceData, onDone xdsresource.DoneNotifier) {
-	grpclog.Infof("easwars: received cluster update")
-	timeBoundedWrite(w.testCtxDone, w.onDoneCh, onDone)
-}
-func (w *blockingClusterWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
-	grpclog.Infof("easwars: received cluster error")
-	timeBoundedWrite(w.testCtxDone, w.onDoneCh, onDone)
-}
-func (w *blockingClusterWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	timeBoundedWrite(w.testCtxDone, w.onDoneCh, onDone)
-}
-
-type blockingEndpointsWatcher struct {
-	testCtxDone <-chan struct{}
-	onDoneCh    chan xdsresource.DoneNotifier
-}
-
-func newBlockingEndpointsWatcher(testCtxDone <-chan struct{}) *blockingEndpointsWatcher {
-	return &blockingEndpointsWatcher{
-		testCtxDone: testCtxDone,
-		onDoneCh:    make(chan xdsresource.DoneNotifier, 1),
-	}
-}
-
-func (w *blockingEndpointsWatcher) OnUpdate(_ *xdsresource.EndpointsResourceData, onDone xdsresource.DoneNotifier) {
-	grpclog.Infof("easwars: received endpoints update")
-	timeBoundedWrite(w.testCtxDone, w.onDoneCh, onDone)
-}
-func (w *blockingEndpointsWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
-	grpclog.Infof("easwars: received endpoints error")
-	timeBoundedWrite(w.testCtxDone, w.onDoneCh, onDone)
-}
-func (w *blockingEndpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	timeBoundedWrite(w.testCtxDone, w.onDoneCh, onDone)
 }
 
 // Creates a gRPC server and starts serving a CSDS service implementation on it.
@@ -238,12 +210,9 @@ func startCSDSClientStream(ctx context.Context, t *testing.T, serverAddr string)
 //   - Configures resources on the management server corresponding to the ones
 //     being watched by the clients, and verifies that the CSDS response reports
 //     resources in ACKED state.
-//   - Modifies resources on the management server such that some of them are
-//     expected to be NACKed by the client. Verifies that the CSDS response
-//     contains some resources in ACKED state and some in NACKED state.
 //
-// For all of the above operations, the test also verifies that the client_scope
-// field in the CSDS response is populated appropriately.
+// For the above operations, the test also verifies that the client_scope field
+// in the CSDS response is populated appropriately.
 func (s) TestCSDS(t *testing.T) {
 	// Spin up a xDS management server on a local port.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
@@ -334,38 +303,21 @@ func (s) TestCSDS(t *testing.T) {
 		endpointAnys[i] = testutils.MarshalAny(t, endpoints[i])
 	}
 
-	// Create four watchers of each type. We have two resources of each type and
-	// two xDS clients to watch those resources. Hence four watchers altogether.
-	var (
-		listenerWatchers    []*blockingListenerWatcher
-		routeConfigWatchers []*blockingRouteConfigWatcher
-		clusterWatchers     []*blockingClusterWatcher
-		endpointsWatchers   []*blockingEndpointsWatcher
-	)
-	for i := 0; i < 4; i++ {
-		listenerWatchers = append(listenerWatchers, newBlockingListenerWatcher(ctx.Done()))
-		routeConfigWatchers = append(routeConfigWatchers, newBlockingRouteConfigWatcher(ctx.Done()))
-		clusterWatchers = append(clusterWatchers, newBlockingClusterWatcher(ctx.Done()))
-		endpointsWatchers = append(endpointsWatchers, newBlockingEndpointsWatcher(ctx.Done()))
+	// Register watches on the xDS clients for two resources of each type.
+	for _, xdsC := range []xdsclient.XDSClient{xdsClient1, xdsClient2} {
+		for _, target := range ldsTargets {
+			xdsresource.WatchListener(xdsC, target, nopListenerWatcher{})
+		}
+		for _, target := range rdsTargets {
+			xdsresource.WatchRouteConfig(xdsC, target, nopRouteConfigWatcher{})
+		}
+		for _, target := range cdsTargets {
+			xdsresource.WatchCluster(xdsC, target, nopClusterWatcher{})
+		}
+		for _, target := range edsTargets {
+			xdsresource.WatchEndpoints(xdsC, target, nopEndpointsWatcher{})
+		}
 	}
-
-	// Register watches on the two xDS clients for two resources of each type.
-	xdsresource.WatchListener(xdsClient1, ldsTargets[0], listenerWatchers[0])
-	xdsresource.WatchListener(xdsClient1, ldsTargets[1], listenerWatchers[1])
-	xdsresource.WatchListener(xdsClient2, ldsTargets[0], listenerWatchers[2])
-	xdsresource.WatchListener(xdsClient2, ldsTargets[1], listenerWatchers[3])
-	xdsresource.WatchRouteConfig(xdsClient1, rdsTargets[0], routeConfigWatchers[0])
-	xdsresource.WatchRouteConfig(xdsClient1, rdsTargets[1], routeConfigWatchers[1])
-	xdsresource.WatchRouteConfig(xdsClient2, rdsTargets[0], routeConfigWatchers[2])
-	xdsresource.WatchRouteConfig(xdsClient2, rdsTargets[1], routeConfigWatchers[3])
-	xdsresource.WatchCluster(xdsClient1, cdsTargets[0], clusterWatchers[0])
-	xdsresource.WatchCluster(xdsClient1, cdsTargets[1], clusterWatchers[1])
-	xdsresource.WatchCluster(xdsClient2, cdsTargets[0], clusterWatchers[2])
-	xdsresource.WatchCluster(xdsClient2, cdsTargets[1], clusterWatchers[3])
-	xdsresource.WatchEndpoints(xdsClient1, edsTargets[0], endpointsWatchers[0])
-	xdsresource.WatchEndpoints(xdsClient1, edsTargets[1], endpointsWatchers[1])
-	xdsresource.WatchEndpoints(xdsClient2, edsTargets[0], endpointsWatchers[2])
-	xdsresource.WatchEndpoints(xdsClient2, edsTargets[1], endpointsWatchers[3])
 
 	// Verify that the xDS client reports the resources as being in "Requested"
 	// state, and in version "0".
@@ -409,83 +361,6 @@ func (s) TestCSDS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Unblock the resource watchers. Watchers of one type are invoked once a
-	// response for that resource type is received, and until all those watchers
-	// invoke their onDone callbacks, the next resource type cannot be read off
-	// the wire. So, we need to spawn a goroutine for each resource type and
-	// once the update is received for that type, we need to invoke the watchers
-	// to unblock the next read.
-	unblockResourceWatchers := func() {
-		var wg sync.WaitGroup
-		wg.Add(4)
-		go func() {
-			defer wg.Done()
-			var onDones []xdsresource.DoneNotifier
-			for i := 0; i < 4; i++ {
-				select {
-				case <-ctx.Done():
-					t.Fatal("Timeout when waiting for listener watch callback to be invoked")
-				case onDone := <-listenerWatchers[i].onDoneCh:
-					onDones = append(onDones, onDone)
-				}
-			}
-			for _, onDone := range onDones {
-				grpclog.Infof("easwars: invoking onDone for a listener")
-				onDone.OnDone()
-			}
-		}()
-		go func() {
-			defer wg.Done()
-			var onDones []xdsresource.DoneNotifier
-			for i := 0; i < 4; i++ {
-				select {
-				case <-ctx.Done():
-					t.Fatal("Timeout when waiting for route configuration watch callback to be invoked")
-				case onDone := <-routeConfigWatchers[i].onDoneCh:
-					onDones = append(onDones, onDone)
-				}
-			}
-			for _, onDone := range onDones {
-				grpclog.Infof("easwars: invoking onDone for a route configuration")
-				onDone.OnDone()
-			}
-		}()
-		go func() {
-			defer wg.Done()
-			var onDones []xdsresource.DoneNotifier
-			for i := 0; i < 4; i++ {
-				select {
-				case <-ctx.Done():
-					t.Fatal("Timeout when waiting for cluster watch callback to be invoked")
-				case onDone := <-clusterWatchers[i].onDoneCh:
-					onDones = append(onDones, onDone)
-				}
-			}
-			for _, onDone := range onDones {
-				grpclog.Infof("easwars: invoking onDone for a cluster")
-				onDone.OnDone()
-			}
-		}()
-		go func() {
-			defer wg.Done()
-			var onDones []xdsresource.DoneNotifier
-			for i := 0; i < 4; i++ {
-				select {
-				case <-ctx.Done():
-					t.Fatal("Timeout when waiting for endpoints watch callback to be invoked")
-				case onDone := <-endpointsWatchers[i].onDoneCh:
-					onDones = append(onDones, onDone)
-				}
-			}
-			for _, onDone := range onDones {
-				grpclog.Infof("easwars: invoking onDone for a endpoints")
-				onDone.OnDone()
-			}
-		}()
-		wg.Wait()
-	}
-	unblockResourceWatchers()
-
 	// Verify that the xDS client reports the resources as being in "ACKed"
 	// state, and in version "1".
 	wantConfigs = []*v3statuspb.ClientConfig_GenericXdsConfig{
@@ -515,52 +390,201 @@ func (s) TestCSDS(t *testing.T) {
 	if err := checkClientStatusResponse(ctx, stream, wantResp); err != nil {
 		t.Fatal(err)
 	}
+}
 
-	// Update the first resource of each type in the management server to a
-	// value which is expected to be NACK'ed by the xDS client.
-	listeners[0].ApiListener = &v3listenerpb.ApiListener{}
-	routes[0].VirtualHosts = []*v3routepb.VirtualHost{{Routes: []*v3routepb.Route{{}}}}
-	clusters[0].ClusterDiscoveryType = &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC}
-	endpoints[0].Endpoints = []*v3endpointpb.LocalityLbEndpoints{{}}
+// Tests CSDS functionality. The test performs the following:
+//   - Spins up a management server and creates two xDS clients talking to it.
+//   - Registers one watch on each xDS client, and verifies that the CSDS
+//     response reports resources in REQUESTED state.
+//   - Configures two resources on the management server such that one of them
+//     is expected to be NACKed by the client. Verifies that the CSDS response
+//     contains one resource in ACKED state and one in NACKED state.
+//
+// For the above operations, the test also verifies that the client_scope field
+// in the CSDS response is populated appropriately.
+//
+// This test does a bunch of similar things to the previous test, but has
+// reduced complexity because of having to deal with a single resource type.
+// This makes is possible to test the NACKing a resource (which results in
+// continuous resending of the resource by the go-control-plane management
+// server), in an easier and less flaky way.
+func (s) TestCSDS_NACK(t *testing.T) {
+	// Spin up a xDS management server on a local port.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create a bootstrap contents pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// Create two xDS clients, with different names. These should end up
+	// creating two different xDS clients.
+	const xdsClient1Name = "xds-csds-client-1"
+	xdsClient1, xdsClose1, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     xdsClient1Name,
+		Contents: bootstrapContents,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer xdsClose1()
+	const xdsClient2Name = "xds-csds-client-2"
+	xdsClient2, xdsClose2, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     xdsClient2Name,
+		Contents: bootstrapContents,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer xdsClose2()
+
+	// Start a CSDS server and create a client stream to it.
+	addr := startCSDSServer(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream := startCSDSClientStream(ctx, t, addr)
+
+	// Verify that the xDS client reports an empty config.
+	wantNode := &v3corepb.Node{
+		Id:                   nodeID,
+		UserAgentName:        "gRPC Go",
+		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+		ClientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
+	}
+	wantResp := &v3statuspb.ClientStatusResponse{
+		Config: []*v3statuspb.ClientConfig{
+			{
+				Node:        wantNode,
+				ClientScope: xdsClient1Name,
+			},
+			{
+				Node:        wantNode,
+				ClientScope: xdsClient2Name,
+			},
+		},
+	}
+	if err := checkClientStatusResponse(ctx, stream, wantResp); err != nil {
+		t.Fatal(err)
+	}
+
+	// Initialize the xDS resources to be used in this test.
+	const ldsTarget0, ldsTarget1 = "lds.target.good:0000", "lds.target.good:1111"
+	listener0 := e2e.DefaultClientListener(ldsTarget0, "rds-name")
+	listener1 := e2e.DefaultClientListener(ldsTarget1, "rds-name")
+	listenerAny0 := testutils.MarshalAny(t, listener0)
+	listenerAny1 := testutils.MarshalAny(t, listener1)
+
+	// Register the watchers, one for each xDS client.
+	watcher1 := nopListenerWatcher{}
+	watcher2 := newBlockingListenerWatcher(ctx.Done())
+	xdsresource.WatchListener(xdsClient1, ldsTarget0, watcher1)
+	xdsresource.WatchListener(xdsClient2, ldsTarget1, watcher2)
+
+	// Verify that the xDS client reports the resources as being in "Requested"
+	// state, and in version "0".
+	wantResp = &v3statuspb.ClientStatusResponse{
+		Config: []*v3statuspb.ClientConfig{
+			{
+				Node: wantNode,
+				GenericXdsConfigs: []*v3statuspb.ClientConfig_GenericXdsConfig{
+					makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTarget0, "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
+				},
+				ClientScope: xdsClient1Name,
+			},
+			{
+				Node: wantNode,
+				GenericXdsConfigs: []*v3statuspb.ClientConfig_GenericXdsConfig{
+					makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTarget1, "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
+				},
+				ClientScope: xdsClient2Name,
+			},
+		},
+	}
+	if err := checkClientStatusResponse(ctx, stream, wantResp); err != nil {
+		t.Fatal(err)
+	}
+
+	// Configure the management server with two listener resources corresponding
+	// to the watches registered above.
 	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:         nodeID,
-		Listeners:      listeners,
-		Routes:         routes,
-		Clusters:       clusters,
-		Endpoints:      endpoints,
+		Listeners:      []*v3listenerpb.Listener{listener0, listener1},
 		SkipValidation: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	unblockResourceWatchers()
-
-	// Verify that the xDS client reports the first resource of each type as
-	// being in "NACKed" state, and the second resource of each type to be in
-	// "ACKed" state. The version for the ACKed resource would be "2", while
-	// that for the NACKed resource would be "1". In the NACKed resource, the
-	// version which is NACKed is stored in the ErrorState field.
-	wantConfigs = []*v3statuspb.ClientConfig_GenericXdsConfig{
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[0], "1", v3adminpb.ClientResourceStatus_NACKED, clusterAnys[0], &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[1], "2", v3adminpb.ClientResourceStatus_ACKED, clusterAnys[1], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[0], "1", v3adminpb.ClientResourceStatus_NACKED, endpointAnys[0], &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[1], "2", v3adminpb.ClientResourceStatus_ACKED, endpointAnys[1], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[0], "1", v3adminpb.ClientResourceStatus_NACKED, listenerAnys[0], &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[1], "2", v3adminpb.ClientResourceStatus_ACKED, listenerAnys[1], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[0], "1", v3adminpb.ClientResourceStatus_NACKED, routeAnys[0], &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[1], "2", v3adminpb.ClientResourceStatus_ACKED, routeAnys[1], nil),
-	}
+	// Verify that the xDS client reports the resources as being in "ACKed"
+	// state, and in version "1".
 	wantResp = &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
 			{
-				Node:              wantNode,
-				GenericXdsConfigs: wantConfigs,
-				ClientScope:       xdsClient1Name,
+				Node: wantNode,
+				GenericXdsConfigs: []*v3statuspb.ClientConfig_GenericXdsConfig{
+					makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTarget0, "1", v3adminpb.ClientResourceStatus_ACKED, listenerAny0, nil),
+				},
+				ClientScope: xdsClient1Name,
 			},
 			{
-				Node:              wantNode,
-				GenericXdsConfigs: wantConfigs,
-				ClientScope:       xdsClient2Name,
+				Node: wantNode,
+				GenericXdsConfigs: []*v3statuspb.ClientConfig_GenericXdsConfig{
+					makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTarget1, "1", v3adminpb.ClientResourceStatus_ACKED, listenerAny1, nil),
+				},
+				ClientScope: xdsClient2Name,
+			},
+		},
+	}
+	if err := checkClientStatusResponse(ctx, stream, wantResp); err != nil {
+		t.Fatal(err)
+	}
+
+	// Unblock reads on the ADS stream by calling the onDone callback sent to
+	// the watcher.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for watch callback")
+	case onDone := <-watcher2.onDoneCh:
+		onDone.OnDone()
+	}
+
+	// Update the second resource with an empty ApiListener field which is
+	// expected to be NACK'ed by the xDS client.
+	listener1.ApiListener = nil
+	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listener0, listener1},
+		SkipValidation: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the update to reach the watchers.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for watch callback")
+	case onDone := <-watcher2.onDoneCh:
+		onDone.OnDone()
+	}
+
+	// Verify that the xDS client reports the first listener resource as being
+	// ACKed and the second listener resource as being NACKed.  The version for
+	// the ACKed resource would be "2", while that for the NACKed resource would
+	// be "1". In the NACKed resource, the version which is NACKed is stored in
+	// the ErrorState field.
+	wantResp = &v3statuspb.ClientStatusResponse{
+		Config: []*v3statuspb.ClientConfig{
+			{
+				Node: wantNode,
+				GenericXdsConfigs: []*v3statuspb.ClientConfig_GenericXdsConfig{
+					makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTarget0, "2", v3adminpb.ClientResourceStatus_ACKED, listenerAny0, nil),
+				},
+				ClientScope: xdsClient1Name,
+			},
+			{
+				Node: wantNode,
+				GenericXdsConfigs: []*v3statuspb.ClientConfig_GenericXdsConfig{
+					makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTarget1, "1", v3adminpb.ClientResourceStatus_NACKED, listenerAny1, &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
+				},
+				ClientScope: xdsClient2Name,
 			},
 		},
 	}
