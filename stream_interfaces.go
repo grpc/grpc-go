@@ -110,9 +110,9 @@ type BidiStreamingServer[Req any, Res any] interface {
 	// once the end of the client-to-server stream is reached.
 	Recv() (*Req, error)
 
-	// Send sends a response message to the client. The server-side handler can repeatedly
-	// call Send to write to the server-to-client message stream. The end of the response
-	// stream is indicated by the return of the bidi method handler.
+	// Send sends a response message to the client. The server-side handler can
+	// repeatedly call Send to write to the server-to-client message stream. The end
+	// of the response stream is indicated by the return of the bidi method handler.
 	Send(*Res) error
 	ServerStream
 }
