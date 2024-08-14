@@ -494,6 +494,7 @@ func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
 		// From second update.
 		connectivity.TransientFailure,
 		// From third update.
+		connectivity.Connecting,
 		connectivity.Ready,
 	}
 

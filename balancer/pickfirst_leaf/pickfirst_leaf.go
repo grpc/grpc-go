@@ -384,7 +384,10 @@ func (b *pickfirstBalancer) requestConnection() {
 	curAddr := b.addressIndex.currentAddress()
 	sd, ok := b.subConns.Get(curAddr)
 	if !ok {
-		sd, err := newSCData(b, curAddr)
+		var err error
+		// We want to assign the new scData to sd from the outer scope, hence
+		// we can't use := below.
+		sd, err = newSCData(b, curAddr)
 		if err != nil {
 			// This should never happen.
 			b.logger.Warningf("Failed to create a subConn for address %v: %v", curAddr.String(), err)
