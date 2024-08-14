@@ -1,17 +1,17 @@
 module google.golang.org/grpc/test/tools
 
-go 1.21
+go 1.22.1
 
 require (
 	github.com/client9/misspell v0.3.4
 	github.com/mgechev/revive v1.3.9
 	golang.org/x/tools v0.23.0
 	google.golang.org/protobuf v1.34.1
-	honnef.co/go/tools v0.4.7
+	honnef.co/go/tools v0.5.0
 )
 
 require (
-	github.com/BurntSushi/toml v1.4.0 // indirect
+	github.com/BurntSushi/toml v1.4.1-0.20240526193622-a339e1f7089c // indirect
 	github.com/chavacava/garif v0.1.0 // indirect
 	github.com/fatih/color v1.17.0 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect

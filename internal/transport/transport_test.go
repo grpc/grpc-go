@@ -1727,7 +1727,7 @@ func waitWhileTrue(t *testing.T, condition func() (bool, error)) {
 		if wait {
 			select {
 			case <-timer.C:
-				t.Fatalf(err.Error())
+				t.Fatal(err)
 			default:
 				time.Sleep(50 * time.Millisecond)
 				continue
