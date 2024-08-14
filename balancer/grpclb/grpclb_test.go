@@ -1639,6 +1639,10 @@ func (s) TestGRPCLBStatsQuashEmpty(t *testing.T) {
 		case <-time.After(500 * time.Millisecond):
 			// Success.
 		}
+		go func() {
+			for range ch { // Drain statsChan until it is closed.
+			}
+		}()
 	}, &rpcStats{
 		numCallsStarted:               0,
 		numCallsFinished:              0,
