@@ -248,7 +248,7 @@ type binaryMethodLogger struct {
 	clientSide bool
 }
 
-// buildGCPLoggingEntry converts the binary log log entry into a gcp logging
+// buildGCPLoggingEntry converts the binary log entry into a gcp logging
 // entry.
 func (bml *binaryMethodLogger) buildGCPLoggingEntry(ctx context.Context, c iblog.LogEntryConfig) gcplogging.Entry {
 	binLogEntry := bml.mlb.Build(c)

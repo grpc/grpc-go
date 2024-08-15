@@ -1008,7 +1008,7 @@ func testHealthWatchMultipleClients(t *testing.T, e env) {
 	healthWatchChecker(t, stream2, healthpb.HealthCheckResponse_NOT_SERVING)
 }
 
-// TestHealthWatchSameStatusmakes a streaming Watch() RPC on the health server
+// TestHealthWatchSameStatus makes a streaming Watch() RPC on the health server
 // and makes sure that the health status of the server is as expected after
 // multiple calls to SetServingStatus with the same status.
 func (s) TestHealthWatchSameStatus(t *testing.T) {

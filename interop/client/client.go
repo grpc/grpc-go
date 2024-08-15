@@ -60,7 +60,7 @@ const (
 )
 
 var (
-	caFile                                 = flag.String("ca_file", "", "The file containning the CA root cert file")
+	caFile                                 = flag.String("ca_file", "", "The file containing the CA root cert file")
 	useTLS                                 = flag.Bool("use_tls", false, "Connection uses TLS if true")
 	useALTS                                = flag.Bool("use_alts", false, "Connection uses ALTS if true (this option can only be used on GCP)")
 	customCredentialsType                  = flag.String("custom_credentials_type", "", "Custom creds to use, excluding TLS or ALTS")

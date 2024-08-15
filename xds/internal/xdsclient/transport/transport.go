@@ -64,7 +64,7 @@ const perRPCVerbosityLevel = 9
 
 // Transport provides a resource-type agnostic implementation of the xDS
 // transport protocol. At this layer, resource contents are supposed to be
-// opaque blobs which should be be meaningful only to the xDS data model layer
+// opaque blobs which should be meaningful only to the xDS data model layer
 // which is implemented by the `xdsresource` package.
 //
 // Under the hood, it owns the gRPC connection to a single management server and
@@ -86,7 +86,7 @@ type Transport struct {
 	lrsRunnerDoneCh chan struct{}           // To notify exit of LRS goroutine.
 
 	// These channels enable synchronization amongst the different goroutines
-	// spawned by the transport, and between asynchorous events resulting from
+	// spawned by the transport, and between asynchronous events resulting from
 	// receipt of responses from the management server.
 	adsStreamCh  chan adsStream    // New ADS streams are pushed here.
 	adsRequestCh *buffer.Unbounded // Resource and ack requests are pushed here.

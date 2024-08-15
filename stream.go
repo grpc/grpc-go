@@ -1121,13 +1121,12 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 	}
 	// Special handling for non-server-stream rpcs.
 	// This recv expects EOF or errors, so we don't collect inPayload.
-	if err := recv(a.p, cs.codec, a.s, a.dc, m, *cs.callInfo.maxReceiveMessageSize, nil, a.decomp, false); err == nil {
-		return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
-	}
-	if err == io.EOF {
+	if err := recv(a.p, cs.codec, a.s, a.dc, m, *cs.callInfo.maxReceiveMessageSize, nil, a.decomp, false); err == io.EOF {
 		return a.s.Status().Err() // non-server streaming Recv returns nil on success
+	} else if err != nil {
+		return toRPCErr(err)
 	}
-	return toRPCErr(err)
+	return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 }
 
 func (a *csAttempt) finish(err error) {
@@ -1183,12 +1182,12 @@ func (a *csAttempt) finish(err error) {
 	a.mu.Unlock()
 }
 
-// newClientStream creates a ClientStream with the specified transport, on the
+// newNonRetryClientStream creates a ClientStream with the specified transport, on the
 // given addrConn.
 //
 // It's expected that the given transport is either the same one in addrConn, or
 // is already closed. To avoid race, transport is specified separately, instead
-// of using ac.transpot.
+// of using ac.transport.
 //
 // Main difference between this and ClientConn.NewStream:
 // - no retry
@@ -1441,13 +1440,12 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 
 	// Special handling for non-server-stream rpcs.
 	// This recv expects EOF or errors, so we don't collect inPayload.
-	if err := recv(as.p, as.codec, as.s, as.dc, m, *as.callInfo.maxReceiveMessageSize, nil, as.decomp, false); err == nil {
-		return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
-	}
-	if err == io.EOF {
+	if err := recv(as.p, as.codec, as.s, as.dc, m, *as.callInfo.maxReceiveMessageSize, nil, as.decomp, false); err == io.EOF {
 		return as.s.Status().Err() // non-server streaming Recv returns nil on success
+	} else if err != nil {
+		return toRPCErr(err)
 	}
-	return toRPCErr(err)
+	return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 }
 
 func (as *addrConnStream) finish(err error) {

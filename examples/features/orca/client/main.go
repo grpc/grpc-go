@@ -59,7 +59,7 @@ func main() {
 	ticker := time.NewTicker(time.Second)
 	for range ticker.C {
 		func() {
-			// Use an anonymous function to ensure context cancelation via defer.
+			// Use an anonymous function to ensure context cancellation via defer.
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			if _, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: "test echo message"}); err != nil {

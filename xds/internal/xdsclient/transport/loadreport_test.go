@@ -211,7 +211,7 @@ func (s) TestReportLoad(t *testing.T) {
 	}
 
 	// Cancel the first load reporting call, and ensure that the stream does not
-	// close (because we have aother call open).
+	// close (because we have another call open).
 	cancelLRS1()
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()

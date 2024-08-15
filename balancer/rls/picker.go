@@ -190,7 +190,7 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 		state := (*balancer.State)(atomic.LoadPointer(&cpw.state))
 		// Delegate to the child policy if it is not in TRANSIENT_FAILURE, or if
 		// it is the last one (which handles the case of delegating to the last
-		// child picker if all child polcies are in TRANSIENT_FAILURE).
+		// child picker if all child policies are in TRANSIENT_FAILURE).
 		if state.ConnectivityState != connectivity.TransientFailure || i == len(dcEntry.childPolicyWrappers)-1 {
 			// Any header data received from the RLS server is stored in the
 			// cache entry and needs to be sent to the actual backend in the

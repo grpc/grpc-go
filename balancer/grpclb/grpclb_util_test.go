@@ -252,7 +252,7 @@ func (s) TestLBCache_ShutdownTimer_New_Race(t *testing.T) {
 	go func() {
 		for i := 0; i < 1000; i++ {
 			// Shutdown starts a timer with 1 ns timeout, the NewSubConn will
-			// race with with the timer.
+			// race with the timer.
 			sc.Shutdown()
 			sc, _ = ccc.NewSubConn([]resolver.Address{{Addr: "address1"}}, balancer.NewSubConnOptions{})
 		}

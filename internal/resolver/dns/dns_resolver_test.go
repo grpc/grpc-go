@@ -1024,7 +1024,7 @@ func (s) TestCustomAuthority(t *testing.T) {
 			wantAuthority: "[::1]:53",
 		},
 		{
-			name:          "ipv6 authority with brackers and non-default DNS port",
+			name:          "ipv6 authority with brackets and non-default DNS port",
 			authority:     "[::1]:123",
 			wantAuthority: "[::1]:123",
 		},

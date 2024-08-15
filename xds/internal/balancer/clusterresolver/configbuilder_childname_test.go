@@ -91,7 +91,7 @@ func Test_nameGenerator_generate(t *testing.T) {
 			},
 			input2: [][]xdsresource.Locality{
 				{{ID: internal.LocalityID{Zone: "L0"}}},
-				{{ID: internal.LocalityID{Zone: "L1"}}}, // This gets a newly generated name, sice "0-0" was already picked.
+				{{ID: internal.LocalityID{Zone: "L1"}}}, // This gets a newly generated name, since "0-0" was already picked.
 				{{ID: internal.LocalityID{Zone: "L2"}}},
 			},
 			want: []string{"priority-0-0", "priority-0-2", "priority-0-1"},

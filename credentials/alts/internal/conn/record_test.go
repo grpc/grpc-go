@@ -248,7 +248,7 @@ func testWriteLargeData(t *testing.T, rp string) {
 	// buffer size.
 	clientConn, serverConn := newConnPair(rp, nil, nil)
 	// Message size is intentionally chosen to not be multiple of
-	// payloadLengthLimtit.
+	// payloadLengthLimit.
 	msgSize := altsWriteBufferMaxSize + (100 * 1024)
 	clientMsg := make([]byte, msgSize)
 	for i := 0; i < msgSize; i++ {
