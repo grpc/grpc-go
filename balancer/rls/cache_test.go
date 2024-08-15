@@ -261,7 +261,7 @@ func (s) TestDataCache_Metrics(t *testing.T) {
 	tmr := stats.NewTestMetricsRecorder(t)
 	// Add the 5 cache entries...any non determinism I need to poll for or is this processing synchronous?
 	initCacheEntries()
-	dc := newDataCache(5, nil, tmr, "")
+	dc := newDataCache(50, nil, tmr, "")
 	// Should I check labels emissions...just tests gRPC target, rls server target, and uuid which idk is even worth testing...
 	dc.updateRLSServerTarget("rls-server-target") // synchronized from test, this is guaranteed to happen before cache operations triggered from balancer...
 	for i, k := range cacheKeys {
@@ -277,9 +277,9 @@ func (s) TestDataCache_Metrics(t *testing.T) {
 	// It would also provide me insight...
 	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 15)
 
-	// Resize down the cache to 3. This should scale down the cache to 3 entries
-	// with 3 bytes each, so should record 3 entries and 9 size.
-	dc.resize(3) // evicts, should scale down, maybe make cache entries with same length
+	// Resize down the cache to 3 entries. This should scale down the cache to 3
+	// entries with 3 bytes each, so should record 3 entries and 9 size.
+	dc.resize(9) // evicts, should scale down, maybe make cache entries with same length
 	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 3)
 	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 9)
 
@@ -287,10 +287,10 @@ func (s) TestDataCache_Metrics(t *testing.T) {
 	// Update an entry to have size 5. This should reflect in the size metrics,
 	// which will increase by 2 to 11, while the number of cache entries should
 	// stay same.
-	dc.updateEntrySize(cacheEntriesMetricsTests[0], 5) // is this deterministic, if not do this in separate test, higher level operations are unit tested for functionality I think this gets all done...
+	dc.updateEntrySize(cacheEntriesMetricsTests[4], 5) // is this deterministic, if not do this in separate test, higher level operations are unit tested for functionality I think this gets all done...
 	// this writes to global var...need to cleanup
 	defer func() {
-		cacheEntriesMetricsTests[0].size = 3
+		cacheEntriesMetricsTests[4].size = 3
 	}() // coupled assertions he might ask to make this a t-test or something...
 
 	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 3)
@@ -298,11 +298,26 @@ func (s) TestDataCache_Metrics(t *testing.T) {
 
 	// Delete this scaled up cache key. This should scale down the cache to 2
 	// entries, and remove 5 size so cache size should be 6.
-	dc.deleteAndCleanup(cacheKeys[0], cacheEntriesMetricsTests[0])
+	dc.deleteAndCleanup(cacheKeys[4], cacheEntriesMetricsTests[4])
 	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 2)
 	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 6)
 } // When get back scale this up and figure out picker smoke test and then send out for review before 1:1 (smoke test but not complicated sceanrios for picker...could I really not scale that up non deterministic...)
 
+// What other operations could trigger?
+
+// This tests all 3 plus a layer above resize based off recently used...
+// Let's see if he wants me to split it up...this is done for cache
+
+// discuss picker/e2e non determinism
+// for picker smoke test to induce needs to pick - could try a failure
+
+// smoke test for all 3 we don't check labels anyway so just induce all 3
+
+// nondeterminism for e2e tests...
+
+// This is done so write picker sanity check....
+
+/*
 func (s) TestDataCache_OtherOperations(t *testing.T) {
 	dc := newDataCache(5, nil, tmr, "")
 	dc.resize()
@@ -330,7 +345,7 @@ func (s) TestDataCache_BasicMetrics(t *testing.T) {
 	tmr := stats.NewTestMetricsRecorder(t) // what does t do?
 	// what does this do?
 
-	dc := newDataCache(/*max size, shouldn't affect metrics*/, nil, tmr, "grpc-target") // should show up in labels...
+	dc := newDataCache(/*max size, shouldn't affect metrics, nil, tmr, "grpc-target") // should show up in labels...
 
 	// Direct 5 operations that can trigger cache size...
 	// What setup does this need to work properly...
@@ -344,7 +359,7 @@ func (s) TestDataCache_BasicMetrics(t *testing.T) {
 
 	// Assertion operations for cache tests:
 	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 5) // If keeping in init cache, but do I need those get timestamps relative to testing run
-	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", /*I don't know how many bytes this ends up being...*/)
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", /*I don't know how many bytes this ends up being...)
 
 	// Do I want to scale these up to have labels?
 
@@ -357,13 +372,18 @@ func (s) TestDataCache_BasicMetrics(t *testing.T) {
 	// Higher layer cache operations:
 	dc.updateRLSServerTarget() // test this somehow, not thread safe but accesses into it protected by higher layer...
 
+
+    // Don't need to retest this, these are tested by unit tests for functionality
+	// and call the underlying methods, tell Doug this...
+
+
 	dc.evictExpiredEntries() // Higher level operation, updateRLSServerTarget should reflect in labels emitted from here...
 
 	dc.resetBackoffState() // what does this do? I think a no-op so don't need to test...is this even worth testing?
 
 	// This calls a lot of underlying operations...
 	// see his other tests?
-	dc.resize(/*size*/) // resizes max size...I think this is a higher level operation, does Easwar invoke cache operations directly or implicitly through cache entry?
+	dc.resize(/*size) // resizes max size...I think this is a higher level operation, does Easwar invoke cache operations directly or implicitly through cache entry?
 
 	dc.stop()
 
@@ -417,3 +437,4 @@ func (s) TestDataCache_BasicMetrics(t *testing.T) {
 	// and ask Frank to test it...with new commit and make sure dashboards show up
 
 }
+*/

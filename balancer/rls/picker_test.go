@@ -72,6 +72,11 @@ func (s) TestNoNonEmptyTargetsReturnsError(t *testing.T) {
 	// Make sure an RLS request is sent out. Even though the RLS Server will
 	// return no targets, the request should still hit the server.
 	verifyRLSRequest(t, rlsReqCh, true)
+
+	// Scale this up to check emits something for rls failures...
+
+	// need other tests which hit normal cache entry and default target...
+
 }
 
 // Test verifies the scenario where there is no matching entry in the data cache
@@ -880,4 +885,21 @@ func TestIsFullMethodNameValid(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (s) TestPickerMetrics(t *testing.T) {
+	// Induce target pick, default target pick, and fail (add label verification?)
+
+	// Can I setup the picker to a point where picks work/emit metrics for all 3
+	// by mocking state?
+
+	picker :=
+
+	// even if invoke helpers directly needs stuff like control channel...
+	// what to do?
+
+	// picker does things like invoke control channel etc...
+	// how to get it working or create a balancer and set up metrics and smoke test
+	// the three for brevity?
+
 }
