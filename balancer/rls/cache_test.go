@@ -67,7 +67,7 @@ func initCacheEntries() {
 			// Entry is invalid.
 			expiryTime: time.Time{}.Add(shortDuration),
 			size:       1,
-		},
+		}, // Different scenarios - does he loop through these for different scenarios...?
 		{
 			// Entry is invalid valid and backoff has expired.
 			expiryTime:        time.Time{}.Add(shortDuration),
@@ -119,11 +119,16 @@ func (s) TestLRU_BasicOperations(t *testing.T) {
 }
 
 func (s) TestDataCache_BasicOperations(t *testing.T) {
-	initCacheEntries()
+	initCacheEntries() // Same 5 scenarios for the different tests...
 	dc := newDataCache(5, nil, &stats.NoopMetricsRecorder{}, "")
 	for i, k := range cacheKeys {
 		dc.addEntry(k, cacheEntries[i])
 	}
+	// This above could be smoke check, and then immediately assert on cache size and number of entries...
+
+
+
+
 	for i, k := range cacheKeys {
 		entry := dc.getEntry(k)
 		if !cmp.Equal(entry, cacheEntries[i], cmp.AllowUnexported(cacheEntry{}, backoffState{}), cmpopts.IgnoreUnexported(time.Timer{})) {
@@ -180,6 +185,7 @@ func (s) TestDataCache_Resize(t *testing.T) {
 	if dc.currentSize != 5 {
 		t.Fatalf("dataCache.size is %d, want 5", dc.currentSize)
 	}
+	// Can resize without actual assertions...
 
 	// Remove the entry with earliestEvictTime in the future and retry the
 	// resize operation.
@@ -241,4 +247,173 @@ func (s) TestDataCache_ResetBackoffState(t *testing.T) {
 	if diff := cmp.Diff(entry.backoffState, newBackoffState, cmp.AllowUnexported(backoffState{})); diff != "" {
 		t.Fatalf("unexpected diff in backoffState for cache entry after dataCache.resetBackoffState(): %s", diff)
 	}
+}
+
+var cacheEntriesMetricsTests = []*cacheEntry{
+	{size: 3},
+	{size: 3},
+	{size: 3},
+	{size: 3},
+	{size: 3},
+}
+
+func (s) TestDataCache_Metrics(t *testing.T) {
+	tmr := stats.NewTestMetricsRecorder(t)
+	// Add the 5 cache entries...any non determinism I need to poll for or is this processing synchronous?
+	initCacheEntries()
+	dc := newDataCache(5, nil, tmr, "")
+	// Should I check labels emissions...just tests gRPC target, rls server target, and uuid which idk is even worth testing...
+	dc.updateRLSServerTarget("rls-server-target") // synchronized from test, this is guaranteed to happen before cache operations triggered from balancer...
+	for i, k := range cacheKeys {
+		dc.addEntry(k, cacheEntriesMetricsTests[i])
+	}
+
+	// 5 total entries, size 3 each, so should record 5 entries and 15
+	// size.
+
+	// PR out for smoke tests...and then further discuss others
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 5)
+	// could just run it and see what value gets added from sync processing...
+	// It would also provide me insight...
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 15)
+
+	// Resize down the cache to 3. This should scale down the cache to 3 entries
+	// with 3 bytes each, so should record 3 entries and 9 size.
+	dc.resize(3) // evicts, should scale down, maybe make cache entries with same length
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 3)
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 9)
+
+
+	// Update an entry to have size 5. This should reflect in the size metrics,
+	// which will increase by 2 to 11, while the number of cache entries should
+	// stay same.
+	dc.updateEntrySize(cacheEntriesMetricsTests[0], 5) // is this deterministic, if not do this in separate test, higher level operations are unit tested for functionality I think this gets all done...
+	// this writes to global var...need to cleanup
+	defer func() {
+		cacheEntriesMetricsTests[0].size = 3
+	}() // coupled assertions he might ask to make this a t-test or something...
+
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 3)
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 11) // write comments for the high level explanations...
+
+	// Delete this scaled up cache key. This should scale down the cache to 2
+	// entries, and remove 5 size so cache size should be 6.
+	dc.deleteAndCleanup(cacheKeys[0], cacheEntriesMetricsTests[0])
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 2)
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 6)
+} // When get back scale this up and figure out picker smoke test and then send out for review before 1:1 (smoke test but not complicated sceanrios for picker...could I really not scale that up non deterministic...)
+
+func (s) TestDataCache_OtherOperations(t *testing.T) {
+	dc := newDataCache(5, nil, tmr, "")
+	dc.resize()
+
+}
+
+func (s) TestDataCache_BasicMetrics(t *testing.T) {
+
+	// There's 5 cache entries...after all processing check size (trivial case
+	// is add and then I can play around) or other operations...or some
+	// permutation of operations...
+
+	// Can I deterministically induce expired entries?
+
+	// fmr here...
+
+	// cache operations which trigger size and entries emissions
+
+	// add entry and remove entry?
+
+	// what does initCacheEntries do?
+
+	// what 5 operations can trigger...
+
+	tmr := stats.NewTestMetricsRecorder(t) // what does t do?
+	// what does this do?
+
+	dc := newDataCache(/*max size, shouldn't affect metrics*/, nil, tmr, "grpc-target") // should show up in labels...
+
+	// Direct 5 operations that can trigger cache size...
+	// What setup does this need to work properly...
+
+	dc.updateEntrySize()
+
+	dc.addEntry()
+
+	dc.deleteAndCleanup() // what data does this need to get it working?
+
+
+	// Assertion operations for cache tests:
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 5) // If keeping in init cache, but do I need those get timestamps relative to testing run
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", /*I don't know how many bytes this ends up being...*/)
+
+	// Do I want to scale these up to have labels?
+
+	// Assertion operations for picker tests:
+	// Smoke tests (try and get these two done before 1:1, can even push out to look at)
+	tmr.AssertDataForMetrics("grpc.lb.rls.default_target_picks", 1) // how do I even induce this without full picker state/in a balancer...
+
+
+
+	// Higher layer cache operations:
+	dc.updateRLSServerTarget() // test this somehow, not thread safe but accesses into it protected by higher layer...
+
+	dc.evictExpiredEntries() // Higher level operation, updateRLSServerTarget should reflect in labels emitted from here...
+
+	dc.resetBackoffState() // what does this do? I think a no-op so don't need to test...is this even worth testing?
+
+	// This calls a lot of underlying operations...
+	// see his other tests?
+	dc.resize(/*size*/) // resizes max size...I think this is a higher level operation, does Easwar invoke cache operations directly or implicitly through cache entry?
+
+	dc.stop()
+
+
+	// newCache creates all the data structures needed...
+
+	// verify labels?
+
+
+	// in flight PR has check on addEntry...
+
+
+	// Not safe for concurrent access...this test happens before does that for you
+
+	// T-Test:
+	// Do a cache operation...on same cache?
+
+	// synchronous processing...
+	// Expect emission for cacheSize and cacheEntries...
+
+	// Not at startup...
+	dc.updateRLSServerTarget() // this should happen first...check if this is received...is it even possible to receive a cache operation before this is called
+	// in the balancer?
+
+	// update the RLS Server target. For the RLS Balancer, cache operations always trigger
+	// after the first RLS Server target is received from a config update.
+	// This is a required label, so it doesn't make sense to get any cache metrics emissions
+	// without this label present...what does balancer do? Look at tests above too...
+
+	// on first config update might resize cache it seems...
+
+	// We're good successfully writes rls server target before every
+	// cache operation that could trigger...
+
+	// See if GCS can build off commit on master and see metrics
+
+	// at the very least get a smoke test working...
+
+	// smoke test - 5 entries add, check
+
+	// picker - barebones emissions...make sure it makes sense
+	// what is minimum required to get this working...at the very least scale up his test
+	// and see what metrics get emitted...?
+
+	// Three buckets - normal target picks, default target picks, rls failures
+	// first two have enum...so to trigger a smoke check need to make a Pick...
+
+	// Whether through full balancer or not I do not know...how easy would it be to set up smoke test...
+
+
+	// and ask Frank to test it...with new commit and make sure dashboards show up
+
 }
