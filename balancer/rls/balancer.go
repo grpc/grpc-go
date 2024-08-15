@@ -340,7 +340,7 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		// `stateMu` if we are to hold both locks at the same time.
 		b.dataCache.resize(newCfg.cacheSizeBytes)
 	}
-        b.cacheMu.Unlock()
+	b.cacheMu.Unlock()
 	// Enqueue an event which will notify us when the above update has been
 	// propagated to all child policies, and the child policies have all
 	// processed their updates, and we have sent a picker update.
