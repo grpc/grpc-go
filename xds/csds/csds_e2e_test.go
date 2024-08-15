@@ -147,9 +147,9 @@ func (w *blockingListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.Done
 	writeOnDone(w.testCtxDone, w.onDoneCh, onDone)
 }
 
-// writeOnDone attempts to writes the onDone callback on the onDone
-// channel. It returns when it can successfully write to the channel or when the
-// test is done, which is signalled by testCtxDone being closed.
+// writeOnDone attempts to writes the onDone callback on the onDone channel. It
+// returns when it can successfully write to the channel or when the test is
+// done, which is signalled by testCtxDone being closed.
 func writeOnDone(testCtxDone <-chan struct{}, onDoneCh chan xdsresource.DoneNotifier, onDone xdsresource.DoneNotifier) {
 	select {
 	case <-testCtxDone:
@@ -396,8 +396,10 @@ func (s) TestCSDS(t *testing.T) {
 //   - Spins up a management server and creates two xDS clients talking to it.
 //   - Registers one watch on each xDS client, and verifies that the CSDS
 //     response reports resources in REQUESTED state.
-//   - Configures two resources on the management server such that one of them
-//     is expected to be NACKed by the client. Verifies that the CSDS response
+//   - Configures two resources on the management server and verifies that the
+//     CSDS response reports the resources as being in ACKED state.
+//   - Updates one of two resources on the management server such that it is
+//     expected to be NACKed by the client. Verifies that the CSDS response
 //     contains one resource in ACKED state and one in NACKED state.
 //
 // For the above operations, the test also verifies that the client_scope field
