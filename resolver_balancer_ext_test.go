@@ -46,7 +46,6 @@ import (
 // 5. resolver.Resolver.ResolveNow() ->
 func (s) TestResolverBalancerInteraction(t *testing.T) {
 	name := strings.Replace(strings.ToLower(t.Name()), "/", "", -1)
-	fmt.Println(name)
 	bf := stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			bd.ClientConn.ResolveNow(resolver.ResolveNowOptions{})
