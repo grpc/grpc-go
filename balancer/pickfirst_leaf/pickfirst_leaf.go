@@ -101,6 +101,7 @@ type scData struct {
 	subConn balancer.SubConn
 	state   connectivity.State
 	addr    resolver.Address
+	lastErr error
 }
 
 func newSCData(b *pickfirstBalancer, addr resolver.Address) (*scData, error) {
@@ -143,7 +144,6 @@ type pickfirstBalancer struct {
 	subConns         *resolver.AddressMap // scData for active subonns mapped by address.
 	addressIndex     addressList
 	firstPass        bool
-	firstErr         error
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
@@ -213,13 +213,18 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 		for i, a := range state.ResolverState.Addresses {
 			newEndpoints[i].Attributes = a.BalancerAttributes
 			newEndpoints[i].Addresses = []resolver.Address{a}
-			// We can't remove address attributes here since xds packages use
+			// We can't remove balancer attributes here since xds packages use
 			// them to store locality metadata.
 		}
 	}
 
 	// Since we have a new set of addresses, we are again at first pass.
 	b.firstPass = true
+	// If multiple endpoints have the same address, they would use the same
+	// subconn because an AddressMap is used to store subconns.
+	// This would result in attempting to connect to the same subconn multiple times
+	// in the same pass. We don't want this, so we ensure each address is present
+	// in only one endpoint before moving further.
 	newEndpoints = deDupAddresses(newEndpoints)
 
 	// Perform the optional shuffling described in gRFC A62. The shuffling will
@@ -269,7 +274,6 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 	// If its the first resolver update or the balancer was already READY or
 	// or CONNECTING, enter CONNECTING.
 	if b.state == connectivity.Ready || b.state == connectivity.Connecting || oldAddrs.Len() == 0 {
-		b.firstErr = nil
 		// Start connection attempt at first address.
 		b.state = connectivity.Connecting
 		b.cc.UpdateState(balancer.State{
@@ -278,7 +282,6 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 		})
 		b.requestConnection()
 	} else if b.state == connectivity.Idle {
-		b.firstErr = nil
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.Idle,
 			Picker:            &idlePicker{exitIdle: b.ExitIdle},
@@ -413,7 +416,7 @@ func (b *pickfirstBalancer) requestConnection() {
 		scd.subConn.Connect()
 	case connectivity.TransientFailure:
 		if !b.addressIndex.increment() {
-			b.endFirstPass()
+			b.endFirstPass(scd.lastErr)
 		}
 		b.requestConnection()
 	case connectivity.Ready:
@@ -440,7 +443,6 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 		b.shutdownRemaining(sd)
 		b.addressIndex.seekTo(sd.addr)
 		b.state = connectivity.Ready
-		b.firstErr = nil
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.Ready,
 			Picker:            &picker{result: balancer.PickResult{SubConn: sd.subConn}},
@@ -476,9 +478,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 				})
 			}
 		case connectivity.TransientFailure:
-			if b.firstErr == nil {
-				b.firstErr = state.ConnectionError
-			}
+			sd.lastErr = state.ConnectionError
 			// Since we're re-using common subconns while handling resolver updates,
 			// we could receive an out of turn TRANSIENT_FAILURE from a pass
 			// over the previous address list. We ignore such updates.
@@ -491,7 +491,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 				return
 			}
 			// End of the first pass.
-			b.endFirstPass()
+			b.endFirstPass(state.ConnectionError)
 		}
 		return
 	}
@@ -499,6 +499,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 	// We have finished the first pass, keep re-connecting failing subconns.
 	switch state.ConnectivityState {
 	case connectivity.TransientFailure:
+		sd.lastErr = state.ConnectionError
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.TransientFailure,
 			Picker:            &picker{err: state.ConnectionError},
@@ -510,12 +511,13 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 	}
 }
 
-func (b *pickfirstBalancer) endFirstPass() {
+func (b *pickfirstBalancer) endFirstPass(lastErr error) {
 	b.firstPass = false
 	b.state = connectivity.TransientFailure
+
 	b.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.TransientFailure,
-		Picker:            &picker{err: b.firstErr},
+		Picker:            &picker{err: lastErr},
 	})
 	// Start re-connecting all the subconns that are already in IDLE.
 	for _, v := range b.subConns.Values() {
