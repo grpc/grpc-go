@@ -334,10 +334,6 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		// specified size. If we do evict an entry with valid backoff timer,
 		// the new picker needs to be sent to the channel to re-process any
 		// RPCs queued as a result of this backoff timer.
-		//
-		// And we cannot do this operation above (where we compute the
-		// `resizeCache` boolean) because `cacheMu` needs to be grabbed before
-		// `stateMu` if we are to hold both locks at the same time.
 		b.dataCache.resize(newCfg.cacheSizeBytes)
 	}
 	b.cacheMu.Unlock()
