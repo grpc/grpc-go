@@ -33,8 +33,7 @@ import (
 type ClientParameters struct {
 	// After a duration of this time if the client doesn't see any activity it
 	// pings the server to see if the transport is still alive.
-	// If set below 10s (including 0), a minimum value of 10s will be used
-	// instead.
+	// If set below 10s, a minimum value of 10s will be used instead.
 	//
 	// Note that gRPC servers have a default EnforcementPolicy.MinTime of 5
 	// minutes (which means the client shouldn't ping more frequently than every
