@@ -322,14 +322,7 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 
 	// Update the copy of the config in the LB policy before releasing the lock.
 	b.lbCfg = newCfg
-
-	// Enqueue an event which will notify us when the above update has been
-	// propagated to all child policies, and the child policies have all
-	// processed their updates, and we have sent a picker update.
-	done := make(chan struct{})
-	b.updateCh.Put(resumePickerUpdates{done: done})
 	b.stateMu.Unlock()
-	<-done
 
 	// We cannot do cache operations above because `cacheMu` needs to be grabbed
 	// before `stateMu` if we are to hold both locks at the same time.
@@ -338,10 +331,18 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	if resizeCache {
 		// If the new config changes reduces the size of the data cache, we
 		// might have to evict entries to get the cache size down to the newly
-		// specified size.
+		// specified size. If we do evict an entry with valid backoff timer,
+		// the new picker needs to be sent to the channel to re-process any
+		// RPCs queued as a result of this backoff timer.
 		b.dataCache.resize(newCfg.cacheSizeBytes)
 	}
 	b.cacheMu.Unlock()
+	// Enqueue an event which will notify us when the above update has been
+	// propagated to all child policies, and the child policies have all
+	// processed their updates, and we have sent a picker update.
+	done := make(chan struct{})
+	b.updateCh.Put(resumePickerUpdates{done: done})
+	<-done
 	return nil
 }
 
