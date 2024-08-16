@@ -53,7 +53,7 @@ type framerWindowUpdateConn struct {
 
 func (cp *clientPrefaceConn) Write(b []byte) (n int, err error) {
 	if string(b) == string(ClientPreface) {
-		return 0, errors.New("preface write error")
+		return 0, errors.New("force error for preface write")
 	}
 
 	// Normally write the bytes if they don't match the ClientPreface
@@ -93,7 +93,7 @@ func dialerClientPrefaceLength(_ context.Context, addr string) (net.Conn, error)
 
 func (fws *framerWriteSettingsConn) Write(b []byte) (n int, err error) {
 	if string(b) == framerWriteSettingsString {
-		return 0, errors.New("intended test case string detected: forced write error")
+		return 0, errors.New("force error for framerWriteSettings")
 	}
 	framerValue := 9
 	n, err = fws.Conn.Write(b)
@@ -115,7 +115,7 @@ func dialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error)
 
 func (fwu *framerWindowUpdateConn) Write(b []byte) (n int, err error) {
 	if string(b) == framerWindowUpdateString {
-		return 0, errors.New("intended test case string detected: forced write error")
+		return 0, errors.New("force error for framerWindowUpdate")
 	}
 	// Simulate a WINDOW_UPDATE frame's value (window size in bytes)
 	windowUpdateValue := 13
@@ -145,7 +145,7 @@ func (s) TestNewHTTP2ClientTarget(t *testing.T) {
 		{
 			name:     "client-preface-write",
 			opts:     ConnectOptions{Dialer: dialerClientPrefaceWrite},
-			expected: "connection error: desc = \"transport: failed to write client preface: preface write error\"",
+			expected: "connection error: desc = \"transport: failed to write client preface: force error for preface write\"",
 		},
 		{
 			name:     "client-preface-length",
