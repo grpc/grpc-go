@@ -32,7 +32,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -58,6 +57,8 @@ type s struct {
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
+
+const goAwayFrameSize = 42
 
 var (
 	expectedRequest            = []byte("ping")
@@ -2753,22 +2754,23 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 // signaled or a timeout occurs.
 type hangingConn struct {
 	net.Conn
-	hangConn     chan struct{}
-	startHanging *atomic.Bool
+	hangConn chan struct{}
 }
 
 func (hc *hangingConn) Write(b []byte) (n int, err error) {
 	n, err = hc.Conn.Write(b)
-	if hc.startHanging.Load() == true {
-		// Hang the Write for more than goAwayLoopyWriterTimeout
-		timer := time.NewTimer(time.Millisecond * 5)
-		defer timer.Stop()
-		select {
-		case <-hc.hangConn:
-		case <-timer.C:
-		}
+	if n == goAwayFrameSize { // hang the conn after the goAway is received
+		<-hc.hangConn
 	}
 	return n, err
+}
+
+func hangingDialer(_ context.Context, addr string) (net.Conn, error) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	return &hangingConn{Conn: conn, hangConn: make(chan struct{})}, nil
 }
 
 // Tests the scenario where a client transport is closed and writing of the
@@ -2786,28 +2788,7 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 	}()
 
 	// Create the server set up.
-	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	server := setUpServerOnly(t, 0, &ServerConfig{}, normal)
-	addr := resolver.Address{Addr: "localhost:" + server.port}
-	isGreetingDone := &atomic.Bool{}
-	dialer := func(_ context.Context, addr string) (net.Conn, error) {
-		conn, err := net.Dial("tcp", addr)
-		if err != nil {
-			return nil, err
-		}
-		return &hangingConn{Conn: conn, hangConn: make(chan struct{}), startHanging: isGreetingDone}, nil
-	}
-	copts := ConnectOptions{Dialer: dialer}
-	copts.ChannelzParent = channelzSubChannel(t)
-
-	// Create client transport with custom dialer
-	ct, connErr := NewClientTransport(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {})
-	if connErr != nil {
-		cancel() // Do not cancel in success path.
-		t.Fatalf("failed to create transport: %v", connErr)
-	}
-	isGreetingDone.Store(true)
-
+	server, ct, cancel := setUpWithOptions(t, 0, &ServerConfig{}, normal, ConnectOptions{Dialer: hangingDialer})
 	defer cancel()
 	defer server.stop()
 
@@ -2816,6 +2797,5 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 	if _, err := ct.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
-
 	ct.Close(errors.New("manually closed by client"))
 }
