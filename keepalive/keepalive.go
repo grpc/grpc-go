@@ -45,15 +45,18 @@ type ClientParameters struct {
 	//
 	// For more details, see
 	// https://github.com/grpc/proposal/blob/master/A8-client-side-keepalive.md
-	Time time.Duration // The current default value is infinity.
+	Time time.Duration
 	// After having pinged for keepalive check, the client waits for a duration
 	// of Timeout and if no activity is seen even after that the connection is
 	// closed.
-	Timeout time.Duration // The current default value is 20 seconds.
+	//
+	// If keepalive is enabled, and this value is not explicitly set, the default
+	// is 20 seconds.
+	Timeout time.Duration
 	// If true, client sends keepalive pings even with no active RPCs. If false,
 	// when there are no active RPCs, Time and Timeout will be ignored and no
 	// keepalive pings will be sent.
-	PermitWithoutStream bool // false by default.
+	PermitWithoutStream bool
 }
 
 // ServerParameters is used to set keepalive and max-age parameters on the
