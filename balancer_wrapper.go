@@ -275,6 +275,8 @@ func (acbw *acBalancerWrapper) updateState(s connectivity.State, curAddr resolve
 			setConnectedAddress(&scs, curAddr)
 		}
 		acbw.stateListener(scs)
+		acbw.ac.mu.Lock()
+		defer acbw.ac.mu.Unlock()
 		if s == connectivity.Ready {
 			// When changing states to READY, reset stateReadyChan.  Wait until
 			// after we notify the LB policy's listener(s) in order to prevent
