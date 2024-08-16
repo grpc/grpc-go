@@ -1632,9 +1632,7 @@ func (s) TestRingHash_TransientFailureSkipToAvailableReady(t *testing.T) {
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 
-	if got, want := conn.GetState(), connectivity.Idle; got != want {
-		t.Errorf("conn.GetState(): got %v, want %v", got, want)
-	}
+	testutils.AwaitState(ctx, t, conn, connectivity.Idle)
 
 	// Test starts with backends not listening.
 	restartableListener1.Stop()
@@ -1644,14 +1642,11 @@ func (s) TestRingHash_TransientFailureSkipToAvailableReady(t *testing.T) {
 	// Because it is not accepting connections, and no other backend is
 	// listening, the RPC fails.
 	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("address_hash", restartableServer1.Address+"_0"))
-	_, err = client.EmptyCall(ctx, &testpb.Empty{})
-	if err == nil {
-		t.Errorf("rpc EmptyCall() succeeded, want error")
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+		t.Fatalf("rpc EmptyCall() succeeded, want error")
 	}
 
-	if got, want := conn.GetState(), connectivity.TransientFailure; got != want {
-		t.Errorf("conn.GetState(): got %v, want %v", got, want)
-	}
+	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
 
 	// Bring up first backend. The channel should become Ready without any
 	// picks, because in TF, we are always trying to connect to at least one
@@ -1671,23 +1666,21 @@ func (s) TestRingHash_TransientFailureSkipToAvailableReady(t *testing.T) {
 	restartableListener1.Stop()
 
 	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
-	_, err = client.EmptyCall(ctx, &testpb.Empty{})
-	if err == nil {
-		t.Errorf("rpc EmptyCall() succeeded, want error")
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+		t.Fatalf("rpc EmptyCall() succeeded, want error")
 	}
 
 	t.Logf("bringing up backend 2")
 	restartableListener2.Restart()
 	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
 
-	peerAddr := ""
-	for peerAddr != restartableServer2.Address {
+	wantPeerAddr := ""
+	for wantPeerAddr != restartableServer2.Address {
 		p := peer.Peer{}
-		_, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p))
-		if errors.Is(err, context.DeadlineExceeded) {
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); errors.Is(err, context.DeadlineExceeded) {
 			t.Fatalf("Timed out waiting for rpc EmptyCall() to be routed to the expected backend")
 		}
-		peerAddr = p.Addr.String()
+		wantPeerAddr = p.Addr.String()
 	}
 }
 
@@ -1736,16 +1729,13 @@ func (s) TestRingHash_ReattemptWhenAllEndpointsUnreachable(t *testing.T) {
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 
-	if got, want := conn.GetState(), connectivity.Idle; got != want {
-		t.Errorf("conn.GetState(): got %v, want %v", got, want)
-	}
+	testutils.AwaitState(ctx, t, conn, connectivity.Idle)
 
 	t.Log("Stopping the backend server")
 	restartableListener.Stop()
 
-	_, err = client.EmptyCall(ctx, &testpb.Empty{})
-	if err == nil || status.Code(err) != codes.Unavailable {
-		t.Errorf("rpc EmptyCall() succeeded, want Unavailable error")
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("rpc EmptyCall() succeeded, want Unavailable error")
 	}
 
 	// Wait for channel to fail.
@@ -1831,7 +1821,7 @@ func (s) TestRingHash_SwitchToLowerPriorityAndThenBack(t *testing.T) {
 	for got = range checkRPCSendOK(ctx, t, client, 1) {
 	}
 	if want := restartableServer.Address; got != want {
-		t.Errorf("Got RPC routed to addr %v, want %v", got, want)
+		t.Fatalf("Got RPC routed to addr %v, want %v", got, want)
 	}
 
 	// Trigger failure with the existing backend, which should cause the
@@ -1847,7 +1837,7 @@ func (s) TestRingHash_SwitchToLowerPriorityAndThenBack(t *testing.T) {
 		// failure (the next write on connection fails).
 		if err == nil {
 			if got, want := p.Addr.String(), otherBackend; got != want {
-				t.Errorf("Got RPC routed to addr %v, want %v", got, want)
+				t.Fatalf("Got RPC routed to addr %v, want %v", got, want)
 			}
 			break
 		}
@@ -1913,12 +1903,15 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicksOneSubchannelAtATime(t *tes
 	holdGood := dialer.Hold(backends[0])
 
 	rpcCtx, rpcCancel := context.WithCancel(ctx)
+	errCh := make(chan error, 1)
 	go func() {
-		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", nonExistantBackends[0]+"_0")) // XXX
+		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", nonExistantBackends[0]+"_0"))
 		_, err := client.EmptyCall(rpcCtx, &testpb.Empty{})
-		if status.Code(err) != codes.Canceled {
-			t.Errorf("Expected RPC to be canceled, got error: %v", err)
+		if status.Code(err) == codes.Canceled {
+			errCh <- nil
+			return
 		}
+		errCh <- err
 	}()
 
 	// Wait for the RPC to trigger a connection attempt to the first address,
@@ -1927,10 +1920,12 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicksOneSubchannelAtATime(t *tes
 		t.Fatalf("Timeout waiting for connection attempt to backend 0")
 	}
 	rpcCancel()
+	if err := <-errCh; err != nil {
+		t.Fatalf("Expected RPC to fail be canceled, got %v", err)
+	}
 
-	// Allow the connection attempt to the first address to resume and wait for
-	// the attempt for the second address.  No other connection attempts should
-	// be started yet.
+	// Since the connection attempt to the first address is still blocked, no
+	// other connection attempts should be started yet.
 	if holdNonExistant1.IsStarted() {
 		t.Errorf("Got connection attempt to backend 1, expected no connection attempt.")
 	}
