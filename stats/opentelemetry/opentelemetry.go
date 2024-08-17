@@ -283,7 +283,7 @@ func optionFromLabels(labelKeys []string, optionalLabelKeys []string, optionalLa
 			}
 		}
 	}
-	return otelmetric.WithAttributes(attributes...)
+	return otelmetric.WithAttributeSet(otelattribute.NewSet(attributes...))
 }
 
 // registryMetrics implements MetricsRecorder for the client and server stats
