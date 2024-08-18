@@ -518,6 +518,7 @@ func serverStreamInterface(g *protogen.GeneratedFile, method *protogen.Method) s
 	if method.Desc.IsStreamingClient() {
 		return g.QualifiedGoIdent(grpcPackage.Ident("ClientStreamingServer")) + "[" + typeParam + "]"
 	}
+
 	return g.QualifiedGoIdent(grpcPackage.Ident("ServerStreamingServer")) + "[" + g.QualifiedGoIdent(method.Output.GoIdent) + "]"
 }
 
