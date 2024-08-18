@@ -90,9 +90,9 @@ func remoteCommand() error {
 
 	if *flagEnableProfiling || *flagDisableProfiling {
 		return setEnabled(ctx, c, *flagEnableProfiling)
-	}
-	if *flagRetrieveSnapshot {
+	} else if *flagRetrieveSnapshot {
 		return retrieveSnapshot(ctx, c, *flagSnapshot)
+	} else {
+		return fmt.Errorf("what should I do with the remote target?")
 	}
-	return fmt.Errorf("what should I do with the remote target?")
 }

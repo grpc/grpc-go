@@ -183,7 +183,7 @@ var (
 
 	// GRPCResolverSchemeExtraMetadata determines when gRPC will add extra
 	// metadata to RPCs.
-	GRPCResolverSchemeExtraMetadata = "xds"
+	GRPCResolverSchemeExtraMetadata string = "xds"
 
 	// EnterIdleModeForTesting gets the ClientConn to enter IDLE mode.
 	EnterIdleModeForTesting any // func(*grpc.ClientConn)
@@ -203,7 +203,7 @@ var (
 
 	// UserSetDefaultScheme is set to true if the user has overridden the
 	// default resolver scheme.
-	UserSetDefaultScheme = false
+	UserSetDefaultScheme bool = false
 
 	// ShuffleAddressListForTesting pseudo-randomizes the order of addresses.  n
 	// is the number of elements.  swap swaps the elements with indexes i and j.
