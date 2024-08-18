@@ -608,7 +608,7 @@ func (w *weightedSubConn) weight(now time.Time, weightExpirationPeriod, blackout
 
 	// The SubConn has not received a load report (i.e. just turned READY with
 	// no load report).
-	if w.lastUpdated == (time.Time{}) {
+	if time.Time.Equal(w.lastUpdated, time.Time{}) {
 		endpointWeightNotYetUsableMetric.Record(w.metricsRecorder, 1, w.target, w.locality)
 		return 0
 	}
