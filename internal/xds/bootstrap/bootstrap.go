@@ -117,6 +117,19 @@ func (scs *ServerConfigs) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// String returns a string representation of the ServerConfigs, by concatenating
+// the string representations of the underlying server configs.
+func (scs *ServerConfigs) String() string {
+	ret := ""
+	for i, sc := range *scs {
+		if i > 0 {
+			ret += ", "
+		}
+		ret += sc.String()
+	}
+	return ret
+}
+
 // Authority contains configuration for an xDS control plane authority.
 //
 // This type does not implement custom JSON marshal/unmarshal logic because it
@@ -237,14 +250,6 @@ func (sc *ServerConfig) Equal(other *ServerConfig) bool {
 }
 
 // String returns the string representation of the ServerConfig.
-//
-// This string representation will be used as map keys in federation
-// (`map[ServerConfig]authority`), so that the xDS ClientConn and stream will be
-// shared by authorities with different names but the same server config.
-//
-// It covers (almost) all the fields so the string can represent the config
-// content. It doesn't cover NodeProto because NodeProto isn't used by
-// federation.
 func (sc *ServerConfig) String() string {
 	if len(sc.serverFeatures) == 0 {
 		return fmt.Sprintf("%s-%s", sc.serverURI, sc.selectedCreds.String())
@@ -361,7 +366,7 @@ type Config struct {
 
 // XDSServers returns the top-level list of management servers to connect to,
 // ordered by priority.
-func (c *Config) XDSServers() []*ServerConfig {
+func (c *Config) XDSServers() ServerConfigs {
 	return c.xDSServers
 }
 
