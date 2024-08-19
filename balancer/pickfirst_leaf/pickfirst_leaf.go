@@ -273,6 +273,10 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 
 	// If its the first resolver update or the balancer was already READY or
 	// or CONNECTING, enter CONNECTING.
+	// We may be in TRANSIENT_FAILURE due to a previous empty address list,
+	// we should still enter CONNECTING because the sticky TF behaviour mentioned
+	// in A62 applied only when the TRANSIENT_FAILURE is reported dur to connectivity
+	// failures.
 	if b.state == connectivity.Ready || b.state == connectivity.Connecting || oldAddrs.Len() == 0 {
 		// Start connection attempt at first address.
 		b.state = connectivity.Connecting
@@ -282,11 +286,15 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 		})
 		b.requestConnection()
 	} else if b.state == connectivity.Idle {
+		// If this is not the first resolver update and we're in IDLE, remain
+		// in IDLE until the picker is used.
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.Idle,
 			Picker:            &idlePicker{exitIdle: b.ExitIdle},
 		})
 	} else if b.state == connectivity.TransientFailure {
+		// If we're in TRANSIENT_FAILURE, we stay in TRANSIENT_FAILURE until
+		// we're READY. See A62.
 		b.requestConnection()
 	}
 	return nil
