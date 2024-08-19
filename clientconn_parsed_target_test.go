@@ -221,12 +221,12 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 		{
 			target:            "unix:/a/b/c",
 			wantParsed:        resolver.Target{URL: *testutils.MustParseURL("unix:/a/b/c")},
-			wantDialerAddress: "unix:///a/b/c",
+			wantDialerAddress: "unix:/a/b/c",
 		},
 		{
 			target:            "unix:///a/b/c",
 			wantParsed:        resolver.Target{URL: *testutils.MustParseURL("unix:///a/b/c")},
-			wantDialerAddress: "unix:///a/b/c",
+			wantDialerAddress: "unix:/a/b/c",
 		},
 		{
 			target:            "dns:///127.0.0.1:50051",

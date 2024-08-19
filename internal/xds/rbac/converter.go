@@ -59,11 +59,11 @@ func buildLogger(loggerConfig *v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConf
 }
 
 func getCustomConfig(config *anypb.Any) (json.RawMessage, string, error) {
-	any, err := config.UnmarshalNew()
+	unmarshalledConfig, err := config.UnmarshalNew()
 	if err != nil {
 		return nil, "", err
 	}
-	switch m := any.(type) {
+	switch m := unmarshalledConfig.(type) {
 	case *v1xdsudpatypepb.TypedStruct:
 		return convertCustomConfig(m.TypeUrl, m.Value)
 	case *v3xdsxdstypepb.TypedStruct:
