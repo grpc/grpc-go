@@ -146,7 +146,10 @@ func testServerTLSHandshake(rawConn net.Conn) handshakeResult {
 	if err != nil {
 		return handshakeResult{err: err}
 	}
-	cfg := &tls.Config{Certificates: []tls.Certificate{cert}}
+	cfg := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		NextProtos:   []string{"h2"},
+	}
 	conn := tls.Server(rawConn, cfg)
 	if err := conn.Handshake(); err != nil {
 		return handshakeResult{err: err}
