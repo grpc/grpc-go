@@ -22,7 +22,6 @@ It supports different test cases, such as "ping_pong", "large_unary", and "custo
 by connecting to a server and invoking the appropriate test. The package also integrates with
 observability tools and includes a delay to ensure proper data flushing before shutdown.
 */
-
 package main
 
 import (
