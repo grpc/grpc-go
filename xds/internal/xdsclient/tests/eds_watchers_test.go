@@ -220,10 +220,10 @@ func (s) TestEDSWatch(t *testing.T) {
 
 			nodeID := uuid.New().String()
 			bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-				Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+				Servers: []byte(fmt.Sprintf(`[{
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+				}]`, mgmtServer.Address)),
 				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 				Authorities: map[string]json.RawMessage{
 					// Xdstp resource names used in this test do not specify an
@@ -410,10 +410,10 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 
 			nodeID := uuid.New().String()
 			bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-				Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+				Servers: []byte(fmt.Sprintf(`[{
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+				}]`, mgmtServer.Address)),
 				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 				Authorities: map[string]json.RawMessage{
 					// Xdstp resource names used in this test do not specify an
@@ -515,10 +515,10 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+				}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
@@ -880,10 +880,10 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+				}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed

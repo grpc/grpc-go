@@ -83,10 +83,10 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	// config, which points to the above management server.
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-		}`, defaultAuthorityServer.Address))},
+		}]`, defaultAuthorityServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			testAuthority1: []byte(`{}`),

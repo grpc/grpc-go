@@ -161,10 +161,10 @@ func (s) TestResolverResourceName(t *testing.T) {
 
 			// Create a bootstrap configuration with test options.
 			opts := bootstrap.ConfigOptionsForTesting{
-				Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+				Servers: []byte(fmt.Sprintf(`[{
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+				}]`, mgmtServer.Address)),
 				ClientDefaultListenerResourceNameTemplate: tt.listenerResourceNameTemplate,
 				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 			}

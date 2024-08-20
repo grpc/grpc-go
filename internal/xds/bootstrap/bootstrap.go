@@ -613,8 +613,9 @@ func newConfigFromContents(data []byte) (*Config, error) {
 //
 // # Testing-Only
 type ConfigOptionsForTesting struct {
-	// Servers is the top-level xDS server configuration
-	Servers []json.RawMessage
+	// Servers is the top-level xDS server configuration. It contains a list of
+	// server configurations.
+	Servers json.RawMessage
 	// CertificateProviders is the certificate providers configuration.
 	CertificateProviders map[string]json.RawMessage
 	// ServerListenerResourceNameTemplate is the listener resource name template
@@ -635,13 +636,9 @@ type ConfigOptionsForTesting struct {
 //
 // # Testing-Only
 func NewContentsForTesting(opts ConfigOptionsForTesting) ([]byte, error) {
-	var servers []*ServerConfig
-	for _, serverCfgJSON := range opts.Servers {
-		server := &ServerConfig{}
-		if err := server.UnmarshalJSON(serverCfgJSON); err != nil {
-			return nil, err
-		}
-		servers = append(servers, server)
+	var servers ServerConfigs
+	if err := json.Unmarshal(opts.Servers, &servers); err != nil {
+		return nil, err
 	}
 	certProviders := make(map[string]certproviderNameAndConfig)
 	for k, v := range opts.CertificateProviders {

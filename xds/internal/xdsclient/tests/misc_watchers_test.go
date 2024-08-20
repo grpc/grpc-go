@@ -107,10 +107,10 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+				}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
