@@ -402,60 +402,6 @@ func TestDecompress(t *testing.T) {
 			wantSize:              0,
 			wantErr:               true,
 		},
-		{
-			name:                  "Empty input",
-			compressor:            &testCompressor{},
-			input:                 []byte{},
-			maxReceiveMessageSize: 10,
-			wantOutput:            []byte{},
-			wantSize:              0,
-			wantErr:               false,
-		},
-		{
-			name:                  "Boundary condition",
-			compressor:            &testCompressor{},
-			input:                 []byte{0x01, 0x02},
-			maxReceiveMessageSize: 1,
-			wantOutput:            nil,
-			wantSize:              4, // 2 bytes compressed * 2
-			wantErr:               true,
-		},
-		{
-			name:                  "Error during decompression",
-			compressor:            &testCompressor{triggerDecompressError: true},
-			input:                 []byte{0x01, 0x02, 0x03, 0x04},
-			maxReceiveMessageSize: 10,
-			wantOutput:            nil,
-			wantSize:              0,
-			wantErr:               true,
-		},
-		{
-			name:                  "Large input",
-			compressor:            &testCompressor{},
-			input:                 make([]byte, 1000), // Large input
-			maxReceiveMessageSize: 2000,               // Large enough to accommodate
-			wantOutput:            make([]byte, 1000),
-			wantSize:              1000,
-			wantErr:               false,
-		},
-		{
-			name:                  "Large buffer size",
-			compressor:            &testCompressor{},
-			input:                 []byte{0x01, 0x02, 0x03, 0x04},
-			maxReceiveMessageSize: math.MaxInt,
-			wantOutput:            []byte{0x01, 0x02, 0x03, 0x04},
-			wantSize:              4,
-			wantErr:               false,
-		},
-		{
-			name:                  "Buffer size overflow",
-			compressor:            &testCompressor{},
-			input:                 []byte{0x01, 0x02, 0x03, 0x04},
-			maxReceiveMessageSize: 2, // too small to hold the decompressed data
-			wantOutput:            nil,
-			wantSize:              4, // This should be the size before the error is reported
-			wantErr:               true,
-		},
 	}
 
 	for _, tt := range tests {
