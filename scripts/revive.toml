@@ -1,0 +1,21 @@
+# TODO(#7444): Enable these rules once the linter issues are fixed.
+[rule.context-as-argument]
+    Disabled = true
+[rule.empty-block]
+    Disabled = true
+[rule.exported]
+    Disabled = true
+[rule.increment-decrement]
+    Disabled = true
+[rule.indent-error-flow]
+    Disabled = true
+[rule.package-comments]
+    Disabled = true
+[rule.redefines-builtin-id]
+    Disabled = true
+[rule.superfluous-else]
+    Disabled = true
+[rule.var-declaration]
+    Disabled = true
+[rule.var-naming]
+    Disabled = true

@@ -176,12 +176,6 @@ XXXXX PleaseIgnoreUnused'
   popd
 done
 
-# Collection of revive linter analysis checks
-REV_OUT="$(mktemp)"
-revive -formatter plain ./... >"${REV_OUT}" || true
-
-# Error for anything other than unused-parameter linter check and in generated code.
-# TODO: Remove `|| true` to unskip linter failures once existing issues are fixed.
-(noret_grep -v "unused-parameter" "${REV_OUT}" | not grep -v "\.pb\.go:") || true
+revive -config "$(dirname "$0")/revive.toml" ./... | fail_on_output
 
 echo SUCCESS
