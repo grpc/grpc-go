@@ -425,6 +425,7 @@ func (b *pickfirstBalancer) requestConnection() {
 	case connectivity.TransientFailure:
 		if !b.addressIndex.increment() {
 			b.endFirstPass(scd.lastErr)
+			return
 		}
 		b.requestConnection()
 	case connectivity.Ready:
@@ -440,7 +441,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 	// To prevent pickers from returning these obsolete subconns, this logic
 	// is included to check if the current list of active subconns includes this
 	// subconn.
-	if activeSd, found := b.subConns.Get(sd.addr); !found || activeSd != sd {
+	if activeSD, found := b.subConns.Get(sd.addr); !found || activeSD != sd {
 		return
 	}
 	if state.ConnectivityState == connectivity.Shutdown {
@@ -491,7 +492,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 			// we could receive an out of turn TRANSIENT_FAILURE from a pass
 			// over the previous address list. We ignore such updates.
 			curAddr := b.addressIndex.currentAddress()
-			if activeSd, found := b.subConns.Get(curAddr); !found || activeSd != sd {
+			if activeSD, found := b.subConns.Get(curAddr); !found || activeSD != sd {
 				return
 			}
 			if b.addressIndex.increment() {
@@ -500,6 +501,21 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 			}
 			// End of the first pass.
 			b.endFirstPass(state.ConnectionError)
+		case connectivity.Idle:
+			// A subconn can transition from CONNECTING directly to IDLE when
+			// a transport is successfully created, but the connection fails before
+			// the subconn can send the notification for READY. We treat this
+			// as a successful connection and transition to IDLE.
+			curAddr := b.addressIndex.currentAddress()
+			if activeSD, found := b.subConns.Get(curAddr); !found || activeSD != sd {
+				return
+			}
+			b.state = connectivity.Idle
+			b.addressIndex.reset()
+			b.cc.UpdateState(balancer.State{
+				ConnectivityState: connectivity.Idle,
+				Picker:            &idlePicker{exitIdle: b.ExitIdle},
+			})
 		}
 		return
 	}
