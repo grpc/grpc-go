@@ -813,7 +813,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		// guarantee f.Data() is consumed before the arrival of next frame.
 		// Can this copy be eliminated?
 		if len(f.Data()) > 0 {
-			pool := s.st.BufferPool()
+			pool := t.bufferPool
 			if pool == nil {
 				// Note that this is only supposed to be nil in tests. Otherwise, stream is
 				// always initialized with a BufferPool.
@@ -1119,7 +1119,6 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 // is returns if it fails (e.g., framing error, transport error).
 func (t *http2Server) Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error {
 	reader := data.Reader()
-	data.Free()
 
 	if !s.isHeaderSent() { // Headers haven't been written yet.
 		if err := t.WriteHeader(s, nil); err != nil {
@@ -1424,10 +1423,6 @@ func (t *http2Server) IncrMsgSent() {
 func (t *http2Server) IncrMsgRecv() {
 	t.channelz.SocketMetrics.MessagesReceived.Add(1)
 	t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Add(1)
-}
-
-func (t *http2Server) BufferPool() mem.BufferPool {
-	return t.bufferPool
 }
 
 func (t *http2Server) getOutFlowWindow() int64 {

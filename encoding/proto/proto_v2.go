@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2024 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,8 +67,6 @@ func (c *codecV2) Unmarshal(data mem.BufferSlice, v any) (err error) {
 	if vv == nil {
 		return fmt.Errorf("failed to unmarshal, message is %T, want proto.Message", v)
 	}
-
-	defer data.Free()
 
 	buf := data.MaterializeToBuffer(mem.DefaultBufferPool())
 	defer buf.Free()

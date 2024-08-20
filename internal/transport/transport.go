@@ -849,10 +849,6 @@ type ServerTransport interface {
 
 	// IncrMsgRecv increments the number of message received through this transport.
 	IncrMsgRecv()
-
-	// BufferPool returns the underlying [mem.BufferPool] this transport is
-	// configured with (can return nil).
-	BufferPool() mem.BufferPool
 }
 
 // connectionErrorf creates an ConnectionError with the specified error description.

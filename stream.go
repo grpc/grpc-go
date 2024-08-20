@@ -928,7 +928,6 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	// compressed). The original ref will always be freed by the deferred free above.
 	payload.Ref()
 	op := func(a *csAttempt) error {
-		payload.Ref()
 		return a.sendMsg(m, hdr, payload, dataLen, payloadLen)
 	}
 
@@ -1431,7 +1430,6 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payload.Len(), *as.callInfo.maxSendMessageSize)
 	}
 
-	payload.Ref()
 	if err := as.t.Write(as.s, hdr, payload, &transport.Options{Last: !as.desc.ClientStreams}); err != nil {
 		if !as.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
@@ -1712,7 +1710,6 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	if payloadLen > ss.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", payloadLen, ss.maxSendMessageSize)
 	}
-	payload.Ref()
 	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
 	}

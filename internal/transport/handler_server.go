@@ -334,6 +334,10 @@ func (ht *serverHandlerTransport) writeCustomHeaders(s *Stream) {
 }
 
 func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error {
+	// Always take a reference because otherwise there is no guarantee the data will
+	// be available after this function returns. This is what callers to Write
+	// expect.
+	data.Ref()
 	headersWritten := s.updateHeaderSent()
 	err := ht.do(func() {
 		defer data.Free()
@@ -470,10 +474,6 @@ func (ht *serverHandlerTransport) runStream() {
 func (ht *serverHandlerTransport) IncrMsgSent() {}
 
 func (ht *serverHandlerTransport) IncrMsgRecv() {}
-
-func (ht *serverHandlerTransport) BufferPool() mem.BufferPool {
-	return ht.bufferPool
-}
 
 func (ht *serverHandlerTransport) Drain(debugData string) {
 	panic("Drain() is not implemented")

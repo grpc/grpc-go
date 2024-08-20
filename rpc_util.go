@@ -918,10 +918,14 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m any, m
 		return err
 	}
 
+	// If the codec wants its own reference to the data, it can get it. Otherwise, always
+	// free the buffers.
+	defer data.Free()
+
 	if err := c.Unmarshal(data, m); err != nil {
-		data.Free()
 		return status.Errorf(codes.Internal, "grpc: failed to unmarshal the received message: %v", err)
 	}
+
 	return nil
 }
 

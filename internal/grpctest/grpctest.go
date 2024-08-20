@@ -31,15 +31,15 @@ import (
 
 var lcFailed uint32
 
-type errorer struct {
+type logger struct {
 	t *testing.T
 }
 
-func (e errorer) Logf(format string, args ...any) {
+func (e logger) Logf(format string, args ...any) {
 	e.t.Logf(format, args...)
 }
 
-func (e errorer) Errorf(format string, args ...any) {
+func (e logger) Errorf(format string, args ...any) {
 	atomic.StoreUint32(&lcFailed, 1)
 	e.t.Errorf(format, args...)
 }
@@ -57,7 +57,7 @@ func (Tester) Setup(t *testing.T) {
 	//  draining the recvBuffer that has yet to be resolved. All other leaks have been
 	//  completely addressed, and this can be turned back on as soon as this issue is
 	//  fixed.
-	leakcheck.SetTrackingBufferPool(errorer{t: t})
+	leakcheck.SetTrackingBufferPool(logger{t: t})
 }
 
 // Teardown performs a leak check.
@@ -66,7 +66,7 @@ func (Tester) Teardown(t *testing.T) {
 	if atomic.LoadUint32(&lcFailed) == 1 {
 		return
 	}
-	leakcheck.CheckGoroutines(errorer{t: t}, 10*time.Second)
+	leakcheck.CheckGoroutines(logger{t: t}, 10*time.Second)
 	if atomic.LoadUint32(&lcFailed) == 1 {
 		t.Log("Goroutine leak check disabled for future tests")
 	}

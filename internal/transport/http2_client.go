@@ -1080,7 +1080,6 @@ func (t *http2Client) GracefulClose() {
 // should proceed only if Write returns nil.
 func (t *http2Client) Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error {
 	reader := data.Reader()
-	data.Free()
 
 	if opts.Last {
 		// If it's the last message, update stream state.
@@ -1213,7 +1212,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		// guarantee f.Data() is consumed before the arrival of next frame.
 		// Can this copy be eliminated?
 		if len(f.Data()) > 0 {
-			pool := s.ct.bufferPool
+			pool := t.bufferPool
 			if pool == nil {
 				// Note that this is only supposed to be nil in tests. Otherwise, stream is
 				// always initialized with a BufferPool.

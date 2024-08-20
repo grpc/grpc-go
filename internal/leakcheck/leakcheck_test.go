@@ -25,15 +25,15 @@ import (
 	"time"
 )
 
-type testErrorfer struct {
+type testLogger struct {
 	errorCount int
 	errors     []string
 }
 
-func (e *testErrorfer) Logf(format string, args ...any) {
+func (e *testLogger) Logf(format string, args ...any) {
 }
 
-func (e *testErrorfer) Errorf(format string, args ...any) {
+func (e *testLogger) Errorf(format string, args ...any) {
 	e.errors = append(e.errors, fmt.Sprintf(format, args...))
 	e.errorCount++
 }
@@ -46,7 +46,7 @@ func TestCheck(t *testing.T) {
 	if ig := interestingGoroutines(); len(ig) == 0 {
 		t.Error("blah")
 	}
-	e := &testErrorfer{}
+	e := &testLogger{}
 	CheckGoroutines(e, time.Second)
 	if e.errorCount != leakCount {
 		t.Errorf("CheckGoroutines found %v leaks, want %v leaks", e.errorCount, leakCount)
@@ -69,7 +69,7 @@ func TestCheckRegisterIgnore(t *testing.T) {
 	if ig := interestingGoroutines(); len(ig) == 0 {
 		t.Error("blah")
 	}
-	e := &testErrorfer{}
+	e := &testLogger{}
 	CheckGoroutines(e, time.Second)
 	if e.errorCount != leakCount {
 		t.Errorf("CheckGoroutines found %v leaks, want %v leaks", e.errorCount, leakCount)
