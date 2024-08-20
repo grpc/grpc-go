@@ -31,9 +31,9 @@ import (
 // ClientPreface is the HTTP/2 client preface string.
 var ClientPreface = []byte(http2.ClientPreface)
 
-var framerWindowUpdateString = "This is a framer window update test case string"
+var framerWindowUpdate = []byte{0, 0, 4, 8, 0, 0, 0, 0, 0, 0, 0, 56, 129}
 
-var framerWriteSettingsString = "This is a framer write setting test case string"
+var framerWriteSettings = []byte{0, 0, 0, 4, 0, 0, 0, 0, 0}
 
 type clientPrefaceConn struct {
 	net.Conn
@@ -92,16 +92,10 @@ func dialerClientPrefaceLength(_ context.Context, addr string) (net.Conn, error)
 }
 
 func (fws *framerWriteSettingsConn) Write(b []byte) (n int, err error) {
-	if string(b) == framerWriteSettingsString {
-		return 0, errors.New("force error for framerWriteSettings")
+	if string(b) == string(framerWriteSettings) {
+		return 0, errors.New("force error for Framer write setting")
 	}
-	framerValue := 9
 	n, err = fws.Conn.Write(b)
-	// Compare the number of bytes written with the framer value
-	if n == framerValue {
-		return 0, errors.New("Framer write setting error")
-	}
-
 	return n, err
 }
 
@@ -114,17 +108,10 @@ func dialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error)
 }
 
 func (fwu *framerWindowUpdateConn) Write(b []byte) (n int, err error) {
-	if string(b) == framerWindowUpdateString {
-		return 0, errors.New("force error for framerWindowUpdate")
+	if string(b) == string(framerWindowUpdate) {
+		return 0, errors.New("force error for windowupdate")
 	}
-	// Simulate a WINDOW_UPDATE frame's value (window size in bytes)
-	windowUpdateValue := 13
 	n, err = fwu.Conn.Write(b)
-
-	// Compare the number of bytes written with the WINDOW_UPDATE value
-	if n == windowUpdateValue {
-		return 0, errors.New("Framer write windowupdate error")
-	}
 	return n, err
 }
 
@@ -155,12 +142,12 @@ func (s) TestNewHTTP2ClientTarget(t *testing.T) {
 		{
 			name:     "framer-write-settings",
 			opts:     ConnectOptions{Dialer: dialerFramerWriteSettings},
-			expected: "connection error: desc = \"transport: failed to write initial settings frame: Framer write setting error\"",
+			expected: "connection error: desc = \"transport: failed to write initial settings frame: force error for Framer write setting\"",
 		},
 		{
 			name:     "framer-write-windowUpdate",
 			opts:     ConnectOptions{Dialer: dialerFramerWriteWindowUpdate, InitialConnWindowSize: 80000},
-			expected: "connection error: desc = \"transport: failed to write window update: Framer write windowupdate error\"",
+			expected: "connection error: desc = \"transport: failed to write window update: force error for windowupdate\"",
 		},
 	}
 	for _, test := range tests {
@@ -177,7 +164,7 @@ func (s) TestNewHTTP2ClientTarget(t *testing.T) {
 
 			_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, test.opts, func(GoAwayReason) {})
 			if err == nil {
-				t.Errorf("Expected an error, but got nil")
+				t.Errorf("got nil, want an error")
 			}
 			if err.Error() != test.expected {
 				t.Fatalf("TestNewHTTP2ClientTarget() = %s, want %s", err.Error(), test.expected)
