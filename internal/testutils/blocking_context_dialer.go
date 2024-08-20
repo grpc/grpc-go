@@ -127,3 +127,13 @@ func (h *Hold) Fail(err error) {
 	h.blockCh <- err
 	close(h.blockCh)
 }
+
+// IsStarted returns true if this hold has received a connection attempt.
+func (h *Hold) IsStarted() bool {
+	select {
+	case <-h.waitCh:
+		return true
+	default:
+		return false
+	}
+}
