@@ -29,8 +29,8 @@ import (
 // methods can be called from concurrent goroutines.
 type CodecV2 interface {
 	// Marshal returns the wire format of v. The buffers in the returned
-	// [mem.BufferSlice] must have at one reference each, which will be freed by gRPC
-	// when they are no longer needed.
+	// [mem.BufferSlice] must have at least one reference each, which will be freed
+	// by gRPC when they are no longer needed.
 	Marshal(v any) (out mem.BufferSlice, err error)
 	// Unmarshal parses the wire format into v. Note that data will be freed as soon
 	// as this function returns. If the codec wishes to guarantee access to the data
