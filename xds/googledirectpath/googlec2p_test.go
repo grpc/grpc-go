@@ -174,10 +174,10 @@ func (s) TestBuildXDS(t *testing.T) {
 			desc: "ipv6 false",
 			wantBootstrapConfig: bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
 				Servers: []byte(`[{
-						"server_uri": "dns:///directpath-pa.googleapis.com",
-					    "channel_creds": [{"type": "google_default"}],
-					    "server_features": ["ignore_resource_deletion"]
-  					}]`),
+					"server_uri": "dns:///directpath-pa.googleapis.com",
+					"channel_creds": [{"type": "google_default"}],
+					"server_features": ["ignore_resource_deletion"]
+  				}]`),
 				Authorities: map[string]json.RawMessage{
 					"traffic-director-c2p.xds.googleapis.com": []byte(`{
 							"xds_servers": [
@@ -200,10 +200,10 @@ func (s) TestBuildXDS(t *testing.T) {
 			ipv6Capable: true,
 			wantBootstrapConfig: bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
 				Servers: []byte(`[{
-						"server_uri": "dns:///directpath-pa.googleapis.com",
-					    "channel_creds": [{"type": "google_default"}],
-					    "server_features": ["ignore_resource_deletion"]
-  					}]`),
+					"server_uri": "dns:///directpath-pa.googleapis.com",
+					"channel_creds": [{"type": "google_default"}],
+					"server_features": ["ignore_resource_deletion"]
+  				}]`),
 				Authorities: map[string]json.RawMessage{
 					"traffic-director-c2p.xds.googleapis.com": []byte(`{
 							"xds_servers": [
@@ -230,10 +230,10 @@ func (s) TestBuildXDS(t *testing.T) {
 			tdURIOverride: "test-uri",
 			wantBootstrapConfig: bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
 				Servers: []byte(`[{
-						"server_uri": "test-uri",
-					    "channel_creds": [{"type": "google_default"}],
-					    "server_features": ["ignore_resource_deletion"]
-  					}]`),
+					"server_uri": "test-uri",
+					"channel_creds": [{"type": "google_default"}],
+					"server_features": ["ignore_resource_deletion"]
+  				}]`),
 				Authorities: map[string]json.RawMessage{
 					"traffic-director-c2p.xds.googleapis.com": []byte(`{
 							"xds_servers": [

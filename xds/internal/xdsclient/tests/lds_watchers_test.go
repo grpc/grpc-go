@@ -465,9 +465,9 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}]`, mgmtServer.Address)),
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
@@ -755,9 +755,9 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}]`, mgmtServer.Address)),
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
@@ -933,9 +933,9 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}]`, mgmtServer.Address)),
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
@@ -1026,9 +1026,9 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}]`, mgmtServer.Address)),
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed

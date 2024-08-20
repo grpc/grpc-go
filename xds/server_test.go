@@ -591,7 +591,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-				}]`, mgmtServer.Address)),
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		CertificateProviders: map[string]json.RawMessage{
 			e2e.ServerSideCertProviderInstance: fakeProvider1Config,
