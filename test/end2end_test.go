@@ -4743,13 +4743,6 @@ type windowSizeConfig struct {
 	clientConn   int32
 }
 
-func max(a, b int32) int32 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func (s) TestConfigurableWindowSizeWithLargeWindow(t *testing.T) {
 	wc := windowSizeConfig{
 		serverStream: 8 * 1024 * 1024,
