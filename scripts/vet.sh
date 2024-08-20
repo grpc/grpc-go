@@ -59,7 +59,7 @@ git grep -l 'time.After(' -- "*.go" | not grep -v '_test.go\|test_utils\|testuti
 git grep -l 'interface{}' -- "*.go" 2>&1 | not grep -v '\.pb\.go\|protoc-gen-go-grpc\|grpc_testing_not_regenerate'
 
 # - Do not call grpclog directly. Use grpclog.Component instead.
-git grep -l -e 'grpclog.I' --or -e 'grpclog.W' --or -e 'grpclog.E' --or -e 'grpclog.F' --or -e 'grpclog.V' -- "*.go" | not grep -v '^grpclog/component.go\|^internal/grpctest/tlogger_test.go'
+git grep -l -e 'grpclog.I' --or -e 'grpclog.W' --or -e 'grpclog.E' --or -e 'grpclog.F' --or -e 'grpclog.V' -- "*.go" | not grep -v '^grpclog/component.go\|^internal/grpctest/tlogger_test.go\|^internal/grpclog/prefix_logger.go'
 
 # - Ensure that the deprecated protobuf dependency is not used.
 not git grep "\"github.com/golang/protobuf/*" -- "*.go" ':(exclude)reflection/test/grpc_testing_not_regenerate/*'
@@ -124,6 +124,13 @@ XXXXX PleaseIgnoreUnused'
   # TODO(https://github.com/dominikh/go-tools/issues/54): Remove this once the issue is fixed in staticcheck.
   noret_grep "(SA4000)" "${SC_OUT}" | not grep -v -e "crl.go:[0-9]\+:[0-9]\+: identical expressions on the left and right side of the '||' operator (SA4000)"
 
+  # Usage of the deprecated Logger interface from prefix_logger.go is the only
+  # allowed one. If any other files use the deprecated interface, this check
+  # will fails. Also, note that this same deprecation notice is also added to
+  # the list of ignored notices down below to allow for the usage in
+  # prefix_logger.go to not case vet failure.
+  noret_grep "(SA1019)" "${SC_OUT}" | noret_grep "internal.Logger is deprecated:" | not grep -v -e "grpclog/logger.go"
+
   # Only ignore the following deprecated types/fields/functions and exclude
   # generated code.
   noret_grep "(SA1019)" "${SC_OUT}" | not grep -Fv 'XXXXX PleaseIgnoreUnused
@@ -140,6 +147,7 @@ XXXXX gRPC internal usage deprecation errors:
 : v1alphareflectionpb.
 BalancerAttributes is deprecated:
 CredsBundle is deprecated:
+internal.Logger is deprecated:
 Metadata is deprecated: use Attributes instead.
 NewSubConn is deprecated:
 OverrideServerName is deprecated:

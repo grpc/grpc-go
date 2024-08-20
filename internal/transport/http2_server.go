@@ -1239,7 +1239,7 @@ func (t *http2Server) keepalive() {
 			// timeoutLeft. This will ensure that we wait only for kp.Time
 			// before sending out the next ping (for cases where the ping is
 			// acked).
-			sleepDuration := minTime(t.kp.Time, kpTimeoutLeft)
+			sleepDuration := min(t.kp.Time, kpTimeoutLeft)
 			kpTimeoutLeft -= sleepDuration
 			kpTimer.Reset(sleepDuration)
 		case <-t.done:
