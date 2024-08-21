@@ -68,7 +68,7 @@ var producerBuilderSingleton = &producerBuilder{}
 // TestProducerStreamStartsAfterReady ensures producer streams only start after
 // the subchannel reports as READY to the LB policy.
 func (s) TestProducerStreamStartsAfterReady(t *testing.T) {
-	name := strings.Replace(strings.ToLower(t.Name()), "/", "", -1)
+	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 	producerCh := make(chan balancer.Producer)
 	streamStarted := make(chan struct{})
 	done := make(chan struct{})
