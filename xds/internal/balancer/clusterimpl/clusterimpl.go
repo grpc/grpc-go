@@ -53,7 +53,10 @@ const (
 	defaultRequestCountMax = 1024
 )
 
-var connectedAddress = internal.ConnectedAddress.(func(balancer.SubConnState) resolver.Address)
+var (
+	connectedAddress  = internal.ConnectedAddress.(func(balancer.SubConnState) resolver.Address)
+	errBalancerClosed = fmt.Errorf("%s LB policy is closed", Name)
+)
 
 func init() {
 	balancer.Register(bb{})
@@ -63,7 +66,6 @@ type bb struct{}
 
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	ctx, cancel := context.WithCancel(context.Background())
-
 	b := &clusterImplBalancer{
 		ClientConn:       cc,
 		bOpts:            bOpts,
@@ -196,9 +198,9 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 	return nil
 }
 
-func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+func (b *clusterImplBalancer) updateClientConnState(s balancer.ClientConnState) error {
 	if b.logger.V(2) {
-		b.logger.Infof("Received update from resolver, balancer config: %s", pretty.ToJSON(s.BalancerConfig))
+		b.logger.Infof("Received configuration: %s", pretty.ToJSON(s.BalancerConfig))
 	}
 	newConfig, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
@@ -210,7 +212,7 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	// it.
 	bb := balancer.Get(newConfig.ChildPolicy.Name)
 	if bb == nil {
-		return fmt.Errorf("balancer %q not registered", newConfig.ChildPolicy.Name)
+		return fmt.Errorf("child policy %q not registered", newConfig.ChildPolicy.Name)
 	}
 
 	if b.xdsClient == nil {
@@ -236,23 +238,14 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	}
 	b.config = newConfig
 
-	callback := func(context.Context) {
-		b.telemetryLabels = newConfig.TelemetryLabels
-		dc := b.handleDropAndRequestCount(newConfig)
-		if dc != nil && b.childState.Picker != nil {
-			b.ClientConn.UpdateState(balancer.State{
-				ConnectivityState: b.childState.ConnectivityState,
-				Picker:            b.newPicker(dc),
-			})
-		}
+	b.telemetryLabels = newConfig.TelemetryLabels
+	dc := b.handleDropAndRequestCount(newConfig)
+	if dc != nil && b.childState.Picker != nil {
+		b.ClientConn.UpdateState(balancer.State{
+			ConnectivityState: b.childState.ConnectivityState,
+			Picker:            b.newPicker(dc),
+		})
 	}
-
-	onFailure := func() {
-		// Handle the case where scheduling fails (e.g., if the serializer is closed)
-		b.logger.Warningf("xds: failed to schedule config update, balancer might be closed")
-	}
-	// Schedule the config update on the serializer
-	b.serializer.ScheduleOr(callback, onFailure)
 
 	// Addresses and sub-balancer config are sent to sub-balancer.
 	return b.child.UpdateClientConnState(balancer.ClientConnState{
@@ -261,8 +254,25 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	})
 }
 
+func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+	// Handle the update in a blocking fashion.
+	errCh := make(chan error, 1)
+	callback := func(context.Context) {
+		errCh <- b.updateClientConnState(s)
+	}
+	onFailure := func() {
+		// The call to Schedule returns false *only* if the serializer has been
+		// closed, which happens only when we receive an update after close.
+		errCh <- errBalancerClosed
+	}
+	b.serializer.ScheduleOr(callback, onFailure)
+	return <-errCh
+}
+
 func (b *clusterImplBalancer) ResolverError(err error) {
-	b.child.ResolverError(err)
+	b.serializer.TrySchedule(func(context.Context) {
+		b.child.ResolverError(err)
+	})
 }
 
 func (b *clusterImplBalancer) updateSubConnState(sc balancer.SubConn, s balancer.SubConnState, cb func(balancer.SubConnState)) {
@@ -287,27 +297,30 @@ func (b *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer
 }
 
 func (b *clusterImplBalancer) Close() {
-	if b.cancelLoadReport != nil {
-		b.cancelLoadReport()
-		b.cancelLoadReport = nil
-	}
+	b.serializer.TrySchedule(func(ctx context.Context) {
+		b.child.Close()
+		b.childState = balancer.State{}
 
+		if b.cancelLoadReport != nil {
+			b.cancelLoadReport()
+			b.cancelLoadReport = nil
+		}
+		b.logger.Infof("Shutdown")
+	})
 	b.serializerCancel()
 	<-b.serializer.Done()
-	b.child.Close()
-	b.childState = balancer.State{}
-	b.logger.Infof("Shutdown")
 }
 
 func (b *clusterImplBalancer) ExitIdle() {
-	b.child.ExitIdle()
+	b.serializer.TrySchedule(func(context.Context) {
+		b.child.ExitIdle()
+	})
 }
 
 // Override methods to accept updates from the child LB.
 
 func (b *clusterImplBalancer) UpdateState(state balancer.State) {
-	// Schedule picker update on the serializer using ScheduleOr
-	b.serializer.ScheduleOr(func(context.Context) {
+	b.serializer.TrySchedule(func(context.Context) {
 		b.childState = state
 		b.ClientConn.UpdateState(balancer.State{
 			ConnectivityState: b.childState.ConnectivityState,
@@ -317,9 +330,6 @@ func (b *clusterImplBalancer) UpdateState(state balancer.State) {
 				requestCountMax: b.requestCountMax,
 			}),
 		})
-	}, func() {
-		// Handle the case where scheduling fails
-		b.logger.Warningf("xds: failed to schedule picker update, balancer might be closed")
 	})
 }
 
@@ -372,21 +382,23 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 	scw := &scWrapper{}
 	oldListener := opts.StateListener
 	opts.StateListener = func(state balancer.SubConnState) {
-		b.updateSubConnState(sc, state, oldListener)
-		if state.ConnectivityState != connectivity.Ready {
-			return
-		}
-		// Read connected address and call updateLocalityID() based on the connected
-		// address's locality. https://github.com/grpc/grpc-go/issues/7339
-		addr := connectedAddress(state)
-		lID := xdsinternal.GetLocalityID(addr)
-		if lID.Empty() {
-			if b.logger.V(2) {
-				b.logger.Infof("Locality ID for %s unexpectedly empty", addr)
+		b.serializer.TrySchedule(func(context.Context) {
+			b.updateSubConnState(sc, state, oldListener)
+			if state.ConnectivityState != connectivity.Ready {
+				return
 			}
-			return
-		}
-		scw.updateLocalityID(lID)
+			// Read connected address and call updateLocalityID() based on the connected
+			// address's locality. https://github.com/grpc/grpc-go/issues/7339
+			addr := connectedAddress(state)
+			lID := xdsinternal.GetLocalityID(addr)
+			if lID.Empty() {
+				if b.logger.V(2) {
+					b.logger.Infof("Locality ID for %s unexpectedly empty", addr)
+				}
+				return
+			}
+			scw.updateLocalityID(lID)
+		})
 	}
 	sc, err := b.ClientConn.NewSubConn(newAddrs, opts)
 	if err != nil {
