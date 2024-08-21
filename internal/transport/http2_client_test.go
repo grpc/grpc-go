@@ -18,6 +18,7 @@
 package transport
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net"
@@ -52,7 +53,7 @@ type framerWindowUpdateConn struct {
 }
 
 func (cp *clientPrefaceConn) Write(b []byte) (n int, err error) {
-	if string(b) == string(ClientPreface) {
+	if bytes.Equal(b, ClientPreface) {
 		return 0, errors.New("force error for preface write")
 	}
 	return cp.Conn.Write(b)
@@ -71,7 +72,7 @@ func dialerClientPrefaceWrite(_ context.Context, addr string) (net.Conn, error) 
 }
 
 func (cpl *clientPrefaceLengthConn) Write(b []byte) (n int, err error) {
-	if string(b) == string(ClientPreface) {
+	if bytes.Equal(b, ClientPreface) {
 		incorrectPreface := "INCORRECT PREFACE\r\n\r\n"
 		n, err = cpl.Conn.Write([]byte(incorrectPreface))
 		return n, err
@@ -89,7 +90,7 @@ func dialerClientPrefaceLength(_ context.Context, addr string) (net.Conn, error)
 }
 
 func (fws *framerWriteSettingsConn) Write(b []byte) (n int, err error) {
-	if string(b) == string(framerWriteSettings) {
+	if bytes.Equal(b, framerWriteSettings) {
 		return 0, errors.New("force error for Framer write setting")
 	}
 	return fws.Conn.Write(b)
@@ -104,7 +105,7 @@ func dialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error)
 }
 
 func (fwu *framerWindowUpdateConn) Write(b []byte) (n int, err error) {
-	if string(b) == string(framerWindowUpdate) {
+	if bytes.Equal(b, framerWindowUpdate) {
 		return 0, errors.New("force error for windowupdate")
 	}
 	return fwu.Conn.Write(b)
