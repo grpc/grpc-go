@@ -66,11 +66,11 @@ import (
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
-	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/bufconn"
 
@@ -152,6 +152,33 @@ const (
 	warmupCallCount = 10
 	warmuptime      = time.Second
 )
+
+var useNopBufferPool atomic.Bool
+
+type swappableBufferPool struct {
+	mem.BufferPool
+}
+
+func (p swappableBufferPool) Get(length int) *[]byte {
+	var pool mem.BufferPool
+	if useNopBufferPool.Load() {
+		pool = mem.NopBufferPool{}
+	} else {
+		pool = p.BufferPool
+	}
+	return pool.Get(length)
+}
+
+func (p swappableBufferPool) Put(i *[]byte) {
+	if useNopBufferPool.Load() {
+		return
+	}
+	p.BufferPool.Put(i)
+}
+
+func init() {
+	internal.SetDefaultBufferPoolForTesting.(func(mem.BufferPool))(swappableBufferPool{mem.DefaultBufferPool()})
+}
 
 var (
 	allWorkloads              = []string{workloadsUnary, workloadsStreaming, workloadsUnconstrained, workloadsAll}
@@ -343,10 +370,9 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 	}
 	switch bf.RecvBufferPool {
 	case recvBufferPoolNil:
-		// Do nothing.
+		useNopBufferPool.Store(true)
 	case recvBufferPoolSimple:
-		opts = append(opts, experimental.WithRecvBufferPool(grpc.NewSharedBufferPool()))
-		sopts = append(sopts, experimental.RecvBufferPool(grpc.NewSharedBufferPool()))
+		// Do nothing as buffering is enabled by default.
 	default:
 		logger.Fatalf("Unknown shared recv buffer pool type: %v", bf.RecvBufferPool)
 	}

@@ -1,6 +1,8 @@
+//go:build checkbuffers
+
 /*
  *
- * Copyright 2023 gRPC authors.
+ * Copyright 2017 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,33 +18,8 @@
  *
  */
 
-package grpc
+package leakcheck
 
-import "testing"
-
-func (s) TestSharedBufferPool(t *testing.T) {
-	pools := []SharedBufferPool{
-		nopBufferPool{},
-		NewSharedBufferPool(),
-	}
-
-	lengths := []int{
-		level4PoolMaxSize + 1,
-		level4PoolMaxSize,
-		level3PoolMaxSize,
-		level2PoolMaxSize,
-		level1PoolMaxSize,
-		level0PoolMaxSize,
-	}
-
-	for _, p := range pools {
-		for _, l := range lengths {
-			bs := p.Get(l)
-			if len(bs) != l {
-				t.Fatalf("Expected buffer of length %d, got %d", l, len(bs))
-			}
-
-			p.Put(&bs)
-		}
-	}
+func init() {
+	failTestsOnLeakedBuffers = true
 }

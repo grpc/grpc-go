@@ -27,13 +27,14 @@ package mem
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 )
 
 // A Buffer represents a reference counted piece of data (in bytes) that can be
 // acquired by a call to NewBuffer() or Copy(). A reference to a Buffer may be
-// released by calling Free(), which invokes the given free function only after
-// all references are released.
+// released by calling Free(), which invokes the free function given at creation
+// only after all references are released.
 //
 // Note that a Buffer is not safe for concurrent access and instead each
 // goroutine should use its own reference to the data, which can be acquired via
@@ -41,23 +42,61 @@ import (
 //
 // Attempts to access the underlying data after releasing the reference to the
 // Buffer will panic.
-type Buffer struct {
-	data  []byte
-	refs  *atomic.Int32
-	free  func()
-	freed bool
+type Buffer interface {
+	// ReadOnlyData returns the underlying byte slice. Note that it is undefined
+	// behavior to modify the contents of this slice in any way.
+	ReadOnlyData() []byte
+	// Ref increases the reference counter for this Buffer.
+	Ref()
+	// Free decrements this Buffer's reference counter and frees the underlying
+	// byte slice if the counter reaches 0 as a result of this call.
+	Free()
+	// Len returns the Buffer's size.
+	Len() int
+
+	split(n int) (left, right Buffer)
+	read(buf []byte) (int, Buffer)
 }
 
-// NewBuffer creates a new Buffer from the given data, initializing the
-// reference counter to 1. The given free function is called when all references
-// to the returned Buffer are released.
+var (
+	bufferPoolingThreshold = 1 << 10
+
+	bufferObjectPool = sync.Pool{New: func() any { return new(buffer) }}
+	refObjectPool    = sync.Pool{New: func() any { return new(atomic.Int32) }}
+)
+
+func IsBelowBufferPoolingThreshold(size int) bool {
+	return size <= bufferPoolingThreshold
+}
+
+type buffer struct {
+	origData *[]byte
+	data     []byte
+	refs     *atomic.Int32
+	pool     BufferPool
+}
+
+func newBuffer() *buffer {
+	return bufferObjectPool.Get().(*buffer)
+}
+
+// NewBuffer creates a new Buffer from the given data, initializing the reference
+// counter to 1. The data will then be returned to the given pool when all
+// references to the returned Buffer are released. As a special case to avoid
+// additional allocations, if the given buffer pool is nil, the returned buffer
+// will be a "no-op" Buffer where invoking Buffer.Free() does nothing and the
+// underlying data is never freed.
 //
 // Note that the backing array of the given data is not copied.
-func NewBuffer(data []byte, onFree func([]byte)) *Buffer {
-	b := &Buffer{data: data, refs: new(atomic.Int32)}
-	if onFree != nil {
-		b.free = func() { onFree(data) }
+func NewBuffer(data *[]byte, pool BufferPool) Buffer {
+	if pool == nil || IsBelowBufferPoolingThreshold(len(*data)) {
+		return (SliceBuffer)(*data)
 	}
+	b := newBuffer()
+	b.origData = data
+	b.data = *data
+	b.pool = pool
+	b.refs = refObjectPool.Get().(*atomic.Int32)
 	b.refs.Add(1)
 	return b
 }
@@ -68,82 +107,146 @@ func NewBuffer(data []byte, onFree func([]byte)) *Buffer {
 // It acquires a []byte from the given pool and copies over the backing array
 // of the given data. The []byte acquired from the pool is returned to the
 // pool when all references to the returned Buffer are released.
-func Copy(data []byte, pool BufferPool) *Buffer {
+func Copy(data []byte, pool BufferPool) Buffer {
+	if IsBelowBufferPoolingThreshold(len(data)) {
+		buf := make(SliceBuffer, len(data))
+		copy(buf, data)
+		return buf
+	}
+
 	buf := pool.Get(len(data))
-	copy(buf, data)
-	return NewBuffer(buf, pool.Put)
+	copy(*buf, data)
+	return NewBuffer(buf, pool)
 }
 
-// ReadOnlyData returns the underlying byte slice. Note that it is undefined
-// behavior to modify the contents of this slice in any way.
-func (b *Buffer) ReadOnlyData() []byte {
-	if b.freed {
+func (b *buffer) ReadOnlyData() []byte {
+	if b.refs == nil {
 		panic("Cannot read freed buffer")
 	}
 	return b.data
 }
 
-// Ref returns a new reference to this Buffer's underlying byte slice.
-func (b *Buffer) Ref() *Buffer {
-	if b.freed {
+func (b *buffer) Ref() {
+	if b.refs == nil {
 		panic("Cannot ref freed buffer")
 	}
-
 	b.refs.Add(1)
-	return &Buffer{
-		data: b.data,
-		refs: b.refs,
-		free: b.free,
-	}
 }
 
-// Free decrements this Buffer's reference counter and frees the underlying
-// byte slice if the counter reaches 0 as a result of this call.
-func (b *Buffer) Free() {
-	if b.freed {
-		return
+func (b *buffer) Free() {
+	if b.refs == nil {
+		panic("Cannot free freed buffer")
 	}
 
-	b.freed = true
 	refs := b.refs.Add(-1)
-	if refs == 0 && b.free != nil {
-		b.free()
+	switch {
+	case refs > 0:
+		return
+	case refs == 0:
+		if b.pool != nil {
+			b.pool.Put(b.origData)
+		}
+
+		refObjectPool.Put(b.refs)
+		b.origData = nil
+		b.data = nil
+		b.refs = nil
+		b.pool = nil
+		bufferObjectPool.Put(b)
+	default:
+		panic("Cannot free freed buffer")
 	}
-	b.data = nil
 }
 
-// Len returns the Buffer's size.
-func (b *Buffer) Len() int {
-	// Convenience: io.Reader returns (n int, err error), and n is often checked
-	// before err is checked. To mimic this, Len() should work on nil Buffers.
-	if b == nil {
-		return 0
-	}
+func (b *buffer) Len() int {
 	return len(b.ReadOnlyData())
 }
 
-// Split modifies the receiver to point to the first n bytes while it returns a
-// new reference to the remaining bytes. The returned Buffer functions just like
-// a normal reference acquired using Ref().
-func (b *Buffer) Split(n int) *Buffer {
-	if b.freed {
+func (b *buffer) split(n int) (Buffer, Buffer) {
+	if b.refs == nil {
 		panic("Cannot split freed buffer")
 	}
 
 	b.refs.Add(1)
+	split := newBuffer()
+	split.origData = b.origData
+	split.data = b.data[n:]
+	split.refs = b.refs
+	split.pool = b.pool
 
-	split := &Buffer{
-		refs: b.refs,
-		free: b.free,
+	b.data = b.data[:n]
+
+	return b, split
+}
+
+func (b *buffer) read(buf []byte) (int, Buffer) {
+	if b.refs == nil {
+		panic("Cannot read freed buffer")
 	}
 
-	b.data, split.data = b.data[:n], b.data[n:]
+	n := copy(buf, b.data)
+	if n == len(b.data) {
+		b.Free()
+		return n, nil
+	}
 
-	return split
+	b.data = b.data[n:]
+	return n, b
 }
 
 // String returns a string representation of the buffer. May be used for
 // debugging purposes.
-func (b *Buffer) String() string {
+func (b *buffer) String() string {
 	return fmt.Sprintf("mem.Buffer(%p, data: %p, length: %d)", b, b.ReadOnlyData(), len(b.ReadOnlyData()))
+}
+
+func ReadUnsafe(dst []byte, buf Buffer) (int, Buffer) {
+	return buf.read(dst)
+}
+
+// SplitUnsafe modifies the receiver to point to the first n bytes while it
+// returns a new reference to the remaining bytes. The returned Buffer functions
+// just like a normal reference acquired using Ref().
+func SplitUnsafe(buf Buffer, n int) (left, right Buffer) {
+	return buf.split(n)
+}
+
+type emptyBuffer struct{}
+
+func (e emptyBuffer) ReadOnlyData() []byte {
+	return nil
+}
+
+func (e emptyBuffer) Ref()  {}
+func (e emptyBuffer) Free() {}
+
+func (e emptyBuffer) Len() int {
+	return 0
+}
+
+func (e emptyBuffer) split(n int) (left, right Buffer) {
+	return e, e
+}
+
+func (e emptyBuffer) read(buf []byte) (int, Buffer) {
+	return 0, e
+}
+
+type SliceBuffer []byte
+
+func (s SliceBuffer) ReadOnlyData() []byte { return s }
+func (s SliceBuffer) Ref()                 {}
+func (s SliceBuffer) Free()                {}
+func (s SliceBuffer) Len() int             { return len(s) }
+
+func (s SliceBuffer) split(n int) (left, right Buffer) {
+	return s[:n], s[n:]
+}
+
+func (s SliceBuffer) read(buf []byte) (int, Buffer) {
+	n := copy(buf, s)
+	if n == len(s) {
+		return n, nil
+	}
+	return n, s[n:]
 }
