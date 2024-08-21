@@ -29,10 +29,10 @@ import (
 // decreased memory allocation.
 type BufferPool interface {
 	// Get returns a buffer with specified length from the pool.
-	Get(length int) []byte
+	Get(length int) *[]byte
 
 	// Put returns a buffer to the pool.
-	Put([]byte)
+	Put(*[]byte)
 }
 
 var defaultBufferPoolSizes = []int{
@@ -48,7 +48,13 @@ var defaultBufferPool BufferPool
 func init() {
 	defaultBufferPool = NewTieredBufferPool(defaultBufferPoolSizes...)
 
-	internal.SetDefaultBufferPoolForTesting = func(pool BufferPool) { defaultBufferPool = pool }
+	internal.SetDefaultBufferPoolForTesting = func(pool BufferPool) {
+		defaultBufferPool = pool
+	}
+
+	internal.SetBufferPoolingThresholdForTesting = func(threshold int) {
+		bufferPoolingThreshold = threshold
+	}
 }
 
 // DefaultBufferPool returns the current default buffer pool. It is a BufferPool
@@ -78,12 +84,12 @@ type tieredBufferPool struct {
 	fallbackPool simpleBufferPool
 }
 
-func (p *tieredBufferPool) Get(size int) []byte {
+func (p *tieredBufferPool) Get(size int) *[]byte {
 	return p.getPool(size).Get(size)
 }
 
-func (p *tieredBufferPool) Put(buf []byte) {
-	p.getPool(cap(buf)).Put(buf)
+func (p *tieredBufferPool) Put(buf *[]byte) {
+	p.getPool(cap(*buf)).Put(buf)
 }
 
 func (p *tieredBufferPool) getPool(size int) BufferPool {
@@ -111,21 +117,22 @@ type sizedBufferPool struct {
 	defaultSize int
 }
 
-func (p *sizedBufferPool) Get(size int) []byte {
-	bs := *p.pool.Get().(*[]byte)
-	return bs[:size]
+func (p *sizedBufferPool) Get(size int) *[]byte {
+	buf := p.pool.Get().(*[]byte)
+	b := *buf
+	clear(b[:cap(b)])
+	*buf = b[:size]
+	return buf
 }
 
-func (p *sizedBufferPool) Put(buf []byte) {
-	if cap(buf) < p.defaultSize {
+func (p *sizedBufferPool) Put(buf *[]byte) {
+	if cap(*buf) < p.defaultSize {
 		// Ignore buffers that are too small to fit in the pool. Otherwise, when
 		// Get is called it will panic as it tries to index outside the bounds
 		// of the buffer.
 		return
 	}
-	buf = buf[:cap(buf)]
-	clear(buf)
-	p.pool.Put(&buf)
+	p.pool.Put(buf)
 }
 
 func newSizedBufferPool(size int) *sizedBufferPool {
@@ -150,10 +157,11 @@ type simpleBufferPool struct {
 	pool sync.Pool
 }
 
-func (p *simpleBufferPool) Get(size int) []byte {
+func (p *simpleBufferPool) Get(size int) *[]byte {
 	bs, ok := p.pool.Get().(*[]byte)
 	if ok && cap(*bs) >= size {
-		return (*bs)[:size]
+		*bs = (*bs)[:size]
+		return bs
 	}
 
 	// A buffer was pulled from the pool, but it is too small. Put it back in
@@ -162,13 +170,12 @@ func (p *simpleBufferPool) Get(size int) []byte {
 		p.pool.Put(bs)
 	}
 
-	return make([]byte, size)
+	b := make([]byte, size)
+	return &b
 }
 
-func (p *simpleBufferPool) Put(buf []byte) {
-	buf = buf[:cap(buf)]
-	clear(buf)
-	p.pool.Put(&buf)
+func (p *simpleBufferPool) Put(buf *[]byte) {
+	p.pool.Put(buf)
 }
 
 var _ BufferPool = NopBufferPool{}
@@ -177,10 +184,11 @@ var _ BufferPool = NopBufferPool{}
 type NopBufferPool struct{}
 
 // Get returns a buffer with specified length from the pool.
-func (NopBufferPool) Get(length int) []byte {
-	return make([]byte, length)
+func (NopBufferPool) Get(length int) *[]byte {
+	b := make([]byte, length)
+	return &b
 }
 
 // Put returns a buffer to the pool.
-func (NopBufferPool) Put([]byte) {
+func (NopBufferPool) Put(*[]byte) {
 }
