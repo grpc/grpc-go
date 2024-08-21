@@ -156,8 +156,14 @@ func (s) TestDropByCategory(t *testing.T) {
 			if err != nil || gotSCSt.SubConn != sc1 {
 				return fmt.Errorf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
 			}
-			if gotSCSt.Done != nil {
+			if gotSCSt.Done == nil {
+				continue
+			}
+			// Fail half of the requests that are not dropped.
+			if i%4 == 1 {
 				gotSCSt.Done(balancer.DoneInfo{})
+			} else {
+				gotSCSt.Done(balancer.DoneInfo{Err: fmt.Errorf("test error")})
 			}
 		}
 		return nil
@@ -178,7 +184,8 @@ func (s) TestDropByCategory(t *testing.T) {
 		Drops:      map[string]uint64{dropReason: dropCount},
 		LocalityStats: map[string]load.LocalityData{
 			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{
-				Succeeded: rpcCount - dropCount,
+				Succeeded: (rpcCount - dropCount) / 2,
+				Errored:   (rpcCount - dropCount) / 2,
 				Issued:    rpcCount - dropCount,
 			}},
 		},
@@ -338,7 +345,9 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 			}
 			dones = append(dones, func() {
 				if gotSCSt.Done != nil {
-					gotSCSt.Done(balancer.DoneInfo{})
+					// Fail these requests to test error counts in the load
+					// report.
+					gotSCSt.Done(balancer.DoneInfo{Err: fmt.Errorf("test error")})
 				}
 			})
 		}
@@ -363,7 +372,8 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 		TotalDrops: uint64(maxRequest),
 		LocalityStats: map[string]load.LocalityData{
 			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{
-				Succeeded: uint64(rpcCount - maxRequest + 50),
+				Succeeded: uint64(rpcCount - maxRequest),
+				Errored:   50,
 				Issued:    uint64(rpcCount - maxRequest + 50),
 			}},
 		},
