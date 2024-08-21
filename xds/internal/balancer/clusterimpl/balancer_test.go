@@ -177,7 +177,10 @@ func (s) TestDropByCategory(t *testing.T) {
 		TotalDrops: dropCount,
 		Drops:      map[string]uint64{dropReason: dropCount},
 		LocalityStats: map[string]load.LocalityData{
-			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{Succeeded: rpcCount - dropCount}},
+			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{
+				Succeeded: rpcCount - dropCount,
+				Issued:    rpcCount - dropCount,
+			}},
 		},
 	}}
 
@@ -239,7 +242,10 @@ func (s) TestDropByCategory(t *testing.T) {
 		TotalDrops: dropCount2,
 		Drops:      map[string]uint64{dropReason2: dropCount2},
 		LocalityStats: map[string]load.LocalityData{
-			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{Succeeded: rpcCount - dropCount2}},
+			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{
+				Succeeded: rpcCount - dropCount2,
+				Issued:    rpcCount - dropCount2,
+			}},
 		},
 	}}
 
@@ -356,7 +362,10 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 		Service:    testServiceName,
 		TotalDrops: uint64(maxRequest),
 		LocalityStats: map[string]load.LocalityData{
-			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{Succeeded: uint64(rpcCount - maxRequest + 50)}},
+			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{
+				Succeeded: uint64(rpcCount - maxRequest + 50),
+				Issued:    uint64(rpcCount - maxRequest + 50),
+			}},
 		},
 	}}
 
