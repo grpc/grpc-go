@@ -55,8 +55,6 @@ func (cp *clientPrefaceConn) Write(b []byte) (n int, err error) {
 	if string(b) == string(ClientPreface) {
 		return 0, errors.New("force error for preface write")
 	}
-
-	// Normally write the bytes if they don't match the ClientPreface
 	return cp.Conn.Write(b)
 }
 
@@ -78,7 +76,6 @@ func (cpl *clientPrefaceLengthConn) Write(b []byte) (n int, err error) {
 		n, err = cpl.Conn.Write([]byte(incorrectPreface))
 		return n, err
 	}
-	// Normally write the bytes if they don't match the ClientPreface
 	return cpl.Conn.Write(b)
 
 }
@@ -95,8 +92,7 @@ func (fws *framerWriteSettingsConn) Write(b []byte) (n int, err error) {
 	if string(b) == string(framerWriteSettings) {
 		return 0, errors.New("force error for Framer write setting")
 	}
-	n, err = fws.Conn.Write(b)
-	return n, err
+	return fws.Conn.Write(b)
 }
 
 func dialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error) {
@@ -111,8 +107,7 @@ func (fwu *framerWindowUpdateConn) Write(b []byte) (n int, err error) {
 	if string(b) == string(framerWindowUpdate) {
 		return 0, errors.New("force error for windowupdate")
 	}
-	n, err = fwu.Conn.Write(b)
-	return n, err
+	return fwu.Conn.Write(b)
 }
 
 func dialerFramerWriteWindowUpdate(_ context.Context, addr string) (net.Conn, error) {
