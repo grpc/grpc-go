@@ -57,6 +57,7 @@ func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error)
 		var name string
 		var jsonCfg json.RawMessage
 		for name, jsonCfg = range e {
+			break
 		}
 
 		builder := balancer.Get(name)
