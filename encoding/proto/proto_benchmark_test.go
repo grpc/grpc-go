@@ -29,7 +29,7 @@ import (
 )
 
 func setupBenchmarkProtoCodecInputs(payloadBaseSize uint32) []proto.Message {
-	payloadBase := make([]byte, payloadBaseSize)
+	payloadBase := make([]byte, 0, payloadBaseSize)
 	// arbitrary byte slices
 	payloadSuffixes := [][]byte{
 		[]byte("one"),
