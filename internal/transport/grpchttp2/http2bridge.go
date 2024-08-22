@@ -85,10 +85,10 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 	switch f := f.(type) {
 	case *http2.DataFrame:
 		buf := fr.pool.Get(int(hdr.Size))
-		copy(buf, f.Data())
+		copy(*buf, f.Data())
 		return &DataFrame{
 			hdr:  hdr,
-			Data: buf,
+			Data: *buf,
 			free: func() { fr.pool.Put(buf) },
 		}, nil
 	case *http2.RSTStreamFrame:
@@ -111,21 +111,21 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 		}, nil
 	case *http2.PingFrame:
 		buf := fr.pool.Get(int(hdr.Size))
-		copy(buf, f.Data[:])
+		copy(*buf, f.Data[:])
 		return &PingFrame{
 			hdr:  hdr,
-			Data: buf,
+			Data: *buf,
 			free: func() { fr.pool.Put(buf) },
 		}, nil
 	case *http2.GoAwayFrame:
 		// Size of the frame minus the code and lastStreamID
 		buf := fr.pool.Get(int(hdr.Size) - 8)
-		copy(buf, f.DebugData())
+		copy(*buf, f.DebugData())
 		return &GoAwayFrame{
 			hdr:          hdr,
 			LastStreamID: f.LastStreamID,
 			Code:         ErrCode(f.ErrCode),
-			DebugData:    buf,
+			DebugData:    *buf,
 			free:         func() { fr.pool.Put(buf) },
 		}, nil
 	case *http2.WindowUpdateFrame:
@@ -141,10 +141,10 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 	default:
 		buf := fr.pool.Get(int(hdr.Size))
 		uf := f.(*http2.UnknownFrame)
-		copy(buf, uf.Payload())
+		copy(*buf, uf.Payload())
 		return &UnknownFrame{
 			hdr:     hdr,
-			Payload: buf,
+			Payload: *buf,
 			free:    func() { fr.pool.Put(buf) },
 		}, nil
 	}
@@ -156,19 +156,19 @@ func (fr *FramerBridge) WriteData(streamID uint32, endStream bool, data ...[]byt
 		return fr.framer.WriteData(streamID, endStream, data[0])
 	}
 
-	var buf []byte
 	tl := 0
 	for _, s := range data {
 		tl += len(s)
 	}
 
-	buf = fr.pool.Get(tl)[:0]
+	buf := fr.pool.Get(tl)
+	*buf = (*buf)[:0]
 	defer fr.pool.Put(buf)
 	for _, s := range data {
-		buf = append(buf, s...)
+		*buf = append(*buf, s...)
 	}
 
-	return fr.framer.WriteData(streamID, endStream, buf)
+	return fr.framer.WriteData(streamID, endStream, *buf)
 }
 
 // WriteHeaders writes a Headers Frame into the underlying writer.

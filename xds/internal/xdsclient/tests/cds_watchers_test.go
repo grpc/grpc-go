@@ -189,10 +189,10 @@ func (s) TestCDSWatch(t *testing.T) {
 
 			nodeID := uuid.New().String()
 			bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-				Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+				Servers: []byte(fmt.Sprintf(`[{
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+				}]`, mgmtServer.Address)),
 				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 				Authorities: map[string]json.RawMessage{
 					// Xdstp resource names used in this test do not specify an
@@ -339,10 +339,10 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 
 			nodeID := uuid.New().String()
 			bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-				Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+				Servers: []byte(fmt.Sprintf(`[{
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+				}]`, mgmtServer.Address)),
 				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 				Authorities: map[string]json.RawMessage{
 					// Xdstp resource names used in this test do not specify an
@@ -443,10 +443,10 @@ func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
@@ -736,10 +736,10 @@ func (s) TestCDSWatch_ResourceRemoved(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
@@ -917,10 +917,10 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
@@ -1009,10 +1009,10 @@ func (s) TestCDSWatch_PartialResponse(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed

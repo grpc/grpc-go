@@ -65,10 +65,10 @@ func (s) TestClientSideFederation(t *testing.T) {
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-		}`, serverDefaultAuth.Address))},
+		}]`, serverDefaultAuth.Address)),
 		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 		// Specify the address of the non-default authority.
@@ -159,10 +159,10 @@ func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-		}`, mgmtServer.Address))},
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ClientDefaultListenerResourceNameTemplate: fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%%s", authority),
 		// Specify the address of the non-default authority.

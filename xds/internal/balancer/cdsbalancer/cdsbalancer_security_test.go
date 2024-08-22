@@ -375,10 +375,10 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 	// and one that does not have certificate providers configuration.
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-		}`, mgmtServer.Address))},
+		}]`, mgmtServer.Address)),
 		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
@@ -441,10 +441,10 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 		"config": {}
 	}`, errCertProviderName))
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-		}`, mgmtServer.Address))},
+		}]`, mgmtServer.Address)),
 		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 		CertificateProviders:               map[string]json.RawMessage{e2e.ClientSideCertProviderInstance: providerCfg},
