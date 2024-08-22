@@ -21,12 +21,13 @@ package grpc
 // ServerStreamingClient represents the client side of a server-streaming (one
 // request, many responses) RPC. It is generic over the type of the response
 // message. It is used in generated code.
-// If an error occurs on the stream, it will be returned as an instance of the status
-// package. Refer to the status package documentation for more details.
+// If an error occurs on the stream, it will be compatible with the status
+// package.
 type ServerStreamingClient[Res any] interface {
 	// Recv receives the next message from the server. The client can repeatedly
-	// call Recv to read messages from the server-to-client response stream. Recv
-	// returns (nil, io.EOF) once the server-to-client stream is completely read.
+	// call Recv to read messages from the server-to-client response stream.
+	// Recv returns (nil, io.EOF) once the server-to-client stream is completely
+	// read.
 	Recv() (*Res, error)
 	ClientStream
 }
@@ -34,10 +35,9 @@ type ServerStreamingClient[Res any] interface {
 // ServerStreamingServer represents the server side of a server-streaming (one
 // request, many responses) RPC. It is generic over the type of the response
 // message. It is used in generated code.
-// If an error occurs on the stream, it will be returned as an instance of the status
-// package. Refer to the status package documentation for more details.
-// End-of-stream for the server-to-client stream is indicated by the return of
-// the handler method.
+// If an error occurs on the stream, it will be compatible with the status
+// package. End-of-stream for the server-to-client stream is indicated by the
+// return of the handler method.
 type ServerStreamingServer[Res any] interface {
 	// Send can send a stream of messages to the client. Server handler may call
 	// Send multiple times to send multiple messages to the client.
@@ -49,16 +49,17 @@ type ServerStreamingServer[Res any] interface {
 // requests, one response) RPC. It is generic over both the type of the request
 // message stream and the type of the unary response message. It is used in
 // generated code.
-// If an error occurs on the stream, it will be returned as an instance of the
-// status package. Refer to the status package documentation for more details.
+// If an error occurs on the stream, it will be compatible with the status
+// package.
 type ClientStreamingClient[Req any, Res any] interface {
-	// Send sends a request message to the server. The client can repeatedly call
-	// Send to send messages as part of the client-to-server request stream.
+	// Send sends a request message to the server. The client can repeatedly
+	// call Send to send messages as part of the client-to-server request stream.
 	Send(*Req) error
 
-	// CloseAndRecv closes the client-to-server request stream and waits for the server's
-	// unary response. This method must be called once and only once after sending all
-	// request messages to close the stream and receive the final response from the server.
+	// CloseAndRecv closes the client-to-server request stream and waits for the
+	// server's unary response. This method must be called once and only once
+	// after sending all request messages to close the stream and receive the
+	// final response from the server.
 	CloseAndRecv() (*Res, error)
 	ClientStream
 }
@@ -67,17 +68,18 @@ type ClientStreamingClient[Req any, Res any] interface {
 // requests, one response) RPC. It is generic over both the type of the request
 // message stream and the type of the unary response message. It is used in
 // generated code.
-// If an error occurs on the stream, it will be returned as an instance of the
-// status package. Refer to the status package documentation for more details.
+// If an error occurs on the stream, it will be compatible with the status
+// package.
 type ClientStreamingServer[Req any, Res any] interface {
 	// Recv reads a request message from the client. This method can be called
-	// repeatedly to receive the full stream of messages from the client. Recv returns
-	// (nil, io.EOF) once the end of the stream is reached.
+	// repeatedly to receive the full stream of messages from the client. Recv
+	// returns (nil, io.EOF) once the end of the stream is reached.
 	Recv() (*Req, error)
 
-	// SendAndClose sends a single response message to the client and closes the stream.
-	// This method must be called once and only once after all request messages have
-	// been processed. No further methods should be called after SendAndClose.
+	// SendAndClose sends a single response message to the client and closes the
+	// stream. This method must be called once and only once after all request
+	// messages have been processed. No further methods should be called after
+	// SendAndClose.
 	SendAndClose(*Res) error
 	ServerStream
 }
@@ -86,18 +88,18 @@ type ClientStreamingServer[Req any, Res any] interface {
 // (many requests, many responses) RPC. It is generic over both the type of the
 // request message stream and the type of the response message stream. It is
 // used in generated code.
-// If an error occurs on the stream, it will be returned as an instance of the
-// status package. Refer to the status package documentation for more details.
-// End-of-stream for the client-to-server stream can be indicated by calling
-// the CloseSend method.
+// If an error occurs on the stream, it will be compatible with the status
+// package. End-of-stream for the client-to-server stream can be indicated by
+// calling the CloseSend method.
 type BidiStreamingClient[Req any, Res any] interface {
 	// Send sends a message to the server. This method can be called repeatedly
 	// to send messages as part of the client-to-server request stream.
 	Send(*Req) error
 
-	// Recv receives the next message from the server's response stream. This method
-	// can be called repeatedly to receive all messages sent by the server. Recv returns
-	// (nil, io.EOF) once the server-to-client stream is completely read.
+	// Recv receives the next message from the server's response stream. This
+	// method can be called repeatedly to receive all messages sent by the server.
+	// Recv returns (nil, io.EOF) once the server-to-client stream is completely
+	// read.
 	Recv() (*Res, error)
 	ClientStream
 }
@@ -106,13 +108,13 @@ type BidiStreamingClient[Req any, Res any] interface {
 // (many requests, many responses) RPC. It is generic over both the type of the
 // request message stream and the type of the response message stream. It is
 // used in generated code.
-// If an error occurs on the stream, it will be returned as an instance of the status
-// package. Refer to the status package documentation for more details.
-// The end of the response stream is indicated by the return of the bidi method handler.
+// If an error occurs on the stream, it will be compatible with the status
+// package. The end of the response stream is indicated by the return of the
+// bidi method handler.
 type BidiStreamingServer[Req any, Res any] interface {
-	// Recv receives a request message from the client. The server-side handler can
-	// repeatedly call Recv to read the request message stream. Recv returns (nil, io.EOF)
-	// once the end of the client-to-server stream is reached.
+	// Recv receives a request message from the client. The server-side handler
+	// can repeatedly call Recv to read the request message stream. Recv returns
+	// (nil, io.EOF) once the end of the client-to-server stream is reached.
 	Recv() (*Req, error)
 
 	// Send sends a response message to the client. The server-side handler can
