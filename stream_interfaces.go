@@ -37,8 +37,8 @@ type ServerStreamingClient[Res any] interface {
 // message. It is used in generated code.
 //
 // The error returned will be compatible to the status package.
-// End-of-stream for the server-to-client stream is indicated by the return of
-// the handler method.
+// End-of-stream for the server-to-client stream is indicated by the return
+// of the handler method.
 type ServerStreamingServer[Res any] interface {
 	// Send can send a stream of messages to the client. Server handler may call
 	// Send multiple times to send multiple messages to the client.
