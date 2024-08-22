@@ -97,9 +97,9 @@ type BidiStreamingClient[Req any, Res any] interface {
 	Send(*Req) error
 
 	// Recv receives the next message from the server's response stream. This
-	// method can be called repeatedly to receive all messages sent by the server.
-	// Recv returns (nil, io.EOF) once the server-to-client stream is completely
-	// read.
+	// method can be called repeatedly to receive all messages sent by the
+	// server. Recv returns (nil, io.EOF) once the server-to-client stream is
+	// completely read.
 	Recv() (*Res, error)
 	ClientStream
 }
