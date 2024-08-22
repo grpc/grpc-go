@@ -19,8 +19,9 @@
 /*
 Package main demonstrates a gRPC client using a custom load balancer with a
 1:2 address distribution ratio.
-It sets up a gRPC client with a custom round-robin load balancer, verifies the distribution
-of RPC calls between two addresses, and ensures the correct load balancing ratio.
+It sets up a gRPC client with a custom round-robin load balancer, verifies
+the distribution of RPC calls between two addresses, and ensures the correct
+load balancing ratio.
 */
 package main
 
