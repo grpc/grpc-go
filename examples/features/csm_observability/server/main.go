@@ -16,6 +16,19 @@
  *
  */
 
+/*
+Package main implements a gRPC server with OpenTelemetry metrics and Prometheus
+exporter integration.
+This package sets up a gRPC server that listens on a specified port and provides
+an implementation of the Echo service. The server is configured to collect and
+export metrics using OpenTelemetry and Prometheus. The metrics are exposed
+through a Prometheus endpoint, allowing for monitoring and observability of the
+gRPC server's performance.
+The server starts by initializing the Prometheus exporter and OpenTelemetry
+metrics provider. It then sets up and serves the gRPC Echo service while
+continuously exposing metrics data to the Prometheus endpoint. The server
+ensures proper cleanup of observability resources upon shutdown.
+*/
 package main
 
 import (
