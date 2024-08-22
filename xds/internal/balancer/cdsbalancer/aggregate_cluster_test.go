@@ -445,7 +445,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 }
 
 // Tests the scenario where an aggregate cluster exceeds the maximum depth,
-// which is 16. Verfies that the channel moves to TRANSIENT_FAILURE, and the
+// which is 16. Verifies that the channel moves to TRANSIENT_FAILURE, and the
 // error is propagated to RPC callers. The test then modifies the graph to no
 // longer exceed maximum depth, but be at the maximum allowed depth, and
 // verifies that an RPC can be made successfully.
@@ -678,7 +678,7 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 // cluster (EDS or Logical DNS), no configuration should be pushed to the child
 // policy.  The channel is expected to move to TRANSIENT_FAILURE and RPCs are
 // expected to fail with code UNAVAILABLE and an error message specifying that
-// the aggregate cluster grpah no leaf clusters.  Then the test updates A -> B,
+// the aggregate cluster graph has no leaf clusters.  Then the test updates A -> B,
 // where B is a leaf EDS cluster. Verifies that configuration is pushed to the
 // child policy and that an RPC can be successfully made.
 func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {

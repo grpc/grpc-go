@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2023 gRPC authors.
+ * Copyright 2024 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,33 +16,11 @@
  *
  */
 
-package grpc
+// Package internal contains functionality internal to the grpclog package.
+package internal
 
-import "testing"
+// LoggerV2Impl is the logger used for the non-depth log functions.
+var LoggerV2Impl LoggerV2
 
-func (s) TestSharedBufferPool(t *testing.T) {
-	pools := []SharedBufferPool{
-		nopBufferPool{},
-		NewSharedBufferPool(),
-	}
-
-	lengths := []int{
-		level4PoolMaxSize + 1,
-		level4PoolMaxSize,
-		level3PoolMaxSize,
-		level2PoolMaxSize,
-		level1PoolMaxSize,
-		level0PoolMaxSize,
-	}
-
-	for _, p := range pools {
-		for _, l := range lengths {
-			bs := p.Get(l)
-			if len(bs) != l {
-				t.Fatalf("Expected buffer of length %d, got %d", l, len(bs))
-			}
-
-			p.Put(&bs)
-		}
-	}
-}
+// DepthLoggerV2Impl is the logger used for the depth log functions.
+var DepthLoggerV2Impl DepthLoggerV2

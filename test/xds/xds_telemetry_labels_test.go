@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/stats"
@@ -53,7 +54,7 @@ const localityValue = `{"region":"region-1","zone":"zone-1","subZone":"subzone-1
 // handler asserts that subsequent HandleRPC calls from the RPC lifecycle
 // contain telemetry labels that it can see.
 func (s) TestTelemetryLabels(t *testing.T) {
-	managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()

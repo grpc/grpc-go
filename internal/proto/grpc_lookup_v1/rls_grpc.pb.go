@@ -92,7 +92,7 @@ type UnsafeRouteLookupServiceServer interface {
 }
 
 func RegisterRouteLookupServiceServer(s grpc.ServiceRegistrar, srv RouteLookupServiceServer) {
-	// If the following call pancis, it indicates UnimplementedRouteLookupServiceServer was
+	// If the following call panics, it indicates UnimplementedRouteLookupServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.

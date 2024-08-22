@@ -33,6 +33,7 @@ import (
 
 	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -203,7 +204,7 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 		if tt.modrw != nil {
 			rw = tt.modrw(rw)
 		}
-		got, gotErr := NewServerHandlerTransport(rw, tt.req, nil)
+		got, gotErr := NewServerHandlerTransport(rw, tt.req, nil, mem.DefaultBufferPool())
 		if (gotErr != nil) != (tt.wantErr != "") || (gotErr != nil && gotErr.Error() != tt.wantErr) {
 			t.Errorf("%s: error = %q; want %q", tt.name, gotErr.Error(), tt.wantErr)
 			continue
@@ -259,7 +260,7 @@ func newHandleStreamTest(t *testing.T) *handleStreamTest {
 		Body: bodyr,
 	}
 	rw := newTestHandlerResponseWriter().(testHandlerResponseWriter)
-	ht, err := NewServerHandlerTransport(rw, req, nil)
+	ht, err := NewServerHandlerTransport(rw, req, nil, mem.DefaultBufferPool())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,7 +375,7 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		Body: bodyr,
 	}
 	rw := newTestHandlerResponseWriter().(testHandlerResponseWriter)
-	ht, err := NewServerHandlerTransport(rw, req, nil)
+	ht, err := NewServerHandlerTransport(rw, req, nil, mem.DefaultBufferPool())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,7 +440,7 @@ func (s) TestHandlerTransport_HandleStreams_WriteStatusWrite(t *testing.T) {
 		st.bodyw.Close() // no body
 
 		st.ht.WriteStatus(s, status.New(codes.OK, ""))
-		st.ht.Write(s, []byte("hdr"), []byte("data"), &Options{})
+		st.ht.Write(s, []byte("hdr"), newBufferSlice([]byte("data")), &Options{})
 	})
 }
 

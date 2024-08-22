@@ -72,10 +72,10 @@ func DefaultBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
 
 	// Create the bootstrap configuration.
 	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": "passthrough:///%s",
 			"channel_creds": [{"type": "insecure"}]
-		}`, serverURI))},
+		}]`, serverURI)),
 		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		CertificateProviders:               cpc,
 		ServerListenerResourceNameTemplate: ServerListenerResourceNameTemplate,

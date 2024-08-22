@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
@@ -64,10 +65,10 @@ func (s) TestClientSideFederation(t *testing.T) {
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-		}`, serverDefaultAuth.Address))},
+		}]`, serverDefaultAuth.Address)),
 		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 		// Specify the address of the non-default authority.
@@ -149,7 +150,7 @@ func (s) TestClientSideFederation(t *testing.T) {
 // supported with new xdstp style names for LDS only while using the old style
 // for other resources. This test in addition also checks that when service name
 // contains escapable characters, we "fully" encode it for looking up
-// VirtualHosts in xDS RouteConfigurtion.
+// VirtualHosts in xDS RouteConfiguration.
 func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 	// Start a management server as a sophisticated authority.
 	const authority = "traffic-manager.xds.notgoogleapis.com"
@@ -158,10 +159,10 @@ func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-		}`, mgmtServer.Address))},
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ClientDefaultListenerResourceNameTemplate: fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%%s", authority),
 		// Specify the address of the non-default authority.
@@ -250,7 +251,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	// server and actually making an RPC ensures that the xDS client is
 	// configured properly, and when we dial with an unknown authority in the
 	// next step, we can be sure that the error we receive is legitimate.
-	managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
@@ -298,7 +299,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 // with an authority which is not specified in the bootstrap configuration. The
 // test verifies that RPCs fail with an appropriate error.
 func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
-	mgmtServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	// LDS is old style name.
 	// RDS is new style, with an unknown authority.

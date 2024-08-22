@@ -185,7 +185,7 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 			tr, err := transport.New(transport.Options{
 				ServerCfg: serverCfg,
 				// No validation. Simply push received resources on a channel.
-				OnRecvHandler: func(update transport.ResourceUpdate) error {
+				OnRecvHandler: func(update transport.ResourceUpdate, _ *transport.ADSFlowControl) error {
 					resourcesCh.Send(&resourcesWithTypeURL{
 						resources: update.Resources,
 						url:       update.URL,
@@ -238,10 +238,8 @@ func (s) TestEmptyListenerResourceOnStreamRestart(t *testing.T) {
 	}
 	nodeProto := &v3corepb.Node{Id: uuid.New().String()}
 	tr, err := transport.New(transport.Options{
-		ServerCfg: serverCfg,
-		OnRecvHandler: func(update transport.ResourceUpdate) error {
-			return nil
-		},
+		ServerCfg:      serverCfg,
+		OnRecvHandler:  func(transport.ResourceUpdate, *transport.ADSFlowControl) error { return nil },
 		OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No onSend handling.
 		OnErrorHandler: func(error) {},                                      // No stream error handling.
 		Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.
@@ -331,10 +329,8 @@ func (s) TestEmptyClusterResourceOnStreamRestartWithListener(t *testing.T) {
 	}
 	nodeProto := &v3corepb.Node{Id: uuid.New().String()}
 	tr, err := transport.New(transport.Options{
-		ServerCfg: serverCfg,
-		OnRecvHandler: func(update transport.ResourceUpdate) error {
-			return nil
-		},
+		ServerCfg:      serverCfg,
+		OnRecvHandler:  func(transport.ResourceUpdate, *transport.ADSFlowControl) error { return nil },
 		OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No onSend handling.
 		OnErrorHandler: func(error) {},                                      // No stream error handling.
 		Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.

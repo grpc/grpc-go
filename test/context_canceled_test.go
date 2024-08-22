@@ -158,4 +158,7 @@ func (s) TestCancelWhileRecvingWithCompression(t *testing.T) {
 			}
 		}
 	}
+	if err := ss.CC.Close(); err != nil {
+		t.Fatalf("Close failed with %v, want nil", err)
+	}
 }

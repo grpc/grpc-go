@@ -642,7 +642,7 @@ func (s) TestConnectParamsWithMinConnectTimeout(t *testing.T) {
 	defer conn.Close()
 
 	if got := conn.dopts.minConnectTimeout(); got != mct {
-		t.Errorf("unexpect minConnectTimeout on the connection: %v, want %v", got, mct)
+		t.Errorf("unexpected minConnectTimeout on the connection: %v, want %v", got, mct)
 	}
 }
 

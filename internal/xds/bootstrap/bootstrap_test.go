@@ -429,6 +429,10 @@ func (s) TestGetConfiguration_Success(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			origFallbackEnv := envconfig.XDSFallbackSupport
+			envconfig.XDSFallbackSupport = true
+			defer func() { envconfig.XDSFallbackSupport = origFallbackEnv }()
+
 			testGetConfigurationWithFileNameEnv(t, test.name, false, test.wantConfig)
 			testGetConfigurationWithFileContentEnv(t, test.name, false, test.wantConfig)
 		})
@@ -1193,4 +1197,79 @@ func (s) TestNode_ToProto(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Tests the case where the xDS fallback env var is set to false, and verifies
+// that only the first server from the list of server configurations is used.
+func (s) TestGetConfiguration_FallbackDisabled(t *testing.T) {
+	// TODO(easwars): Default value of "GRPC_EXPERIMENTAL_XDS_FALLBACK"
+	// env var is currently false. When the default is changed to true,
+	// explicitly set it to false here.
+
+	cancel := setupBootstrapOverride(map[string]string{
+		"multipleXDSServers": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [
+				{
+					"server_uri": "trafficdirector.googleapis.com:443",
+					"channel_creds": [{ "type": "google_default" }],
+					"server_features": ["xds_v3"]
+				},
+				{
+					"server_uri": "backup.never.use.com:1234",
+					"channel_creds": [{ "type": "google_default" }]
+				}
+			],
+			"authorities": {
+				"xds.td.com": {
+					"xds_servers": [
+						{
+							"server_uri": "td.com",
+							"channel_creds": [ { "type": "google_default" } ],
+							"server_features" : ["xds_v3"]
+						},
+						{
+							"server_uri": "backup.never.use.com:1234",
+							"channel_creds": [{ "type": "google_default" }]
+						}
+					]
+				}
+			}
+		}`,
+	})
+	defer cancel()
+
+	wantConfig := &Config{
+		xDSServers: []*ServerConfig{{
+			serverURI:      "trafficdirector.googleapis.com:443",
+			channelCreds:   []ChannelCreds{{Type: "google_default"}},
+			serverFeatures: []string{"xds_v3"},
+			selectedCreds:  ChannelCreds{Type: "google_default"},
+		}},
+		node: v3Node,
+		clientDefaultListenerResourceNameTemplate: "%s",
+		authorities: map[string]*Authority{
+			"xds.td.com": {
+				ClientListenerResourceNameTemplate: "xdstp://xds.td.com/envoy.config.listener.v3.Listener/%s",
+				XDSServers: []*ServerConfig{{
+					serverURI:      "td.com",
+					channelCreds:   []ChannelCreds{{Type: "google_default"}},
+					serverFeatures: []string{"xds_v3"},
+					selectedCreds:  ChannelCreds{Type: "google_default"},
+				}},
+			},
+		},
+	}
+	t.Run("bootstrap_file_name", func(t *testing.T) {
+		testGetConfigurationWithFileNameEnv(t, "multipleXDSServers", false, wantConfig)
+	})
+	t.Run("bootstrap_file_contents", func(t *testing.T) {
+		testGetConfigurationWithFileContentEnv(t, "multipleXDSServers", false, wantConfig)
+	})
 }

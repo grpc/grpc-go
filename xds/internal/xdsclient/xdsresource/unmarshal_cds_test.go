@@ -355,7 +355,7 @@ func (s) TestSecurityConfigFromCommonTLSContextUsingNewFields_ErrorCases(t *test
 					},
 				},
 			},
-			wantErr: "unsupported require_sugned_ceritificate_timestamp field in CommonTlsContext message",
+			wantErr: "unsupported require_signed_certificate_timestamp field in CommonTlsContext message",
 		},
 		{
 			name: "unsupported-field-crl-in-validation-context",

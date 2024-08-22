@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -83,7 +84,7 @@ func ringhashCluster(clusterName, edsServiceName string) *v3clusterpb.Cluster {
 // propagated to pick the ring_hash policy. It doesn't test the affinity
 // behavior in ring_hash policy.
 func (s) TestClientSideAffinitySanityCheck(t *testing.T) {
-	managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()

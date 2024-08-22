@@ -30,6 +30,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
@@ -38,6 +39,82 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
+
+// TestUnsupportedEncodingResponse validates gRPC status codes
+// for different client-server compression setups
+// ensuring the correct behavior when compression is enabled or disabled on either side.
+func (s) TestUnsupportedEncodingResponse(t *testing.T) {
+	tests := []struct {
+		name           string
+		clientCompress bool
+		serverCompress bool
+		wantStatus     codes.Code
+	}{
+		{
+			name:           "client_server_compression",
+			clientCompress: true,
+			serverCompress: true,
+			wantStatus:     codes.OK,
+		},
+		{
+			name:           "client_compression",
+			clientCompress: true,
+			serverCompress: false,
+			wantStatus:     codes.Unimplemented,
+		},
+		{
+			name:           "server_compression",
+			clientCompress: false,
+			serverCompress: true,
+			wantStatus:     codes.Internal,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ss := &stubserver.StubServer{
+				UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					return &testpb.SimpleResponse{Payload: in.Payload}, nil
+				},
+			}
+			sopts := []grpc.ServerOption{}
+			if test.serverCompress {
+				// Using deprecated methods to selectively apply compression
+				// only on the server side. With encoding.registerCompressor(),
+				// the compressor is applied globally, affecting client and server
+				sopts = append(sopts, grpc.RPCCompressor(newNopCompressor()), grpc.RPCDecompressor(newNopDecompressor()))
+			}
+			if err := ss.StartServer(sopts...); err != nil {
+				t.Fatalf("Error starting server: %v", err)
+			}
+			defer ss.Stop()
+
+			dopts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+			if test.clientCompress {
+				// UseCompressor() requires the compressor to be registered
+				// using encoding.RegisterCompressor() which applies compressor globally,
+				// Hence, using deprecated WithCompressor() and WithDecompressor()
+				// to apply compression only on client.
+				dopts = append(dopts, grpc.WithCompressor(newNopCompressor()), grpc.WithDecompressor(newNopDecompressor()))
+			}
+			if err := ss.StartClient(dopts...); err != nil {
+				t.Fatalf("Error starting client: %v", err)
+			}
+
+			payload := &testpb.SimpleRequest{
+				Payload: &testpb.Payload{
+					Body: []byte("test message"),
+				},
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			_, err := ss.Client.UnaryCall(ctx, payload)
+			if got, want := status.Code(err), test.wantStatus; got != want {
+				t.Errorf("Client.UnaryCall() = %v, want %v", got, want)
+			}
+		})
+	}
+}
 
 func (s) TestCompressServerHasNoSupport(t *testing.T) {
 	for _, e := range listTestEnv() {

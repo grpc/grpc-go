@@ -114,7 +114,7 @@ func (s) TestStreamCleanupAfterSendStatus(t *testing.T) {
 	// It will close the connection if there's no active streams. This won't
 	// happen because of the pending stream. But if there's a bug in stream
 	// cleanup that causes stream to be removed too aggressively, the connection
-	// will be closd and the stream will be broken.
+	// will be closed and the stream will be broken.
 	gracefulStopDone := make(chan struct{})
 	go func() {
 		defer close(gracefulStopDone)

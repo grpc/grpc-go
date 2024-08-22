@@ -604,7 +604,7 @@ func (s) TestPendingReplacedByAnotherPending(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error constructing newSubConn in gsb: %v", err)
 	}
-	// This picker never returns an error, which can help this this test verify
+	// This picker never returns an error, which can help this test verify
 	// whether this cached state will get cleared on a new pending balancer
 	// (will replace it with a picker that always errors).
 	pendBal.updateState(balancer.State{
@@ -672,7 +672,7 @@ func (p *neverErrPicker) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 
 // TestUpdateSubConnStateRace tests the race condition when the graceful switch
 // load balancer receives a SubConnUpdate concurrently with an UpdateState()
-// call, which can cause the balancer to forward the update to to be closed and
+// call, which can cause the balancer to forward the update to be closed and
 // cleared. The balancer API guarantees to never call any method the balancer
 // after a Close() call, and the test verifies that doesn't happen within the
 // graceful switch load balancer.

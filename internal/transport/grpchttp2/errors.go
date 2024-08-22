@@ -30,6 +30,7 @@ import "fmt"
 // [GOAWAY]: https://httpwg.org/specs/rfc7540.html#GOAWAY
 type ErrCode uint32
 
+// Error Codes defined by the HTTP/2 Spec.
 const (
 	ErrCodeNoError            ErrCode = 0x0
 	ErrCodeProtocol           ErrCode = 0x1
@@ -43,7 +44,7 @@ const (
 	ErrCodeCompression        ErrCode = 0x9
 	ErrCodeConnect            ErrCode = 0xa
 	ErrCodeEnhanceYourCalm    ErrCode = 0xb
-	ErrCodeIndaequateSecurity ErrCode = 0xc
+	ErrCodeInadequateSecurity ErrCode = 0xc
 	ErrCodeHTTP11Required     ErrCode = 0xd
 )
 
@@ -60,7 +61,7 @@ var errorCodeNames = map[ErrCode]string{
 	ErrCodeCompression:        "COMPRESSION_ERROR",
 	ErrCodeConnect:            "CONNECT_ERROR",
 	ErrCodeEnhanceYourCalm:    "ENHANCE_YOUR_CALM",
-	ErrCodeIndaequateSecurity: "INADEQUATE_SECURITY",
+	ErrCodeInadequateSecurity: "INADEQUATE_SECURITY",
 	ErrCodeHTTP11Required:     "HTTP_1_1_REQUIRED",
 }
 

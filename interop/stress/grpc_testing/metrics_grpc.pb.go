@@ -128,7 +128,7 @@ type UnsafeMetricsServiceServer interface {
 }
 
 func RegisterMetricsServiceServer(s grpc.ServiceRegistrar, srv MetricsServiceServer) {
-	// If the following call pancis, it indicates UnimplementedMetricsServiceServer was
+	// If the following call panics, it indicates UnimplementedMetricsServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.

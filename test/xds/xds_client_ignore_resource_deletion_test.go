@@ -260,22 +260,22 @@ func testResourceDeletionNotIgnored(t *testing.T, initialResource func(string) e
 // This helper generates a custom bootstrap config for the test.
 func generateBootstrapContents(t *testing.T, serverURI string, ignoreResourceDeletion bool, nodeID string) []byte {
 	t.Helper()
-	var serverCfg json.RawMessage
+	var serverCfgs json.RawMessage
 	if ignoreResourceDeletion {
-		serverCfg = []byte(fmt.Sprintf(`{
+		serverCfgs = []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}],
 			"server_features": ["ignore_resource_deletion"]
-		}`, serverURI))
+		}]`, serverURI))
 	} else {
-		serverCfg = []byte(fmt.Sprintf(`{
+		serverCfgs = []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-		}`, serverURI))
+		}]`, serverURI))
 
 	}
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers:                            []json.RawMessage{serverCfg},
+		Servers:                            serverCfgs,
 		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})

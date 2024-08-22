@@ -300,7 +300,7 @@ func timerBeginIsBefore(ti *ppb.Timer, tj *ppb.Timer) bool {
 	return ti.BeginSec < tj.BeginSec
 }
 
-// streamStatsCatapulJSON receives a *snapshot and the name of a JSON file to
+// streamStatsCatapultJSON receives a *snapshot and the name of a JSON file to
 // write to. The grpc-go profiling snapshot is processed and converted to a
 // JSON format that can be understood by trace-viewer.
 func streamStatsCatapultJSON(s *snapshot, streamStatsCatapultJSONFileName string) (err error) {
