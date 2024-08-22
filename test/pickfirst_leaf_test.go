@@ -534,7 +534,7 @@ func (b *stateStoringBalancerBuilder) Build(cc balancer.ClientConn, opts balance
 	bal := &stateStoringBalancer{
 		resolverUpdateSeen: make(chan struct{}, 1),
 	}
-	bal.Balancer = balancer.Get(pickfirstleaf.PickFirstLeafName).Build(&stateStoringCCWrapper{cc, bal}, opts)
+	bal.Balancer = balancer.Get(pickfirstleaf.Name).Build(&stateStoringCCWrapper{cc, bal}, opts)
 	b.balancerChan <- bal
 	return bal
 }

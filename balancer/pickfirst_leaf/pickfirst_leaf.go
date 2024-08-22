@@ -43,7 +43,7 @@ func init() {
 	if envconfig.NewPickFirstEnabled {
 		internal.ShuffleAddressListForTesting = func(n int, swap func(i, j int)) { rand.Shuffle(n, swap) }
 		// Register as the default pick_first balancer.
-		PickFirstLeafName = "pick_first"
+		Name = "pick_first"
 	}
 	balancer.Register(pickfirstBuilder{})
 }
@@ -51,10 +51,10 @@ func init() {
 var (
 	logger            = grpclog.Component("pick-first-leaf-lb")
 	errBalancerClosed = fmt.Errorf("pickfirst: LB policy is closed")
-	// PickFirstLeafName is the name of the pick_first_leaf balancer.
+	// Name is the name of the pick_first_leaf balancer.
 	// Can be changed in init() if this balancer is to be registered as the default
 	// pickfirst.
-	PickFirstLeafName = "pick_first_leaf"
+	Name = "pick_first_leaf"
 )
 
 const logPrefix = "[pick-first-leaf-lb %p] "
@@ -69,14 +69,14 @@ func (pickfirstBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) b
 		subConns:         resolver.NewAddressMap(),
 		serializer:       grpcsync.NewCallbackSerializer(ctx),
 		serializerCancel: cancel,
-		state:            connectivity.Idle,
+		state:            connectivity.Connecting,
 	}
 	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(logPrefix, b))
 	return b
 }
 
 func (b pickfirstBuilder) Name() string {
-	return PickFirstLeafName
+	return Name
 }
 
 func (pickfirstBuilder) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
@@ -199,7 +199,7 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 	}
 	cfg, ok := state.BalancerConfig.(pfConfig)
 	if state.BalancerConfig != nil && !ok {
-		return fmt.Errorf("pickfirst: received illegal BalancerConfig (type %T): %v", state.BalancerConfig, state.BalancerConfig)
+		return fmt.Errorf("pickfirst: received illegal BalancerConfig (type %T): %v: %w", state.BalancerConfig, state.BalancerConfig, balancer.ErrBadResolverState)
 	}
 
 	if b.logger.V(2) {
@@ -222,9 +222,9 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 	b.firstPass = true
 	// If multiple endpoints have the same address, they would use the same
 	// subconn because an AddressMap is used to store subconns.
-	// This would result in attempting to connect to the same subconn multiple times
-	// in the same pass. We don't want this, so we ensure each address is present
-	// in only one endpoint before moving further.
+	// This would result in attempting to connect to the same subconn multiple
+	// times in the same pass. We don't want this, so we ensure each address is
+	// present in only one endpoint before moving further.
 	newEndpoints = deDupAddresses(newEndpoints)
 
 	// Perform the optional shuffling described in gRFC A62. The shuffling will
@@ -235,49 +235,24 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 		internal.ShuffleAddressListForTesting.(func(int, func(int, int)))(len(newEndpoints), func(i, j int) { newEndpoints[i], newEndpoints[j] = newEndpoints[j], newEndpoints[i] })
 	}
 
-	if b.state == connectivity.Ready {
-		// If the previous ready subconn exists in new address list,
-		// keep this connection and don't create new subconns.
-		prevAddr := b.addressIndex.currentAddress()
-		b.addressIndex.updateEndpointList(newEndpoints)
-		if b.addressIndex.seekTo(prevAddr) {
-			return nil
-		}
-	} else {
-		b.addressIndex.updateEndpointList(newEndpoints)
+	// If the previous ready subconn exists in new address list,
+	// keep this connection and don't create new subconns.
+	prevAddr := b.addressIndex.currentAddress()
+	prevAddrsCount := b.addressIndex.size()
+	b.addressIndex.updateEndpointList(newEndpoints)
+	if b.state == connectivity.Ready && b.addressIndex.seekTo(prevAddr) {
+		return nil
 	}
 
-	// Remove old subConns that were not in new address list.
-	oldAddrs := resolver.NewAddressMap()
-	for _, k := range b.subConns.Keys() {
-		oldAddrs.Set(k, true)
-	}
-
-	// Flatten the new endpoint addresses.
-	newAddrs := resolver.NewAddressMap()
-	for _, endpoint := range newEndpoints {
-		for _, addr := range endpoint.Addresses {
-			newAddrs.Set(addr, true)
-		}
-	}
-
-	// Shut them down and remove them.
-	for _, oldAddr := range oldAddrs.Keys() {
-		if _, ok := newAddrs.Get(oldAddr); ok {
-			continue
-		}
-		val, _ := b.subConns.Get(oldAddr)
-		val.(*scData).subConn.Shutdown()
-		b.subConns.Delete(oldAddr)
-	}
-
-	// If its the first resolver update or the balancer was already READY or
-	// or CONNECTING, enter CONNECTING.
+	b.reconcileSubConns(newEndpoints)
+	// If its the first resolver update or the balancer was already READY
+	// (but the new address list does not contain the ready subconn) or
+	// CONNECTING, enter CONNECTING.
 	// We may be in TRANSIENT_FAILURE due to a previous empty address list,
 	// we should still enter CONNECTING because the sticky TF behaviour mentioned
-	// in A62 applied only when the TRANSIENT_FAILURE is reported dur to connectivity
+	// in A62 applies only when the TRANSIENT_FAILURE is reported due to connectivity
 	// failures.
-	if b.state == connectivity.Ready || b.state == connectivity.Connecting || oldAddrs.Len() == 0 {
+	if b.state == connectivity.Ready || b.state == connectivity.Connecting || prevAddrsCount == 0 {
 		// Start connection attempt at first address.
 		b.state = connectivity.Connecting
 		b.cc.UpdateState(balancer.State{
@@ -285,13 +260,6 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 			Picker:            &picker{err: balancer.ErrNoSubConnAvailable},
 		})
 		b.requestConnection()
-	} else if b.state == connectivity.Idle {
-		// If this is not the first resolver update and we're in IDLE, remain
-		// in IDLE until the picker is used.
-		b.cc.UpdateState(balancer.State{
-			ConnectivityState: connectivity.Idle,
-			Picker:            &idlePicker{exitIdle: b.ExitIdle},
-		})
 	} else if b.state == connectivity.TransientFailure {
 		// If we're in TRANSIENT_FAILURE, we stay in TRANSIENT_FAILURE until
 		// we're READY. See A62.
@@ -308,42 +276,28 @@ func (b *pickfirstBalancer) UpdateSubConnState(subConn balancer.SubConn, state b
 
 func (b *pickfirstBalancer) Close() {
 	b.serializer.TrySchedule(func(_ context.Context) {
-		b.close()
+		b.closeSubConns()
+		b.state = connectivity.Shutdown
 	})
-	<-b.serializer.Done()
-}
-
-// close closes the balancer.
-// Only executed in the context of a serializer callback.
-func (b *pickfirstBalancer) close() {
 	b.serializerCancel()
-	b.closeSubConns()
-	b.state = connectivity.Shutdown
+	<-b.serializer.Done()
 }
 
 // ExitIdle moves the balancer out of idle state. It can be called concurrently
 // by the idlePicker and clientConn so access to variables should be synchronized.
 func (b *pickfirstBalancer) ExitIdle() {
 	b.serializer.TrySchedule(func(_ context.Context) {
-		b.exitIdle()
+		if b.state == connectivity.Idle {
+			b.requestConnection()
+		}
 	})
-}
-
-// exitIdle starts a connection attempt if not already started.
-// Only executed in the context of a serializer callback.
-func (b *pickfirstBalancer) exitIdle() {
-	if b.state == connectivity.Idle {
-		b.requestConnection()
-	}
 }
 
 func (b *pickfirstBalancer) closeSubConns() {
 	for _, sd := range b.subConns.Values() {
 		sd.(*scData).subConn.Shutdown()
 	}
-	for _, k := range b.subConns.Keys() {
-		b.subConns.Delete(k)
-	}
+	b.subConns = resolver.NewAddressMap()
 }
 
 // deDupAddresses ensures that each address belongs to only one endpoint.
@@ -368,6 +322,32 @@ func deDupAddresses(endpoints []resolver.Endpoint) []resolver.Endpoint {
 		})
 	}
 	return newEndpoints
+}
+
+func (b *pickfirstBalancer) reconcileSubConns(newEndpoints []resolver.Endpoint) {
+	// Remove old subConns that were not in new address list.
+	oldAddrs := resolver.NewAddressMap()
+	for _, k := range b.subConns.Keys() {
+		oldAddrs.Set(k, true)
+	}
+
+	// Flatten the new endpoint addresses.
+	newAddrs := resolver.NewAddressMap()
+	for _, endpoint := range newEndpoints {
+		for _, addr := range endpoint.Addresses {
+			newAddrs.Set(addr, true)
+		}
+	}
+
+	// Shut them down and remove them.
+	for _, oldAddr := range oldAddrs.Keys() {
+		if _, ok := newAddrs.Get(oldAddr); ok {
+			continue
+		}
+		val, _ := b.subConns.Get(oldAddr)
+		val.(*scData).subConn.Shutdown()
+		b.subConns.Delete(oldAddr)
+	}
 }
 
 // shutdownRemaining shuts down remaining subConns. Called when a subConn
@@ -402,16 +382,16 @@ func (b *pickfirstBalancer) requestConnection() {
 		// we can't use := below.
 		sd, err = newSCData(b, curAddr)
 		if err != nil {
-			// This should never happen.
+			// This should never happen, unless the clientConn is being shut
+			// down.
 			b.logger.Warningf("Failed to create a subConn for address %v: %v", curAddr.String(), err)
+			// The LB policy remains in TRANSIENT_FAILURE until a new resolver
+			// update is received.
 			b.state = connectivity.TransientFailure
 			b.addressIndex.reset()
 			b.cc.UpdateState(balancer.State{
 				ConnectivityState: connectivity.TransientFailure,
-				// Return an idle picker so that the clientConn doesn't remain
-				// stuck in TRANSIENT_FAILURE and attempts to re-connect the
-				// next time picker.Pick is called.
-				Picker: &idlePicker{exitIdle: b.ExitIdle},
+				Picker:            &picker{err: fmt.Errorf("failed to create a new subConn: %v", err)},
 			})
 			return
 		}
@@ -585,6 +565,10 @@ func (al *addressList) isValid() bool {
 	return al.idx < len(al.addresses)
 }
 
+func (al *addressList) size() int {
+	return len(al.addresses)
+}
+
 // increment moves to the next index in the address list. If at the last address
 // in the address list, moves to the next endpoint in the endpoint list.
 // This method returns false if it went off the list, true otherwise.
@@ -596,9 +580,11 @@ func (al *addressList) increment() bool {
 	return al.idx < len(al.addresses)
 }
 
+// currentAddress returns the current address pointed to in the addressList.
+// If the list is in an invalid state, it returns an empty address instead.
 func (al *addressList) currentAddress() resolver.Address {
 	if !al.isValid() {
-		panic("pickfirst: index is off the end of the address list")
+		return resolver.Address{}
 	}
 	return al.addresses[al.idx]
 }
