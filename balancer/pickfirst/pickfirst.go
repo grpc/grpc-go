@@ -35,7 +35,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 
-	_ "google.golang.org/grpc/balancer/pickfirst_leaf" // For automatically registering the new pickfirst if required.
+	_ "google.golang.org/grpc/balancer/pickfirstleaf" // For automatically registering the new pickfirst if required.
 )
 
 func init() {

@@ -65,7 +65,7 @@ func (pickfirstBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) b
 	ctx, cancel := context.WithCancel(context.Background())
 	b := &pickfirstBalancer{
 		cc:               cc,
-		addressIndex:     addressList{},
+		addressList:      addressList{},
 		subConns:         resolver.NewAddressMap(),
 		serializer:       grpcsync.NewCallbackSerializer(ctx),
 		serializerCancel: cancel,
@@ -142,7 +142,7 @@ type pickfirstBalancer struct {
 	serializerCancel func()
 	state            connectivity.State
 	subConns         *resolver.AddressMap // scData for active subonns mapped by address.
-	addressIndex     addressList
+	addressList      addressList
 	firstPass        bool
 }
 
@@ -166,7 +166,7 @@ func (b *pickfirstBalancer) resolverError(err error) {
 	}
 
 	b.closeSubConns()
-	b.addressIndex.updateEndpointList(nil)
+	b.addressList.updateEndpointList(nil)
 	b.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.TransientFailure,
 		Picker:            &picker{err: fmt.Errorf("name resolver error: %v", err)},
@@ -237,10 +237,10 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 
 	// If the previous ready subconn exists in new address list,
 	// keep this connection and don't create new subconns.
-	prevAddr := b.addressIndex.currentAddress()
-	prevAddrsCount := b.addressIndex.size()
-	b.addressIndex.updateEndpointList(newEndpoints)
-	if b.state == connectivity.Ready && b.addressIndex.seekTo(prevAddr) {
+	prevAddr := b.addressList.currentAddress()
+	prevAddrsCount := b.addressList.size()
+	b.addressList.updateEndpointList(newEndpoints)
+	if b.state == connectivity.Ready && b.addressList.seekTo(prevAddr) {
 		return nil
 	}
 
@@ -365,16 +365,15 @@ func (b *pickfirstBalancer) shutdownRemaining(selected *scData) {
 	b.subConns.Set(selected.addr, selected)
 }
 
-// requestConnection requests a connection to the next applicable address'
-// subcon, creating one if necessary. Schedules a connection to next address in list as well.
-// If the current channel has already attempted a connection, we attempt a connection
-// to the next address/subconn in our list.  We assume that NewSubConn will never
-// return an error.
+// requestConnection starts connecting on the subchannel corresponding to the
+// current address. If no subchannel exists, one is created. If the current
+// subchannel is in TransientFailure, a connection to the next address is
+// attempted.
 func (b *pickfirstBalancer) requestConnection() {
-	if !b.addressIndex.isValid() || b.state == connectivity.Shutdown {
+	if !b.addressList.isValid() || b.state == connectivity.Shutdown {
 		return
 	}
-	curAddr := b.addressIndex.currentAddress()
+	curAddr := b.addressList.currentAddress()
 	sd, ok := b.subConns.Get(curAddr)
 	if !ok {
 		var err error
@@ -388,7 +387,7 @@ func (b *pickfirstBalancer) requestConnection() {
 			// The LB policy remains in TRANSIENT_FAILURE until a new resolver
 			// update is received.
 			b.state = connectivity.TransientFailure
-			b.addressIndex.reset()
+			b.addressList.reset()
 			b.cc.UpdateState(balancer.State{
 				ConnectivityState: connectivity.TransientFailure,
 				Picker:            &picker{err: fmt.Errorf("failed to create a new subConn: %v", err)},
@@ -403,7 +402,7 @@ func (b *pickfirstBalancer) requestConnection() {
 	case connectivity.Idle:
 		scd.subConn.Connect()
 	case connectivity.TransientFailure:
-		if !b.addressIndex.increment() {
+		if !b.addressList.increment() {
 			b.endFirstPass(scd.lastErr)
 			return
 		}
@@ -430,7 +429,12 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 
 	if state.ConnectivityState == connectivity.Ready {
 		b.shutdownRemaining(sd)
-		b.addressIndex.seekTo(sd.addr)
+		if !b.addressList.seekTo(sd.addr) {
+			// This should not fail as we should have only one subconn after
+			// entering READY. The subconn should be present in the addressList.
+			b.logger.Errorf("Address %q not found address list in  %v", sd.addr, b.addressList.addresses)
+			return
+		}
 		b.state = connectivity.Ready
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.Ready,
@@ -442,10 +446,10 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 	// If we are transitioning from READY to IDLE, reset index and re-connect when
 	// prompted.
 	if b.state == connectivity.Ready && state.ConnectivityState == connectivity.Idle {
-		// Once a transport fails, we enter idle and start from the first address
-		// when the picker is used.
+		// Once a transport fails, the balancer enters IDLE and starts from
+		// the first address when the picker is used.
 		b.state = connectivity.Idle
-		b.addressIndex.reset()
+		b.addressList.reset()
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.Idle,
 			Picker:            &idlePicker{exitIdle: b.ExitIdle},
@@ -456,10 +460,10 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 	if b.firstPass {
 		switch state.ConnectivityState {
 		case connectivity.Connecting:
-			// We can be in either IDLE, CONNECTING or TRANSIENT_FAILURE.
-			// If we're in TRANSIENT_FAILURE, we stay in TRANSIENT_FAILURE until
-			// we're READY. See A62.
-			// If we're already in CONNECTING, no update is needed.
+			// The balancer can be in either IDLE, CONNECTING or TRANSIENT_FAILURE.
+			// If it's in TRANSIENT_FAILURE, stay in TRANSIENT_FAILURE until
+			// it's READY. See A62.
+			// If the balancer is already in CONNECTING, no update is needed.
 			if b.state == connectivity.Idle {
 				b.cc.UpdateState(balancer.State{
 					ConnectivityState: connectivity.Connecting,
@@ -471,11 +475,11 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 			// Since we're re-using common subconns while handling resolver updates,
 			// we could receive an out of turn TRANSIENT_FAILURE from a pass
 			// over the previous address list. We ignore such updates.
-			curAddr := b.addressIndex.currentAddress()
-			if activeSD, found := b.subConns.Get(curAddr); !found || activeSD != sd {
+
+			if curAddr := b.addressList.currentAddress(); !equalAddressIgnoringBalAttributes(&curAddr, &sd.addr) {
 				return
 			}
-			if b.addressIndex.increment() {
+			if b.addressList.increment() {
 				b.requestConnection()
 				return
 			}
@@ -486,12 +490,11 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 			// a transport is successfully created, but the connection fails before
 			// the subconn can send the notification for READY. We treat this
 			// as a successful connection and transition to IDLE.
-			curAddr := b.addressIndex.currentAddress()
-			if activeSD, found := b.subConns.Get(curAddr); !found || activeSD != sd {
+			if curAddr := b.addressList.currentAddress(); !equalAddressIgnoringBalAttributes(&sd.addr, &curAddr) {
 				return
 			}
 			b.state = connectivity.Idle
-			b.addressIndex.reset()
+			b.addressList.reset()
 			b.cc.UpdateState(balancer.State{
 				ConnectivityState: connectivity.Idle,
 				Picker:            &idlePicker{exitIdle: b.ExitIdle},
@@ -510,6 +513,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 		})
 		// We don't need to request re-resolution since the subconn already does
 		// that before reporting TRANSIENT_FAILURE.
+		// TODO: #7534 - Move re-resolution requests from subconn into pick_first.
 	case connectivity.Idle:
 		sd.subConn.Connect()
 	}
@@ -569,8 +573,7 @@ func (al *addressList) size() int {
 	return len(al.addresses)
 }
 
-// increment moves to the next index in the address list. If at the last address
-// in the address list, moves to the next endpoint in the endpoint list.
+// increment moves to the next index in the address list.
 // This method returns false if it went off the list, true otherwise.
 func (al *addressList) increment() bool {
 	if !al.isValid() {

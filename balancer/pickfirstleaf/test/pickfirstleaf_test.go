@@ -23,15 +23,17 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	pickfirstleaf "google.golang.org/grpc/balancer/pickfirst_leaf"
+	"google.golang.org/grpc/balancer/pickfirstleaf"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
 	"google.golang.org/grpc/resolver"
@@ -42,9 +44,24 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
+const (
+	// Default timeout for tests in this package.
+	defaultTestTimeout = 10 * time.Second
+	// Default short timeout, to be used when waiting for events which are not
+	// expected to happen.
+	defaultTestShortTimeout  = 100 * time.Millisecond
+	stateStoringBalancerName = "state_storing"
+)
+
 var stateStoringServiceConfig = fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateStoringBalancerName)
 
-const stateStoringBalancerName = "state_storing"
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 // setupPickFirstLeaf performs steps required for pick_first tests. It starts a
 // bunch of backends exporting the TestService, creates a ClientConn to them
@@ -501,6 +518,16 @@ func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
 	if diff := cmp.Diff(wantTransitions, bal.connStateTransitions()); diff != "" {
 		t.Errorf("balancer states mismatch (-want +got):\n%s", diff)
 	}
+}
+
+// stubBackendsToResolverAddrs converts from a set of stub server backends to
+// resolver addresses. Useful when pushing addresses to the manual resolver.
+func stubBackendsToResolverAddrs(backends []*stubserver.StubServer) []resolver.Address {
+	addrs := make([]resolver.Address, len(backends))
+	for i, backend := range backends {
+		addrs[i] = resolver.Address{Addr: backend.Address}
+	}
+	return addrs
 }
 
 // stateStoringBalancer stores the state of the subconns being created.

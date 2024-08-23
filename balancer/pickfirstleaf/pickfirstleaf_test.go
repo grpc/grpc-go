@@ -72,24 +72,25 @@ func (s) TestAddressList_Iteration(t *testing.T) {
 
 	for i := 0; i < len(addrs); i++ {
 		if got, want := addressList.isValid(), true; got != want {
-			t.Errorf("addressList.isValid() = %t, want %t", got, want)
+			t.Fatalf("addressList.isValid() = %t, want %t", got, want)
 		}
 		if got, want := addressList.currentAddress(), addrs[i]; !want.Equal(got) {
 			t.Errorf("addressList.currentAddress() = %v, want %v", got, want)
 		}
 		if got, want := addressList.increment(), i+1 < len(addrs); got != want {
-			t.Errorf("addressList.increment() = %t, want %t", got, want)
+			t.Fatalf("addressList.increment() = %t, want %t", got, want)
 		}
 	}
 
 	if got, want := addressList.isValid(), false; got != want {
-		t.Errorf("addressList.isValid() = %t, want %t", got, want)
+		t.Fatalf("addressList.isValid() = %t, want %t", got, want)
 	}
 
 	// increment an invalid address list.
 	if got, want := addressList.increment(), false; got != want {
 		t.Errorf("addressList.increment() = %t, want %t", got, want)
 	}
+
 	if got, want := addressList.isValid(), false; got != want {
 		t.Errorf("addressList.isValid() = %t, want %t", got, want)
 	}
@@ -97,13 +98,13 @@ func (s) TestAddressList_Iteration(t *testing.T) {
 	addressList.reset()
 	for i := 0; i < len(addrs); i++ {
 		if got, want := addressList.isValid(), true; got != want {
-			t.Errorf("addressList.isValid() = %t, want %t", got, want)
+			t.Fatalf("addressList.isValid() = %t, want %t", got, want)
 		}
 		if got, want := addressList.currentAddress(), addrs[i]; !want.Equal(got) {
 			t.Errorf("addressList.currentAddress() = %v, want %v", got, want)
 		}
 		if got, want := addressList.increment(), i+1 < len(addrs); got != want {
-			t.Errorf("addressList.increment() = %t, want %t", got, want)
+			t.Fatalf("addressList.increment() = %t, want %t", got, want)
 		}
 	}
 }
@@ -159,6 +160,7 @@ func (s) TestAddressList_SeekTo(t *testing.T) {
 	if got, want := addressList.increment(), true; got != want {
 		t.Errorf("addressList.increment() = %t, want %t", got, want)
 	}
+
 	if got, want := addressList.increment(), false; got != want {
 		t.Errorf("addressList.increment() = %t, want %t", got, want)
 	}
@@ -170,20 +172,17 @@ func (s) TestAddressList_SeekTo(t *testing.T) {
 
 	// Seek to a key not in the list.
 	key = resolver.Address{
-		Addr:               "192.168.1.2",
+		Addr:               "192.168.1.5",
 		ServerName:         "test-host-5",
 		Attributes:         attributes.New("key-5", "val-5"),
 		BalancerAttributes: attributes.New("ignored", "bal-val-5"),
-	}
-	// Seek to the key again, it is behind the pointer now.
-	if got, want := addressList.seekTo(key), false; got != want {
-		t.Errorf("addressList.seekTo(%v) = %t, want %t", key, got, want)
 	}
 
 	// It should be possible to increment once more since the pointer has not advanced.
 	if got, want := addressList.increment(), true; got != want {
 		t.Errorf("addressList.increment() = %t, want %t", got, want)
 	}
+
 	if got, want := addressList.increment(), false; got != want {
 		t.Errorf("addressList.increment() = %t, want %t", got, want)
 	}
