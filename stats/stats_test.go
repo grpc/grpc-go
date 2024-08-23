@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
@@ -38,6 +39,7 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -538,40 +540,29 @@ func checkInPayload(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
+
+	var idx *int
+	var payloads []proto.Message
 	if d.client {
-		b, err := proto.Marshal(e.responses[e.respIdx])
-		if err != nil {
-			t.Fatalf("failed to marshal message: %v", err)
-		}
-		if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.responses[e.respIdx]) {
-			t.Fatalf("st.Payload = %T, want %T", st.Payload, e.responses[e.respIdx])
-		}
-		e.respIdx++
-		if string(st.Data) != string(b) {
-			t.Fatalf("st.Data = %v, want %v", st.Data, b)
-		}
-		if st.Length != len(b) {
-			t.Fatalf("st.Length = %v, want %v", st.Length, len(b))
-		}
+		idx = &e.respIdx
+		payloads = e.responses
 	} else {
-		b, err := proto.Marshal(e.requests[e.reqIdx])
-		if err != nil {
-			t.Fatalf("failed to marshal message: %v", err)
-		}
-		if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.requests[e.reqIdx]) {
-			t.Fatalf("st.Payload = %T, want %T", st.Payload, e.requests[e.reqIdx])
-		}
-		e.reqIdx++
-		if string(st.Data) != string(b) {
-			t.Fatalf("st.Data = %v, want %v", st.Data, b)
-		}
-		if st.Length != len(b) {
-			t.Fatalf("st.Length = %v, want %v", st.Length, len(b))
-		}
+		idx = &e.reqIdx
+		payloads = e.requests
 	}
+
+	wantPayload := payloads[*idx]
+	if diff := cmp.Diff(wantPayload, st.Payload.(proto.Message), protocmp.Transform()); diff != "" {
+		t.Fatalf("unexpected difference in st.Payload (-want +got):\n%s", diff)
+	}
+	*idx++
+	if st.Length != proto.Size(wantPayload) {
+		t.Fatalf("st.Length = %v, want %v", st.Length, proto.Size(wantPayload))
+	}
+
 	// Below are sanity checks that WireLength and RecvTime are populated.
 	// TODO: check values of WireLength and RecvTime.
-	if len(st.Data) > 0 && st.CompressedLength == 0 {
+	if st.Length > 0 && st.CompressedLength == 0 {
 		t.Fatalf("st.WireLength = %v with non-empty data, want <non-zero>",
 			st.CompressedLength)
 	}
@@ -657,40 +648,29 @@ func checkOutPayload(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
+
+	var idx *int
+	var payloads []proto.Message
 	if d.client {
-		b, err := proto.Marshal(e.requests[e.reqIdx])
-		if err != nil {
-			t.Fatalf("failed to marshal message: %v", err)
-		}
-		if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.requests[e.reqIdx]) {
-			t.Fatalf("st.Payload = %T, want %T", st.Payload, e.requests[e.reqIdx])
-		}
-		e.reqIdx++
-		if string(st.Data) != string(b) {
-			t.Fatalf("st.Data = %v, want %v", st.Data, b)
-		}
-		if st.Length != len(b) {
-			t.Fatalf("st.Length = %v, want %v", st.Length, len(b))
-		}
+		idx = &e.reqIdx
+		payloads = e.requests
 	} else {
-		b, err := proto.Marshal(e.responses[e.respIdx])
-		if err != nil {
-			t.Fatalf("failed to marshal message: %v", err)
-		}
-		if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.responses[e.respIdx]) {
-			t.Fatalf("st.Payload = %T, want %T", st.Payload, e.responses[e.respIdx])
-		}
-		e.respIdx++
-		if string(st.Data) != string(b) {
-			t.Fatalf("st.Data = %v, want %v", st.Data, b)
-		}
-		if st.Length != len(b) {
-			t.Fatalf("st.Length = %v, want %v", st.Length, len(b))
-		}
+		idx = &e.respIdx
+		payloads = e.responses
 	}
-	// Below are sanity checks that WireLength and SentTime are populated.
+
+	expectedPayload := payloads[*idx]
+	if !proto.Equal(st.Payload.(proto.Message), expectedPayload) {
+		t.Fatalf("st.Payload = %v, want %v", st.Payload, expectedPayload)
+	}
+	*idx++
+	if st.Length != proto.Size(expectedPayload) {
+		t.Fatalf("st.Length = %v, want %v", st.Length, proto.Size(expectedPayload))
+	}
+
+	// Below are sanity checks that Length, CompressedLength and SentTime are populated.
 	// TODO: check values of WireLength and SentTime.
-	if len(st.Data) > 0 && st.WireLength == 0 {
+	if st.Length > 0 && st.WireLength == 0 {
 		t.Fatalf("st.WireLength = %v with non-empty data, want <non-zero>",
 			st.WireLength)
 	}
