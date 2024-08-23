@@ -40,8 +40,6 @@ func init() {
 // gRPC.
 type codecV2 struct{}
 
-var _ encoding.CodecV2 = (*codecV2)(nil)
-
 func (c *codecV2) Marshal(v any) (data mem.BufferSlice, err error) {
 	vv := messageV2Of(v)
 	if vv == nil {
@@ -68,17 +66,6 @@ func (c *codecV2) Marshal(v any) (data mem.BufferSlice, err error) {
 	return data, nil
 }
 
-func messageV2Of(v any) proto.Message {
-	switch v := v.(type) {
-	case protoadapt.MessageV1:
-		return protoadapt.MessageV2Of(v)
-	case protoadapt.MessageV2:
-		return v
-	}
-
-	return nil
-}
-
 func (c *codecV2) Unmarshal(data mem.BufferSlice, v any) (err error) {
 	vv := messageV2Of(v)
 	if vv == nil {
@@ -91,6 +78,17 @@ func (c *codecV2) Unmarshal(data mem.BufferSlice, v any) (err error) {
 	//  really possible without a major overhaul of the proto package, but the
 	//  vtprotobuf library may be able to support this.
 	return proto.Unmarshal(buf.ReadOnlyData(), vv)
+}
+
+func messageV2Of(v any) proto.Message {
+	switch v := v.(type) {
+	case protoadapt.MessageV1:
+		return protoadapt.MessageV2Of(v)
+	case protoadapt.MessageV2:
+		return v
+	}
+
+	return nil
 }
 
 func (c *codecV2) Name() string {
