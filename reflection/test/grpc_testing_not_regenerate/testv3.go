@@ -53,26 +53,19 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-// SearchResponseV3_State defines the state of a search response.
 type SearchResponseV3_State int32
 
 const (
-    // SearchResponseV3_UNKNOWN indicates an unknown state.
 	SearchResponseV3_UNKNOWN SearchResponseV3_State = 0
-    // SearchResponseV3_FRESH indicates the search response is fresh.
 	SearchResponseV3_FRESH   SearchResponseV3_State = 1
-    // SearchResponseV3_STALE indicates the search response is stale.
 	SearchResponseV3_STALE   SearchResponseV3_State = 2
 )
 
-// SearchResponseV3_State_name maps enum values to their string names.
 var SearchResponseV3_State_name = map[int32]string{
 	0: "UNKNOWN",
 	1: "FRESH",
 	2: "STALE",
 }
-
-// SearchResponseV3_State_value maps string names to their enum values.
 var SearchResponseV3_State_value = map[string]int32{
 	"UNKNOWN": 0,
 	"FRESH":   1,
@@ -84,22 +77,16 @@ func (x SearchResponseV3_State) String() string {
 }
 func (SearchResponseV3_State) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{0, 0} }
 
-// SearchResponseV3 represents the response from a search query, including
-// the results of the search and the state of the response.
 type SearchResponseV3 struct {
 	Results []*SearchResponseV3_Result `protobuf:"bytes,1,rep,name=results" json:"results,omitempty"`
 	State   SearchResponseV3_State     `protobuf:"varint,2,opt,name=state,enum=grpc.testingv3.SearchResponseV3_State" json:"state,omitempty"`
 }
 
-// Reset resets the SearchResponseV3 message to its zero value.
 func (m *SearchResponseV3) Reset()                    { *m = SearchResponseV3{} }
 func (m *SearchResponseV3) String() string            { return proto.CompactTextString(m) }
-// protoMessage is a method required by the proto package but does not need to be exported.
 func (*SearchResponseV3) ProtoMessage()               {}
-// Descriptor returns the descriptor of the SearchResponseV3 message.
 func (*SearchResponseV3) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-// GetResults returns the results of the search response.
 func (m *SearchResponseV3) GetResults() []*SearchResponseV3_Result {
 	if m != nil {
 		return m.Results
@@ -107,7 +94,6 @@ func (m *SearchResponseV3) GetResults() []*SearchResponseV3_Result {
 	return nil
 }
 
-// GetState returns the state of the search response.
 func (m *SearchResponseV3) GetState() SearchResponseV3_State {
 	if m != nil {
 		return m.State
@@ -115,7 +101,6 @@ func (m *SearchResponseV3) GetState() SearchResponseV3_State {
 	return SearchResponseV3_UNKNOWN
 }
 
-// SearchResponseV3_Result represents a result in the search response.
 type SearchResponseV3_Result struct {
 	Url      string                                    `protobuf:"bytes,1,opt,name=url" json:"url,omitempty"`
 	Title    string                                    `protobuf:"bytes,2,opt,name=title" json:"title,omitempty"`
@@ -123,16 +108,11 @@ type SearchResponseV3_Result struct {
 	Metadata map[string]*SearchResponseV3_Result_Value `protobuf:"bytes,4,rep,name=metadata" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 }
 
-// Reset resets the SearchResponseV3_Result message to its zero value.
 func (m *SearchResponseV3_Result) Reset()                    { *m = SearchResponseV3_Result{} }
 func (m *SearchResponseV3_Result) String() string            { return proto.CompactTextString(m) }
-// protoMessage is a method required by the proto package but does not need to be exported.
 func (*SearchResponseV3_Result) ProtoMessage()               {}
-// Descriptor returns the descriptor of the SearchResponseV3_Result message.
 func (*SearchResponseV3_Result) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0, 0} }
 
-// GetUrl returns the URL of the search result.
-// If the SearchResponseV3_Result receiver is nil, it returns an empty string.
 func (m *SearchResponseV3_Result) GetUrl() string {
 	if m != nil {
 		return m.Url
@@ -140,8 +120,6 @@ func (m *SearchResponseV3_Result) GetUrl() string {
 	return ""
 }
 
-// GetTitle returns the title of the search result.
-// If the SearchResponseV3_Result receiver is nil, it returns an empty string.
 func (m *SearchResponseV3_Result) GetTitle() string {
 	if m != nil {
 		return m.Title
@@ -149,8 +127,6 @@ func (m *SearchResponseV3_Result) GetTitle() string {
 	return ""
 }
 
-// GetSnippets returns the snippets of the search result.
-// If the SearchResponseV3_Result receiver is nil, it returns an empty slice.
 func (m *SearchResponseV3_Result) GetSnippets() []string {
 	if m != nil {
 		return m.Snippets
@@ -158,8 +134,6 @@ func (m *SearchResponseV3_Result) GetSnippets() []string {
 	return nil
 }
 
-// GetMetadata returns the metadata associated with the search result.
-// If the SearchResponseV3_Result receiver is nil, it returns an empty metadata structure.
 func (m *SearchResponseV3_Result) GetMetadata() map[string]*SearchResponseV3_Result_Value {
 	if m != nil {
 		return m.Metadata
@@ -167,9 +141,6 @@ func (m *SearchResponseV3_Result) GetMetadata() map[string]*SearchResponseV3_Res
 	return nil
 }
 
-// SearchResponseV3_Result_Value represents the value of a search result in the
-// SearchResponseV3. It uses a oneof field to encapsulate various types of values
-// that can be associated with a search result.
 type SearchResponseV3_Result_Value struct {
 	// Types that are valid to be assigned to Val:
 	//	*SearchResponseV3_Result_Value_Str
@@ -178,17 +149,9 @@ type SearchResponseV3_Result_Value struct {
 	Val isSearchResponseV3_Result_Value_Val `protobuf_oneof:"val"`
 }
 
-// Reset resets the SearchResponseV3_Result_Value to its zero value.
-// This method is part of the proto.Message interface.
 func (m *SearchResponseV3_Result_Value) Reset()         { *m = SearchResponseV3_Result_Value{} }
 func (m *SearchResponseV3_Result_Value) String() string { return proto.CompactTextString(m) }
-
-// ProtoMessage is a placeholder method required by the proto.Message interface.
-// It is used to mark the type as a proto.Message.
 func (*SearchResponseV3_Result_Value) ProtoMessage()    {}
-
-// Descriptor returns a descriptor for the SearchResponseV3_Result_Value message.
-// This method is part of the proto.Message interface and is used for message introspection.
 func (*SearchResponseV3_Result_Value) Descriptor() ([]byte, []int) {
 	return fileDescriptor0, []int{0, 0, 0}
 }
@@ -197,20 +160,12 @@ type isSearchResponseV3_Result_Value_Val interface {
 	isSearchResponseV3_Result_Value_Val()
 }
 
-// SearchResponseV3_Result_Value_Str represents a string value in a
-// SearchResponseV3_Result_Value message.
 type SearchResponseV3_Result_Value_Str struct {
 	Str string `protobuf:"bytes,1,opt,name=str,oneof"`
 }
-
-// SearchResponseV3_Result_Value_Int represents an integer value in a
-// SearchResponseV3_Result_Value message.
 type SearchResponseV3_Result_Value_Int struct {
 	Int int64 `protobuf:"varint,2,opt,name=int,oneof"`
 }
-
-// SearchResponseV3_Result_Value_Real represents a floating-point value in a
-// SearchResponseV3_Result_Value message.
 type SearchResponseV3_Result_Value_Real struct {
 	Real float64 `protobuf:"fixed64,3,opt,name=real,oneof"`
 }
@@ -219,8 +174,6 @@ func (*SearchResponseV3_Result_Value_Str) isSearchResponseV3_Result_Value_Val() 
 func (*SearchResponseV3_Result_Value_Int) isSearchResponseV3_Result_Value_Val()  {}
 func (*SearchResponseV3_Result_Value_Real) isSearchResponseV3_Result_Value_Val() {}
 
-// GetVal returns the underlying value of the SearchResponseV3_Result_Value
-// as an interface, which can be type-asserted to one of the concrete value types.
 func (m *SearchResponseV3_Result_Value) GetVal() isSearchResponseV3_Result_Value_Val {
 	if m != nil {
 		return m.Val
@@ -228,8 +181,6 @@ func (m *SearchResponseV3_Result_Value) GetVal() isSearchResponseV3_Result_Value
 	return nil
 }
 
-// GetStr returns the string value from SearchResponseV3_Result_Value if it is
-// of type SearchResponseV3_Result_Value_Str. Otherwise, it returns an empty string.
 func (m *SearchResponseV3_Result_Value) GetStr() string {
 	if x, ok := m.GetVal().(*SearchResponseV3_Result_Value_Str); ok {
 		return x.Str
@@ -237,8 +188,6 @@ func (m *SearchResponseV3_Result_Value) GetStr() string {
 	return ""
 }
 
-// GetInt returns the integer value from SearchResponseV3_Result_Value if it is
-// of type SearchResponseV3_Result_Value_Int. Otherwise, it returns 0.
 func (m *SearchResponseV3_Result_Value) GetInt() int64 {
 	if x, ok := m.GetVal().(*SearchResponseV3_Result_Value_Int); ok {
 		return x.Int
@@ -246,8 +195,6 @@ func (m *SearchResponseV3_Result_Value) GetInt() int64 {
 	return 0
 }
 
-// GetReal returns the floating-point value from SearchResponseV3_Result_Value if it is
-// of type SearchResponseV3_Result_Value_Real. Otherwise, it returns 0.
 func (m *SearchResponseV3_Result_Value) GetReal() float64 {
 	if x, ok := m.GetVal().(*SearchResponseV3_Result_Value_Real); ok {
 		return x.Real
@@ -334,24 +281,15 @@ func _SearchResponseV3_Result_Value_OneofSizer(msg proto.Message) (n int) {
 	return n
 }
 
-// SearchRequestV3 represents a search request. It contains a single 
-// query field which is used to specify the search term.
 type SearchRequestV3 struct {
 	Query string `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
 }
 
-// Reset resets the SearchRequestV3 to its zero value.
 func (m *SearchRequestV3) Reset()                    { *m = SearchRequestV3{} }
 func (m *SearchRequestV3) String() string            { return proto.CompactTextString(m) }
-
-// ProtoMessage indicates that SearchRequestV3 implements the proto.Message interface.
 func (*SearchRequestV3) ProtoMessage()               {}
-
-// Descriptor returns a description of the SearchRequestV3 message type.
-// It provides the serialized descriptor for the message.
 func (*SearchRequestV3) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
-// GetQuery returns the query field of the SearchRequestV3 message.
 func (m *SearchRequestV3) GetQuery() string {
 	if m != nil {
 		return m.Query
@@ -377,12 +315,8 @@ const _ = grpc.SupportPackageIsVersion3
 
 // Client API for SearchServiceV3 service
 
-// SearchServiceV3Client provides operations for performing searches and streaming search results.
 type SearchServiceV3Client interface {
-	// Search performs a search operation based on the provided request and options.
 	Search(ctx context.Context, in *SearchRequestV3, opts ...grpc.CallOption) (*SearchResponseV3, error)
-
-	// StreamingSearch returns a client that streams search results.
 	StreamingSearch(ctx context.Context, opts ...grpc.CallOption) (SearchServiceV3_StreamingSearchClient, error)
 }
 
@@ -390,8 +324,6 @@ type searchServiceV3Client struct {
 	cc *grpc.ClientConn
 }
 
-// NewSearchServiceV3Client creates a new instance of a SearchServiceV3Client.
-// It initializes the client with the provided connection and returns it.
 func NewSearchServiceV3Client(cc *grpc.ClientConn) SearchServiceV3Client {
 	return &searchServiceV3Client{cc}
 }
@@ -414,13 +346,8 @@ func (c *searchServiceV3Client) StreamingSearch(ctx context.Context, opts ...grp
 	return x, nil
 }
 
-// SearchServiceV3_StreamingSearchClient is the client API for handling streaming search requests and responses.
-// It allows sending search requests to the server and receiving streaming search responses.
-// It embeds grpc.ClientStream to provide additional methods for managing the stream.
 type SearchServiceV3_StreamingSearchClient interface {
-	// Send sends a search request to the server.
 	Send(*SearchRequestV3) error
-	// Recv receives a search response from the server.
 	Recv() (*SearchResponseV3, error)
 	grpc.ClientStream
 }
@@ -443,23 +370,11 @@ func (x *searchServiceV3StreamingSearchClient) Recv() (*SearchResponseV3, error)
 
 // Server API for SearchServiceV3 service
 
-// SearchServiceV3Server defines the server API for the SearchServiceV3 service.
-// It includes methods for handling both single and streaming search requests.
-//
-// The Search method handles a single search request and returns a response.
-// The StreamingSearch method facilitates a streaming search, allowing for
-// multiple messages to be exchanged between the client and server.
 type SearchServiceV3Server interface {
-	// Search processes a single search request and provides a corresponding response.
 	Search(context.Context, *SearchRequestV3) (*SearchResponseV3, error)
-	
-	// StreamingSearch manages a streaming search session, allowing the exchange
-	// of multiple messages between the client and server.
 	StreamingSearch(SearchServiceV3_StreamingSearchServer) error
 }
 
-// RegisterSearchServiceV3Server registers the SearchServiceV3Server with the given gRPC server.
-// It sets up the server to handle requests for the SearchServiceV3 service.
 func RegisterSearchServiceV3Server(s *grpc.Server, srv SearchServiceV3Server) {
 	s.RegisterService(&_SearchServiceV3_serviceDesc, srv)
 }
@@ -486,13 +401,8 @@ func _SearchServiceV3_StreamingSearch_Handler(srv interface{}, stream grpc.Serve
 	return srv.(SearchServiceV3Server).StreamingSearch(&searchServiceV3StreamingSearchServer{stream})
 }
 
-// SearchServiceV3_StreamingSearchServer is the server-side interface for the
-// StreamingSearch RPC method of the SearchServiceV3 service. It provides
-// methods for sending and receiving messages in a streaming RPC.
 type SearchServiceV3_StreamingSearchServer interface {
-	// Sends a SearchResponseV3 message to the client.
 	Send(*SearchResponseV3) error
-	// Receives a SearchRequestV3 message from the client.
 	Recv() (*SearchRequestV3, error)
 	grpc.ServerStream
 }
