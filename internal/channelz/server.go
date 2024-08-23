@@ -59,6 +59,10 @@ func NewServerMetricsForTesting(started, succeeded, failed, timestamp int64) *Se
 	return sm
 }
 
+// CopyFrom copies the atomic values from another ServerMetrics instance into
+// the current ServerMetrics instance. It updates the metrics fields to match
+// those of the provided instance. This ensures that the current instance
+// reflects the same metrics as the source instance.
 func (sm *ServerMetrics) CopyFrom(o *ServerMetrics) {
 	sm.CallsStarted.Store(o.CallsStarted.Load())
 	sm.CallsSucceeded.Store(o.CallsSucceeded.Load())

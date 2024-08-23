@@ -182,6 +182,9 @@ func (m *Manager) tryEnterIdleMode() bool {
 	return true
 }
 
+// EnterIdleModeForTesting forces the Manager into idle mode for testing purposes.
+// This bypasses normal idle transition checks and is used to verify idle behavior
+// without waiting for timeouts or other conditions.
 func (m *Manager) EnterIdleModeForTesting() {
 	m.tryEnterIdleMode()
 }
@@ -266,6 +269,9 @@ func (m *Manager) isClosed() bool {
 	return atomic.LoadInt32(&m.closed) == 1
 }
 
+// Close stops the idle timer and marks the Manager as closed. It ensures
+// that no further activity is processed and cleans up any resources used
+// by the Manager. After calling Close, the Manager should not be used.
 func (m *Manager) Close() {
 	atomic.StoreInt32(&m.closed, 1)
 

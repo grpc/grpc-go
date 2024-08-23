@@ -49,6 +49,12 @@ type TestMetricsRecorder struct {
 	data map[estats.Metric]float64
 }
 
+// NewTestMetricsRecorder creates a new instance of TestMetricsRecorder for use
+// in tests. It initializes channels for different types of metrics (int64 counts,
+// float64 counts, int64 histograms, float64 histograms, and int64 gauges) to
+// record and validate metrics events. The provided `metrics` parameter specifies
+// the list of metric names to be used for the recorder.
+
 func NewTestMetricsRecorder(t *testing.T) *TestMetricsRecorder {
 	tmr := &TestMetricsRecorder{
 		t: t,

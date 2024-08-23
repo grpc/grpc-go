@@ -61,24 +61,34 @@ func (c *Channel) id() int64 {
 	return c.ID
 }
 
+// SubChans method returns a copy of the map containing subchannels associated
+// with the channel, providing a snapshot of the current subchannels. It ensures
+// thread safety by acquiring a read lock before accessing the map.
 func (c *Channel) SubChans() map[int64]string {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	return copyMap(c.subChans)
 }
 
+// NestedChans returns a copy of the map containing nested channels associated
+// with the channel, providing a snapshot of the current nested channels.
+// It ensures thread safety by acquiring a read lock before accessing the map.
 func (c *Channel) NestedChans() map[int64]string {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	return copyMap(c.nestedChans)
 }
 
+// Trace returns a copy of the ChannelTrace associated with this channel.
+// It ensures thread safety by acquiring a read lock before accessing the trace.
 func (c *Channel) Trace() *ChannelTrace {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	return c.trace.copy()
 }
 
+// ChannelMetrics holds various metrics related to the channel, such as its
+// current connectivity state, target, and call statistics.
 type ChannelMetrics struct {
 	// The current connectivity state of the channel.
 	State atomic.Pointer[connectivity.State]
@@ -142,6 +152,10 @@ func (c *ChannelMetrics) String() string {
 	)
 }
 
+// NewChannelMetricForTesting function is designed to create and initialize a
+// ChannelMetrics instance with specified values. This helps in monitoring and
+// understanding the channel's behavior and performance, including its connectivity
+// state, target address, call statistics, and timestamps.
 func NewChannelMetricForTesting(state connectivity.State, target string, started, succeeded, failed, timestamp int64) *ChannelMetrics {
 	c := &ChannelMetrics{}
 	c.State.Store(&state)

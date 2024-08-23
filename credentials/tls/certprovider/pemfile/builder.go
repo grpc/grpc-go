@@ -29,6 +29,9 @@ import (
 )
 
 const (
+	// PluginName defines the name of the plugin used for file watching
+	// in the certificate provider configuration. This name is used to
+	// identify the plugin when registering or parsing configurations.
 	PluginName             = "file_watcher"
 	defaultRefreshInterval = 10 * time.Minute
 )

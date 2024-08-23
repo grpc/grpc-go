@@ -47,12 +47,16 @@ func (sc *SubChannel) id() int64 {
 	return sc.ID
 }
 
+// Sockets returns a map of socket IDs to their reference names for the subchannel.
+// This map includes all sockets currently associated with the subchannel.
 func (sc *SubChannel) Sockets() map[int64]string {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	return copyMap(sc.sockets)
 }
 
+// Trace returns a copy of the ChannelTrace for the subchannel. It provides insights
+// into the trace events of the subchannel for monitoring and debugging purposes.
 func (sc *SubChannel) Trace() *ChannelTrace {
 	db.mu.RLock()
 	defer db.mu.RUnlock()

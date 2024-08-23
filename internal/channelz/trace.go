@@ -79,6 +79,11 @@ type TraceEvent struct {
 	Parent   *TraceEvent
 }
 
+// ChannelTrace manages a history of trace events for a channel or entity,
+// including details like event descriptions, severity, and timestamps.
+// It supports adding new events, copying its state, and clearing old entries,
+// while maintaining a maximum number of trace entries.
+
 type ChannelTrace struct {
 	cm           *channelMap
 	clearCalled  bool

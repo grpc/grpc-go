@@ -285,6 +285,8 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 	bw.es.updateState()
 }
 
+// ParseConfig parses the JSON configuration for the endpointsharding balancer.
+// It uses the configuration format defined for the gracefulswitch balancer.
 func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return gracefulswitch.ParseConfig(cfg)
 }

@@ -70,13 +70,22 @@ type EphemeralSocketMetrics struct {
 	RemoteFlowControlWindow int64
 }
 
+// SocketType represents the type of a socket, indicating whether it is a normal
+// socket or a listening socket.
 type SocketType string
 
 const (
+	// SocketTypeNormal represents a normal socket used for communication.
 	SocketTypeNormal = "NormalSocket"
+	// SocketTypeListen represents a listening socket used for accepting incoming connections.
 	SocketTypeListen = "ListenSocket"
 )
 
+// Socket represents a network socket and contains various metrics and
+// information related to it. It tracks details such as local and remote
+// addresses, socket type, metrics, and security settings. The Socket type
+// is used for monitoring and managing network connections within the gRPC
+// system.
 type Socket struct {
 	Entity
 	SocketType       SocketType

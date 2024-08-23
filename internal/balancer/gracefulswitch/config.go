@@ -33,6 +33,9 @@ type lbConfig struct {
 	childConfig  serviceconfig.LoadBalancingConfig
 }
 
+// ChildName extracts and returns the name of the child balancer from the
+// provided LoadBalancingConfig. This function is typically used to identify
+// which child balancer is configured within a larger load balancing setup.
 func ChildName(l serviceconfig.LoadBalancingConfig) string {
 	return l.(*lbConfig).childBuilder.Name()
 }

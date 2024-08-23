@@ -54,6 +54,11 @@ func verifyLabels(desc *estats.MetricDescriptor, labelsRecv ...string) {
 	}
 }
 
+// RecordInt64Count records a measurement for an int64 count across all
+// metric recorders in the MetricsRecorderList. It increments the count
+// associated with the provided handle by the given amount and uses the
+// provided labels for the measurement. The labels must match the expected
+// labels defined in the handle's descriptor.
 func (l *MetricsRecorderList) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
 	verifyLabels(handle.Descriptor(), labels...)
 
@@ -62,6 +67,11 @@ func (l *MetricsRecorderList) RecordInt64Count(handle *estats.Int64CountHandle, 
 	}
 }
 
+// RecordFloat64Count records a measurement for a float64 count across all
+// metric recorders in the MetricsRecorderList. It increments the count
+// associated with the provided handle by the given amount and uses the
+// provided labels for the measurement. The labels must match the expected
+// labels defined in the handle's descriptor.
 func (l *MetricsRecorderList) RecordFloat64Count(handle *estats.Float64CountHandle, incr float64, labels ...string) {
 	verifyLabels(handle.Descriptor(), labels...)
 
@@ -70,6 +80,11 @@ func (l *MetricsRecorderList) RecordFloat64Count(handle *estats.Float64CountHand
 	}
 }
 
+// RecordInt64Histo records a measurement for an int64 histogram across all
+// metric recorders in the MetricsRecorderList. It increments the histogram
+// associated with the provided handle by the given amount and uses the provided
+// labels for the measurement. The labels must match the expected labels
+// defined in the handle's descriptor.
 func (l *MetricsRecorderList) RecordInt64Histo(handle *estats.Int64HistoHandle, incr int64, labels ...string) {
 	verifyLabels(handle.Descriptor(), labels...)
 
@@ -78,6 +93,11 @@ func (l *MetricsRecorderList) RecordInt64Histo(handle *estats.Int64HistoHandle, 
 	}
 }
 
+// RecordFloat64Histo records a measurement for a float64 histogram across all
+// metric recorders in the MetricsRecorderList. It increments the histogram
+// associated with the provided handle by the given amount and uses the provided
+// labels for the measurement. The labels must match the expected labels
+// defined in the handle's descriptor.
 func (l *MetricsRecorderList) RecordFloat64Histo(handle *estats.Float64HistoHandle, incr float64, labels ...string) {
 	verifyLabels(handle.Descriptor(), labels...)
 
@@ -86,6 +106,11 @@ func (l *MetricsRecorderList) RecordFloat64Histo(handle *estats.Float64HistoHand
 	}
 }
 
+// RecordInt64Gauge records a measurement for an int64 gauge across all
+// metric recorders in the MetricsRecorderList. It updates the gauge
+// associated with the provided handle by the given amount and uses the
+// provided labels for the measurement. The labels must match the expected
+// labels defined in the handle's descriptor.
 func (l *MetricsRecorderList) RecordInt64Gauge(handle *estats.Int64GaugeHandle, incr int64, labels ...string) {
 	verifyLabels(handle.Descriptor(), labels...)
 
