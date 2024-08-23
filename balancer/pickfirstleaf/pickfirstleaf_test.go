@@ -178,6 +178,10 @@ func (s) TestAddressList_SeekTo(t *testing.T) {
 		BalancerAttributes: attributes.New("ignored", "bal-val-5"),
 	}
 
+	if got, want := addressList.seekTo(key), false; got != want {
+		t.Errorf("addressList.seekTo(%v) = %t, want %t", key, got, want)
+	}
+
 	// It should be possible to increment once more since the pointer has not advanced.
 	if got, want := addressList.increment(), true; got != want {
 		t.Errorf("addressList.increment() = %t, want %t", got, want)
