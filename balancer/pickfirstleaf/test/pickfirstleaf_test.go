@@ -33,8 +33,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -377,19 +380,13 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cc, r, backends := setupPickFirstLeaf(t, tc.backendCount)
 			addrs := stubBackendsToResolverAddrs(backends)
+			stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+			internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 			activeAddrs := []resolver.Address{}
 			for _, idx := range tc.preUpdateBackendIndexes {
 				activeAddrs = append(activeAddrs, addrs[idx])
 			}
-			r.UpdateState(resolver.State{Addresses: activeAddrs})
-			bal := <-balChan
-			select {
-			case <-bal.resolverUpdateSeen:
-			case <-ctx.Done():
-				t.Fatalf("Context timed out waiting for resolve update to be processed")
-			}
-
 			// shutdown all active backends except the target.
 			var targetAddr resolver.Address
 			for idxI, idx := range tc.preUpdateBackendIndexes {
@@ -400,6 +397,10 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 				backends[idx].S.Stop()
 			}
 
+			r.UpdateState(resolver.State{Addresses: activeAddrs})
+			bal := <-balChan
+			testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+
 			if err := pickfirst.CheckRPCsToBackend(ctx, cc, targetAddr); err != nil {
 				t.Fatal(err)
 			}
@@ -409,7 +410,7 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			}
 
 			if len(tc.updatedBackendIndexes) == 0 {
-				if diff := cmp.Diff(tc.wantConnStateTransitions, bal.connStateTransitions()); diff != "" {
+				if diff := cmp.Diff(tc.wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
 					t.Errorf("balancer states mismatch (-want +got):\n%s", diff)
 				}
 				return
@@ -432,11 +433,6 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			}
 
 			r.UpdateState(resolver.State{Addresses: activeAddrs})
-			select {
-			case <-bal.resolverUpdateSeen:
-			case <-ctx.Done():
-				t.Fatalf("Context timed out waiting for resolve update to be processed")
-			}
 
 			// shutdown all active backends except the target.
 			for idxI, idx := range tc.updatedBackendIndexes {
@@ -455,11 +451,19 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 				t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
 			}
 
-			if diff := cmp.Diff(tc.wantConnStateTransitions, bal.connStateTransitions()); diff != "" {
+			if diff := cmp.Diff(tc.wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
 				t.Errorf("balancer states mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
+}
+
+type ccStateSubscriber struct {
+	transitions []connectivity.State
+}
+
+func (c *ccStateSubscriber) OnMessage(msg any) {
+	c.transitions = append(c.transitions, msg.(connectivity.State))
 }
 
 func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
@@ -470,35 +474,25 @@ func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
 	cc, r, backends := setupPickFirstLeaf(t, 1)
 	addrs := stubBackendsToResolverAddrs(backends)
 
+	stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
+
 	r.UpdateState(resolver.State{Addresses: addrs})
-	bal := <-balChan
-	select {
-	case <-bal.resolverUpdateSeen:
-	case <-ctx.Done():
-		t.Fatalf("Context timed out waiting for resolve update to be processed")
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 
 	r.UpdateState(resolver.State{})
-	select {
-	case <-bal.resolverUpdateSeen:
-	case <-ctx.Done():
-		t.Fatalf("Context timed out waiting for resolve update to be processed")
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// The balancer should have entered transient failure.
 	// It should transition to CONNECTING from TRANSIENT_FAILURE as sticky TF
 	// only applies when the initial TF is reported due to connection failures
 	// and not bad resolver states.
 	r.UpdateState(resolver.State{Addresses: addrs})
-	select {
-	case <-bal.resolverUpdateSeen:
-	case <-ctx.Done():
-		t.Fatalf("Context timed out waiting for resolve update to be processed")
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
@@ -515,7 +509,7 @@ func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
 		connectivity.Ready,
 	}
 
-	if diff := cmp.Diff(wantTransitions, bal.connStateTransitions()); diff != "" {
+	if diff := cmp.Diff(wantTransitions, stateSubscriber.transitions); diff != "" {
 		t.Errorf("balancer states mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -533,10 +527,8 @@ func stubBackendsToResolverAddrs(backends []*stubserver.StubServer) []resolver.A
 // stateStoringBalancer stores the state of the subconns being created.
 type stateStoringBalancer struct {
 	balancer.Balancer
-	mu                 sync.Mutex
-	scStates           []*scState
-	stateTransitions   []connectivity.State
-	resolverUpdateSeen chan struct{}
+	mu       sync.Mutex
+	scStates []*scState
 }
 
 func (b *stateStoringBalancer) Close() {
@@ -558,18 +550,10 @@ func (b *stateStoringBalancerBuilder) Name() string {
 }
 
 func (b *stateStoringBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	bal := &stateStoringBalancer{
-		resolverUpdateSeen: make(chan struct{}, 1),
-	}
+	bal := &stateStoringBalancer{}
 	bal.Balancer = balancer.Get(pickfirstleaf.Name).Build(&stateStoringCCWrapper{cc, bal}, opts)
 	b.balancerChan <- bal
 	return bal
-}
-
-func (b *stateStoringBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
-	err := b.Balancer.UpdateClientConnState(state)
-	b.resolverUpdateSeen <- struct{}{}
-	return err
 }
 
 func (b *stateStoringBalancer) subConns() []scState {
@@ -586,20 +570,6 @@ func (b *stateStoringBalancer) addScState(state *scState) {
 	b.mu.Lock()
 	b.scStates = append(b.scStates, state)
 	b.mu.Unlock()
-}
-
-func (b *stateStoringBalancer) addConnState(state connectivity.State) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if len(b.stateTransitions) == 0 || state != b.stateTransitions[len(b.stateTransitions)-1] {
-		b.stateTransitions = append(b.stateTransitions, state)
-	}
-}
-
-func (b *stateStoringBalancer) connStateTransitions() []connectivity.State {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return append([]connectivity.State{}, b.stateTransitions...)
 }
 
 type stateStoringCCWrapper struct {
@@ -621,11 +591,6 @@ func (ccw *stateStoringCCWrapper) NewSubConn(addrs []resolver.Address, opts bala
 		oldListener(s)
 	}
 	return ccw.ClientConn.NewSubConn(addrs, opts)
-}
-
-func (ccw *stateStoringCCWrapper) UpdateState(state balancer.State) {
-	ccw.b.addConnState(state.ConnectivityState)
-	ccw.ClientConn.UpdateState(state)
 }
 
 type scState struct {
