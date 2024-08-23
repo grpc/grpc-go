@@ -183,7 +183,7 @@ var (
 
 	// GRPCResolverSchemeExtraMetadata determines when gRPC will add extra
 	// metadata to RPCs.
-	GRPCResolverSchemeExtraMetadata = "xds"
+	GRPCResolverSchemeExtraMetadata string = "xds"
 
 	// EnterIdleModeForTesting gets the ClientConn to enter IDLE mode.
 	EnterIdleModeForTesting any // func(*grpc.ClientConn)
@@ -191,8 +191,8 @@ var (
 	// ExitIdleModeForTesting gets the ClientConn to exit IDLE mode.
 	ExitIdleModeForTesting any // func(*grpc.ClientConn) error
 
-	// channelzTurnOffForTesting is a utility that allows disabling Channelz
-	// functionality by setting the current state to 0.
+	// ChannelzTurnOffForTesting disables Channelz functionality by setting the
+	// current state to 0.
 	ChannelzTurnOffForTesting func()
 
 	// TriggerXDSResourceNotFoundForTesting causes the provided xDS Client to
@@ -205,7 +205,7 @@ var (
 
 	// UserSetDefaultScheme is set to true if the user has overridden the
 	// default resolver scheme.
-	UserSetDefaultScheme = false
+	UserSetDefaultScheme bool = false
 
 	// ShuffleAddressListForTesting pseudo-randomizes the order of addresses.  n
 	// is the number of elements.  swap swaps the elements with indexes i and j.

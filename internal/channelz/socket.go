@@ -77,7 +77,8 @@ type SocketType string
 const (
 	// SocketTypeNormal represents a normal socket used for communication.
 	SocketTypeNormal = "NormalSocket"
-	// SocketTypeListen represents a listening socket used for accepting incoming connections.
+	// SocketTypeListen represents a listening socket used for accepting
+	// incoming connections.
 	SocketTypeListen = "ListenSocket"
 )
 

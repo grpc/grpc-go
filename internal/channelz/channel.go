@@ -154,8 +154,8 @@ func (c *ChannelMetrics) String() string {
 
 // NewChannelMetricForTesting function is designed to create and initialize a
 // ChannelMetrics instance with specified values. This helps in monitoring and
-// understanding the channel's behavior and performance, including its connectivity
-// state, target address, call statistics, and timestamps.
+// understanding the channel's behavior and performance, including its
+// connectivity state, target address, call statistics, and timestamps.
 func NewChannelMetricForTesting(state connectivity.State, target string, started, succeeded, failed, timestamp int64) *ChannelMetrics {
 	c := &ChannelMetrics{}
 	c.State.Store(&state)
