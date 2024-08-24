@@ -21,6 +21,7 @@ package test
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -69,13 +70,12 @@ func Test(t *testing.T) {
 // setupPickFirstLeaf performs steps required for pick_first tests. It starts a
 // bunch of backends exporting the TestService, creates a ClientConn to them
 // with service config specifying the use of the pick_first LB policy.
-func setupPickFirstLeaf(t *testing.T, backendCount int, opts ...grpc.DialOption) (*grpc.ClientConn, *manual.Resolver, []*stubserver.StubServer) {
+func setupPickFirstLeaf(t *testing.T, backendCount int, opts ...grpc.DialOption) (*grpc.ClientConn, *manual.Resolver, *backendManager) {
 	t.Helper()
-
 	r := manual.NewBuilderWithScheme("whatever")
-
 	backends := make([]*stubserver.StubServer, backendCount)
 	addrs := make([]resolver.Address, backendCount)
+
 	for i := 0; i < backendCount; i++ {
 		backend := &stubserver.StubServer{
 			EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
@@ -112,52 +112,37 @@ func setupPickFirstLeaf(t *testing.T, backendCount int, opts ...grpc.DialOption)
 	if _, err := client.EmptyCall(sCtx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = %s, want %s", status.Code(err), codes.DeadlineExceeded)
 	}
-	return cc, r, backends
+	return cc, r, &backendManager{backends}
 }
 
-type scStateExpectation struct {
-	State     connectivity.State
-	ServerIdx int
-}
-
-func scStateExpectationToScState(in []scStateExpectation, serverAddrs []resolver.Address) []scState {
-	out := []scState{}
-	for _, exp := range in {
-		out = append(out, scState{
-			State: exp.State,
-			Addrs: []resolver.Address{serverAddrs[exp.ServerIdx]},
-		})
-	}
-	return out
-
-}
-
-// TestPickFirstLeaf_ResolverUpdate tests the behaviour of the new pick first
-// policy when servers are brought down and resolver updates are received.
-func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
+// TestPickFirstLeaf_SimpleResolverUpdate tests the behaviour of the pick first
+// policy when when given an list of addresses. The following steps are carried
+// out in order:
+//  1. A list of addresses are given through the resolver. Only one
+//     of the servers is running.
+//  2. RPCs are sent to verify they reach the running server.
+//
+// The state transitions of the ClientConn and all the subconns created are
+// verified.
+func (s) TestPickFirstLeaf_SimpleResolverUpdate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	balChan := make(chan *stateStoringBalancer, 1)
-	balancer.Register(&stateStoringBalancerBuilder{balancerChan: balChan})
+	balancer.Register(&stateStoringBalancerBuilder{balancer: balChan})
 	tests := []struct {
-		name                         string
-		backendCount                 int
-		preUpdateBackendIndexes      []int
-		preUpdateTargetBackendIndex  int
-		wantPreUpdateScStates        []scStateExpectation
-		updatedBackendIndexes        []int
-		postUpdateTargetBackendIndex int
-		wantPostUpdateScStates       []scStateExpectation
-		restartConnected             bool
-		wantConnStateTransitions     []connectivity.State
+		name                     string
+		backendCount             int
+		backendIndexes           []int
+		runningBackendIndex      int
+		wantSCStates             []scStateExpectation
+		wantConnStateTransitions []connectivity.State
 	}{
 		{
-			name:                        "two_server_first_ready",
-			backendCount:                2,
-			preUpdateBackendIndexes:     []int{0, 1},
-			preUpdateTargetBackendIndex: 0,
-			wantPreUpdateScStates: []scStateExpectation{
-				{State: connectivity.Ready, ServerIdx: 0},
+			name:                "two_server_first_ready",
+			backendIndexes:      []int{0, 1},
+			runningBackendIndex: 0,
+			wantSCStates: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Ready},
 			},
 			wantConnStateTransitions: []connectivity.State{
 				connectivity.Connecting,
@@ -165,13 +150,12 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			},
 		},
 		{
-			name:                        "two_server_second_ready",
-			backendCount:                2,
-			preUpdateBackendIndexes:     []int{0, 1},
-			preUpdateTargetBackendIndex: 1,
-			wantPreUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Ready, ServerIdx: 1},
+			name:                "two_server_second_ready",
+			backendIndexes:      []int{0, 1},
+			runningBackendIndex: 1,
+			wantSCStates: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Ready},
 			},
 			wantConnStateTransitions: []connectivity.State{
 				connectivity.Connecting,
@@ -179,13 +163,119 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			},
 		},
 		{
-			name:                        "duplicate_address",
-			backendCount:                2,
-			preUpdateBackendIndexes:     []int{0, 0, 1},
-			preUpdateTargetBackendIndex: 1,
-			wantPreUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Ready, ServerIdx: 1},
+			name:                "duplicate_address",
+			backendIndexes:      []int{0, 0, 1},
+			runningBackendIndex: 1,
+			wantSCStates: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Ready},
+			},
+			wantConnStateTransitions: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.Ready,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cc, r, bm := setupPickFirstLeaf(t, 2)
+			addrs := stubBackendsToResolverAddrs(bm.backends)
+			stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+			internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
+
+			activeAddrs := []resolver.Address{}
+			for _, idx := range tc.backendIndexes {
+				activeAddrs = append(activeAddrs, addrs[idx])
+			}
+
+			bm.stopAllExcept(tc.runningBackendIndex)
+			runningAddr := addrs[tc.runningBackendIndex]
+
+			r.UpdateState(resolver.State{Addresses: activeAddrs})
+			bal := <-balChan
+			testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+
+			if err := pickfirst.CheckRPCsToBackend(ctx, cc, runningAddr); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(scStateExpectationToSCState(tc.wantSCStates, addrs), bal.subConns()); diff != "" {
+				t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+			}
+
+			if diff := cmp.Diff(tc.wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
+				t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestPickFirstLeaf_ResolverUpdate tests the behaviour of the pick first
+// policy when the following steps are carried out in order:
+//  1. A list of addresses are given through the resolver. Only one
+//     of the servers is running.
+//  2. RPCs are sent to verify they reach the running server.
+//  3. A second resolver update is sent. Again, only one of the servers is
+//     running. This may not be the same server as before.
+//  4. RPCs are sent to verify they reach the running server.
+//
+// The state transitions of the ClientConn and all the subconns created are
+// verified.
+func (s) TestPickFirstLeaf_MultipleResolverUpdates(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	balCh := make(chan *stateStoringBalancer, 1)
+	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
+	tests := []struct {
+		name                     string
+		backendCount             int
+		backendIndexes1          []int
+		runningBackendIndex1     int
+		wantSCStates1            []scStateExpectation
+		backendIndexes2          []int
+		runningBackendIndex2     int
+		wantSCStates2            []scStateExpectation
+		wantConnStateTransitions []connectivity.State
+	}{
+		{
+			name:                 "disjoint_updated_addresses",
+			backendCount:         4,
+			backendIndexes1:      []int{0, 1},
+			runningBackendIndex1: 1,
+			wantSCStates1: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Ready},
+			},
+			backendIndexes2:      []int{2, 3},
+			runningBackendIndex2: 3,
+			wantSCStates2: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Shutdown},
+				{ServerIdx: 2, State: connectivity.Shutdown},
+				{ServerIdx: 3, State: connectivity.Ready},
+			},
+			wantConnStateTransitions: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.Ready,
+				connectivity.Connecting,
+				connectivity.Ready,
+			},
+		},
+		{
+			name:                 "active_backend_in_updated_list",
+			backendCount:         3,
+			backendIndexes1:      []int{0, 1},
+			runningBackendIndex1: 1,
+			wantSCStates1: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Ready},
+			},
+			backendIndexes2:      []int{1, 2},
+			runningBackendIndex2: 1,
+			wantSCStates2: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Ready},
 			},
 			wantConnStateTransitions: []connectivity.State{
 				connectivity.Connecting,
@@ -193,64 +283,20 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			},
 		},
 		{
-			name:                        "disjoint_updated_addresses",
-			backendCount:                4,
-			preUpdateBackendIndexes:     []int{0, 1},
-			preUpdateTargetBackendIndex: 1,
-			wantPreUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Ready, ServerIdx: 1},
+			name:                 "inactive_backend_in_updated_list",
+			backendCount:         3,
+			backendIndexes1:      []int{0, 1},
+			runningBackendIndex1: 1,
+			wantSCStates1: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Ready},
 			},
-			updatedBackendIndexes:        []int{2, 3},
-			postUpdateTargetBackendIndex: 3,
-			wantPostUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Shutdown, ServerIdx: 1},
-				{State: connectivity.Shutdown, ServerIdx: 2},
-				{State: connectivity.Ready, ServerIdx: 3},
-			},
-			wantConnStateTransitions: []connectivity.State{
-				connectivity.Connecting,
-				connectivity.Ready,
-				connectivity.Connecting,
-				connectivity.Ready,
-			},
-		},
-		{
-			name:                        "active_backend_in_updated_list",
-			backendCount:                3,
-			preUpdateBackendIndexes:     []int{0, 1},
-			preUpdateTargetBackendIndex: 1,
-			wantPreUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Ready, ServerIdx: 1},
-			},
-			updatedBackendIndexes:        []int{1, 2},
-			postUpdateTargetBackendIndex: 1,
-			wantPostUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Ready, ServerIdx: 1},
-			},
-			wantConnStateTransitions: []connectivity.State{
-				connectivity.Connecting,
-				connectivity.Ready,
-			},
-		},
-		{
-			name:                        "inactive_backend_in_updated_list",
-			backendCount:                3,
-			preUpdateBackendIndexes:     []int{0, 1},
-			preUpdateTargetBackendIndex: 1,
-			wantPreUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Ready, ServerIdx: 1},
-			},
-			updatedBackendIndexes:        []int{0, 2},
-			postUpdateTargetBackendIndex: 0,
-			wantPostUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Shutdown, ServerIdx: 1},
-				{State: connectivity.Ready, ServerIdx: 0},
+			backendIndexes2:      []int{0, 2},
+			runningBackendIndex2: 0,
+			wantSCStates2: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Shutdown},
+				{ServerIdx: 0, State: connectivity.Ready},
 			},
 			wantConnStateTransitions: []connectivity.State{
 				connectivity.Connecting,
@@ -260,38 +306,128 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			},
 		},
 		{
-			name:                        "identical_list",
-			backendCount:                2,
-			preUpdateBackendIndexes:     []int{0, 1},
-			preUpdateTargetBackendIndex: 1,
-			wantPreUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Ready, ServerIdx: 1},
+			name:                 "identical_list",
+			backendCount:         2,
+			backendIndexes1:      []int{0, 1},
+			runningBackendIndex1: 1,
+			wantSCStates1: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Ready},
 			},
-			updatedBackendIndexes:        []int{0, 1},
-			postUpdateTargetBackendIndex: 1,
-			wantPostUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Ready, ServerIdx: 1},
+			backendIndexes2:      []int{0, 1},
+			runningBackendIndex2: 1,
+			wantSCStates2: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Ready},
 			},
 			wantConnStateTransitions: []connectivity.State{
 				connectivity.Connecting,
 				connectivity.Ready,
 			},
 		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cc, r, bm := setupPickFirstLeaf(t, tc.backendCount)
+			addrs := stubBackendsToResolverAddrs(bm.backends)
+			stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+			internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
+
+			resolverAddrs := []resolver.Address{}
+			for _, idx := range tc.backendIndexes1 {
+				resolverAddrs = append(resolverAddrs, addrs[idx])
+			}
+
+			bm.stopAllExcept(tc.runningBackendIndex1)
+			targetAddr := addrs[tc.runningBackendIndex1]
+
+			r.UpdateState(resolver.State{Addresses: resolverAddrs})
+			bal := <-balCh
+			testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+
+			if err := pickfirst.CheckRPCsToBackend(ctx, cc, targetAddr); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(scStateExpectationToSCState(tc.wantSCStates1, addrs), bal.subConns()); diff != "" {
+				t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+			}
+
+			// Start the backend that needs to be connected to next.
+			if tc.runningBackendIndex1 != tc.runningBackendIndex2 {
+				if err := bm.backends[tc.runningBackendIndex2].StartServer(); err != nil {
+					t.Fatalf("Failed to re-start test backend: %v", err)
+				}
+			}
+
+			resolverAddrs = []resolver.Address{}
+			for _, idx := range tc.backendIndexes2 {
+				resolverAddrs = append(resolverAddrs, addrs[idx])
+			}
+			r.UpdateState(resolver.State{Addresses: resolverAddrs})
+
+			if slices.Contains(tc.backendIndexes2, tc.runningBackendIndex1) {
+				// Verify that the ClientConn stays in READY.
+				sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+				defer sCancel()
+				testutils.AwaitNoStateChange(sCtx, t, cc, connectivity.Ready)
+			}
+			// We don't shut down the previous target server if it's different
+			// from the current target server as it can cause the ClientConn to
+			// go into IDLE if it has not yet processed the resolver update.
+			targetAddr = addrs[tc.runningBackendIndex2]
+
+			if err := pickfirst.CheckRPCsToBackend(ctx, cc, targetAddr); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(scStateExpectationToSCState(tc.wantSCStates2, addrs), bal.subConns()); diff != "" {
+				t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+			}
+
+			if diff := cmp.Diff(tc.wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
+				t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestPickFirstLeaf_StopConnectedServer tests the behaviour of the pick first
+// policy when the connected server is shut down. It carries out the following
+// steps in order:
+//  1. A list of addresses are given through the resolver. Only one
+//     of the servers is running.
+//  2. The running server is stopped, causing the ClientConn to enter IDLE.
+//  3. A (possibly different) server is started.
+//  4. RPCs are made to kick the ClientConn out of IDLE. The test verifies that
+//     the RPCs reach the running server.
+//
+// The test verifies the ClientConn state transitions.
+func (s) TestPickFirstLeaf_StopConnectedServer(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	balChan := make(chan *stateStoringBalancer, 1)
+	balancer.Register(&stateStoringBalancerBuilder{balancer: balChan})
+	tests := []struct {
+		name                     string
+		backendCount             int
+		runningServerIndex       int
+		wantSCStates1            []scStateExpectation
+		runningServerIndex2      int
+		wantSCStates2            []scStateExpectation
+		wantConnStateTransitions []connectivity.State
+	}{
 		{
-			name:                        "first_connected_idle_reconnect",
-			backendCount:                2,
-			preUpdateBackendIndexes:     []int{0, 1},
-			preUpdateTargetBackendIndex: 0,
-			restartConnected:            true,
-			wantPreUpdateScStates: []scStateExpectation{
-				{State: connectivity.Ready, ServerIdx: 0},
+			name:               "first_connected_idle_reconnect_first",
+			backendCount:       2,
+			runningServerIndex: 0,
+			wantSCStates1: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Ready},
 			},
-			updatedBackendIndexes:        []int{0, 1},
-			postUpdateTargetBackendIndex: 0,
-			wantPostUpdateScStates: []scStateExpectation{
-				{State: connectivity.Ready, ServerIdx: 0},
+			runningServerIndex2: 0,
+			wantSCStates2: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Ready},
 			},
 			wantConnStateTransitions: []connectivity.State{
 				connectivity.Connecting,
@@ -302,21 +438,18 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			},
 		},
 		{
-			name:                        "second_connected_idle_reconnect",
-			backendCount:                2,
-			preUpdateBackendIndexes:     []int{0, 1},
-			preUpdateTargetBackendIndex: 1,
-			restartConnected:            true,
-			wantPreUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Ready, ServerIdx: 1},
+			name:               "second_connected_idle_reconnect_second",
+			backendCount:       2,
+			runningServerIndex: 1,
+			wantSCStates1: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Ready},
 			},
-			updatedBackendIndexes:        []int{0, 1},
-			postUpdateTargetBackendIndex: 1,
-			wantPostUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Ready, ServerIdx: 1},
-				{State: connectivity.Shutdown, ServerIdx: 0},
+			runningServerIndex2: 1,
+			wantSCStates2: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Ready},
+				{ServerIdx: 0, State: connectivity.Shutdown},
 			},
 			wantConnStateTransitions: []connectivity.State{
 				connectivity.Connecting,
@@ -327,21 +460,18 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			},
 		},
 		{
-			name:                        "second_connected_idle_reconnect_first",
-			backendCount:                2,
-			preUpdateBackendIndexes:     []int{0, 1},
-			preUpdateTargetBackendIndex: 1,
-			restartConnected:            true,
-			wantPreUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Ready, ServerIdx: 1},
+			name:               "second_connected_idle_reconnect_first",
+			backendCount:       2,
+			runningServerIndex: 1,
+			wantSCStates1: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Ready},
 			},
-			updatedBackendIndexes:        []int{0, 1},
-			postUpdateTargetBackendIndex: 0,
-			wantPostUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Shutdown, ServerIdx: 1},
-				{State: connectivity.Ready, ServerIdx: 0},
+			runningServerIndex2: 0,
+			wantSCStates2: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Shutdown},
+				{ServerIdx: 0, State: connectivity.Ready},
 			},
 			wantConnStateTransitions: []connectivity.State{
 				connectivity.Connecting,
@@ -352,19 +482,16 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 			},
 		},
 		{
-			name:                        "first_connected_idle_reconnect_second",
-			backendCount:                2,
-			preUpdateBackendIndexes:     []int{0, 1},
-			preUpdateTargetBackendIndex: 0,
-			restartConnected:            true,
-			wantPreUpdateScStates: []scStateExpectation{
-				{State: connectivity.Ready, ServerIdx: 0},
+			name:               "first_connected_idle_reconnect_second",
+			backendCount:       2,
+			runningServerIndex: 0,
+			wantSCStates1: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Ready},
 			},
-			updatedBackendIndexes:        []int{0, 1},
-			postUpdateTargetBackendIndex: 1,
-			wantPostUpdateScStates: []scStateExpectation{
-				{State: connectivity.Shutdown, ServerIdx: 0},
-				{State: connectivity.Ready, ServerIdx: 1},
+			runningServerIndex2: 1,
+			wantSCStates2: []scStateExpectation{
+				{ServerIdx: 0, State: connectivity.Shutdown},
+				{ServerIdx: 1, State: connectivity.Ready},
 			},
 			wantConnStateTransitions: []connectivity.State{
 				connectivity.Connecting,
@@ -378,26 +505,16 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cc, r, backends := setupPickFirstLeaf(t, tc.backendCount)
-			addrs := stubBackendsToResolverAddrs(backends)
+			cc, r, bm := setupPickFirstLeaf(t, tc.backendCount)
+			addrs := stubBackendsToResolverAddrs(bm.backends)
 			stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
 			internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
-			activeAddrs := []resolver.Address{}
-			for _, idx := range tc.preUpdateBackendIndexes {
-				activeAddrs = append(activeAddrs, addrs[idx])
-			}
 			// shutdown all active backends except the target.
-			var targetAddr resolver.Address
-			for idxI, idx := range tc.preUpdateBackendIndexes {
-				if idx == tc.preUpdateTargetBackendIndex {
-					targetAddr = activeAddrs[idxI]
-					continue
-				}
-				backends[idx].S.Stop()
-			}
+			bm.stopAllExcept(tc.runningServerIndex)
+			targetAddr := addrs[tc.runningServerIndex]
 
-			r.UpdateState(resolver.State{Addresses: activeAddrs})
+			r.UpdateState(resolver.State{Addresses: addrs})
 			bal := <-balChan
 			testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
@@ -405,74 +522,47 @@ func (s) TestPickFirstLeaf_ResolverUpdate(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if diff := cmp.Diff(scStateExpectationToScState(tc.wantPreUpdateScStates, addrs), bal.subConns()); diff != "" {
+			if diff := cmp.Diff(scStateExpectationToSCState(tc.wantSCStates1, addrs), bal.subConns()); diff != "" {
 				t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
 			}
 
-			if len(tc.updatedBackendIndexes) == 0 {
-				if diff := cmp.Diff(tc.wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
-					t.Errorf("balancer states mismatch (-want +got):\n%s", diff)
-				}
-				return
+			// Shut down the connected server.
+			bm.backends[tc.runningServerIndex].S.Stop()
+			testutils.AwaitState(ctx, t, cc, connectivity.Idle)
+
+			// Start the new target server.
+			if err := bm.backends[tc.runningServerIndex2].StartServer(); err != nil {
+				t.Fatalf("Failed to start server: %v", err)
 			}
 
-			// Restart all the backends.
-			for i, s := range backends {
-				if !tc.restartConnected && i == tc.preUpdateTargetBackendIndex {
-					continue
-				}
-				s.S.Stop()
-				if err := s.StartServer(); err != nil {
-					t.Fatalf("Failed to re-start test backend: %v", err)
-				}
-			}
-
-			activeAddrs = []resolver.Address{}
-			for _, idx := range tc.updatedBackendIndexes {
-				activeAddrs = append(activeAddrs, addrs[idx])
-			}
-
-			r.UpdateState(resolver.State{Addresses: activeAddrs})
-
-			// shutdown all active backends except the target.
-			for idxI, idx := range tc.updatedBackendIndexes {
-				if idx == tc.postUpdateTargetBackendIndex {
-					targetAddr = activeAddrs[idxI]
-					continue
-				}
-				backends[idx].S.Stop()
-			}
-
+			targetAddr = addrs[tc.runningServerIndex2]
 			if err := pickfirst.CheckRPCsToBackend(ctx, cc, targetAddr); err != nil {
 				t.Fatal(err)
 			}
 
-			if diff := cmp.Diff(scStateExpectationToScState(tc.wantPostUpdateScStates, addrs), bal.subConns()); diff != "" {
+			if diff := cmp.Diff(scStateExpectationToSCState(tc.wantSCStates2, addrs), bal.subConns()); diff != "" {
 				t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
 			}
 
 			if diff := cmp.Diff(tc.wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
-				t.Errorf("balancer states mismatch (-want +got):\n%s", diff)
+				t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-type ccStateSubscriber struct {
-	transitions []connectivity.State
-}
-
-func (c *ccStateSubscriber) OnMessage(msg any) {
-	c.transitions = append(c.transitions, msg.(connectivity.State))
-}
-
+// TestPickFirstLeaf_EmptyAddressList carries out the following steps in order:
+// 1. Send a resolver update with one running backend.
+// 2. Send an empty address list causing the balancer to enter TRANSIENT_FAILURE.
+// 3. Send a resolver update with one running backend.
+// The test verifies the ClientConn state transitions.
 func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	balChan := make(chan *stateStoringBalancer, 1)
-	balancer.Register(&stateStoringBalancerBuilder{balancerChan: balChan})
-	cc, r, backends := setupPickFirstLeaf(t, 1)
-	addrs := stubBackendsToResolverAddrs(backends)
+	balancer.Register(&stateStoringBalancerBuilder{balancer: balChan})
+	cc, r, bm := setupPickFirstLeaf(t, 1)
+	addrs := stubBackendsToResolverAddrs(bm.backends)
 
 	stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
@@ -510,8 +600,30 @@ func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(wantTransitions, stateSubscriber.transitions); diff != "" {
-		t.Errorf("balancer states mismatch (-want +got):\n%s", diff)
+		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 	}
+}
+
+// scStateExpectation stores the expected state for a subconn created for the
+// specified server. Since the servers use random ports, the server is identified
+// using using its index in the list of backends.
+type scStateExpectation struct {
+	State     connectivity.State
+	ServerIdx int
+}
+
+// scStateExpectationToSCState converts scStateExpectationToSCState to scState
+// using the server addresses. This is required since the servers use random
+// ports which are known only once the test runs.
+func scStateExpectationToSCState(in []scStateExpectation, serverAddrs []resolver.Address) []scState {
+	out := []scState{}
+	for _, exp := range in {
+		out = append(out, scState{
+			State: exp.State,
+			Addrs: []resolver.Address{serverAddrs[exp.ServerIdx]},
+		})
+	}
+	return out
 }
 
 // stubBackendsToResolverAddrs converts from a set of stub server backends to
@@ -542,7 +654,7 @@ func (b *stateStoringBalancer) ExitIdle() {
 }
 
 type stateStoringBalancerBuilder struct {
-	balancerChan chan *stateStoringBalancer
+	balancer chan *stateStoringBalancer
 }
 
 func (b *stateStoringBalancerBuilder) Name() string {
@@ -552,7 +664,7 @@ func (b *stateStoringBalancerBuilder) Name() string {
 func (b *stateStoringBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	bal := &stateStoringBalancer{}
 	bal.Balancer = balancer.Get(pickfirstleaf.Name).Build(&stateStoringCCWrapper{cc, bal}, opts)
-	b.balancerChan <- bal
+	b.balancer <- bal
 	return bal
 }
 
@@ -566,7 +678,7 @@ func (b *stateStoringBalancer) subConns() []scState {
 	return ret
 }
 
-func (b *stateStoringBalancer) addScState(state *scState) {
+func (b *stateStoringBalancer) addSCState(state *scState) {
 	b.mu.Lock()
 	b.scStates = append(b.scStates, state)
 	b.mu.Unlock()
@@ -583,7 +695,7 @@ func (ccw *stateStoringCCWrapper) NewSubConn(addrs []resolver.Address, opts bala
 		State: connectivity.Idle,
 		Addrs: addrs,
 	}
-	ccw.b.addScState(scs)
+	ccw.b.addSCState(scs)
 	opts.StateListener = func(s balancer.SubConnState) {
 		ccw.b.mu.Lock()
 		scs.State = s.ConnectivityState
@@ -596,4 +708,24 @@ func (ccw *stateStoringCCWrapper) NewSubConn(addrs []resolver.Address, opts bala
 type scState struct {
 	State connectivity.State
 	Addrs []resolver.Address
+}
+
+type backendManager struct {
+	backends []*stubserver.StubServer
+}
+
+func (b *backendManager) stopAllExcept(index int) {
+	for idx, b := range b.backends {
+		if idx != index {
+			b.S.Stop()
+		}
+	}
+}
+
+type ccStateSubscriber struct {
+	transitions []connectivity.State
+}
+
+func (c *ccStateSubscriber) OnMessage(msg any) {
+	c.transitions = append(c.transitions, msg.(connectivity.State))
 }
