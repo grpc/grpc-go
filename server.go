@@ -1029,7 +1029,7 @@ func (s *Server) serveStreams(ctx context.Context, st transport.ServerTransport,
 			s.handleStream(st, stream)
 		}
 
-		if s.opts.numServerWorkers > 0 {
+		if s.opts.numServerWorkers > 0 && s.isUnaryRPCMethod(stream.Method()) {
 			select {
 			case s.serverWorkerChannel <- f:
 				return
@@ -2204,4 +2204,23 @@ func newHandlerQuota(n uint32) *atomicSemaphore {
 	a := &atomicSemaphore{wait: make(chan struct{}, 1)}
 	a.n.Store(int64(n))
 	return a
+}
+
+// isUnaryRPCMethod returns true if the passed in method corresponds to a registered
+// unary RPC method on the server.
+func (s *Server) isUnaryRPCMethod(serviceMethod string) bool {
+	serviceMethod = strings.TrimPrefix(serviceMethod, "/")
+	pos := strings.LastIndex(serviceMethod, "/")
+	if pos == -1 {
+		return false
+	}
+	service := serviceMethod[:pos]
+	method := serviceMethod[pos+1:]
+	srv, knownService := s.services[service]
+	if knownService {
+		if _, ok := srv.methods[method]; ok {
+			return true
+		}
+	}
+	return false
 }
