@@ -232,8 +232,22 @@ func (b *clusterImplBalancer) updateClientConnState(s balancer.ClientConnState) 
 	}
 
 	if b.config == nil || b.config.ChildPolicy.Name != newConfig.ChildPolicy.Name {
-		if err := b.child.SwitchTo(bb); err != nil {
-			return fmt.Errorf("error switching to child of type %q: %v", newConfig.ChildPolicy.Name, err)
+		if b.config == nil || b.config.ChildPolicy.Name != newConfig.ChildPolicy.Name {
+			strCfg, err := newConfig.ChildPolicy.MarshalJSON()
+			if err != nil {
+				return fmt.Errorf("error marshaling config: %v", err)
+			}
+			r := json.RawMessage(strCfg)
+			sc, err := gracefulswitch.ParseConfig(r)
+			if err != nil {
+				return fmt.Errorf("error parsing child config: %v", err)
+			}
+			if err := b.child.UpdateClientConnState(balancer.ClientConnState{
+				ResolverState:  s.ResolverState,
+				BalancerConfig: sc,
+			}); err != nil {
+				return fmt.Errorf("error switching to child of type %q: %v", newConfig.ChildPolicy.Name, err)
+			}
 		}
 	}
 	b.config = newConfig
