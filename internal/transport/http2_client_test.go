@@ -29,12 +29,15 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
+type SettingID uint16
+
+type Setting struct {
+	ID  SettingID
+	Val uint32
+}
+
 // ClientPreface is the HTTP/2 client preface string.
 var ClientPreface = []byte(http2.ClientPreface)
-
-var framerWindowUpdate = []byte{0, 0, 4, 8, 0, 0, 0, 0, 0, 0, 0, 56, 129}
-
-var framerWriteSettings = []byte{0, 0, 0, 4, 0, 0, 0, 0, 0}
 
 type clientPrefaceConn struct {
 	net.Conn
@@ -90,7 +93,12 @@ func dialerClientPrefaceLength(_ context.Context, addr string) (net.Conn, error)
 }
 
 func (fws *framerWriteSettingsConn) Write(b []byte) (n int, err error) {
-	if bytes.Equal(b, framerWriteSettings) {
+	setting := []http2.Setting{}
+	buf := &bytes.Buffer{}
+	framer := http2.NewFramer(buf, buf)
+	framer.WriteSettings(setting...)
+
+	if bytes.Equal(b, buf.Bytes()) {
 		return 0, errors.New("force error for Framer write setting")
 	}
 	return fws.Conn.Write(b)
@@ -105,7 +113,11 @@ func dialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error)
 }
 
 func (fwu *framerWindowUpdateConn) Write(b []byte) (n int, err error) {
-	if bytes.Equal(b, framerWindowUpdate) {
+	var buf bytes.Buffer
+	framer := http2.NewFramer(&buf, nil)
+	framer.WriteWindowUpdate(0, 14465)
+
+	if bytes.Equal(b, buf.Bytes()) {
 		return 0, errors.New("force error for windowupdate")
 	}
 	return fwu.Conn.Write(b)
