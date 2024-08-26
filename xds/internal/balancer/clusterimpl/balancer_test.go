@@ -142,7 +142,7 @@ func (s) TestDropByCategory(t *testing.T) {
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
 
-	const rpcCount = 20
+	const rpcCount = 24
 	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
 		for i := 0; i < rpcCount; i++ {
 			gotSCSt, err := p.Pick(balancer.PickInfo{})
@@ -159,11 +159,11 @@ func (s) TestDropByCategory(t *testing.T) {
 			if gotSCSt.Done == nil {
 				continue
 			}
-			// Fail half of the requests that are not dropped.
-			if i%4 == 1 {
-				gotSCSt.Done(balancer.DoneInfo{})
-			} else {
+			// Fail 1/4th of the requests that are not dropped.
+			if i%8 == 1 {
 				gotSCSt.Done(balancer.DoneInfo{Err: fmt.Errorf("test error")})
+			} else {
+				gotSCSt.Done(balancer.DoneInfo{})
 			}
 		}
 		return nil
@@ -184,8 +184,8 @@ func (s) TestDropByCategory(t *testing.T) {
 		Drops:      map[string]uint64{dropReason: dropCount},
 		LocalityStats: map[string]load.LocalityData{
 			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{
-				Succeeded: (rpcCount - dropCount) / 2,
-				Errored:   (rpcCount - dropCount) / 2,
+				Succeeded: (rpcCount - dropCount) * 3 / 4,
+				Errored:   (rpcCount - dropCount) / 4,
 				Issued:    rpcCount - dropCount,
 			}},
 		},
