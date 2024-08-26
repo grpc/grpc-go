@@ -862,7 +862,7 @@ func (s) TestAggregateCluster_BadDNS_GoodEDS(t *testing.T) {
 		NodeID: nodeID,
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{dnsClusterName, edsClusterName}),
-			makeLogicalDNSClusterResource(dnsClusterName, "bad.ip.v4.address", 8080),
+			makeLogicalDNSClusterResource(dnsClusterName, "bad%ipv4%address", 8080), // Invalid URL to avoid making a DNS request.
 			e2e.DefaultCluster(edsClusterName, edsServiceName, e2e.SecurityLevelNone),
 		},
 		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{uint32(edsPort)})},
