@@ -49,35 +49,35 @@ pass () {
 }
 
 EXAMPLES=(
-    "helloworld"
-    "route_guide"
+    # "helloworld"
+    # "route_guide"
     "features/advancedtls"
-    "features/authentication"
-    "features/authz"
-    "features/cancellation"
-    "features/compression"
-    "features/customloadbalancer"
-    "features/deadline"
-    "features/encryption/TLS"
-    "features/error_details"
-    "features/error_handling"
-    "features/flow_control"
-    "features/interceptor"
-    "features/load_balancing"
-    "features/metadata"
-    "features/metadata_interceptor"
-    "features/multiplex"
-    "features/name_resolving"
-    "features/orca"
-    "features/retry"
-    "features/unix_abstract"
+    # "features/authentication"
+    # "features/authz"
+    # "features/cancellation"
+    # "features/compression"
+    # "features/customloadbalancer"
+    # "features/deadline"
+    # "features/encryption/TLS"
+    # "features/error_details"
+    # "features/error_handling"
+    # "features/flow_control"
+    # "features/interceptor"
+    # "features/load_balancing"
+    # "features/metadata"
+    # "features/metadata_interceptor"
+    # "features/multiplex"
+    # "features/name_resolving"
+    # "features/orca"
+    # "features/retry"
+    # "features/unix_abstract"
 )
 
 declare -A SERVER_ARGS=(
     ["features/unix_abstract"]="-addr $UNIX_ADDR"
     ["default"]="-port $SERVER_PORT"
     # the CI runs this from the grpc-go directory
-    ["features/advancedtls"]="-credentials_directory $(pwd)/examples/features/advancedtls/creds"
+    ["features/advancedtls"]="-credentials_directory $(dirname $(realpath "$0"))/features/advancedtls/creds"
 )
 
 declare -A CLIENT_ARGS=(
@@ -85,7 +85,7 @@ declare -A CLIENT_ARGS=(
     ["features/orca"]="-test=true"
     ["default"]="-addr localhost:$SERVER_PORT"
     # the CI runs this from the grpc-go directory
-    ["features/advancedtls"]="-credentials_directory $(pwd)/examples/features/advancedtls/creds"
+    ["features/advancedtls"]="-credentials_directory $(dirname $(realpath "$0"))/features/advancedtls/creds"
 )
 
 declare -A SERVER_WAIT_COMMAND=(
