@@ -39,17 +39,11 @@ type baseCodec interface {
 // with encoding.GetCodec and if it is registered wraps it with newCodecV1Bridge
 // to turn it into an encoding.CodecV2. Returns nil otherwise.
 func getCodec(name string) encoding.CodecV2 {
-	codecV2 := encoding.GetCodecV2(name)
-	if codecV2 != nil {
-		return codecV2
-	}
-
-	codecV1 := encoding.GetCodec(name)
-	if codecV1 != nil {
+	if codecV1 := encoding.GetCodec(name); codecV1 != nil {
 		return newCodecV1Bridge(codecV1)
 	}
 
-	return nil
+	return encoding.GetCodecV2(name)
 }
 
 func newCodecV0Bridge(c Codec) baseCodec {

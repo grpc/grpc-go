@@ -43,8 +43,6 @@ type CodecV2 interface {
 	Name() string
 }
 
-var registeredV2Codecs = make(map[string]CodecV2)
-
 // RegisterCodecV2 registers the provided CodecV2 for use with all gRPC clients and
 // servers.
 //
@@ -70,7 +68,7 @@ func RegisterCodecV2(codec CodecV2) {
 		panic("cannot register CodecV2 with empty string result for Name()")
 	}
 	contentSubtype := strings.ToLower(codec.Name())
-	registeredV2Codecs[contentSubtype] = codec
+	registeredCodecs[contentSubtype] = codec
 }
 
 // GetCodecV2 gets a registered CodecV2 by content-subtype, or nil if no CodecV2 is
@@ -78,5 +76,6 @@ func RegisterCodecV2(codec CodecV2) {
 //
 // The content-subtype is expected to be lowercase.
 func GetCodecV2(contentSubtype string) CodecV2 {
-	return registeredV2Codecs[contentSubtype]
+	c, _ := registeredCodecs[contentSubtype].(CodecV2)
+	return c
 }

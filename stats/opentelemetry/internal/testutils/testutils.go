@@ -131,8 +131,8 @@ func createBucketCounts(recordingPoints []float64, bounds []float64) []uint64 {
 			continue
 		}
 		for recordingPoints[recordingPointIndex] <= bound {
-			bucketCount += 1
-			recordingPointIndex += 1
+			bucketCount++
+			recordingPointIndex++
 			if recordingPointIndex >= len(recordingPoints) {
 				break
 			}
