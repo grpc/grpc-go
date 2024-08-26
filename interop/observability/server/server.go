@@ -17,11 +17,9 @@
  */
 
 /*
-Package main provides a gRPC server with observability integration. This
-server sets up a gRPC service with observability features enabled using gRPC's
-observability package. It listens on a specified port and serves the TestService
-from the interop package. The server starts observability and sets up logging
-for server activity. The server will stop gracefully when the application exits.
+Package main provides a gRPC server with observability features, using gRPC's
+observability package. It sets up and serves the TestService, and stops
+gracefully upon exit.
 */
 package main
 

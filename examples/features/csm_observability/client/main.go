@@ -17,15 +17,9 @@
  */
 
 /*
-Package main implements a gRPC client that connects to a server using xDS
-resolvers and balancers, with observability features enabled.
-The client is configured to use OpenTelemetry for metrics collection and
-Prometheus for exporting these metrics. It connects to the specified server
-address and continuously performs unary RPC calls every second. Metrics from
-these operations are collected and exposed via a Prometheus endpoint.
-The client sets up the necessary components for observability, including the
-Prometheus exporter and OpenTelemetry metrics provider. It also handles cleanup
-of observability resources upon exit.
+Package main implements a gRPC client with xDS support, observability via
+OpenTelemetry, and Prometheus metrics export. It continuously performs unary
+RPC calls to a server and exposes metrics through a Prometheus endpoint.
 */
 package main
 

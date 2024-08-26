@@ -17,12 +17,9 @@
  */
 
 /*
-Package main implements a gRPC server that listens on multiple addresses and
-provides an Echo service.
-It sets up gRPC servers on specified addresses, handling unary RPC requests
-and responding with a message that includes the server's address. The servers
-are run concurrently using goroutines, and the main function waits for all
-servers to complete before exiting.
+Package main implements a gRPC server running on multiple addresses, providing
+an Echo service. It sets up servers on specified addresses, handles unary RPC
+requests, and concurrently runs all servers.
 */
 package main
 

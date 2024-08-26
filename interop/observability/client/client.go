@@ -18,10 +18,8 @@
 
 /*
 Package main is a gRPC client for running various interop test cases against a
-gRPC server. It supports different test cases, such as "ping_pong", "large_unary",
-and "custom_metadata", by connecting to a server and invoking the appropriate
-test. The package also integrates with observability tools and includes a delay
-to ensure proper data flushing before shutdown.
+server. It supports different test cases and integrates with observability tools,
+including a delay before shutdown.
 */
 package main
 
