@@ -1,4 +1,8 @@
-rm -rf creds
+#!/bin/bash
+if [ -d "creds" ]; then
+  echo "creds directory already exists. Remove it and re-run this script."
+  exit 1
+fi
 mkdir creds
 pushd creds
 touch index.txt
