@@ -51,6 +51,9 @@ var (
 	newChildBalancer  = func(bb balancer.Builder, cc balancer.ClientConn, o balancer.BuildOptions) balancer.Balancer {
 		return bb.Build(cc, o)
 	}
+	// Below function is no-op in actual code, but can be overridden in
+	// tests to give tests visibility into exactly when certain events happen.
+	ClientConnUpdateHook = func() {}
 )
 
 func init() {
@@ -145,6 +148,7 @@ func (bb) ParseConfig(j json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 type ccUpdate struct {
 	state balancer.ClientConnState
 	err   error
+	done  chan struct{}
 }
 
 type exitIdle struct{}
@@ -306,6 +310,11 @@ func (b *clusterResolverBalancer) run() {
 			switch update := u.(type) {
 			case *ccUpdate:
 				b.handleClientConnUpdate(update)
+				if update.done != nil {
+					// Close the channel to convey to the consumers of updateCh
+					// that child policies config are updated inline.
+					close(update.done)
+				}
 			case exitIdle:
 				if b.child == nil {
 					b.logger.Errorf("xds: received ExitIdle with no child balancer")
@@ -357,7 +366,10 @@ func (b *clusterResolverBalancer) UpdateClientConnState(state balancer.ClientCon
 		b.attrsWithClient = state.ResolverState.Attributes
 	}
 
-	b.updateCh.Put(&ccUpdate{state: state})
+	done := make(chan struct{})
+	b.updateCh.Put(&ccUpdate{state: state, done: done})
+	<-done
+	ClientConnUpdateHook()
 	return nil
 }
 

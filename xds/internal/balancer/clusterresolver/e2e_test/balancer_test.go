@@ -44,6 +44,7 @@ import (
 	"google.golang.org/grpc/status"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
+	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
@@ -443,5 +444,66 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatalf("Timeout when waiting for child policy to receive its configuration")
+	}
+}
+
+// Test verifies that LB waits for child policy configuration update
+// inline on receipt of configuration update.
+func (s) TestChildPoliciesConfigUpdatedInline(t *testing.T) {
+	// Override the newConfigHook to ensure picker was updated.
+	clientConnUpdateDone := make(chan struct{}, 1)
+	origNewClientConnUpdateHookHook := clusterresolver.ClientConnUpdateHook
+	clusterresolver.ClientConnUpdateHook = func() { clientConnUpdateDone <- struct{}{} }
+	defer func() { clusterresolver.ClientConnUpdateHook = origNewClientConnUpdateHookHook }()
+
+	// Create a listener to be used by the management server. The test will
+	// close this listener to simulate ADS stream breakage.
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+
+	// Start an xDS management server with the above restartable listener, and
+	// push a channel when the stream is closed.
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		Listener: lis,
+	})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
+
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	// Configure cluster and endpoints resources in the management server.
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create xDS client, configure cds_experimental LB policy with a manual
+	// resolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Close the listener and ensure that the config is updated.
+	lis.Close()
+	select {
+	case <-clientConnUpdateDone:
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for inline child policy configuration update on receipt of configuration update.")
 	}
 }
