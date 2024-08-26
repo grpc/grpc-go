@@ -511,13 +511,13 @@ type test struct {
 	customDialOptions           []grpc.DialOption
 	resolverScheme              string
 
-	// These are are set once startServer is called. The common case is to have
+	// These are set once startServer is called. The common case is to have
 	// only one testServer.
 	srv     stopper
 	hSrv    healthgrpc.HealthServer
 	srvAddr string
 
-	// These are are set once startServers is called.
+	// These are set once startServers is called.
 	srvs     []stopper
 	hSrvs    []healthgrpc.HealthServer
 	srvAddrs []string
@@ -2919,7 +2919,7 @@ func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
 	}
 }
 
-// TestMalformedHTTP2Metadata verfies the returned error when the client
+// TestMalformedHTTP2Metadata verifies the returned error when the client
 // sends an illegal metadata.
 func (s) TestMalformedHTTP2Metadata(t *testing.T) {
 	for _, e := range listTestEnv() {
@@ -4743,13 +4743,6 @@ type windowSizeConfig struct {
 	clientConn   int32
 }
 
-func max(a, b int32) int32 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func (s) TestConfigurableWindowSizeWithLargeWindow(t *testing.T) {
 	wc := windowSizeConfig{
 		serverStream: 8 * 1024 * 1024,
@@ -5849,7 +5842,7 @@ func (s) TestClientSettingsFloodCloseConn(t *testing.T) {
 		t.Fatalf("Unexpected frame: %v", f)
 	}
 
-	// Flood settings frames until a timeout occurs, indiciating the server has
+	// Flood settings frames until a timeout occurs, indicating the server has
 	// stopped reading from the connection, then close the conn.
 	for {
 		conn.SetWriteDeadline(time.Now().Add(50 * time.Millisecond))

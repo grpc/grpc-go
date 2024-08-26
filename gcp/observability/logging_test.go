@@ -204,7 +204,7 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 			SequenceID:  2,
 			Authority:   ss.Address,
 			Payload: payload{
-				Message: []uint8{},
+				Message: nil,
 			},
 		},
 		{
@@ -285,7 +285,7 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 			SequenceID:  2,
 			Authority:   ss.Address,
 			Payload: payload{
-				Message: []uint8{},
+				Message: nil,
 			},
 		},
 		{
@@ -512,7 +512,7 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 			SequenceID:  4,
 			Authority:   ss.Address,
 			Payload: payload{
-				Message: []uint8{},
+				Message: nil,
 			},
 		},
 		{
@@ -548,7 +548,7 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 // Client and Server RPC Events configured to log. Both sides should log and
 // share the exporter, so the exporter should receive the collective amount of
 // calls for both a client stream (corresponding to a Client RPC Event) and a
-// server stream (corresponding ot a Server RPC Event). The specificity of the
+// server stream (corresponding to a Server RPC Event). The specificity of the
 // entries are tested in previous tests.
 func (s) TestBothClientAndServerRPCEvents(t *testing.T) {
 	fle := &fakeLoggingExporter{
@@ -870,7 +870,7 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 			SequenceID:  2,
 			Authority:   ss.Address,
 			Payload: payload{
-				Message: []uint8{},
+				Message: nil,
 			},
 		},
 		{

@@ -191,7 +191,7 @@ func (s) TestRefuseStartWithInvalidPatterns(t *testing.T) {
 	}
 }
 
-// TestRefuseStartWithExcludeAndWildCardAll tests the sceanrio where an
+// TestRefuseStartWithExcludeAndWildCardAll tests the scenario where an
 // observability configuration is provided with client RPC event specifying to
 // exclude, and which matches on the '*' wildcard (any). This should cause an
 // error when trying to start the observability system.

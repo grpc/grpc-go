@@ -77,7 +77,7 @@ func testRW(r io.Reader, w io.Writer) error {
 func (s) TestPipe(t *testing.T) {
 	p := newPipe(10)
 	if err := testRW(p, p); err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err)
 	}
 }
 
@@ -97,10 +97,10 @@ func (s) TestConn(t *testing.T) {
 	c1, c2 := &conn{p1, p2}, &conn{p2, p1}
 
 	if err := testRW(c1, c2); err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err)
 	}
 	if err := testRW(c2, c1); err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err)
 	}
 }
 
@@ -169,10 +169,10 @@ func (s) TestListener(t *testing.T) {
 		t.Fatalf("cerr = %v, serr = %v; want nil, nil", cerr, serr)
 	}
 	if err := testRW(c, s); err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err)
 	}
 	if err := testRW(s, c); err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err)
 	}
 }
 

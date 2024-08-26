@@ -57,6 +57,10 @@ jobs:
 
           - type: tests
             goversion: '1.22'
+            testflags: '-race -tags=buffer_pooling'
+
+          - type: tests
+            goversion: '1.22'
             goarch: 386
 
           - type: tests
@@ -81,7 +85,7 @@ jobs:
       - name: Setup GRPC environment
         if: matrix.grpcenv != ''
         run: echo "${{ matrix.grpcenv }}" >> $GITHUB_ENV
-        
+
       - name: Checkout repo
         uses: actions/checkout@v4
 

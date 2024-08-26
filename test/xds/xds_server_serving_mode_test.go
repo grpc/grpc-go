@@ -31,6 +31,7 @@ import (
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/xds"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -43,7 +44,7 @@ import (
 // change callback is not invoked and client connections to the server are not
 // recycled.
 func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, _ := setupManagementServerAndResolver(t)
+	managementServer, nodeID, bootstrapContents, _ := setup.ManagementServerAndResolver(t)
 
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
@@ -165,7 +166,7 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 // xDS enabled gRPC servers. It verifies that appropriate mode changes happen in
 // the server, and also verifies behavior of clientConns under these modes.
 func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, _ := setupManagementServerAndResolver(t)
+	managementServer, nodeID, bootstrapContents, _ := setup.ManagementServerAndResolver(t)
 
 	// Configure xDS credentials to be used on the server-side.
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{

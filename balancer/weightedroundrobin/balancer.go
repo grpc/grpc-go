@@ -415,7 +415,7 @@ func (p *picker) inc() uint32 {
 }
 
 func (p *picker) regenerateScheduler() {
-	s := p.newScheduler()
+	s := p.newScheduler(true)
 	atomic.StorePointer(&p.scheduler, unsafe.Pointer(&s))
 }
 
@@ -513,7 +513,7 @@ func (w *weightedSubConn) OnLoadReport(load *v3orcapb.OrcaLoadReport) {
 	}
 
 	w.lastUpdated = internal.TimeNow()
-	if w.nonEmptySince == (time.Time{}) {
+	if w.nonEmptySince.Equal(time.Time{}) {
 		w.nonEmptySince = w.lastUpdated
 	}
 }
@@ -558,14 +558,17 @@ func (w *weightedSubConn) updateConnectivityState(cs connectivity.State) connect
 		w.SubConn.Connect()
 	case connectivity.Ready:
 		// If we transition back to READY state, reset nonEmptySince so that we
-		// apply the blackout period after we start receiving load data.  Note
-		// that we cannot guarantee that we will never receive lingering
-		// callbacks for backend metric reports from the previous connection
-		// after the new connection has been established, but they should be
-		// masked by new backend metric reports from the new connection by the
-		// time the blackout period ends.
+		// apply the blackout period after we start receiving load data. Also
+		// reset lastUpdated to trigger endpoint weight not yet usable in the
+		// case endpoint gets asked what weight it is before receiving a new
+		// load report. Note that we cannot guarantee that we will never receive
+		// lingering callbacks for backend metric reports from the previous
+		// connection after the new connection has been established, but they
+		// should be masked by new backend metric reports from the new
+		// connection by the time the blackout period ends.
 		w.mu.Lock()
 		w.nonEmptySince = time.Time{}
+		w.lastUpdated = time.Time{}
 		w.mu.Unlock()
 	case connectivity.Shutdown:
 		if w.stopORCAListener != nil {
@@ -592,7 +595,7 @@ func (w *weightedSubConn) updateConnectivityState(cs connectivity.State) connect
 // account the parameters.  Returns 0 for blacked out or expired data, which
 // will cause the backend weight to be treated as the mean of the weights of the
 // other backends. If forScheduler is set to true, this function will emit
-// metrics through the mtrics registry.
+// metrics through the metrics registry.
 func (w *weightedSubConn) weight(now time.Time, weightExpirationPeriod, blackoutPeriod time.Duration, recordMetrics bool) (weight float64) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -601,6 +604,13 @@ func (w *weightedSubConn) weight(now time.Time, weightExpirationPeriod, blackout
 		defer func() {
 			endpointWeightsMetric.Record(w.metricsRecorder, weight, w.target, w.locality)
 		}()
+	}
+
+	// The SubConn has not received a load report (i.e. just turned READY with
+	// no load report).
+	if w.lastUpdated.Equal(time.Time{}) {
+		endpointWeightNotYetUsableMetric.Record(w.metricsRecorder, 1, w.target, w.locality)
+		return 0
 	}
 
 	// If the most recent update was longer ago than the expiration period,
@@ -615,7 +625,7 @@ func (w *weightedSubConn) weight(now time.Time, weightExpirationPeriod, blackout
 	}
 
 	// If we don't have at least blackoutPeriod worth of data, return 0.
-	if blackoutPeriod != 0 && (w.nonEmptySince == (time.Time{}) || now.Sub(w.nonEmptySince) < blackoutPeriod) {
+	if blackoutPeriod != 0 && (w.nonEmptySince.Equal(time.Time{}) || now.Sub(w.nonEmptySince) < blackoutPeriod) {
 		if recordMetrics {
 			endpointWeightNotYetUsableMetric.Record(w.metricsRecorder, 1, w.target, w.locality)
 		}

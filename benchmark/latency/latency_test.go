@@ -46,9 +46,9 @@ type bufConn struct {
 func (bufConn) Close() error                       { panic("unimplemented") }
 func (bufConn) LocalAddr() net.Addr                { panic("unimplemented") }
 func (bufConn) RemoteAddr() net.Addr               { panic("unimplemented") }
-func (bufConn) SetDeadline(t time.Time) error      { panic("unimplemneted") }
-func (bufConn) SetReadDeadline(t time.Time) error  { panic("unimplemneted") }
-func (bufConn) SetWriteDeadline(t time.Time) error { panic("unimplemneted") }
+func (bufConn) SetDeadline(t time.Time) error      { panic("unimplemented") }
+func (bufConn) SetReadDeadline(t time.Time) error  { panic("unimplemented") }
+func (bufConn) SetWriteDeadline(t time.Time) error { panic("unimplemented") }
 
 func restoreHooks() func() {
 	s := sleep

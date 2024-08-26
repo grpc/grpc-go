@@ -21,7 +21,6 @@ package xds_test
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -36,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -60,7 +60,7 @@ import (
 // used on the client.
 func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Success(t *testing.T) {
 	// Spin up an xDS management server.
-	mgmtServer, nodeID, _, resolverBuilder := setupManagementServerAndResolver(t)
+	mgmtServer, nodeID, _, resolverBuilder := setup.ManagementServerAndResolver(t)
 
 	// Spin up a test backend.
 	server := stubserver.StartTestService(t, nil)
@@ -118,10 +118,10 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	// with no certificate providers.
 	nodeID := uuid.New().String()
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 	})
 	if err != nil {

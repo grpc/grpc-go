@@ -68,10 +68,10 @@ func (s) TestReportLoad(t *testing.T) {
 	tr, err := transport.New(transport.Options{
 		ServerCfg:      serverCfg,
 		NodeProto:      nodeProto,
-		OnRecvHandler:  func(transport.ResourceUpdate) error { return nil }, // No ADS validation.
-		OnErrorHandler: func(error) {},                                      // No ADS stream error handling.
-		OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No ADS stream update handling.
-		Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.
+		OnRecvHandler:  func(transport.ResourceUpdate, *transport.ADSFlowControl) error { return nil }, // No ADS validation.
+		OnErrorHandler: func(error) {},                                                                 // No ADS stream error handling.
+		OnSendHandler:  func(*transport.ResourceSendInfo) {},                                           // No ADS stream update handling.
+		Backoff:        func(int) time.Duration { return time.Duration(0) },                            // No backoff.
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
@@ -211,7 +211,7 @@ func (s) TestReportLoad(t *testing.T) {
 	}
 
 	// Cancel the first load reporting call, and ensure that the stream does not
-	// close (because we have aother call open).
+	// close (because we have another call open).
 	cancelLRS1()
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()

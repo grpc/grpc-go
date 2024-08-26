@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -59,7 +60,7 @@ import (
 // (NonForwardingAction), and the RPC's matching those routes should proceed as
 // normal.
 func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, xdsResolver := setupManagementServerAndResolver(t)
+	managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
 	defer cleanup2()
@@ -594,7 +595,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 		// This test tests that an RBAC Config with Action.LOG configured allows
 		// every RPC through. This maps to the line "At this time, if the
 		// RBAC.action is Action.LOG then the policy will be completely ignored,
-		// as if RBAC was not configurated." from A41
+		// as if RBAC was not configured." from A41
 		{
 			name: "action-log",
 			rbacCfg: &rpb.RBAC{
@@ -626,7 +627,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 				}
 				audit.RegisterLoggerBuilder(lb)
 
-				managementServer, nodeID, bootstrapContents, xdsResolver := setupManagementServerAndResolver(t)
+				managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
 
 				lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
 				defer cleanup2()
@@ -802,7 +803,7 @@ func serverListenerWithBadRouteConfiguration(t *testing.T, host string, port uin
 }
 
 func (s) TestRBACToggledOn_WithBadRouteConfiguration(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, xdsResolver := setupManagementServerAndResolver(t)
+	managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
 	defer cleanup2()

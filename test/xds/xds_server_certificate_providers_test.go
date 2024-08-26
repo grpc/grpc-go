@@ -20,7 +20,6 @@ package xds_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -34,6 +33,7 @@ import (
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -57,7 +57,7 @@ import (
 // credentials are getting used on the server.
 func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Success(t *testing.T) {
 	// Spin up an xDS management server.
-	mgmtServer, nodeID, bootstrapContents, _ := setupManagementServerAndResolver(t)
+	mgmtServer, nodeID, bootstrapContents, _ := setup.ManagementServerAndResolver(t)
 
 	// Spin up an xDS-enabled gRPC server that uses xDS credentials with
 	// insecure fallback, and the above bootstrap configuration.
@@ -130,10 +130,10 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	// Create bootstrap configuration with no certificate providers.
 	nodeID := uuid.New().String()
 	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-		}`, mgmtServer.Address))},
+		}]`, mgmtServer.Address)),
 		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})

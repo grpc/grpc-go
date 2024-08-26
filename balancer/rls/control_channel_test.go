@@ -62,7 +62,7 @@ func (s) TestControlChannelThrottled(t *testing.T) {
 
 	select {
 	case <-rlsReqCh:
-		t.Fatal("RouteLookup RPC invoked when control channel is throtlled")
+		t.Fatal("RouteLookup RPC invoked when control channel is throttled")
 	case <-time.After(defaultTestShortTimeout):
 	}
 }

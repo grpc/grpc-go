@@ -125,7 +125,7 @@ func (b *bal) Close() {
 
 // run is a dummy goroutine to make sure that child policies are closed at the
 // end of tests. If they are not closed, these goroutines will be picked up by
-// the leakcheker and tests will fail.
+// the leak checker and tests will fail.
 func (b *bal) run() {
 	<-b.done.Done()
 }

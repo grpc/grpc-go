@@ -24,15 +24,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -51,40 +49,8 @@ const (
 	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
 )
 
-// setupManagementServerAndResolver sets up an xDS management server, creates
-// bootstrap configuration pointing to that server and creates an xDS resolver
-// using that configuration.
-//
-// Registers a cleanup function on t to stop the management server.
-//
-// Returns the following:
-// - the xDS management server
-// - the node ID to use when talking to this management server
-// - bootstrap configuration to use (if creating an xDS-enabled gRPC server)
-// - xDS resolver builder (if creating an xDS-enabled gRPC client)
-func setupManagementServerAndResolver(t *testing.T) (*e2e.ManagementServer, string, []byte, resolver.Builder) {
-	// Start an xDS management server.
-	xdsServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-
-	// Create bootstrap configuration pointing to the above management server.
-	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, xdsServer.Address)
-
-	// Create an xDS resolver with the above bootstrap configuration.
-	var r resolver.Builder
-	var err error
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		r, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
-	}
-
-	return xdsServer, nodeID, bc, r
-}
-
 func (s) TestClientSideXDS(t *testing.T) {
-	managementServer, nodeID, _, xdsResolver := setupManagementServerAndResolver(t)
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()

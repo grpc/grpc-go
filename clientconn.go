@@ -825,14 +825,14 @@ func (cc *ClientConn) newAddrConnLocked(addrs []resolver.Address, opts balancer.
 	}
 
 	ac := &addrConn{
-		state:        connectivity.Idle,
-		cc:           cc,
-		addrs:        copyAddresses(addrs),
-		scopts:       opts,
-		dopts:        cc.dopts,
-		channelz:     channelz.RegisterSubChannel(cc.channelz, ""),
-		resetBackoff: make(chan struct{}),
-		stateChan:    make(chan struct{}),
+		state:          connectivity.Idle,
+		cc:             cc,
+		addrs:          copyAddresses(addrs),
+		scopts:         opts,
+		dopts:          cc.dopts,
+		channelz:       channelz.RegisterSubChannel(cc.channelz, ""),
+		resetBackoff:   make(chan struct{}),
+		stateReadyChan: make(chan struct{}),
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 	// Start with our address set to the first address; this may be updated if
@@ -1179,8 +1179,8 @@ type addrConn struct {
 	addrs   []resolver.Address // All addresses that the resolver resolved to.
 
 	// Use updateConnectivityState for updating addrConn's connectivity state.
-	state     connectivity.State
-	stateChan chan struct{} // closed and recreated on every state change.
+	state          connectivity.State
+	stateReadyChan chan struct{} // closed and recreated on every READY state change.
 
 	backoffIdx   int // Needs to be stateful for resetConnectBackoff.
 	resetBackoff chan struct{}
@@ -1193,9 +1193,6 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	if ac.state == s {
 		return
 	}
-	// When changing states, reset the state change channel.
-	close(ac.stateChan)
-	ac.stateChan = make(chan struct{})
 	ac.state = s
 	ac.channelz.ChannelMetrics.State.Store(&s)
 	if lastErr == nil {
@@ -1513,7 +1510,7 @@ func (ac *addrConn) getReadyTransport() transport.ClientTransport {
 func (ac *addrConn) getTransport(ctx context.Context) (transport.ClientTransport, error) {
 	for ctx.Err() == nil {
 		ac.mu.Lock()
-		t, state, sc := ac.transport, ac.state, ac.stateChan
+		t, state, sc := ac.transport, ac.state, ac.stateReadyChan
 		ac.mu.Unlock()
 		if state == connectivity.Ready {
 			return t, nil
@@ -1576,7 +1573,7 @@ func (ac *addrConn) tearDown(err error) {
 		} else {
 			// Hard close the transport when the channel is entering idle or is
 			// being shutdown. In the case where the channel is being shutdown,
-			// closing of transports is also taken care of by cancelation of cc.ctx.
+			// closing of transports is also taken care of by cancellation of cc.ctx.
 			// But in the case where the channel is entering idle, we need to
 			// explicitly close the transports here. Instead of distinguishing
 			// between these two cases, it is simpler to close the transport

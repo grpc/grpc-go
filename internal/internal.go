@@ -183,7 +183,7 @@ var (
 
 	// GRPCResolverSchemeExtraMetadata determines when gRPC will add extra
 	// metadata to RPCs.
-	GRPCResolverSchemeExtraMetadata string = "xds"
+	GRPCResolverSchemeExtraMetadata = "xds"
 
 	// EnterIdleModeForTesting gets the ClientConn to enter IDLE mode.
 	EnterIdleModeForTesting any // func(*grpc.ClientConn)
@@ -203,7 +203,7 @@ var (
 
 	// UserSetDefaultScheme is set to true if the user has overridden the
 	// default resolver scheme.
-	UserSetDefaultScheme bool = false
+	UserSetDefaultScheme = false
 
 	// ShuffleAddressListForTesting pseudo-randomizes the order of addresses.  n
 	// is the number of elements.  swap swaps the elements with indexes i and j.
@@ -221,6 +221,14 @@ var (
 	// sets the metric registry to its original state. Only called in testing
 	// functions.
 	SnapshotMetricRegistryForTesting any // func(t *testing.T)
+
+	// SetDefaultBufferPoolForTesting updates the default buffer pool, for
+	// testing purposes.
+	SetDefaultBufferPoolForTesting any // func(mem.BufferPool)
+
+	// SetBufferPoolingThresholdForTesting updates the buffer pooling threshold, for
+	// testing purposes.
+	SetBufferPoolingThresholdForTesting any // func(int)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health

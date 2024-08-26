@@ -152,7 +152,7 @@ func benchmarkIncrementUint64Map(b *testing.B, f func() incrementUint64Map) {
 	}
 }
 
-func BenchmarkMapWithSyncMutexContetion(b *testing.B) {
+func BenchmarkMapWithSyncMutexContention(b *testing.B) {
 	benchmarkIncrementUint64Map(b, newMapWithLock)
 }
 

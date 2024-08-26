@@ -173,11 +173,11 @@ func (s) TestBuildXDS(t *testing.T) {
 		{
 			desc: "ipv6 false",
 			wantBootstrapConfig: bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
-				Servers: []json.RawMessage{[]byte(`{
-						"server_uri": "dns:///directpath-pa.googleapis.com",
-					    "channel_creds": [{"type": "google_default"}],
-					    "server_features": ["ignore_resource_deletion"]
-  					}`)},
+				Servers: []byte(`[{
+					"server_uri": "dns:///directpath-pa.googleapis.com",
+					"channel_creds": [{"type": "google_default"}],
+					"server_features": ["ignore_resource_deletion"]
+  				}]`),
 				Authorities: map[string]json.RawMessage{
 					"traffic-director-c2p.xds.googleapis.com": []byte(`{
 							"xds_servers": [
@@ -199,11 +199,11 @@ func (s) TestBuildXDS(t *testing.T) {
 			desc:        "ipv6 true",
 			ipv6Capable: true,
 			wantBootstrapConfig: bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
-				Servers: []json.RawMessage{[]byte(`{
-						"server_uri": "dns:///directpath-pa.googleapis.com",
-					    "channel_creds": [{"type": "google_default"}],
-					    "server_features": ["ignore_resource_deletion"]
-  					}`)},
+				Servers: []byte(`[{
+					"server_uri": "dns:///directpath-pa.googleapis.com",
+					"channel_creds": [{"type": "google_default"}],
+					"server_features": ["ignore_resource_deletion"]
+  				}]`),
 				Authorities: map[string]json.RawMessage{
 					"traffic-director-c2p.xds.googleapis.com": []byte(`{
 							"xds_servers": [
@@ -229,11 +229,11 @@ func (s) TestBuildXDS(t *testing.T) {
 			ipv6Capable:   true,
 			tdURIOverride: "test-uri",
 			wantBootstrapConfig: bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
-				Servers: []json.RawMessage{[]byte(`{
-						"server_uri": "test-uri",
-					    "channel_creds": [{"type": "google_default"}],
-					    "server_features": ["ignore_resource_deletion"]
-  					}`)},
+				Servers: []byte(`[{
+					"server_uri": "test-uri",
+					"channel_creds": [{"type": "google_default"}],
+					"server_features": ["ignore_resource_deletion"]
+  				}]`),
 				Authorities: map[string]json.RawMessage{
 					"traffic-director-c2p.xds.googleapis.com": []byte(`{
 							"xds_servers": [
