@@ -1616,12 +1616,6 @@ func (s) TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 	}
 }
 
-func drainChannel(ch <-chan *lbpb.ClientStats) {
-	for range ch {
-		// Continue draining until the channel is closed
-	}
-}
-
 func (s) TestGRPCLBStatsQuashEmpty(t *testing.T) {
 	ch := make(chan *lbpb.ClientStats)
 	defer close(ch)
@@ -1643,10 +1637,13 @@ func (s) TestGRPCLBStatsQuashEmpty(t *testing.T) {
 		case st := <-ch:
 			t.Errorf("got unexpected stats report: %v", st)
 		case <-time.After(500 * time.Millisecond):
-			// Success: No further stats reports are expected
+			// Success.
 		}
-		// goroutine to drain the channel
-		go drainChannel(ch)
+		go func() {
+			for range ch {
+				// Drain statsChan until it is closed.
+			}
+		}()
 	}, &rpcStats{
 		numCallsStarted:               0,
 		numCallsFinished:              0,
