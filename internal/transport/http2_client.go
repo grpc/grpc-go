@@ -1667,11 +1667,10 @@ func (t *http2Client) reader(errCh chan<- error) {
 					t.closeStream(s, status.Error(code, msg), true, http2.ErrCodeProtocol, status.New(code, msg), nil, false)
 				}
 				continue
-			} else {
-				// Transport error.
-				t.Close(connectionErrorf(true, err, "error reading from server: %v", err))
-				return
 			}
+			// Transport error.
+			t.Close(connectionErrorf(true, err, "error reading from server: %v", err))
+			return
 		}
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
