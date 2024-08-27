@@ -153,7 +153,7 @@ func (s) TestCZGetSubChannel(t *testing.T) {
 		}
 		var scid int64
 		for scid = range scs {
-			break
+			// extract the socket id from the map entry.
 		}
 		sc := channelz.GetSubChannel(scid)
 		if sc == nil {
@@ -234,7 +234,7 @@ func (s) TestCZGetSocket(t *testing.T) {
 		}
 		var sktID int64
 		for sktID = range skts {
-			break
+			// extract the socket id from the map entry.
 		}
 
 		skt := channelz.GetSocket(sktID)

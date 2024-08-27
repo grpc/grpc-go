@@ -271,7 +271,7 @@ func parseChildPolicyConfigs(childPolicies []map[string]json.RawMessage, targetF
 		var name string
 		var rawCfg json.RawMessage
 		for name, rawCfg = range config {
-			break
+			// extracting the policy/config pair
 		}
 		builder := balancer.Get(name)
 		if builder == nil {
