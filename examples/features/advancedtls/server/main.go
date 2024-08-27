@@ -50,19 +50,8 @@ func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoRe
 	return &pb.EchoResponse{Message: req.Message}, nil
 }
 
-func tlsServers(credentialsDirectory string) {
-	go func() {
-		createAndRunTLSServer(credentialsDirectory, false, goodServerWithCrlPort)
-	}()
-	go func() {
-		createAndRunTLSServer(credentialsDirectory, true, revokedServerWithCrlPort)
-	}()
-}
-
 func insecureServer() {
-	go func() {
-		createAndRunInsecureServer(insecurePort)
-	}()
+	createAndRunInsecureServer(insecurePort)
 }
 
 func createAndRunInsecureServer(port int) {
@@ -180,7 +169,7 @@ func main() {
 		fmt.Println("Must set credentials_directory argument")
 		os.Exit(1)
 	}
-	tlsServers(*credentialsDirectory)
+	go createAndRunTLSServer(*credentialsDirectory, false, goodServerWithCrlPort)
+	go createAndRunTLSServer(*credentialsDirectory, true, revokedServerWithCrlPort)
 	insecureServer()
-	<-make(chan struct{})
 }
