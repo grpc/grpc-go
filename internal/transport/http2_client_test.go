@@ -32,10 +32,10 @@ import (
 // ClientPreface is the HTTP/2 client preface string.
 var ClientPreface = []byte(http2.ClientPreface)
 
-// framerWriteSettings represents the serialized byte sequence of an empty HTTP/2 SETTINGS frame.
+// framerWriteSettings is serialized byte sequence of []http2.Setting{}
 var framerWriteSettings = []byte{0, 0, 0, 4, 0, 0, 0, 0, 0}
 
-// framerWindowUpdate represents the serialized byte sequence of an HTTP/2 WINDOW_UPDATE frame.
+// framerWindowUpdate is serialized byte sequence of http2.Setting{ID:  http2.SettingInitialWindowSize, Val: 14465}
 var framerWindowUpdate = []byte{0, 0, 4, 8, 0, 0, 0, 0, 0, 0, 0, 56, 129}
 
 type clientPrefaceConn struct {
