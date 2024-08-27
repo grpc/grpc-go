@@ -42,8 +42,8 @@ type server struct {
 }
 
 const credRefreshInterval = 1 * time.Minute
-const goodServerWithCrlPort int = 50051
-const revokedServerWithCrlPort int = 50053
+const goodServerWithCRLPort int = 50051
+const revokedServerWithCRLPort int = 50053
 const insecurePort int = 50054
 
 func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
@@ -75,7 +75,7 @@ func createAndRunTLSServer(credsDirectory string, useRevokedCert bool, port int)
 	rootProvider := makeRootProvider(credsDirectory)
 	defer rootProvider.Close()
 
-	crlProvider := makeCrlProvider(filepath.Join(credsDirectory, "crl"))
+	crlProvider := makeCRLProvider(filepath.Join(credsDirectory, "crl"))
 	defer crlProvider.Close()
 
 	options := &advancedtls.Options{
@@ -150,7 +150,7 @@ func makeIdentityProvider(useRevokedCert bool, credsDirectory string) certprovid
 	return identityProvider
 }
 
-func makeCrlProvider(crlDirectory string) *advancedtls.FileWatcherCRLProvider {
+func makeCRLProvider(crlDirectory string) *advancedtls.FileWatcherCRLProvider {
 	options := advancedtls.FileWatcherOptions{
 		CRLDirectory: crlDirectory,
 	}
@@ -169,7 +169,7 @@ func main() {
 		fmt.Println("Must set credentials_directory argument")
 		os.Exit(1)
 	}
-	go createAndRunTLSServer(*credentialsDirectory, false, goodServerWithCrlPort)
-	go createAndRunTLSServer(*credentialsDirectory, true, revokedServerWithCrlPort)
+	go createAndRunTLSServer(*credentialsDirectory, false, goodServerWithCRLPort)
+	go createAndRunTLSServer(*credentialsDirectory, true, revokedServerWithCRLPort)
 	insecureServer()
 }

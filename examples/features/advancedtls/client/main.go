@@ -109,34 +109,34 @@ func runClientWithProviders(rootProvider certprovider.Provider, identityProvider
 	runWithCredentials(clientTLSCreds, fullServerAddr, !shouldFail)
 }
 
-func tlsWithCrlsToGoodServer(credsDirectory string) {
+func tlsWithCRLsToGoodServer(credsDirectory string) {
 	rootProvider := makeRootProvider(credsDirectory)
 	defer rootProvider.Close()
 	identityProvider := makeIdentityProvider(false, credsDirectory)
 	defer identityProvider.Close()
-	crlProvider := makeCrlProvider(credsDirectory)
+	crlProvider := makeCRLProvider(credsDirectory)
 	defer crlProvider.Close()
 
 	runClientWithProviders(rootProvider, identityProvider, crlProvider, goodServerPort, false)
 }
 
-func tlsWithCrlsToRevokedServer(credsDirectory string) {
+func tlsWithCRLsToRevokedServer(credsDirectory string) {
 	rootProvider := makeRootProvider(credsDirectory)
 	defer rootProvider.Close()
 	identityProvider := makeIdentityProvider(false, credsDirectory)
 	defer identityProvider.Close()
-	crlProvider := makeCrlProvider(credsDirectory)
+	crlProvider := makeCRLProvider(credsDirectory)
 	defer crlProvider.Close()
 
 	runClientWithProviders(rootProvider, identityProvider, crlProvider, revokedServerPort, true)
 }
 
-func tlsWithCrls(credsDirectory string) {
-	tlsWithCrlsToGoodServer(credsDirectory)
-	tlsWithCrlsToRevokedServer(credsDirectory)
+func tlsWithCRLs(credsDirectory string) {
+	tlsWithCRLsToGoodServer(credsDirectory)
+	tlsWithCRLsToRevokedServer(credsDirectory)
 }
 
-func makeCrlProvider(crlDirectory string) *advancedtls.FileWatcherCRLProvider {
+func makeCRLProvider(crlDirectory string) *advancedtls.FileWatcherCRLProvider {
 	options := advancedtls.FileWatcherOptions{
 		CRLDirectory: crlDirectory,
 	}
@@ -297,7 +297,7 @@ func main() {
 		fmt.Println("Must set credentials_directory argument to this repo's creds directory")
 		os.Exit(1)
 	}
-	tlsWithCrls(*credsDirectory)
+	tlsWithCRLs(*credsDirectory)
 	customVerification(*credsDirectory)
 	credentialsNewTLSExample(*credsDirectory)
 	insecureCredentialsExample()
