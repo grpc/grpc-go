@@ -43,8 +43,8 @@ type server struct {
 
 const credRefreshInterval = 1 * time.Minute
 const goodServerWithCrlPort int = 50051
-const revokedServerWithCrlPort int = 50052
-const insecurePort int = 50053
+const revokedServerWithCrlPort int = 50053
+const insecurePort int = 50054
 
 func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: req.Message}, nil
@@ -182,7 +182,5 @@ func main() {
 	}
 	tlsServers(*credentialsDirectory)
 	insecureServer()
-	for {
-		time.Sleep(1 * time.Second)
-	}
+	<-make(chan struct{})
 }
