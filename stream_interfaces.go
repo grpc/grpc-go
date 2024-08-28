@@ -82,6 +82,10 @@ type ClientStreamingClient[Req any, Res any] interface {
 // requests, one response) RPC. It is generic over both the type of the request
 // message stream and the type of the unary response message. It is used in
 // generated code.
+//
+// To terminate the RPC, call SendAndClose and return nil from the method
+// handler or do not call SendAndClose and return an error from the status
+// package.
 type ClientStreamingServer[Req any, Res any] interface {
 	// Recv receives the next request message from the client.  The server may
 	// repeatedly call Recv to read messages from the request stream.  If
@@ -132,6 +136,9 @@ type BidiStreamingClient[Req any, Res any] interface {
 // (many requests, many responses) RPC. It is generic over both the type of the
 // request message stream and the type of the response message stream. It is
 // used in generated code.
+//
+// To terminate the stream, return from the handler method and return
+// an error from the status package, or use nil to indicate an OK status code.
 type BidiStreamingServer[Req any, Res any] interface {
 	// Recv receives the next request message from the client.  The server may
 	// repeatedly call Recv to read messages from the request stream.  If
