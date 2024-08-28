@@ -88,7 +88,7 @@ func ServerOption(to TraceOptions) grpc.ServerOption {
 func (csh *clientStatsHandler) createCallSpan(ctx context.Context, method string) (context.Context, *trace.Span) {
 	var span *trace.Span
 	if !csh.to.DisableTrace {
-		mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
+		mn := strings.ReplaceAll(removeLeadingSlash(method), "/", ".")
 		ctx, span = trace.StartSpan(ctx, mn, trace.WithSampler(csh.to.TS), trace.WithSpanKind(trace.SpanKindClient))
 	}
 	return ctx, span
