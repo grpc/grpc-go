@@ -311,7 +311,7 @@ func tlsServerHandshake(conn net.Conn) (AuthInfo, error) {
 
 func tlsClientHandshake(conn net.Conn, _ string) (AuthInfo, error) {
 	clientTLSConfig := &tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, // NOLINT
 		NextProtos:         []string{"h2"},
 	}
 	clientConn := tls.Client(conn, clientTLSConfig)
