@@ -234,7 +234,7 @@ func (s) TestCZGetSocket(t *testing.T) {
 		}
 		var sktID int64
 		for sktID = range skts {
-			// loop until end to get the last to get last socket id
+			// loop until end to get the last socket id
 		}
 
 		skt := channelz.GetSocket(sktID)
