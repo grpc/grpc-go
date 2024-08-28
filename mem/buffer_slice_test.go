@@ -27,6 +27,10 @@ import (
 	"google.golang.org/grpc/mem"
 )
 
+func newBuffer(data []byte, pool mem.BufferPool) mem.Buffer {
+	return mem.NewBuffer(&data, pool)
+}
+
 func (s) TestBufferSlice_Len(t *testing.T) {
 	tests := []struct {
 		name string
@@ -40,15 +44,15 @@ func (s) TestBufferSlice_Len(t *testing.T) {
 		},
 		{
 			name: "single",
-			in:   mem.BufferSlice{mem.NewBuffer([]byte("abcd"), nil)},
+			in:   mem.BufferSlice{newBuffer([]byte("abcd"), nil)},
 			want: 4,
 		},
 		{
 			name: "multiple",
 			in: mem.BufferSlice{
-				mem.NewBuffer([]byte("abcd"), nil),
-				mem.NewBuffer([]byte("abcd"), nil),
-				mem.NewBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
 			},
 			want: 12,
 		},
@@ -65,15 +69,15 @@ func (s) TestBufferSlice_Len(t *testing.T) {
 func (s) TestBufferSlice_Ref(t *testing.T) {
 	// Create a new buffer slice and a reference to it.
 	bs := mem.BufferSlice{
-		mem.NewBuffer([]byte("abcd"), nil),
-		mem.NewBuffer([]byte("abcd"), nil),
+		newBuffer([]byte("abcd"), nil),
+		newBuffer([]byte("abcd"), nil),
 	}
-	bsRef := bs.Ref()
+	bs.Ref()
 
 	// Free the original buffer slice and verify that the reference can still
 	// read data from it.
 	bs.Free()
-	got := bsRef.Materialize()
+	got := bs.Materialize()
 	want := []byte("abcdabcd")
 	if !bytes.Equal(got, want) {
 		t.Errorf("BufferSlice.Materialize() = %s, want %s", string(got), string(want))
@@ -89,16 +93,16 @@ func (s) TestBufferSlice_MaterializeToBuffer(t *testing.T) {
 	}{
 		{
 			name:     "single",
-			in:       mem.BufferSlice{mem.NewBuffer([]byte("abcd"), nil)},
+			in:       mem.BufferSlice{newBuffer([]byte("abcd"), nil)},
 			pool:     nil, // MaterializeToBuffer should not use the pool in this case.
 			wantData: []byte("abcd"),
 		},
 		{
 			name: "multiple",
 			in: mem.BufferSlice{
-				mem.NewBuffer([]byte("abcd"), nil),
-				mem.NewBuffer([]byte("abcd"), nil),
-				mem.NewBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
 			},
 			pool:     mem.DefaultBufferPool(),
 			wantData: []byte("abcdabcdabcd"),
@@ -106,6 +110,7 @@ func (s) TestBufferSlice_MaterializeToBuffer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			defer tt.in.Free()
 			got := tt.in.MaterializeToBuffer(tt.pool)
 			defer got.Free()
 			if !bytes.Equal(got.ReadOnlyData(), tt.wantData) {
@@ -117,9 +122,9 @@ func (s) TestBufferSlice_MaterializeToBuffer(t *testing.T) {
 
 func (s) TestBufferSlice_Reader(t *testing.T) {
 	bs := mem.BufferSlice{
-		mem.NewBuffer([]byte("abcd"), nil),
-		mem.NewBuffer([]byte("abcd"), nil),
-		mem.NewBuffer([]byte("abcd"), nil),
+		newBuffer([]byte("abcd"), nil),
+		newBuffer([]byte("abcd"), nil),
+		newBuffer([]byte("abcd"), nil),
 	}
 	wantData := []byte("abcdabcdabcd")
 

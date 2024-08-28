@@ -204,7 +204,7 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 			SequenceID:  2,
 			Authority:   ss.Address,
 			Payload: payload{
-				Message: []uint8{},
+				Message: nil,
 			},
 		},
 		{
@@ -285,7 +285,7 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 			SequenceID:  2,
 			Authority:   ss.Address,
 			Payload: payload{
-				Message: []uint8{},
+				Message: nil,
 			},
 		},
 		{
@@ -512,7 +512,7 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 			SequenceID:  4,
 			Authority:   ss.Address,
 			Payload: payload{
-				Message: []uint8{},
+				Message: nil,
 			},
 		},
 		{
@@ -870,7 +870,7 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 			SequenceID:  2,
 			Authority:   ss.Address,
 			Payload: payload{
-				Message: []uint8{},
+				Message: nil,
 			},
 		},
 		{
