@@ -108,6 +108,7 @@ func newClientImpl(config *bootstrap.Config, watchExpiryTimeout, idleChannelExpi
 type OptionsForTesting struct {
 	// Name is a unique name for this xDS client.
 	Name string
+
 	// Contents contain a JSON representation of the bootstrap configuration to
 	// be used when creating the xDS client.
 	Contents []byte
@@ -180,7 +181,6 @@ func GetForTesting(name string) (XDSClient, func(), error) {
 func init() {
 	internal.TriggerXDSResourceNotFoundForTesting = triggerXDSResourceNotFoundForTesting
 	xdsclientinternal.ResourceWatchStateForTesting = resourceWatchStateForTesting
-
 }
 
 func triggerXDSResourceNotFoundForTesting(client XDSClient, typ xdsresource.Type, name string) error {
