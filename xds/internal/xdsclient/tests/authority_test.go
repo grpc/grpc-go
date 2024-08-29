@@ -102,10 +102,10 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
 	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:                 t.Name(),
-		Contents:             bootstrapContents,
-		WatchExpiryTimeout:   defaultTestWatchExpiryTimeout,
-		AuthorityIdleTimeout: idleTimeout,
+		Name:                     t.Name(),
+		Contents:                 bootstrapContents,
+		WatchExpiryTimeout:       defaultTestWatchExpiryTimeout,
+		IdleChannelExpiryTimeout: idleTimeout,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
@@ -183,7 +183,7 @@ func (s) TestAuthorityShare(t *testing.T) {
 func (s) TestAuthorityIdleTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	lis, _, client, close := setupForAuthorityTests(ctx, t, defaultTestIdleAuthorityTimeout)
+	lis, _, client, close := setupForAuthorityTests(ctx, t, defaultTestIdleChannelExpiryTimeout)
 	defer close()
 
 	// Request the first resource. Verify that a new transport is created.
@@ -213,11 +213,10 @@ func (s) TestAuthorityIdleTimeout(t *testing.T) {
 		t.Fatal("Connection to management server closed unexpectedly")
 	}
 
-	// Wait for the authority idle timeout to fire.
-	time.Sleep(2 * defaultTestIdleAuthorityTimeout)
-	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := conn.CloseCh.Receive(sCtx); err != nil {
+	// Ensure the transport is closed once the authority idle timeout fires.
+	select {
+	case <-conn.CloseCh.C:
+	case <-time.After(2 * defaultTestIdleChannelExpiryTimeout):
 		t.Fatal("Connection to management server not closed after idle timeout expiry")
 	}
 }
@@ -278,7 +277,7 @@ func (s) TestAuthorityClientClose(t *testing.T) {
 func (s) TestAuthorityRevive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	lis, _, client, close := setupForAuthorityTests(ctx, t, defaultTestIdleAuthorityTimeout)
+	lis, _, client, close := setupForAuthorityTests(ctx, t, defaultTestIdleChannelExpiryTimeout)
 	defer close()
 
 	// Request the first resource. Verify that a new transport is created.
@@ -305,7 +304,7 @@ func (s) TestAuthorityRevive(t *testing.T) {
 
 	// Wait for double the idle timeout, and the connection to the management
 	// server should not be closed, since it was revived from the idle cache.
-	time.Sleep(2 * defaultTestIdleAuthorityTimeout)
+	time.Sleep(2 * defaultTestIdleChannelExpiryTimeout)
 	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := conn.CloseCh.Receive(sCtx); err != context.DeadlineExceeded {
