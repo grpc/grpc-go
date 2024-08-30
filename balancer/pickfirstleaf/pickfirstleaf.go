@@ -98,13 +98,18 @@ type pfConfig struct {
 
 // scData keeps track of the current state of the subConn.
 type scData struct {
+	// The following fields are initialized at build time and read-only after
+	// that.
 	subConn balancer.SubConn
-	state   connectivity.State
 	addr    resolver.Address
+
+	// The following fields should only be accessed from a serializer callback
+	// to ensure synchronization.
+	state   connectivity.State
 	lastErr error
 }
 
-func newSCData(b *pickfirstBalancer, addr resolver.Address) (*scData, error) {
+func (b *pickfirstBalancer) newSCData(addr resolver.Address) (*scData, error) {
 	sd := &scData{
 		state: connectivity.Idle,
 		addr:  addr,
@@ -152,6 +157,7 @@ func (b *pickfirstBalancer) ResolverError(err error) {
 	})
 }
 
+// Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) resolverError(err error) {
 	if b.logger.V(2) {
 		b.logger.Infof("Received error from the name resolver: %v", err)
@@ -162,6 +168,9 @@ func (b *pickfirstBalancer) resolverError(err error) {
 	// The picker will not change since the balancer does not currently
 	// report an error.
 	if b.state != connectivity.TransientFailure {
+		if b.logger.V(2) {
+			b.logger.Infof("Ignoring resolver error because balancer is using a previous good update.")
+		}
 		return
 	}
 
@@ -293,6 +302,7 @@ func (b *pickfirstBalancer) ExitIdle() {
 	})
 }
 
+// Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) closeSubConns() {
 	for _, sd := range b.subConns.Values() {
 		sd.(*scData).subConn.Shutdown()
@@ -324,6 +334,7 @@ func deDupAddresses(endpoints []resolver.Endpoint) []resolver.Endpoint {
 	return newEndpoints
 }
 
+// Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) reconcileSubConns(newEndpoints []resolver.Endpoint) {
 	// Remove old subConns that were not in new address list.
 	oldAddrs := resolver.NewAddressMap()
@@ -352,6 +363,7 @@ func (b *pickfirstBalancer) reconcileSubConns(newEndpoints []resolver.Endpoint) 
 
 // shutdownRemaining shuts down remaining subConns. Called when a subConn
 // becomes ready, which means that all other subConn must be shutdown.
+// Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) shutdownRemaining(selected *scData) {
 	for _, v := range b.subConns.Values() {
 		sd := v.(*scData)
@@ -369,6 +381,7 @@ func (b *pickfirstBalancer) shutdownRemaining(selected *scData) {
 // current address. If no subchannel exists, one is created. If the current
 // subchannel is in TransientFailure, a connection to the next address is
 // attempted.
+// Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) requestConnection() {
 	if !b.addressList.isValid() || b.state == connectivity.Shutdown {
 		return
@@ -379,7 +392,7 @@ func (b *pickfirstBalancer) requestConnection() {
 		var err error
 		// We want to assign the new scData to sd from the outer scope, hence
 		// we can't use := below.
-		sd, err = newSCData(b, curAddr)
+		sd, err = b.newSCData(curAddr)
 		if err != nil {
 			// This should never happen, unless the clientConn is being shut
 			// down.
@@ -413,7 +426,6 @@ func (b *pickfirstBalancer) requestConnection() {
 	}
 }
 
-// updateSubConnState handles subConn state updates.
 // Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubConnState) {
 	// Previously relevant subconns can still callback with state updates.
@@ -443,9 +455,9 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 		return
 	}
 
-	// If we are transitioning from READY to IDLE, reset index and re-connect when
-	// prompted.
-	if b.state == connectivity.Ready && state.ConnectivityState == connectivity.Idle {
+	// If the LB policy is READY, and it receives a subchannel state change,
+	// it means that the READY subchannel has failed.
+	if b.state == connectivity.Ready && state.ConnectivityState != connectivity.Ready {
 		// Once a transport fails, the balancer enters IDLE and starts from
 		// the first address when the picker is used.
 		b.state = connectivity.Idle
@@ -519,6 +531,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 	}
 }
 
+// Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) endFirstPass(lastErr error) {
 	b.firstPass = false
 	b.state = connectivity.TransientFailure
