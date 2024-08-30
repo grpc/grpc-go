@@ -16,7 +16,7 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client is an example client for CSM Observability.
 package main
 
 import (

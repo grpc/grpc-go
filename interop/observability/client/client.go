@@ -16,7 +16,7 @@
  *
  */
 
-// Binary client is an interop client.
+// Binary client is an interop client for Observability.
 //
 // See interop test case descriptions [here].
 //

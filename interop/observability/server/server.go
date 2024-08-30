@@ -16,7 +16,7 @@
  *
  */
 
-// Binary server is an interop server.
+// Binary server is an interop server for Observability.
 //
 // See interop test case descriptions [here].
 //
