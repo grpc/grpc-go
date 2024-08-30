@@ -290,5 +290,5 @@ func (r *NoopMetricsRecorder) RecordInt64Histo(*estats.Int64HistoHandle, int64, 
 // RecordFloat64Histo is noop implementation of RecordFloat64Histo.
 func (r *NoopMetricsRecorder) RecordFloat64Histo(*estats.Float64HistoHandle, float64, ...string) {}
 
-// RecordInt64Gauge is moop implementation of RecordInt64Gauge.
+// RecordInt64Gauge is noop implementation of RecordInt64Gauge.
 func (r *NoopMetricsRecorder) RecordInt64Gauge(*estats.Int64GaugeHandle, int64, ...string) {}

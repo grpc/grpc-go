@@ -70,17 +70,12 @@ type EphemeralSocketMetrics struct {
 	RemoteFlowControlWindow int64
 }
 
-// SocketType represents the type of socket, indicating whether it is a
-// NormalSocket or a ListenSocket.
+// SocketType represents the type of socket.
 type SocketType string
 
+// SocketType can be one of these.
 const (
-	// SocketTypeNormal represents a standard socket used for normal
-	// operations.
 	SocketTypeNormal = "NormalSocket"
-
-	// SocketTypeListen represents a socket used specifically for
-	// listening for incoming connections.
 	SocketTypeListen = "ListenSocket"
 )
 

@@ -122,7 +122,6 @@ func Copy(data []byte, pool BufferPool) Buffer {
 	return NewBuffer(buf, pool)
 }
 
-// ReadOnlyData returns the underlying byte slice of the Buffer.
 func (b *buffer) ReadOnlyData() []byte {
 	if b.refs == nil {
 		panic("Cannot read freed buffer")
@@ -130,8 +129,6 @@ func (b *buffer) ReadOnlyData() []byte {
 	return b.data
 }
 
-// Ref increments the reference counter of the Buffer, indicating that an
-// additional reference to the Buffer has been acquired.
 func (b *buffer) Ref() {
 	if b.refs == nil {
 		panic("Cannot ref freed buffer")
@@ -139,8 +136,6 @@ func (b *buffer) Ref() {
 	b.refs.Add(1)
 }
 
-// Free decrements the reference counter of the Buffer and releases the
-// underlying byte slice if the counter reaches 0.
 func (b *buffer) Free() {
 	if b.refs == nil {
 		panic("Cannot free freed buffer")
@@ -166,7 +161,6 @@ func (b *buffer) Free() {
 	}
 }
 
-// Len returns the size of the Buffer.
 func (b *buffer) Len() int {
 	return len(b.ReadOnlyData())
 }
@@ -203,8 +197,6 @@ func (b *buffer) read(buf []byte) (int, Buffer) {
 	return n, b
 }
 
-// String returns a string representation of the buffer. May be used for
-// debugging purposes.
 func (b *buffer) String() string {
 	return fmt.Sprintf("mem.Buffer(%p, data: %p, length: %d)", b, b.ReadOnlyData(), len(b.ReadOnlyData()))
 }
@@ -226,18 +218,12 @@ func SplitUnsafe(buf Buffer, n int) (left, right Buffer) {
 // methods are no-op implementations.
 type emptyBuffer struct{}
 
-// Noop implementation of ReadOnlyData
 func (e emptyBuffer) ReadOnlyData() []byte {
 	return nil
 }
-
-// Ref is noop implementation of Ref.
-func (e emptyBuffer) Ref() {}
-
-// Free is noop implementation of Free.
+func (e emptyBuffer) Ref()  {}
 func (e emptyBuffer) Free() {}
 
-// Len is noop implementation of Len.
 func (e emptyBuffer) Len() int {
 	return 0
 }

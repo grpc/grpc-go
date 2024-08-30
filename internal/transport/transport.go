@@ -133,14 +133,6 @@ type recvBufferReader struct {
 	err         error
 }
 
-// ReadHeader reads data into the provided header slice. It first checks if
-// there is an existing error and returns it immediately if present. If
-// there is data remaining from the previous call, it uses `mem.ReadUnsafe`
-// to copy the data into the header slice and returns the number of bytes read.
-// If there is no previous data, it determines whether to call
-// `readHeaderClient` or `readHeader` based on the presence of `closeStream`.
-// The method returns the number of bytes read and any error encountered during
-// the operation.
 func (r *recvBufferReader) ReadHeader(header []byte) (n int, err error) {
 	if r.err != nil {
 		return 0, r.err
