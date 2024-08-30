@@ -200,7 +200,7 @@ func (s) TestConfigSelector(t *testing.T) {
 			}
 
 			wantDeadline := tc.wantDeadline
-			if wantDeadline == (time.Time{}) {
+			if wantDeadline.Equal(time.Time{}) {
 				wantDeadline = startTime.Add(tc.wantTimeout)
 			}
 			deadlineGot, _ := gotContext.Deadline()
