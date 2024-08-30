@@ -176,8 +176,7 @@ XXXXX PleaseIgnoreUnused'
   popd
 done
 
-# Collection of revive linter analysis checks
-REV_OUT="$(mktemp)"
+# Run revive checks.
 revive -formatter plain -exclude "reflection/test/grpc_testing_not_regenerate/" ./... >"${REV_OUT}"
 
 echo SUCCESS
