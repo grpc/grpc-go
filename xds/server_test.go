@@ -410,7 +410,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("Timeout when waiting for an LDS request to be sent out")
 	}
-	wantNames := []string{strings.Replace(e2e.ServerListenerResourceNameTemplate, "%s", lis.Addr().String(), -1)}
+	wantNames := []string{strings.ReplaceAll(e2e.ServerListenerResourceNameTemplate, "%s", lis.Addr().String())}
 	if !cmp.Equal(gotNames, wantNames) {
 		t.Fatalf("LDS watch registered for names %v, want %v", gotNames, wantNames)
 	}
@@ -647,7 +647,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("Timeout when waiting for an LDS request to be sent out")
 	}
-	wantNames := []string{strings.Replace(e2e.ServerListenerResourceNameTemplate, "%s", lis.Addr().String(), -1)}
+	wantNames := []string{strings.ReplaceAll(e2e.ServerListenerResourceNameTemplate, "%s", lis.Addr().String())}
 	if !cmp.Equal(gotNames, wantNames) {
 		t.Fatalf("LDS watch registered for names %v, want %v", gotNames, wantNames)
 	}

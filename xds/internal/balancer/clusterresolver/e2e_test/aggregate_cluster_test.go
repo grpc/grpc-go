@@ -840,6 +840,7 @@ func (s) TestAggregateCluster_BadEDSFromError_GoodToBadDNS(t *testing.T) {
 // good update, this test verifies the cluster_resolver balancer correctly falls
 // back from the LOGICAL_DNS cluster to the EDS cluster.
 func (s) TestAggregateCluster_BadDNS_GoodEDS(t *testing.T) {
+	dnsTargetCh, dnsR := setupDNS(t)
 	// Start an xDS management server.
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 
@@ -857,12 +858,14 @@ func (s) TestAggregateCluster_BadDNS_GoodEDS(t *testing.T) {
 	const (
 		edsClusterName = clusterName + "-eds"
 		dnsClusterName = clusterName + "-dns"
+		dnsHostName    = "bad.ip.v4.address"
+		dnsPort        = 8080
 	)
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{dnsClusterName, edsClusterName}),
-			makeLogicalDNSClusterResource(dnsClusterName, "bad.ip.v4.address", 8080),
+			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
 			e2e.DefaultCluster(edsClusterName, edsServiceName, e2e.SecurityLevelNone),
 		},
 		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{uint32(edsPort)})},
@@ -878,6 +881,21 @@ func (s) TestAggregateCluster_BadDNS_GoodEDS(t *testing.T) {
 	// resolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
+
+	// Ensure that the DNS resolver is started for the expected target.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for DNS resolver to be started")
+	case target := <-dnsTargetCh:
+		got, want := target.Endpoint(), fmt.Sprintf("%s:%d", dnsHostName, dnsPort)
+		if got != want {
+			t.Fatalf("DNS resolution started for target %q, want %q", got, want)
+		}
+	}
+
+	// Produce a bad resolver update from the DNS resolver.
+	dnsErr := fmt.Errorf("DNS error")
+	dnsR.ReportError(dnsErr)
 
 	// RPCs should work, higher level DNS cluster errors so should fallback to
 	// EDS cluster.
