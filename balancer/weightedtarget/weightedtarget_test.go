@@ -1327,7 +1327,7 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	cc := &tcc{BalancerClientConn: testutils.NewBalancerClientConn(t)}
 
 	balFuncs := stub.BalancerFuncs{
-		UpdateClientConnState: func(bd *stub.BalancerData, s balancer.ClientConnState) error {
+		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
 			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: nil})
 			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: nil})
 			return nil

@@ -176,7 +176,7 @@ func (s) TestGracefulStopClosesConnAfterLastStream(t *testing.T) {
 	handlerCalled := make(chan struct{})
 	gracefulStopCalled := make(chan struct{})
 
-	ts := &funcServer{streamingInputCall: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+	ts := &funcServer{streamingInputCall: func(testgrpc.TestService_StreamingInputCallServer) error {
 		close(handlerCalled) // Initiate call to GracefulStop.
 		<-gracefulStopCalled // Wait for GOAWAYs to be received by the client.
 		return nil
@@ -225,7 +225,7 @@ func (s) TestGracefulStopBlocksUntilGRPCConnectionsTerminate(t *testing.T) {
 	unblockGRPCCall := make(chan struct{})
 	grpcCallExecuting := make(chan struct{})
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			close(grpcCallExecuting)
 			<-unblockGRPCCall
 			return &testpb.SimpleResponse{}, nil
@@ -276,7 +276,7 @@ func (s) TestStopAbortsBlockingGRPCCall(t *testing.T) {
 	unblockGRPCCall := make(chan struct{})
 	grpcCallExecuting := make(chan struct{})
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			close(grpcCallExecuting)
 			<-unblockGRPCCall
 			return &testpb.SimpleResponse{}, nil

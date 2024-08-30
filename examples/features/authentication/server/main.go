@@ -77,7 +77,7 @@ type ecServer struct {
 	pb.UnimplementedEchoServer
 }
 
-func (s *ecServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+func (s *ecServer) UnaryEcho(_ context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: req.Message}, nil
 }
 
@@ -97,7 +97,7 @@ func valid(authorization []string) bool {
 // the token is missing or invalid, the interceptor blocks execution of the
 // handler and returns an error. Otherwise, the interceptor invokes the unary
 // handler.
-func ensureValidToken(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+func ensureValidToken(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, errMissingMetadata

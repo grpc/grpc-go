@@ -165,7 +165,7 @@ func (es *endpointSharding) ResolverError(err error) {
 	}
 }
 
-func (es *endpointSharding) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+func (es *endpointSharding) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
 	// UpdateSubConnState is deprecated.
 }
 

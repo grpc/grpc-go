@@ -41,7 +41,7 @@ type server struct {
 }
 
 // SayHello implements helloworld.GreeterServer.
-func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+func (s *server) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	if in.Name == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "request missing required field: Name")
 	}

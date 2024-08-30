@@ -127,7 +127,7 @@ func setupBackends(t *testing.T) []string {
 	// Construct and start three working backends.
 	for i := 0; i < numBackends; i++ {
 		backend := &stubserver.StubServer{
-			EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 				return &testpb.Empty{}, nil
 			},
 			FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {

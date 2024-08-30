@@ -50,7 +50,7 @@ func (s) TestConfigSelector(t *testing.T) {
 	gotContextChan := testutils.NewChannelWithSize(1)
 
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			gotContextChan.SendContext(ctx, ctx)
 			return &testpb.Empty{}, nil
 		},

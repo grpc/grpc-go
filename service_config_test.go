@@ -93,7 +93,7 @@ func (parseBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBa
 	return d, nil
 }
 
-func (parseBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (parseBalancerBuilder) Build(balancer.ClientConn, balancer.BuildOptions) balancer.Balancer {
 	panic("unimplemented")
 }
 

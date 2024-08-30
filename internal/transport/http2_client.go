@@ -772,7 +772,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 	hdr := &headerFrame{
 		hf:        headerFields,
 		endStream: false,
-		initStream: func(id uint32) error {
+		initStream: func(uint32) error {
 			t.mu.Lock()
 			// TODO: handle transport closure in loopy instead and remove this
 			// initStream is never called when transport is draining.
