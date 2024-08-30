@@ -90,10 +90,8 @@ func (bc *BalancerConfig) UnmarshalJSON(b []byte) error {
 		)
 		// Get the key:value pair from the map. We have already made sure that
 		// the map contains a single entry.
-		for k, v := range lbcfg {
+		for name, jsonCfg = range lbcfg {
 			// loop until end to get the last config
-			name = k
-			jsonCfg = v
 		}
 
 		names = append(names, name)
