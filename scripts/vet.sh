@@ -177,6 +177,6 @@ XXXXX PleaseIgnoreUnused'
 done
 
 # Run revive checks.
-revive -formatter plain -exclude "reflection/test/grpc_testing_not_regenerate/" ./... >"${REV_OUT}"
+revive -formatter plain -exclude "reflection/test/grpc_testing_not_regenerate/" ./...
 
 echo SUCCESS
