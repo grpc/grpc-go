@@ -261,8 +261,8 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 		errCh <- b.updateClientConnState(s)
 	}
 	onFailure := func() {
-		// The call to Schedule returns false *only* if the serializer has been
-		// closed, which happens only when we receive an update after close.
+		// An attempt to schedule callback fails only when an update is received
+		// after Close().
 		errCh <- errBalancerClosed
 	}
 	b.serializer.ScheduleOr(callback, onFailure)
