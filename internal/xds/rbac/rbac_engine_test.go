@@ -1812,15 +1812,15 @@ func (sts *ServerTransportStreamWithMethod) Method() string {
 	return sts.method
 }
 
-func (sts *ServerTransportStreamWithMethod) SetHeader(md metadata.MD) error {
+func (sts *ServerTransportStreamWithMethod) SetHeader(_ metadata.MD) error {
 	return nil
 }
 
-func (sts *ServerTransportStreamWithMethod) SendHeader(md metadata.MD) error {
+func (sts *ServerTransportStreamWithMethod) SendHeader(_ metadata.MD) error {
 	return nil
 }
 
-func (sts *ServerTransportStreamWithMethod) SetTrailer(md metadata.MD) error {
+func (sts *ServerTransportStreamWithMethod) SetTrailer(_ metadata.MD) error {
 	return nil
 }
 
@@ -1844,11 +1844,11 @@ type TestAuditLoggerBufferConfig struct {
 	audit.LoggerConfig
 }
 
-func (b *TestAuditLoggerBufferBuilder) ParseLoggerConfig(configJSON json.RawMessage) (config audit.LoggerConfig, err error) {
+func (b *TestAuditLoggerBufferBuilder) ParseLoggerConfig(_ json.RawMessage) (config audit.LoggerConfig, err error) {
 	return TestAuditLoggerBufferConfig{}, nil
 }
 
-func (b *TestAuditLoggerBufferBuilder) Build(config audit.LoggerConfig) audit.Logger {
+func (b *TestAuditLoggerBufferBuilder) Build(_ audit.LoggerConfig) audit.Logger {
 	return &TestAuditLoggerBuffer{auditEvents: &b.auditEvents}
 }
 
@@ -1885,7 +1885,7 @@ func (b TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJSON json.Ra
 	return c, nil
 }
 
-func (b *TestAuditLoggerCustomConfigBuilder) Build(config audit.LoggerConfig) audit.Logger {
+func (b *TestAuditLoggerCustomConfigBuilder) Build(_ audit.LoggerConfig) audit.Logger {
 	return &TestAuditLoggerCustomConfig{}
 }
 

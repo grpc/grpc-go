@@ -79,6 +79,7 @@ type TraceEvent struct {
 	Parent   *TraceEvent
 }
 
+// ChannelTrace is a struct that holds the trace of a channel.
 type ChannelTrace struct {
 	cm           *channelMap
 	clearCalled  bool

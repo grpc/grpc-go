@@ -82,7 +82,7 @@ func init() {
 type orcaLBBuilder struct{}
 
 func (orcaLBBuilder) Name() string { return "orca_example" }
-func (orcaLBBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (orcaLBBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	return &orcaLB{cc: cc}
 }
 
@@ -124,7 +124,7 @@ func (o *orcaLB) UpdateClientConnState(ccs balancer.ClientConnState) error {
 func (o *orcaLB) ResolverError(error) {}
 
 // TODO: unused; remove when no longer required.
-func (o *orcaLB) UpdateSubConnState(sc balancer.SubConn, scs balancer.SubConnState) {}
+func (o *orcaLB) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConnState) {}
 
 func (o *orcaLB) Close() {}
 
@@ -132,7 +132,7 @@ type picker struct {
 	sc balancer.SubConn
 }
 
-func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (p *picker) Pick(_ balancer.PickInfo) (balancer.PickResult, error) {
 	return balancer.PickResult{
 		SubConn: p.sc,
 		Done: func(di balancer.DoneInfo) {

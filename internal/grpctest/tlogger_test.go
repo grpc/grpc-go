@@ -32,39 +32,39 @@ func Test(t *testing.T) {
 	RunSubTests(t, s{})
 }
 
-func (s) TestInfo(t *testing.T) {
+func (s) TestInfo(_ *testing.T) {
 	grpclog.Info("Info", "message.")
 }
 
-func (s) TestInfoln(t *testing.T) {
+func (s) TestInfoln(_ *testing.T) {
 	grpclog.Infoln("Info", "message.")
 }
 
-func (s) TestInfof(t *testing.T) {
+func (s) TestInfof(_ *testing.T) {
 	grpclog.Infof("%v %v.", "Info", "message")
 }
 
-func (s) TestInfoDepth(t *testing.T) {
+func (s) TestInfoDepth(_ *testing.T) {
 	grpclog.InfoDepth(0, "Info", "depth", "message.")
 }
 
-func (s) TestWarning(t *testing.T) {
+func (s) TestWarning(_ *testing.T) {
 	grpclog.Warning("Warning", "message.")
 }
 
-func (s) TestWarningln(t *testing.T) {
+func (s) TestWarningln(_ *testing.T) {
 	grpclog.Warningln("Warning", "message.")
 }
 
-func (s) TestWarningf(t *testing.T) {
+func (s) TestWarningf(_ *testing.T) {
 	grpclog.Warningf("%v %v.", "Warning", "message")
 }
 
-func (s) TestWarningDepth(t *testing.T) {
+func (s) TestWarningDepth(_ *testing.T) {
 	grpclog.WarningDepth(0, "Warning", "depth", "message.")
 }
 
-func (s) TestError(t *testing.T) {
+func (s) TestError(_ *testing.T) {
 	const numErrors = 10
 	TLogger.ExpectError("Expected error")
 	TLogger.ExpectError("Expected ln error")

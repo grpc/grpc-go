@@ -290,12 +290,12 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 	if name := ts.GetName(); name != transportSocketName {
 		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
 	}
-	any := ts.GetTypedConfig()
-	if any == nil || any.TypeUrl != version.V3UpstreamTLSContextURL {
-		return nil, fmt.Errorf("transport_socket field has unexpected typeURL: %s", any.TypeUrl)
+	c := ts.GetTypedConfig()
+	if c == nil || c.TypeUrl != version.V3UpstreamTLSContextURL {
+		return nil, fmt.Errorf("transport_socket field has unexpected typeURL: %s", c.TypeUrl)
 	}
 	upstreamCtx := &v3tlspb.UpstreamTlsContext{}
-	if err := proto.Unmarshal(any.GetValue(), upstreamCtx); err != nil {
+	if err := proto.Unmarshal(c.GetValue(), upstreamCtx); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal UpstreamTlsContext in CDS response: %v", err)
 	}
 	// The following fields from `UpstreamTlsContext` are ignored:

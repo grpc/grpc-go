@@ -16,6 +16,8 @@
  *
  */
 
+// Package main provides an example of a gRPC client that uses the OpenTelemetry
+// observability features.
 package main
 
 import (

@@ -33,6 +33,7 @@ type lbConfig struct {
 	childConfig  serviceconfig.LoadBalancingConfig
 }
 
+// ChildName returns the name of the child balancer.
 func ChildName(l serviceconfig.LoadBalancingConfig) string {
 	return l.(*lbConfig).childBuilder.Name()
 }
@@ -56,7 +57,8 @@ func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error)
 
 		var name string
 		var jsonCfg json.RawMessage
-		for name, jsonCfg = range e {
+		for n, j := range e {
+			name, jsonCfg = n, j
 		}
 
 		builder := balancer.Get(name)

@@ -65,6 +65,8 @@ var (
 	refObjectPool    = sync.Pool{New: func() any { return new(atomic.Int32) }}
 )
 
+// IsBelowBufferPoolingThreshold returns true if the given size is below the
+// bufferPoolingThreshold, which is 1024.
 func IsBelowBufferPoolingThreshold(size int) bool {
 	return size <= bufferPoolingThreshold
 }
@@ -200,6 +202,8 @@ func (b *buffer) String() string {
 	return fmt.Sprintf("mem.Buffer(%p, data: %p, length: %d)", b, b.ReadOnlyData(), len(b.ReadOnlyData()))
 }
 
+// ReadUnsafe reads from the given Buffer into the given byte slice. It returns
+// the number of bytes read and a new reference to the remaining bytes.
 func ReadUnsafe(dst []byte, buf Buffer) (int, Buffer) {
 	return buf.read(dst)
 }
@@ -224,20 +228,29 @@ func (e emptyBuffer) Len() int {
 	return 0
 }
 
-func (e emptyBuffer) split(n int) (left, right Buffer) {
+func (e emptyBuffer) split(_ int) (left, right Buffer) {
 	return e, e
 }
 
-func (e emptyBuffer) read(buf []byte) (int, Buffer) {
+func (e emptyBuffer) read(_ []byte) (int, Buffer) {
 	return 0, e
 }
 
+// SliceBuffer is a Buffer implementation that wraps a byte slice. It is not
+// reference counted and does not need to be freed.
 type SliceBuffer []byte
 
+// ReadOnlyData returns the underlying byte slice.
 func (s SliceBuffer) ReadOnlyData() []byte { return s }
-func (s SliceBuffer) Ref()                 {}
-func (s SliceBuffer) Free()                {}
-func (s SliceBuffer) Len() int             { return len(s) }
+
+// Ref is a no-op for SliceBuffer.
+func (s SliceBuffer) Ref() {}
+
+// Free is a no-op for SliceBuffer.
+func (s SliceBuffer) Free() {}
+
+// Len returns the length of the underlying byte slice.
+func (s SliceBuffer) Len() int { return len(s) }
 
 func (s SliceBuffer) split(n int) (left, right Buffer) {
 	return s[:n], s[n:]

@@ -270,7 +270,10 @@ func parseChildPolicyConfigs(childPolicies []map[string]json.RawMessage, targetF
 
 		var name string
 		var rawCfg json.RawMessage
-		for name, rawCfg = range config {
+		// Use the only key:value from the map. We have already validated that
+		// there is only one entry in the map.
+		for n, r := range config {
+			name, rawCfg = n, r
 		}
 		builder := balancer.Get(name)
 		if builder == nil {

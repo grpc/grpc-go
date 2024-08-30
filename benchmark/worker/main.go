@@ -188,12 +188,12 @@ func (s *workerServer) RunClient(stream testgrpc.WorkerService_RunClientServer) 
 	}
 }
 
-func (s *workerServer) CoreCount(ctx context.Context, in *testpb.CoreRequest) (*testpb.CoreResponse, error) {
+func (s *workerServer) CoreCount(_ context.Context, _ *testpb.CoreRequest) (*testpb.CoreResponse, error) {
 	logger.Infof("core count: %v", runtime.NumCPU())
 	return &testpb.CoreResponse{Cores: int32(runtime.NumCPU())}, nil
 }
 
-func (s *workerServer) QuitWorker(ctx context.Context, in *testpb.Void) (*testpb.Void, error) {
+func (s *workerServer) QuitWorker(_ context.Context, _ *testpb.Void) (*testpb.Void, error) {
 	logger.Infof("quitting worker")
 	s.stop <- true
 	return &testpb.Void{}, nil

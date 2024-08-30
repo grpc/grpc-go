@@ -16,6 +16,7 @@
  *
  */
 
+// This example demonstrates how to use a custom load balancer policy in a gRPC.
 package main
 
 import (

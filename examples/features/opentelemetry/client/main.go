@@ -16,6 +16,8 @@
  *
  */
 
+// Package main implements a simple gRPC client that demonstrates how to use
+// OpenTelemetry with gRPC.
 package main
 
 import (

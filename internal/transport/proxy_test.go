@@ -159,7 +159,7 @@ func testHTTPConnect(t *testing.T, args testArgs) {
 	}()
 
 	// Overwrite the function in the test and restore them in defer.
-	hpfe := func(req *http.Request) (*url.URL, error) {
+	hpfe := func(_ *http.Request) (*url.URL, error) {
 		return args.proxyURLModify(&url.URL{Host: plis.Addr().String()}), nil
 	}
 	defer overwrite(hpfe)()

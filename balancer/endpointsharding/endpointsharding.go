@@ -165,7 +165,7 @@ func (es *endpointSharding) ResolverError(err error) {
 	}
 }
 
-func (es *endpointSharding) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+func (es *endpointSharding) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConnState) {
 	// UpdateSubConnState is deprecated.
 }
 
@@ -285,6 +285,7 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 	bw.es.updateState()
 }
 
+// ParseConfig parses the given config for the endpoint sharding balancer.
 func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return gracefulswitch.ParseConfig(cfg)
 }

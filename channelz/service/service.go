@@ -51,7 +51,7 @@ type serverImpl struct {
 	channelzgrpc.UnimplementedChannelzServer
 }
 
-func (s *serverImpl) GetChannel(ctx context.Context, req *channelzpb.GetChannelRequest) (*channelzpb.GetChannelResponse, error) {
+func (s *serverImpl) GetChannel(_ context.Context, req *channelzpb.GetChannelRequest) (*channelzpb.GetChannelResponse, error) {
 	ch, err := protoconv.GetChannel(req.GetChannelId())
 	if err != nil {
 		return nil, err
@@ -59,13 +59,13 @@ func (s *serverImpl) GetChannel(ctx context.Context, req *channelzpb.GetChannelR
 	return &channelzpb.GetChannelResponse{Channel: ch}, nil
 }
 
-func (s *serverImpl) GetTopChannels(ctx context.Context, req *channelzpb.GetTopChannelsRequest) (*channelzpb.GetTopChannelsResponse, error) {
+func (s *serverImpl) GetTopChannels(_ context.Context, req *channelzpb.GetTopChannelsRequest) (*channelzpb.GetTopChannelsResponse, error) {
 	resp := &channelzpb.GetTopChannelsResponse{}
 	resp.Channel, resp.End = protoconv.GetTopChannels(req.GetStartChannelId(), int(req.GetMaxResults()))
 	return resp, nil
 }
 
-func (s *serverImpl) GetServer(ctx context.Context, req *channelzpb.GetServerRequest) (*channelzpb.GetServerResponse, error) {
+func (s *serverImpl) GetServer(_ context.Context, req *channelzpb.GetServerRequest) (*channelzpb.GetServerResponse, error) {
 	srv, err := protoconv.GetServer(req.GetServerId())
 	if err != nil {
 		return nil, err
@@ -73,13 +73,13 @@ func (s *serverImpl) GetServer(ctx context.Context, req *channelzpb.GetServerReq
 	return &channelzpb.GetServerResponse{Server: srv}, nil
 }
 
-func (s *serverImpl) GetServers(ctx context.Context, req *channelzpb.GetServersRequest) (*channelzpb.GetServersResponse, error) {
+func (s *serverImpl) GetServers(_ context.Context, req *channelzpb.GetServersRequest) (*channelzpb.GetServersResponse, error) {
 	resp := &channelzpb.GetServersResponse{}
 	resp.Server, resp.End = protoconv.GetServers(req.GetStartServerId(), int(req.GetMaxResults()))
 	return resp, nil
 }
 
-func (s *serverImpl) GetSubchannel(ctx context.Context, req *channelzpb.GetSubchannelRequest) (*channelzpb.GetSubchannelResponse, error) {
+func (s *serverImpl) GetSubchannel(_ context.Context, req *channelzpb.GetSubchannelRequest) (*channelzpb.GetSubchannelResponse, error) {
 	subChan, err := protoconv.GetSubChannel(req.GetSubchannelId())
 	if err != nil {
 		return nil, err
@@ -87,13 +87,13 @@ func (s *serverImpl) GetSubchannel(ctx context.Context, req *channelzpb.GetSubch
 	return &channelzpb.GetSubchannelResponse{Subchannel: subChan}, nil
 }
 
-func (s *serverImpl) GetServerSockets(ctx context.Context, req *channelzpb.GetServerSocketsRequest) (*channelzpb.GetServerSocketsResponse, error) {
+func (s *serverImpl) GetServerSockets(_ context.Context, req *channelzpb.GetServerSocketsRequest) (*channelzpb.GetServerSocketsResponse, error) {
 	resp := &channelzpb.GetServerSocketsResponse{}
 	resp.SocketRef, resp.End = protoconv.GetServerSockets(req.GetServerId(), req.GetStartSocketId(), int(req.GetMaxResults()))
 	return resp, nil
 }
 
-func (s *serverImpl) GetSocket(ctx context.Context, req *channelzpb.GetSocketRequest) (*channelzpb.GetSocketResponse, error) {
+func (s *serverImpl) GetSocket(_ context.Context, req *channelzpb.GetSocketRequest) (*channelzpb.GetSocketResponse, error) {
 	socket, err := protoconv.GetSocket(req.GetSocketId())
 	if err != nil {
 		return nil, err

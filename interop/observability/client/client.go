@@ -16,6 +16,7 @@
  *
  */
 
+// Package main implements a client that is used for interop testing.
 package main
 
 import (

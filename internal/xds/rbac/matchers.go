@@ -244,7 +244,7 @@ func (am *andMatcher) match(data *rpcData) bool {
 type alwaysMatcher struct {
 }
 
-func (am *alwaysMatcher) match(data *rpcData) bool {
+func (am *alwaysMatcher) match(_ *rpcData) bool {
 	return true
 }
 

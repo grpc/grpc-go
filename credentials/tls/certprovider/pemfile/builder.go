@@ -29,6 +29,7 @@ import (
 )
 
 const (
+	// PluginName is the name of the cert provider plugin.
 	PluginName             = "file_watcher"
 	defaultRefreshInterval = 10 * time.Minute
 )

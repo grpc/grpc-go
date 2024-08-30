@@ -16,6 +16,8 @@
  *
  */
 
+// Package main provides an example client implementation for gRPC with advanced
+// TLS features.
 package main
 
 import (

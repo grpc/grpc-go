@@ -182,6 +182,8 @@ func (m *Manager) tryEnterIdleMode() bool {
 	return true
 }
 
+// EnterIdleModeForTesting is a method that allows the channel to enter idle
+// mode.
 func (m *Manager) EnterIdleModeForTesting() {
 	m.tryEnterIdleMode()
 }
@@ -266,6 +268,7 @@ func (m *Manager) isClosed() bool {
 	return atomic.LoadInt32(&m.closed) == 1
 }
 
+// Close closes the Manager and stops the idle timer.
 func (m *Manager) Close() {
 	atomic.StoreInt32(&m.closed, 1)
 

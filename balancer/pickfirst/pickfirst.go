@@ -50,7 +50,7 @@ const (
 
 type pickfirstBuilder struct{}
 
-func (pickfirstBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
+func (pickfirstBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	b := &pickfirstBalancer{cc: cc}
 	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(logPrefix, b))
 	return b
@@ -102,12 +102,6 @@ func (b *pickfirstBalancer) ResolverError(err error) {
 		Picker:            &picker{err: fmt.Errorf("name resolver error: %v", err)},
 	})
 }
-
-type Shuffler interface {
-	ShuffleAddressListForTesting(n int, swap func(i, j int))
-}
-
-func ShuffleAddressListForTesting(n int, swap func(i, j int)) { rand.Shuffle(n, swap) }
 
 func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	if len(state.ResolverState.Addresses) == 0 && len(state.ResolverState.Endpoints) == 0 {

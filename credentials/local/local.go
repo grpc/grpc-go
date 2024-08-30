@@ -77,7 +77,7 @@ func getSecurityLevel(network, addr string) (credentials.SecurityLevel, error) {
 	}
 }
 
-func (*localTC) ClientHandshake(ctx context.Context, authority string, conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (*localTC) ClientHandshake(_ context.Context, _ string, conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	secLevel, err := getSecurityLevel(conn.RemoteAddr().Network(), conn.RemoteAddr().String())
 	if err != nil {
 		return nil, nil, err

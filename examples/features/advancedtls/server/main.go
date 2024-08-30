@@ -16,6 +16,7 @@
  *
  */
 
+// Package main provides an example server implementation for gRPC with advanced TLS features.
 package main
 
 import (
@@ -46,7 +47,7 @@ const goodServerWithCRLPort int = 50051
 const revokedServerWithCRLPort int = 50053
 const insecurePort int = 50054
 
-func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+func (s *server) UnaryEcho(_ context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: req.Message}, nil
 }
 

@@ -379,7 +379,7 @@ type TestConstPicker struct {
 }
 
 // Pick returns the const SubConn or the error.
-func (tcp *TestConstPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (tcp *TestConstPicker) Pick(_ balancer.PickInfo) (balancer.PickResult, error) {
 	if tcp.Err != nil {
 		return balancer.PickResult{}, tcp.Err
 	}

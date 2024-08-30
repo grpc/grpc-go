@@ -45,7 +45,7 @@ type echoServer struct {
 	pb.UnimplementedEchoServer
 }
 
-func (e *echoServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+func (e *echoServer) UnaryEcho(_ context.Context, _ *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{
 		Message: fmt.Sprintf("hello from localhost:%d", *port),
 	}, nil

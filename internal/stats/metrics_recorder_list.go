@@ -54,6 +54,7 @@ func verifyLabels(desc *estats.MetricDescriptor, labelsRecv ...string) {
 	}
 }
 
+// RecordInt64Count records an int64 value for the given handle.
 func (l *MetricsRecorderList) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
 	verifyLabels(handle.Descriptor(), labels...)
 
@@ -62,6 +63,7 @@ func (l *MetricsRecorderList) RecordInt64Count(handle *estats.Int64CountHandle, 
 	}
 }
 
+// RecordFloat64Count records a float64 value for the given handle.
 func (l *MetricsRecorderList) RecordFloat64Count(handle *estats.Float64CountHandle, incr float64, labels ...string) {
 	verifyLabels(handle.Descriptor(), labels...)
 
@@ -70,6 +72,7 @@ func (l *MetricsRecorderList) RecordFloat64Count(handle *estats.Float64CountHand
 	}
 }
 
+// RecordInt64Histo records an int64 value for the given handle.
 func (l *MetricsRecorderList) RecordInt64Histo(handle *estats.Int64HistoHandle, incr int64, labels ...string) {
 	verifyLabels(handle.Descriptor(), labels...)
 
@@ -78,6 +81,7 @@ func (l *MetricsRecorderList) RecordInt64Histo(handle *estats.Int64HistoHandle, 
 	}
 }
 
+// RecordFloat64Histo records a float64 value for the given handle.
 func (l *MetricsRecorderList) RecordFloat64Histo(handle *estats.Float64HistoHandle, incr float64, labels ...string) {
 	verifyLabels(handle.Descriptor(), labels...)
 
@@ -86,6 +90,7 @@ func (l *MetricsRecorderList) RecordFloat64Histo(handle *estats.Float64HistoHand
 	}
 }
 
+// RecordInt64Gauge records an int64 value for the given handle.
 func (l *MetricsRecorderList) RecordInt64Gauge(handle *estats.Int64GaugeHandle, incr int64, labels ...string) {
 	verifyLabels(handle.Descriptor(), labels...)
 

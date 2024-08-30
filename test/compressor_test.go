@@ -73,7 +73,7 @@ func (s) TestUnsupportedEncodingResponse(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ss := &stubserver.StubServer{
-				UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 					return &testpb.SimpleResponse{Payload: in.Payload}, nil
 				},
 			}
@@ -301,7 +301,7 @@ func (s) TestClientForwardsGrpcAcceptEncodingHeader(t *testing.T) {
 	decompressor := renameDecompressor{Decompressor: grpc.NewGZIPDecompressor(), name: "testgzip"}
 
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			md, ok := metadata.FromIncomingContext(ctx)
 			if !ok {
 				return nil, status.Errorf(codes.Internal, "no metadata in context")
@@ -414,7 +414,7 @@ func (s) TestSetSendCompressorSuccess(t *testing.T) {
 func testUnarySetSendCompressorSuccess(t *testing.T, payload *testpb.Payload, resCompressor string, wantCompressInvokes int32, dialOpts []grpc.DialOption) {
 	wc := setupGzipWrapCompressor(t)
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			if err := grpc.SetSendCompressor(ctx, resCompressor); err != nil {
 				return nil, err
 			}
@@ -500,7 +500,7 @@ func (s) TestUnregisteredSetSendCompressorFailure(t *testing.T) {
 
 func testUnarySetSendCompressorFailure(t *testing.T, resCompressor string, wantErr error) {
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			if err := grpc.SetSendCompressor(ctx, resCompressor); err != nil {
 				return nil, err
 			}
@@ -558,7 +558,7 @@ func testStreamSetSendCompressorFailure(t *testing.T, resCompressor string, want
 
 func (s) TestUnarySetSendCompressorAfterHeaderSendFailure(t *testing.T) {
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			// Send headers early and then set send compressor.
 			grpc.SendHeader(ctx, metadata.MD{})
 			err := grpc.SetSendCompressor(ctx, "gzip")
@@ -653,7 +653,7 @@ func (s) TestClientSupportedCompressors(t *testing.T) {
 	} {
 		t.Run(tt.desc, func(t *testing.T) {
 			ss := &stubserver.StubServer{
-				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 					got, err := grpc.ClientSupportedCompressors(ctx)
 					if err != nil {
 						return nil, err
@@ -763,7 +763,7 @@ func (badGzipCompressor) Type() string {
 
 func (s) TestGzipBadChecksum(t *testing.T) {
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 	}

@@ -451,11 +451,11 @@ func str(s *Status) string {
 
 // mustMarshalAny converts a protobuf message to an any.
 func mustMarshalAny(msg proto.Message) *anypb.Any {
-	any, err := anypb.New(msg)
+	m, err := anypb.New(msg)
 	if err != nil {
 		panic(fmt.Sprintf("anypb.New(%+v) failed: %v", msg, err))
 	}
-	return any
+	return m
 }
 
 func (s) TestFromContextError(t *testing.T) {

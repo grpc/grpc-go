@@ -547,6 +547,7 @@ func (s *Stream) write(m recvMsg) {
 	s.buf.put(m)
 }
 
+// ReadHeader reads the header metadata from the wire for this stream.
 func (s *Stream) ReadHeader(header []byte) (err error) {
 	// Don't request a read if there was an error earlier
 	if er := s.trReader.er; er != nil {

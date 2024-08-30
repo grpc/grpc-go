@@ -141,12 +141,12 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	if cfg == nil {
 		return nil, fmt.Errorf("rbac: nil configuration message provided")
 	}
-	any, ok := cfg.(*anypb.Any)
+	c, ok := cfg.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("rbac: error parsing config %v: unknown type %T", cfg, cfg)
 	}
 	msg := new(rpb.RBAC)
-	if err := any.UnmarshalTo(msg); err != nil {
+	if err := c.UnmarshalTo(msg); err != nil {
 		return nil, fmt.Errorf("rbac: error parsing config %v: %v", cfg, err)
 	}
 	return parseConfig(msg)

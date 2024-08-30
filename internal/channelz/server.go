@@ -59,6 +59,7 @@ func NewServerMetricsForTesting(started, succeeded, failed, timestamp int64) *Se
 	return sm
 }
 
+// CopyFrom copies the values from o to sm.
 func (sm *ServerMetrics) CopyFrom(o *ServerMetrics) {
 	sm.CallsStarted.Store(o.CallsStarted.Load())
 	sm.CallsSucceeded.Store(o.CallsSucceeded.Load())

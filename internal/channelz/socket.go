@@ -70,6 +70,7 @@ type EphemeralSocketMetrics struct {
 	RemoteFlowControlWindow int64
 }
 
+// SocketType is the type of the socket.
 type SocketType string
 
 const (

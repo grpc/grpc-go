@@ -186,7 +186,7 @@ type fakeProvider struct {
 	err error
 }
 
-func (f *fakeProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
+func (f *fakeProvider) KeyMaterial(_ context.Context) (*certprovider.KeyMaterial, error) {
 	return f.km, f.err
 }
 
@@ -419,7 +419,7 @@ func (s) TestClientCredsHandshakeTimeout(t *testing.T) {
 	// server-side by simply blocking on the client-side handshake to timeout
 	// and not writing any handshake data.
 	hErr := errors.New("server handshake error")
-	ts := newTestServerWithHandshakeFunc(func(rawConn net.Conn) handshakeResult {
+	ts := newTestServerWithHandshakeFunc(func(_ net.Conn) handshakeResult {
 		<-clientDone
 		return handshakeResult{err: hErr}
 	})

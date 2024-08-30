@@ -94,7 +94,7 @@ func startBackendsForBalancerSwitch(t *testing.T) ([]*stubserver.StubServer, fun
 	backends := make([]*stubserver.StubServer, backendCount)
 	for i := 0; i < backendCount; i++ {
 		backend := &stubserver.StubServer{
-			EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+			EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
 		}
 		if err := backend.StartServer(); err != nil {
 			t.Fatalf("Failed to start backend: %v", err)
@@ -375,7 +375,7 @@ func (s) TestBalancerSwitch_OldBalancerCallsShutdownInClose(t *testing.T) {
 			close(uccsCalled)
 			return nil
 		},
-		Close: func(data *stub.BalancerData) {
+		Close: func(_ *stub.BalancerData) {
 			(<-scChan).Shutdown()
 		},
 	})

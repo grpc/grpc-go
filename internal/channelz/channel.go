@@ -61,24 +61,28 @@ func (c *Channel) id() int64 {
 	return c.ID
 }
 
+// SubChans returns a copy of the subchannels of the channel.
 func (c *Channel) SubChans() map[int64]string {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	return copyMap(c.subChans)
 }
 
+// NestedChans returns a copy of the nested channels of the channel.
 func (c *Channel) NestedChans() map[int64]string {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	return copyMap(c.nestedChans)
 }
 
+// Trace returns a copy of the trace of the channel.
 func (c *Channel) Trace() *ChannelTrace {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	return c.trace.copy()
 }
 
+// ChannelMetrics represents the metrics of a channel.
 type ChannelMetrics struct {
 	// The current connectivity state of the channel.
 	State atomic.Pointer[connectivity.State]
@@ -142,6 +146,7 @@ func (c *ChannelMetrics) String() string {
 	)
 }
 
+// NewChannelMetricForTesting creates a new ChannelMetrics.
 func NewChannelMetricForTesting(state connectivity.State, target string, started, succeeded, failed, timestamp int64) *ChannelMetrics {
 	c := &ChannelMetrics{}
 	c.State.Store(&state)
