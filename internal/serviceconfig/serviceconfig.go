@@ -93,6 +93,7 @@ func (bc *BalancerConfig) UnmarshalJSON(b []byte) error {
 		// the map contains a single entry.
 		for name, jsonCfg = range lbcfg {
 			// loop until end to get the last config
+			_ = jsonCfg
 		}
 
 		names = append(names, name)
