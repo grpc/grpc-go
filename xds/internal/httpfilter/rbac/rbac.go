@@ -156,12 +156,12 @@ func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.Fil
 	if override == nil {
 		return nil, fmt.Errorf("rbac: nil configuration message provided")
 	}
-	anyMsg, ok := override.(*anypb.Any)
+	m, ok := override.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("rbac: error parsing override config %v: unknown type %T", override, override)
 	}
 	msg := new(rpb.RBACPerRoute)
-	if err := anyMsg.UnmarshalTo(msg); err != nil {
+	if err := m.UnmarshalTo(msg); err != nil {
 		return nil, fmt.Errorf("rbac: error parsing override config %v: %v", override, err)
 	}
 	return parseConfig(msg.Rbac)

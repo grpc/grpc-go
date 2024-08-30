@@ -49,7 +49,7 @@ func (s) TestLRSClient(t *testing.T) {
 		t.Fatalf("Failed to create server config for testing: %v", err)
 	}
 	bc := e2e.DefaultBootstrapContents(t, nodeID, fs1.Address)
-	xdsC, closeFunc, err := NewForTesting(OptionsForTesting{
+	xdsC, closeF, err := NewForTesting(OptionsForTesting{
 		Name:               t.Name(),
 		Contents:           bc,
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
@@ -57,7 +57,7 @@ func (s) TestLRSClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
-	defer closeFunc()
+	defer closeF()
 
 	// Report to the same address should not create new ClientConn.
 	store1, lrsCancel1 := xdsC.ReportLoad(serverCfg1)

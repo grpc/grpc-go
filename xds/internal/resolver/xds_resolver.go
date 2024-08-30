@@ -101,12 +101,12 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	if b.newXDSClient != nil {
 		newXDSClient = b.newXDSClient
 	}
-	client, closeXDSClient, err := newXDSClient(target.String())
+	client, closeF, err := newXDSClient(target.String())
 	if err != nil {
 		return nil, fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}
 	r.xdsClient = client
-	r.xdsClientClose = closeXDSClient
+	r.xdsClientClose = closeF
 
 	// Determine the listener resource name and start a watcher for it.
 	template, err := r.sanityChecksOnBootstrapConfig(target, opts, r.xdsClient)
