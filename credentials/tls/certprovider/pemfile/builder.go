@@ -29,6 +29,7 @@ import (
 )
 
 const (
+	// PluginName is the name of the PEM file watcher plugin.
 	PluginName             = "file_watcher"
 	defaultRefreshInterval = 10 * time.Minute
 )
@@ -39,6 +40,8 @@ func init() {
 
 type pluginBuilder struct{}
 
+// ParseConfig parses the configuration data from JSON and returns a
+// certprovider.BuildableConfig for the PEM file watcher.
 func (p *pluginBuilder) ParseConfig(c any) (*certprovider.BuildableConfig, error) {
 	data, ok := c.(json.RawMessage)
 	if !ok {
@@ -53,6 +56,7 @@ func (p *pluginBuilder) ParseConfig(c any) (*certprovider.BuildableConfig, error
 	}), nil
 }
 
+// Name returns the name of the PEM file watcher plugin.
 func (p *pluginBuilder) Name() string {
 	return PluginName
 }

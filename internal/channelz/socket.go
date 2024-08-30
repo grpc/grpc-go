@@ -70,13 +70,23 @@ type EphemeralSocketMetrics struct {
 	RemoteFlowControlWindow int64
 }
 
+// SocketType represents the type of socket, indicating whether it is a
+// NormalSocket or a ListenSocket.
 type SocketType string
 
 const (
+	// SocketTypeNormal represents a standard socket used for normal
+	// operations.
 	SocketTypeNormal = "NormalSocket"
+
+	// SocketTypeListen represents a socket used specifically for
+	// listening for incoming connections.
 	SocketTypeListen = "ListenSocket"
 )
 
+// Socket represents a socket within channelz which includes socket
+// metrics and data related to socket activity and provides methods
+// for managing and interacting with sockets.
 type Socket struct {
 	Entity
 	SocketType       SocketType
@@ -100,6 +110,8 @@ type Socket struct {
 	Security credentials.ChannelzSecurityValue
 }
 
+// String returns a string representation of the Socket, including its parent
+// entity, socket type, and ID.
 func (ls *Socket) String() string {
 	return fmt.Sprintf("%s %s #%d", ls.Parent, ls.SocketType, ls.ID)
 }

@@ -65,6 +65,9 @@ var (
 	refObjectPool    = sync.Pool{New: func() any { return new(atomic.Int32) }}
 )
 
+// IsBelowBufferPoolingThreshold returns true if the given size is less than or
+// equal to the threshold for buffer pooling. This is used to determine whether
+// to pool buffers or allocate them directly.
 func IsBelowBufferPoolingThreshold(size int) bool {
 	return size <= bufferPoolingThreshold
 }
@@ -119,6 +122,7 @@ func Copy(data []byte, pool BufferPool) Buffer {
 	return NewBuffer(buf, pool)
 }
 
+// ReadOnlyData returns the underlying byte slice of the Buffer.
 func (b *buffer) ReadOnlyData() []byte {
 	if b.refs == nil {
 		panic("Cannot read freed buffer")
@@ -126,6 +130,8 @@ func (b *buffer) ReadOnlyData() []byte {
 	return b.data
 }
 
+// Ref increments the reference counter of the Buffer, indicating that an
+// additional reference to the Buffer has been acquired.
 func (b *buffer) Ref() {
 	if b.refs == nil {
 		panic("Cannot ref freed buffer")
@@ -133,6 +139,8 @@ func (b *buffer) Ref() {
 	b.refs.Add(1)
 }
 
+// Free decrements the reference counter of the Buffer and releases the
+// underlying byte slice if the counter reaches 0.
 func (b *buffer) Free() {
 	if b.refs == nil {
 		panic("Cannot free freed buffer")
@@ -158,6 +166,7 @@ func (b *buffer) Free() {
 	}
 }
 
+// Len returns the size of the Buffer.
 func (b *buffer) Len() int {
 	return len(b.ReadOnlyData())
 }
@@ -200,6 +209,8 @@ func (b *buffer) String() string {
 	return fmt.Sprintf("mem.Buffer(%p, data: %p, length: %d)", b, b.ReadOnlyData(), len(b.ReadOnlyData()))
 }
 
+// ReadUnsafe reads bytes from the given Buffer into the provided slice.
+// It does not perform safety checks.
 func ReadUnsafe(dst []byte, buf Buffer) (int, Buffer) {
 	return buf.read(dst)
 }
@@ -211,15 +222,22 @@ func SplitUnsafe(buf Buffer, n int) (left, right Buffer) {
 	return buf.split(n)
 }
 
+// emptyBuffer is a Buffer implementation that represents an empty buffer. All
+// methods are no-op implementations.
 type emptyBuffer struct{}
 
+// Noop implementation of ReadOnlyData
 func (e emptyBuffer) ReadOnlyData() []byte {
 	return nil
 }
 
-func (e emptyBuffer) Ref()  {}
+// Ref is noop implementation of Ref.
+func (e emptyBuffer) Ref() {}
+
+// Free is noop implementation of Free.
 func (e emptyBuffer) Free() {}
 
+// Len is noop implementation of Len.
 func (e emptyBuffer) Len() int {
 	return 0
 }
@@ -232,12 +250,21 @@ func (e emptyBuffer) read([]byte) (int, Buffer) {
 	return 0, e
 }
 
+// SliceBuffer is a Buffer implementation that wraps a byte slice. It provides
+// methods for reading, splitting, and managing the byte slice.
 type SliceBuffer []byte
 
+// ReadOnlyData returns the byte slice.
 func (s SliceBuffer) ReadOnlyData() []byte { return s }
-func (s SliceBuffer) Ref()                 {}
-func (s SliceBuffer) Free()                {}
-func (s SliceBuffer) Len() int             { return len(s) }
+
+// Ref is noop implementation of Ref.
+func (s SliceBuffer) Ref() {}
+
+// Free is noop implementation of Free.
+func (s SliceBuffer) Free() {}
+
+// Len is noop implementation of Len.
+func (s SliceBuffer) Len() int { return len(s) }
 
 func (s SliceBuffer) split(n int) (left, right Buffer) {
 	return s[:n], s[n:]

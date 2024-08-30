@@ -285,6 +285,8 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 	bw.es.updateState()
 }
 
+// ParseConfig parses a child config list and returns a LB config for the
+// gracefulswitch Balancer.
 func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return gracefulswitch.ParseConfig(cfg)
 }
