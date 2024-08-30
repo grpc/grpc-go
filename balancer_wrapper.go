@@ -342,8 +342,8 @@ func (acbw *acBalancerWrapper) GetOrBuildProducer(pb balancer.ProducerBuilder) (
 	pData := acbw.producers[pb]
 	if pData == nil {
 		// Not found; create a new one and add it to the producers map.
-		p, cleanup := pb.Build(acbw)
-		pData = &refCountedProducer{producer: p, close: cleanup}
+		p, closeF := pb.Build(acbw)
+		pData = &refCountedProducer{producer: p, close: closeF}
 		acbw.producers[pb] = pData
 	}
 	// Account for this new reference.
