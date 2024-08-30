@@ -52,7 +52,7 @@ func newMockClientConn() *mockClientConn {
 	}
 }
 
-func (mcc *mockClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+func (mcc *mockClientConn) NewSubConn(addrs []resolver.Address, _ balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	sc := &mockSubConn{mcc: mcc}
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()

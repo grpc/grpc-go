@@ -53,7 +53,7 @@ func SetupFakeRLSServer(t *testing.T, lis net.Listener, opts ...grpc.ServerOptio
 	t.Logf("Started fake RLS server at %q", s.Address)
 
 	ch := make(chan struct{}, 1)
-	s.SetRequestCallback(func(request *rlspb.RouteLookupRequest) {
+	s.SetRequestCallback(func(*rlspb.RouteLookupRequest) {
 		select {
 		case ch <- struct{}{}:
 		default:

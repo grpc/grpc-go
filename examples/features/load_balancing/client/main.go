@@ -91,7 +91,7 @@ func main() {
 
 type exampleResolverBuilder struct{}
 
-func (*exampleResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+func (*exampleResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
 	r := &exampleResolver{
 		target: target,
 		cc:     cc,
@@ -118,8 +118,8 @@ func (r *exampleResolver) start() {
 	}
 	r.cc.UpdateState(resolver.State{Addresses: addrs})
 }
-func (*exampleResolver) ResolveNow(o resolver.ResolveNowOptions) {}
-func (*exampleResolver) Close()                                  {}
+func (*exampleResolver) ResolveNow(resolver.ResolveNowOptions) {}
+func (*exampleResolver) Close()                                {}
 
 func init() {
 	resolver.Register(&exampleResolverBuilder{})

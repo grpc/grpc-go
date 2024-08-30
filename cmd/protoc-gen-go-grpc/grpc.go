@@ -73,11 +73,11 @@ func (serviceGenerateHelper) generateClientStruct(g *protogen.GeneratedFile, cli
 	g.P()
 }
 
-func (serviceGenerateHelper) generateNewClientDefinitions(g *protogen.GeneratedFile, service *protogen.Service, clientName string) {
+func (serviceGenerateHelper) generateNewClientDefinitions(g *protogen.GeneratedFile, _ *protogen.Service, clientName string) {
 	g.P("return &", unexport(clientName), "{cc}")
 }
 
-func (serviceGenerateHelper) generateUnimplementedServerType(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
+func (serviceGenerateHelper) generateUnimplementedServerType(_ *protogen.Plugin, _ *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
 	serverType := service.GoName + "Server"
 	mustOrShould := "must"
 	if !*requireUnimplemented {
@@ -119,7 +119,7 @@ func (serviceGenerateHelper) generateServerFunctions(gen *protogen.Plugin, file 
 	genServiceDesc(file, g, serviceDescVar, serverType, service, handlerNames)
 }
 
-func (serviceGenerateHelper) formatHandlerFuncName(service *protogen.Service, hname string) string {
+func (serviceGenerateHelper) formatHandlerFuncName(_ *protogen.Service, hname string) string {
 	return hname
 }
 
@@ -354,7 +354,7 @@ func clientStreamInterface(g *protogen.GeneratedFile, method *protogen.Method) s
 	return g.QualifiedGoIdent(grpcPackage.Ident("ServerStreamingClient")) + "[" + g.QualifiedGoIdent(method.Output.GoIdent) + "]"
 }
 
-func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, method *protogen.Method, index int) {
+func genClientMethod(_ *protogen.Plugin, _ *protogen.File, g *protogen.GeneratedFile, method *protogen.Method, index int) {
 	service := method.Parent
 	fmSymbol := helper.formatFullMethodSymbol(service, method)
 
@@ -522,7 +522,7 @@ func serverStreamInterface(g *protogen.GeneratedFile, method *protogen.Method) s
 	return g.QualifiedGoIdent(grpcPackage.Ident("ServerStreamingServer")) + "[" + g.QualifiedGoIdent(method.Output.GoIdent) + "]"
 }
 
-func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, method *protogen.Method, hnameFuncNameFormatter func(string) string) string {
+func genServerMethod(_ *protogen.Plugin, _ *protogen.File, g *protogen.GeneratedFile, method *protogen.Method, hnameFuncNameFormatter func(string) string) string {
 	service := method.Parent
 	hname := fmt.Sprintf("_%s_%s_Handler", service.GoName, method.GoName)
 
