@@ -43,14 +43,14 @@ import (
 
 type noopRouteConfigWatcher struct{}
 
-func (noopRouteConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, done xdsresource.DoneNotifier) {
-	done.OnDone()
+func (noopRouteConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (noopRouteConfigWatcher) OnError(err error, done xdsresource.DoneNotifier) {
-	done.OnDone()
+func (noopRouteConfigWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (noopRouteConfigWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
-	done.OnDone()
+func (noopRouteConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
 
 type routeConfigUpdateErrTuple struct {
@@ -66,23 +66,23 @@ func newRouteConfigWatcher() *routeConfigWatcher {
 	return &routeConfigWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (rw *routeConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, done xdsresource.DoneNotifier) {
+func (rw *routeConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, onDone xdsresource.OnDoneFunc) {
 	rw.updateCh.Send(routeConfigUpdateErrTuple{update: update.Resource})
-	done.OnDone()
+	onDone()
 }
 
-func (rw *routeConfigWatcher) OnError(err error, done xdsresource.DoneNotifier) {
+func (rw *routeConfigWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
 	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: err})
-	done.OnDone()
+	onDone()
 }
 
-func (rw *routeConfigWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
+func (rw *routeConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
 	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "RouteConfiguration not found in received response")})
-	done.OnDone()
+	onDone()
 }
 
 // badRouteConfigResource returns a RouteConfiguration resource for the given
