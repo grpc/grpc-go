@@ -38,7 +38,9 @@ func Test(t *testing.T) {
 // TestPanic tests that registering two metrics with the same name across any
 // type of metric triggers a panic.
 func (s) TestPanic(t *testing.T) {
-	snapshotMetricsRegistryForTesting(t)
+	cleanup := snapshotMetricsRegistryForTesting()
+	defer cleanup()
+
 	want := "metric simple counter already registered"
 	defer func() {
 		if r := recover(); !strings.Contains(fmt.Sprint(r), want) {
@@ -64,7 +66,9 @@ func (s) TestPanic(t *testing.T) {
 // this tests the interactions between the metrics recorder and the metrics
 // registry.
 func (s) TestMetricRegistry(t *testing.T) {
-	snapshotMetricsRegistryForTesting(t)
+	cleanup := snapshotMetricsRegistryForTesting()
+	defer cleanup()
+
 	intCountHandle1 := RegisterInt64Count(MetricDescriptor{
 		Name:           "simple counter",
 		Description:    "sum of all emissions from tests",
@@ -141,7 +145,9 @@ func (s) TestMetricRegistry(t *testing.T) {
 // metric registry. A component (simulated by test) should be able to record on
 // the different registered int count metrics.
 func TestNumerousIntCounts(t *testing.T) {
-	snapshotMetricsRegistryForTesting(t)
+	cleanup := snapshotMetricsRegistryForTesting()
+	defer cleanup()
+
 	intCountHandle1 := RegisterInt64Count(MetricDescriptor{
 		Name:           "int counter",
 		Description:    "sum of all emissions from tests",
