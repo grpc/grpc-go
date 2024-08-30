@@ -78,7 +78,7 @@ var authzTests = map[string]struct {
 	"DeniesRPCMatchInDenyNoMatchInAllow": {
 		authzPolicy: `{
 				"name": "authz",
-				"allow_rules": 
+				"allow_rules":
 				[
 					{
 						"name": "allow_StreamingOutputCall",
@@ -166,11 +166,11 @@ var authzTests = map[string]struct {
 								"/grpc.testing.TestService/UnaryCall",
 								"/grpc.testing.TestService/StreamingInputCall"
 							],
-							"headers": 
+							"headers":
 							[
 								{
 									"key": "key-abc",
-									"values": 
+									"values":
 									[
 										"val-abc",
 										"val-def"
@@ -250,7 +250,7 @@ var authzTests = map[string]struct {
 				[
 					{
 						"name": "allow_StreamingOutputCall",
-						"request": 
+						"request":
 						{
 							"paths":
 							[
