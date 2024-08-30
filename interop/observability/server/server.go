@@ -16,6 +16,11 @@
  *
  */
 
+// Binary server is an interop server.
+//
+// See interop test case descriptions [here].
+//
+// [here]: https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md
 package main
 
 import (
