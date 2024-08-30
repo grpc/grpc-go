@@ -74,10 +74,13 @@ type EphemeralSocketMetrics struct {
 type SocketType string
 
 const (
+	// SocketTypeNormal is used to connect to a remote server.
 	SocketTypeNormal = "NormalSocket"
+	// SocketTypeListen is used to accept connections from remote servers.
 	SocketTypeListen = "ListenSocket"
 )
 
+// Socket is a channelz entry representing a socket.
 type Socket struct {
 	Entity
 	SocketType       SocketType
