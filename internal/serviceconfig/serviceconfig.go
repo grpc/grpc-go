@@ -88,7 +88,6 @@ func (bc *BalancerConfig) UnmarshalJSON(b []byte) error {
 			name    string
 			jsonCfg json.RawMessage
 		)
-
 		// Get the key:value pair from the map. We have already made sure that
 		// the map contains a single entry.
 		for name, jsonCfg = range lbcfg {
