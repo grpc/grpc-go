@@ -1240,6 +1240,7 @@ func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
 // TestMethodInConfiguration tests different method names with an expectation on
 // whether they should error or not.
 func (s) TestMethodInConfiguration(t *testing.T) {
+
 	// To skip creating a stackdriver exporter.
 	fle := &fakeLoggingExporter{
 		t: t,
