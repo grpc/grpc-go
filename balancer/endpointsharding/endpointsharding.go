@@ -288,10 +288,8 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 // ParseConfig parses a child config list and returns a LB to use with the
 // endpointsharding balancer.
 //
-// cfg is expected to be a json.RawMessage containing a JSON array of LB policy
-// names + configs as the format of the "loadBalancingConfig" field in
-// ServiceConfig.  It returns a type that should be passed to
-// UpdateClientConnState in the BalancerConfig field.
+// cfg is expected to be a JSON array of LB policy names + configs as the
+// format of the loadBalancingConfig field in ServiceConfig.
 func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return gracefulswitch.ParseConfig(cfg)
 }
