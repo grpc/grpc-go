@@ -41,7 +41,7 @@ import (
 
 func testLocalCredsE2ESucceed(network, address string) error {
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			pr, ok := peer.FromContext(ctx)
 			if !ok {
 				return nil, status.Error(codes.DataLoss, "Failed to get peer from ctx")
@@ -89,7 +89,7 @@ func testLocalCredsE2ESucceed(network, address string) error {
 	switch network {
 	case "unix":
 		cc, err = grpc.Dial(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()), grpc.WithContextDialer(
-			func(ctx context.Context, addr string) (net.Conn, error) {
+			func(_ context.Context, addr string) (net.Conn, error) {
 				return net.Dial("unix", addr)
 			}))
 	case "tcp":

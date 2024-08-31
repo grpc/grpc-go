@@ -801,7 +801,7 @@ func NewTestServer(opts ...NewTestServerOptions) testgrpc.TestServiceServer {
 	return &testServer{}
 }
 
-func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+func (s *testServer) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 	return new(testpb.Empty), nil
 }
 

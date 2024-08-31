@@ -134,7 +134,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 	}{
 		{
 			name: "normal-flow",
-			unaryCallFunc: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			unaryCallFunc: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return &testpb.SimpleResponse{Payload: &testpb.Payload{
 					Body: make([]byte, len(in.GetPayload().GetBody())),
 				}}, nil
@@ -146,7 +146,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 		},
 		{
 			name: "trailers-only",
-			unaryCallFunc: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			unaryCallFunc: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return nil, errors.New("some error") // return an error and no message - this triggers trailers only - no messages or headers sent
 			},
 			opts: itestutils.MetricDataOptions{
@@ -184,7 +184,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 		},
 		{
 			name: "send-msg",
-			unaryCallFunc: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			unaryCallFunc: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return &testpb.SimpleResponse{Payload: &testpb.Payload{
 					Body: make([]byte, len(in.GetPayload().GetBody())),
 				}}, nil
@@ -453,7 +453,7 @@ func (s) TestXDSLabels(t *testing.T) {
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Payload: &testpb.Payload{
 				Body: make([]byte, len(in.GetPayload().GetBody())),
 			}}, nil
@@ -607,7 +607,7 @@ func (s) TestXDSLabels(t *testing.T) {
 // TestObservability tests that Observability global function compiles and runs
 // without error. The actual functionality of this function will be verified in
 // interop tests.
-func (s) TestObservability(t *testing.T) {
+func (s) TestObservability(*testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 

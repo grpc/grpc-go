@@ -80,7 +80,7 @@ type greeterServer struct {
 }
 
 // sayHello is a simple implementation of the pb.GreeterServer SayHello method.
-func (greeterServer) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+func (greeterServer) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
@@ -175,12 +175,12 @@ func (s) TestEnd2End(t *testing.T) {
 				}
 			},
 			clientRoot: cs.ClientTrust1,
-			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			clientVerifyFunc: func(*HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				return &PostHandshakeVerificationResults{}, nil
 			},
 			clientVerificationType: CertVerification,
 			serverCert:             []tls.Certificate{cs.ServerCert1},
-			serverGetRoot: func(params *ConnectionInfo) (*RootCertificates, error) {
+			serverGetRoot: func(*ConnectionInfo) (*RootCertificates, error) {
 				switch stage.read() {
 				case 0, 1:
 					return &RootCertificates{TrustCerts: cs.ServerTrust1}, nil
@@ -188,7 +188,7 @@ func (s) TestEnd2End(t *testing.T) {
 					return &RootCertificates{TrustCerts: cs.ServerTrust2}, nil
 				}
 			},
-			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			serverVerifyFunc: func(*HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				return &PostHandshakeVerificationResults{}, nil
 			},
 			serverVerificationType: CertVerification,
@@ -208,7 +208,7 @@ func (s) TestEnd2End(t *testing.T) {
 		{
 			desc:       "test the reloading feature for server identity callback and client trust callback",
 			clientCert: []tls.Certificate{cs.ClientCert1},
-			clientGetRoot: func(params *ConnectionInfo) (*RootCertificates, error) {
+			clientGetRoot: func(*ConnectionInfo) (*RootCertificates, error) {
 				switch stage.read() {
 				case 0, 1:
 					return &RootCertificates{TrustCerts: cs.ClientTrust1}, nil
@@ -216,7 +216,7 @@ func (s) TestEnd2End(t *testing.T) {
 					return &RootCertificates{TrustCerts: cs.ClientTrust2}, nil
 				}
 			},
-			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			clientVerifyFunc: func(*HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				return &PostHandshakeVerificationResults{}, nil
 			},
 			clientVerificationType: CertVerification,
@@ -229,7 +229,7 @@ func (s) TestEnd2End(t *testing.T) {
 				}
 			},
 			serverRoot: cs.ServerTrust1,
-			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			serverVerifyFunc: func(*HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				return &PostHandshakeVerificationResults{}, nil
 			},
 			serverVerificationType: CertVerification,
@@ -250,7 +250,7 @@ func (s) TestEnd2End(t *testing.T) {
 		{
 			desc:       "test client custom verification",
 			clientCert: []tls.Certificate{cs.ClientCert1},
-			clientGetRoot: func(params *ConnectionInfo) (*RootCertificates, error) {
+			clientGetRoot: func(*ConnectionInfo) (*RootCertificates, error) {
 				switch stage.read() {
 				case 0:
 					return &RootCertificates{TrustCerts: cs.ClientTrust1}, nil
@@ -294,7 +294,7 @@ func (s) TestEnd2End(t *testing.T) {
 				}
 			},
 			serverRoot: cs.ServerTrust1,
-			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			serverVerifyFunc: func(*HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				return &PostHandshakeVerificationResults{}, nil
 			},
 			serverVerificationType: CertVerification,
@@ -314,13 +314,13 @@ func (s) TestEnd2End(t *testing.T) {
 			desc:       "TestServerCustomVerification",
 			clientCert: []tls.Certificate{cs.ClientCert1},
 			clientRoot: cs.ClientTrust1,
-			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			clientVerifyFunc: func(*HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				return &PostHandshakeVerificationResults{}, nil
 			},
 			clientVerificationType: CertVerification,
 			serverCert:             []tls.Certificate{cs.ServerCert1},
 			serverRoot:             cs.ServerTrust1,
-			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			serverVerifyFunc: func(*HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				switch stage.read() {
 				case 0, 2:
 					return &PostHandshakeVerificationResults{}, nil
@@ -635,7 +635,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 					RootProvider: serverRootProvider,
 				},
 				RequireClientCert: true,
-				AdditionalPeerVerification: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				AdditionalPeerVerification: func(*HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 					return &PostHandshakeVerificationResults{}, nil
 				},
 				VerificationType: CertVerification,
@@ -658,7 +658,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 				IdentityOptions: IdentityCertificateOptions{
 					IdentityProvider: clientIdentityProvider,
 				},
-				AdditionalPeerVerification: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				AdditionalPeerVerification: func(*HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 					return &PostHandshakeVerificationResults{}, nil
 				},
 				RootOptions: RootCertificateOptions{

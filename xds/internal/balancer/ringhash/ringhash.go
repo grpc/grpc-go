@@ -44,7 +44,7 @@ func init() {
 
 type bb struct{}
 
-func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
+func (bb) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	b := &ringhashBalancer{
 		cc:              cc,
 		subConns:        resolver.NewAddressMap(),

@@ -109,7 +109,7 @@ func createTestContext(ctx context.Context, s credentials.SecurityLevel) context
 // Read method.
 type errReader struct{}
 
-func (r errReader) Read(b []byte) (n int, err error) {
+func (r errReader) Read([]byte) (n int, err error) {
 	return 0, errors.New("read error")
 }
 
@@ -155,7 +155,7 @@ func overrideHTTPClient(fc *testutils.FakeHTTPClient) func() {
 // our tests.
 func overrideSubjectTokenGood() func() {
 	origReadSubjectTokenFrom := readSubjectTokenFrom
-	readSubjectTokenFrom = func(path string) ([]byte, error) {
+	readSubjectTokenFrom = func(string) ([]byte, error) {
 		return []byte(subjectTokenContents), nil
 	}
 	return func() { readSubjectTokenFrom = origReadSubjectTokenFrom }
@@ -164,7 +164,7 @@ func overrideSubjectTokenGood() func() {
 // Overrides the subject token read to always return an error.
 func overrideSubjectTokenError() func() {
 	origReadSubjectTokenFrom := readSubjectTokenFrom
-	readSubjectTokenFrom = func(path string) ([]byte, error) {
+	readSubjectTokenFrom = func(string) ([]byte, error) {
 		return nil, errors.New("error reading subject token")
 	}
 	return func() { readSubjectTokenFrom = origReadSubjectTokenFrom }
@@ -174,7 +174,7 @@ func overrideSubjectTokenError() func() {
 // our tests.
 func overrideActorTokenGood() func() {
 	origReadActorTokenFrom := readActorTokenFrom
-	readActorTokenFrom = func(path string) ([]byte, error) {
+	readActorTokenFrom = func(string) ([]byte, error) {
 		return []byte(actorTokenContents), nil
 	}
 	return func() { readActorTokenFrom = origReadActorTokenFrom }
@@ -183,7 +183,7 @@ func overrideActorTokenGood() func() {
 // Overrides the actor token read to always return an error.
 func overrideActorTokenError() func() {
 	origReadActorTokenFrom := readActorTokenFrom
-	readActorTokenFrom = func(path string) ([]byte, error) {
+	readActorTokenFrom = func(string) ([]byte, error) {
 		return nil, errors.New("error reading actor token")
 	}
 	return func() { readActorTokenFrom = origReadActorTokenFrom }

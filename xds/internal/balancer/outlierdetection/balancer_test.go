@@ -578,11 +578,11 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	closeCh := testutils.NewChannel()
 
 	stub.Register(t.Name()+"child1", stub.BalancerFuncs{
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+		UpdateClientConnState: func(_ *stub.BalancerData, ccs balancer.ClientConnState) error {
 			ccsCh.Send(ccs.BalancerConfig)
 			return nil
 		},
-		Close: func(bd *stub.BalancerData) {
+		Close: func(*stub.BalancerData) {
 			closeCh.Send(nil)
 		},
 	})
@@ -598,7 +598,7 @@ func (s) TestChildBasicOperations(t *testing.T) {
 			ccsCh.Send(nil)
 			return nil
 		},
-		Close: func(bd *stub.BalancerData) {
+		Close: func(*stub.BalancerData) {
 			closeCh.Send(nil)
 		},
 	})

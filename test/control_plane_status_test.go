@@ -56,7 +56,7 @@ func (s) TestConfigSelectorStatusCodes(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ss := &stubserver.StubServer{
-				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 					return &testpb.Empty{}, nil
 				},
 			}
@@ -71,7 +71,7 @@ func (s) TestConfigSelectorStatusCodes(t *testing.T) {
 				Addresses:     []resolver.Address{{Addr: ss.Address}},
 				ServiceConfig: parseServiceConfig(t, ss.R, "{}"),
 			}, funcConfigSelector{
-				f: func(i iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
+				f: func(iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
 					return nil, tc.csErr
 				},
 			})
@@ -104,7 +104,7 @@ func (s) TestPickerStatusCodes(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ss := &stubserver.StubServer{
-				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 					return &testpb.Empty{}, nil
 				},
 			}
@@ -165,7 +165,7 @@ func (s) TestCallCredsFromDialOptionsStatusCodes(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ss := &stubserver.StubServer{
-				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 					return &testpb.Empty{}, nil
 				},
 			}
@@ -208,7 +208,7 @@ func (s) TestCallCredsFromCallOptionsStatusCodes(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ss := &stubserver.StubServer{
-				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 					return &testpb.Empty{}, nil
 				},
 			}

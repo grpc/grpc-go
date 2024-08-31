@@ -58,7 +58,7 @@ type transportRestartCheckCreds struct {
 func (c *transportRestartCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return rawConn, nil, nil
 }
-func (c *transportRestartCheckCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (c *transportRestartCheckCreds) ClientHandshake(_ context.Context, _ string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	conn := &connWrapperWithCloseCh{Conn: rawConn, close: grpcsync.NewEvent()}
@@ -71,7 +71,7 @@ func (c *transportRestartCheckCreds) Info() credentials.ProtocolInfo {
 func (c *transportRestartCheckCreds) Clone() credentials.TransportCredentials {
 	return c
 }
-func (c *transportRestartCheckCreds) OverrideServerName(s string) error {
+func (c *transportRestartCheckCreds) OverrideServerName(string) error {
 	return nil
 }
 

@@ -54,7 +54,7 @@ type endpointsResourceType struct {
 
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
-func (endpointsResourceType) Decode(opts *DecodeOptions, resource *anypb.Any) (*DecodeResult, error) {
+func (endpointsResourceType) Decode(_ *DecodeOptions, resource *anypb.Any) (*DecodeResult, error) {
 	name, rc, err := unmarshalEndpointsResource(resource)
 	switch {
 	case name == "":

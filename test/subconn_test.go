@@ -39,7 +39,7 @@ type tsccPicker struct {
 	sc balancer.SubConn
 }
 
-func (p *tsccPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (p *tsccPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	return balancer.PickResult{SubConn: p.sc}, nil
 }
 
@@ -102,7 +102,7 @@ func (s) TestSubConnEmpty(t *testing.T) {
 
 	// Start the stub server with our stub balancer.
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}

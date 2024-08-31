@@ -279,7 +279,7 @@ func (s *statsService) GetClientStats(ctx context.Context, in *testpb.LoadBalanc
 	}
 }
 
-func (s *statsService) GetClientAccumulatedStats(ctx context.Context, in *testpb.LoadBalancerAccumulatedStatsRequest) (*testpb.LoadBalancerAccumulatedStatsResponse, error) {
+func (s *statsService) GetClientAccumulatedStats(context.Context, *testpb.LoadBalancerAccumulatedStatsRequest) (*testpb.LoadBalancerAccumulatedStatsResponse, error) {
 	return accStats.buildResp(), nil
 }
 
@@ -287,7 +287,7 @@ type configureService struct {
 	testgrpc.UnimplementedXdsUpdateClientConfigureServiceServer
 }
 
-func (s *configureService) Configure(ctx context.Context, in *testpb.ClientConfigureRequest) (*testpb.ClientConfigureResponse, error) {
+func (s *configureService) Configure(_ context.Context, in *testpb.ClientConfigureRequest) (*testpb.ClientConfigureResponse, error) {
 	rpcsToMD := make(map[testpb.ClientConfigureRequest_RpcType][]string)
 	for _, typ := range in.GetTypes() {
 		rpcsToMD[typ] = nil

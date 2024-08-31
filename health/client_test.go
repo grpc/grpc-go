@@ -47,7 +47,7 @@ func (s) TestClientHealthCheckBackoff(t *testing.T) {
 	}
 
 	oldBackoffFunc := backoffFunc
-	backoffFunc = func(ctx context.Context, retries int) bool {
+	backoffFunc = func(_ context.Context, retries int) bool {
 		got = append(got, time.Duration(retries+1)*time.Second)
 		return true
 	}

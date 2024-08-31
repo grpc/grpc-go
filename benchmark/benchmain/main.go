@@ -384,7 +384,7 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 	if bf.UseBufConn {
 		bcLis := bufconn.Listen(256 * 1024)
 		lis = bcLis
-		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, address string) (net.Conn, error) {
+		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 			return nw.ContextDialer(func(context.Context, string, string) (net.Conn, error) {
 				return bcLis.Dial()
 			})(ctx, "", "")
@@ -395,7 +395,7 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 		if err != nil {
 			logger.Fatalf("Failed to listen: %v", err)
 		}
-		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, address string) (net.Conn, error) {
+		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 			return nw.ContextDialer((internal.NetDialerWithTCPKeepalive().DialContext))(ctx, "tcp", lis.Addr().String())
 		}))
 	}
@@ -418,7 +418,7 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 
 func makeFuncUnary(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 	clients, cleanup := makeClients(bf)
-	return func(cn, pos int) {
+	return func(cn, _ int) {
 		reqSizeBytes := bf.ReqSizeBytes
 		respSizeBytes := bf.RespSizeBytes
 		if bf.ReqPayloadCurve != nil {
