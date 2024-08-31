@@ -36,6 +36,12 @@ const (
 	RouteLookupService_RouteLookup_FullMethodName = "/grpc.lookup.v1.RouteLookupService/RouteLookup"
 )
 
+var (
+	RouteLookupService_FullMethodNames = []string{
+		"/grpc.lookup.v1.RouteLookupService/RouteLookup",
+	}
+)
+
 // RouteLookupServiceClient is the client API for RouteLookupService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.

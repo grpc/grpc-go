@@ -43,6 +43,16 @@ const (
 	BenchmarkService_StreamingBothWays_FullMethodName   = "/grpc.testing.BenchmarkService/StreamingBothWays"
 )
 
+var (
+	BenchmarkService_FullMethodNames = []string{
+		"/grpc.testing.BenchmarkService/UnaryCall",
+		"/grpc.testing.BenchmarkService/StreamingCall",
+		"/grpc.testing.BenchmarkService/StreamingFromClient",
+		"/grpc.testing.BenchmarkService/StreamingFromServer",
+		"/grpc.testing.BenchmarkService/StreamingBothWays",
+	}
+)
+
 // BenchmarkServiceClient is the client API for BenchmarkService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.

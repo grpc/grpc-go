@@ -49,6 +49,18 @@ const (
 	Channelz_GetSocket_FullMethodName        = "/grpc.channelz.v1.Channelz/GetSocket"
 )
 
+var (
+	Channelz_FullMethodNames = []string{
+		"/grpc.channelz.v1.Channelz/GetTopChannels",
+		"/grpc.channelz.v1.Channelz/GetServers",
+		"/grpc.channelz.v1.Channelz/GetServer",
+		"/grpc.channelz.v1.Channelz/GetServerSockets",
+		"/grpc.channelz.v1.Channelz/GetChannel",
+		"/grpc.channelz.v1.Channelz/GetSubchannel",
+		"/grpc.channelz.v1.Channelz/GetSocket",
+	}
+)
+
 // ChannelzClient is the client API for Channelz service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.

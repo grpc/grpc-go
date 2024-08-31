@@ -37,6 +37,13 @@ const (
 	Profiling_GetStreamStats_FullMethodName = "/grpc.go.profiling.v1alpha.Profiling/GetStreamStats"
 )
 
+var (
+	Profiling_FullMethodNames = []string{
+		"/grpc.go.profiling.v1alpha.Profiling/Enable",
+		"/grpc.go.profiling.v1alpha.Profiling/GetStreamStats",
+	}
+)
+
 // ProfilingClient is the client API for Profiling service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.

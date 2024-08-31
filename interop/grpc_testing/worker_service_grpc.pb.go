@@ -42,6 +42,15 @@ const (
 	WorkerService_QuitWorker_FullMethodName = "/grpc.testing.WorkerService/QuitWorker"
 )
 
+var (
+	WorkerService_FullMethodNames = []string{
+		"/grpc.testing.WorkerService/RunServer",
+		"/grpc.testing.WorkerService/RunClient",
+		"/grpc.testing.WorkerService/CoreCount",
+		"/grpc.testing.WorkerService/QuitWorker",
+	}
+)
+
 // WorkerServiceClient is the client API for WorkerService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.

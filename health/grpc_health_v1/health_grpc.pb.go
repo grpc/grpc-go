@@ -40,6 +40,13 @@ const (
 	Health_Watch_FullMethodName = "/grpc.health.v1.Health/Watch"
 )
 
+var (
+	Health_FullMethodNames = []string{
+		"/grpc.health.v1.Health/Check",
+		"/grpc.health.v1.Health/Watch",
+	}
+)
+
 // HealthClient is the client API for Health service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.

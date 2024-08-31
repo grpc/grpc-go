@@ -46,6 +46,19 @@ const (
 	TestService_UnimplementedCall_FullMethodName   = "/grpc.testing.TestService/UnimplementedCall"
 )
 
+var (
+	TestService_FullMethodNames = []string{
+		"/grpc.testing.TestService/EmptyCall",
+		"/grpc.testing.TestService/UnaryCall",
+		"/grpc.testing.TestService/CacheableUnaryCall",
+		"/grpc.testing.TestService/StreamingOutputCall",
+		"/grpc.testing.TestService/StreamingInputCall",
+		"/grpc.testing.TestService/FullDuplexCall",
+		"/grpc.testing.TestService/HalfDuplexCall",
+		"/grpc.testing.TestService/UnimplementedCall",
+	}
+)
+
 // TestServiceClient is the client API for TestService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -434,6 +447,12 @@ const (
 	UnimplementedService_UnimplementedCall_FullMethodName = "/grpc.testing.UnimplementedService/UnimplementedCall"
 )
 
+var (
+	UnimplementedService_FullMethodNames = []string{
+		"/grpc.testing.UnimplementedService/UnimplementedCall",
+	}
+)
+
 // UnimplementedServiceClient is the client API for UnimplementedService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -543,6 +562,13 @@ var UnimplementedService_ServiceDesc = grpc.ServiceDesc{
 const (
 	ReconnectService_Start_FullMethodName = "/grpc.testing.ReconnectService/Start"
 	ReconnectService_Stop_FullMethodName  = "/grpc.testing.ReconnectService/Stop"
+)
+
+var (
+	ReconnectService_FullMethodNames = []string{
+		"/grpc.testing.ReconnectService/Start",
+		"/grpc.testing.ReconnectService/Stop",
+	}
 )
 
 // ReconnectServiceClient is the client API for ReconnectService service.
@@ -687,6 +713,13 @@ var ReconnectService_ServiceDesc = grpc.ServiceDesc{
 const (
 	LoadBalancerStatsService_GetClientStats_FullMethodName            = "/grpc.testing.LoadBalancerStatsService/GetClientStats"
 	LoadBalancerStatsService_GetClientAccumulatedStats_FullMethodName = "/grpc.testing.LoadBalancerStatsService/GetClientAccumulatedStats"
+)
+
+var (
+	LoadBalancerStatsService_FullMethodNames = []string{
+		"/grpc.testing.LoadBalancerStatsService/GetClientStats",
+		"/grpc.testing.LoadBalancerStatsService/GetClientAccumulatedStats",
+	}
 )
 
 // LoadBalancerStatsServiceClient is the client API for LoadBalancerStatsService service.
@@ -837,6 +870,14 @@ const (
 	HookService_Hook_FullMethodName              = "/grpc.testing.HookService/Hook"
 	HookService_SetReturnStatus_FullMethodName   = "/grpc.testing.HookService/SetReturnStatus"
 	HookService_ClearReturnStatus_FullMethodName = "/grpc.testing.HookService/ClearReturnStatus"
+)
+
+var (
+	HookService_FullMethodNames = []string{
+		"/grpc.testing.HookService/Hook",
+		"/grpc.testing.HookService/SetReturnStatus",
+		"/grpc.testing.HookService/ClearReturnStatus",
+	}
 )
 
 // HookServiceClient is the client API for HookService service.
@@ -1029,6 +1070,14 @@ const (
 	XdsUpdateHealthService_SendHookRequest_FullMethodName = "/grpc.testing.XdsUpdateHealthService/SendHookRequest"
 )
 
+var (
+	XdsUpdateHealthService_FullMethodNames = []string{
+		"/grpc.testing.XdsUpdateHealthService/SetServing",
+		"/grpc.testing.XdsUpdateHealthService/SetNotServing",
+		"/grpc.testing.XdsUpdateHealthService/SendHookRequest",
+	}
+)
+
 // XdsUpdateHealthServiceClient is the client API for XdsUpdateHealthService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -1208,6 +1257,12 @@ var XdsUpdateHealthService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	XdsUpdateClientConfigureService_Configure_FullMethodName = "/grpc.testing.XdsUpdateClientConfigureService/Configure"
+)
+
+var (
+	XdsUpdateClientConfigureService_FullMethodNames = []string{
+		"/grpc.testing.XdsUpdateClientConfigureService/Configure",
+	}
 )
 
 // XdsUpdateClientConfigureServiceClient is the client API for XdsUpdateClientConfigureService service.

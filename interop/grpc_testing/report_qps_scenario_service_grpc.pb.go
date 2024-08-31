@@ -39,6 +39,12 @@ const (
 	ReportQpsScenarioService_ReportScenario_FullMethodName = "/grpc.testing.ReportQpsScenarioService/ReportScenario"
 )
 
+var (
+	ReportQpsScenarioService_FullMethodNames = []string{
+		"/grpc.testing.ReportQpsScenarioService/ReportScenario",
+	}
+)
+
 // ReportQpsScenarioServiceClient is the client API for ReportQpsScenarioService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.

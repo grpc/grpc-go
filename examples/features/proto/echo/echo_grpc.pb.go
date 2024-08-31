@@ -42,6 +42,15 @@ const (
 	Echo_BidirectionalStreamingEcho_FullMethodName = "/grpc.examples.echo.Echo/BidirectionalStreamingEcho"
 )
 
+var (
+	Echo_FullMethodNames = []string{
+		"/grpc.examples.echo.Echo/UnaryEcho",
+		"/grpc.examples.echo.Echo/ServerStreamingEcho",
+		"/grpc.examples.echo.Echo/ClientStreamingEcho",
+		"/grpc.examples.echo.Echo/BidirectionalStreamingEcho",
+	}
+)
+
 // EchoClient is the client API for Echo service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.

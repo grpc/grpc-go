@@ -39,6 +39,15 @@ const (
 	RouteGuide_RouteChat_FullMethodName    = "/routeguide.RouteGuide/RouteChat"
 )
 
+var (
+	RouteGuide_FullMethodNames = []string{
+		"/routeguide.RouteGuide/GetFeature",
+		"/routeguide.RouteGuide/ListFeatures",
+		"/routeguide.RouteGuide/RecordRoute",
+		"/routeguide.RouteGuide/RouteChat",
+	}
+)
+
 // RouteGuideClient is the client API for RouteGuide service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.

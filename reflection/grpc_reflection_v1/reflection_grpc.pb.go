@@ -43,6 +43,12 @@ const (
 	ServerReflection_ServerReflectionInfo_FullMethodName = "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo"
 )
 
+var (
+	ServerReflection_FullMethodNames = []string{
+		"/grpc.reflection.v1.ServerReflection/ServerReflectionInfo",
+	}
+)
+
 // ServerReflectionClient is the client API for ServerReflection service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
