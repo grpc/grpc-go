@@ -56,12 +56,24 @@ func (serviceGenerateHelper) genFullMethods(g *protogen.GeneratedFile, service *
 		return
 	}
 
+	serviceFullMethodNames := make([]string, 0, len(service.Methods))
+
 	g.P("const (")
 	for _, method := range service.Methods {
 		fmSymbol := helper.formatFullMethodSymbol(service, method)
 		fmName := fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name())
+		serviceFullMethodNames = append(serviceFullMethodNames, fmName)
 		g.P(fmSymbol, ` = "`, fmName, `"`)
 	}
+	g.P(")")
+	g.P()
+
+	g.P("var (")
+	g.P(fmt.Sprintf("%s_FullMethodNames = []string{", service.GoName))
+	for _, fullMethodName := range serviceFullMethodNames {
+		g.P(fmt.Sprintf(`"%s",`, fullMethodName))
+	}
+	g.P("}")
 	g.P(")")
 	g.P()
 }
