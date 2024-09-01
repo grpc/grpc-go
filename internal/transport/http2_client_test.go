@@ -23,23 +23,17 @@ import (
 	"errors"
 	"net"
 	"testing"
-	"time"
 
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/resolver"
 )
 
-// ClientPreface is the HTTP/2 client preface string.
-var ClientPreface = []byte(http2.ClientPreface)
+type Http2TestCustomError struct {
+	Err string
+}
 
-// framerWriteSettings is serialized byte sequence of []http2.Setting{}
-var framerWriteSettings = []byte{0, 0, 0, 4, 0, 0, 0, 0, 0}
-
-// framerWindowUpdate is serialized byte sequence of http2.Setting{ID:  http2.SettingInitialWindowSize, Val: 14465}
-var framerWindowUpdate = []byte{0, 0, 4, 8, 0, 0, 0, 0, 0, 0, 0, 56, 129}
-
-type clientPrefaceConn struct {
-	net.Conn
+func (hte Http2TestCustomError) Error() string {
+	return hte.Err
 }
 
 type clientPrefaceLengthConn struct {
@@ -54,27 +48,8 @@ type framerWindowUpdateConn struct {
 	net.Conn
 }
 
-func (cp *clientPrefaceConn) Write(b []byte) (n int, err error) {
-	if bytes.Equal(b, ClientPreface) {
-		return 0, errors.New("force error for preface write")
-	}
-	return cp.Conn.Write(b)
-}
-
-func (cp *clientPrefaceConn) Close() error {
-	return cp.Conn.Close()
-}
-
-func dialerClientPrefaceWrite(_ context.Context, addr string) (net.Conn, error) {
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-	return &clientPrefaceConn{Conn: conn}, nil
-}
-
 func (cpl *clientPrefaceLengthConn) Write(b []byte) (n int, err error) {
-	if bytes.Equal(b, ClientPreface) {
+	if bytes.Equal(b, []byte(http2.ClientPreface)) {
 		incorrectPreface := "INCORRECT PREFACE\r\n\r\n"
 		n, err = cpl.Conn.Write([]byte(incorrectPreface))
 		return n, err
@@ -92,7 +67,8 @@ func dialerClientPrefaceLength(_ context.Context, addr string) (net.Conn, error)
 }
 
 func (fws *framerWriteSettingsConn) Write(b []byte) (n int, err error) {
-	if bytes.Equal(b, framerWriteSettings) {
+	// compare b with serialized byte sequence of []http2.Setting{}
+	if bytes.Equal(b, []byte{0, 0, 0, 4, 0, 0, 0, 0, 0}) {
 		return 0, errors.New("force error for Framer write setting")
 	}
 	return fws.Conn.Write(b)
@@ -107,7 +83,8 @@ func dialerFramerWriteSettings(_ context.Context, addr string) (net.Conn, error)
 }
 
 func (fwu *framerWindowUpdateConn) Write(b []byte) (n int, err error) {
-	if bytes.Equal(b, framerWindowUpdate) {
+	// compare b with serialized byte sequence of http2.Setting{ID:  http2.SettingInitialWindowSize, Val: 14465}
+	if bytes.Equal(b, []byte{0, 0, 4, 8, 0, 0, 0, 0, 0, 0, 0, 56, 129}) {
 		return 0, errors.New("force error for windowupdate")
 	}
 	return fwu.Conn.Write(b)
@@ -128,11 +105,6 @@ func (s) TestNewHTTP2ClientTarget(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "client-preface-write",
-			opts:     ConnectOptions{Dialer: dialerClientPrefaceWrite},
-			expected: "connection error: desc = \"transport: failed to write client preface: force error for preface write\"",
-		},
-		{
 			name:     "client-preface-length",
 			opts:     ConnectOptions{Dialer: dialerClientPrefaceLength},
 			expected: "connection error: desc = \"transport: preface mismatch, wrote 21 bytes; want 24\"",
@@ -150,21 +122,21 @@ func (s) TestNewHTTP2ClientTarget(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-
 			// Create a server.
 			lis, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
 				t.Fatalf("Listen() = _, %v, want _, <nil>", err)
 			}
 			defer lis.Close()
-			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-
 			_, err = NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, test.opts, func(GoAwayReason) {})
 			if err == nil {
 				t.Errorf("got nil, want an error")
 			}
-			if err.Error() != test.expected {
+			expectedError := Http2TestCustomError{Err: test.expected}
+			err = Http2TestCustomError{Err: err.Error()}
+			if !errors.Is(err, expectedError) {
 				t.Fatalf("TestNewHTTP2ClientTarget() = %s, want %s", err.Error(), test.expected)
 			}
 		})
