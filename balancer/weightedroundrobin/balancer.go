@@ -440,7 +440,7 @@ func (p *picker) start(ctx context.Context) {
 	}()
 }
 
-func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (p *picker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	// Read the scheduler atomically.  All scheduler operations are threadsafe,
 	// and if the scheduler is replaced during this usage, we want to use the
 	// scheduler that was live when the pick started.

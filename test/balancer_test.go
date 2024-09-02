@@ -71,7 +71,7 @@ type testBalancer struct {
 	doneInfo          []balancer.DoneInfo
 }
 
-func (b *testBalancer) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
+func (b *testBalancer) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	b.cc = cc
 	return b
 }
@@ -80,7 +80,7 @@ func (*testBalancer) Name() string {
 	return testBalancerName
 }
 
-func (*testBalancer) ResolverError(err error) {
+func (*testBalancer) ResolverError(error) {
 	panic("not implemented")
 }
 
@@ -308,7 +308,7 @@ func testDoneLoads(t *testing.T) {
 	const testLoad = "test-load-,-should-be-orca"
 
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			grpc.SetTrailer(ctx, metadata.Pairs(loadMDKey, testLoad))
 			return &testpb.Empty{}, nil
 		},
@@ -359,7 +359,7 @@ type attrTransportCreds struct {
 	attr *attributes.Attributes
 }
 
-func (ac *attrTransportCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (ac *attrTransportCreds) ClientHandshake(ctx context.Context, _ string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	ai := credentials.ClientHandshakeInfoFromContext(ctx)
 	ac.attr = ai.Attributes
 	return rawConn, nil, nil
@@ -550,7 +550,7 @@ func (s) TestServersSwap(t *testing.T) {
 		}
 		s := grpc.NewServer()
 		ts := &funcServer{
-			unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			unaryCall: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return &testpb.SimpleResponse{Username: username}, nil
 			},
 		}
@@ -607,7 +607,7 @@ func (s) TestWaitForReady(t *testing.T) {
 	defer s.Stop()
 	const one = "1"
 	ts := &funcServer{
-		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		unaryCall: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Username: one}, nil
 		},
 	}
@@ -662,7 +662,7 @@ type authorityOverrideTransportCreds struct {
 	authorityOverride string
 }
 
-func (ao *authorityOverrideTransportCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (ao *authorityOverrideTransportCreds) ClientHandshake(_ context.Context, _ string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return rawConn, nil, nil
 }
 func (ao *authorityOverrideTransportCreds) Info() credentials.ProtocolInfo {
@@ -913,7 +913,7 @@ type producerTestBalancerBuilder struct {
 	connect    bool
 }
 
-func (bb *producerTestBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (bb *producerTestBalancerBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	return &producerTestBalancer{cc: cc, rpcErrChan: bb.rpcErrChan, ctxChan: bb.ctxChan, connect: bb.connect}
 }
 
@@ -1003,7 +1003,7 @@ func (s) TestBalancerProducerBlockUntilReady(t *testing.T) {
 	balancer.Register(&producerTestBalancerBuilder{rpcErrChan: rpcErrChan, ctxChan: ctxChan, connect: true})
 
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -1034,7 +1034,7 @@ func (s) TestBalancerProducerHonorsContext(t *testing.T) {
 	balancer.Register(&producerTestBalancerBuilder{rpcErrChan: rpcErrChan, ctxChan: ctxChan, connect: false})
 
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}

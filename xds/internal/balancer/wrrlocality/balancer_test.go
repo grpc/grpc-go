@@ -153,7 +153,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 			}
 			return &cfg, nil
 		},
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+		UpdateClientConnState: func(_ *stub.BalancerData, ccs balancer.ClientConnState) error {
 			wtCfg, ok := ccs.BalancerConfig.(*weightedtarget.LBConfig)
 			if !ok {
 				return errors.New("child received config that was not a weighted target config")

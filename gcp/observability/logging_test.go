@@ -134,7 +134,7 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 		newLoggingExporter = ne
 	}(newLoggingExporter)
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(context.Context, *config) (loggingExporter, error) {
 		return fle, nil
 	}
 
@@ -157,7 +157,7 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -344,7 +344,7 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 		newLoggingExporter = ne
 	}(newLoggingExporter)
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(context.Context, *config) (loggingExporter, error) {
 		return fle, nil
 	}
 
@@ -367,7 +367,7 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -558,7 +558,7 @@ func (s) TestBothClientAndServerRPCEvents(t *testing.T) {
 		newLoggingExporter = ne
 	}(newLoggingExporter)
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(context.Context, *config) (loggingExporter, error) {
 		return fle, nil
 	}
 

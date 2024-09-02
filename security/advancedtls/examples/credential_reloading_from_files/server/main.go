@@ -47,7 +47,7 @@ type greeterServer struct {
 }
 
 // sayHello is a simple implementation of the pb.GreeterServer SayHello method.
-func (greeterServer) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+func (greeterServer) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 

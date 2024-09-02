@@ -42,7 +42,7 @@ type server struct {
 }
 
 // SayHello implements helloworld.GreeterServer
-func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+func (s *server) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
@@ -52,7 +52,7 @@ type slowServer struct {
 }
 
 // SayHello implements helloworld.GreeterServer
-func (s *slowServer) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+func (s *slowServer) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	// Delay 100ms ~ 200ms before replying
 	time.Sleep(time.Duration(100+rand.Intn(100)) * time.Millisecond)
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil

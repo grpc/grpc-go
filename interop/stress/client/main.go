@@ -173,7 +173,7 @@ func newMetricsServer() *server {
 }
 
 // GetAllGauges returns all gauges.
-func (s *server) GetAllGauges(in *metricspb.EmptyMessage, stream metricspb.MetricsService_GetAllGaugesServer) error {
+func (s *server) GetAllGauges(_ *metricspb.EmptyMessage, stream metricspb.MetricsService_GetAllGaugesServer) error {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -186,7 +186,7 @@ func (s *server) GetAllGauges(in *metricspb.EmptyMessage, stream metricspb.Metri
 }
 
 // GetGauge returns the gauge for the given name.
-func (s *server) GetGauge(ctx context.Context, in *metricspb.GaugeRequest) (*metricspb.GaugeResponse, error) {
+func (s *server) GetGauge(_ context.Context, in *metricspb.GaugeRequest) (*metricspb.GaugeResponse, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 

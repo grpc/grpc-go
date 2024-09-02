@@ -307,7 +307,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	defer view.UnregisterExporter(fe)
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Payload: &testpb.Payload{
 				Body: make([]byte, 10000),
 			}}, nil
@@ -1072,7 +1072,7 @@ func (s) TestOpenCensusTags(t *testing.T) {
 	// populated at the client side application layer if populated.
 	tmCh := testutils.NewChannel()
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			// Do the sends of the tag maps for assertions in this main testing
 			// goroutine. Do the receives and assertions in a forked goroutine.
 			if tm := tag.FromContext(ctx); tm != nil {
@@ -1404,7 +1404,7 @@ func (s) TestSpan(t *testing.T) {
 		DisableTrace: false,
 	}
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {

@@ -30,7 +30,7 @@ type testLogger struct {
 	errors     []string
 }
 
-func (e *testLogger) Logf(format string, args ...any) {
+func (e *testLogger) Logf(string, ...any) {
 }
 
 func (e *testLogger) Errorf(format string, args ...any) {

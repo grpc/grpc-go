@@ -56,7 +56,7 @@ type testingPicker struct {
 	maxCalled int64
 }
 
-func (p *testingPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (p *testingPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	if atomic.AddInt64(&p.maxCalled, -1) < 0 {
 		return balancer.PickResult{}, fmt.Errorf("pick called to many times (> goroutineCount)")
 	}

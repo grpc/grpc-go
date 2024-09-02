@@ -178,10 +178,9 @@ done
 
 # Collection of revive linter analysis checks
 REV_OUT="$(mktemp)"
-revive -formatter plain ./... >"${REV_OUT}" || true
+revive -set_exit_status=1 -exclude "reflection/test/grpc_testing_not_regenerate/" -formatter plain ./... >"${REV_OUT}" || true
 
-# Error for anything other than unused-parameter linter check and in generated code.
 # TODO: Remove `|| true` to unskip linter failures once existing issues are fixed.
-(noret_grep -v "unused-parameter" "${REV_OUT}" | not grep -v "\.pb\.go:") || true
+(not grep -v "\.pb\.go:" "${REV_OUT}") || true
 
 echo SUCCESS

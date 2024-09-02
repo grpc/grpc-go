@@ -231,7 +231,7 @@ func (s) TestRegisterService(t *testing.T) {
 	fs := newFakeGRPCServer()
 
 	origNewGRPCServer := newGRPCServer
-	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer { return fs }
+	newGRPCServer = func(...grpc.ServerOption) grpcServer { return fs }
 	defer func() { newGRPCServer = origNewGRPCServer }()
 
 	s, err := NewGRPCServer(BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), "non-existent-management-server")))
@@ -355,7 +355,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	// request is received by it.
 	ldsRequestCh := make(chan []string, 1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3ListenerURL {
 				select {
 				case ldsRequestCh <- req.GetResourceNames():
@@ -374,7 +374,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	// test to verify that Serve() is called on the underlying server.
 	fs := newFakeGRPCServer()
 	origNewGRPCServer := newGRPCServer
-	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer { return fs }
+	newGRPCServer = func(...grpc.ServerOption) grpcServer { return fs }
 	defer func() { newGRPCServer = origNewGRPCServer }()
 
 	// Create a new xDS enabled gRPC server and pass it a server option to get
@@ -572,7 +572,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	// request is received by it.
 	ldsRequestCh := make(chan []string, 1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3ListenerURL {
 				select {
 				case ldsRequestCh <- req.GetResourceNames():
