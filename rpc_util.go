@@ -19,9 +19,11 @@
 package grpc
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -872,41 +874,62 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 
 // Using compressor, decompress d, returning data and size.
 // Optionally, if data will be over maxReceiveMessageSize, just return the size.
+// func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMessageSize int, pool mem.BufferPool) (mem.BufferSlice, int, error) {
+// 	dcReader, err := compressor.Decompress(d.Reader())
+// 	if err != nil {
+// 		return nil, 0, err
+// 	}
+
+//		var out mem.BufferSlice
+//		_, err = io.Copy(mem.NewWriter(&out, pool), io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+//		if err != nil {
+//			out.Free()
+//			return nil, 0, err
+//		}
+//		return out, out.Len(), nil
+//	}
 func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMessageSize int, pool mem.BufferPool) (mem.BufferSlice, int, error) {
 	dcReader, err := compressor.Decompress(d.Reader())
+	// dcReader, err := compressor.Decompress(bytes.NewReader(d))
 	if err != nil {
 		return nil, 0, err
 	}
-
-	// TODO: Can/should this still be preserved with the new BufferSlice API? Are
-	//  there any actual benefits to allocating a single large buffer instead of
-	//  multiple smaller ones?
-	//if sizer, ok := compressor.(interface {
-	//	DecompressedSize(compressedBytes []byte) int
-	//}); ok {
-	//	if size := sizer.DecompressedSize(d); size >= 0 {
-	//		if size > maxReceiveMessageSize {
-	//			return nil, size, nil
-	//		}
-	//		// size is used as an estimate to size the buffer, but we
-	//		// will read more data if available.
-	//		// +MinRead so ReadFrom will not reallocate if size is correct.
-	//		//
-	//		// TODO: If we ensure that the buffer size is the same as the DecompressedSize,
-	//		// we can also utilize the recv buffer pool here.
-	//		buf := bytes.NewBuffer(make([]byte, 0, size+bytes.MinRead))
-	//		bytesRead, err := buf.ReadFrom(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
-	//		return buf.Bytes(), int(bytesRead), err
-	//	}
-	//}
-
-	var out mem.BufferSlice
-	_, err = io.Copy(mem.NewWriter(&out, pool), io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+	if sizer, ok := compressor.(interface {
+		DecompressedSize(compressedBytes mem.BufferSlice) int
+	}); ok {
+		if size := sizer.DecompressedSize(d); size >= 0 {
+			if size > maxReceiveMessageSize {
+				return nil, size, errors.New("message size exceeds maxReceiveMessageSize allowed")
+			}
+			bufferSize := uint64(size) + bytes.MinRead
+			if bufferSize > math.MaxInt {
+				bufferSize = math.MaxInt
+			}
+			buf := bytes.NewBuffer(make([]byte, 0, int(bufferSize)))
+			bytesRead, err := buf.ReadFrom(io.LimitReader(dcReader, int64(maxReceiveMessageSize)))
+			if err != nil {
+				return nil, int(bytesRead), err
+			}
+			if err = checkReceiveMessageOverflow(bytesRead, int64(maxReceiveMessageSize), dcReader); err != nil {
+				return nil, size + 1, err
+			}
+			//	bytesRead, err := buf.ReadFrom(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+			return nil, int(bytesRead), err
+		}
+	}
+	// d, err = io.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)))
+	// if err != nil {
+	// 	return nil, len(d), err
+	// }
+	_, err = io.Copy(mem.NewWriter(&d, pool), io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
 	if err != nil {
-		out.Free()
+		d.Free()
 		return nil, 0, err
 	}
-	return out, out.Len(), nil
+	if err = checkReceiveMessageOverflow(int64(len(d)), int64(maxReceiveMessageSize), dcReader); err != nil {
+		return nil, len(d) + 1, err
+	}
+	return d, len(d), err
 }
 
 // For the two compressor parameters, both should not be set, but if they are,
@@ -1067,3 +1090,20 @@ const (
 )
 
 const grpcUA = "grpc-go/" + Version
+
+// checkReceiveMessageOverflow checks if the number of bytes read from the stream exceeds
+// the maximum receive message size allowed by the client. If the `readBytes` equals
+// `maxReceiveMessageSize`, the function attempts to read one more byte from the `dcReader`
+// to detect if there's an overflow.
+//
+// If additional data is read, or an error other than `io.EOF` is encountered, the function
+// returns an error indicating that the message size has exceeded the permissible limit.
+func checkReceiveMessageOverflow(readBytes, maxReceiveMessageSize int64, dcReader io.Reader) error {
+	if readBytes == maxReceiveMessageSize {
+		b := make([]byte, 1)
+		if n, err := dcReader.Read(b); n > 0 || err != io.EOF {
+			return fmt.Errorf("overflow: message larger than max size receivable by client (%d bytes)", maxReceiveMessageSize)
+		}
+	}
+	return nil
+}
