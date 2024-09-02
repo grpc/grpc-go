@@ -16,7 +16,7 @@
  *
  */
 
-// Binary server is an example server for CSM Observability.
+// Binary server is a server for the CSM Observability example.
 package main
 
 import (

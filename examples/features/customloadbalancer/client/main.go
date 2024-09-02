@@ -16,7 +16,7 @@
  *
  */
 
-// Binary client is an example client for custom load balancer.
+// Binary client is a client for the custom load balancer example.
 package main
 
 import (
