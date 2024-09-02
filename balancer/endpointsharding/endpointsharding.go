@@ -116,7 +116,13 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 			bal = child.(*balancerWrapper)
 		} else {
 			bal = &balancerWrapper{
-				childState: ChildState{Endpoint: endpoint},
+				childState: ChildState{
+					Endpoint: endpoint,
+					State: balancer.State{
+						ConnectivityState: connectivity.Connecting,
+						Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
+					},
+				},
 				ClientConn: es.cc,
 				es:         es,
 			}
