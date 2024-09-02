@@ -477,6 +477,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 			// it's READY. See A62.
 			// If the balancer is already in CONNECTING, no update is needed.
 			if b.state == connectivity.Idle {
+				b.state = connectivity.Connecting
 				b.cc.UpdateState(balancer.State{
 					ConnectivityState: connectivity.Connecting,
 					Picker:            &picker{err: balancer.ErrNoSubConnAvailable},
