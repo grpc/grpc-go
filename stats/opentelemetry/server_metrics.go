@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 
+	"go.opentelemetry.io/otel"
 	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
 )
@@ -64,6 +65,8 @@ func (h *serverStatsHandler) initializeMetrics() {
 	}
 	h.MetricsRecorder = rm
 	rm.registerMetrics(metrics, meter)
+
+	otel.SetTracerProvider(h.options.TraceOptions.TracerProvider)
 }
 
 // attachLabelsTransportStream intercepts SetHeader and SendHeader calls of the
@@ -90,7 +93,7 @@ func (s *attachLabelsTransportStream) SendHeader(md metadata.MD) error {
 	return s.ServerTransportStream.SendHeader(md)
 }
 
-func (h *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+func (h *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	var metadataExchangeLabels metadata.MD
 	if h.options.MetricsOptions.pluginOption != nil {
 		metadataExchangeLabels = h.options.MetricsOptions.pluginOption.GetMetadata()
@@ -151,7 +154,7 @@ func (s *attachLabelsStream) SendMsg(m any) error {
 	return s.ServerStream.SendMsg(m)
 }
 
-func (h *serverStatsHandler) streamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func (h *serverStatsHandler) streamInterceptor(srv any, ss grpc.ServerStream, ssi *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	var metadataExchangeLabels metadata.MD
 	if h.options.MetricsOptions.pluginOption != nil {
 		metadataExchangeLabels = h.options.MetricsOptions.pluginOption.GetMetadata()
@@ -196,10 +199,15 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 			method = "other"
 		}
 	}
+	var ti *traceInfo
+	if !h.options.TraceOptions.DisableTrace {
+		ctx, ti = h.traceTagRPC(ctx, info)
+	}
 
 	ai := &attemptInfo{
 		startTime: time.Now(),
 		method:    removeLeadingSlash(method),
+		ti:        ti,
 	}
 	ri := &rpcInfo{
 		ai: ai,
@@ -215,6 +223,9 @@ func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 		return
 	}
 	h.processRPCData(ctx, rs, ri.ai)
+	if !h.options.TraceOptions.DisableTrace {
+		populateSpan(ctx, rs, ri.ai.ti)
+	}
 }
 
 func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
