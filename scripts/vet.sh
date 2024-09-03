@@ -186,6 +186,6 @@ revive \
   ./...
 
 # Error if trailing spaces found in any files excluding files in .git directory
-git grep "[[:blank:]]$" | not grep -v '\.pb\.go\|protoc-gen-go-grpc\|grpc_testing_not_regenerate'
+git grep "[[:blank:]]$" -- | not grep -v '\.pb\.go\|protoc-gen-go-grpc\|grpc_testing_not_regenerate'
 
 echo SUCCESS
