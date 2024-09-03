@@ -185,7 +185,7 @@ revive \
   -config "$(dirname "$0")/revive.toml" \
   ./...
 
-# Error if trailing spaces found in any files excluding files in .git directory
-git grep "[[:blank:]]$" -- | not grep -v '\.pb\.go\|protoc-gen-go-grpc\|grpc_testing_not_regenerate'
+# Ensure that no trailing spaces are found.
+not git grep '[[:blank:]]$'
 
 echo SUCCESS
