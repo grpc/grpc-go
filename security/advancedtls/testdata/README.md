@@ -6,7 +6,7 @@ How to Generate Test Certificates Using OpenSSL
 -------------
 
 Supposing we are going to create a `subject_cert.pem` that is trusted by `ca_cert.pem`, here are the
-commands we run: 
+commands we run:
 
 1. Generate the private key, `ca_key.pem`, and the cert `ca_cert.pem`, for the CA:
 
@@ -14,12 +14,12 @@ commands we run:
    $ openssl req -x509 -newkey rsa:4096 -keyout ca_key.pem -out ca_cert.pem -nodes -days $DURATION_DAYS
    ```
 
-2. Generate a private key `subject_key.pem` for the subject: 
-      
+2. Generate a private key `subject_key.pem` for the subject:
+
       ```
       $ openssl genrsa -out subject_key.pem 4096
       ```
-   
+
 3. Generate a CSR `csr.pem` using `subject_key.pem`:
 
    ```
@@ -32,7 +32,7 @@ commands we run:
    ```
 
 4. Use `ca_key.pem` and `ca_cert.pem` to sign `csr.pem`, and get a certificate, `subject_cert.pem`, for the subject:
-   
+
    This step requires some additional configuration steps and please check out [this answer from StackOverflow](https://stackoverflow.com/a/21340898) for more.
 
    ```
@@ -40,7 +40,7 @@ commands we run:
    ```
    Please see an example configuration template at `openssl-ca.cnf`.
 5. Verify the `subject_cert.pem` is trusted by `ca_cert.pem`:
-   
+
 
    ```
    $ openssl verify -verbose -CAfile ca_cert.pem  subject_cert.pem

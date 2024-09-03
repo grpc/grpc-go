@@ -49,7 +49,7 @@ Certificate chain where the leaf is revoked
 
 ## Test Data for testing CRL providers functionality
 
-To generate test data please run provider_create.sh script. All the files have 
+To generate test data please run provider_create.sh script. All the files have
 `provider_` prefix.
 
 We need to generate the following artifacts for testing CRL provider:
@@ -59,34 +59,34 @@ We need to generate the following artifacts for testing CRL provider:
 * client cert signed by server CA
 * empty crl file
 * crl file containing information about revoked server cert
-* crl file by 'malicious' CA which contains the same issuer with original CA 
+* crl file by 'malicious' CA which contains the same issuer with original CA
 
 
-All the commands are provided in provider_create.sh script. Please find the 
+All the commands are provided in provider_create.sh script. Please find the
 description below.
 
 1. The first two commands generate self signed CAs for client and server:
-   - provider_server_trust_key.pem 
-   - provider_server_trust_cert.pem 
-   - provider_client_trust_key.pem 
-   - provider_client_trust_cert.pem 
+   - provider_server_trust_key.pem
+   - provider_server_trust_cert.pem
+   - provider_client_trust_key.pem
+   - provider_client_trust_cert.pem
 
 2. Generate client and server certs signed by the CAs above:
-   - provider_server_cert.pem 
+   - provider_server_cert.pem
    - provider_client_cert.pem
 
 3. The next 2 commands create 2 files needed for CRL issuing:
    - provider_crlnumber.txt
    - provider_index.txt
 
-4. The next 3 commands generate an empty CRL file and a CRL file containing 
+4. The next 3 commands generate an empty CRL file and a CRL file containing
 revoked server cert:
-   - provider_crl_empty.pem 
-   - provider_crl_server_revoked.pem 
+   - provider_crl_empty.pem
+   - provider_crl_server_revoked.pem
 
-5. The final section contains commands to generate CRL file by 'malicious' CA. 
-Note that we use Subject Key Identifier from previously created 
+5. The final section contains commands to generate CRL file by 'malicious' CA.
+Note that we use Subject Key Identifier from previously created
 provider_client_trust_cert.pem to generate malicious certs / CRL.
    - provider_malicious_client_trust_key.pem
-   - provider_malicious_client_trust_cert.pem 
+   - provider_malicious_client_trust_cert.pem
    - provider_malicious_crl_empty.pem

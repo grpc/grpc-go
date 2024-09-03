@@ -57,7 +57,7 @@ func (s *wrappedStream) Context() context.Context {
 }
 
 func SomeStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-    // Get the incoming metadata from the RPC context, and add a new 
+    // Get the incoming metadata from the RPC context, and add a new
     // key-value pair to it.
     md, ok := metadata.FromIncomingContext(ctx)
     md.Append("key1", "value1")

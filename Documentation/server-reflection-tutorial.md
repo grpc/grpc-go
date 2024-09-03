@@ -103,7 +103,7 @@ The `list` command lists services exposed at a given port:
 - Describe all services
 
   The `describe` command inspects a service given its full name (in the format
-  of \<package\>.\<service\>). 
+  of \<package\>.\<service\>).
 
   ```sh
   $ grpcurl -plaintext localhost:50051 describe helloworld.Greeter

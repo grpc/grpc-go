@@ -3,7 +3,7 @@
 gRPC provides a health library to communicate a system's health to their clients.
 It works by providing a service definition via the [health/v1](https://github.com/grpc/grpc-proto/blob/master/grpc/health/v1/health.proto) api.
 
-By using the health library, clients can gracefully avoid using servers as they encounter issues. 
+By using the health library, clients can gracefully avoid using servers as they encounter issues.
 Most languages provide an implementation out of box, making it interoperable between systems.
 
 ## Try it
@@ -30,7 +30,7 @@ This configuration indicates which backend `serviceName` should be inspected whe
 An empty string (`""`) typically indicates the overall health of a server should be reported.
 
 ```go
-// import grpc/health to enable transparent client side checking 
+// import grpc/health to enable transparent client side checking
 import _ "google.golang.org/grpc/health"
 
 // set up appropriate service config
@@ -59,6 +59,6 @@ This state is often seen at the start up of a server instance.
 Conversely, `NOT_SERVING` indicates the system is unable to service requests at the time.
 
 `SERVICE_UNKNOWN` communicates the `serviceName` requested by the client is not known by the server.
-This status is only reported by the `Watch()` call. 
+This status is only reported by the `Watch()` call.
 
 A server may toggle its health using `healthServer.SetServingStatus("serviceName", servingStatus)`.

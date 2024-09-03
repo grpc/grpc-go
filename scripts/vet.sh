@@ -185,12 +185,7 @@ revive \
   -config "$(dirname "$0")/revive.toml" \
   ./...
 
-TRAIL_SPACE_OUT="$(mktemp)"
 # Error if trailing spaces found in any files excluding files in .git directory and *.md files
-find . -path ./.git -prune -o -type f -exec grep -Hn "[[:blank:]]$" {} \; >"${TRAIL_SPACE_OUT}"
-
-not grep -v "\.pb\.go:" "${TRAIL_SPACE_OUT}"
-
-find . -type f -exec sed -i 's/[[:blank:]]\+$//' {} +
+$(find . -path ./.git -prune -o -type f ! -name "*.md" -exec grep -Hn "[[:blank:]]$" {} \;) | fail_on_output
 
 echo SUCCESS
