@@ -467,7 +467,7 @@ type testServer struct {
 	testgrpc.UnimplementedTestServiceServer
 }
 
-func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+func (s *testServer) UnaryCall(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	return &testpb.SimpleResponse{
 		Payload: &testpb.Payload{},
 	}, nil
