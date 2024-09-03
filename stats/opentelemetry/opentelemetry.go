@@ -283,7 +283,7 @@ func optionFromLabels(labelKeys []string, optionalLabelKeys []string, optionalLa
 			}
 		}
 	}
-	return otelmetric.WithAttributes(attributes...)
+	return otelmetric.WithAttributeSet(otelattribute.NewSet(attributes...))
 }
 
 // registryMetrics implements MetricsRecorder for the client and server stats
@@ -330,41 +330,40 @@ func (rm *registryMetrics) registerMetrics(metrics *estats.Metrics, meter otelme
 
 func (rm *registryMetrics) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
 	desc := handle.Descriptor()
-	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
-
 	if ic, ok := rm.intCounts[desc]; ok {
+		ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
 		ic.Add(context.TODO(), incr, ao)
 	}
 }
 
 func (rm *registryMetrics) RecordFloat64Count(handle *estats.Float64CountHandle, incr float64, labels ...string) {
 	desc := handle.Descriptor()
-	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
 	if fc, ok := rm.floatCounts[desc]; ok {
+		ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
 		fc.Add(context.TODO(), incr, ao)
 	}
 }
 
 func (rm *registryMetrics) RecordInt64Histo(handle *estats.Int64HistoHandle, incr int64, labels ...string) {
 	desc := handle.Descriptor()
-	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
 	if ih, ok := rm.intHistos[desc]; ok {
+		ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
 		ih.Record(context.TODO(), incr, ao)
 	}
 }
 
 func (rm *registryMetrics) RecordFloat64Histo(handle *estats.Float64HistoHandle, incr float64, labels ...string) {
 	desc := handle.Descriptor()
-	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
 	if fh, ok := rm.floatHistos[desc]; ok {
+		ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
 		fh.Record(context.TODO(), incr, ao)
 	}
 }
 
 func (rm *registryMetrics) RecordInt64Gauge(handle *estats.Int64GaugeHandle, incr int64, labels ...string) {
 	desc := handle.Descriptor()
-	ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
 	if ig, ok := rm.intGauges[desc]; ok {
+		ao := optionFromLabels(desc.Labels, desc.OptionalLabels, rm.optionalLabels, labels...)
 		ig.Record(context.TODO(), incr, ao)
 	}
 }
