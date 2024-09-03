@@ -185,7 +185,7 @@ revive \
   -config "$(dirname "$0")/revive.toml" \
   ./...
 
-# Error if trailing spaces found in any files excluding files in .git directory and *.md files
-find . -path ./.git -prune -o -type f -exec grep -Hn "[[:blank:]]$" {} \; | fail_on_output
+# Error if trailing spaces found in any files excluding files in .git directory
+git grep "[[:blank:]]$" | fail_on_output
 
 echo SUCCESS
