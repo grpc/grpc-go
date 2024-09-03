@@ -186,6 +186,6 @@ revive \
   ./...
 
 # Error if trailing spaces found in any files excluding files in .git directory and *.md files
-find . -path ./.git -prune -o -type f ! -name "*.md" -exec grep -Hn "[[:blank:]]$" {} \; | fail_on_output
+find . -path ./.git -prune -o -type f -exec grep -Hn "[[:blank:]]$" {} \; | fail_on_output
 
 echo SUCCESS
