@@ -16,6 +16,7 @@
  *
  */
 
+// Binary client is a client for the OpenTelemetry example.
 package main
 
 import (

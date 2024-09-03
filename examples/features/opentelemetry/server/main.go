@@ -16,6 +16,7 @@
  *
  */
 
+// Binary server is a server for the OpenTelemetry example.
 package main
 
 import (
