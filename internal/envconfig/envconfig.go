@@ -50,6 +50,9 @@ var (
 	// xDS fallback is turned on. If this is unset or is false, only the first
 	// xDS server in the list of server configs will be used.
 	XDSFallbackSupport = boolFromEnv("GRPC_EXPERIMENTAL_XDS_FALLBACK", false)
+	// UseHTTP2StandardFramer is the env variable that controls whether to use the
+	// http2.Framer or the new grpchttp2.Framer struct in the HTTP/2 Transport.
+	UseHTTP2StandardFramer = boolFromEnv("GRPC_USE_STANDARD_FRAMER", false)
 )
 
 func boolFromEnv(envVar string, def bool) bool {

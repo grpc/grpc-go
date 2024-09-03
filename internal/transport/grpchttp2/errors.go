@@ -71,3 +71,25 @@ func (err ErrCode) String() string {
 	}
 	return fmt.Sprintf("unknown error code %#x", uint32(err))
 }
+
+// connError represents an [HTTP/2 connection error].
+//
+// [HTTP/2 connection error]: https://httpwg.org/specs/rfc7540.html#ErrorHandler
+type connError struct {
+	ErrCode
+	Reason string
+}
+
+func (err connError) Error() string {
+	return fmt.Sprintf("connection error: %s; %s", err.ErrCode, err.Reason)
+}
+
+type StreamError struct {
+	ErrCode
+	StreamID uint32
+	Reason   string
+}
+
+func (err StreamError) Error() string {
+	return fmt.Sprintf("stream error from stream %d: %s", err.StreamID, err.ErrCode)
+}

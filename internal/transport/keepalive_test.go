@@ -34,11 +34,11 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/http2"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/syscall"
+	"google.golang.org/grpc/internal/transport/grpchttp2"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/testdata"
 )
@@ -192,7 +192,7 @@ func (s) TestKeepaliveServerClosesUnresponsiveClient(t *testing.T) {
 		t.Fatalf("conn.Write(clientPreface) failed: n=%v, err=%v", n, err)
 	}
 	framer := newFramer(conn, defaultWriteBufSize, defaultReadBufSize, false, 0)
-	if err := framer.fr.WriteSettings(http2.Setting{}); err != nil {
+	if err := framer.fr.WriteSettings(grpchttp2.Setting{}); err != nil {
 		t.Fatal("framer.WriteSettings(http2.Setting{}) failed:", err)
 	}
 	framer.writer.Flush()

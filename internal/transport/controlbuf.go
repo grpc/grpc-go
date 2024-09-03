@@ -28,10 +28,10 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
+	"google.golang.org/grpc/internal/transport/grpchttp2"
 	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/status"
 )
@@ -129,7 +129,7 @@ func (h *headerFrame) isTransportResponseFrame() bool {
 type cleanupStream struct {
 	streamID uint32
 	rst      bool
-	rstCode  http2.ErrCode
+	rstCode  grpchttp2.ErrCode
 	onWrite  func()
 }
 
@@ -149,7 +149,7 @@ type dataFrame struct {
 	streamID  uint32
 	endStream bool
 	h         []byte
-	reader    mem.Reader
+	d         mem.BufferSlice
 	// onEachWrite is called every time
 	// a part of data is written out.
 	onEachWrite func()
@@ -174,13 +174,13 @@ func (*outgoingWindowUpdate) isTransportResponseFrame() bool {
 }
 
 type incomingSettings struct {
-	ss []http2.Setting
+	ss []grpchttp2.Setting
 }
 
 func (*incomingSettings) isTransportResponseFrame() bool { return true } // Results in a settings ACK
 
 type outgoingSettings struct {
-	ss []http2.Setting
+	ss []grpchttp2.Setting
 }
 
 func (*outgoingSettings) isTransportResponseFrame() bool { return false }
@@ -191,7 +191,7 @@ type incomingGoAway struct {
 func (*incomingGoAway) isTransportResponseFrame() bool { return false }
 
 type goAway struct {
-	code      http2.ErrCode
+	code      grpchttp2.ErrCode
 	debugData []byte
 	headsUp   bool
 	closeConn error // if set, loopyWriter will exit with this error
@@ -461,7 +461,7 @@ func (c *controlBuffer) finish() {
 				v.onOrphaned(ErrConnClosing)
 			}
 		case *dataFrame:
-			_ = v.reader.Close()
+			v.d.Free()
 		}
 	}
 
@@ -737,12 +737,7 @@ func (l *loopyWriter) writeHeader(streamID uint32, endStream bool, hf []hpack.He
 		}
 		if first {
 			first = false
-			err = l.framer.fr.WriteHeaders(http2.HeadersFrameParam{
-				StreamID:      streamID,
-				BlockFragment: l.hBuf.Next(size),
-				EndStream:     endStream,
-				EndHeaders:    endHeaders,
-			})
+			err = l.framer.fr.WriteHeaders(streamID, endStream, endHeaders, l.hBuf.Next(size))
 		} else {
 			err = l.framer.fr.WriteContinuation(
 				streamID,
@@ -793,7 +788,7 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 		str.deleteSelf()
 		for head := str.itl.dequeueAll(); head != nil; head = head.next {
 			if df, ok := head.it.(*dataFrame); ok {
-				_ = df.reader.Close()
+				df.d.Free()
 			}
 		}
 	}
@@ -828,7 +823,7 @@ func (l *loopyWriter) earlyAbortStreamHandler(eas *earlyAbortStream) error {
 		return err
 	}
 	if eas.rst {
-		if err := l.framer.fr.WriteRSTStream(eas.streamID, http2.ErrCodeNo); err != nil {
+		if err := l.framer.fr.WriteRSTStream(eas.streamID, grpchttp2.ErrCodeNoError); err != nil {
 			return err
 		}
 	}
@@ -896,12 +891,12 @@ func (l *loopyWriter) handle(i any) error {
 	return nil
 }
 
-func (l *loopyWriter) applySettings(ss []http2.Setting) {
+func (l *loopyWriter) applySettings(ss []grpchttp2.Setting) {
 	for _, s := range ss {
 		switch s.ID {
-		case http2.SettingInitialWindowSize:
+		case grpchttp2.SettingsInitialWindowSize:
 			o := l.oiws
-			l.oiws = s.Val
+			l.oiws = s.Value
 			if o < l.oiws {
 				// If the new limit is greater make all depleted streams active.
 				for _, stream := range l.estdStreams {
@@ -911,8 +906,8 @@ func (l *loopyWriter) applySettings(ss []http2.Setting) {
 					}
 				}
 			}
-		case http2.SettingHeaderTableSize:
-			updateHeaderTblSize(l.hEnc, s.Val)
+		case grpchttp2.SettingsHeaderTableSize:
+			updateHeaderTblSize(l.hEnc, s.Value)
 		}
 	}
 }
@@ -936,13 +931,13 @@ func (l *loopyWriter) processData() (bool, error) {
 	// from data is copied to h to make as big as the maximum possible HTTP2 frame
 	// size.
 
-	if len(dataItem.h) == 0 && dataItem.reader.Remaining() == 0 { // Empty data frame
+	if len(dataItem.h) == 0 && dataItem.d.Len() == 0 { // Empty data frame
 		// Client sends out empty data frame with endStream = true
-		if err := l.framer.fr.WriteData(dataItem.streamID, dataItem.endStream, nil); err != nil {
+		if err := l.framer.fr.WriteData(dataItem.streamID, dataItem.endStream, nil, nil); err != nil {
 			return false, err
 		}
 		str.itl.dequeue() // remove the empty data item from stream
-		_ = dataItem.reader.Close()
+		dataItem.d.Free()
 		if str.itl.isEmpty() {
 			str.state = empty
 		} else if trailer, ok := str.itl.peek().(*headerFrame); ok { // the next item is trailers.
@@ -971,50 +966,31 @@ func (l *loopyWriter) processData() (bool, error) {
 	}
 	// Compute how much of the header and data we can send within quota and max frame length
 	hSize := min(maxSize, len(dataItem.h))
-	dSize := min(maxSize-hSize, dataItem.reader.Remaining())
-	remainingBytes := len(dataItem.h) + dataItem.reader.Remaining() - hSize - dSize
+	dSize := min(maxSize-hSize, dataItem.d.Len())
 	size := hSize + dSize
-
-	var buf *[]byte
-
-	if hSize != 0 && dSize == 0 {
-		buf = &dataItem.h
-	} else {
-		// Note: this is only necessary because the http2.Framer does not support
-		// partially writing a frame, so the sequence must be materialized into a buffer.
-		// TODO: Revisit once https://github.com/golang/go/issues/66655 is addressed.
-		pool := l.bufferPool
-		if pool == nil {
-			// Note that this is only supposed to be nil in tests. Otherwise, stream is
-			// always initialized with a BufferPool.
-			pool = mem.DefaultBufferPool()
-		}
-		buf = pool.Get(size)
-		defer pool.Put(buf)
-
-		copy((*buf)[:hSize], dataItem.h)
-		_, _ = dataItem.reader.Read((*buf)[hSize:])
-	}
 
 	// Now that outgoing flow controls are checked we can replenish str's write quota
 	str.wq.replenish(size)
 	var endStream bool
 	// If this is the last data message on this stream and all of it can be written in this iteration.
-	if dataItem.endStream && remainingBytes == 0 {
+	if dataItem.endStream && dataItem.d.Len()-dSize == 0 {
 		endStream = true
 	}
 	if dataItem.onEachWrite != nil {
 		dataItem.onEachWrite()
 	}
-	if err := l.framer.fr.WriteData(dataItem.streamID, endStream, (*buf)[:size]); err != nil {
+	var dw mem.BufferSlice
+	dw, dataItem.d = mem.SplitSliceUnsafe(&dataItem.d, dSize)
+	if err := l.framer.fr.WriteData(dataItem.streamID, endStream, dataItem.h[:hSize], dw); err != nil {
 		return false, err
 	}
+	dw.Free()
 	str.bytesOutStanding += size
 	l.sendQuota -= uint32(size)
 	dataItem.h = dataItem.h[hSize:]
 
-	if remainingBytes == 0 { // All the data from that message was written out.
-		_ = dataItem.reader.Close()
+	if dataItem.d.Len() == 0 { // All the data from that message was written out.
+		dataItem.d.Free()
 		str.itl.dequeue()
 	}
 	if str.itl.isEmpty() {

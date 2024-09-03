@@ -121,6 +121,40 @@ func (s BufferSlice) Reader() Reader {
 	}
 }
 
+func SplitSliceUnsafe(s *BufferSlice, n int) (left, right BufferSlice) {
+	if len(*s) == 0 {
+		return (*s), BufferSlice{}
+	}
+	if s.Len() <= n {
+		return *s, BufferSlice{}
+	}
+	if len(*s) == 1 {
+		l, r := (*s)[0].split(n)
+		*s = BufferSlice{l}
+		return *s, BufferSlice{r}
+	}
+	wholeBuffers := 0
+	currLen := 0
+	for _, b := range *s {
+		if b.Len()+currLen > n {
+			break
+		}
+		wholeBuffers++
+		currLen += b.Len()
+	}
+	remaining := n - currLen
+	splitBuf := (*s)[wholeBuffers]
+	splitBuf, rest := SplitUnsafe(splitBuf, remaining)
+
+	left = make(BufferSlice, wholeBuffers+1)
+	copy(left, (*s)[:wholeBuffers+1])
+	left[wholeBuffers] = splitBuf
+	right = (*s)[wholeBuffers:]
+	right[0] = rest
+
+	return left, right
+}
+
 // Reader exposes a BufferSlice's data as an io.Reader, allowing it to interface
 // with other parts systems. It also provides an additional convenience method
 // Remaining(), which returns the number of unread bytes remaining in the slice.

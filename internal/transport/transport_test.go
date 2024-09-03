@@ -37,7 +37,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/codes"
@@ -46,6 +45,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/transport/grpchttp2"
 	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -203,10 +203,11 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 			}
 		}
 		data := newBufferSlice(p)
+		data.Ref()
 		conn.controlBuf.put(&dataFrame{
 			streamID:    s.id,
 			h:           nil,
-			reader:      data.Reader(),
+			d:           data,
 			onEachWrite: func() {},
 		})
 		sent += len(p)
@@ -487,7 +488,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 			close(connCh)
 			return
 		}
-		framer := http2.NewFramer(conn, conn)
+		framer := grpchttp2.NewFramerBridge(conn, conn, 0, nil)
 		if err := framer.WriteSettings(); err != nil {
 			t.Errorf("Error at server-side while writing settings: %v", err)
 			close(connCh)
@@ -1027,11 +1028,12 @@ func (s) TestServerContextCanceledOnClosedConnection(t *testing.T) {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
 	d := newBufferSlice(make([]byte, http2MaxFrameLen))
+	d.Ref()
 	ct.controlBuf.put(&dataFrame{
 		streamID:    s.id,
 		endStream:   false,
 		h:           nil,
-		reader:      d.Reader(),
+		d:           d,
 		onEachWrite: func() {},
 	})
 	// Loop until the server side stream is created.
@@ -1237,7 +1239,7 @@ func (s) TestServerWithMisbehavedClient(t *testing.T) {
 	// success chan indicates that reader received a RSTStream from server.
 	success := make(chan struct{})
 	var mu sync.Mutex
-	framer := http2.NewFramer(mconn, mconn)
+	framer := grpchttp2.NewFramerBridge(mconn, mconn, 0, nil)
 	if err := framer.WriteSettings(); err != nil {
 		t.Fatalf("Error while writing settings: %v", err)
 	}
@@ -1248,14 +1250,14 @@ func (s) TestServerWithMisbehavedClient(t *testing.T) {
 				return
 			}
 			switch frame := frame.(type) {
-			case *http2.PingFrame:
+			case *grpchttp2.PingFrame:
 				// Write ping ack back so that server's BDP estimation works right.
 				mu.Lock()
-				framer.WritePing(true, frame.Data)
+				framer.WritePing(true, [8]byte(frame.Data))
 				mu.Unlock()
-			case *http2.RSTStreamFrame:
-				if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != http2.ErrCodeFlowControl {
-					t.Errorf("RST stream received with streamID: %d and code: %v, want streamID: 1 and code: http2.ErrCodeFlowControl", frame.Header().StreamID, http2.ErrCode(frame.ErrCode))
+			case *grpchttp2.RSTStreamFrame:
+				if frame.Header().StreamID != 1 || frame.ErrCode != grpchttp2.ErrCodeFlowControl {
+					t.Errorf("RST stream received with streamID: %d and code: %v, want streamID: 1 and code: http2.ErrCodeFlowControl", frame.Header().StreamID, grpchttp2.ErrCode(frame.ErrCode))
 				}
 				close(success)
 				return
@@ -1282,7 +1284,7 @@ func (s) TestServerWithMisbehavedClient(t *testing.T) {
 		t.Fatalf("Error while encoding header: %v", err)
 	}
 	mu.Lock()
-	if err := framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
+	if err := framer.WriteHeaders(1, false, true, buf.Bytes()); err != nil {
 		mu.Unlock()
 		t.Fatalf("Error while writing headers: %v", err)
 	}
@@ -1300,7 +1302,7 @@ func (s) TestServerWithMisbehavedClient(t *testing.T) {
 		default:
 		}
 		mu.Lock()
-		if err := framer.WriteData(1, false, dbuf); err != nil {
+		if err := framer.WriteData(1, false, nil, mem.BufferSlice{mem.NewBuffer(&dbuf, nil)}); err != nil {
 			mu.Unlock()
 			// Error here means the server could have closed the connection due to flow control
 			// violation. Make sure that is the case by waiting for success chan to be closed.
@@ -1337,7 +1339,7 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 			t.Errorf("Error while reading client preface: %v", err)
 			return
 		}
-		sfr := http2.NewFramer(sconn, sconn)
+		sfr := grpchttp2.NewFramerBridge(sconn, sconn, 0, nil)
 		// Do not write a settings frame, but read from the conn forever.
 		for {
 			if _, err := sfr.ReadFrame(); err != nil {
@@ -1393,7 +1395,7 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 			t.Errorf("Error while reading client preface: %v", err)
 			return
 		}
-		sfr := http2.NewFramer(sconn, sconn)
+		sfr := grpchttp2.NewFramerBridge(sconn, sconn, 0, nil)
 		if err := sfr.WriteSettings(); err != nil {
 			t.Errorf("Error while writing settings: %v", err)
 			return
@@ -1409,13 +1411,13 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 				return
 			}
 			switch frame := frame.(type) {
-			case *http2.HeadersFrame:
+			case *grpchttp2.MetaHeadersFrame:
 				// When the client creates a stream, violate the stream flow control.
 				go func() {
 					buf := make([]byte, http2MaxFrameLen)
 					for {
 						mu.Lock()
-						if err := sfr.WriteData(1, false, buf); err != nil {
+						if err := sfr.WriteData(1, false, nil, mem.BufferSlice{mem.NewBuffer(&buf, nil)}); err != nil {
 							mu.Unlock()
 							return
 						}
@@ -1426,15 +1428,15 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 						runtime.Gosched()
 					}
 				}()
-			case *http2.RSTStreamFrame:
-				if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != http2.ErrCodeFlowControl {
-					t.Errorf("RST stream received with streamID: %d and code: %v, want streamID: 1 and code: http2.ErrCodeFlowControl", frame.Header().StreamID, http2.ErrCode(frame.ErrCode))
+			case *grpchttp2.RSTStreamFrame:
+				if frame.Header().StreamID != 1 || grpchttp2.ErrCode(frame.ErrCode) != grpchttp2.ErrCodeFlowControl {
+					t.Errorf("RST stream received with streamID: %d and code: %v, want streamID: 1 and code: http2.ErrCodeFlowControl", frame.Header().StreamID, grpchttp2.ErrCode(frame.ErrCode))
 				}
 				close(success)
 				return
-			case *http2.PingFrame:
+			case *grpchttp2.PingFrame:
 				mu.Lock()
-				sfr.WritePing(true, frame.Data)
+				sfr.WritePing(true, [8]byte(frame.Data))
 				mu.Unlock()
 			default:
 			}
@@ -1886,7 +1888,7 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 				t.Fatalf("mconn.Write(clientPreface) = %d, %v, want %d, <nil>", n, err, len(clientPreface))
 			}
 
-			framer := http2.NewFramer(mconn, mconn)
+			framer := grpchttp2.NewFramerBridge(mconn, mconn, 0, nil)
 			if err := framer.WriteSettings(); err != nil {
 				t.Fatalf("Error while writing settings: %v", err)
 			}
@@ -1903,12 +1905,12 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 						return
 					}
 					switch frame := frame.(type) {
-					case *http2.SettingsFrame:
+					case *grpchttp2.SettingsFrame:
 						// Do nothing. A settings frame is expected from server preface.
-					case *http2.RSTStreamFrame:
-						if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != http2.ErrCodeProtocol {
+					case *grpchttp2.RSTStreamFrame:
+						if frame.Header().StreamID != 1 || grpchttp2.ErrCode(frame.ErrCode) != grpchttp2.ErrCodeProtocol {
 							// Client only created a single stream, so RST Stream should be for that single stream.
-							result.Send(fmt.Errorf("RST stream received with streamID: %d and code %v, want streamID: 1 and code: http.ErrCodeFlowControl", frame.Header().StreamID, http2.ErrCode(frame.ErrCode)))
+							result.Send(fmt.Errorf("RST stream received with streamID: %d and code %v, want streamID: 1 and code: http.ErrCodeFlowControl", frame.Header().StreamID, grpchttp2.ErrCode(frame.ErrCode)))
 						}
 						// Records that client successfully received RST Stream frame.
 						result.Send(nil)
@@ -1933,7 +1935,7 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 				}
 			}
 
-			if err := framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
+			if err := framer.WriteHeaders(1, false, true, buf.Bytes()); err != nil {
 				t.Fatalf("Error while writing headers: %v", err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -2086,8 +2088,7 @@ func (s) TestHeadersHTTPStatusGRPCStatus(t *testing.T) {
 				t.Fatalf("mconn.Write(clientPreface) = %d, %v, want %d, <nil>", n, err, len(clientPreface))
 			}
 
-			framer := http2.NewFramer(mconn, mconn)
-			framer.ReadMetaHeaders = hpack.NewDecoder(4096, nil)
+			framer := grpchttp2.NewFramerBridge(mconn, mconn, 0, nil)
 			if err := framer.WriteSettings(); err != nil {
 				t.Fatalf("Error while writing settings: %v", err)
 			}
@@ -2105,9 +2106,9 @@ func (s) TestHeadersHTTPStatusGRPCStatus(t *testing.T) {
 						return
 					}
 					switch frame := frame.(type) {
-					case *http2.SettingsFrame:
+					case *grpchttp2.SettingsFrame:
 						// Do nothing. A settings frame is expected from server preface.
-					case *http2.MetaHeadersFrame:
+					case *grpchttp2.MetaHeadersFrame:
 						var httpStatus, grpcStatus, grpcMessage string
 						for _, header := range frame.Fields {
 							if header.Name == ":status" {
@@ -2157,7 +2158,7 @@ func (s) TestHeadersHTTPStatusGRPCStatus(t *testing.T) {
 				}
 			}
 
-			if err := framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
+			if err := framer.WriteHeaders(1, false, true, buf.Bytes()); err != nil {
 				t.Fatalf("Error while writing headers: %v", err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -2369,10 +2370,10 @@ func (s) TestHeaderTblSize(t *testing.T) {
 		break
 	}
 	svrTransport.(*http2Server).controlBuf.put(&outgoingSettings{
-		ss: []http2.Setting{
+		ss: []grpchttp2.Setting{
 			{
-				ID:  http2.SettingHeaderTableSize,
-				Val: uint32(100),
+				ID:    grpchttp2.SettingsHeaderTableSize,
+				Value: uint32(100),
 			},
 		},
 	})
@@ -2392,10 +2393,10 @@ func (s) TestHeaderTblSize(t *testing.T) {
 	}
 
 	ct.controlBuf.put(&outgoingSettings{
-		ss: []http2.Setting{
+		ss: []grpchttp2.Setting{
 			{
-				ID:  http2.SettingHeaderTableSize,
-				Val: uint32(200),
+				ID:    grpchttp2.SettingsHeaderTableSize,
+				Value: uint32(200),
 			},
 		},
 	})
@@ -2536,13 +2537,13 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 	for _, test := range []struct {
 		name string
 		// input
-		metaHeaderFrame *http2.MetaHeadersFrame
+		metaHeaderFrame *grpchttp2.MetaHeadersFrame
 		// output
 		wantStatus *status.Status
 	}{
 		{
 			name: "valid header",
-			metaHeaderFrame: &http2.MetaHeadersFrame{
+			metaHeaderFrame: &grpchttp2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
 					{Name: "grpc-status", Value: "0"},
@@ -2554,7 +2555,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 		},
 		{
 			name: "missing content-type header",
-			metaHeaderFrame: &http2.MetaHeadersFrame{
+			metaHeaderFrame: &grpchttp2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "grpc-status", Value: "0"},
 					{Name: ":status", Value: "200"},
@@ -2567,7 +2568,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 		},
 		{
 			name: "invalid grpc status header field",
-			metaHeaderFrame: &http2.MetaHeadersFrame{
+			metaHeaderFrame: &grpchttp2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
 					{Name: "grpc-status", Value: "xxxx"},
@@ -2581,7 +2582,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 		},
 		{
 			name: "invalid http content type",
-			metaHeaderFrame: &http2.MetaHeadersFrame{
+			metaHeaderFrame: &grpchttp2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/json"},
 				},
@@ -2593,7 +2594,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 		},
 		{
 			name: "http fallback and invalid http status",
-			metaHeaderFrame: &http2.MetaHeadersFrame{
+			metaHeaderFrame: &grpchttp2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					// No content type provided then fallback into handling http error.
 					{Name: ":status", Value: "xxxx"},
@@ -2606,7 +2607,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 		},
 		{
 			name: "http2 frame size exceeds",
-			metaHeaderFrame: &http2.MetaHeadersFrame{
+			metaHeaderFrame: &grpchttp2.MetaHeadersFrame{
 				Fields:    nil,
 				Truncated: true,
 			},
@@ -2617,7 +2618,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 		},
 		{
 			name: "bad status in grpc mode",
-			metaHeaderFrame: &http2.MetaHeadersFrame{
+			metaHeaderFrame: &grpchttp2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
 					{Name: "grpc-status", Value: "0"},
@@ -2631,7 +2632,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 		},
 		{
 			name: "missing http status",
-			metaHeaderFrame: &http2.MetaHeadersFrame{
+			metaHeaderFrame: &grpchttp2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
 				},
@@ -2647,9 +2648,10 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			ts := testStream()
 			s := testClient(ts)
 
-			test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
-				FrameHeader: http2.FrameHeader{
+			test.metaHeaderFrame.HdrFrame = &grpchttp2.HeadersFrame{
+				Hdr: &grpchttp2.FrameHeader{
 					StreamID: 0,
+					Type:     grpchttp2.FrameTypeHeaders,
 				},
 			}
 
@@ -2665,10 +2667,10 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			ts := testStream()
 			s := testClient(ts)
 
-			test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
-				FrameHeader: http2.FrameHeader{
+			test.metaHeaderFrame.HdrFrame = &grpchttp2.HeadersFrame{
+				Hdr: &grpchttp2.FrameHeader{
 					StreamID: 0,
-					Flags:    http2.FlagHeadersEndStream,
+					Type:     grpchttp2.FrameTypeHeaders,
 				},
 			}
 
@@ -2717,21 +2719,21 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 			t.Errorf("Error while writing settings ack: %v", err)
 			return
 		}
-		sfr := http2.NewFramer(sconn, sconn)
+		sfr := grpchttp2.NewFramerBridge(sconn, sconn, 0, nil)
 		if err := sfr.WriteSettings(); err != nil {
 			t.Errorf("Error while writing settings %v", err)
 			return
 		}
 		fr, _ := sfr.ReadFrame()
-		if _, ok := fr.(*http2.SettingsFrame); !ok {
+		if _, ok := fr.(*grpchttp2.SettingsFrame); !ok {
 			t.Errorf("Expected settings frame, got %v", fr)
 		}
 		fr, _ = sfr.ReadFrame()
-		if fr, ok := fr.(*http2.SettingsFrame); !ok || !fr.IsAck() {
+		if fr, ok := fr.(*grpchttp2.SettingsFrame); !ok || !fr.Header().Flags.IsSet(grpchttp2.FlagSettingsAck) {
 			t.Errorf("Expected settings ACK frame, got %v", fr)
 		}
-		fr, _ = sfr.ReadFrame()
-		if fr, ok := fr.(*http2.HeadersFrame); !ok || !fr.Flags.Has(http2.FlagHeadersEndHeaders) {
+		fr, err = sfr.ReadFrame()
+		if fr, ok := fr.(*grpchttp2.MetaHeadersFrame); !ok || !fr.Header().Flags.IsSet(grpchttp2.FlagHeadersEndHeaders) {
 			t.Errorf("Expected Headers frame with END_HEADERS frame, got %v", fr)
 		}
 		close(greetDone)
@@ -2741,10 +2743,10 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 			return
 		}
 		switch fr := frame.(type) {
-		case *http2.GoAwayFrame:
+		case *grpchttp2.GoAwayFrame:
 			// Records that the server successfully received a GOAWAY frame.
 			goAwayFrame := fr
-			if goAwayFrame.ErrCode == http2.ErrCodeNo {
+			if goAwayFrame.ErrCode == grpchttp2.ErrCodeNoError {
 				t.Logf("Received goAway frame from client")
 				close(errorCh)
 			} else {

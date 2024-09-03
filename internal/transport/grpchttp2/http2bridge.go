@@ -71,6 +71,9 @@ func NewFramerBridge(w io.Writer, r io.Reader, maxHeaderListSize uint32, pool me
 func (fr *FramerBridge) ReadFrame() (Frame, error) {
 	f, err := fr.framer.ReadFrame()
 	if err != nil {
+		if se, ok := err.(http2.StreamError); ok {
+			return nil, StreamError{ErrCode: ErrCode(se.Code), StreamID: se.StreamID}
+		}
 		return nil, err
 	}
 
@@ -84,17 +87,15 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 
 	switch f := f.(type) {
 	case *http2.DataFrame:
-		buf := fr.pool.Get(int(hdr.Size))
-		copy(*buf, f.Data())
+		buf := mem.Copy(f.Data(), fr.pool)
 		return &DataFrame{
 			hdr:  hdr,
-			Data: *buf,
-			free: func() { fr.pool.Put(buf) },
+			Data: buf,
 		}, nil
 	case *http2.RSTStreamFrame:
 		return &RSTStreamFrame{
-			hdr:  hdr,
-			Code: ErrCode(f.ErrCode),
+			hdr:     hdr,
+			ErrCode: ErrCode(f.ErrCode),
 		}, nil
 	case *http2.SettingsFrame:
 		buf := make([]Setting, 0, f.NumSettings())
@@ -124,8 +125,8 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 		return &GoAwayFrame{
 			hdr:          hdr,
 			LastStreamID: f.LastStreamID,
-			Code:         ErrCode(f.ErrCode),
 			DebugData:    *buf,
+			ErrCode:      ErrCode(f.ErrCode),
 			free:         func() { fr.pool.Put(buf) },
 		}, nil
 	case *http2.WindowUpdateFrame:
@@ -134,9 +135,12 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 			Inc: f.Increment,
 		}, nil
 	case *http2.MetaHeadersFrame:
+		hf := &HeadersFrame{
+			Hdr: hdr,
+		}
 		return &MetaHeadersFrame{
-			hdr:    hdr,
-			Fields: f.Fields,
+			HdrFrame: hf,
+			Fields:   f.Fields,
 		}, nil
 	default:
 		buf := fr.pool.Get(int(hdr.Size))
@@ -151,21 +155,16 @@ func (fr *FramerBridge) ReadFrame() (Frame, error) {
 }
 
 // WriteData writes a DATA Frame into the underlying writer.
-func (fr *FramerBridge) WriteData(streamID uint32, endStream bool, data ...[]byte) error {
-	if len(data) == 1 {
-		return fr.framer.WriteData(streamID, endStream, data[0])
-	}
-
-	tl := 0
-	for _, s := range data {
-		tl += len(s)
-	}
+func (fr *FramerBridge) WriteData(streamID uint32, endStream bool, hdr []byte, data mem.BufferSlice) error {
+	tl := len(hdr) + data.Len()
 
 	buf := fr.pool.Get(tl)
 	*buf = (*buf)[:0]
 	defer fr.pool.Put(buf)
-	for _, s := range data {
-		*buf = append(*buf, s...)
+
+	*buf = append(*buf, hdr...)
+	for _, b := range data {
+		*buf = append(*buf, b.ReadOnlyData()...)
 	}
 
 	return fr.framer.WriteData(streamID, endStream, *buf)
@@ -222,4 +221,8 @@ func (fr *FramerBridge) WriteWindowUpdate(streamID, inc uint32) error {
 // WriteContinuation writes a Continuation Frame into the underlying writer.
 func (fr *FramerBridge) WriteContinuation(streamID uint32, endHeaders bool, headerBlock []byte) error {
 	return fr.framer.WriteContinuation(streamID, endHeaders, headerBlock)
+}
+
+func (fr *FramerBridge) ErrorDetail() error {
+	return fr.framer.ErrorDetail()
 }

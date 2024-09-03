@@ -34,9 +34,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/transport/grpchttp2"
 )
 
 const (
@@ -47,22 +47,22 @@ const (
 )
 
 var (
-	clientPreface   = []byte(http2.ClientPreface)
-	http2ErrConvTab = map[http2.ErrCode]codes.Code{
-		http2.ErrCodeNo:                 codes.Internal,
-		http2.ErrCodeProtocol:           codes.Internal,
-		http2.ErrCodeInternal:           codes.Internal,
-		http2.ErrCodeFlowControl:        codes.ResourceExhausted,
-		http2.ErrCodeSettingsTimeout:    codes.Internal,
-		http2.ErrCodeStreamClosed:       codes.Internal,
-		http2.ErrCodeFrameSize:          codes.Internal,
-		http2.ErrCodeRefusedStream:      codes.Unavailable,
-		http2.ErrCodeCancel:             codes.Canceled,
-		http2.ErrCodeCompression:        codes.Internal,
-		http2.ErrCodeConnect:            codes.Internal,
-		http2.ErrCodeEnhanceYourCalm:    codes.ResourceExhausted,
-		http2.ErrCodeInadequateSecurity: codes.PermissionDenied,
-		http2.ErrCodeHTTP11Required:     codes.Internal,
+	clientPreface   = []byte(grpchttp2.ClientPreface)
+	http2ErrConvTab = map[grpchttp2.ErrCode]codes.Code{
+		grpchttp2.ErrCodeNoError:            codes.Internal,
+		grpchttp2.ErrCodeProtocol:           codes.Internal,
+		grpchttp2.ErrCodeInternal:           codes.Internal,
+		grpchttp2.ErrCodeFlowControl:        codes.ResourceExhausted,
+		grpchttp2.ErrCodeSettingsTimeout:    codes.Internal,
+		grpchttp2.ErrCodeStreamClosed:       codes.Internal,
+		grpchttp2.ErrCodeFrameSize:          codes.Internal,
+		grpchttp2.ErrCodeRefusedStream:      codes.Unavailable,
+		grpchttp2.ErrCodeCancel:             codes.Canceled,
+		grpchttp2.ErrCodeCompression:        codes.Internal,
+		grpchttp2.ErrCodeConnect:            codes.Internal,
+		grpchttp2.ErrCodeEnhanceYourCalm:    codes.ResourceExhausted,
+		grpchttp2.ErrCodeInadequateSecurity: codes.PermissionDenied,
+		grpchttp2.ErrCodeHTTP11Required:     codes.Internal,
 	}
 	// HTTPStatusConvTab is the HTTP status code to gRPC error code conversion table.
 	HTTPStatusConvTab = map[int]codes.Code{
@@ -390,7 +390,7 @@ func toIOError(err error) error {
 
 type framer struct {
 	writer *bufWriter
-	fr     *http2.Framer
+	fr     grpchttp2.Framer
 }
 
 var writeBufferPoolMap = make(map[int]*sync.Pool)
@@ -409,16 +409,18 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, sharedWriteBu
 		pool = getWriteBufferPool(writeBufferSize)
 	}
 	w := newBufWriter(conn, writeBufferSize, pool)
+
+	var fr grpchttp2.Framer
+	if envconfig.UseHTTP2StandardFramer {
+		fr = grpchttp2.NewFramerBridge(w, r, maxHeaderListSize, nil)
+	} else {
+		fr = grpchttp2.NewFramer(w, r, maxHeaderListSize, nil)
+	}
+
 	f := &framer{
 		writer: w,
-		fr:     http2.NewFramer(w, r),
+		fr:     fr,
 	}
-	f.fr.SetMaxReadFrameSize(http2MaxFrameLen)
-	// Opt-in to Frame reuse API on framer to reduce garbage.
-	// Frames aren't safe to read from after a subsequent call to ReadFrame.
-	f.fr.SetReuseFrames()
-	f.fr.MaxHeaderListSize = maxHeaderListSize
-	f.fr.ReadMetaHeaders = hpack.NewDecoder(http2InitHeaderTableSize, nil)
 	return f
 }
 

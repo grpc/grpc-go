@@ -19,9 +19,19 @@
 // Package grpchttp2 defines HTTP/2 types and a framer API and implementation.
 package grpchttp2
 
-import "golang.org/x/net/http2/hpack"
+import (
+	"encoding/binary"
+	"io"
 
-const initHeaderTableSize = 4096 // Default HTTP/2 header table size.
+	"golang.org/x/net/http2/hpack"
+	"google.golang.org/grpc/mem"
+)
+
+const (
+	initHeaderTableSize = 4096 // Default HTTP/2 header table size.
+	ClientPreface       = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+	TrailerPrefix       = "Trailer:"
+)
 
 // FrameType represents the type of an HTTP/2 Frame.
 // See [Frame Type].
@@ -129,8 +139,7 @@ type Frame interface {
 // [DATA frame]: https://httpwg.org/specs/rfc7540.html#DATA
 type DataFrame struct {
 	hdr  *FrameHeader
-	free func()
-	Data []byte
+	Data mem.Buffer
 }
 
 // Header returns the 9 byte HTTP/2 header for this frame.
@@ -140,9 +149,7 @@ func (f *DataFrame) Header() *FrameHeader {
 
 // Free frees the buffer containing the data in this frame.
 func (f *DataFrame) Free() {
-	if f.free != nil {
-		f.free()
-	}
+	f.Data.Free()
 }
 
 // HeadersFrame is the representation of a [HEADERS Frame]. The HEADERS frame
@@ -150,14 +157,14 @@ func (f *DataFrame) Free() {
 //
 // [HEADERS Frame]: https://httpwg.org/specs/rfc7540.html#HEADERS
 type HeadersFrame struct {
-	hdr      *FrameHeader
+	Hdr      *FrameHeader
 	free     func()
 	HdrBlock []byte
 }
 
 // Header returns the 9 byte HTTP/2 header for this frame.
 func (f *HeadersFrame) Header() *FrameHeader {
-	return f.hdr
+	return f.Hdr
 }
 
 // Free frees the buffer containing the header block in this frame.
@@ -173,8 +180,8 @@ func (f *HeadersFrame) Free() {
 //
 // [RST_STREAM Frame]: https://httpwg.org/specs/rfc7540.html#RST_STREAM
 type RSTStreamFrame struct {
-	hdr  *FrameHeader
-	Code ErrCode
+	hdr     *FrameHeader
+	ErrCode ErrCode
 }
 
 // Header returns the 9 byte HTTP/2 header for this frame.
@@ -237,7 +244,7 @@ type GoAwayFrame struct {
 	hdr          *FrameHeader
 	free         func()
 	LastStreamID uint32
-	Code         ErrCode
+	ErrCode      ErrCode
 	DebugData    []byte
 }
 
@@ -299,16 +306,17 @@ func (f *ContinuationFrame) Free() {
 //
 // Since there is no underlying buffer in this Frame, Free() is a no-op.
 type MetaHeadersFrame struct {
-	hdr    *FrameHeader
-	Fields []hpack.HeaderField
+	HdrFrame *HeadersFrame
+	Fields   []hpack.HeaderField
 	// Truncated indicates whether the MetaHeadersFrame has been truncated due
 	// to being longer than the MaxHeaderListSize.
-	Truncated bool
+	Truncated   bool
+	StreamEnded bool
 }
 
 // Header returns the 9 byte HTTP/2 header for this frame.
 func (f *MetaHeadersFrame) Header() *FrameHeader {
-	return f.hdr
+	return f.HdrFrame.Hdr
 }
 
 // Free is a no-op for MetaHeadersFrame.
@@ -343,7 +351,7 @@ type Framer interface {
 	// WriteData writes an HTTP/2 DATA frame to the stream.
 	// TODO: Once the mem package gets merged, data will change type to
 	// mem.BufferSlice.
-	WriteData(streamID uint32, endStream bool, data ...[]byte) error
+	WriteData(streamID uint32, endStream bool, hdr []byte, data mem.BufferSlice) error
 	// WriteData writes an HTTP/2 HEADERS frame to the stream.
 	// TODO: Once the mem package gets merged, headerBlock will change type to
 	// mem.Buffer.
@@ -366,4 +374,454 @@ type Framer interface {
 	// TODO: Once the mem package gets merged, data will change type to
 	// mem.Buffer.
 	WriteContinuation(streamID uint32, endHeaders bool, headerBlock []byte) error
+	// Provides additional detail about the last error occurred if available.
+	ErrorDetail() error
+}
+
+// framer implements the Framer interface.
+type framer struct {
+	dec               *hpack.Decoder
+	hbuf              [9]byte
+	w                 io.Writer
+	r                 io.Reader
+	pool              mem.BufferPool
+	maxHeaderListSize uint32
+	lastHeaderStream  uint32
+	lastErr           error
+}
+
+func NewFramer(w io.Writer, r io.Reader, maxHeaderListSize uint32, pool mem.BufferPool) *framer {
+	if maxHeaderListSize == 0 {
+		maxHeaderListSize = 16 << 20
+	}
+	if pool == nil {
+		pool = mem.DefaultBufferPool()
+	}
+	return &framer{
+		w:                 w,
+		r:                 r,
+		dec:               hpack.NewDecoder(initHeaderTableSize, nil),
+		maxHeaderListSize: maxHeaderListSize,
+		pool:              pool,
+	}
+}
+
+func (f *framer) parseDataFrame(hdr *FrameHeader, payload *[]byte) (Frame, error) {
+	if hdr.StreamID == 0 {
+		f.pool.Put(payload)
+		return nil, connError{ErrCode: ErrCodeProtocol, Reason: "DATA: Invalid stream ID"}
+	}
+
+	df := &DataFrame{hdr: hdr, Data: mem.NewBuffer(payload, f.pool)}
+	return df, nil
+}
+
+func (f *framer) parseHeadersFrame(hdr *FrameHeader, payload *[]byte) (Frame, error) {
+	if hdr.StreamID == 0 {
+		f.pool.Put(payload)
+		return nil, connError{ErrCode: ErrCodeProtocol, Reason: "HEADERS: Invalid stream ID"}
+	}
+
+	hf := &HeadersFrame{Hdr: hdr, HdrBlock: *payload}
+	hf.free = func() { f.pool.Put(payload) }
+	return hf, nil
+}
+
+func (f *framer) parseRSTStreamFrame(hdr *FrameHeader, payload *[]byte) (Frame, error) {
+	defer f.pool.Put(payload)
+
+	if hdr.StreamID == 0 {
+		return nil, connError{ErrCode: ErrCodeProtocol, Reason: "RST_STREAM: Invalid stream ID"}
+	}
+	if hdr.Size != 4 {
+		return nil, connError{ErrCode: ErrCodeFrameSize}
+	}
+
+	code := ErrCode(binary.BigEndian.Uint32(*payload))
+	return &RSTStreamFrame{hdr: hdr, ErrCode: code}, nil
+}
+
+func (f *framer) parseSettingsFrame(hdr *FrameHeader, payload *[]byte) (Frame, error) {
+	defer f.pool.Put(payload)
+	if hdr.StreamID != 0 {
+		return nil, connError{ErrCode: ErrCodeProtocol, Reason: "SETTINGS: Invalid stream ID"}
+	}
+	if hdr.Size != 0 && hdr.Flags.IsSet(FlagSettingsAck) {
+		return nil, connError{ErrCode: ErrCodeProtocol, Reason: "ACK Flag with Payload"}
+	}
+	if hdr.Size%6 != 0 {
+		return nil, connError{ErrCode: ErrCodeFrameSize}
+	}
+
+	ss := make([]Setting, 0, hdr.Size/6)
+	for i := 0; i < int(hdr.Size)/6; i += 6 {
+		ss = append(ss, Setting{
+			ID:    SettingID(binary.BigEndian.Uint16((*payload)[i : i+2])),
+			Value: binary.BigEndian.Uint32((*payload)[i+2 : i+6]),
+		})
+	}
+
+	return &SettingsFrame{hdr: hdr, Settings: ss}, nil
+}
+
+func (f *framer) parsePingFrame(hdr *FrameHeader, payload *[]byte) (Frame, error) {
+	if hdr.StreamID != 0 {
+		f.pool.Put(payload)
+		return nil, connError{ErrCode: ErrCodeProtocol, Reason: "PING: Invalid stream ID"}
+	}
+	if hdr.Size != 8 {
+		f.pool.Put(payload)
+		return nil, connError{ErrCode: ErrCodeFrameSize}
+	}
+
+	pf := &PingFrame{hdr: hdr, Data: *payload}
+	pf.free = func() { f.pool.Put(payload) }
+	return pf, nil
+}
+
+func (f *framer) parseGoAwayFrame(hdr *FrameHeader, payload *[]byte) (Frame, error) {
+	if hdr.StreamID != 0 {
+		f.pool.Put(payload)
+		return nil, connError{ErrCodeProtocol, "GO_AWAY: Invalid stream ID"}
+	}
+	lastStream := binary.BigEndian.Uint32((*payload)[:4])
+	code := ErrCode(binary.BigEndian.Uint32((*payload)[4:8]))
+	return &GoAwayFrame{
+		hdr:          hdr,
+		LastStreamID: lastStream,
+		ErrCode:      code,
+		DebugData:    (*payload)[8:],
+		free:         func() { f.pool.Put(payload) },
+	}, nil
+}
+
+func (f *framer) parseWindowUpdate(hdr *FrameHeader, payload *[]byte) (Frame, error) {
+	defer f.pool.Put(payload)
+	if hdr.Size != 4 {
+		return nil, connError{ErrCode: ErrCodeFrameSize}
+	}
+
+	inc := binary.BigEndian.Uint32(*payload)
+	if inc == 0 {
+		if hdr.StreamID == 0 {
+			return nil, connError{ErrCode: ErrCodeProtocol, Reason: "WINDOW_UPDATE: Invalid increment"}
+		}
+		return nil, StreamError{StreamID: hdr.StreamID, ErrCode: ErrCodeProtocol, Reason: "Invalid increment"}
+	}
+
+	return &WindowUpdateFrame{
+		hdr: hdr,
+		Inc: inc,
+	}, nil
+}
+
+func (f *framer) parseContinuationFrame(hdr *FrameHeader, payload *[]byte) (Frame, error) {
+	if hdr.StreamID == 0 {
+		f.pool.Put(payload)
+		return nil, connError{ErrCode: ErrCodeProtocol, Reason: "CONTINUATION: Invalid stream ID"}
+	}
+
+	cf := &ContinuationFrame{
+		hdr:      hdr,
+		HdrBlock: *payload,
+	}
+	cf.free = func() { f.pool.Put(payload) }
+	return cf, nil
+}
+
+func (f *framer) parseUnknownFrame(hdr *FrameHeader, payload *[]byte) (Frame, error) {
+	return &UnknownFrame{
+		hdr:     hdr,
+		Payload: *payload,
+		free:    func() { f.pool.Put(payload) },
+	}, nil
+}
+
+func (f *framer) checkOrder(hdr FrameHeader) error {
+	if f.lastHeaderStream != 0 {
+		if hdr.Type != FrameTypeContinuation {
+			return connError{ErrCode: ErrCodeProtocol, Reason: "Expected CONTINUATION frame"}
+		} else if f.lastHeaderStream != hdr.StreamID {
+			return connError{ErrCode: ErrCodeProtocol, Reason: "Unexpected stream on CONTINUATION frame"}
+		}
+	} else if hdr.Type == FrameTypeContinuation {
+		return connError{ErrCode: ErrCodeProtocol, Reason: "Unexpected CONTINUATION frame"}
+	}
+
+	if hdr.Type == FrameTypeContinuation || hdr.Type == FrameTypeHeaders {
+		if hdr.Flags.IsSet(FlagHeadersEndHeaders) {
+			f.lastHeaderStream = 0
+		} else {
+			f.lastHeaderStream = hdr.StreamID
+		}
+
+	}
+
+	return nil
+}
+
+func (f *framer) readMetaHeaders(frame *HeadersFrame) (Frame, error) {
+	mh := &MetaHeadersFrame{HdrFrame: frame}
+
+	remainingSize := f.maxHeaderListSize
+	f.dec.SetEmitEnabled(true)
+	f.dec.SetEmitFunc(func(hf hpack.HeaderField) {
+		size := hf.Size()
+		if size > remainingSize {
+			f.dec.SetEmitEnabled(false)
+			mh.Truncated = true
+			remainingSize = 0
+			return
+		}
+		remainingSize -= size
+		mh.Fields = append(mh.Fields, hf)
+	})
+
+	var currFr Frame = frame
+	frag := frame.HdrBlock
+	for {
+		if _, err := f.dec.Write(frag); err != nil {
+			return nil, connError{ErrCode: ErrCodeCompression}
+		}
+
+		if currFr.Header().Flags.IsSet(FlagHeadersEndHeaders) {
+			mh.StreamEnded = currFr.Header().Flags.IsSet(FlagHeadersEndStream)
+			break
+		}
+
+		fr, err := f.ReadFrame()
+		if err != nil {
+			return nil, err
+		}
+
+		currFr.Free()
+		currFr = fr
+		frag = fr.(*ContinuationFrame).HdrBlock
+	}
+
+	return mh, nil
+}
+
+func (f *framer) readHeader() (*FrameHeader, error) {
+	_, err := io.ReadFull(f.r, f.hbuf[:])
+	if err != nil {
+		return nil, err
+	}
+
+	return &FrameHeader{
+		Size:     uint32(f.hbuf[0])<<16 | uint32(f.hbuf[1])<<8 | uint32(f.hbuf[2]),
+		Type:     FrameType(f.hbuf[3]),
+		Flags:    Flag(f.hbuf[4]),
+		StreamID: binary.BigEndian.Uint32(f.hbuf[5:]),
+	}, nil
+}
+
+func (f *framer) ReadFrame() (Frame, error) {
+	hdr, err := f.readHeader()
+	if err != nil {
+		return nil, err
+	}
+
+	p := f.pool.Get(int(hdr.Size))
+	if _, err := io.ReadFull(f.r, *p); err != nil {
+		f.pool.Put(p)
+		return nil, err
+	}
+
+	var fr Frame
+	switch hdr.Type {
+	case FrameTypeData:
+		fr, err = f.parseDataFrame(hdr, p)
+	case FrameTypeHeaders:
+		fr, err = f.parseHeadersFrame(hdr, p)
+	case FrameTypeRSTStream:
+		fr, err = f.parseRSTStreamFrame(hdr, p)
+	case FrameTypeSettings:
+		fr, err = f.parseSettingsFrame(hdr, p)
+	case FrameTypePing:
+		fr, err = f.parsePingFrame(hdr, p)
+	case FrameTypeGoAway:
+		fr, err = f.parseGoAwayFrame(hdr, p)
+	case FrameTypeWindowUpdate:
+		fr, err = f.parseWindowUpdate(hdr, p)
+	case FrameTypeContinuation:
+		fr, err = f.parseContinuationFrame(hdr, p)
+	default:
+		fr, err = f.parseUnknownFrame(hdr, p)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err := f.checkOrder(*hdr); err != nil {
+		return nil, err
+	}
+
+	if fr.Header().Type == FrameTypeHeaders {
+		fr, err = f.readMetaHeaders(fr.(*HeadersFrame))
+	}
+	return fr, err
+
+}
+
+func (f *framer) writeHeader(size uint32, ft FrameType, flags Flag, streamID uint32) error {
+	if size >= 1<<24 {
+		return connError{ErrCode: ErrCodeFrameSize}
+	}
+
+	f.hbuf[0] = byte(size >> 16)
+	f.hbuf[1] = byte(size >> 8)
+	f.hbuf[2] = byte(size)
+	f.hbuf[3] = byte(ft)
+	f.hbuf[4] = byte(flags)
+	f.hbuf[5] = byte(streamID >> 24)
+	f.hbuf[6] = byte(streamID >> 16)
+	f.hbuf[7] = byte(streamID >> 8)
+	f.hbuf[8] = byte(streamID)
+
+	_, err := f.w.Write(f.hbuf[:])
+
+	return err
+}
+
+func (f *framer) writeUint32(v uint32) error {
+	buf := f.pool.Get(4)
+	defer f.pool.Put(buf)
+	binary.BigEndian.PutUint32(*buf, v)
+	_, err := f.w.Write(*buf)
+	return err
+}
+
+func (f *framer) writeUint16(v uint16) error {
+	buf := f.pool.Get(2)
+	defer f.pool.Put(buf)
+	binary.BigEndian.PutUint16(*buf, v)
+	_, err := f.w.Write(*buf)
+	return err
+}
+
+func (f *framer) WriteData(streamID uint32, endStream bool, hdr []byte, data mem.BufferSlice) error {
+	tl := len(hdr) + data.Len()
+
+	var flag Flag
+	if endStream {
+		flag |= FlagDataEndStream
+	}
+
+	if err := f.writeHeader(uint32(tl), FrameTypeData, flag, streamID); err != nil {
+		return err
+	}
+
+	if _, err := f.w.Write(hdr); err != nil {
+		return err
+	}
+	for _, buf := range data {
+		if _, err := f.w.Write(buf.ReadOnlyData()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (f *framer) WriteHeaders(streamID uint32, endStream, endHeaders bool, headerBlock []byte) error {
+	var flag Flag
+	if endStream {
+		flag |= FlagHeadersEndStream
+	}
+	if endHeaders {
+		flag |= FlagHeadersEndHeaders
+	}
+
+	if err := f.writeHeader(uint32(len(headerBlock)), FrameTypeHeaders, flag, streamID); err != nil {
+		return err
+	}
+
+	_, err := f.w.Write(headerBlock)
+	return err
+}
+
+func (f *framer) WriteRSTStream(streamID uint32, code ErrCode) error {
+	if err := f.writeHeader(4, FrameTypeRSTStream, 0, streamID); err != nil {
+		return err
+	}
+	return f.writeUint32(uint32(code))
+}
+
+func (f *framer) WriteSettings(settings ...Setting) error {
+	// Each setting is 6 bytes long.
+	tl := len(settings) * 6
+
+	if err := f.writeHeader(uint32(tl), FrameTypeSettings, 0, 0); err != nil {
+		return err
+	}
+
+	for _, s := range settings {
+		if err := f.writeUint16(uint16(s.ID)); err != nil {
+			return err
+		}
+		if err := f.writeUint32(s.Value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (f *framer) WriteSettingsAck() error {
+	return f.writeHeader(0, FrameTypeSettings, FlagSettingsAck, 0)
+}
+
+func (f *framer) WritePing(ack bool, data [8]byte) error {
+	var flag Flag
+	if ack {
+		flag |= FlagPingAck
+	}
+
+	if err := f.writeHeader(8, FrameTypePing, flag, 0); err != nil {
+		return err
+	}
+
+	_, err := f.w.Write(data[:])
+	return err
+}
+
+func (f *framer) WriteGoAway(maxStreamID uint32, code ErrCode, debugData []byte) error {
+	// maxStreamID + ErrCode + debugData
+	tl := 4 + 4 + len(debugData)
+	if err := f.writeHeader(uint32(tl), FrameTypeGoAway, 0, 0); err != nil {
+		return err
+	}
+	if err := f.writeUint32(maxStreamID); err != nil {
+		return err
+	}
+	if err := f.writeUint32(uint32(code)); err != nil {
+		return err
+	}
+	_, err := f.w.Write(debugData)
+	return err
+}
+
+func (f *framer) WriteWindowUpdate(streamID, incr uint32) error {
+	if err := f.writeHeader(4, FrameTypeWindowUpdate, 0, streamID); err != nil {
+		return err
+	}
+	return f.writeUint32(incr)
+}
+
+func (f *framer) WriteContinuation(streamID uint32, endHeaders bool, headerBlock []byte) error {
+	var flag Flag
+	if endHeaders {
+		flag |= FlagHeadersEndHeaders
+	}
+
+	if err := f.writeHeader(uint32(len(headerBlock)), FrameTypeContinuation, flag, streamID); err != nil {
+		return err
+	}
+
+	_, err := f.w.Write(headerBlock)
+	return err
+}
+
+func (f *framer) ErrorDetail() error {
+	return f.lastErr
 }

@@ -156,6 +156,63 @@ func (s) TestBufferSlice_Reader(t *testing.T) {
 	}
 }
 
+func (s) TestBufferSlice_SplitUnsafe(t *testing.T) {
+	tests := []struct {
+		name  string
+		in    mem.BufferSlice
+		want  []string
+		split int
+	}{
+		{
+			name:  "empty",
+			in:    nil,
+			want:  []string{"", ""},
+			split: 0,
+		},
+		{
+			name:  "single",
+			in:    mem.BufferSlice{newBuffer([]byte("abcd"), nil)},
+			want:  []string{"ab", "cd"},
+			split: 2,
+		},
+		{
+			name: "multiple",
+			in: mem.BufferSlice{
+				newBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
+			},
+			want:  []string{"abcdab", "cdabcd"},
+			split: 6,
+		},
+		{
+			name: "edge",
+			in: mem.BufferSlice{
+				newBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
+				newBuffer([]byte("abcd"), nil),
+			},
+			want:  []string{"abcdabcdabcd", ""},
+			split: 12,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			left, right := mem.SplitSliceUnsafe(&test.in, test.split)
+			wantLeft := []byte(test.want[0])
+			wantRight := []byte(test.want[1])
+			if !bytes.Equal(left.Materialize(), wantLeft) {
+				t.Errorf("BufferSlice.SplitUnsafe() left = %s, want %s", string(left.Materialize()), string(wantLeft))
+			}
+
+			if !bytes.Equal(right.Materialize(), wantRight) {
+				t.Errorf("BufferSlice.SplitUnsafe() right = %s, want %s", string(right.Materialize()), string(wantRight))
+			}
+		})
+	}
+}
+
 func ExampleNewWriter() {
 	var bs mem.BufferSlice
 	pool := mem.DefaultBufferPool()
