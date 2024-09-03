@@ -69,26 +69,26 @@ func newTestRouteConfigWatcher(client xdsclient.XDSClient, name1, name2 string) 
 	}
 }
 
-func (rw *testRouteConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, done xdsresource.DoneNotifier) {
+func (rw *testRouteConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, onDone xdsresource.OnDoneFunc) {
 	rw.updateCh.Send(routeConfigUpdateErrTuple{update: update.Resource})
 
 	rw.cancel1 = xdsresource.WatchRouteConfig(rw.client, rw.name1, rw.rcw1)
 	rw.cancel2 = xdsresource.WatchRouteConfig(rw.client, rw.name2, rw.rcw2)
-	done.OnDone()
+	onDone()
 }
 
-func (rw *testRouteConfigWatcher) OnError(err error, done xdsresource.DoneNotifier) {
+func (rw *testRouteConfigWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
 	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: err})
-	done.OnDone()
+	onDone()
 }
 
-func (rw *testRouteConfigWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
+func (rw *testRouteConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
 	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "RouteConfiguration not found in received response")})
-	done.OnDone()
+	onDone()
 }
 
 func (rw *testRouteConfigWatcher) cancel() {

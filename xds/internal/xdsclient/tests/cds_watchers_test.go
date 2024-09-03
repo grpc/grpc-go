@@ -43,14 +43,14 @@ import (
 
 type noopClusterWatcher struct{}
 
-func (noopClusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData, done xdsresource.DoneNotifier) {
-	done.OnDone()
+func (noopClusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (noopClusterWatcher) OnError(err error, done xdsresource.DoneNotifier) {
-	done.OnDone()
+func (noopClusterWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (noopClusterWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
-	done.OnDone()
+func (noopClusterWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
 
 type clusterUpdateErrTuple struct {
@@ -66,23 +66,23 @@ func newClusterWatcher() *clusterWatcher {
 	return &clusterWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (cw *clusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData, done xdsresource.DoneNotifier) {
+func (cw *clusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData, onDone xdsresource.OnDoneFunc) {
 	cw.updateCh.Send(clusterUpdateErrTuple{update: update.Resource})
-	done.OnDone()
+	onDone()
 }
 
-func (cw *clusterWatcher) OnError(err error, done xdsresource.DoneNotifier) {
+func (cw *clusterWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
 	cw.updateCh.Replace(clusterUpdateErrTuple{err: err})
-	done.OnDone()
+	onDone()
 }
 
-func (cw *clusterWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
+func (cw *clusterWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
 	cw.updateCh.Replace(clusterUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response")})
-	done.OnDone()
+	onDone()
 }
 
 // badClusterResource returns a cluster resource for the given name which
