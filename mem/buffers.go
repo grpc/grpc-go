@@ -214,13 +214,12 @@ func SplitUnsafe(buf Buffer, n int) (left, right Buffer) {
 	return buf.split(n)
 }
 
-// emptyBuffer is a Buffer implementation that represents an empty buffer. All
-// methods are no-op implementations.
 type emptyBuffer struct{}
 
 func (e emptyBuffer) ReadOnlyData() []byte {
 	return nil
 }
+
 func (e emptyBuffer) Ref()  {}
 func (e emptyBuffer) Free() {}
 
@@ -243,13 +242,13 @@ type SliceBuffer []byte
 // ReadOnlyData returns the byte slice.
 func (s SliceBuffer) ReadOnlyData() []byte { return s }
 
-// Ref is noop implementation of Ref.
+// Ref is a noop implementation of Ref.
 func (s SliceBuffer) Ref() {}
 
-// Free is noop implementation of Free.
+// Free is a noop implementation of Free.
 func (s SliceBuffer) Free() {}
 
-// Len is noop implementation of Len.
+// Len is a noop implementation of Len.
 func (s SliceBuffer) Len() int { return len(s) }
 
 func (s SliceBuffer) split(n int) (left, right Buffer) {

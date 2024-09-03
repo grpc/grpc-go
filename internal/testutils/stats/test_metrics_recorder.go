@@ -278,17 +278,17 @@ func (r *TestMetricsRecorder) HandleConn(context.Context, stats.ConnStats) {}
 // nil panics.
 type NoopMetricsRecorder struct{}
 
-// RecordInt64Count noop implementation of RecordInt64Count.
+// RecordInt64Count is a noop implementation of RecordInt64Count.
 func (r *NoopMetricsRecorder) RecordInt64Count(*estats.Int64CountHandle, int64, ...string) {}
 
-// RecordFloat64Count is noop implementation of RecordFloat64Count.
+// RecordFloat64Count is a noop implementation of RecordFloat64Count.
 func (r *NoopMetricsRecorder) RecordFloat64Count(*estats.Float64CountHandle, float64, ...string) {}
 
-// RecordInt64Histo is noop implementation of RecordInt64Histo.
+// RecordInt64Histo is a noop implementation of RecordInt64Histo.
 func (r *NoopMetricsRecorder) RecordInt64Histo(*estats.Int64HistoHandle, int64, ...string) {}
 
-// RecordFloat64Histo is noop implementation of RecordFloat64Histo.
+// RecordFloat64Histo is a noop implementation of RecordFloat64Histo.
 func (r *NoopMetricsRecorder) RecordFloat64Histo(*estats.Float64HistoHandle, float64, ...string) {}
 
-// RecordInt64Gauge is noop implementation of RecordInt64Gauge.
+// RecordInt64Gauge is a noop implementation of RecordInt64Gauge.
 func (r *NoopMetricsRecorder) RecordInt64Gauge(*estats.Int64GaugeHandle, int64, ...string) {}
