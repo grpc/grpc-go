@@ -41,7 +41,7 @@ How to get your contributions merged smoothly and quickly.
 - Provide a good **PR description** as a record of **what** change is being made
   and **why** it was made. Link to a github issue if it exists.
 
-- If you want to fix formatting or style, consider whether your changes are an 
+- If you want to fix formatting or style, consider whether your changes are an
   obvious improvement or might be considered a personal preference. If a style
   change is based on preference, it likely will not be accepted. If it corrects
   widely agreed-upon anti-patterns, then please do create a PR and explain the
@@ -49,8 +49,8 @@ How to get your contributions merged smoothly and quickly.
 
 - Unless your PR is trivial, you should expect there will be reviewer comments
   that you'll need to address before merging. We'll mark it as `Status: Requires
-  Reporter Clarification` if we expect you to respond to these comments in a 
-  timely manner. If the PR remains inactive for 6 days, it will be marked as 
+  Reporter Clarification` if we expect you to respond to these comments in a
+  timely manner. If the PR remains inactive for 6 days, it will be marked as
   `stale` and automatically close 7 days after that if we don't hear back from
   you.
 
