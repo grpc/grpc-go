@@ -208,8 +208,8 @@ func ReadUnsafe(dst []byte, buf Buffer) (int, Buffer) {
 }
 
 // SplitUnsafe modifies the receiver to point to the first n bytes while it
-// returns a new reference to the remaining bytes. The returned Buffer functions
-// just like a normal reference acquired using Ref().
+// returns a new reference to the remaining bytes. The returned Buffer
+// functions just like a normal reference acquired using Ref().
 func SplitUnsafe(buf Buffer, n int) (left, right Buffer) {
 	return buf.split(n)
 }
