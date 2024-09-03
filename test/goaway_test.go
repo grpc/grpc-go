@@ -94,7 +94,7 @@ func (s) TestGracefulClientOnGoAway(t *testing.T) {
 func (s) TestDetailedGoAwayErrorOnGracefulClosePropagatesToRPCError(t *testing.T) {
 	rpcDoneOnClient := make(chan struct{})
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 			<-rpcDoneOnClient
 			return status.Error(codes.Internal, "arbitrary status")
 		},
@@ -134,7 +134,7 @@ func (s) TestDetailedGoAwayErrorOnAbruptClosePropagatesToRPCError(t *testing.T) 
 
 	rpcDoneOnClient := make(chan struct{})
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 			<-rpcDoneOnClient
 			return status.Error(codes.Internal, "arbitrary status")
 		},
@@ -554,7 +554,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	s1 := grpc.NewServer()
 	defer s1.Stop()
 	ts := &funcServer{
-		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		unaryCall: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		fullDuplexCall: func(stream testgrpc.TestService_FullDuplexCallServer) error {

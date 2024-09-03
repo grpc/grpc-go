@@ -192,7 +192,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 	return acbw, nil
 }
 
-func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
+func (ccb *ccBalancerWrapper) RemoveSubConn(balancer.SubConn) {
 	// The graceful switch balancer will never call this.
 	logger.Errorf("ccb RemoveSubConn(%v) called unexpectedly, sc")
 }

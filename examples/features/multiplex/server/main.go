@@ -40,7 +40,7 @@ type hwServer struct {
 }
 
 // SayHello implements helloworld.GreeterServer
-func (s *hwServer) SayHello(ctx context.Context, in *hwpb.HelloRequest) (*hwpb.HelloReply, error) {
+func (s *hwServer) SayHello(_ context.Context, in *hwpb.HelloRequest) (*hwpb.HelloReply, error) {
 	return &hwpb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
@@ -48,7 +48,7 @@ type ecServer struct {
 	ecpb.UnimplementedEchoServer
 }
 
-func (s *ecServer) UnaryEcho(ctx context.Context, req *ecpb.EchoRequest) (*ecpb.EchoResponse, error) {
+func (s *ecServer) UnaryEcho(_ context.Context, req *ecpb.EchoRequest) (*ecpb.EchoResponse, error) {
 	return &ecpb.EchoResponse{Message: req.Message}, nil
 }
 

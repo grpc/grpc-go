@@ -126,7 +126,7 @@ func (c *serverNameCheckCreds) Info() credentials.ProtocolInfo {
 func (c *serverNameCheckCreds) Clone() credentials.TransportCredentials {
 	return &serverNameCheckCreds{}
 }
-func (c *serverNameCheckCreds) OverrideServerName(s string) error {
+func (c *serverNameCheckCreds) OverrideServerName(string) error {
 	return nil
 }
 
@@ -307,7 +307,7 @@ type testServer struct {
 
 const testmdkey = "testmd"
 
-func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+func (s *testServer) EmptyCall(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Internal, "failed to receive metadata")
@@ -319,7 +319,7 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 	return &testpb.Empty{}, nil
 }
 
-func (s *testServer) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallServer) error {
+func (s *testServer) FullDuplexCall(testgrpc.TestService_FullDuplexCallServer) error {
 	return nil
 }
 
@@ -1378,7 +1378,7 @@ func (s) TestGRPCLBWithTargetNameFieldInConfig(t *testing.T) {
 
 type failPreRPCCred struct{}
 
-func (failPreRPCCred) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+func (failPreRPCCred) GetRequestMetadata(_ context.Context, uri ...string) (map[string]string, error) {
 	if strings.Contains(uri[0], failtosendURI) {
 		return nil, fmt.Errorf("rpc should fail to send")
 	}
@@ -1619,7 +1619,7 @@ func (s) TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 func (s) TestGRPCLBStatsQuashEmpty(t *testing.T) {
 	ch := make(chan *lbpb.ClientStats)
 	defer close(ch)
-	if err := runAndCheckStats(t, false, ch, func(cc *grpc.ClientConn) {
+	if err := runAndCheckStats(t, false, ch, func(*grpc.ClientConn) {
 		// Perform no RPCs; wait for load reports to start, which should be
 		// zero, then expect no other load report within 5x the update
 		// interval.

@@ -139,7 +139,7 @@ type interceptor struct {
 
 var activeFaults uint32 // global active faults; accessed atomically
 
-func (i *interceptor) NewStream(ctx context.Context, ri iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
 	if maxAF := i.config.GetMaxActiveFaults(); maxAF != nil {
 		defer atomic.AddUint32(&activeFaults, ^uint32(0)) // decrement counter
 		if af := atomic.AddUint32(&activeFaults, 1); af > maxAF.GetValue() {
@@ -296,5 +296,5 @@ func (*okStream) Header() (metadata.MD, error) { return nil, nil }
 func (*okStream) Trailer() metadata.MD         { return nil }
 func (*okStream) CloseSend() error             { return nil }
 func (o *okStream) Context() context.Context   { return o.ctx }
-func (*okStream) SendMsg(m any) error          { return io.EOF }
-func (*okStream) RecvMsg(m any) error          { return io.EOF }
+func (*okStream) SendMsg(any) error            { return io.EOF }
+func (*okStream) RecvMsg(any) error            { return io.EOF }

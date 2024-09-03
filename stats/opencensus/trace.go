@@ -81,7 +81,7 @@ func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 // populateSpan populates span information based on stats passed in (invariants
 // of the RPC lifecycle), and also ends span which triggers the span to be
 // exported.
-func populateSpan(ctx context.Context, rs stats.RPCStats, ti *traceInfo) {
+func populateSpan(_ context.Context, rs stats.RPCStats, ti *traceInfo) {
 	if ti == nil || ti.span == nil {
 		// Shouldn't happen, tagRPC call comes before this function gets called
 		// which populates this information.

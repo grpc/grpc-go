@@ -59,7 +59,7 @@ func setupPickFirst(t *testing.T, backendCount int, opts ...grpc.DialOption) (*g
 	addrs := make([]resolver.Address, backendCount)
 	for i := 0; i < backendCount; i++ {
 		backend := &stubserver.StubServer{
-			EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 				return &testpb.Empty{}, nil
 			},
 		}
@@ -514,7 +514,7 @@ func setupPickFirstWithListenerWrapper(t *testing.T, backendCount int, opts ...g
 		lis := testutils.NewListenerWrapper(t, nil)
 		backend := &stubserver.StubServer{
 			Listener: lis,
-			EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 				return &testpb.Empty{}, nil
 			},
 		}

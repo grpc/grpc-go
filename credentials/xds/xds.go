@@ -138,7 +138,7 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 	if err != nil {
 		return nil, nil, err
 	}
-	cfg.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	cfg.VerifyPeerCertificate = func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 		// Parse all raw certificates presented by the peer.
 		var certs []*x509.Certificate
 		for _, rc := range rawCerts {

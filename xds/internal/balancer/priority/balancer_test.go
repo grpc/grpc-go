@@ -1491,7 +1491,7 @@ var errTestInlineStateUpdate = fmt.Errorf("don't like addresses, empty or not")
 
 func init() {
 	stub.Register(inlineUpdateBalancerName, stub.BalancerFuncs{
-		UpdateClientConnState: func(bd *stub.BalancerData, opts balancer.ClientConnState) error {
+		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
 			bd.ClientConn.UpdateState(balancer.State{
 				ConnectivityState: connectivity.Ready,
 				Picker:            &testutils.TestConstPicker{Err: errTestInlineStateUpdate},

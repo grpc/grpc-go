@@ -61,7 +61,7 @@ type fakeBackoffStrategy struct {
 	backoff time.Duration
 }
 
-func (f *fakeBackoffStrategy) Backoff(retries int) time.Duration {
+func (f *fakeBackoffStrategy) Backoff(int) time.Duration {
 	return f.backoff
 }
 
@@ -171,7 +171,7 @@ func startBackend(t *testing.T, sopts ...grpc.ServerOption) (rpcCh chan struct{}
 
 	rpcCh = make(chan struct{}, 1)
 	backend := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			select {
 			case rpcCh <- struct{}{}:
 			default:

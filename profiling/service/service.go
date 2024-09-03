@@ -99,7 +99,7 @@ func getProfilingServerInstance() *profilingServer {
 	return profilingServerInstance
 }
 
-func (s *profilingServer) Enable(ctx context.Context, req *ppb.EnableRequest) (*ppb.EnableResponse, error) {
+func (s *profilingServer) Enable(_ context.Context, req *ppb.EnableRequest) (*ppb.EnableResponse, error) {
 	if req.Enabled {
 		logger.Infof("profilingServer: Enable: enabling profiling")
 	} else {
@@ -133,7 +133,7 @@ func statToProtoStat(stat *profiling.Stat) *ppb.Stat {
 	return protoStat
 }
 
-func (s *profilingServer) GetStreamStats(ctx context.Context, req *ppb.GetStreamStatsRequest) (*ppb.GetStreamStatsResponse, error) {
+func (s *profilingServer) GetStreamStats(context.Context, *ppb.GetStreamStatsRequest) (*ppb.GetStreamStatsResponse, error) {
 	// Since the drain operation is destructive, only one client request should
 	// be served at a time.
 	logger.Infof("profilingServer: GetStreamStats: processing request")

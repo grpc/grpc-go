@@ -138,7 +138,7 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 					Path: "/service/foo.bar",
 				},
 			},
-			check: func(t *serverHandlerTransport, tt *testCase) error {
+			check: func(t *serverHandlerTransport, _ *testCase) error {
 				if !t.timeoutSet {
 					return errors.New("timeout not set")
 				}
@@ -179,7 +179,7 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 					Path: "/service/foo.bar",
 				},
 			},
-			check: func(ht *serverHandlerTransport, tt *testCase) error {
+			check: func(ht *serverHandlerTransport, _ *testCase) error {
 				want := metadata.MD{
 					"meta-bar":     {"bar-val1", "bar-val2"},
 					"user-agent":   {"x/y a/b"},

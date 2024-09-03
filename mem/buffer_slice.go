@@ -92,9 +92,11 @@ func (s BufferSlice) Materialize() []byte {
 }
 
 // MaterializeToBuffer functions like Materialize except that it writes the data
-// to a single Buffer pulled from the given BufferPool. As a special case, if the
-// input BufferSlice only actually has one Buffer, this function has nothing to
-// do and simply returns said Buffer.
+// to a single Buffer pulled from the given BufferPool.
+//
+// As a special case, if the input BufferSlice only actually has one Buffer, this
+// function simply increases the refcount before returning said Buffer. Freeing this
+// buffer won't release it until the BufferSlice is itself released.
 func (s BufferSlice) MaterializeToBuffer(pool BufferPool) Buffer {
 	if len(s) == 1 {
 		s[0].Ref()
