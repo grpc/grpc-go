@@ -346,6 +346,7 @@ func (acbw *acBalancerWrapper) GetOrBuildProducer(pb balancer.ProducerBuilder) (
 		pData = &refCountedProducer{producer: p, close: closeF}
 		acbw.producers[pb] = pData
 	}
+
 	// Account for this new reference.
 	pData.refs++
 
