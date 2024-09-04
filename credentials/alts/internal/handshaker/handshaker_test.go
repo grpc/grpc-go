@@ -273,7 +273,7 @@ func (t *testUnresponsiveRPCStream) Recv() (*altspb.HandshakerResp, error) {
 	return &altspb.HandshakerResp{}, nil
 }
 
-func (t *testUnresponsiveRPCStream) Send(req *altspb.HandshakerReq) error {
+func (t *testUnresponsiveRPCStream) Send(*altspb.HandshakerReq) error {
 	return nil
 }
 

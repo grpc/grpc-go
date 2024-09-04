@@ -150,7 +150,7 @@ type clientTimeoutCreds struct {
 	timeoutReturned bool
 }
 
-func (c *clientTimeoutCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (c *clientTimeoutCreds) ClientHandshake(_ context.Context, _ string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	if !c.timeoutReturned {
 		c.timeoutReturned = true
 		return nil, nil, context.DeadlineExceeded
@@ -184,7 +184,7 @@ func (s) TestNonFailFastRPCSucceedOnTimeoutCreds(t *testing.T) {
 
 type methodTestCreds struct{}
 
-func (m *methodTestCreds) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+func (m *methodTestCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
 	ri, _ := credentials.RequestInfoFromContext(ctx)
 	return nil, status.Errorf(codes.Unknown, ri.Method)
 }
@@ -218,7 +218,7 @@ type clientAlwaysFailCred struct {
 	credentials.TransportCredentials
 }
 
-func (c clientAlwaysFailCred) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (c clientAlwaysFailCred) ClientHandshake(context.Context, string, net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return nil, nil, errors.New(clientAlwaysFailCredErrorMsg)
 }
 func (c clientAlwaysFailCred) Info() credentials.ProtocolInfo {
@@ -291,7 +291,7 @@ type testPerRPCCredentials struct {
 	errChan  chan error
 }
 
-func (cr testPerRPCCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+func (cr testPerRPCCredentials) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
 	var err error
 	if cr.errChan != nil {
 		err = <-cr.errChan
@@ -303,7 +303,7 @@ func (cr testPerRPCCredentials) RequireTransportSecurity() bool {
 	return false
 }
 
-func authHandle(ctx context.Context, info *tap.Info) (context.Context, error) {
+func authHandle(ctx context.Context, _ *tap.Info) (context.Context, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return ctx, fmt.Errorf("didn't find metadata in context")
@@ -412,7 +412,7 @@ type authorityCheckCreds struct {
 	got string
 }
 
-func (c *authorityCheckCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (c *authorityCheckCreds) ClientHandshake(_ context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	c.got = authority
 	return rawConn, nil, nil
 }
@@ -489,7 +489,7 @@ type serverDispatchCred struct {
 	rawConnCh chan net.Conn
 }
 
-func (c *serverDispatchCred) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (c *serverDispatchCred) ClientHandshake(_ context.Context, _ string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return rawConn, nil, nil
 }
 func (c *serverDispatchCred) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -505,7 +505,7 @@ func (c *serverDispatchCred) Info() credentials.ProtocolInfo {
 func (c *serverDispatchCred) Clone() credentials.TransportCredentials {
 	return nil
 }
-func (c *serverDispatchCred) OverrideServerName(s string) error {
+func (c *serverDispatchCred) OverrideServerName(string) error {
 	return nil
 }
 func (c *serverDispatchCred) getRawConn() net.Conn {

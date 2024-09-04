@@ -120,12 +120,12 @@ func NewUnresponsiveTestConn() net.Conn {
 }
 
 // Read reads from the in buffer.
-func (c *unresponsiveTestConn) Read(b []byte) (n int, err error) {
+func (c *unresponsiveTestConn) Read([]byte) (n int, err error) {
 	return 0, io.EOF
 }
 
 // Write writes to the out buffer.
-func (c *unresponsiveTestConn) Write(b []byte) (n int, err error) {
+func (c *unresponsiveTestConn) Write([]byte) (n int, err error) {
 	return 0, nil
 }
 

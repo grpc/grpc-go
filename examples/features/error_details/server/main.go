@@ -45,7 +45,7 @@ type server struct {
 }
 
 // SayHello implements helloworld.GreeterServer
-func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+func (s *server) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// Track the number of times the user has been greeted.

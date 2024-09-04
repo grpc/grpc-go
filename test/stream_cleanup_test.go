@@ -39,7 +39,7 @@ func (s) TestStreamCleanup(t *testing.T) {
 	const callRecvMsgSize uint = 1           // The maximum message size the client can receive
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Payload: &testpb.Payload{
 				Body: make([]byte, bodySize),
 			}}, nil

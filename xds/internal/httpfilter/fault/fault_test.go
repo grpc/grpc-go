@@ -567,7 +567,7 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 
 	defer func() { newTimer = time.NewTimer }()
 	timers := make(chan *time.Timer, 2)
-	newTimer = func(d time.Duration) *time.Timer {
+	newTimer = func(time.Duration) *time.Timer {
 		t := time.NewTimer(24 * time.Hour) // Will reset to fire.
 		timers <- t
 		return t

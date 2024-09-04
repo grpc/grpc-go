@@ -43,11 +43,11 @@ type testCreds struct {
 	typ string
 }
 
-func (c *testCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (c *testCreds) ClientHandshake(context.Context, string, net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return nil, &testAuthInfo{typ: c.typ}, nil
 }
 
-func (c *testCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (c *testCreds) ServerHandshake(net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return nil, &testAuthInfo{typ: c.typ}, nil
 }
 

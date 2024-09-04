@@ -44,7 +44,7 @@ type testSubConn struct {
 	updateState func(balancer.SubConnState)
 }
 
-func (sc *testSubConn) UpdateAddresses(addresses []resolver.Address) {}
+func (sc *testSubConn) UpdateAddresses([]resolver.Address) {}
 
 func (sc *testSubConn) Connect() {}
 
@@ -88,7 +88,7 @@ func TestBaseBalancerReserveAttributes(t *testing.T) {
 	}
 	pickBuilder := &testPickBuilder{validate: v}
 	b := (&baseBuilder{pickerBuilder: pickBuilder}).Build(&testClientConn{
-		newSubConn: func(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+		newSubConn: func(_ []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 			return &testSubConn{updateState: opts.StateListener}, nil
 		},
 	}, balancer.BuildOptions{}).(*baseBalancer)

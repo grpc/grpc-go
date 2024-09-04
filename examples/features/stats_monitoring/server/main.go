@@ -40,7 +40,7 @@ type server struct {
 	echogrpc.UnimplementedEchoServer
 }
 
-func (s *server) UnaryEcho(ctx context.Context, req *echopb.EchoRequest) (*echopb.EchoResponse, error) {
+func (s *server) UnaryEcho(_ context.Context, req *echopb.EchoRequest) (*echopb.EchoResponse, error) {
 	time.Sleep(2 * time.Second)
 	return &echopb.EchoResponse{Message: req.Message}, nil
 }

@@ -125,7 +125,7 @@ type peerStatsHandler struct {
 	mu   sync.Mutex
 }
 
-func (h *peerStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+func (h *peerStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 	return ctx
 }
 
@@ -136,7 +136,7 @@ func (h *peerStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	h.args = append(h.args, peerStats{rs, p})
 }
 
-func (h *peerStatsHandler) TagConn(ctx context.Context, info *stats.ConnTagInfo) context.Context {
+func (h *peerStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
 	return ctx
 }
 
