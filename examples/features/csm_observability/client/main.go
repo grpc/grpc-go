@@ -33,7 +33,7 @@ import (
 	"google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/csm"
-        _ "google.golang.org/grpc/xds" // To install the xds resolvers and balancers.
+  _ "google.golang.org/grpc/xds" // To install the xds resolvers and balancers.
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel/exporters/prometheus"
@@ -58,13 +58,13 @@ func main() {
 	cleanup := csm.EnableObservability(context.Background(), opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
 	defer cleanup()
 
-        credentials := insecure.NewCredentials()
-        if *useXdsCreds {
-                credentials, err = xds.NewClientCredentials(xds.ClientOptions{FallbackCreds: insecure.NewCredentials()}) 
-                if err != nil {
+	credentials := insecure.NewCredentials()
+	if *useXdsCreds {
+		credentials, err = xds.NewClientCredentials(xds.ClientOptions{FallbackCreds: insecure.NewCredentials()}) 
+		if err != nil {
 			log.Fatalf("Failed to create xDS credentials: %v", err)
 		}
-        }
+	}
 	cc, err := grpc.NewClient(*target, grpc.WithTransportCredentials(credentials)) 
 	if err != nil {
 		log.Fatalf("Failed to start NewClient: %v", err)
