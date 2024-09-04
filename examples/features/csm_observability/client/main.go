@@ -29,11 +29,11 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-        "google.golang.org/grpc/credentials/xds"
+	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/csm"
-  _ "google.golang.org/grpc/xds" // To install the xds resolvers and balancers.
+	_ "google.golang.org/grpc/xds" // To install the xds resolvers and balancers.
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel/exporters/prometheus"
