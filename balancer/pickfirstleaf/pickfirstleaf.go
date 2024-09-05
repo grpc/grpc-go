@@ -152,8 +152,12 @@ type pickfirstBalancer struct {
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
-	b.serializer.TrySchedule(func(_ context.Context) {
+	doneCh := make(chan error, 1)
+	b.serializer.ScheduleOr(func(_ context.Context) {
 		b.resolverError(err)
+		close(doneCh)
+	}, func() {
+		close(doneCh)
 	})
 }
 
@@ -427,7 +431,7 @@ func (b *pickfirstBalancer) requestConnection() {
 }
 
 // Only executed in the context of a serializer callback.
-func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubConnState) {
+func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.SubConnState) {
 	// Previously relevant subconns can still callback with state updates.
 	// To prevent pickers from returning these obsolete subconns, this logic
 	// is included to check if the current list of active subconns includes this
@@ -435,11 +439,11 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 	if activeSD, found := b.subConns.Get(sd.addr); !found || activeSD != sd {
 		return
 	}
-	if state.ConnectivityState == connectivity.Shutdown {
+	if newState.ConnectivityState == connectivity.Shutdown {
 		return
 	}
 
-	if state.ConnectivityState == connectivity.Ready {
+	if newState.ConnectivityState == connectivity.Ready {
 		b.shutdownRemaining(sd)
 		if !b.addressList.seekTo(sd.addr) {
 			// This should not fail as we should have only one subconn after
@@ -457,7 +461,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 
 	// If the LB policy is READY, and it receives a subchannel state change,
 	// it means that the READY subchannel has failed.
-	if b.state == connectivity.Ready && state.ConnectivityState != connectivity.Ready {
+	if b.state == connectivity.Ready && newState.ConnectivityState != connectivity.Ready {
 		// Once a transport fails, the balancer enters IDLE and starts from
 		// the first address when the picker is used.
 		b.state = connectivity.Idle
@@ -470,7 +474,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 	}
 
 	if b.firstPass {
-		switch state.ConnectivityState {
+		switch newState.ConnectivityState {
 		case connectivity.Connecting:
 			// The balancer can be in either IDLE, CONNECTING or TRANSIENT_FAILURE.
 			// If it's in TRANSIENT_FAILURE, stay in TRANSIENT_FAILURE until
@@ -484,7 +488,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 				})
 			}
 		case connectivity.TransientFailure:
-			sd.lastErr = state.ConnectionError
+			sd.lastErr = newState.ConnectionError
 			// Since we're re-using common subconns while handling resolver updates,
 			// we could receive an out of turn TRANSIENT_FAILURE from a pass
 			// over the previous address list. We ignore such updates.
@@ -497,7 +501,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 				return
 			}
 			// End of the first pass.
-			b.endFirstPass(state.ConnectionError)
+			b.endFirstPass(newState.ConnectionError)
 		case connectivity.Idle:
 			// A subconn can transition from CONNECTING directly to IDLE when
 			// a transport is successfully created, but the connection fails before
@@ -517,12 +521,12 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, state balancer.SubCon
 	}
 
 	// We have finished the first pass, keep re-connecting failing subconns.
-	switch state.ConnectivityState {
+	switch newState.ConnectivityState {
 	case connectivity.TransientFailure:
-		sd.lastErr = state.ConnectionError
+		sd.lastErr = newState.ConnectionError
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.TransientFailure,
-			Picker:            &picker{err: state.ConnectionError},
+			Picker:            &picker{err: newState.ConnectionError},
 		})
 		// We don't need to request re-resolution since the subconn already does
 		// that before reporting TRANSIENT_FAILURE.

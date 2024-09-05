@@ -68,7 +68,7 @@ func Test(t *testing.T) {
 
 // setupPickFirstLeaf performs steps required for pick_first tests. It starts a
 // bunch of backends exporting the TestService, creates a ClientConn to them
-// with service config specifying the use of the pick_first LB policy.
+// with service config specifying the use of the state_storing LB policy.
 func setupPickFirstLeaf(t *testing.T, backendCount int, opts ...grpc.DialOption) (*grpc.ClientConn, *manual.Resolver, *backendManager) {
 	t.Helper()
 	r := manual.NewBuilderWithScheme("whatever")
@@ -76,17 +76,10 @@ func setupPickFirstLeaf(t *testing.T, backendCount int, opts ...grpc.DialOption)
 	addrs := make([]resolver.Address, backendCount)
 
 	for i := 0; i < backendCount; i++ {
-		backend := &stubserver.StubServer{
-			EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-				return &testpb.Empty{}, nil
-			},
-		}
-		if err := backend.StartServer(); err != nil {
-			t.Fatalf("Failed to start backend: %v", err)
-		}
-		t.Logf("Started TestService backend at: %q", backend.Address)
-		t.Cleanup(func() { backend.S.Stop() })
-
+		backend := stubserver.StartTestService(t, nil)
+		t.Cleanup(func() {
+			backend.Stop()
+		})
 		backends[i] = backend
 		addrs[i] = resolver.Address{Addr: backend.Address}
 	}
@@ -115,7 +108,7 @@ func setupPickFirstLeaf(t *testing.T, backendCount int, opts ...grpc.DialOption)
 }
 
 // TestPickFirstLeaf_SimpleResolverUpdate tests the behaviour of the pick first
-// policy when when given an list of addresses. The following steps are carried
+// policy when given an list of addresses. The following steps are carried
 // out in order:
 //  1. A list of addresses are given through the resolver. Only one
 //     of the servers is running.
@@ -131,7 +124,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_FirstServerReady(t *testing.T) {
 
 	cc, r, bm := setupPickFirstLeaf(t, 2)
 	addrs := bm.resolverAddrs()
-	stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 	r.UpdateState(resolver.State{Addresses: addrs})
@@ -171,7 +164,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_FirstServerUnReady(t *testing.T)
 
 	cc, r, bm := setupPickFirstLeaf(t, 2)
 	addrs := bm.resolverAddrs()
-	stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 	bm.stopAllExcept(1)
 
@@ -213,7 +206,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_DuplicateAddrs(t *testing.T) {
 
 	cc, r, bm := setupPickFirstLeaf(t, 2)
 	addrs := bm.resolverAddrs()
-	stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 	bm.stopAllExcept(1)
 
@@ -269,7 +262,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_DisjointLists(t *testing.T) {
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
 	cc, r, bm := setupPickFirstLeaf(t, 4)
 	addrs := bm.resolverAddrs()
-	stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 	bm.backends[0].S.Stop()
@@ -330,7 +323,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_ActiveBackendInUpdatedList(t *testing
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
 	cc, r, bm := setupPickFirstLeaf(t, 3)
 	addrs := bm.resolverAddrs()
-	stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 	bm.backends[0].S.Stop()
@@ -392,7 +385,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_InActiveBackendInUpdatedList(t *testi
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
 	cc, r, bm := setupPickFirstLeaf(t, 3)
 	addrs := bm.resolverAddrs()
-	stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 	bm.backends[0].S.Stop()
@@ -455,7 +448,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_IdenticalLists(t *testing.T) {
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
 	cc, r, bm := setupPickFirstLeaf(t, 2)
 	addrs := bm.resolverAddrs()
-	stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 	bm.backends[0].S.Stop()
@@ -527,7 +520,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerRestart(t *testing.T) 
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
 	cc, r, bm := setupPickFirstLeaf(t, 2)
 	addrs := bm.resolverAddrs()
-	stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 	// shutdown all active backends except the target.
@@ -591,7 +584,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerRestart(t *testing.T)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
 	cc, r, bm := setupPickFirstLeaf(t, 2)
 	addrs := bm.resolverAddrs()
-	stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 	// shutdown all active backends except the target.
@@ -662,7 +655,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerToFirst(t *testing.T)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
 	cc, r, bm := setupPickFirstLeaf(t, 2)
 	addrs := bm.resolverAddrs()
-	stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 	// shutdown all active backends except the target.
@@ -733,7 +726,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerToSecond(t *testing.T)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
 	cc, r, bm := setupPickFirstLeaf(t, 2)
 	addrs := bm.resolverAddrs()
-	stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 	// shutdown all active backends except the target.
@@ -807,7 +800,7 @@ func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
 	cc, r, bm := setupPickFirstLeaf(t, 1)
 	addrs := bm.resolverAddrs()
 
-	stateSubscriber := &ccStateSubscriber{transitions: []connectivity.State{}}
+	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 	r.UpdateState(resolver.State{Addresses: addrs})
