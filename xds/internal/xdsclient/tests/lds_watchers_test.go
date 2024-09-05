@@ -48,14 +48,14 @@ import (
 
 type noopListenerWatcher struct{}
 
-func (noopListenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, done xdsresource.DoneNotifier) {
-	done.OnDone()
+func (noopListenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (noopListenerWatcher) OnError(err error, done xdsresource.DoneNotifier) {
-	done.OnDone()
+func (noopListenerWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (noopListenerWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
-	done.OnDone()
+func (noopListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
 
 type listenerUpdateErrTuple struct {
@@ -71,23 +71,23 @@ func newListenerWatcher() *listenerWatcher {
 	return &listenerWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (cw *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, done xdsresource.DoneNotifier) {
+func (cw *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
 	cw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
-	done.OnDone()
+	onDone()
 }
 
-func (cw *listenerWatcher) OnError(err error, done xdsresource.DoneNotifier) {
+func (cw *listenerWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
 	cw.updateCh.Replace(listenerUpdateErrTuple{err: err})
-	done.OnDone()
+	onDone()
 }
 
-func (cw *listenerWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
+func (cw *listenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
 	cw.updateCh.Replace(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
-	done.OnDone()
+	onDone()
 }
 
 // badListenerResource returns a listener resource for the given name which does

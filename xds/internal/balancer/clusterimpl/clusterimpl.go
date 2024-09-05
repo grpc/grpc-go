@@ -275,7 +275,7 @@ func (b *clusterImplBalancer) ResolverError(err error) {
 	})
 }
 
-func (b *clusterImplBalancer) updateSubConnState(sc balancer.SubConn, s balancer.SubConnState, cb func(balancer.SubConnState)) {
+func (b *clusterImplBalancer) updateSubConnState(_ balancer.SubConn, s balancer.SubConnState, cb func(balancer.SubConnState)) {
 	// Trigger re-resolution when a SubConn turns transient failure. This is
 	// necessary for the LogicalDNS in cluster_resolver policy to re-resolve.
 	//
@@ -297,7 +297,7 @@ func (b *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer
 }
 
 func (b *clusterImplBalancer) Close() {
-	b.serializer.TrySchedule(func(ctx context.Context) {
+	b.serializer.TrySchedule(func(_ context.Context) {
 		b.child.Close()
 		b.childState = balancer.State{}
 

@@ -589,7 +589,7 @@ func (s) TestBothClientAndServerRPCEvents(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -650,7 +650,7 @@ func (s) TestClientRPCEventsTruncateHeaderAndMetadata(t *testing.T) {
 		newLoggingExporter = ne
 	}(newLoggingExporter)
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(_ context.Context, _ *config) (loggingExporter, error) {
 		return fle, nil
 	}
 
@@ -673,7 +673,7 @@ func (s) TestClientRPCEventsTruncateHeaderAndMetadata(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
@@ -787,7 +787,7 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 		newLoggingExporter = ne
 	}(newLoggingExporter)
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(_ context.Context, _ *config) (loggingExporter, error) {
 		return fle, nil
 	}
 
@@ -822,10 +822,10 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -1125,7 +1125,7 @@ func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
 		newLoggingExporter = ne
 	}(newLoggingExporter)
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(_ context.Context, _ *config) (loggingExporter, error) {
 		return fle, nil
 	}
 
@@ -1149,7 +1149,7 @@ func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
@@ -1240,6 +1240,7 @@ func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
 // TestMethodInConfiguration tests different method names with an expectation on
 // whether they should error or not.
 func (s) TestMethodInConfiguration(t *testing.T) {
+
 	// To skip creating a stackdriver exporter.
 	fle := &fakeLoggingExporter{
 		t: t,
@@ -1249,7 +1250,7 @@ func (s) TestMethodInConfiguration(t *testing.T) {
 		newLoggingExporter = ne
 	}(newLoggingExporter)
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(_ context.Context, _ *config) (loggingExporter, error) {
 		return fle, nil
 	}
 

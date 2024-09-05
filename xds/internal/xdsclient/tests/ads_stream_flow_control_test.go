@@ -45,22 +45,22 @@ import (
 // DoneNotifier passed to the callback available to the test, thereby enabling
 // the test to block this watcher for as long as required.
 type blockingListenerWatcher struct {
-	doneNotifierCh chan xdsresource.DoneNotifier // DoneNotifier passed to the callback.
-	updateCh       chan struct{}                 // Written to when an update is received.
-	errorCh        chan struct{}                 // Written to when an error is received.
-	notFoundCh     chan struct{}                 // Written to when the resource is not found.
+	doneNotifierCh chan xdsresource.OnDoneFunc // DoneNotifier passed to the callback.
+	updateCh       chan struct{}               // Written to when an update is received.
+	errorCh        chan struct{}               // Written to when an error is received.
+	notFoundCh     chan struct{}               // Written to when the resource is not found.
 }
 
 func newBLockingListenerWatcher() *blockingListenerWatcher {
 	return &blockingListenerWatcher{
-		doneNotifierCh: make(chan xdsresource.DoneNotifier, 1),
+		doneNotifierCh: make(chan xdsresource.OnDoneFunc, 1),
 		updateCh:       make(chan struct{}, 1),
 		errorCh:        make(chan struct{}, 1),
 		notFoundCh:     make(chan struct{}, 1),
 	}
 }
 
-func (lw *blockingListenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, done xdsresource.DoneNotifier) {
+func (lw *blockingListenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, done xdsresource.OnDoneFunc) {
 	// Notify receipt of the update.
 	select {
 	case lw.updateCh <- struct{}{}:
@@ -73,7 +73,7 @@ func (lw *blockingListenerWatcher) OnUpdate(update *xdsresource.ListenerResource
 	}
 }
 
-func (lw *blockingListenerWatcher) OnError(err error, done xdsresource.DoneNotifier) {
+func (lw *blockingListenerWatcher) OnError(err error, done xdsresource.OnDoneFunc) {
 	// Notify receipt of an error.
 	select {
 	case lw.errorCh <- struct{}{}:
@@ -86,7 +86,7 @@ func (lw *blockingListenerWatcher) OnError(err error, done xdsresource.DoneNotif
 	}
 }
 
-func (lw *blockingListenerWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
+func (lw *blockingListenerWatcher) OnResourceDoesNotExist(done xdsresource.OnDoneFunc) {
 	// Notify receipt of resource not found.
 	select {
 	case lw.notFoundCh <- struct{}{}:
@@ -250,8 +250,8 @@ func (s) TestADSFlowControl_ResourceUpdates_SingleResource(t *testing.T) {
 	}
 
 	// Unblock one watcher.
-	done := <-watcher1.doneNotifierCh
-	done.OnDone()
+	onDone := <-watcher1.doneNotifierCh
+	onDone()
 
 	// Wait for a short duration and ensure that there is no read on the stream.
 	select {
@@ -261,8 +261,8 @@ func (s) TestADSFlowControl_ResourceUpdates_SingleResource(t *testing.T) {
 	}
 
 	// Unblock the second watcher.
-	done = <-watcher2.doneNotifierCh
-	done.OnDone()
+	onDone = <-watcher2.doneNotifierCh
+	onDone()
 
 	// Ensure that there is a read on the stream, now that the previous update
 	// has been consumed by all watchers.
@@ -394,16 +394,16 @@ func (s) TestADSFlowControl_ResourceUpdates_MultipleResources(t *testing.T) {
 	// guaranteed. So, we select on both of them and unblock the first watcher
 	// whose callback is invoked.
 	var otherWatcherUpdateCh chan struct{}
-	var otherWatcherDoneCh chan xdsresource.DoneNotifier
+	var otherWatcherDoneCh chan xdsresource.OnDoneFunc
 	select {
 	case <-watcher1.updateCh:
-		done := <-watcher1.doneNotifierCh
-		done.OnDone()
+		onDone := <-watcher1.doneNotifierCh
+		onDone()
 		otherWatcherUpdateCh = watcher2.updateCh
 		otherWatcherDoneCh = watcher2.doneNotifierCh
 	case <-watcher2.updateCh:
-		done := <-watcher2.doneNotifierCh
-		done.OnDone()
+		onDone := <-watcher2.doneNotifierCh
+		onDone()
 		otherWatcherUpdateCh = watcher1.updateCh
 		otherWatcherDoneCh = watcher1.doneNotifierCh
 	case <-ctx.Done():
@@ -420,8 +420,8 @@ func (s) TestADSFlowControl_ResourceUpdates_MultipleResources(t *testing.T) {
 	// Wait for the update on the second watcher and unblock it.
 	select {
 	case <-otherWatcherUpdateCh:
-		done := <-otherWatcherDoneCh
-		done.OnDone()
+		onDone := <-otherWatcherDoneCh
+		onDone()
 	case <-ctx.Done():
 		t.Fatal("Timed out waiting for update to reach second watcher")
 	}
@@ -504,8 +504,8 @@ func (s) TestADSFlowControl_ResourceErrors(t *testing.T) {
 	}
 
 	// Unblock one watcher.
-	done := <-watcher.doneNotifierCh
-	done.OnDone()
+	onDone := <-watcher.doneNotifierCh
+	onDone()
 
 	// Ensure that there is a read on the stream, now that the previous error
 	// has been consumed by the watcher.
@@ -573,8 +573,8 @@ func (s) TestADSFlowControl_ResourceDoesNotExist(t *testing.T) {
 	// Wait for the update to reach the watcher and unblock it.
 	select {
 	case <-watcher.updateCh:
-		done := <-watcher.doneNotifierCh
-		done.OnDone()
+		onDone := <-watcher.doneNotifierCh
+		onDone()
 	case <-ctx.Done():
 		t.Fatalf("Timed out waiting for update to reach watcher 1")
 	}
@@ -611,8 +611,8 @@ func (s) TestADSFlowControl_ResourceDoesNotExist(t *testing.T) {
 	}
 
 	// Unblock the watcher.
-	done := <-watcher.doneNotifierCh
-	done.OnDone()
+	onDone := <-watcher.doneNotifierCh
+	onDone()
 
 	// Ensure that there is a read on the stream.
 	select {

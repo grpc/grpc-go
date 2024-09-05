@@ -70,50 +70,50 @@ func Test(t *testing.T) {
 
 type nopListenerWatcher struct{}
 
-func (nopListenerWatcher) OnUpdate(_ *xdsresource.ListenerResourceData, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (nopListenerWatcher) OnUpdate(_ *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (nopListenerWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (nopListenerWatcher) OnError(_ error, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (nopListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (nopListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
 
 type nopRouteConfigWatcher struct{}
 
-func (nopRouteConfigWatcher) OnUpdate(_ *xdsresource.RouteConfigResourceData, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (nopRouteConfigWatcher) OnUpdate(_ *xdsresource.RouteConfigResourceData, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (nopRouteConfigWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (nopRouteConfigWatcher) OnError(_ error, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (nopRouteConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (nopRouteConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
 
 type nopClusterWatcher struct{}
 
-func (nopClusterWatcher) OnUpdate(_ *xdsresource.ClusterResourceData, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (nopClusterWatcher) OnUpdate(_ *xdsresource.ClusterResourceData, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (nopClusterWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (nopClusterWatcher) OnError(_ error, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (nopClusterWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (nopClusterWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
 
 type nopEndpointsWatcher struct{}
 
-func (nopEndpointsWatcher) OnUpdate(_ *xdsresource.EndpointsResourceData, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (nopEndpointsWatcher) OnUpdate(_ *xdsresource.EndpointsResourceData, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (nopEndpointsWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (nopEndpointsWatcher) OnError(_ error, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (nopEndpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	onDone.OnDone()
+func (nopEndpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
 
 // This watcher writes the onDone callback on to a channel for the test to
@@ -126,31 +126,31 @@ func (nopEndpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifie
 // for ADS stream level flow control), and was causing CSDS to not receive any
 // updates from the xDS client.
 type blockingListenerWatcher struct {
-	testCtxDone <-chan struct{}               // Closed when the test is done.
-	onDoneCh    chan xdsresource.DoneNotifier // Channel to write the onDone callback to.
+	testCtxDone <-chan struct{}             // Closed when the test is done.
+	onDoneCh    chan xdsresource.OnDoneFunc // Channel to write the onDone callback to.
 }
 
 func newBlockingListenerWatcher(testCtxDone <-chan struct{}) *blockingListenerWatcher {
 	return &blockingListenerWatcher{
 		testCtxDone: testCtxDone,
-		onDoneCh:    make(chan xdsresource.DoneNotifier, 1),
+		onDoneCh:    make(chan xdsresource.OnDoneFunc, 1),
 	}
 }
 
-func (w *blockingListenerWatcher) OnUpdate(_ *xdsresource.ListenerResourceData, onDone xdsresource.DoneNotifier) {
+func (w *blockingListenerWatcher) OnUpdate(_ *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
 	writeOnDone(w.testCtxDone, w.onDoneCh, onDone)
 }
-func (w *blockingListenerWatcher) OnError(_ error, onDone xdsresource.DoneNotifier) {
+func (w *blockingListenerWatcher) OnError(_ error, onDone xdsresource.OnDoneFunc) {
 	writeOnDone(w.testCtxDone, w.onDoneCh, onDone)
 }
-func (w *blockingListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
+func (w *blockingListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
 	writeOnDone(w.testCtxDone, w.onDoneCh, onDone)
 }
 
 // writeOnDone attempts to writes the onDone callback on the onDone channel. It
 // returns when it can successfully write to the channel or when the test is
 // done, which is signalled by testCtxDone being closed.
-func writeOnDone(testCtxDone <-chan struct{}, onDoneCh chan xdsresource.DoneNotifier, onDone xdsresource.DoneNotifier) {
+func writeOnDone(testCtxDone <-chan struct{}, onDoneCh chan xdsresource.OnDoneFunc, onDone xdsresource.OnDoneFunc) {
 	select {
 	case <-testCtxDone:
 	case onDoneCh <- onDone:
@@ -545,7 +545,7 @@ func (s) TestCSDS_NACK(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timed out waiting for watch callback")
 	case onDone := <-watcher2.onDoneCh:
-		onDone.OnDone()
+		onDone()
 	}
 
 	// Update the second resource with an empty ApiListener field which is
@@ -564,7 +564,7 @@ func (s) TestCSDS_NACK(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timed out waiting for watch callback")
 	case onDone := <-watcher2.onDoneCh:
-		onDone.OnDone()
+		onDone()
 	}
 
 	// Verify that the xDS client reports the first listener resource as being

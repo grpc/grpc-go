@@ -297,7 +297,10 @@ func tlsServerHandshake(conn net.Conn) (AuthInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	serverTLSConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
+	serverTLSConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		NextProtos:   []string{"h2"},
+	}
 	serverConn := tls.Server(conn, serverTLSConfig)
 	err = serverConn.Handshake()
 	if err != nil {
@@ -307,7 +310,10 @@ func tlsServerHandshake(conn net.Conn) (AuthInfo, error) {
 }
 
 func tlsClientHandshake(conn net.Conn, _ string) (AuthInfo, error) {
-	clientTLSConfig := &tls.Config{InsecureSkipVerify: true}
+	clientTLSConfig := &tls.Config{
+		InsecureSkipVerify: true, // NOLINT
+		NextProtos:         []string{"h2"},
+	}
 	clientConn := tls.Client(conn, clientTLSConfig)
 	if err := clientConn.Handshake(); err != nil {
 		return nil, err

@@ -53,14 +53,14 @@ const (
 
 type noopEndpointsWatcher struct{}
 
-func (noopEndpointsWatcher) OnUpdate(update *xdsresource.EndpointsResourceData, done xdsresource.DoneNotifier) {
-	done.OnDone()
+func (noopEndpointsWatcher) OnUpdate(update *xdsresource.EndpointsResourceData, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (noopEndpointsWatcher) OnError(err error, done xdsresource.DoneNotifier) {
-	done.OnDone()
+func (noopEndpointsWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
-func (noopEndpointsWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
-	done.OnDone()
+func (noopEndpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	onDone()
 }
 
 type endpointsUpdateErrTuple struct {
@@ -76,23 +76,23 @@ func newEndpointsWatcher() *endpointsWatcher {
 	return &endpointsWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (ew *endpointsWatcher) OnUpdate(update *xdsresource.EndpointsResourceData, done xdsresource.DoneNotifier) {
+func (ew *endpointsWatcher) OnUpdate(update *xdsresource.EndpointsResourceData, onDone xdsresource.OnDoneFunc) {
 	ew.updateCh.Send(endpointsUpdateErrTuple{update: update.Resource})
-	done.OnDone()
+	onDone()
 }
 
-func (ew *endpointsWatcher) OnError(err error, done xdsresource.DoneNotifier) {
+func (ew *endpointsWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
 	ew.updateCh.Replace(endpointsUpdateErrTuple{err: err})
-	done.OnDone()
+	onDone()
 }
 
-func (ew *endpointsWatcher) OnResourceDoesNotExist(done xdsresource.DoneNotifier) {
+func (ew *endpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
 	ew.updateCh.Replace(endpointsUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Endpoints not found in received response")})
-	done.OnDone()
+	onDone()
 }
 
 // badEndpointsResource returns a endpoints resource for the given
