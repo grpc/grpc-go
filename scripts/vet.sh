@@ -176,11 +176,12 @@ XXXXX PleaseIgnoreUnused'
   popd
 done
 
-# Collection of revive linter analysis checks
-REV_OUT="$(mktemp)"
-revive -set_exit_status=1 -exclude "reflection/test/grpc_testing_not_regenerate/" -formatter plain -config "$(dirname "$0")/revive.toml" ./... >"${REV_OUT}" || true
-
-# TODO: Remove `|| true` to unskip linter failures once existing issues are fixed.
-(not grep -v "\.pb\.go:" "${REV_OUT}") || true
+# Error for violation of enabled lint rules in config excluding generated code.
+revive \
+  -set_exit_status=1 \
+  -exclude "reflection/test/grpc_testing_not_regenerate/" \
+  -exclude "**/*.pb.go" \
+  -config "$(dirname "$0")/revive.toml" \
+  ./...
 
 echo SUCCESS
