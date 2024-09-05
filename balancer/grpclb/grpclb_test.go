@@ -1640,7 +1640,8 @@ func (s) TestGRPCLBStatsQuashEmpty(t *testing.T) {
 			// Success.
 		}
 		go func() {
-			for range ch { // Drain statsChan until it is closed.
+			for range ch {
+				// Drain statsChan until it is closed.
 			}
 		}()
 	}, &rpcStats{
