@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -853,44 +852,69 @@ func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
-	childConfigUpdated := atomic.Bool{}
-	// Create a stub balancer which updates picker on receipt of config
-	// update, and notifies when child policy was updated via
-	// childConfigUpdated.
-	const childPolicyName = "stubBalancer-ChildPolicyUpdatedSynchronouslyOnConfigUpdate"
-	stub.Register(childPolicyName, stub.BalancerFuncs{
+	// Keep track of which child policy was updated
+	updatedChildPolicy := ""
+
+	// Create stub balancers to track config updates
+	const (
+		childPolicyName1 = "stubBalancer1"
+		childPolicyName2 = "stubBalancer2"
+	)
+
+	stub.Register(childPolicyName1, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			updatedChildPolicy = childPolicyName1
 			bd.ClientConn.UpdateState(balancer.State{
 				Picker: base.NewErrPicker(errors.New("dummy error picker")),
 			})
-			childConfigUpdated.Store(true)
 			return nil
 		},
 	})
 
-	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
-		URI:          "trafficdirector.googleapis.com:443",
-		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+	stub.Register(childPolicyName2, stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			updatedChildPolicy = childPolicyName2
+			bd.ClientConn.UpdateState(balancer.State{
+				Picker: base.NewErrPicker(errors.New("dummy error picker")),
+			})
+			return nil
+		},
 	})
-	if err != nil {
-		t.Fatalf("Failed to create LRS server config for testing: %v", err)
-	}
+
+	// Initial config update with childPolicyName1
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
-			Cluster:             testClusterName,
-			EDSServiceName:      testServiceName,
-			LoadReportingServer: testLRSServerConfig,
+			Cluster:        testClusterName,
+			EDSServiceName: testServiceName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
-				Name: childPolicyName,
+				Name: childPolicyName1,
 			},
 		},
 	}); err != nil {
 		t.Fatalf("Error updating the config: %v", err)
 	}
 
-	if !childConfigUpdated.Load() {
-		t.Fatal("Child policy was not updated on receipt of configuration update.")
+	if updatedChildPolicy != childPolicyName1 {
+		t.Fatal("Child policy 1 was not updated on initial configuration update.")
+	}
+
+	// Second config update with childPolicyName2
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		BalancerConfig: &LBConfig{
+			Cluster:        testClusterName,
+			EDSServiceName: testServiceName,
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name: childPolicyName2,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("Error updating the config: %v", err)
+	}
+
+	if updatedChildPolicy != childPolicyName2 {
+		t.Fatal("Child policy 2 was not updated after child policy name change.")
 	}
 }
 
@@ -920,19 +944,11 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 		},
 	})
 
-	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
-		URI:          "trafficdirector.googleapis.com:443",
-		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
-	})
-	if err != nil {
-		t.Fatalf("Failed to create LRS server config for testing: %v", err)
-	}
-	err = b.UpdateClientConnState(balancer.ClientConnState{
+	err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
-			Cluster:             testClusterName,
-			EDSServiceName:      testServiceName,
-			LoadReportingServer: testLRSServerConfig,
+			Cluster:        testClusterName,
+			EDSServiceName: testServiceName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: childPolicyName,
 			},
