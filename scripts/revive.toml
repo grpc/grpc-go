@@ -6,11 +6,9 @@
 [rule.error-return]
 [rule.error-strings]
 [rule.error-naming]
-[rule.exported]
 [rule.increment-decrement]
 [rule.var-naming]
 [rule.var-declaration]
-[rule.package-comments]
 [rule.range]
 [rule.receiver-naming]
 [rule.time-naming]
@@ -20,8 +18,16 @@
 [rule.superfluous-else]
 [rule.unused-parameter]
 [rule.unreachable-code]
-[rule.redefines-builtin-id]
 
 # Disabled rules
+# https://github.com/grpc/grpc-go/issues/7444 to track TODO(s)
 [rule.empty-block]
     Disabled = true
+[rule.exported]
+    Disabled = true # TODO: Enable after existing issues are fixed
+[rule.redefines-builtin-id]
+    Disabled = true # TODO: Enable after existing issues are fixed
+[rule.package-comments]
+    Disabled = true # TODO: Enable after existing issues are fixed
+[rule.use-any]
+    Disabled = true # TODO: Enable after existing issues are fixed
